@@ -116,9 +116,16 @@ ALTER TABLE bee_approval_outbox_rebuilt RENAME TO bee_approval_outbox;
 CREATE INDEX bee_approval_outbox_due
     ON bee_approval_outbox (acknowledged_at, exhausted_at, next_attempt_ms);
 ]]
+local INSTALLATION_EFFECT_SQL = [[
+ALTER TABLE bee_approval_requests ADD COLUMN effect_completed_at TEXT;
+ALTER TABLE bee_approval_requests ADD COLUMN effect_result_json TEXT;
+CREATE INDEX bee_approval_requests_effects
+    ON bee_approval_requests (state, decision, effect_completed_at, approval_id);
+]]
 local list: {Migration} = {
     {id = 1, name = "approvals", sql = APPROVALS_SQL, rebuild = false},
     {id = 2, name = "decision_notice", sql = NOTICE_SQL, rebuild = true},
+    {id = 3, name = "effect_completion", sql = INSTALLATION_EFFECT_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

@@ -89,7 +89,7 @@ entries:
   source: file://recovery_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "180s"}
-  modules: [funcs, security, registry, process, time, uuid]
+  modules: [funcs, security, registry, process, channel, time, uuid]
   security:
     policies: [bee.approvals.inbox:spawn_test_policy, bee.approvals.inbox:client_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy]
   imports:

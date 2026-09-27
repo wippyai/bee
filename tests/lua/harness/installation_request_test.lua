@@ -14,9 +14,11 @@ local AGENT = "bee.test.install_agent"
 local OTHER = "bee.test.install_other"
 local APPROVER = "bee.test.install_approver"
 local APPROVER_POLICY = "installation-fixture"
+local OTHER_APPROVER_POLICY = "installation-fixture-other"
 local CONFIGURATION = "bee:module_installation"
 local DIGEST = string.rep("d", 64)
 local REMOVAL_DIGEST = string.rep("e", 64)
+local base_port = installation.port
 type Object = {[string]: unknown}
 type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, workspace_id: string?}
 local counter = 0
@@ -27,7 +29,8 @@ end
 local scope_names = {"bee.harness.catalog:installation_client_policy", "bee.security.gateway:gateway_manage_policy",
     "bee.security.gateway:gateway_admit_policy", "bee.security.threads:thread_create_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_observe_policy",
-    "bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy"}
+    "bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy",
+    "bee.security.approvals:approval_consume_policy"}
 local function scope(): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -61,14 +64,14 @@ local function endpoint(): string
     if not entry then error("gateway endpoint entry") end
     return tostring((entry.data :: Object).address)
 end
-local function ensure_approver_policy()
+local function ensure_approver_policy(name: string)
     local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list = (policies_entry.data :: Object).policies :: {Object}
     for _, item in ipairs(list) do
-        if item.name == APPROVER_POLICY then return end
+        if item.name == name then return end
     end
-    list[#list + 1] = {name = APPROVER_POLICY, approvers = {APPROVER}, max_ttl_ms = 60000}
+    list[#list + 1] = {name = name, approvers = {APPROVER}, max_ttl_ms = 60000}
     apply(policies_entry)
 end
 local function select_policy(name: string): string
@@ -103,13 +106,14 @@ local function attempt(workspace: string): Binding
         thread_id = thread, workspace_id = workspace}
 end
 -- The Hub facade fixture: one resolvable package and a recorded apply.
-type Hub = {calls: {Object}, applies: {Object}, apply_reply: Object}
-local function hub(apply_reply: Object?): Hub
+type Hub = {calls: {Object}, applies: {Object}, apply_reply: Object, receipts: {[string]: Object}, uncertain_after_apply: boolean}
+local function hub(apply_reply: Object?, uncertain_after_apply: boolean?): Hub
     return {calls = {}, applies = {}, apply_reply = apply_reply or {ok = true, replayed = false,
-        value = {state = "complete", message = "Dependency root install completed"}}}
+        value = {state = "complete", message = "Dependency root install completed"}}, receipts = {},
+        uncertain_after_apply = uncertain_after_apply == true}
 end
 local function port(binding: Binding, fixture: Hub): installation.Port
-    local selected = installation.port(binding)
+    local selected = base_port(binding)
     selected.hub = function(value: Object, manage: boolean): Object
         fixture.calls[#fixture.calls + 1] = {operation = value.operation, manage = manage}
         local request = (value.request or {}) :: Object
@@ -130,14 +134,50 @@ local function port(binding: Binding, fixture: Hub): installation.Port
                     actions = {"fs.get"}, resources = {"acme.tool:data"}, expression = false}},
                 migrations = {}, starts = {}, capabilities = {"acme.tool:files"}, missing = {}}}
         end
+        if value.operation == "status" then
+            local expected = tostring(value.expected_digest or "")
+            local receipt = fixture.receipts[expected]
+            if receipt then return {ok = true, replayed = false, value = receipt} end
+            return {ok = false, replayed = false, code = "NOT_FOUND", message = "no published operation for this plan"}
+        end
         if value.operation == "apply" then
             if not manage then return {ok = false, replayed = false, code = "DENIED", message = "Hub operation is not authorized"} end
-            fixture.applies[#fixture.applies + 1] = {request = request, expected_digest = value.expected_digest}
+            local expected = tostring(value.expected_digest or "")
+            local recorded = fixture.receipts[expected]
+            if recorded then
+                fixture.applies[#fixture.applies + 1] = {request = request, expected_digest = expected, replayed = true}
+                return {ok = true, replayed = true, value = recorded}
+            end
+            fixture.applies[#fixture.applies + 1] = {request = request, expected_digest = expected, replayed = false}
+            if fixture.uncertain_after_apply then
+                fixture.uncertain_after_apply = false
+                local receipt = fixture.apply_reply.value
+                if type(receipt) == "table" then fixture.receipts[expected] = receipt :: Object end
+                return {ok = false, replayed = false, code = "UNCERTAIN", message = "Hub reply was lost after publication"}
+            end
+            if fixture.apply_reply.ok == true then
+                local receipt = fixture.apply_reply.value
+                if type(receipt) == "table" then fixture.receipts[expected] = receipt :: Object end
+            end
             return fixture.apply_reply
         end
         return {ok = false, replayed = false, code = "INVALID", message = "unexpected Hub operation"}
     end
     return selected
+end
+local function drain(fixture: Hub): (integer, string?)
+    local original_port = installation.port
+    local drained: integer = 0
+    local drain_error: string? = nil
+    installation.port = function(worker_binding: Binding): installation.Port
+        return port(worker_binding, fixture)
+    end
+    local ok, failure = pcall(function()
+        drained, drain_error = installation.drain_approved()
+    end)
+    installation.port = original_port
+    if not ok then error(failure) end
+    return drained, drain_error
 end
 local function value_of(reply: Object): Object
     if not reply.ok then
@@ -148,14 +188,14 @@ local function value_of(reply: Object): Object
 end
 local function define_tests()
     test.describe("Agent installation requests", function()
-        test.it("applies an approved plan once by its digest and refuses the rest", function()
-            ensure_approver_policy()
+        test.it("retries a consumed approved plan by its digest and refuses the rest", function()
+            ensure_approver_policy(APPROVER_POLICY)
             local previous = select_policy(APPROVER_POLICY)
             local ok, failure = pcall(function()
                 local workspace = fresh("install")
                 call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
                 local binding = attempt(workspace)
-                local fixture = hub()
+                local fixture = hub(nil, true)
                 local selected = port(binding, fixture)
                 local filed = value_of(installation.request(selected, binding, APPROVER_POLICY, "install",
                     {component = "acme/tool"}))
@@ -175,27 +215,52 @@ local function define_tests()
                 test.eq((read.prompt :: Object).text, "Install acme/tool 1.1.0 from the Hub?")
                 local payload = (read.proposal :: Object).payload :: Object
                 test.eq(payload.source, "hub")
+                test.eq(payload.binding_id, binding.binding_id)
                 test.eq(payload.plan_digest, DIGEST)
                 test.eq((payload.dependency_changes :: {string})[1], "install acme/tool 1.1.0")
                 test.eq((payload.permission_changes :: {string})[1], "added: acme.tool:files allows fs.get on acme.tool:data")
                 call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = request_id,
                     expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
-                local applied = value_of(installation.status(selected, binding, APPROVER_POLICY, {request_id = request_id}))
-                test.eq(applied.status, "applied")
+                local drained, drain_error = drain(fixture)
+                test.is_nil(drain_error)
+                test.eq(drained, 1)
                 test.eq(#fixture.applies, 1)
-                local applied_request = fixture.applies[1].request :: Object
                 test.eq(fixture.applies[1].expected_digest, DIGEST)
+                test.eq(fixture.applies[1].replayed, false)
+                local consumed = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = request_id})
+                test.eq(consumed.consumer_id, AGENT)
+                test.eq(consumed.consumed_effect, "hub-install:" .. request_id)
+                test.is_nil(consumed.effect_completed_at)
+                local observed = value_of(installation.status(selected, binding, APPROVER_POLICY,
+                    {request_id = request_id}))
+                test.eq(observed.status, "applied")
+                test.eq(#fixture.applies, 1)
+                local recovered, recovery_error = drain(fixture)
+                test.is_nil(recovery_error)
+                test.eq(recovered, 1)
+                test.eq(#fixture.applies, 2)
+                local applied_request = fixture.applies[2].request :: Object
+                test.eq(fixture.applies[2].expected_digest, DIGEST)
+                test.eq(fixture.applies[2].replayed, true)
                 test.eq(applied_request.action, "install")
                 test.eq(applied_request.version, "1.1.0")
                 test.eq(applied_request.migration_policy, "up")
-                local consumed = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = request_id})
-                test.eq(consumed.consumed_effect, "hub-install:" .. request_id)
-                local replay: Object = {ok = true, replayed = true, value = {state = "complete"}}
-                fixture.apply_reply = replay
+                local applied = value_of(installation.status(selected, binding, APPROVER_POLICY, {request_id = request_id}))
+                test.eq(applied.status, "applied")
+                test.eq(applied.replayed, true)
+                test.eq(#fixture.applies, 2)
+                local completed = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = request_id})
+                test.eq(completed.consumer_id, AGENT)
+                test.eq(completed.consumed_effect, "hub-install:" .. request_id)
+                test.not_nil(completed.effect_completed_at)
+                test.eq((completed.effect_result :: Object).replayed, true)
                 local again = value_of(installation.status(selected, binding, APPROVER_POLICY, {request_id = request_id}))
                 test.eq(again.status, "applied")
+                test.eq(again.replayed, true)
                 test.eq(#fixture.applies, 2)
-                test.eq(fixture.applies[2].expected_digest, DIGEST)
+                local drained_again, drain_again_error = installation.drain_approved()
+                test.is_nil(drain_again_error)
+                test.eq(drained_again, 0)
 
                 local other = attempt(workspace)
                 local foreign = installation.status(port(other, hub()), other, APPROVER_POLICY, {request_id = request_id})
@@ -222,7 +287,7 @@ local function define_tests()
         end)
 
         test.it("reports a failed apply with the Hub code", function()
-            ensure_approver_policy()
+            ensure_approver_policy(APPROVER_POLICY)
             local previous = select_policy(APPROVER_POLICY)
             local ok, failure = pcall(function()
                 local workspace = fresh("install-stale")
@@ -236,9 +301,77 @@ local function define_tests()
                 local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = filed.request_id})
                 call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = filed.request_id,
                     expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
+                local drained, drain_error = drain(fixture)
+                test.is_nil(drain_error)
+                test.eq(drained, 1)
                 local failed = value_of(installation.status(selected, binding, APPROVER_POLICY, {request_id = filed.request_id}))
                 test.eq(failed.status, "failed")
                 test.eq(failed.code, "STALE")
+                local completed = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = filed.request_id})
+                test.not_nil(completed.effect_completed_at)
+                local drained_again, drain_again_error = installation.drain_approved()
+                test.is_nil(drain_again_error)
+                test.eq(drained_again, 0)
+            end)
+            select_policy(previous)
+            if not ok then error(failure) end
+        end)
+
+        test.it("does not apply an installation consumed by another effect owner", function()
+            ensure_approver_policy(APPROVER_POLICY)
+            local previous = select_policy(APPROVER_POLICY)
+            local ok, failure = pcall(function()
+                local workspace = fresh("install-consumer")
+                call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
+                local binding = attempt(workspace)
+                local fixture = hub()
+                local selected = port(binding, fixture)
+                local filed = value_of(installation.request(selected, binding, APPROVER_POLICY, "install",
+                    {component = "acme/tool", version = "1.0.0"}))
+                local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = filed.request_id})
+                call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = filed.request_id,
+                    expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
+                local consumed = call(OTHER, workspace, "bee.approvals.binding:consume", {approval_id = filed.request_id,
+                    proposal_digest = read.proposal_digest, owner_incarnation = read.owner_incarnation,
+                    effect_key = "hub-install:" .. tostring(filed.request_id)})
+                test.eq(consumed.consumer_id, OTHER)
+                local refused = installation.status(selected, binding, APPROVER_POLICY, {request_id = filed.request_id})
+                test.is_false(refused.ok)
+                test.eq((refused.error :: Object).code, "DENIED")
+                local drained, drain_error = drain(fixture)
+                test.is_nil(drain_error)
+                test.eq(drained, 0)
+                test.eq(#fixture.applies, 0)
+            end)
+            select_policy(previous)
+            if not ok then error(failure) end
+        end)
+
+        test.it("uses the host-selected installation policy in the owner worker", function()
+            ensure_approver_policy(APPROVER_POLICY)
+            ensure_approver_policy(OTHER_APPROVER_POLICY)
+            local previous = select_policy(APPROVER_POLICY)
+            local ok, failure = pcall(function()
+                local workspace = fresh("install-policy")
+                call(AGENT, workspace, "bee.gateway.binding:open", {address = endpoint()})
+                local binding = attempt(workspace)
+                local fixture = hub()
+                local selected = port(binding, fixture)
+                local filed = value_of(installation.request(selected, binding, APPROVER_POLICY, "install",
+                    {component = "acme/tool", version = "1.0.0"}))
+                local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = filed.request_id})
+                call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = filed.request_id,
+                    expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
+                select_policy(OTHER_APPROVER_POLICY)
+                local refused, refuse_error = drain(fixture)
+                select_policy(APPROVER_POLICY)
+                test.is_nil(refuse_error)
+                test.eq(refused, 0)
+                test.eq(#fixture.applies, 0)
+                local applied, apply_error = drain(fixture)
+                test.is_nil(apply_error)
+                test.eq(applied, 1)
+                test.eq(#fixture.applies, 1)
             end)
             select_policy(previous)
             if not ok then error(failure) end

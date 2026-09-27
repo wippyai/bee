@@ -106,6 +106,20 @@ entries:
     service: bee.approvals:service
   security:
     policies: [bee.security.approvals:approval_store_policy]
+- name: installation_effects
+  kind: function.lua
+  source: file://installation_effects_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security:
+    policies: [bee.security.approvals:approval_store_policy]
+- name: complete_installation_effect
+  kind: function.lua
+  source: file://complete_installation_effect_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security:
+    policies: [bee.security.approvals:approval_store_policy]
 - name: revalidate
   kind: function.lua
   source: file://revalidate_method.lua

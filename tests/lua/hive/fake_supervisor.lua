@@ -4,10 +4,11 @@ local process = require("process")
 local channel = require("channel")
 local time = require("time")
 local types = require("types")
-local function main()
+local function main(parent_id: string, ready_topic: string)
     local registered, register_error = process.registry.register(types.SUPERVISOR_NAME)
     if not registered then error("register: " .. tostring(register_error)) end
     local requests = assert(process.listen(types.TOPIC_REQUEST, {message = true}))
+    process.send(parent_id, ready_topic, {ready = true})
     local events = assert(process.events())
     while true do
         local selected = channel.select({requests:case_receive(), events:case_receive()})

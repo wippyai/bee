@@ -5,13 +5,13 @@
 local process = require("process")
 local service = require("service")
 local function main()
-    local registered, register_error = process.registry.register(service.AUTHORITY_NAME)
-    if not registered then error("register approval authority: " .. tostring(register_error)) end
     local db, open_error = service.open()
     if not db then error("open approval store: " .. tostring(open_error)) end
     local _, establish_error = service.establish(db)
     db:release()
     if establish_error then error("establish authority incarnation: " .. establish_error) end
+    local registered, register_error = process.registry.register(service.AUTHORITY_NAME)
+    if not registered then error("register approval authority: " .. tostring(register_error)) end
     local events = assert(process.events())
     while true do
         local event = events:receive()

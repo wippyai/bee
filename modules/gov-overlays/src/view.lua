@@ -29,9 +29,9 @@ function M.pane_of(kind: string): model.Pane?
     return nil
 end
 
--- The primary action is deliberately one local transition. An approval is
--- never represented as an apply button: it remains a separate decision in
--- Approvals, and activation can proceed only after that owner binds it.
+-- The primary action is one reviewed install or update decision for the person.
+-- Local acceptance, selection, and activation preparation are combined, while
+-- recovery and technical step actions remain in details.
 function M.primary(state: model.State): (string, string, boolean)
     if state.pane == "available" then return "stage", " Stage ", model.selected_available(state) ~= nil end
     local item = model.selected(state)
@@ -39,16 +39,15 @@ function M.primary(state: model.State): (string, string, boolean)
     if not item then return "read", " Read review ", false end
     local verdict = model.verdict(state, item)
     if verdict == "unread" or verdict == "unreadable" then return "read", " Read review ", true end
-    if model.accepts_review(item) then
-        if verdict == "ready" then return "accept", " Accept review ", true end
-        return "read", " Read details ", true
-    end
-    if model.can_select(item) and not item.selected then return "select", " Select version ", true end
-    if model.can_prepare(state, item) then return "prepare", " Request approval ", true end
     local intent = state.intent
     if intent and model.key(item) == (intent.source_node .. "\0" .. intent.source_workspace .. "\0" .. intent.version) then
-        if intent.phase == "authorized" or intent.phase == "applying" then return "step", " Apply approved ", true end
+        if intent.phase == "settled" then return "read", " Read details ", true end
         return "status", " Check status ", true
+    end
+    if verdict == "ready" and (model.accepts_review(item) or model.can_select(item)) then
+        local is_update = (state.changes and state.changes.base_revision > 0) or (state.report and state.report.base_revision > 0)
+        if is_update then return "update", " Update ", true end
+        return "install", " Install ", true
     end
     return "read", " Read details ", true
 end

@@ -14,6 +14,7 @@ local ADMISSION_ID = "bee.security:application_admission"
 local DEFINITION = "bee.harness.window:app"
 local OTHER_DEFINITION = "bee.apps:welcome"
 local RUN_THREAD = "stable-run-thread"
+local BACKFILL_THREAD = "stable-backfill-run-thread"
 local ATTEMPT = "stable-run-attempt-1"
 local BACKEND = "bee.harness.launch:agent_call_backend"
 local LAUNCH_SCOPE = "bee.harness.launch:agent_launch_execution_scope"
@@ -73,7 +74,7 @@ end
 
 local baseline_bindings: {{[string]: unknown}}? = nil
 
-local function set_admission(admitted: boolean)
+local function set_admission_for(definition_id: string, admitted: boolean)
     local snap = registry.snapshot()
     local record = assert(snap:get(ADMISSION_ID)) :: {[string]: unknown}
     local data = (record.data :: {[string]: unknown}?) or {}
@@ -85,12 +86,16 @@ local function set_admission(admitted: boolean)
     end
     local bindings = {}
     for _, binding in ipairs(baseline_bindings) do
-        if admitted or binding.definition_id ~= DEFINITION then bindings[#bindings + 1] = binding end
+        if admitted or binding.definition_id ~= definition_id then bindings[#bindings + 1] = binding end
     end
     local changes = snap:changes()
     changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = record.meta, data = {bindings = bindings}})
     local applied, apply_error = changes:apply()
     if not applied then error("apply application admission: " .. tostring(apply_error)) end
+end
+
+local function set_admission(admitted: boolean)
+    set_admission_for(DEFINITION, admitted)
 end
 
 local function define_tests()
@@ -99,6 +104,8 @@ local function define_tests()
             local owner = tostring(process.pid())
             local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local broker_ready = assert(process.listen("bee.app.ready", {message = true}))
+            local events = assert(process.events())
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
@@ -106,6 +113,15 @@ local function define_tests()
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
             assert(catalogs:receive():from() == broker)
+            local function wait_exit(target: string)
+                local deadline = time.after("30s")
+                while true do
+                    local received = channel.select({events:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == events, target .. " did not exit")
+                    local event = received.value
+                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
+                end
+            end
             local function open(definition_id: string, tag: string): (string, string)
                 local request_id = tag .. "-open"
                 assert(process.send(broker, "bee.app.request", {version = 1, request_id = request_id, op = "open",
@@ -189,7 +205,66 @@ local function define_tests()
             local fenced_ok, fence_error = pcall(revoked_refused)
             set_admission(true)
             assert(fenced_ok, fence_error)
-            process.cancel(broker)
+
+            -- Boot can read its initial catalog before governance has
+            -- reapplied a retained definition. Backfill must preserve this
+            -- app family until the admitted definition returns.
+            local backfill_created = as_app(other, "bee.threads.service:create",
+                {thread_id = BACKFILL_THREAD, idempotency_key = BACKFILL_THREAD .. "-create", title = "Backfill run"})
+            test.eq(backfill_created.thread_id, BACKFILL_THREAD)
+            assert(process.cancel(broker, "restart retained alias probe"))
+            wait_exit(broker)
+
+            local restarted_broker: string? = nil
+            local backfill_ok, backfill_error = pcall(function()
+                set_admission_for(OTHER_DEFINITION, false)
+                local restart_pid, restart_error = process.with_context({["bee.workspace_owner"] = owner,
+                    ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
+                    assert(security.policy("bee.security:core_spawn_boundary"))}))
+                    :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(),
+                        {{instance_id = other, definition_id = OTHER_DEFINITION}})
+                if not restart_pid then error("restart broker spawn failed: " .. tostring(restart_error)) end
+                restarted_broker = tostring(restart_pid)
+                local ready_deadline = time.after("30s")
+                local backfill_ready = false
+                while not backfill_ready do
+                    local received = channel.select({broker_ready:case_receive(), ready_deadline:case_receive()})
+                    assert(received.ok and received.channel == broker_ready, "restarted broker did not finish alias backfill")
+                    backfill_ready = tostring(received.value:from()) == restarted_broker
+                end
+
+                -- Simulate the overlay becoming available after the broker's
+                -- initial catalog. The same retained instance must still see the
+                -- thread it created before restart.
+                set_admission_for(OTHER_DEFINITION, true)
+                local catalog_deadline = time.after("30s")
+                local definition_returned = false
+                while not definition_returned do
+                    local received = channel.select({catalogs:case_receive(), catalog_deadline:case_receive()})
+                    assert(received.ok and received.channel == catalogs, "restored definition did not return to catalog")
+                    local message = received.value
+                    if tostring(message:from()) == restarted_broker then
+                        local data: unknown = message:payload():data()
+                        if type(data) == "table" then
+                            for _, raw in ipairs(((data :: {[string]: unknown}).items :: {unknown}?) or {}) do
+                                if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id == OTHER_DEFINITION then
+                                    definition_returned = true
+                                end
+                            end
+                        end
+                    end
+                end
+                as_app(other, "bee.threads.service:get", {thread_id = BACKFILL_THREAD})
+            end)
+            set_admission_for(OTHER_DEFINITION, true)
+            if restarted_broker then
+                pcall(process.cancel, restarted_broker, "finish retained alias probe")
+                wait_exit(restarted_broker)
+            end
+            assert(backfill_ok, "startup backfill fenced a temporarily absent app family: " .. tostring(backfill_error))
+            process.unlisten(broker_ready)
+            process.unlisten(catalogs)
+            process.unlisten(replies)
         end)
     end)
 end

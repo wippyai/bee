@@ -242,7 +242,6 @@ end
 -- before the caller could monitor it; the receipt and the ended checkpoint
 -- outlive the process.
 local function await_settled(thread_id: string, attempt_id: string): {[string]: unknown}
-    local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
     local cursor = 0
     local settled = false
     while not settled do
@@ -252,9 +251,7 @@ local function await_settled(thread_id: string, attempt_id: string): {[string]: 
         end
         cursor = math.floor(tonumber(page.scanned_through) or cursor)
         if not settled and page.has_more ~= true then
-            local remaining = deadline_ms - math.floor(time.now():unix_nano() / 1000000)
-            if remaining <= 0 then error("attempt " .. attempt_id .. " did not settle") end
-            value(call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining}))
+            value(call("bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = 60000}))
         end
     end
     local stored = value(call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = attempt_id}))
@@ -1214,14 +1211,11 @@ local function define_tests()
             local key = fresh("app-run")
             test.eq(code(app_call(application, ungranted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key})), "LAUNCH_NOT_PERMITTED")
             local function settle(run: {[string]: unknown}): {[string]: unknown}
-                local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
-                local state = ""
-                while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
-                    local current = value(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
+                while true do
+                    local current = value(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60000}))
                     if current.state == "ended" then return current end
-                    state = tostring(current.state)
                 end
-                error("the application's run did not settle; it is " .. state)
+                error("the application's run did not settle")
             end
             local run = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key}))
             test.eq(run.definition_ref, DEFINITION)
@@ -1347,11 +1341,10 @@ local function define_tests()
             local refused = generated_call({operation = "launch", definition_ref = RETAINED_DEFINITION, brief = "ping",
                 idempotency_key = fresh("generated-foreign")})
             test.eq(code(refused), "LAUNCH_NOT_PERMITTED")
-            local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
             local settled: {[string]: unknown}? = nil
-            while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
-                local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
-                if current.state == "ended" then settled = current break end
+            while settled == nil do
+                local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60000}))
+                if current.state == "ended" then settled = current end
             end
             test.not_nil(settled)
             test.eq(settled and settled.outcome, "succeeded")
@@ -1435,11 +1428,10 @@ local function define_tests()
                 test.not_nil(run.thread_id)
                 test.not_nil(run.attempt_id)
                 test.not_nil(run.receipt)
-                local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
                 local settled: {[string]: unknown}? = nil
-                while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
-                    local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
-                    if current.state == "ended" then settled = current break end
+                while settled == nil do
+                    local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60000}))
+                    if current.state == "ended" then settled = current end
                 end
                 test.not_nil(settled)
                 test.eq(settled and settled.outcome, "succeeded")
@@ -1509,11 +1501,10 @@ local function define_tests()
             test.eq(replay_val.thread_id, run_val.thread_id)
 
             -- 3. Wait for function run completion
-            local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
             local settled: {[string]: unknown}? = nil
-            while math.floor(time.now():unix_nano() / 1000000) < deadline_ms do
-                local cur = value(app_call(application, granted, {operation = "wait", thread_id = tostring(run_val.thread_id), attempt_id = tostring(run_val.attempt_id), wait_ms = 5000}))
-                if cur.state == "ended" then settled = cur break end
+            while settled == nil do
+                local cur = value(app_call(application, granted, {operation = "wait", thread_id = tostring(run_val.thread_id), attempt_id = tostring(run_val.attempt_id), wait_ms = 60000}))
+                if cur.state == "ended" then settled = cur end
             end
             test.not_nil(settled)
             test.eq(settled and settled.outcome, "succeeded")

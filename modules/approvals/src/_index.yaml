@@ -85,6 +85,10 @@ entries:
     description: End the caller's own pending request, or learn the outcome that already committed
   - name: consume
     description: The effect owner binds an approved decision to one effect identity under the authority incarnation it observed; it revalidates policy, attempt state and authority itself before acting
+  - name: installation_effects
+    description: Host-authorized installation workers read a bounded queue of approved, uncompleted Hub installation effects
+  - name: complete_installation_effect
+    description: The consuming effect owner records the durable result for its exact approval and effect key; identical completion replays
   - name: revalidate
     description: After an authority restart, the effect owner records that an approved decision still holds under the current incarnation
   - name: read
@@ -110,6 +114,8 @@ entries:
       decide: bee.approvals.binding:decide
       withdraw: bee.approvals.binding:withdraw
       consume: bee.approvals.binding:consume
+      installation_effects: bee.approvals.binding:installation_effects
+      complete_installation_effect: bee.approvals.binding:complete_installation_effect
       revalidate: bee.approvals.binding:revalidate
       read: bee.approvals.binding:read
       inbox: bee.approvals.binding:inbox

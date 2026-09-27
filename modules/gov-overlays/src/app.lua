@@ -160,6 +160,38 @@ local function main(value: unknown)
         if reply and (applied or not reply.ok) then state.pending_prepare = nil end
         dirty = true
     end
+    local function install_now()
+        local item = model.selected(state)
+        local refused = model.refusal(state, item)
+        if refused then state.notice = refused; dirty = true; return end
+        if not item then state.notice = "Choose a staged version first"; dirty = true; return end
+        if model.accepts_review(item) then
+            local reply = invoke(model.review_request(state, item, true, new_key()))
+            if not model.apply_plan(state, reply) then dirty = true; return end
+            item = model.selected(state)
+        end
+        if item and model.can_select(item) and not item.selected then
+            local reply = invoke(model.select_request(state, item, new_key()))
+            if not model.apply_plan(state, reply) then dirty = true; return end
+            item = model.selected(state)
+        end
+        if item and model.can_prepare(state, item) then
+            local pending = state.pending_prepare
+            if pending and pending.plan_key ~= model.key(item) then
+                state.notice = "A previous prepare has no reply; select that version and retry its same request"
+                dirty = true
+                return
+            end
+            if not pending then
+                pending = {plan_key = model.key(item), intent_id = new_key(), receipt_key = new_key()}
+                model.set_pending_prepare(state, item, pending.intent_id, pending.receipt_key)
+            end
+            local reply = invoke(model.prepare_request(state, item, pending.intent_id, pending.receipt_key))
+            local applied = model.apply_activation(state, reply)
+            if reply and (applied or not reply.ok) then state.pending_prepare = nil end
+        end
+        dirty = true
+    end
     local function step_now()
         local intent_id = state.intent and state.intent.intent_id or state.restored_intent_id
         if not intent_id then state.notice = "Use Recover to find the desired activation first"; dirty = true; return end
@@ -196,6 +228,7 @@ local function main(value: unknown)
     local function take(kind: string)
         if kind == "stage" then perform(stage_available_now)
         elseif kind == "read" then perform(get_selected_now)
+        elseif kind == "install" or kind == "update" then perform(install_now)
         elseif kind == "accept" then perform(function() review_now(true) end)
         elseif kind == "reject" then perform(function() review_now(false) end)
         elseif kind == "select" then perform(select_version_now)

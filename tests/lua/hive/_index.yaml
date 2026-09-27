@@ -145,7 +145,7 @@ entries:
   source: file://client_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [process, time]
+  modules: [process, channel, time]
   imports:
     test: wippy.test:test
     client: bee.hive:client

@@ -222,6 +222,30 @@ entries:
     security:
       actor: {id: bee.sync.distribution}
       policies: [bee.security:sync_distribution_policy]
+- name: gateway_installation_service
+  kind: process.service
+  process: bee.gateway.service:worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.gateway.worker}
+      policies:
+      - bee.gateway.security:store_policy
+      - bee.gateway.security:database_ref_policy
+      - bee.gateway.security:execute_policy
+      - bee.gateway.security:installation_policy
+      - bee.gateway.security:installation_queue_policy
+      - bee.gateway.security:installation_resolver_policy
+      - bee.gateway.security:installation_worker_policy
+      - bee.gateway.security:installation_read_policy
+      - bee.gateway.security:installation_apply_policy
+      - bee.gateway.security:access_reference_policy
+      - bee.gateway.security:access_policy_read_policy
+      - bee.security.approvals:approval_installation_effects_policy
+      - bee.security.approvals:approval_request_policy
+      - bee.security.approvals:approval_consume_policy
+      - bee.security.desktop:host_policy
 - name: terminal
   kind: terminal.host
   hide_logs: true

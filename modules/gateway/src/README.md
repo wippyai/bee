@@ -40,11 +40,16 @@ selects the approver. Filing the request grants nothing.
 installation requests the same way. The gateway resolves the exact Hub plan as
 the bound subject with Hub read authority only, and files one thread-bound
 approval under the approval policy the host's `target_install_configuration`
-entry names. On the first status poll after approval it consumes the decision
-under one effect key and calls the Hub apply with the approved digest, adding
-the installation apply policy to that call alone. Elevation, MCP access and
-installation share `subject_call` for subject-bound owner calls and approval
-consumption.
+entry names. An owner worker reads approved installation effects from the
+approvals owner and resolves each proposal's binding ID through the gateway
+owner, then checks the host-selected policy and persisted attempt context before
+consuming the decision and calling Hub apply with the approved digest. Consumed
+requests stay in the owner's queue until its bounded applied or terminal outcome
+is recorded; restarting the worker replays Hub's idempotent operation after an
+uncertain call. Hub retains the complete receipt, and status polling returns its
+recorded state and message even if the asking session ended. Elevation, MCP
+access and installation share `subject_call` for subject-bound owner calls and
+approval consumption.
 
 The HTTP MCP route bounds each JSON request at 512 KiB. Overlay calls through MCP
 accept at most 64 KiB of text or 87,384 bytes of canonical base64 per put
@@ -103,9 +108,9 @@ stable database, listener, address, and hook-executable entries. The callable
 lifecycle and hook operations are in `bee.gateway.binding`; the HTTP handlers
 are in `bee.gateway.api`; and endpoint lookup is
 `bee.gateway:address`. `bee.gateway.migrations`,
-`bee.gateway.persist`, and `bee.gateway.security` contain the component's
-migration, storage, and policy implementation. There are no root-namespace
-forwarding functions for the lifecycle operations.
+`bee.gateway.persist`, `bee.gateway.security`, and `bee.gateway.service` contain
+the component's migration, storage, policy, and background worker implementation.
+There are no root-namespace forwarding functions for the lifecycle operations.
 
 The `catalog.from_framework` projection exposes an admitted agent closure's
 selected function tools and traits through the gateway: each function id

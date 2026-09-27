@@ -38,6 +38,7 @@ M.LEDGER = {table = "bee_gateway_schema_migrations", label = "gateway"}
 M.ADMIT = "bee.gateway.admit"
 M.MANAGE = "bee.gateway.manage"
 M.MATERIALIZE = "bee.gateway.materialize"
+M.INSTALLATION_WORK = "bee.gateway.installation_work"
 M.DATABASE_REF = "bee.gateway:database_ref"
 M.LISTENER_SERVICE = "bee.gateway:listener_ref"
 M.ENDPOINT = configuration.ENDPOINT
@@ -194,6 +195,32 @@ local function binding_by_id(db: sql.DB, binding_id: string): (Binding?, Reply?)
     local binding, decode_error = binding_of(rows[1] :: Row)
     if not binding then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
     return binding, nil
+end
+-- Resolve the durable gateway context for an approved installation effect.
+-- The stored attempt identity, rather than proposal fields, supplies the
+-- binding that the installation worker verifies.
+function M.installation_binding(value: unknown): Reply
+    if not security.can(M.INSTALLATION_WORK, "resolve_binding") then
+        return fail("DENIED", "caller may not resolve installation bindings")
+    end
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"binding_id"}) then return fail("INVALID", "binding_id is required") end
+    local binding_id = bounds.id(object.binding_id)
+    if not binding_id then return fail("INVALID", "binding_id is not an identifier") end
+    local db, open_failure = open()
+    if not db then return open_failure or fail("STORAGE", "open binding store") end
+    local binding, missing = binding_by_id(db, binding_id)
+    db:release()
+    if not binding then return missing or fail("NOT_FOUND", "binding does not exist") end
+    local installation_tool = false
+    for _, tool in ipairs(binding.tools) do
+        if tool == "install_request" or tool == "uninstall_request" then installation_tool = true end
+    end
+    if not installation_tool or not binding.workspace_id then
+        return fail("DENIED", "binding has no installation authority or workspace")
+    end
+    return succeed({binding_id = binding.binding_id, subject = binding.subject, action_id = binding.action_id,
+        attempt_id = binding.attempt_id, thread_id = binding.thread_id, workspace_id = binding.workspace_id})
 end
 -- A permitted admission may initialize the host-selected native listener.
 -- The conditional upsert gives simultaneous admissions one epoch and secret.

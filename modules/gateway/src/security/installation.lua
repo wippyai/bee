@@ -2,11 +2,12 @@
 -- Agent-requested Hub installation through the approval owner. The agent
 -- names a package; the host resolves the exact plan and files one approval
 -- bound to the asking thread and attempt. The agent never writes the
--- registry: once the person approves, the next status poll consumes the
--- decision exactly once and applies the approved plan digest through the Hub
--- facade under the installation apply policy. A replayed poll replays the
--- recorded Hub receipt instead of applying twice.
+-- registry: once the person approves, an owner worker consumes the decision
+-- and applies the approved plan digest through the Hub facade under the
+-- installation apply policy. The agent's status polling returns the decision
+-- and, once applied, the recorded Hub receipt without performing the apply.
 local registry = require("registry")
+local funcs = require("funcs")
 local bounds = require("bounds")
 local installation = require("installation")
 local subject_call = require("subject_call")
@@ -61,8 +62,9 @@ local function hub_value(port: Port, value: Object): (unknown?, Reply?)
     return reply.value, nil
 end
 
-local function context(binding: Binding): {thread_id: string, action_id: string, attempt_id: string}
-    return {thread_id = binding.thread_id, action_id = binding.action_id, attempt_id = binding.attempt_id}
+local function context(binding: Binding): {binding_id: string, thread_id: string, action_id: string, attempt_id: string}
+    return {binding_id = binding.binding_id, thread_id = binding.thread_id,
+        action_id = binding.action_id, attempt_id = binding.attempt_id}
 end
 
 -- request: resolve the plan and file one approval. kind is install or
@@ -110,7 +112,56 @@ function M.request(port: Port, binding: Binding, policy: string, kind: "install"
         expires_at = approval.expires_at}}
 end
 
--- status: the person's decision, and once approved the applied outcome.
+-- apply_approved: consumes the approved decision and applies the approved plan digest through Hub.
+function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unknown): Reply
+    local value = bounds.object(raw)
+    local request_id = value and bounds.id(value.request_id) or nil
+    if not request_id then return fail("INVALID", "request_id is required") end
+    local workspace_id = binding.workspace_id
+    if not workspace_id then return fail("DENIED", "this binding names no workspace to install into") end
+    local read = port.approvals("read", {approval_id = request_id})
+    if not read.ok then return read end
+    local view = bounds.object(read.value)
+    local verified, verify_error = installation.verify(view, binding.subject, workspace_id, policy, context(binding))
+    if not view or not verified then return fail("DENIED", verify_error or "request does not belong to this agent") end
+    local request = verified.request
+    local function reply(outcome: installation.Status): Reply
+        return {ok = true, value = {request_id = request_id, action = request.action, component = request.component,
+            version = request.version, plan_digest = verified.digest, status = outcome.status, code = outcome.code,
+            message = outcome.message, state = outcome.state, replayed = outcome.replayed}}
+    end
+    local decision = installation.decision(view)
+    if decision.status ~= "approved" then return reply(decision) end
+    local effect_key = installation.effect_key(request_id)
+    if view.effect_completed_at ~= nil then
+        if view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
+            return fail("DENIED", "approval was consumed by another effect owner")
+        end
+        if view.effect_result == nil then return fail("UNAVAILABLE", "completed installation has no recorded Hub reply") end
+        return reply(installation.status(view.effect_result))
+    end
+    if view.consumed_effect == nil and view.consumer_id == nil then
+        local digest = bounds.id(view.proposal_digest)
+        if not digest then return fail("UNAVAILABLE", "approval carries no proposal digest") end
+        local consumed = subject_call.consume(port.approvals, request_id, digest, effect_key, view.owner_incarnation)
+        if not consumed.ok then return consumed end
+    elseif view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
+        return fail("DENIED", "approval was consumed by another effect owner")
+    end
+    local effect = port.hub({operation = "apply", request = installation.apply_request(verified),
+        expected_digest = verified.digest}, true)
+    local outcome = installation.status(effect)
+    if outcome.status ~= "approved" then
+        local digest = bounds.id(view.proposal_digest)
+        if not digest then return fail("UNAVAILABLE", "approval carries no proposal digest") end
+        local completed = port.approvals("complete_installation_effect", {approval_id = request_id,
+            proposal_digest = digest, effect_key = effect_key, result = installation.effect_result(effect)})
+        if not completed.ok then return completed end
+    end
+    return reply(outcome)
+end
+
+-- status: the person's decision, or once applied by the owner worker, the applied outcome.
 function M.status(port: Port, binding: Binding, policy: string, raw: unknown): Reply
     local value = bounds.object(raw)
     local request_id = value and bounds.id(value.request_id) or nil
@@ -126,19 +177,59 @@ function M.status(port: Port, binding: Binding, policy: string, raw: unknown): R
     local function reply(outcome: installation.Status): Reply
         return {ok = true, value = {request_id = request_id, action = request.action, component = request.component,
             version = request.version, plan_digest = verified.digest, status = outcome.status, code = outcome.code,
-            message = outcome.message, state = outcome.state}}
+            message = outcome.message, state = outcome.state, replayed = outcome.replayed}}
     end
     local decision = installation.decision(view)
     if decision.status ~= "approved" then return reply(decision) end
     local effect_key = installation.effect_key(request_id)
-    if view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
-        local digest = bounds.id(view.proposal_digest)
-        if not digest then return fail("UNAVAILABLE", "approval carries no proposal digest") end
-        local consumed = subject_call.consume(port.approvals, request_id, digest, effect_key, view.owner_incarnation)
-        if not consumed.ok then return consumed end
+    if view.consumed_effect ~= nil or view.consumer_id ~= nil then
+        if view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
+            return fail("DENIED", "approval was consumed by another effect owner")
+        end
+        if view.effect_result ~= nil then return reply(installation.status(view.effect_result)) end
+        return reply(installation.status(port.hub({operation = "status", expected_digest = verified.digest}, false)))
     end
-    return reply(installation.status(port.hub({operation = "apply", request = installation.apply_request(verified),
-        expected_digest = verified.digest}, true)))
+    return reply(decision)
+end
+
+-- drain_approved: finds approved Hub installation requests that have not been consumed,
+-- consumes each under the asking subject's binding and applies it through Hub.
+function M.drain_approved(): (integer, string?)
+    local policy, policy_error = M.approval_policy()
+    if not policy then return 0, policy_error and policy_error.error.message or "installation policy unavailable" end
+    local raw, call_error = funcs.new():call("bee.approvals.binding:installation_effects", {limit = 16})
+    if call_error then return 0, tostring(call_error) end
+    local listed = bounds.object(raw)
+    local queue = listed and bounds.object(listed.value) or nil
+    if not listed or listed.ok ~= true or not queue or type(queue.effects) ~= "table" then
+        return 0, "approval owner returned no installation effect queue"
+    end
+    local count = 0
+    for _, raw_view in ipairs(queue.effects :: {unknown}) do
+        local view = bounds.object(raw_view)
+        local approval_id = view and bounds.id(view.approval_id) or nil
+        local proposal = view and bounds.object(view.proposal) or nil
+        local payload = proposal and bounds.object(proposal.payload) or nil
+        local binding_id = payload and bounds.id(payload.binding_id) or nil
+        if approval_id and view.policy == policy and proposal and proposal.ref == installation.REF and payload and binding_id then
+            local raw_resolved, resolve_error = funcs.new():call("bee.gateway.binding:installation_binding", {binding_id = binding_id})
+            local resolved_reply = not resolve_error and bounds.object(raw_resolved) or nil
+            local resolved = resolved_reply and resolved_reply.ok == true and bounds.object(resolved_reply.value) or nil
+            local workspace_id = resolved and bounds.id(resolved.workspace_id) or nil
+            local requester_id = view.requester_id
+            if resolved and workspace_id and requester_id == resolved.subject and view.workspace_id == workspace_id
+                and view.thread_id == resolved.thread_id and payload.binding_id == resolved.binding_id
+                and payload.thread_id == resolved.thread_id and payload.action_id == resolved.action_id
+                and payload.attempt_id == resolved.attempt_id then
+                local binding: Binding = {binding_id = binding_id, subject = tostring(resolved.subject),
+                    action_id = tostring(resolved.action_id), attempt_id = tostring(resolved.attempt_id),
+                    thread_id = tostring(resolved.thread_id), workspace_id = workspace_id}
+                local applied = M.apply_approved(M.port(binding), binding, policy, {request_id = approval_id})
+                if applied.ok then count = count + 1 end
+            end
+        end
+    end
+    return count, nil
 end
 
 return M

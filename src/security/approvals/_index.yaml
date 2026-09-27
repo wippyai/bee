@@ -58,6 +58,14 @@ entries:
     - bee.approvals.consume
     resources: '*'
     effect: allow
+- name: approval_installation_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized installation worker lists approved Hub effects; the effect owner verifies each binding and approval before applying
+  policy:
+    actions: [bee.approvals.own]
+    resources: [installation_effects]
+    effect: allow
 - name: approval_manage_policy
   kind: security.policy
   meta:

@@ -5,7 +5,7 @@ local test = require("test")
 local installation = require("installation")
 type Object = {[string]: unknown}
 local DIGEST = string.rep("a", 64)
-local CONTEXT = {thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-1"}
+local CONTEXT = {binding_id = "binding-1", thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-1"}
 
 local function plan(overrides: Object?): Object
     local value: Object = {digest = DIGEST, ready = true, base_revision = 7,
@@ -84,6 +84,7 @@ local function define_tests()
             local payload = proposal.payload :: Object
             test.eq(payload.source, "hub")
             test.eq(payload.version, "1.2.0")
+            test.eq(payload.binding_id, "binding-1")
             test.eq(payload.attempt_id, "attempt-1")
             local dependencies = payload.dependency_changes :: {string}
             test.eq(#dependencies, 3)
@@ -108,7 +109,9 @@ local function define_tests()
             local first = installation.idempotency_key(CONTEXT, DIGEST)
             test.eq(first, installation.idempotency_key(CONTEXT, DIGEST))
             test.is_false(first == installation.idempotency_key(
-                {thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-2"}, DIGEST))
+                {binding_id = "binding-1", thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-2"}, DIGEST))
+            test.is_false(first == installation.idempotency_key(
+                {binding_id = "binding-2", thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-1"}, DIGEST))
         end)
 
         test.it("accepts only the asking agent's own recorded request", function()
@@ -128,7 +131,9 @@ local function define_tests()
             test.is_nil(installation.verify(view, "agent", "other-ws", "module-installation", CONTEXT))
             test.is_nil(installation.verify(view, "agent", "ws", "other-policy", CONTEXT))
             test.is_nil(installation.verify(view, "agent", "ws", "module-installation",
-                {thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-2"}))
+                {binding_id = "binding-1", thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-2"}))
+            test.is_nil(installation.verify(view, "agent", "ws", "module-installation",
+                {binding_id = "binding-2", thread_id = "thread-1", action_id = "action-1", attempt_id = "attempt-1"}))
             local foreign: Object = {requester_id = "agent", thread_id = "thread-1", workspace_id = "ws",
                 policy = "module-installation", proposal = {kind = "operation", ref = "bee.gov:apply", payload = {}}}
             test.is_nil(installation.verify(foreign, "agent", "ws", "module-installation", CONTEXT))
@@ -151,6 +156,21 @@ local function define_tests()
             local recovery = installation.status({ok = true, replayed = false,
                 value = {state = "recovery_required", message = "review recovery"}})
             test.eq(recovery.status, "failed"); test.eq(recovery.message, "review recovery")
+        end)
+
+        test.it("keeps a bounded status result without copying the Hub migration receipt", function()
+            local saved = installation.effect_result({ok = true, replayed = true, value = {state = "complete",
+                message = "Hub operation completed", migration_work = {entries = {{source = string.rep("x", 12000)}}}}})
+            test.eq(saved.ok, true)
+            test.eq(saved.replayed, true)
+            local receipt = saved.value :: Object
+            test.eq(receipt.state, "complete")
+            test.eq(receipt.message, "Hub operation completed")
+            test.is_nil(receipt.migration_work)
+            local failed = installation.effect_result({ok = false, replayed = false, code = "STALE",
+                message = "plan changed"})
+            test.eq(failed.ok, false)
+            test.eq(failed.code, "STALE")
         end)
     end)
 end

@@ -206,6 +206,17 @@ entries:
     - bee.gateway.security:installation_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
+- name: installation_binding
+  kind: function.lua
+  source: file://installation_binding_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:installation_worker_policy
 - name: drain
   kind: function.lua
   source: file://drain_method.lua

@@ -29,8 +29,13 @@ fi
 if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   # Codex reads its gateway from config.toml in its private CODEX_HOME and the
   # bearer credential from the environment variable that file names; the
-  # gateway client reads the same two, and reports status codes only on stderr.
-  "$(dirname "$0")/../bin/gateway-client" codex "${CODEX_HOME:-$HOME/.codex}/config.toml" >&2
+  # gateway client reads the same two. Ordered reports share stdout with the
+  # terminal frame so carrier settlement cannot overtake stderr output.
+  if [ "${BEE_FIXTURE_REPORT_STREAM:-}" = "1" ]; then
+    "$(dirname "$0")/../bin/gateway-client" codex "${CODEX_HOME:-$HOME/.codex}/config.toml"
+  else
+    "$(dirname "$0")/../bin/gateway-client" codex "${CODEX_HOME:-$HOME/.codex}/config.toml" >&2
+  fi
 fi
 # A trailing hold keeps the child alive after its stream so a caller can register
 # a one-shot notice and observe the ending, exactly as the Claude fixture's

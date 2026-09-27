@@ -135,10 +135,13 @@ end
 local function session(binding_ref: string, policy_ref: string, thread_id: string, workspace_id: string, environment: {[string]: string}, owner_id: string?, brief: string?): Object
     local placement = placement_fixture.resolve()
     local attempt_id = fresh("attempt")
+    local selected_environment: {[string]: string} = {}
+    for name, value in pairs(environment) do selected_environment[name] = value end
+    if selected_environment.BEE_FIXTURE_GATEWAY == "1" then selected_environment.BEE_FIXTURE_REPORT_STREAM = "1" end
     return {thread_id = thread_id, action_id = "action-" .. attempt_id, attempt_id = attempt_id, owner_id = owner_id or ACTOR, owner_incarnation = 1, binding_ref = binding_ref,
         profile_id = "batch", brief = brief or "coordinate", policy_ref = policy_ref, workspace_id = workspace_id,
         resources = {{name = "project", grant_ref = "host", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
-        environment = environment, working_directory = "project", placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
+        environment = selected_environment, working_directory = "project", placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest}
 end
 local function spawn(request_value: Object, mode: string?, crash_after: string?): string
     local pid, err = process.with_context({}):with_actor(principals.actor(tostring(request_value.owner_id), request_value.workspace_id)):with_scope(scope()):spawn_monitored(CARRIER, "bee:workers", request_value, mode or "open", process.pid(), crash_after)
@@ -198,8 +201,17 @@ local function report(thread_id: string, actor_id: string?): Object
     for _, item in ipairs(records_of(thread_id, actor_id)) do
         if item.kind == "observation" and item.source == "stream" then
             local data = (item.body :: Object).data :: Object
-            if data.type == "notice" and data.code == "stderr" then
-                local text = tostring((data.content :: Object).text)
+            local text: string? = nil
+            if data.type == "notice" and (data.code == "stderr" or data.code == "informational") and type(data.content) == "table" then
+                text = tostring(((data.content :: Object).text))
+            elseif data.type == "extension" and data.event_name == "codex.system" and type(data.payload_json) == "string" then
+                local envelope, envelope_error = json.decode(data.payload_json :: string)
+                if not envelope_error and type(envelope) == "table" then
+                    local value = envelope :: Object
+                    if value.type == "system" and value.subtype == "informational" and type(value.content) == "string" then text = value.content :: string end
+                end
+            end
+            if text then
                 local start = text:find("gateway:", 1, true)
                 if start then
                     local decoded, err = json.decode(text:sub(start + 8))

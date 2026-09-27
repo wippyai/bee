@@ -566,11 +566,15 @@ local function define_tests()
                 if a_error or not a or b_error or not b then error("start/stop race: " .. tostring(a_error or b_error)) end
                 local first_reply, second_reply = await(a), await(b)
                 local stop_reply = first == "stop" and first_reply or second_reply
-                test.is_true(stop_reply.ok)
-                test.is_true(wait_for(function()
+                if not stop_reply.ok then error("stop after concurrent " .. first .. "/" .. second .. " failed: " .. tostring(json.encode(stop_reply))) end
+                local exited = wait_for(function()
                     local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt
                     return current.execution_state == "exited"
-                end, 8000))
+                end, 8000)
+                if not exited then
+                    local current = value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt
+                    error("concurrent " .. first .. "/" .. second .. " remained " .. current.execution_state .. ": " .. tostring(json.encode({start = first == "start" and first_reply or second_reply, stop = stop_reply})))
+                end
                 test.eq(attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
                 local successor = attempt_of(call(OWNER, "prepare", retained_launch(OWNER, session_ref, "after-race")))
                 test.eq(attempt_of(call(OWNER, "stop", {attempt_id = successor.attempt_id})).cleanup_state, "complete")

@@ -78,7 +78,8 @@ def run_shard(index, folder, entries, timeout=None):
     selected = re.search(r"(\d+) tests in \d+ suites", plain)
     cases = re.findall(r"(\d+) tests\s+[\d.]+s", plain)
     passed = re.findall(r"(\d+) passed\s+[\d.]+(?:ms|s)", plain)
-    count = int(cases[-1]) if cases else int(passed[-1]) if passed else 0
+    completed = re.findall(r"(\d+) passed\s+(\d+) failed\s+[\d.]+s", plain)
+    count = int(cases[-1]) if cases else sum(map(int, completed[-1])) if completed else int(passed[-1]) if passed else 0
     valid = result.returncode == 0 and selected is not None and int(selected.group(1)) == len(entries) and count > 0
     return index, entries, count, time.monotonic() - started, valid, result.returncode, output
 

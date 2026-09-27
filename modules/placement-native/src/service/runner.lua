@@ -26,6 +26,7 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
     return true, nil
 end
 local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?)
+    local controls = assert(process.listen(protocol.TOPIC_CONTROL, {message = true}))
     local db, open_error = store.open()
     if not db then error("open placement store: " .. tostring(open_error)) end
     -- The gateway binding this runner materialized, retired by this runner
@@ -127,11 +128,24 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local detail = recorded and ("pid " .. tostring(recorded.pid) .. " group " .. tostring(recorded.pgid)) or "no pid available from this runtime"
     local running = store.transition(db, attempt_id, {execution = "running", fields = fields, evidence = {kind = "child.started", detail = detail}})
     if not running.ok then
-        proc:close(true)
-        executor:release()
-        return refuse(running.message or "record start")
+        local current = store.row(db, attempt_id)
+        if current and current.execution_state == "stopping" and current.runner_pid == process.pid() then
+            local recorded_start = store.transition(db, attempt_id, {expected_execution = "stopping", fields = fields,
+                evidence = {kind = "child.started", detail = detail .. "; stop requested during startup"}})
+            if not recorded_start.ok then
+                proc:close(true)
+                executor:release()
+                return refuse(recorded_start.message or "record child identity after startup stop")
+            end
+            process.send(starter, reply_topic, {started = false, reason = "stop requested during startup"})
+        else
+            proc:close(true)
+            executor:release()
+            return refuse(running.message or "record start")
+        end
+    else
+        process.send(starter, reply_topic, {started = true, attempt = running.attempt})
     end
-    process.send(starter, reply_topic, {started = true, attempt = running.attempt})
     local stdin_closed = false
     if request.launch.stdin then
         -- The complete initial input goes first, then stdin is closed once
@@ -208,7 +222,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local consumed_through = 0
     local remembered: {string} = {}
     local remembered_set: {[string]: boolean} = {}
-    local controls = assert(process.listen(protocol.TOPIC_CONTROL, {message = true}))
     local inputs = assert(process.listen(protocol.TOPIC_INPUT, {message = true}))
     local acks = assert(process.listen(protocol.TOPIC_ACK, {message = true}))
     local events = assert(process.events())

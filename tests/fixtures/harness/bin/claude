@@ -53,11 +53,17 @@ if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   # ordered-report fixture writes a Claude informational frame on stdout.
   # A revoked gateway can make placement request cooperative shutdown while
   # this client is holding. Flush its last real HTTP check before exiting;
-  # the runner's normal forced-stop deadline remains authoritative.
+  # the runner's normal forced-stop deadline remains authoritative. Ordered
+  # reports share stdout with the terminal frame so carrier settlement cannot
+  # overtake the report on stderr.
   gateway_stopping=""
   trap 'gateway_stopping=1' TERM
   gateway_status=0
-  "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" >&2 || gateway_status=$?
+  if [ "${BEE_FIXTURE_REPORT_STREAM:-}" = "1" ]; then
+    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" || gateway_status=$?
+  else
+    "$(dirname "$0")/gateway-client" gateway "$mcp_config_json" >&2 || gateway_status=$?
+  fi
   trap - TERM
   if [ -n "$gateway_stopping" ] || [ "$gateway_status" -eq 143 ]; then exit 143; fi
 fi

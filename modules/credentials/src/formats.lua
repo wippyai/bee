@@ -10,7 +10,7 @@ M.MAX_INITIALIZATION_BYTES = 65536
 function M.path(value: unknown): string?
     local path = bounds.text(value, 512)
     if not path then return nil end
-    return bounds.subpath(path, {nonempty = true, no_control = true})
+    return bounds.subpath(path, nil, {nonempty = true, no_control = true})
 end
 function M.decode(value: unknown): (Format?, string?)
     local object = bounds.object(value)

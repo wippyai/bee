@@ -11,6 +11,11 @@ entries:
 - name: bounds
   kind: library.lua
   source: file://bounds.lua
+- name: workspace_query
+  kind: library.lua
+  source: file://workspace_query.lua
+  imports:
+    bounds: bee.hive:bounds
 - name: canonical
   kind: library.lua
   source: file://canonical.lua

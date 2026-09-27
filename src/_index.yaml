@@ -12,6 +12,10 @@ entries:
     workers: 4
   lifecycle:
     auto_start: true
+- name: clock
+  kind: library.lua
+  source: file://clock.lua
+  modules: [time]
 - name: workspace_hosts
   kind: process.service
   process: bee.launch:host_manager

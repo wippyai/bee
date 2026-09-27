@@ -7,8 +7,9 @@ entries:
   method: handle
   modules: [funcs, process, system]
   imports:
-    bounds: bee.threads.records:bounds
-    contract: bee.protocol:application
+    bounds: bee.hive:bounds
+    workspace_query: bee.hive:workspace_query
+    workspace_page: bee.hive.api:workspaces_page
   meta:
     comment: Open Hive operation listing one page of this node's workspace catalog and which workspaces a host serves now
     hive: open
@@ -43,3 +44,10 @@ entries:
   security:
     policies: [bee.security.hive:hive_telemetry_policy, bee.security.storage:workspace_catalog_read_policy, bee.hive.security:workspaces_policy]
 
+- name: workspaces_page
+  kind: library.lua
+  source: file://workspaces_page.lua
+  imports:
+    bounds: bee.hive:bounds
+    contract: bee.protocol:application
+    workspace_query: bee.hive:workspace_query

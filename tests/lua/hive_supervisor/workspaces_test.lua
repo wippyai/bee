@@ -9,6 +9,7 @@ local uuid = require("uuid")
 local types = require("types")
 local store = require("store")
 local binding = require("binding")
+local workspace_page = require("workspace_page")
 type Object = {[string]: unknown}
 local PROJECTS = "bee.workspace.catalog:projects_fixture"
 
@@ -108,6 +109,20 @@ local function define_tests()
             test.eq(refused.error and refused.error.code, "INVALID_ARGUMENT")
             local extra = dispatch({owner = "me"})
             test.is_false(extra.ok)
+        end)
+        test.it("rejects malformed pages and missing node identity", function()
+            local row = {workspace_id = "0123456789abcdef0123456789abcdef", label = "Workspace"}
+            local sparse, sparse_error = workspace_page.decode({items = {[1] = row, [3] = row}}, "forge", 50)
+            test.is_nil(sparse)
+            test.eq(sparse_error, "the workspace catalog answered a malformed page")
+
+            local malformed, row_error = workspace_page.decode({items = {{workspace_id = "bad", label = "Workspace"}}}, "forge", 50)
+            test.is_nil(malformed)
+            test.eq(row_error, "the workspace catalog answered a malformed row")
+
+            local missing_node, node_error = workspace_page.decode({items = {}}, "", 50)
+            test.is_nil(missing_node)
+            test.eq(node_error, "the local node has no identity")
         end)
     end)
 end

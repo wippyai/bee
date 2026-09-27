@@ -12,6 +12,7 @@ entries:
     arguments: bee.application:arguments
     bounds: bee.hive:bounds
     contract: bee.protocol:application
+    workspace_query: bee.hive:workspace_query
 - name: catalog
   kind: library.lua
   source: file://catalog.lua

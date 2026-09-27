@@ -17,6 +17,11 @@ Cluster telemetry lives in the optional `bee/hive-telemetry` package
 | `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, generic adapter routing, guarded dispatch, epochs |
 | `bee.hive.desktop` | Root-owned desktop integration |
 
+The Hive workspace listing API and desktop `list` operation share
+`bee.hive:workspace_query` for label, cursor and page-size validation. The
+workspace listing handler validates a dense, bounded catalog page and requires
+the local node identity before it returns results.
+
 ## Host composition
 
 `bee.hive.service:supervisor_service` is the default `process.service`. It starts

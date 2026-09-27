@@ -10,6 +10,7 @@ local process = require("process")
 local channel = require("channel")
 local security = require("security")
 local time = require("time")
+local clock = require("clock")
 local uuid = require("uuid")
 local logger = require("logger")
 local hosts = require("hosts")
@@ -46,7 +47,7 @@ local function config(value: unknown): Config?
     return {cap = math.floor(cap), idle = idle_ms / 1000, database = database}
 end
 
-local function now(): number return time.now():unix_nano() / 1000000000 end
+local function now(): number return clock.epoch_seconds(time.now()) end
 
 local function main(value: unknown)
     local settings = config(value)

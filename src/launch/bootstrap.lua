@@ -4,7 +4,6 @@ local channel = require("channel")
 local tty = require("tty")
 local security = require("security")
 local time = require("time")
-local funcs = require("funcs")
 local physical = require("physical")
 local input_decode = require("input_decode")
 local contract = require("contract")
@@ -99,11 +98,10 @@ function M.open(): Started?
     end
 
     local function disable_super_edit(): (boolean?, string?)
-        local ok, reply, call_error = pcall(function()
-            return funcs.new():call("bee.gov.binding:super_edit_recovery_call", {operation = "disable_all"})
+        local ok, reply = pcall(function()
+            return edit_mode_recovery.handle({operation = "disable_all"})
         end)
         if not ok then return nil, tostring(reply) end
-        if call_error then return nil, tostring(call_error) end
         local result = type(reply) == "table" and reply :: {[string]: unknown} or nil
         if not result or result.ok ~= true then
             return nil, tostring(result and (result.message or result.code) or "edit-mode recovery returned an invalid reply")

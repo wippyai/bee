@@ -7,8 +7,10 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -37,9 +39,9 @@ const (
 	joinedSecretName     = "joined.secret"
 	joinedCredentialName = "joined.pem"
 	maxJoinedRecordBytes = meshtls.MaxBytes + 1024
-	// gossipPortName keeps the gossip port the node's first boot selected. Later
-	// boots bind it again, so the address the node's hive remembers stays valid
-	// across restarts, clean or not.
+	// gossipPortName keeps the gossip port the node selected. Later boots reuse
+	// it while free; an occupied port falls back to memberlist's OS-selected
+	// port, which the live join listener records before serving peers.
 	gossipPortName = "gossip.port"
 	// peerAddressSuffix names a pinned peer's last gossip address, beside its
 	// key in the peers directory; the next boot seeds it.
@@ -184,6 +186,9 @@ func prepareMesh(state string, now time.Time, address netip.Addr) (meshBoot, err
 	if err != nil {
 		return meshBoot{}, err
 	}
+	if port != 0 && !meshPortAvailable(meshBindAddress(address), port) {
+		port = 0
+	}
 	seeds, err := peerAddresses(state)
 	if err != nil {
 		return meshBoot{}, err
@@ -230,6 +235,24 @@ func prepareMesh(state string, now time.Time, address netip.Addr) (meshBoot, err
 	return meshBoot{secret: secret, seeds: strings.Join(seeds, ","), port: port}, nil
 }
 
+// meshPortAvailable checks both memberlist transports on the exact bind
+// address. Memberlist needs TCP and UDP on one port; retaining a port held by
+// either transport guarantees that its Create call will fail.
+func meshPortAvailable(address netip.Addr, port int) bool {
+	endpoint := netip.AddrPortFrom(address, uint16(port)).String()
+	tcp, err := net.Listen("tcp", endpoint)
+	if err != nil {
+		return false
+	}
+	defer tcp.Close()
+	udp, err := net.ListenPacket("udp", endpoint)
+	if err != nil {
+		return false
+	}
+	defer udp.Close()
+	return true
+}
+
 // readGossipPort returns the port a previous boot selected, or zero before
 // the first boot publishes one.
 func readGossipPort(directory string) (int, error) {
@@ -272,10 +295,8 @@ func peerAddresses(state string) ([]string, error) {
 	return result, nil
 }
 
-// recordAddresses keeps the hive's addresses stable across owner boots: the
-// node's own gossip port, which the next boot binds again, and the gossip
-// address of each pinned peer that is a member under its pinned key, which the
-// next boot seeds.
+// recordAddresses saves the live gossip port as the next boot's preferred
+// port and the current addresses of pinned peers, which the next boot seeds.
 func recordAddresses(state string, membership clusterapi.Membership) error {
 	directory := ownerDirectory(state)
 	local, err := netip.ParseAddrPort(membership.LocalNode().Addr)
@@ -309,6 +330,7 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 		}
 		verified = path.Addr()
 	}
+	joinedAddress := ""
 	for _, member := range membership.Nodes() {
 		key, ok := pinned[member.ID]
 		if !ok || member.Meta[internode.MetadataPublicKey] != base64.RawStdEncoding.EncodeToString(key) {
@@ -321,7 +343,20 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 		if verified.IsValid() && !verified.IsLoopback() && joined && member.ID == joinedRecord.Node {
 			address = netip.AddrPortFrom(verified, address.Port())
 		}
+		if joined && member.ID == joinedRecord.Node {
+			joinedAddress = address.String()
+		}
 		if err := writeChanged(filepath.Join(ownerPeersDirectory(state), member.ID+peerAddressSuffix), address.String()); err != nil {
+			return err
+		}
+	}
+	if joinedAddress != "" && joinedRecord.Gossip != joinedAddress {
+		joinedRecord.Gossip = joinedAddress
+		document, err := json.Marshal(joinedRecord)
+		if err != nil {
+			return err
+		}
+		if err := writeChanged(filepath.Join(directory, joinedRecordName), string(document)); err != nil {
 			return err
 		}
 	}

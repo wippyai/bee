@@ -23,7 +23,13 @@ function M.run<T>(start: Start<T>, disable: Disable, cleanup: Cleanup): (T?, str
     if not readiness_failed then return nil, first_error end
 
     local changed, disable_error = disable()
-    if changed ~= true then return nil, disable_error or first_error end
+    if changed ~= true then
+        if disable_error and first_error then
+            return nil, "local host startup failed: " .. tostring(first_error)
+                .. "; super-edit recovery failed: " .. tostring(disable_error)
+        end
+        return nil, disable_error or first_error
+    end
 
     local second, second_error = checked(start, cleanup)
     if second ~= nil then return second, nil end

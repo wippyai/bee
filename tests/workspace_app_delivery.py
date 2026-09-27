@@ -24,12 +24,14 @@ writes the application itself, consuming inference. BEE_RUNTIME names the
 runtime used to compose and author the fixture. BEE_WORKSPACE_APP_EVIDENCE
 overrides the retained evidence directory.
 """
-import json
+import errno
 import hashlib
+import json
 import os
 import re
-import shutil
 import shlex
+import shutil
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -270,6 +272,21 @@ def evidence_root():
     return root
 
 
+def occupy_gossip_port(state_dir):
+    """Keep the saved gossip port busy while the native owner restarts."""
+    path = Path(state_dir) / "hive" / "gossip.port"
+    assert path.is_file(), path
+    port = int(path.read_text().strip())
+    listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        listener.bind(("0.0.0.0", port))
+    except OSError as exc:
+        listener.close()
+        assert exc.errno == errno.EADDRINUSE, f"cannot reserve saved gossip port {port}: {exc}"
+        return port, None
+    return port, listener
+
+
 def exercise():
     folder = evidence_root()
     print("Evidence:", folder)
@@ -339,20 +356,54 @@ def exercise():
             volume_id, database_id = grant_identities(classic_workspace(folder / "workspace.db"))
             assert grant["volume_id"] == volume_id, grant
             assert grant["database_id"] == database_id, grant
+        ui.window_control("×")
+        ui.wait("No applications open", timeout=20)
         ui.quit()
     finally:
         ui.close()
         os.environ.pop("BEE_WORKSPACE_APP_INSPECT", None)
         os.environ.pop("BEE_WORKSPACE_APP_WORKSPACE", None)
 
+    held_gossip_port = None
+    saved_gossip_port = None
+    if NATIVE_DESKTOP:
+        stopped = subprocess.run([str(DESKTOP_RUNTIME), "--state", str(folder / "native-state"), "stop"],
+                                 cwd=project, env=database_environment(folder), capture_output=True,
+                                 text=True, timeout=90)
+        stop_output = stopped.stdout + stopped.stderr
+        assert stopped.returncode == 0 and "Bee stopped" in stop_output, stop_output
+        saved_gossip_port, held_gossip_port = occupy_gossip_port(folder / "native-state")
+
+    # The source-runtime fixture exits its owner with the terminal process;
+    # native mode keeps the owner alive and needs the explicit stop above.
     restarted = Desktop(folder, project=project, runtime=DESKTOP_RUNTIME, native=NATIVE_DESKTOP,
                         state_dir=folder / "native-state" if NATIVE_DESKTOP else None)
     try:
+        restarted.wait("No applications open", timeout=COLD_BOOT)
+        deadline = time.monotonic() + COLD_BOOT
+        while True:
+            restarted.open_start()
+            if TITLE in restarted.text():
+                restarted.choose(TITLE)
+                break
+            restarted.key(b"\x1b")
+            assert time.monotonic() < deadline, restarted.text()
+            restarted.pump(.1)
+        if NATIVE_DESKTOP:
+            gossip_port = int((folder / "native-state" / "hive" / "gossip.port").read_text().strip())
+            assert gossip_port != saved_gossip_port, (gossip_port, saved_gossip_port)
         restarted.wait("TALLY", timeout=COLD_BOOT)
-        restarted.wait("Tally: 3", timeout=20)
         restarted.quit()
     finally:
         restarted.close()
+        if NATIVE_DESKTOP:
+            stopped = subprocess.run([str(DESKTOP_RUNTIME), "--state", str(folder / "native-state"), "stop"],
+                                     cwd=project, env=database_environment(folder), capture_output=True,
+                                     text=True, timeout=90)
+            stop_output = stopped.stdout + stopped.stderr
+            assert stopped.returncode == 0 and "Bee stopped" in stop_output, stop_output
+        if held_gossip_port is not None:
+            held_gossip_port.close()
     workspace_id = classic_workspace(folder / "workspace.db")
     app_db = application_database(folder, project)
     with sqlite3.connect(f"file:{app_db}?mode=ro", uri=True) as db:

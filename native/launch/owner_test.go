@@ -265,6 +265,27 @@ func TestPrepareOwnerIsIdempotentAcrossRuns(t *testing.T) {
 	}
 }
 
+func TestPrepareOwnerMintsANewExecutionForEachBoot(t *testing.T) {
+	state := t.TempDir()
+	boot := func() string {
+		_, release, err := prepareOwner(state, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = release() }()
+		execution, err := readExecution(ownerDirectory(state))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return execution
+	}
+	first := boot()
+	second := boot()
+	if first == second {
+		t.Fatalf("owner execution stayed %q across boots", first)
+	}
+}
+
 func TestExistingMembershipSecretMustHaveTheRequestedLength(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "owner")
 	if err := privatefile.EnsurePrivateDir(directory); err != nil {

@@ -5,8 +5,9 @@ local test = require("test")
 local protocol = require("protocol")
 local owner = require("owner")
 local EXECUTION = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-local function configuration(folder: unknown): (protocol.Configuration?, string?)
-    return protocol.configuration({execution = EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {},
+local NEXT_EXECUTION = "ffffffffffffffffffffffffffffffff"
+local function configuration(folder: unknown, execution: string?): (protocol.Configuration?, string?)
+    return protocol.configuration({execution = execution or EXECUTION, expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {},
         local_clients = true, folder = folder})
 end
 local function define_tests()
@@ -33,6 +34,7 @@ local function define_tests()
             local daemon = configuration(false)
             if not daemon then error("daemon configuration refused") end
             local state = owner.start(daemon, "daemon-node")
+            test.eq(state.execution, EXECUTION)
             test.is_nil(state.folder)
             test.eq(state.served_count, 0)
             test.is_nil(next(state.served))
@@ -40,8 +42,11 @@ local function define_tests()
             test.is_nil(owner.listing(state).default_workspace)
             local first_execution = owner.listing(state).execution
             owner.close(state)
-            local restarted = owner.start(daemon, "daemon-node")
+            local next_boot = configuration(false, NEXT_EXECUTION)
+            if not next_boot then error("next boot configuration refused") end
+            local restarted = owner.start(next_boot, "daemon-node")
             test.is_true(owner.listing(restarted).execution ~= first_execution)
+            test.eq(owner.listing(restarted).execution, NEXT_EXECUTION)
             owner.close(restarted)
         end)
     end)

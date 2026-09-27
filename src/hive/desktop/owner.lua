@@ -82,9 +82,14 @@ end
 -- grants. Neither is inferred from transport, discovery, metadata or a PID.
 function M.start(config: protocol.Configuration, node: string): State
     if not security.can("bee.desktop.host", "bee.desktop") then error("Host did not authorize desktop admission") end
-    local raw_execution, execution_error = uuid.v4()
-    if not raw_execution or execution_error then error("Cannot allocate desktop owner incarnation: " .. tostring(execution_error)) end
-    local execution = raw_execution:gsub("-", "")
+    local execution: string
+    if config.execution then
+        execution = config.execution
+    else
+        local raw_execution, execution_error = uuid.v4()
+        if not raw_execution or execution_error then error("Cannot allocate desktop owner incarnation: " .. tostring(execution_error)) end
+        execution = raw_execution:gsub("-", "")
+    end
     local expiry = clock.parse(config.expires_at)
     if not expiry or not time.now():before(expiry) then error("Desktop owner execution expired") end
     local allowed: {[string]: boolean} = {}
@@ -273,6 +278,20 @@ function M.folder_workspace(state: State): string?
     local folder = state.folder
     if folder and folder.ready then return folder.workspace_id end
     return nil
+end
+-- A folder supervisor can fail before the native owner receives readiness.
+-- Forward its actual startup cause while this bridge still owns the route.
+function M.startup_failure(state: State?, reason: string): ()
+    if reason == "" or (state and (state.stopped or not state.folder or state.folder.ready)) then return end
+    local owner_name = state and state.owner_name or ""
+    if owner_name == "" then
+        local folder = workspaces.classic()
+        local key = workspaces.key(folder)
+        owner_name = key and retained.owner_name(key) or ""
+    end
+    if owner_name == "" then return end
+    local route = process.registry.lookup(owner_name)
+    if route then send(tostring(route), "bee.retained.failure", {version = 1, error = reason:sub(1, 4096)}) end
 end
 -- Whether a retained desktop supervisor serves the workspace now.
 function M.serves(state: State, workspace_id: string): boolean

@@ -49,6 +49,17 @@ local function define_tests()
             test.eq(disabled, 1)
         end)
 
+        test.it("keeps the readiness cause when edit-mode recovery also fails", function()
+            local ready, err = fallback.run(function()
+                return nil, "membership bind failed: address already in use", true
+            end, function()
+                return nil, "recovery actor was denied"
+            end, function() end)
+            test.is_nil(ready)
+            test.eq(err, "local host startup failed: membership bind failed: address already in use; "
+                .. "super-edit recovery failed: recovery actor was denied")
+        end)
+
         test.it("does not disable profiles after cancellation", function()
             local starts, disabled = 0, 0
             local ready, err = fallback.run(function()

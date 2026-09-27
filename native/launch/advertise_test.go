@@ -114,7 +114,7 @@ func TestObservedAddressReplacesAdvertiseWhenLocal(t *testing.T) {
 	if err != nil || !ok || recorded != remote {
 		t.Fatalf("recorded NAT address = %v %v %v, want %v", recorded, ok, err, remote)
 	}
-	if hint := meshDialHint(state); hint != dialOut {
+	if hint := dialHintForTest(t, state); hint != dialOut {
 		t.Fatalf("NATed node dial hint = %q, want %q", hint, dialOut)
 	}
 	// A later join that observes an address this host owns clears the mark.
@@ -124,7 +124,7 @@ func TestObservedAddressReplacesAdvertiseWhenLocal(t *testing.T) {
 	if _, ok, err := readNAT(directory); err != nil || ok {
 		t.Fatalf("NAT mark survived = %v %v", ok, err)
 	}
-	if hint := meshDialHint(state); hint == dialOut {
+	if hint := dialHintForTest(t, state); hint == dialOut {
 		t.Fatal("an unnatted node still dials out")
 	}
 	// A malformed observation is refused rather than stored.
@@ -188,14 +188,27 @@ func TestMeshDialHintOnlyForANATedNode(t *testing.T) {
 	if err := os.MkdirAll(ownerDirectory(state), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if hint := meshDialHint(state); hint == dialOut {
+	if hint := dialHintForTest(t, state); hint == dialOut {
 		t.Fatal("a directly reachable node dials out")
 	}
 	if err := os.WriteFile(filepath.Join(ownerDirectory(state), natFileName), []byte("203.0.113.7\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if hint := meshDialHint(state); hint != dialOut {
+	if hint := dialHintForTest(t, state); hint != dialOut {
 		t.Fatalf("NATed node dial hint = %q, want %q", hint, dialOut)
+	}
+}
+
+func TestMeshDialHintPropagatesCorruptNATState(t *testing.T) {
+	state := t.TempDir()
+	if err := os.MkdirAll(ownerDirectory(state), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ownerDirectory(state), natFileName), []byte("invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := meshDialHint(state); err == nil {
+		t.Fatal("corrupt NAT state silently selected a direct dial hint")
 	}
 }
 
@@ -211,7 +224,7 @@ func TestOwnerPublishesItsDialHintAndEndpoint(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(ownerDirectory(state), natFileName), []byte("203.0.113.7\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if hint := meshDialHint(state); hint != dialOut {
+	if hint := dialHintForTest(t, state); hint != dialOut {
 		t.Fatalf("dial hint = %q, want %q", hint, dialOut)
 	}
 	membership := &recordingMembership{}
@@ -226,6 +239,15 @@ func TestOwnerPublishesItsDialHintAndEndpoint(t *testing.T) {
 	if len(direct.meta) != 0 {
 		t.Fatalf("a direct node published meta: %#v", direct.meta)
 	}
+}
+
+func dialHintForTest(t *testing.T, state string) string {
+	t.Helper()
+	hint, err := meshDialHint(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hint
 }
 
 // recordingMembership captures the metadata a node publishes.

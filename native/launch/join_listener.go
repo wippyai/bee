@@ -51,7 +51,8 @@ type joinListenerComponent struct {
 	// The component republishes it through Membership.UpdateMeta when the
 	// host's own pick changes, so peers learn the new internode endpoint
 	// without a restart.
-	published netip.Addr
+	published         netip.Addr
+	publishedDialHint string
 }
 
 // joinListener serves invite redemption for the owner of state and records the
@@ -127,6 +128,10 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	if membership == nil {
 		return errors.New("join listener requires the running mesh")
 	}
+	dialHint, err := meshDialHint(l.state)
+	if err != nil {
+		return err
+	}
 	store, err := rendezvous.New(filepath.Join(l.state, rendezvous.DirectoryName))
 	if err != nil {
 		return err
@@ -157,8 +162,8 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	// metadata the runtime re-broadcasts. Its internode endpoint needs no
 	// metadata: the runtime dials a member at its membership address, which the
 	// owner selected from hive/advertise at boot.
-	publishMeshMeta(membership, meshDialHint(l.state))
-	l.published = l.address
+	publishMeshMeta(membership, dialHint)
+	l.published, l.publishedDialHint = l.address, dialHint
 	served, recorded := make(chan struct{}), make(chan struct{})
 	updates := subscribeNodeUpdates(lifetime, ctx)
 	go func() {
@@ -229,11 +234,19 @@ func (l *joinListenerComponent) republishAddress(membership clusterapi.Membershi
 	if err != nil {
 		return err
 	}
-	if address == l.published {
+	dialHint, err := meshDialHint(l.state)
+	if err != nil {
+		return err
+	}
+	if address == l.published && dialHint == l.publishedDialHint {
 		return nil
 	}
-	publishMeshMeta(membership, meshDialHint(l.state))
-	l.published = address
+	if dialHint == "" && l.publishedDialHint != "" {
+		membership.UpdateMeta(map[string]string{dialMetadataKey: ""})
+	} else {
+		publishMeshMeta(membership, dialHint)
+	}
+	l.published, l.publishedDialHint = address, dialHint
 	return nil
 }
 
@@ -293,8 +306,8 @@ func (l *joinListenerComponent) Stop(context.Context) error {
 	return nil
 }
 
-func refuse(code, message string) *invite.Refused {
-	return &invite.Refused{Code: code, Message: message}
+func refuse(code, message string) invite.Decision {
+	return invite.Reject(invite.Refused{Code: code, Message: message})
 }
 
 // observeReached records the local address one authenticated, redeemed join
@@ -304,46 +317,49 @@ func refuse(code, message string) *invite.Refused {
 // Only a peer on another machine teaches anything. A node on this host is
 // already reachable through the automatic pick, and the local address of a
 // same-host connection may be an address no other machine can route.
-func (a *admitter) observeReached(remote, local string) {
+func (a *admitter) observeReached(remote, local net.Addr) {
 	assigned, err := assignedInterfaceAddresses()
 	if err != nil {
 		return
 	}
 	tailnet, _ := tailscaleIdentity()
-	remoteAddress, err := netip.ParseAddr(remote)
-	if err == nil && isAssignedLocally(remoteAddress, assigned, tailnet) {
+	if isAssignedLocally(remoteAddress(remote), assigned, tailnet) {
 		return
 	}
-	address, err := netip.ParseAddr(local)
-	if err != nil {
-		return
-	}
-	address = address.Unmap()
-	if address.IsLoopback() || address.IsUnspecified() || !isAssignedLocally(address, assigned, tailnet) {
+	address, ok := localAddress(local)
+	if !ok || !isAssignedLocally(address, assigned, tailnet) {
 		return
 	}
 	value := address
 	a.reached.Store(&value)
 }
 
+func socketAddress(value string) net.Addr {
+	address, err := netip.ParseAddr(value)
+	if err != nil {
+		return nil
+	}
+	return &net.TCPAddr{IP: net.IP(address.AsSlice())}
+}
+
 // admit redeems the joiner's invite through the supervisor, pins the joiner's
 // identity key as a Hive peer and certifies its mesh leaf.
-func (a *admitter) admit(ctx context.Context, peer ed25519.PublicKey, request invite.Request) (invite.Admission, *invite.Refused) {
+func (a *admitter) admit(ctx context.Context, peer ed25519.PublicKey, request invite.Request) invite.Decision {
 	if !invite.ValidNode(request.Node) || request.Node == a.node || !validTrustedName(request.Node) {
-		return invite.Admission{}, refuse("INVALID_ARGUMENT", "the joining node identity is invalid")
+		return refuse("INVALID_ARGUMENT", "the joining node identity is invalid")
 	}
 	key, err := base64.RawStdEncoding.DecodeString(request.Key)
 	if err != nil || len(key) != ed25519.PublicKeySize {
-		return invite.Admission{}, refuse("INVALID_ARGUMENT", "the joining node's mesh key is invalid")
+		return refuse("INVALID_ARGUMENT", "the joining node's mesh key is invalid")
 	}
 	if len(request.Addresses) > maxJoinAddresses {
-		return invite.Admission{}, refuse("INVALID_ARGUMENT", "too many joining node addresses")
+		return refuse("INVALID_ARGUMENT", "too many joining node addresses")
 	}
 	addresses := make([]netip.Addr, 0, len(request.Addresses))
 	for _, value := range request.Addresses {
 		address, err := netip.ParseAddr(value)
 		if err != nil || address.Zone() != "" || address.IsUnspecified() {
-			return invite.Admission{}, refuse("INVALID_ARGUMENT", "a joining node address is invalid")
+			return refuse("INVALID_ARGUMENT", "a joining node address is invalid")
 		}
 		addresses = append(addresses, address)
 	}
@@ -352,42 +368,42 @@ func (a *admitter) admit(ctx context.Context, peer ed25519.PublicKey, request in
 	if err := a.redeem.Redeem(ctx, request.Invite, request.Secret, request.Node); err != nil {
 		var refused *invite.Refused
 		if errors.As(err, &refused) {
-			return invite.Admission{}, refused
+			return invite.Reject(*refused)
 		}
-		return invite.Admission{}, refuse("UNAVAILABLE", "the hive node could not redeem the invite")
+		return refuse("UNAVAILABLE", "the hive node could not redeem the invite")
 	}
 	assigned, assignedError := hostInterfaceAddresses()
 	tailnet, _ := tailscaleIdentity()
 	if assignedError == nil && sameHostJoin(request.Observed, assigned, tailnet) {
 		if err := a.forgetReached(); err != nil {
-			return invite.Admission{}, refuse("INTERNAL", "the hive node could not retain its advertised address")
+			return refuse("INTERNAL", "the hive node could not retain its advertised address")
 		}
 	} else {
-		a.observeReached(request.Observed, request.Local)
+		a.observeReached(socketAddress(request.Observed), socketAddress(request.Local))
 	}
 	now := time.Now()
 	leaf, err := a.authority.Issue(ed25519.PublicKey(key), addresses, now)
 	if err != nil {
-		return invite.Admission{}, refuse("INTERNAL", "the hive node could not certify the joining node")
+		return refuse("INTERNAL", "the hive node could not certify the joining node")
 	}
 	secretPath, err := membershipSecretPath(a.state)
 	if err != nil {
-		return invite.Admission{}, refuse("INTERNAL", "the hive mesh secret is unavailable")
+		return refuse("INTERNAL", "the hive mesh secret is unavailable")
 	}
 	secret, err := os.ReadFile(secretPath)
 	if err != nil {
-		return invite.Admission{}, refuse("INTERNAL", "the hive mesh secret is unavailable")
+		return refuse("INTERNAL", "the hive mesh secret is unavailable")
 	}
 	pool, err := os.ReadFile(filepath.Join(ownerDirectory(a.state), meshtls.AuthoritiesFile))
 	if err != nil {
-		return invite.Admission{}, refuse("INTERNAL", "the hive authorities are unavailable")
+		return refuse("INTERNAL", "the hive authorities are unavailable")
 	}
 	pin := filepath.Join(ownerPeersDirectory(a.state), request.Node+".pub")
 	if err := writeOwnerFile(pin, []byte(base64.RawStdEncoding.EncodeToString(peer)+"\n")); err != nil {
-		return invite.Admission{}, refuse("INTERNAL", "the hive node could not pin the joining node")
+		return refuse("INTERNAL", "the hive node could not pin the joining node")
 	}
-	return invite.Admission{Node: a.node, Gossip: a.gossipSeed(), Secret: strings.TrimSpace(string(secret)),
-		Certificate: string(leaf), Authorities: string(pool)}, nil
+	return invite.Accept(invite.Admission{Node: a.node, Gossip: a.gossipSeed(), Secret: strings.TrimSpace(string(secret)),
+		Certificate: string(leaf), Authorities: string(pool)})
 }
 
 // gossipSeed is the address the joiner seeds this node at. A remote joiner

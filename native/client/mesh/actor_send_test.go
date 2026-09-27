@@ -65,7 +65,8 @@ func TestActorSendsControlAcrossNativeMesh(t *testing.T) {
 			case <-deadline.Done():
 				return deadline.Err()
 			}
-			if !samePID(request.From, actor.PID()) || request.Topic != "bee.client.request" || !bytes.Equal(request.Body, body) {
+			if !request.From.Equal(actor.PID()) || request.From.Host != "bee.hive.desktop:display_host" ||
+				ActorHost != "bee.hive.desktop:display_host" || request.Topic != "bee.client.request" || !bytes.Equal(request.Body, body) {
 				t.Fatalf("changed request: %#v", request)
 			}
 			reply := relay.NewPackage(target, request.From, "bee.client.reply", payload.NewPayload(request.Body, payload.JSON))
@@ -77,7 +78,7 @@ func TestActorSendsControlAcrossNativeMesh(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if !samePID(received.From, target) || !bytes.Equal(received.Body, body) {
+			if !received.From.Equal(target) || !bytes.Equal(received.Body, body) {
 				t.Fatal("changed reply")
 			}
 			select {

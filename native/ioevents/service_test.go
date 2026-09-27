@@ -44,10 +44,10 @@ func TestWatchReportsChangesAndReconciliation(t *testing.T) {
 			if event.Resource != "project:root" || !filepath.IsLocal(event.Path) {
 				t.Fatalf("invalid event: %+v", event)
 			}
-			if event.Kind == "change" && event.Path == "file.txt" {
+			if event.Kind == EventChange && event.Path == "file.txt" {
 				changes++
 			}
-			if event.Kind == "rescan" {
+			if event.Kind == EventRescan {
 				rescans++
 			}
 		case <-deadline.C:
@@ -105,7 +105,7 @@ func TestWatchTreatsTrailingDotsAsLiteralDirectoryName(t *testing.T) {
 	for {
 		select {
 		case event := <-events:
-			if event.Kind == "change" && event.Path == "literal.../file.txt" {
+			if event.Kind == EventChange && event.Path == "literal.../file.txt" {
 				return
 			}
 		case <-deadline.C:
@@ -141,7 +141,7 @@ func TestWatchEventsStopsWhenNativeChannelCloses(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		watchEvents(context.Background(), raw, time.Hour, t.TempDir(), Event{Kind: "rescan"}, func(Event) error {
+		watchEvents(context.Background(), raw, time.Hour, t.TempDir(), Event{Kind: EventRescan}, func(Event) error {
 			return nil
 		})
 		close(done)

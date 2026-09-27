@@ -20,6 +20,7 @@ import (
 	"github.com/wippyai/bee/native/hive/meshtls"
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
+	"github.com/wippyai/bee/native/internal/timewire"
 	"github.com/wippyai/runtime/api/boot"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 )
@@ -213,7 +214,7 @@ func selectedDesktopPeers(state string) ([]any, error) {
 // with millisecond precision, the only format the desktop bridge accepts.
 func ownerExpiry() string {
 	now := time.Now().UTC().Add(30 * 24 * time.Hour)
-	return now.Format("2006-01-02T15:04:05.000Z")
+	return timewire.FormatCanonicalUTC(now)
 }
 
 // executionName persists the owner execution identity so the rendezvous
@@ -281,9 +282,18 @@ func randomExecution() (string, error) {
 // ensureSecretFile creates a random base64 secret at path if absent and returns
 // the path. An existing secret is validated and reused, never rewritten.
 func ensureSecretFile(path string, size int) (string, error) {
-	if data, err := os.ReadFile(path); err == nil {
-		if _, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data))); decodeErr != nil {
+	if size < 1 || size > 1<<20 {
+		return "", errors.New("owner membership secret size is invalid")
+	}
+	encodedLimit := base64.StdEncoding.EncodedLen(size) + 2
+	data, err := readOwnerFile(path, int64(encodedLimit))
+	if err == nil {
+		decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+		if decodeErr != nil {
 			return "", fmt.Errorf("owner membership secret is not base64: %w", decodeErr)
+		}
+		if len(decoded) != size {
+			return "", errors.New("owner membership secret has an invalid length")
 		}
 		return path, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -370,37 +380,18 @@ func validTrustedName(nodeID string) bool {
 }
 
 // writeOwnerFile replaces path atomically with an owner-only file.
-func writeOwnerFile(path string, data []byte) (result error) {
-	file, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+func writeOwnerFile(path string, data []byte) error { return privatefile.WriteAtomic(path, data) }
+
+func readOwnerFile(path string, maxBytes int64) ([]byte, error) {
+	name := filepath.Base(path)
+	file, err := privatefile.New(filepath.Dir(path), name, "."+name+".lock")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() {
-		if result != nil {
-			_ = os.Remove(file.Name())
-		}
-	}()
-	if err := privatefile.SetOwnerOnlyPermissions(file.Name()); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return os.Rename(file.Name(), path)
+	return file.Read(context.Background(), maxBytes)
 }
 
 func sha256Hex(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
 }
-
-var _ = rendezvous.DirectoryName

@@ -77,7 +77,7 @@ func (p *nativeActor) Step(events []process.Event, out *process.StepOutput) erro
 		}
 		// The native scheduler sends typed cancellation from its reserved system
 		// identity. It is lifecycle control, not a remote application reply.
-		if samePID(pkg.Source, topology.SystemPID) && samePID(pkg.Target, p.actor.id) {
+		if pkg.Source.Equal(topology.SystemPID) && pkg.Target.Equal(p.actor.id) {
 			for _, message := range pkg.Messages {
 				if message == nil || message.Topic != topology.TopicEvents || len(message.Payloads) != 1 || message.Payloads[0] == nil {
 					continue
@@ -88,11 +88,9 @@ func (p *nativeActor) Step(events []process.Event, out *process.StepOutput) erro
 				}
 			}
 		}
-		// Application control replies must come from the enrolled owner node.
-		// Remote admission requires runtime source-provenance enforcement (a release
-		// gate); checking this field here cannot establish transport provenance.
-		// Exact supervisor/process identity remains the operation decoder's job.
-		if pkg.Source.Node != p.actor.owner {
+		// The runtime sets IngressNode from the peer connection; Source is the
+		// logical sender carried in the remote envelope.
+		if pkg.IngressNode != pid.NodeID(p.actor.owner) {
 			continue
 		}
 		for _, message := range pkg.Messages {

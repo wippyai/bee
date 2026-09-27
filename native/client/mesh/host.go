@@ -102,7 +102,7 @@ func WithActor(ctx context.Context, stack *stackpkg.Stack, owner string, run fun
 	proc.actor.id = generated
 	// Init exposes the original runtime frame without inventing or copying a PID.
 	actual, ok := runtime.GetFramePID(frame)
-	if !ok || !samePID(actual, generated) {
+	if !ok || !actual.Equal(generated) {
 		return errors.New("mesh client: runtime frame identity mismatch")
 	}
 	result = run(frame, proc.actor)

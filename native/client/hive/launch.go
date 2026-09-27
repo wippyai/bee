@@ -19,7 +19,7 @@ type LaunchedApplication struct {
 // Launch requires the existing controller session; it never retries a mutation.
 func (d *Desktop) Launch(ctx context.Context, key string, mounted DesktopMount, command DesktopCommand) (LaunchedApplication, error) {
 	if d == nil || !mounted.Selection.valid() || mounted.Selection.Execution != d.execution || mounted.owner != d.owner ||
-		!samePID(mounted.Recipient, d.recipient) || !identifier(mounted.Session) || !live(mounted.lifetime) || mounted.Mode != Control || !command.Valid() {
+		!mounted.Recipient.Equal(d.recipient) || !identifier(mounted.Session) || !live(mounted.lifetime) || mounted.Mode != Control || !command.Valid() {
 		return LaunchedApplication{}, errors.New("invalid command or unavailable desktop controller")
 	}
 	// Lua requires an explicit dense argument vector, including for no arguments.

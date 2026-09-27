@@ -35,6 +35,7 @@ func TestActorReleasesEveryConsumedPackage(t *testing.T) {
 					source = "other"
 				}
 				pkg := relay.NewPackage(pid.PID{Node: source, Host: "fixture", UniqID: "owner"}, pid.PID{}, "reply", payload.NewPayload([]byte(`{"ok":true}`), payload.JSON))
+				pkg.IngressNode = pid.NodeID(source)
 				pkg.Messages[0].SetRetentionLease(lease)
 				events[i] = process.Event{Type: process.EventMessage, Data: pkg}
 			}

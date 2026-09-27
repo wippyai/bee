@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/client/mesh"
+	"github.com/wippyai/bee/native/internal/timewire"
 )
 
 func desktopBinding(t *testing.T) (*Desktop, *scripted) {
@@ -33,7 +34,7 @@ func answerDesktop(s *scripted, value any, fault *Fault) wireCall {
 func TestDesktopBindingCarriesExactIdentityAndUsesOneSendPerOperation(t *testing.T) {
 	d, s := desktopBinding(t)
 	value := mountValue()
-	value["expires_at"] = time.Now().UTC().Add(time.Minute).Format(desktopTimeLayout)
+	value["expires_at"] = timewire.FormatCanonicalUTC(time.Now().Add(time.Minute))
 	calls := make(chan wireCall, 1)
 	go func() { calls <- answerDesktop(s, value, nil) }()
 	mounted, err := d.Attach(context.Background(), "attach-key", selection.Workspace, selection.Desktop, Control)
@@ -99,6 +100,87 @@ func TestDesktopBindingCreatesExactDurableIdentityBeforeAttachment(t *testing.T)
 	}
 }
 
+func TestDesktopPlanDecodesDiscriminatedOwnerDecision(t *testing.T) {
+	workspace := strings.Repeat("a", 32)
+	first, second := strings.Repeat("b", 32), strings.Repeat("c", 32)
+	d, script := desktopBinding(t)
+	request := &AutomaticSessionRequest{Mode: Control, Desktops: []string{first, second}, Excluded: []string{}}
+	calls := make(chan wireCall, 1)
+	go func() {
+		calls <- answerDesktop(script, map[string]any{"kind": "attach", "workspace_id": workspace, "desktop_id": second, "mode": "control"}, nil)
+	}()
+	plan, err := d.Plan(context.Background(), "plan-key", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, ok := plan.(AttachSessionPlan)
+	if !ok || selected != (AttachSessionPlan{Workspace: workspace, Desktop: second, Mode: Control}) {
+		t.Fatalf("unexpected desktop plan: %#v", plan)
+	}
+	call := <-calls
+	if call.Key != "plan-key" || call.Target.Ref != DesktopPlan || call.Owner.Service != DesktopService {
+		t.Fatalf("wrong plan call: %+v", call)
+	}
+	var input struct {
+		Execution string          `json:"owner_execution"`
+		Request   json.RawMessage `json:"request"`
+	}
+	if json.Unmarshal(call.Input, &input) != nil || input.Execution != selection.Execution {
+		t.Fatalf("invalid plan envelope: %s", call.Input)
+	}
+	var body struct {
+		Kind     string      `json:"kind"`
+		Mode     DesktopMode `json:"mode"`
+		Desktops []string    `json:"desktops"`
+		Excluded []string    `json:"excluded"`
+	}
+	if json.Unmarshal(input.Request, &body) != nil || body.Kind != "automatic" || body.Mode != Control ||
+		len(body.Desktops) != 2 || body.Desktops[0] != first || body.Desktops[1] != second || body.Excluded == nil || len(body.Excluded) != 0 {
+		t.Fatalf("invalid typed plan request: %s", input.Request)
+	}
+}
+
+func TestDesktopPlanRejectsUnknownOrOutOfPlanDecisions(t *testing.T) {
+	workspace, desktop := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	for name, value := range map[string]any{
+		"extra field":             map[string]any{"kind": "choose_workspace", "desktop_id": desktop},
+		"unlisted desktop":        map[string]any{"kind": "attach", "workspace_id": workspace, "desktop_id": strings.Repeat("c", 32), "mode": "control"},
+		"excluded desktop":        map[string]any{"kind": "attach", "workspace_id": workspace, "desktop_id": desktop, "mode": "control"},
+		"wrong mode":              map[string]any{"kind": "attach", "workspace_id": workspace, "desktop_id": desktop, "mode": "observe"},
+		"allocation on selection": map[string]any{"kind": "allocate", "workspace_id": workspace},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d, script := desktopBinding(t)
+			var request SessionPlanRequest = &AutomaticSessionRequest{Mode: Control, Desktops: []string{desktop}, Excluded: []string{}}
+			if name == "allocation on selection" {
+				request = &SelectedSessionRequest{Workspace: workspace, Desktop: desktop, Mode: Control, Desktops: []string{desktop}}
+			} else if name == "excluded desktop" {
+				request = &WorkspaceSessionRequest{Workspace: workspace, Mode: Control, Desktops: []string{desktop}, Excluded: []string{desktop}}
+			}
+			go func() { answerDesktop(script, value, nil) }()
+			if _, err := d.Plan(context.Background(), "plan-key", request); err == nil {
+				t.Fatal("invalid owner plan was accepted")
+			}
+		})
+	}
+}
+
+func TestDesktopPlanRejectsInvalidRequestsBeforeSending(t *testing.T) {
+	d, script := desktopBinding(t)
+	for _, request := range []SessionPlanRequest{
+		&AutomaticSessionRequest{Mode: Control, Desktops: []string{selection.Desktop}},
+		&AutomaticSessionRequest{Mode: Control, Desktops: []string{selection.Desktop, selection.Desktop}, Excluded: []string{}},
+		&SelectedSessionRequest{Workspace: selection.Workspace, Desktop: "unknown", Mode: Control, Desktops: []string{selection.Desktop}},
+	} {
+		if _, err := d.Plan(context.Background(), "invalid", request); err == nil {
+			t.Fatal("invalid session plan was sent")
+		}
+	}
+	if script.sent.Load() != 0 {
+		t.Fatalf("invalid plans sent %d calls", script.sent.Load())
+	}
+}
+
 func TestDesktopBindingListsOnePageByLabelAndCursor(t *testing.T) {
 	d, s := desktopBinding(t)
 	calls := make(chan wireCall, 1)
@@ -124,8 +206,6 @@ func TestDesktopBindingListsOnePageByLabelAndCursor(t *testing.T) {
 		t.Fatal("control text sent as a query")
 	}
 }
-
-const desktopTimeLayout = "2006-01-02T15:04:05.000Z"
 
 func TestDesktopBindingDistinguishesRefusalFromUnknownSuccessfulGrant(t *testing.T) {
 	for _, scenario := range []string{"denied", "uncertain", "malformed"} {
@@ -174,7 +254,7 @@ func TestDesktopBindingRejectsInvalidSelectionBeforeSend(t *testing.T) {
 func TestDesktopBindingReadsTheCurrentSessionOfItsDisplay(t *testing.T) {
 	d, s := desktopBinding(t)
 	value := mountValue()
-	value["expires_at"] = time.Now().UTC().Add(time.Minute).Format(desktopTimeLayout)
+	value["expires_at"] = timewire.FormatCanonicalUTC(time.Now().Add(time.Minute))
 	go answerDesktop(s, value, nil)
 	mounted, err := d.Attach(context.Background(), "attach-key", selection.Workspace, selection.Desktop, Control)
 	if err != nil {

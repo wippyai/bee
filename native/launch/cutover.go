@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/wippyai/bee/native/internal/jsonwire"
 )
 
 const (
@@ -324,23 +326,28 @@ func writeCutoverLedger(state string, ledger cutoverLedger) error {
 }
 
 func readCutoverLedger(state string) (cutoverLedger, error) {
-	var ledger cutoverLedger
-	data, err := os.ReadFile(cutoverLedgerPath(state))
+	data, err := readOwnerFile(cutoverLedgerPath(state), 8192)
 	if errors.Is(err, os.ErrNotExist) {
 		return cutoverLedger{}, errors.New("no native cutover was recorded for this state; no previous binary is retained")
 	}
 	if err != nil {
 		return cutoverLedger{}, err
 	}
-	decoder := json.NewDecoder(strings.NewReader(strings.TrimSpace(string(data))))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&ledger); err != nil {
+	ledger, err := jsonwire.DecodeObject[cutoverLedger](data, 8192,
+		"version", "previous", "previous_digest", "candidate", "candidate_digest")
+	if err != nil {
 		return cutoverLedger{}, errors.New("the native cutover ledger is invalid")
 	}
-	if ledger.Version != 1 || ledger.Previous == "" || ledger.PreviousDigest == "" {
+	if ledger.Version != 1 || ledger.Previous != filepath.Join(ownerDirectory(state), cutoverPreviousName) ||
+		!validCutoverDigest(ledger.PreviousDigest) || ledger.Candidate == "" || !validCutoverDigest(ledger.CandidateDigest) {
 		return cutoverLedger{}, errors.New("the native cutover ledger is invalid")
 	}
 	return ledger, nil
+}
+
+func validCutoverDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == value
 }
 
 func sameFile(first, second string) bool {

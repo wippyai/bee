@@ -24,7 +24,7 @@ type SelectionText struct {
 // calls it only for an explicit user copy action.
 func (d *Desktop) Copy(ctx context.Context, key string, mounted DesktopMount) (SelectionText, error) {
 	if d == nil || !mounted.Selection.valid() || mounted.Selection.Execution != d.execution || mounted.owner != d.owner ||
-		!samePID(mounted.Recipient, d.recipient) || !identifier(mounted.Session) || !live(mounted.lifetime) ||
+		!mounted.Recipient.Equal(d.recipient) || !identifier(mounted.Session) || !live(mounted.lifetime) ||
 		!time.Now().Before(mounted.Expires) {
 		return SelectionText{}, errors.New("copy session unavailable or belongs to another recipient")
 	}

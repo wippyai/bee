@@ -19,6 +19,8 @@ import (
 	topologysys "github.com/wippyai/runtime/system/topology"
 )
 
+var ErrSupervisorNotDiscovered = errors.New("mesh client: owner supervisor not discovered")
+
 // prepareNames loads the standard runtime naming component before membership
 // starts, so its delegate participates in the initial state exchange. The
 // caller starts/stops it around the client callback, before stopping transport.
@@ -82,7 +84,7 @@ func (a *Actor) OwnerSupervisor(ctx context.Context) (pid.PID, error) {
 		return pid.PID{}, err
 	}
 	if !found.Found {
-		return pid.PID{}, errors.New("mesh client: owner supervisor not discovered")
+		return pid.PID{}, ErrSupervisorNotDiscovered
 	}
 	if found.PID.Node != a.owner || found.PID.Host != "bee.hive.service:supervisor_host" || found.PID.UniqID == "" {
 		return pid.PID{}, errors.New("mesh client: invalid owner supervisor address")

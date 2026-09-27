@@ -226,6 +226,45 @@ func TestPrepareOwnerBootsAJoinedNodeIntoItsHive(t *testing.T) {
 	}
 }
 
+func TestReadJoinedRejectsMalformedRecords(t *testing.T) {
+	state := t.TempDir()
+	directory := ownerDirectory(state)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	valid := `{"node":"bee-owner-hive","gossip":"127.0.0.1:4100","authorities":"pool"}`
+	for name, data := range map[string]string{
+		"oversized":       strings.Repeat("x", maxJoinedRecordBytes+1),
+		"duplicate":       `{"node":"bee-owner-hive","node":"bee-owner-other","gossip":"127.0.0.1:4100","authorities":"pool"}`,
+		"trailing":        valid + ` {}`,
+		"missing-field":   `{"node":"bee-owner-hive","gossip":"127.0.0.1:4100"}`,
+		"invalid-address": `{"node":"bee-owner-hive","gossip":"not-an-address","authorities":"pool"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := writeOwnerFile(filepath.Join(directory, joinedRecordName), []byte(data)); err != nil {
+				t.Fatal(err)
+			}
+			if _, found, err := readJoined(state); err == nil || found {
+				t.Fatalf("accepted malformed joined record: found=%v err=%v", found, err)
+			}
+		})
+	}
+}
+
+func TestRecordAddressesPropagatesJoinedRecordCorruption(t *testing.T) {
+	state := t.TempDir()
+	directory := ownerDirectory(state)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerFile(filepath.Join(directory, joinedRecordName), []byte(`{"node":"bee-owner-hive"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordAddresses(state, fakeMembership{local: clusterapi.NodeInfo{Addr: "127.0.0.1:4100"}}); err == nil {
+		t.Fatal("silently ignored a corrupt joined record")
+	}
+}
+
 func tlsPair(credential []byte) (ed25519.PublicKey, error) {
 	pair, err := tls.X509KeyPair(credential, credential)
 	if err != nil {
@@ -341,16 +380,16 @@ func TestRedeemInviteRecordsTheHiveOnAFreshNode(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan error, 1)
 	go func() {
-		served <- invite.Serve(ctx, listener, hiveIdentity, func(_ context.Context, _ ed25519.PublicKey, request invite.Request) (invite.Admission, *invite.Refused) {
+		served <- invite.Serve(ctx, listener, hiveIdentity, func(_ context.Context, _ ed25519.PublicKey, request invite.Request) invite.Decision {
 			key, err := base64.RawStdEncoding.DecodeString(request.Key)
 			if err != nil {
-				return invite.Admission{}, &invite.Refused{Code: "INVALID_ARGUMENT", Message: err.Error()}
+				return invite.Reject(invite.Refused{Code: "INVALID_ARGUMENT", Message: err.Error()})
 			}
 			leaf, err := hive.Issue(ed25519.PublicKey(key), nil, time.Now())
 			if err != nil {
-				return invite.Admission{}, &invite.Refused{Code: "INTERNAL", Message: err.Error()}
+				return invite.Reject(invite.Refused{Code: "INTERNAL", Message: err.Error()})
 			}
-			return invite.Admission{Node: "bee-owner-hive", Gossip: "127.0.0.1:4100", Secret: secret, Certificate: string(leaf), Authorities: string(hive.Certificate())}, nil
+			return invite.Accept(invite.Admission{Node: "bee-owner-hive", Gossip: "127.0.0.1:4100", Secret: secret, Certificate: string(leaf), Authorities: string(hive.Certificate())})
 		})
 	}()
 	defer func() {

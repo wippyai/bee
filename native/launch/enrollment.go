@@ -265,7 +265,7 @@ func retireDepartedClients(ctx context.Context, trusted string) error {
 			return err
 		}
 		removed := os.Remove(filepath.Join(trusted, entry.Name()))
-		if err := errors.Join(removed, unlock(), os.Remove(filepath.Join(trusted, clientLockName(node)))); err != nil {
+		if err := errors.Join(removed, unlock()); err != nil {
 			return err
 		}
 	}

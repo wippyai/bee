@@ -3,12 +3,10 @@
 package launch
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -21,6 +19,7 @@ import (
 
 	"github.com/wippyai/bee/native/hive/invite"
 	"github.com/wippyai/bee/native/hive/meshtls"
+	"github.com/wippyai/bee/native/internal/jsonwire"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	clusterapi "github.com/wippyai/runtime/api/cluster"
 	"github.com/wippyai/runtime/cluster/internode"
@@ -101,18 +100,19 @@ var errOwnerRunning = errors.New("this Bee is running")
 
 // readJoined returns the joined record of state, if the node joined a hive.
 func readJoined(state string) (joinedRecord, bool, error) {
-	data, err := os.ReadFile(filepath.Join(ownerDirectory(state), joinedRecordName))
+	data, err := readOwnerFile(filepath.Join(ownerDirectory(state), joinedRecordName), maxJoinedRecordBytes)
 	if errors.Is(err, os.ErrNotExist) {
 		return joinedRecord{}, false, nil
 	}
 	if err != nil {
 		return joinedRecord{}, false, err
 	}
-	var record joinedRecord
-	if len(data) > maxJoinedRecordBytes || strictJSON(data, &record) != nil || !invite.ValidNode(record.Node) {
+	record, err := jsonwire.DecodeObject[joinedRecord](data, maxJoinedRecordBytes, "node", "gossip", "authorities")
+	if err != nil || !invite.ValidNode(record.Node) {
 		return joinedRecord{}, false, errors.New("joined hive record is invalid")
 	}
-	if _, err := netip.ParseAddrPort(record.Gossip); err != nil {
+	gossip, err := netip.ParseAddrPort(record.Gossip)
+	if err != nil || gossip.Port() == 0 {
 		return joinedRecord{}, false, errors.New("joined hive record is invalid")
 	}
 	if record.JoinPath != "" {
@@ -125,12 +125,6 @@ func readJoined(state string) (joinedRecord, bool, error) {
 		return joinedRecord{}, false, errors.New("joined hive record is invalid")
 	}
 	return record, true, nil
-}
-
-func strictJSON(data []byte, into any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	return decoder.Decode(into)
 }
 
 // membershipSecretPath is the secret the owner's mesh uses: the hive's secret
@@ -288,6 +282,10 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 	if err != nil {
 		return fmt.Errorf("local gossip address: %w", err)
 	}
+	joinedRecord, joined, err := readJoined(state)
+	if err != nil {
+		return fmt.Errorf("read joined hive record: %w", err)
+	}
 	if err := writeChanged(filepath.Join(directory, gossipPortName), strconv.Itoa(int(local.Port()))); err != nil {
 		return err
 	}
@@ -304,10 +302,12 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 	// this host cannot route (a Tailscale or private address), so the proven
 	// path wins for that peer and the gossiped address stands for the rest.
 	verified := netip.Addr{}
-	if record, joined, err := readJoined(state); err == nil && joined && record.JoinPath != "" {
-		if path, err := netip.ParseAddrPort(record.JoinPath); err == nil {
-			verified = path.Addr()
+	if joined && joinedRecord.JoinPath != "" {
+		path, err := netip.ParseAddrPort(joinedRecord.JoinPath)
+		if err != nil {
+			return fmt.Errorf("joined hive path is invalid: %w", err)
 		}
+		verified = path.Addr()
 	}
 	for _, member := range membership.Nodes() {
 		key, ok := pinned[member.ID]
@@ -318,7 +318,7 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 		if err != nil || address.Port() == 0 {
 			continue
 		}
-		if verified.IsValid() && !verified.IsLoopback() && member.ID == joinedNode(state) {
+		if verified.IsValid() && !verified.IsLoopback() && joined && member.ID == joinedRecord.Node {
 			address = netip.AddrPortFrom(verified, address.Port())
 		}
 		if err := writeChanged(filepath.Join(ownerPeersDirectory(state), member.ID+peerAddressSuffix), address.String()); err != nil {
@@ -326,15 +326,6 @@ func recordAddresses(state string, membership clusterapi.Membership) error {
 		}
 	}
 	return nil
-}
-
-// joinedNode is the node this one joined, or empty when it joined none.
-func joinedNode(state string) string {
-	record, joined, err := readJoined(state)
-	if err != nil || !joined {
-		return ""
-	}
-	return record.Node
 }
 
 // writeChanged writes value as one line unless the file already holds it.

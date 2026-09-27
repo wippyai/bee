@@ -82,3 +82,34 @@ func TestWorkspacesDecodeTheCatalogAnswers(t *testing.T) {
 		t.Fatalf("invalid access accepted: %v", err)
 	}
 }
+
+func TestWorkspaceRowsAndCursorsMatchTheirTypedContract(t *testing.T) {
+	valid := Workspace{ID: strings.Repeat("a", 32), Label: "Project", Root: "bee.env:workspace_root", Subpath: "src",
+		State: WorkspaceActive, CreatedAt: "2026-09-24T00:00:00.000Z", LastUsed: "2026-09-24T00:00:00.000Z"}
+	for name, change := range map[string]func(*Workspace){
+		"control-label":     func(row *Workspace) { row.Label = "bad\nlabel" },
+		"invalid-subpath":   func(row *Workspace) { row.Subpath = "../outside" },
+		"invalid-created":   func(row *Workspace) { row.CreatedAt = "2026-09-24T00:00:00Z" },
+		"invalid-last-used": func(row *Workspace) { row.LastUsed = "not-time" },
+		"unknown-state":     func(row *Workspace) { row.State = "deleted" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			row := valid
+			change(&row)
+			if validWorkspace(row) {
+				t.Fatalf("accepted malformed workspace row: %+v", row)
+			}
+		})
+	}
+	for _, cursor := range []string{
+		"short", valid.ID + ":A", valid.ID + ":abc", valid.ID + ":61:" + "zz",
+		valid.ID + ":" + strings.Repeat("a", maxCursorBytes),
+	} {
+		if validWorkspaceCursor(cursor) {
+			t.Errorf("accepted invalid workspace cursor %q", cursor)
+		}
+	}
+	if !validWorkspaceCursor(valid.ID + ":61:" + "6265652e656e763a776f726b73706163655f726f6f74") {
+		t.Fatal("rejected canonical multi-root cursor")
+	}
+}

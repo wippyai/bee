@@ -7,14 +7,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	tty "github.com/wippyai/runtime/api/tty"
-	"github.com/wippyai/runtime/service/terminal"
 )
 
 type copyViewport struct {
@@ -77,60 +75,48 @@ func TestPhysicalCopyAndOrdinaryInterruptRemainDistinct(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("copy action not queried")
 			}
-			_, supported := any(terminal.NewSurface(io.Discard, tty.SurfaceOptions{})).(interface{ Clipboard(string) error })
-			if selected && !supported {
+			if selected {
 				select {
-				case err := <-done:
-					if err == nil {
-						t.Fatal("unsupported copy claimed success")
-					}
+				case <-out.wrote:
 				case <-ctx.Done():
-					t.Fatal("unsupported copy did not finish")
+					t.Fatal("copy not submitted")
 				}
-			} else {
-				if selected {
-					select {
-					case <-out.wrote:
-					case <-ctx.Done():
-						t.Fatal("copy not submitted")
-					}
-					if _, err := master.Write([]byte("\x1b[99;5:3uz")); err != nil {
-						t.Fatal(err)
-					}
-					select {
-					case key := <-view.keys:
-						if key.Key != "z" {
-							t.Fatal("copy release leaked to application", key)
-						}
-					case <-ctx.Done():
-						t.Fatal("ordinary input did not resume after copy")
-					}
-				} else {
-					select {
-					case key := <-view.keys:
-						if !key.Ctrl || key.Key != "c" {
-							t.Fatal(key)
-						}
-					case <-ctx.Done():
-						t.Fatal("application interrupt lost")
-					}
-				}
-				if _, err := master.Write([]byte{0x1d}); err != nil {
+				if _, err := master.Write([]byte("\x1b[99;5:3uz")); err != nil {
 					t.Fatal(err)
 				}
 				select {
-				case err := <-done:
-					if !errors.Is(err, ErrDetached) {
-						t.Fatal(err)
+				case key := <-view.keys:
+					if key.Key != "z" {
+						t.Fatal("copy release leaked to application", key)
 					}
 				case <-ctx.Done():
-					t.Fatal("detach stalled")
+					t.Fatal("ordinary input did not resume after copy")
 				}
+			} else {
+				select {
+				case key := <-view.keys:
+					if !key.Ctrl || key.Key != "c" {
+						t.Fatal(key)
+					}
+				case <-ctx.Done():
+					t.Fatal("application interrupt lost")
+				}
+			}
+			if _, err := master.Write([]byte{0x1d}); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if !errors.Is(err, ErrDetached) {
+					t.Fatal(err)
+				}
+			case <-ctx.Done():
+				t.Fatal("detach stalled")
 			}
 			if selected && len(view.keys) != 0 {
 				t.Fatal("copy also interrupted application")
 			}
-			if selected && supported && !bytes.Contains(out.Buffer.Bytes(), []byte("\x1b]52;c;Zm9yZWdyb3VuZAo=\x07")) {
+			if selected && !bytes.Contains(out.Buffer.Bytes(), []byte("\x1b]52;c;Zm9yZWdyb3VuZAo=\x07")) {
 				t.Fatal("clipboard text changed")
 			}
 			restored(t, slave, before)

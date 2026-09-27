@@ -257,12 +257,16 @@ func applyObservedAddress(directory, observed string, assigned []interfaceAddres
 // node that cannot be dialed directly (its observed join-path IP is not
 // assigned locally, or it runs behind the WSL2 NAT guest address) dials out
 // and expects no inbound connection.
-func meshDialHint(state string) string {
-	if _, natted, err := readNAT(ownerDirectory(state)); err == nil && natted {
-		return dialOut
+func meshDialHint(state string) (string, error) {
+	_, natted, err := readNAT(ownerDirectory(state))
+	if err != nil {
+		return "", err
+	}
+	if natted {
+		return dialOut, nil
 	}
 	if wslNATAddress() != "" {
-		return dialOut
+		return dialOut, nil
 	}
-	return ""
+	return "", nil
 }

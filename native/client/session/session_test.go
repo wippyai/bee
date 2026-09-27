@@ -20,6 +20,8 @@ import (
 )
 
 type desktopScript struct {
+	plans        []hive.SessionPlan
+	planRequests []hive.SessionPlanRequest
 	attachErrors []error
 	attached     []Selection
 	created      []string
@@ -84,6 +86,16 @@ func (s *desktopScript) Create(_ context.Context, desktop string) (string, error
 	return desktop, nil
 }
 
+func (s *desktopScript) Plan(_ context.Context, _ string, request hive.SessionPlanRequest) (hive.SessionPlan, error) {
+	s.planRequests = append(s.planRequests, request)
+	if len(s.plans) == 0 {
+		return nil, errors.New("unexpected desktop plan request")
+	}
+	plan := s.plans[0]
+	s.plans = s.plans[1:]
+	return plan, nil
+}
+
 func (s *desktopScript) Attach(_ context.Context, _ string, workspace, desktop string, _ hive.DesktopMode) (hive.DesktopMount, error) {
 	s.attached = append(s.attached, Selection{Workspace: workspace, Desktop: desktop})
 	index := len(s.attached) - 1
@@ -93,39 +105,50 @@ func (s *desktopScript) Attach(_ context.Context, _ string, workspace, desktop s
 	return hive.DesktopMount{}, nil
 }
 
-func TestExplicitSelectionNamesANodeDisplayInTheNamedWorkspace(t *testing.T) {
-	catalog := hive.DesktopCatalog{Desktops: []hive.DesktopDescription{{ID: "desktop-a", IsDefault: true}, {ID: "desktop-b"}}}
-	want := Selection{Workspace: "workspace-b", Desktop: "desktop-b"}
-	if got, err := selectDesktop(catalog, want); err != nil || got != want {
-		t.Fatalf("selection=%v error=%v", got, err)
+func TestExplicitSelectionUsesExactOwnerPlan(t *testing.T) {
+	workspace, desktop := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	request := &hive.SelectedSessionRequest{Workspace: workspace, Desktop: desktop, Mode: hive.Control, Desktops: []string{desktop}}
+	script := &desktopScript{plans: []hive.SessionPlan{hive.AttachSessionPlan{Workspace: workspace, Desktop: desktop, Mode: hive.Control}}}
+	if _, err := attachDesktop(context.Background(), script, request, nil); err != nil {
+		t.Fatal(err)
 	}
-	for _, selection := range []Selection{{Workspace: "workspace-a"}, {Desktop: "desktop-a"}, {Workspace: "workspace-a", Desktop: "desktop-c"}} {
-		if _, err := selectDesktop(catalog, selection); err == nil {
-			t.Fatalf("invalid selection accepted: %v", selection)
-		}
-	}
-	script := &desktopScript{}
-	if _, err := attachDesktop(context.Background(), script, catalog, "", Selection{}, hive.Control); err == nil || len(script.attached) != 0 {
-		t.Fatal("attached without a workspace")
+	if len(script.attached) != 1 || script.attached[0] != (Selection{Workspace: workspace, Desktop: desktop}) || len(script.created) != 0 {
+		t.Fatalf("explicit selection changed: %+v", script)
 	}
 }
 
-func TestOrdinaryControlReusesFreeDisplayOrAllocatesAfterDefiniteConflicts(t *testing.T) {
+func TestOwnerPlanChoosesFreeDisplayOrRequestsAllocationAfterDefiniteConflicts(t *testing.T) {
 	workspace := strings.Repeat("a", 32)
 	first, second := strings.Repeat("b", 32), strings.Repeat("c", 32)
-	catalog := hive.DesktopCatalog{Desktops: []hive.DesktopDescription{{ID: first, IsDefault: true}, {ID: second}}}
 	controlled := &hive.Rejected{Fault: hive.Fault{Code: "DESKTOP_CONTROLLED", Message: "another controller"}}
 
-	reuse := &desktopScript{attachErrors: []error{controlled, nil}}
-	if _, err := attachDesktop(context.Background(), reuse, catalog, workspace, Selection{}, hive.Control); err != nil {
+	request := func() *hive.WorkspaceSessionRequest {
+		return &hive.WorkspaceSessionRequest{Workspace: workspace, Mode: hive.Control, Desktops: []string{first, second}, Excluded: []string{}}
+	}
+	reuse := &desktopScript{
+		plans:        []hive.SessionPlan{hive.AttachSessionPlan{Workspace: workspace, Desktop: first, Mode: hive.Control}, hive.AttachSessionPlan{Workspace: workspace, Desktop: second, Mode: hive.Control}},
+		attachErrors: []error{controlled, nil},
+	}
+	if _, err := attachDesktop(context.Background(), reuse, request(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(reuse.attached) != 2 || reuse.attached[1] != (Selection{Workspace: workspace, Desktop: second}) || len(reuse.created) != 0 {
-		t.Fatalf("free display was not reused: %+v", reuse)
+	if len(reuse.attached) != 2 || reuse.attached[1] != (Selection{Workspace: workspace, Desktop: second}) || len(reuse.created) != 0 || len(reuse.planRequests) != 2 {
+		t.Fatalf("owner's second display plan was not applied: %+v", reuse)
+	}
+	secondRequest, ok := reuse.planRequests[1].(*hive.WorkspaceSessionRequest)
+	if !ok || len(secondRequest.Excluded) != 1 || secondRequest.Excluded[0] != first {
+		t.Fatalf("controlled desktop was not reported to the owner: %#v", reuse.planRequests[1])
 	}
 
-	allocate := &desktopScript{attachErrors: []error{controlled, controlled, nil}}
-	if _, err := attachDesktop(context.Background(), allocate, catalog, workspace, Selection{}, hive.Control); err != nil {
+	allocate := &desktopScript{
+		plans: []hive.SessionPlan{
+			hive.AttachSessionPlan{Workspace: workspace, Desktop: first, Mode: hive.Control},
+			hive.AttachSessionPlan{Workspace: workspace, Desktop: second, Mode: hive.Control},
+			hive.AllocateSessionPlan{Workspace: workspace},
+		},
+		attachErrors: []error{controlled, controlled, nil},
+	}
+	if _, err := attachDesktop(context.Background(), allocate, request(), nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(allocate.created) != 1 || len(allocate.attached) != 3 || len(allocate.created[0]) != 32 ||
@@ -136,16 +159,19 @@ func TestOrdinaryControlReusesFreeDisplayOrAllocatesAfterDefiniteConflicts(t *te
 
 func TestAutomaticDisplaySelectionNeverRetriesUnknownOrExplicitRefusal(t *testing.T) {
 	workspace := strings.Repeat("a", 32)
-	first, second := strings.Repeat("b", 32), strings.Repeat("c", 32)
-	catalog := hive.DesktopCatalog{Desktops: []hive.DesktopDescription{{ID: first, IsDefault: true}, {ID: second}}}
+	first := strings.Repeat("b", 32)
 	unknown := errors.New("transport lost")
-	script := &desktopScript{attachErrors: []error{unknown}}
-	if _, err := attachDesktop(context.Background(), script, catalog, workspace, Selection{}, hive.Control); err != unknown || len(script.attached) != 1 || len(script.created) != 0 {
+	request := &hive.WorkspaceSessionRequest{Workspace: workspace, Mode: hive.Control, Desktops: []string{first}, Excluded: []string{}}
+	script := &desktopScript{plans: []hive.SessionPlan{hive.AttachSessionPlan{Workspace: workspace, Desktop: first, Mode: hive.Control}}, attachErrors: []error{unknown}}
+	if _, err := attachDesktop(context.Background(), script, request, nil); err != unknown || len(script.attached) != 1 || len(script.created) != 0 || len(script.planRequests) != 1 {
 		t.Fatalf("unknown result was retried: calls=%+v created=%+v err=%v", script.attached, script.created, err)
 	}
-	explicit := &desktopScript{attachErrors: []error{&hive.Rejected{Fault: hive.Fault{Code: "DESKTOP_CONTROLLED"}}}}
-	selected := Selection{Workspace: workspace, Desktop: second}
-	if _, err := attachDesktop(context.Background(), explicit, catalog, workspace, selected, hive.Control); err == nil || len(explicit.attached) != 1 || explicit.attached[0] != selected || len(explicit.created) != 0 {
+	explicit := &desktopScript{
+		plans:        []hive.SessionPlan{hive.AttachSessionPlan{Workspace: workspace, Desktop: first, Mode: hive.Control}},
+		attachErrors: []error{&hive.Rejected{Fault: hive.Fault{Code: "DESKTOP_CONTROLLED"}}},
+	}
+	selection := &hive.SelectedSessionRequest{Workspace: workspace, Desktop: first, Mode: hive.Control, Desktops: []string{first}}
+	if _, err := attachDesktop(context.Background(), explicit, selection, nil); err == nil || len(explicit.attached) != 1 || explicit.attached[0] != (Selection{Workspace: workspace, Desktop: first}) || len(explicit.created) != 0 || len(explicit.planRequests) != 1 {
 		t.Fatalf("explicit selection widened: %+v err=%v", explicit, err)
 	}
 }

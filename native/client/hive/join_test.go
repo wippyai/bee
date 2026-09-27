@@ -68,6 +68,44 @@ func TestJoinDecodesTheSupervisorInviteOperations(t *testing.T) {
 	}
 }
 
+func TestJoinRejectsIncompleteOrUnknownInviteAndPeerRecords(t *testing.T) {
+	join, s := joinFixture(t)
+	id := strings.Repeat("a", 32)
+	for name, row := range map[string]map[string]any{
+		"missing-id":        {"status": "pending", "expires_at": "2026-09-23T12:15:00.000Z"},
+		"unknown-status":    {"invite_id": id, "status": "waiting", "expires_at": "2026-09-23T12:15:00.000Z"},
+		"used-without-node": {"invite_id": id, "status": "used", "expires_at": "2026-09-23T12:15:00.000Z"},
+		"missing-expiry":    {"invite_id": id, "status": "pending"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			answer(s, map[string]any{"invites": []any{row}}, nil)
+			if _, err := join.Invites(callContext(t)); !errors.Is(err, ErrProtocol) {
+				t.Fatalf("accepted malformed invite record: %v", err)
+			}
+		})
+	}
+	for name, peer := range map[string]map[string]any{
+		"missing-node":    {"session": "established"},
+		"unknown-session": {"node_id": "peer", "session": "joining"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			answer(s, map[string]any{"node_id": "owner", "peers": []any{peer}}, nil)
+			if _, err := join.Peers(callContext(t)); !errors.Is(err, ErrProtocol) {
+				t.Fatalf("accepted malformed peer: %v", err)
+			}
+		})
+	}
+}
+
+func TestHiveListRejectsDuplicateMembersAndObjectsOverItsBound(t *testing.T) {
+	if _, err := list[InviteRecord]([]byte(`[{"invite_id":"`+strings.Repeat("a", 32)+`","invite_id":"`+strings.Repeat("b", 32)+`","status":"pending","expires_at":"2026-09-23T12:15:00.000Z"}]`), 64, "invite_id", "status", "expires_at"); !errors.Is(err, ErrProtocol) {
+		t.Fatalf("accepted duplicate list member: %v", err)
+	}
+	if _, err := list[InviteRecord]([]byte(`[{"invite_id":"`+strings.Repeat("a", 32)+`","status":"pending","expires_at":"2026-09-23T12:15:00.000Z"}]`), 0, "invite_id", "status", "expires_at"); !errors.Is(err, ErrProtocol) {
+		t.Fatalf("accepted over-limit list: %v", err)
+	}
+}
+
 func TestJoinCallsNameTheJoinServiceOfTheOwner(t *testing.T) {
 	join, s := joinFixture(t)
 	done := make(chan wireCall, 1)

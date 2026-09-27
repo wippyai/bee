@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/wippyai/bee/native/client/mesh"
+	"github.com/wippyai/bee/native/internal/timewire"
 	"github.com/wippyai/runtime/api/pid"
 )
 
@@ -112,7 +113,6 @@ func live(lifetime <-chan struct{}) bool {
 		return true
 	}
 }
-func samePID(a, b pid.PID) bool { return a.Node == b.Node && a.Host == b.Host && a.UniqID == b.UniqID }
 
 // Call uses the existing bee.hive@1 Call envelope. A successful transport send
 // is not operation completion. It sends once, validates the exact supervisor,
@@ -156,7 +156,7 @@ func (c *Client) Call(ctx context.Context, operation Operation) (Reply, error) {
 	if supervisor.Node != c.owner || supervisor.Host != "bee.hive.service:supervisor_host" || supervisor.UniqID == "" {
 		return Reply{}, ErrProtocol
 	}
-	if c.supervisor.UniqID != "" && !samePID(c.supervisor, supervisor) {
+	if c.supervisor.UniqID != "" && !c.supervisor.Equal(supervisor) {
 		c.failed = ErrOwner
 		return Reply{}, ErrOwner
 	}
@@ -166,7 +166,7 @@ func (c *Client) Call(ctx context.Context, operation Operation) (Reply, error) {
 	}
 	deadline, _ := ctx.Deadline()
 	call := wireCall{Revision: Revision, ID: hex.EncodeToString(nonce[:]), Key: operation.Key, Owner: operation.Owner,
-		Input: operation.Input, Deadline: deadline.UTC().Format("2006-01-02T15:04:05.000Z")}
+		Input: operation.Input, Deadline: timewire.FormatCanonicalUTC(deadline)}
 	call.Target.Ref = operation.Ref
 	body, err := json.Marshal(call)
 	if err != nil || len(body) > maxBytes {
@@ -186,7 +186,7 @@ func (c *Client) Call(ctx context.Context, operation Operation) (Reply, error) {
 		if err := ctx.Err(); err != nil {
 			return uncertain(err)
 		}
-		if message.Topic != replyTopic || !samePID(message.From, supervisor) {
+		if message.Topic != replyTopic || !message.From.Equal(supervisor) {
 			continue
 		}
 		reply, err := decodeReply(message.Body)
@@ -205,7 +205,7 @@ func (c *Client) Call(ctx context.Context, operation Operation) (Reply, error) {
 			return uncertain(err)
 		}
 		current, lookupErr := c.actor.OwnerSupervisor(ctx)
-		if lookupErr != nil || !samePID(current, supervisor) {
+		if lookupErr != nil || !current.Equal(supervisor) {
 			c.failed = ErrOwner
 			return uncertain(ErrOwner)
 		}

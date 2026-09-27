@@ -2,15 +2,17 @@
 
 This `meshclient`-gated package binds the existing `bee.hive@1` protocol to one
 native `mesh.Actor`. It creates no transport, principal, listener, database or
-application permission. Public launch does not construct it yet.
+application permission. Native session presentation constructs it after joining
+the enrolled owner's mesh.
 
 `New(lifetime, actor, ownerNode)` receives a cancellable context owned by the
 client actor's caller. One binding exclusively consumes that actor's control
 inbox. Calls use bounded, cancellable serialization and a 30-second ceiling,
 send once, authenticate the exact supervisor PID from native discovery, correlate
 the reply and recheck that supervisor before accepting it. A replacement owner
-retires the binding. Native Wippy supplies sender identity and transport security;
-there is no ingress API or connection credential in Bee's message contract.
+retires the binding. The actor admits only packages whose runtime `IngressNode`
+is the enrolled owner; each operation then checks its logical sender against the
+discovered supervisor PID.
 
 `UnknownOutcome` retains the operation and idempotency key when transport accepted
 a request but no trustworthy completion arrived. It does not trigger replay.
@@ -20,11 +22,13 @@ end that lifetime on actor/transport shutdown. Native viewport grants enforce
 actual observation/input/resize rights at use time.
 
 `NewDesktop` additionally binds owner execution and physical actor identity.
-`List`, `Attach` and `Detach` validate workspace, desktop, recipient, session, mode
-and expiry. `Current` reads the client's current session on the display it
-presents; only its workspace may differ from the mount the client held. A node's catalog can contain multiple workspaces. Ordinary typed
-refusals remain distinct from uncertain mutations. No method owns the terminal,
-starts a workspace or retries a mutation.
+`List`, `Plan`, `Attach` and `Detach` validate workspace, desktop, recipient,
+session, mode and expiry. `Plan` decodes the owner's tagged session decision;
+allocation and attachment remain separate calls. `Current` reads the client's
+current session on the display it presents; only its workspace may differ from
+the mount the client held. A node's catalog can contain multiple workspaces.
+Ordinary typed refusals remain distinct from uncertain mutations. No method
+owns the terminal, starts a workspace or retries a mutation.
 
 `Launch` submits one in-desktop application command through the existing
 controller session. The command carries literal values, bounded to 40 name bytes,
@@ -40,29 +44,11 @@ an empty list; arbitrary objects do not. Operation-specific results are decoded
 separately from the common envelope.
 
 Unit/race checks cover sender and reply correlation, owner replacement,
-cancellation and no replay, plus strict reply and desktop decoders. These are
-binding tests; actual supervisor round trips, physical attachment, invitation
-redemption and public second-`bee` behavior still need integration acceptance.
-`native/Makefile` does not define the documented `hive-client-check` target, so
-that acceptance command is unavailable in this checkout. The ordinary desktop
-runtime candidate lacks native mesh surface/TLS APIs; use the client runtime
-supplied by its lane without changing the release manifest.
-
-`native/Makefile` also does not define `hive-desktop-client-fixture`; compiling
-that fixture through Make remains a proposal.
-The runtime lane's `/tmp/bee-wippy-tls-lifecycle-candidate` now passes the real
-supervisor round trip with this compiled client: admission, native viewport IO,
-detach and same-shell rejoin (`/tmp/bee-tls-lifecycle-admission.log`, journal 559).
-It fixes the earlier TLS mismatch; no TLS bypass or ingress API is needed.
-
-The physical PTY variant reaches the shell, but F12 replacement currently misses
-presenter readiness and pauses the desktop
-(`/tmp/bee-physical-tls-lifecycle-check.log`). An isolated trace pins the stall to the replacement presenter's `tty.start()`:
-it does not reach surface creation or readiness. The candidate still has the
-single terminal worker shared with `io.readline()`; runtime #701 addresses this
-exact blocked-read/F12 case. Production Bee timeouts remain unchanged. The runtime candidate also retains six lint issues and unfinished
-cluster load/recovery validation; it is not a release pin. Public launch remains
-unimplemented, including the owner-lock/client transition.
+cancellation and no replay, plus strict reply and desktop decoders. The root
+`make native-client-check` target also compiles the client fixture and runs it
+against a retained owner. The separate `meshmonitorproof` acceptance remains a
+required release gate; it currently fails because the pinned runtime sends no
+remote EXIT after a client actor completes.
 
 ## Session-qualified copy
 
@@ -73,8 +59,7 @@ It does not write the clipboard or replay a request. The physical input worker
 performs the write for explicit Ctrl+C; an unselected reply preserves ordinary
 application input. A definite selection refusal leaves the client running.
 
-The current external Bee source must include this owner operation, the retained
-input marker and presenter response path. Ordinary public releases do not expose
-it yet. The separate unsolicited inbox experiment was removed; copy uses the
-same existing serialized call/reply reader. Full selected-window acceptance still
-requires the combined launcher/clipboard runtime.
+The physical input worker performs the write for explicit Ctrl+C; an unselected
+reply preserves ordinary application input. A definite selection refusal leaves
+the client running. Copy uses the same serialized call/reply reader as the other
+Hive operations.

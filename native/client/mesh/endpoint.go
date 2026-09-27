@@ -93,7 +93,7 @@ func (r endpointReceiver) Send(pkg *relay.Package) error {
 		return nil
 	}
 	defer relay.ReleasePackage(pkg)
-	if !samePID(pkg.Target, e.id) || pkg.Source.Node != e.id.Node || e.ctx.Err() != nil {
+	if !pkg.Target.Equal(e.id) || pkg.Source.Node != e.id.Node || e.ctx.Err() != nil {
 		return nil
 	}
 	for _, message := range pkg.Messages {

@@ -26,9 +26,11 @@ type Binding = {
 }
 type Expected = {attempt_id: string, carrier_epoch: integer, binding_id: string?}
 type Materialization = {binding: Binding, token: string, hook_token: string?, generation: integer}
-type CheckedBinding = {binding: Binding, valid: boolean, reason: string?, generation: integer,
+type Generation = {epoch: integer, restarts: integer}
+type CheckedBinding = {binding: Binding, valid: boolean, reason: string?, generation: Generation,
     presented_count: integer, last_presented_at: string?}
-type Readiness = {generation: integer, address: string, listening: boolean, binding_valid: boolean?, binding_reason: string?}
+type Readiness = {generation: Generation, address: string, listening: boolean, binding_valid: boolean?, binding_reason: string?}
+type HookClaim = {binding_id: string, carrier_epoch: integer, hooks: {unknown}}
 
 local BASE_FIELDS = {"binding_id", "subject", "action_id", "attempt_id", "thread_id", "owner_incarnation", "carrier_epoch",
     "tools", "hooks", "epoch", "credential_generation", "expires_at", "revoked", "sealed", "policy_ref", "workspace_id",
@@ -38,6 +40,16 @@ local function positive_count(value: unknown): integer?
     local count = bounds.count(value)
     if count == nil or count < 1 then return nil end
     return count
+end
+
+local function decode_generation(value: unknown): (Generation?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "generation must be an object" end
+    local unknown_field = bounds.fields(object, {"epoch", "restarts"})
+    if unknown_field then return nil, "generation: " .. unknown_field end
+    local epoch, restarts = bounds.count(object.epoch), bounds.count(object.restarts)
+    if epoch == nil or restarts == nil then return nil, "generation fields are malformed" end
+    return {epoch = epoch, restarts = restarts}, nil
 end
 
 local function decode_binding(value: unknown, checked: boolean): (Binding?, string?)
@@ -128,10 +140,14 @@ function M.checked_binding(value: unknown): (CheckedBinding?, string?)
     local valid = object.valid
     local reason: string? = nil
     if object.reason ~= nil then reason = bounds.text(object.reason, 4096) end
-    local generation, presented_count = bounds.count(object.generation), bounds.count(object.presented_count)
+    local generation, generation_error = decode_generation(object.generation)
+    local presented_count = bounds.count(object.presented_count)
     local last_presented_at: string? = nil
     if object.last_presented_at ~= nil then last_presented_at = bounds.timestamp(object.last_presented_at) end
-    if type(valid) ~= "boolean" or (object.reason ~= nil and reason == nil) or generation == nil
+    if generation == nil then
+        return nil, "checked binding fields are malformed: " .. tostring(generation_error)
+    end
+    if type(valid) ~= "boolean" or (object.reason ~= nil and reason == nil)
         or presented_count == nil or (object.last_presented_at ~= nil and last_presented_at == nil)
         or (presented_count == 0 and last_presented_at ~= nil) or (presented_count > 0 and last_presented_at == nil) then
         return nil, "checked binding fields are malformed"
@@ -154,9 +170,10 @@ function M.readiness(value: unknown, expected_binding: string): (Readiness?, str
     if not result then return nil, "readiness value must be an object" end
     local unknown_field = bounds.fields(result, {"generation", "address", "listening", "binding", "binding_valid", "binding_reason"})
     if unknown_field then return nil, "readiness: " .. unknown_field end
-    local generation = positive_count(result.generation)
+    local generation, generation_error = decode_generation(result.generation)
+    if not generation then return nil, "readiness " .. tostring(generation_error) end
     local address = bounds.line(result.address, 120)
-    if generation == nil or address == nil or type(result.listening) ~= "boolean" then return nil, "readiness fields are malformed" end
+    if address == nil or type(result.listening) ~= "boolean" then return nil, "readiness fields are malformed" end
     local binding_valid: boolean? = nil
     local binding_reason: string? = nil
     if type(result.binding_valid) ~= "boolean" then return nil, "readiness binding status is malformed" end
@@ -173,14 +190,20 @@ function M.readiness(value: unknown, expected_binding: string): (Readiness?, str
     return {generation = generation, address = address, listening = result.listening, binding_valid = binding_valid, binding_reason = binding_reason}, nil
 end
 
-function M.hook_claim(value: unknown): (unknown?, string?)
+function M.hook_claim(value: unknown, expected_binding: string, expected_epoch: integer): (HookClaim?, string?)
     local result = bounds.object(value)
     if not result then return nil, "hook claim must be an object" end
-    local unknown_field = bounds.fields(result, {"hooks"})
+    local unknown_field = bounds.fields(result, {"binding_id", "carrier_epoch", "hooks"})
     if unknown_field then return nil, "hook claim: " .. unknown_field end
+    local binding_id = bounds.id(result.binding_id)
+    if not binding_id then return nil, "hook claim binding_id is malformed" end
+    local carrier_epoch = positive_count(result.carrier_epoch)
+    if not carrier_epoch then return nil, "hook claim carrier_epoch must be positive" end
+    if binding_id ~= expected_binding then return nil, "hook claim names another binding" end
+    if carrier_epoch ~= expected_epoch then return nil, "hook claim names another carrier epoch" end
     local hooks, hooks_error = bounds.array(result.hooks, 16)
     if not hooks then return nil, "hook claim: " .. tostring(hooks_error) end
-    return hooks, nil
+    return {binding_id = binding_id, carrier_epoch = carrier_epoch, hooks = hooks}, nil
 end
 
 return M

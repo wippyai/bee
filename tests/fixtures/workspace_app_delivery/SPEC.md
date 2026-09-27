@@ -27,9 +27,9 @@ here for my approval.
   `.security.policies +=`. Record every count with the greeting as a row in
   the granted database; the rows survive a restart.
 - Request the host catalog capability `agents.launch` with
-  `definitions: [bee.workspace.app.probe:child]` using a measured
+  `definitions: [bee.driver.claude:research_batch]` using a measured
   `ns.requirement` targeting `app.tally:app` at `.security.policies +=`. At
-  startup, call the application agents helper's `run` with that definition and
+  startup, call the application agents helper's `launch` with that definition and
   a brief, then `wait` for the child to settle and `status` for its result;
   record the attempt id, definition, settled state and outcome as a row in the
   granted database. The same grant must refuse a definition it does not name.

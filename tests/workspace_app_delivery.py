@@ -12,8 +12,8 @@ agents.launch; the person then reviews the plan in Overlays and approves it in
 Approvals, the activation owner applies it with its host-created volume and
 isolated database, and the application opens from the Start menu and behaves as
 the spec says, including its saved count and its database rows after a restart.
-The installed app launches its shipped-driver-shaped fixture agent, waits for
-the placed child to settle, reads its result and steers it once.
+The installed app launches the shipped Claude batch definition, waits for the
+placed child to settle, reads its result and steers it once.
 
 The far end of the launch is the scripted protocol agent
 (tests/fixtures/harness/gateway_client.go, mode spec): it writes the answer a
@@ -21,12 +21,15 @@ model would write, tests/fixtures/workspace_app_delivery/tally.lua, so the
 proof needs no provider account. BEE_WORKSPACE_APP_PROVIDER=claude runs the
 installed Claude Code at that end instead; it reads the spec and the guide and
 writes the application itself, consuming inference. BEE_RUNTIME names the
-runtime; BEE_WORKSPACE_APP_EVIDENCE overrides the retained evidence directory.
+runtime used to compose and author the fixture. BEE_WORKSPACE_APP_EVIDENCE
+overrides the retained evidence directory.
 """
 import json
+import hashlib
 import os
 import re
 import shutil
+import shlex
 import sqlite3
 import subprocess
 import sys
@@ -48,9 +51,12 @@ VERSION = "1.0.0"
 TITLE = "Tally"
 DEFINITION_ID = "app.tally:app"
 APPROVAL_POLICY = "workspace-application-delivery"
-SHIPPED = ["modules/gov/src/_index.yaml", "src/_index.yaml", "src/env/_index.yaml"]
+SHIPPED = ["modules/gov/src/_index.yaml", "src/_index.yaml", "src/deps/_index.yaml", "src/env/_index.yaml"]
 PROVIDER = os.environ.get("BEE_WORKSPACE_APP_PROVIDER", "scripted")
 HIVE_SOURCE = os.environ.get("BEE_WORKSPACE_APP_HIVE_SOURCE_NODE")
+NATIVE_OWNER = os.environ.get("BEE_WORKSPACE_APP_NATIVE_OWNER") == "1"
+DESKTOP_RUNTIME = Path(os.environ.get("BEE_WORKSPACE_APP_DESKTOP_RUNTIME", RUNTIME)).resolve()
+NATIVE_DESKTOP = os.environ.get("BEE_WORKSPACE_APP_NATIVE_DESKTOP") == "1"
 # A live agent is told only how to use its tools; the spec is the person's.
 LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another agent. Read the overlay tool's "
               "guide operation first and follow it. Author the application below in your own overlay, freeze it, "
@@ -62,12 +68,11 @@ LIVE_BRIEF = ("Use only the Bee MCP tools; never a shell, a file tool or another
 GREETING = "hello tally"
 SHARED_SUBPATH = "shared"
 DATABASE_NAME = "tally"
-CHILD_DEFINITION = "bee.workspace.app.probe:child"
+CHILD_DEFINITION = "bee.driver.claude:research_batch"
 
 
 def grant_identities(workspace_id):
     """The host-installed volume and database identities for one workspace."""
-    import hashlib
     owner = f"bee.gov.apps:{workspace_id}.tally"
     # The classic folder workspace is rooted at the node's workspace root.
     volume = ("bee.gov.grants:volume."
@@ -75,6 +80,34 @@ def grant_identities(workspace_id):
     database = ("bee.gov.grants:database."
                 + hashlib.sha256(f"{owner}\n{DATABASE_NAME}".encode()).hexdigest())
     return volume, database
+
+
+def application_database(folder, project):
+    workspace_id = classic_workspace(folder / "workspace.db")
+    _, database_id = grant_identities(workspace_id)
+    suffix = database_id.rsplit(".", 1)[-1]
+    return project / ".wippy" / "app-db" / f"{suffix}.db"
+
+
+def wait_for_agent_run(folder, project, desktop, timeout=60):
+    app_db = application_database(folder, project)
+    deadline = time.monotonic() + timeout
+    runs = []
+    while time.monotonic() < deadline:
+        desktop.pump(.1)
+        if app_db.exists():
+            with sqlite3.connect(f"file:{app_db}?mode=ro", uri=True) as db:
+                try:
+                    runs = db.execute(
+                        "SELECT attempt_id, definition_ref, state, outcome, steer FROM tally_runs"
+                    ).fetchall()
+                except sqlite3.OperationalError as exc:
+                    if "no such table" not in str(exc):
+                        raise
+            if any(state == "ended" and outcome == "succeeded" and steer == "sent"
+                   for _, _, state, outcome, steer in runs):
+                return
+    raise AssertionError(f"the installed app did not record a settled child run: {runs}\n{desktop.text()}")
 
 
 def answer_entries():
@@ -128,6 +161,12 @@ def compose(folder):
     if HIVE_SOURCE:
         name_node(project, HIVE_SOURCE)
         stage_hive_source(project)
+    elif NATIVE_OWNER:
+        # A standalone owner derives its relay identity from the native state
+        # directory. Keep authoring and the desktop client on that same node.
+        native_state = (folder / "native-state").resolve()
+        owner_node = "bee-owner-" + hashlib.sha256(str(native_state).encode()).hexdigest()[:16]
+        name_node(project, owner_node)
     answer = folder / "entries.json"
     answer.write_text(json.dumps(answer_entries()))
     index = project / "src/workspace_app_probe/_index.yaml"
@@ -153,17 +192,22 @@ def compose(folder):
         policy["environment"]["BEE_FIXTURE_AUTHOR_ENTRIES"] = str(answer)
         policy["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
     index.write_text(yaml.safe_dump(document, sort_keys=False))
-    # The allow-listed child agent the installed app launches resolves its
-    # scripted protocol executable through executable_env like the shipped
-    # drivers do; the acceptance proves the installed agents.launch grant
-    # reaches the real launch pipeline and resolves the driver entry there.
-    if PROVIDER == "scripted":
-        child = next(entry for entry in document["entries"] if entry["name"] == "child_policy")["data"]
-        child["environment"]["BEE_FIXTURE_STREAM"] = str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
-        index.write_text(yaml.safe_dump(document, sort_keys=False))
     subprocess.run([str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true",
                     "--set", "lua.type_system.strict=true"], cwd=project, check=True, timeout=300)
     return project
+
+
+def configure_driver_fixture(folder):
+    """Resolve the shipped Claude policy to a fixture that emits captured output."""
+    shim_dir = folder / "driver-bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "claude"
+    fixture = ROOT / "tests/fixtures/harness/bin/claude"
+    stream = ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl"
+    shim.write_text("#!/bin/sh\nexport BEE_FIXTURE_STREAM=" + shlex.quote(str(stream)) +
+                    "\nexec " + shlex.quote(str(fixture)) + " \"$@\"\n")
+    shim.chmod(0o755)
+    os.environ["PATH"] = str(shim_dir) + os.pathsep + os.environ.get("PATH", "")
 
 
 def author(project, folder):
@@ -174,11 +218,16 @@ def author(project, folder):
         brief = LIVE_BRIEF + spec
     else:
         brief = spec
+    author_environment = database_environment(folder, BEE_WORKSPACE_APP_WORKSPACE=workspace_id,
+                                               BEE_WORKSPACE_APP_BRIEF=brief)
+    if PROVIDER == "scripted":
+        author_environment.update(BEE_CLAUDE_BIN=str(ROOT / "tests/fixtures/harness/bin/claude"),
+                                 claude=str(ROOT / "tests/fixtures/harness/bin/claude"),
+                                 ANTHROPIC_API_KEY="")
     result = subprocess.run([str(RUNTIME), "run", "--verbose", "workspace-app-author",
                              "--set", f"registry.history_path={folder}/registry.db"],
                             cwd=project, capture_output=True, text=True, timeout=1500,
-                            env=database_environment(folder, BEE_WORKSPACE_APP_WORKSPACE=workspace_id,
-                                                     BEE_WORKSPACE_APP_BRIEF=brief))
+                            env=author_environment)
     output = result.stdout + result.stderr
     (folder / "author.log").write_text(output)
     assert result.returncode == 0, output[-6000:]
@@ -224,14 +273,17 @@ def evidence_root():
 def exercise():
     folder = evidence_root()
     print("Evidence:", folder)
-    # The shipped-driver-shaped child resolves its executable through
-    # executable_env, so the fixture protocol binary answers host executable
-    # discovery for every node this acceptance boots.
-    fixture_bin = str(ROOT / "tests/fixtures/harness/bin")
-    if fixture_bin not in os.environ.get("PATH", "").split(os.pathsep):
-        os.environ["PATH"] = fixture_bin + os.pathsep + os.environ.get("PATH", "")
+    if PROVIDER == "scripted":
+        # Resolve the shipped Claude policy's executable_env through the
+        # fixture protocol binary for each node this acceptance boots.
+        fixture_bin = str(ROOT / "tests/fixtures/harness/bin")
+        if fixture_bin not in os.environ.get("PATH", "").split(os.pathsep):
+            os.environ["PATH"] = fixture_bin + os.pathsep + os.environ.get("PATH", "")
     project = compose(folder)
-    first = Desktop(folder, project=project)
+    if PROVIDER == "scripted":
+        configure_driver_fixture(folder)
+    first = Desktop(folder, project=project, runtime=DESKTOP_RUNTIME, native=NATIVE_DESKTOP,
+                    state_dir=folder / "native-state" if NATIVE_DESKTOP else None)
     try:
         first.wait("No applications open", timeout=COLD_BOOT)
         first.quit()
@@ -243,8 +295,10 @@ def exercise():
         assert_authored(report)
 
     os.environ["BEE_WORKSPACE_APP_WORKSPACE"] = classic_workspace(folder / "workspace.db")
-    os.environ["BEE_WORKSPACE_APP_INSPECT"] = "1"
-    ui = Desktop(folder, project=project)
+    if not NATIVE_DESKTOP:
+        os.environ["BEE_WORKSPACE_APP_INSPECT"] = "1"
+    ui = Desktop(folder, project=project, runtime=DESKTOP_RUNTIME, native=NATIVE_DESKTOP,
+                 state_dir=folder / "native-state" if NATIVE_DESKTOP else None)
     try:
         ui.wait("No applications open", timeout=COLD_BOOT)
         ui.pump(.5)
@@ -271,25 +325,28 @@ def exercise():
             ui.key(b"\r")
             ui.wait(f"Tally: {count}", timeout=20)
         ui.wait("Saved: 3", timeout=20)
-        grant_evidence = project / "evidence/grant.json"
-        deadline = time.monotonic() + 35
-        while not grant_evidence.exists() and time.monotonic() < deadline:
-            ui.pump(.1)
-        assert grant_evidence.exists(), "installed grant scope was not verified"
-        grant = json.loads(grant_evidence.read_text())
-        assert grant["capabilities"] == ["agents.launch", "app.database", "threads.message", "threads.read",
-                                                "workspace.files.read"], grant
-        assert len(grant["policies"]) == 6, grant
-        volume_id, database_id = grant_identities(classic_workspace(folder / "workspace.db"))
-        assert grant["volume_id"] == volume_id, grant
-        assert grant["database_id"] == database_id, grant
+        wait_for_agent_run(folder, project, ui)
+        if not NATIVE_DESKTOP:
+            grant_evidence = project / "evidence/grant.json"
+            deadline = time.monotonic() + 35
+            while not grant_evidence.exists() and time.monotonic() < deadline:
+                ui.pump(.1)
+            assert grant_evidence.exists(), "installed grant scope was not verified"
+            grant = json.loads(grant_evidence.read_text())
+            assert grant["capabilities"] == ["agents.launch", "app.database", "threads.message", "threads.read",
+                                                    "workspace.files.read"], grant
+            assert len(grant["policies"]) == 6, grant
+            volume_id, database_id = grant_identities(classic_workspace(folder / "workspace.db"))
+            assert grant["volume_id"] == volume_id, grant
+            assert grant["database_id"] == database_id, grant
         ui.quit()
     finally:
         ui.close()
         os.environ.pop("BEE_WORKSPACE_APP_INSPECT", None)
         os.environ.pop("BEE_WORKSPACE_APP_WORKSPACE", None)
 
-    restarted = Desktop(folder, project=project)
+    restarted = Desktop(folder, project=project, runtime=DESKTOP_RUNTIME, native=NATIVE_DESKTOP,
+                        state_dir=folder / "native-state" if NATIVE_DESKTOP else None)
     try:
         restarted.wait("TALLY", timeout=COLD_BOOT)
         restarted.wait("Tally: 3", timeout=20)
@@ -297,15 +354,13 @@ def exercise():
     finally:
         restarted.close()
     workspace_id = classic_workspace(folder / "workspace.db")
-    _, database_id = grant_identities(workspace_id)
-    suffix = database_id.rsplit(".", 1)[-1]
-    app_db = project / ".wippy" / "app-db" / f"{suffix}.db"
+    app_db = application_database(folder, project)
     with sqlite3.connect(f"file:{app_db}?mode=ro", uri=True) as db:
         rows = db.execute("SELECT n, note FROM tally_rows ORDER BY rowid").fetchall()
         runs = db.execute("SELECT attempt_id, definition_ref, state, outcome, steer FROM tally_runs ORDER BY rowid").fetchall()
     assert rows == [(1, GREETING), (2, GREETING), (3, GREETING)], rows
-    # The installed app launched the shipped-driver-shaped fixture agent under
-    # its generated agents.launch grant, waited for the placed child to
+    # The installed app launched the shipped Claude batch definition under its
+    # generated agents.launch grant, waited for the placed child to
     # settle, read its result and steered it once under threads.message.
     assert runs, "the installed app recorded no agent launch"
     for attempt_id, definition_ref, state, outcome, steer in runs:
@@ -332,8 +387,8 @@ def exercise():
           "shipped host profiles, the person saw the threads.read, threads.message, workspace.files.read, "
           "app.database and agents.launch capabilities in Approvals, and the installed scope contained their "
           "generated policies; it called the Threads owner, read a workspace file through its confined volume, "
-          "recorded its counts with the greeting in its isolated database, launched the shipped-driver-shaped "
-          "fixture agent under its generated launch grant, waited for the placed child to settle, read its "
+          "recorded its counts with the greeting in its isolated database, launched the shipped "
+          "bee.driver.claude:research_batch child under its generated launch grant, waited for it to settle, read its "
           "result, steered it once with a durable message, and restored its saved count with its rows intact")
 
 

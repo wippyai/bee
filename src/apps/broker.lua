@@ -283,12 +283,17 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local current = admission.current
         if not current then error("Application admission is unavailable for alias recovery") end
         for _, record in ipairs(records) do
-            local attested, _, message = attest_instance(record.instance_id, record.definition_id)
-            if not attested then
-                error("Backfill retained application alias: " .. tostring(message or "thread owner refused the alias"))
-            end
-            if not current.descriptors[record.definition_id] and not fence_stable(record.definition_id) then
-                error("Fence unadmitted checkpoint application family")
+            -- The first catalog can precede governance/package recovery. A
+            -- missing definition here is not evidence of an admission loss:
+            -- the host keeps its checkpoint pending and may restore it when
+            -- the definition returns. Restore-open attests that exact
+            -- instance before starting it. Runtime admission removal is
+            -- fenced by refresh_admission's previous-to-current transition.
+            if current.descriptors[record.definition_id] then
+                local attested, _, message = attest_instance(record.instance_id, record.definition_id)
+                if not attested then
+                    error("Backfill retained application alias: " .. tostring(message or "thread owner refused the alias"))
+                end
             end
         end
     end

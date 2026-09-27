@@ -62,7 +62,7 @@ def assert_shared_database(root):
 
 
 def bind_admission(project):
-    """The host owner admits the definition; registry metadata cannot."""
+    """The host owner admits the fixture and grants its Agent thread access."""
     index = project / "src/security/_index.yaml"
     document = yaml.safe_load(index.read_text())
     admission = next(entry for entry in document["entries"] if entry["name"] == "application_admission")
@@ -71,15 +71,34 @@ def bind_admission(project):
                                                "bee.app.open.probe:recheck_policy",
                                                "bee.app.open.probe:operator_signal_policy"],
                                   "thread_access": "observe_post"})
-    window = next(item for item in admission["bindings"]
-                  if item["definition_id"] == "bee.harness.window:app")
-    window["thread_access"] = "observe_post"
     index.write_text(yaml.safe_dump(document, sort_keys=False))
+
+    harness_index = project / "modules/harness/src/_index.yaml"
+    harness = yaml.safe_load(harness_index.read_text())
+    agent_admission = next(entry for entry in harness["entries"]
+                           if entry["name"] == "target_agent_application_admission")
+    agent_admission["default"]["thread_access"] = "observe_post"
+    harness_index.write_text(yaml.safe_dump(harness, sort_keys=False))
 
 
 def assert_overlay_authority(project):
-    """Applications get only the destination writer; host recovery stays private."""
-    granted, denied, host_only = set(), set(), {}
+    """Applications get the destination writer; recovery paths stay host-only."""
+    granted, denied, host_only, edit_assignments = set(), set(), {}, set()
+    edit_only = {
+        "bee.gov.security:super_edit_execution_policy": "super_edit_execution_scope",
+        "bee.gov.security:super_edit_recovery_execution_policy": "super_edit_recovery_execution_scope",
+    }
+
+    def selected_policies(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "policies" and isinstance(child, list):
+                    edit_assignments.update(item for item in child if isinstance(item, str) and item in edit_only)
+                selected_policies(child)
+        elif isinstance(value, list):
+            for child in value:
+                selected_policies(child)
+
     indexes = list((project / "src").rglob("_index.yaml")) + list((project / "modules/gov/src").rglob("_index.yaml"))
     for index in indexes:
         document = yaml.safe_load(index.read_text())
@@ -88,13 +107,20 @@ def assert_overlay_authority(project):
             if not isinstance(policy, dict) or OVERLAY_WRITE not in (policy.get("actions") or []):
                 continue
             identity = f'{document["namespace"]}:{entry["name"]}'
-            if identity in HOST_ONLY_OVERLAY_WRITERS:
-                host_only[identity] = entry
-                continue
-            (granted if policy.get("effect") == "allow" else denied).add(identity)
+            if policy.get("effect") == "allow":
+                if identity in HOST_ONLY_OVERLAY_WRITERS:
+                    host_only[identity] = entry
+                else:
+                    granted.add(identity)
+                if identity in edit_only:
+                    assert entry.get("groups") == [edit_only[identity]], (identity, entry.get("groups"))
+            else:
+                denied.add(identity)
+        selected_policies(document)
     assert granted == {"bee.gov.security:destination_service_policy"}, granted
     assert denied == {"bee.security:app_boundary_policy", "bee.security:scope_managing_app_boundary"}, denied
     assert set(host_only) == HOST_ONLY_OVERLAY_WRITERS, host_only
+    assert not edit_assignments, edit_assignments
     assert host_only["bee.gov.security:super_edit_execution_policy"]["groups"] == ["super_edit_execution_scope"]
     assert host_only["bee.gov.security:super_edit_recovery_execution_policy"]["groups"] == ["super_edit_recovery_execution_scope"]
 
@@ -610,6 +636,12 @@ def revoke_crash_recovery(project, source_root, report, destination):
 
     restarted = Desktop(destination, project=project)
     try:
+        # This probe also left the managed Agent open. Its fixture launch
+        # reached a tool hook but never established a provider conversation,
+        # so the documented recovery surface explains that it cannot resume.
+        # Close that unrelated window before asserting the revoked app is gone.
+        restarted.wait("This Agent window cannot be resumed", timeout=COLD_BOOT)
+        restarted.key(b"\x1b")
         restarted.wait("No applications open", timeout=COLD_BOOT)
         wait_binding(destination, instance_ids,
                      lambda rows: revoked if rows.get(revoked) == ("revoked", 0) else None)

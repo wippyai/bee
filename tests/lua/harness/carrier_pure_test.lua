@@ -142,6 +142,25 @@ local function define_tests()
             test.is_nil(bounded)
             test.eq(bounded_error, "pending_writes must be a bounded dense list: list exceeds 8 items")
         end)
+        test.it("decodes checkpoint terminals through shared fault and usage types", function()
+            local raw: {[string]: unknown} = {outcome = "failed", answer = "failed", resume_ref = "session",
+                usage = {input_tokens = 7, cost_decimal = "0.25", currency = "USD"},
+                error = {code = "driver_failed", message = "the driver failed", retryable = false}}
+            local terminal, terminal_error = checkpoint.decode_terminal(raw)
+            if not terminal then error(tostring(terminal_error)) end
+            test.eq(terminal.outcome, "failed")
+            test.eq(terminal.usage and terminal.usage.input_tokens, 7)
+            test.eq(terminal.error and terminal.error.code, "driver_failed")
+
+            local malformed_usage: {[string]: unknown} = {outcome = "succeeded", usage = {unexpected = true}}
+            local invalid_usage, usage_error = checkpoint.decode_terminal(malformed_usage)
+            test.is_nil(invalid_usage)
+            test.eq(usage_error, "terminal usage is malformed: unknown field unexpected")
+            local malformed_fault: {[string]: unknown} = {outcome = "failed", error = {code = "driver_failed", message = "failure", retryable = "no"}}
+            local invalid_fault, fault_error = checkpoint.decode_terminal(malformed_fault)
+            test.is_nil(invalid_fault)
+            test.eq(fault_error, "terminal error is malformed: fault retryable must be a boolean")
+        end)
         test.it("rejects malformed gateway materialization credentials and nested bindings", function()
             local binding: {[string]: unknown} = {binding_id = "binding", subject = "owner", action_id = "action", attempt_id = "attempt",
                 thread_id = "thread", owner_incarnation = 1, carrier_epoch = 2, tools = {}, hooks = {}, epoch = 0,

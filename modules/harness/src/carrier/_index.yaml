@@ -14,6 +14,7 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     driver_types: bee.driver:types
+    record_values: bee.threads.records:values
 - name: prestart
   kind: library.lua
   source: file://prestart.lua

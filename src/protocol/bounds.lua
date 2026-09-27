@@ -7,7 +7,6 @@ M.MAX_ARRAY_ITEMS = 64
 M.MAX_TEXT_BYTES = 16384
 M.MAX_SUBPATH_BYTES = 512
 type RelativePathOptions = {nonempty: boolean?, no_control: boolean?}
-type RelativePathOptions = {nonempty: boolean?, no_control: boolean?}
 
 function M.id(value: unknown): string?
     if type(value) ~= "string" or #value == 0 or #value > M.MAX_ID_BYTES or value:find("%c") then return nil end
@@ -106,7 +105,6 @@ function M.optional_id(value: {[string]: unknown}, name: string): (string?, bool
     return result, true
 end
 
-<<<<<<< HEAD
 function M.subpath(value: unknown, options: RelativePathOptions | integer?): (string?, string?)
     if type(value) ~= "string" then return nil, "subpath must be a string" end
     local maximum: integer = M.MAX_SUBPATH_BYTES
@@ -120,18 +118,6 @@ function M.subpath(value: unknown, options: RelativePathOptions | integer?): (st
     end
     if value:sub(1, 1) == "/" or value:find("\\", 1, true) or value:find("\0", 1, true)
         or (rules.no_control == true and value:find("%c")) then return nil, "subpath must be relative" end
-=======
-function M.subpath(value: unknown, options: RelativePathOptions?): (string?, string?)
-    if type(value) ~= "string" then return nil, "subpath must be a string" end
-    if #value > M.MAX_SUBPATH_BYTES then return nil, "subpath is too long" end
-    local rules = options or {}
-    if value == "" then
-        if rules.nonempty then return nil, "subpath must not be empty" end
-        return "", nil
-    end
-    if value:sub(1, 1) == "/" or value:find("\\", 1, true) or value:find("\0", 1, true)
-        or (rules.no_control == true and value:find("%c")) then return nil, "subpath must be relative" end
->>>>>>> 4df4a879 (fix(boundaries): decode owner replies with shared protocols)
     for segment in (value .. "/"):gmatch("([^/]*)/") do
         if segment == "" or segment == "." or segment == ".." then return nil, "subpath has an invalid segment" end
     end

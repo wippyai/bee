@@ -23,7 +23,7 @@ the replaceable `target_root` requirement.
    that filesystem authority.
    Window login evidence is checked by existence in the selected provider
    home. An admitted file projection's source is also checked by metadata so
-   a login about to be copied into a retained home does not produce a false
+   a login about to be copied into a private or retained home does not produce a false
    warning. Neither check opens login bytes. An absent login adds an advisory
    `LOGIN_REQUIRED` notice to the prepare reply and does not stop the launch.
    A retained session home has one holder per owner/session pair: another
@@ -89,10 +89,13 @@ in placement's stored delivery; the launch caller and provider configure reply
 cannot choose it.
 
 Native placement owns `HOME`, selected from its attempt or retained session home.
-An admitted gateway owns its tool and hook token destinations. `prepare` refuses
-literal or referenced environment values that collide with those names, and
-refuses a shared tool/hook destination, before recording intent. Materialization
-checks those assignments again for a retained request.
+For a driver's private provider home, placement also sets only its declared
+provider-home variables (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `GROK_HOME`, or
+OpenCode's XDG roots) below that same private home. An admitted gateway owns its
+tool and hook token destinations. `prepare` refuses literal or referenced
+environment values that collide with those names, and refuses a shared
+tool/hook destination, before recording intent. Materialization checks those
+assignments again for a retained request.
 
 Credential projections cannot overwrite a policy value, another projection, the
 native home or a gateway destination. Such a conflict ends materialization before
@@ -106,52 +109,68 @@ retained byte-identical file replay remains unchanged. This permits Agy's
 `.agents/mcp_config.json` in a retained customization root without adopting
 or changing the user's global configuration directories.
 
-## Retained provider login destinations
+## Provider login homes
 
-`homes.retain_login` receives broker file projections during runtime materialization
-only after a launch selects its retained session home. It accepts bounded opaque bytes and
-a frozen host-selected relative target declared by the harness component.
-Codex declares `.codex/auth.json`, Claude `.claude/.credentials.json`, and Agy
-`.gemini/antigravity-cli/antigravity-oauth-token`. Claude's declaration also initializes `.claude.json` with only
-`hasCompletedOnboarding: true`: the real CLI otherwise asks for a login method
-despite recognizing the imported subscription. This does not trust any project,
-import machine settings or change later harness-owned preferences. An absent
-optional login does not initialize onboarding. Existing retained homes are not
-rewritten. Nested parent creation records every directory it creates, so later
-immutable driver configuration can share those directories. Existing parents
-are refused unless the current materialization created them; login formats
-cannot overwrite the retained identity marker.
+Private attempt homes are created empty. A private `provider_home` declaration
+selects the provider's machine-home source paths, private destinations, runtime
+home variables and whether its login can be returned after exit. The credential
+broker supplies bounded bytes only for source paths admitted by the host;
+placement compares every returned login and setup path with the driver
+declaration before creating files. It never scans the source home or copies
+unlisted files. Optional absent logins leave the token destination absent.
 
-The first seed records a separate nonsecret
-provider/definition-id/definition-revision identity only after the opaque file
-has been completely written. A matching resume leaves the login file untouched,
-so bytes refreshed by the harness persist. A changed provider, definition or
-revision, or either half of an interrupted seed, refuses reuse. It neither emits
-evidence nor treats opaque bytes as immutable configuration. The native fixture
-checks the placement root's actual `0700` mode rather than registry metadata.
-The helper reads the root's actual numeric `fs.FileInfo.mode` and refuses group
-or other access; it does not infer privacy from the registry declaration. The
-pinned `fs` write contract reports an error for a short write, so a successful
-write plus successful close is the ready-marker precondition. It has no fsync
-operation: ready-marker ordering refuses interrupted process writes, but is not
-a machine-power-loss durability claim.
+`homes.project_attempt_login` writes only the broker's primary login file and
+its admitted setup initializers into a newly created attempt home. Claude's
+format also initializes `.claude.json` with only `hasCompletedOnboarding: true`
+when login bytes are present; this lets Claude Code recognize the imported
+subscription without importing unrelated home state. Setup configuration is
+copied as admitted, or created empty only when its host declaration marks it as
+a composition base. Bee's generated provider configuration is then composed by
+the selected driver.
 
-An optional source can seed no bytes while recording the same source binding
-with `optional=true`. A matching retained home then preserves either an absent
-file or a file created by interactive sign-in; later machine credentials never
-replace either choice. Required sources still refuse a missing login file.
-Changing optional policy also changes the binding and refuses reuse. Empty
-provided bytes remain an error. Native materialization requires explicit `present` and `optional` flags from
-the broker; absent bytes are accepted only for an optional absent reply. This
-records an unseeded home without placing file credentials in the environment.
-First-use setup preserves the host-selected optional policy and refuses a
-conflicting existing definition. Default Claude, Codex and Agy window profiles
-use the explicitly authorized host HOME and select no login-file projection.
-Agy places Bee-generated files in its retained session customization root.
-Private structured profiles may still select declared credential sources.
-Source-free acceptance covers present and absent global login and exclusion of
-Bee-generated files from global configuration trees, using fixture CLIs. Real
-authenticated provider turns remain verified separately per driver.
+The CLI may refresh its own login file while it runs. The pinned runtime has
+no Lua filesystem operation that opens a regular file while refusing symlinks
+in every path component. The runner therefore refuses provider login
+write-back with `provider login write-back requires runtime no-follow fs` after
+the child exits. It leaves the worker file unchanged and never truncates or
+rewrites it to validate the path. Host-to-private-home projection remains
+available because the credential broker reads only the host-declared source
+files before the worker starts.
+
+Configuration and state files are never returned. Evidence records status and
+projection identity only; it never contains login bytes. The runtime feature
+branch adds the descriptor-relative no-follow read needed to resume write-back;
+Bee keeps the behavior disabled while its manifest pins the earlier runtime.
+
+Retained homes keep their existing identity marker and seed rules. The first
+seed records provider, definition ID and revision only after the login file is
+completely written. A matching resume leaves the login file untouched, so
+provider-refreshed bytes persist. Changed identity or an interrupted seed
+refuses reuse. Existing parents are refused unless the current materialization
+created them; login formats cannot overwrite the retained identity marker.
+
+The native fixture checks the placement root's actual `0700` mode rather than
+registry metadata. The helper reads the root's actual numeric
+`fs.FileInfo.mode` and refuses group or other access; it does not infer privacy
+from the registry declaration. The pinned `fs` write contract reports an error
+for a short write, so a successful write plus successful close is the
+ready-marker precondition. It has no fsync operation: ready-marker ordering
+refuses interrupted process writes, but is not a machine-power-loss durability
+claim.
+
+An optional source may seed no login bytes. Retained homes preserve either an
+absent file or one created by interactive sign-in; later machine credentials
+never replace either choice. Required sources refuse a missing login. Changing
+the optional policy changes the retained binding and refuses reuse. Empty
+provided login bytes remain an error. Default provider windows use the
+explicitly authorized host HOME and select no login projection; private batch
+profiles project their declared files into attempt homes. Fixture unit tests
+cover all six driver declarations and placement paths, and the confined Codex
+fixture worker verifies that unrelated machine-home files stay outside its
+attempt home. `thread-launch-check` uses fixture CLIs only. The opt-in
+`thread-launch-live-check` uses an installed Claude or Codex CLI with its local
+login file, passes no provider API key variables, and withholds runtime output.
+Standard gates never run the live smoke.
 
 ## Capability
 

@@ -9,6 +9,7 @@ local funcs = require("funcs")
 local sql = require("sql")
 local process = require("process")
 local hash = require("hash")
+local bounds = require("bounds")
 local store = require("store")
 local resources = require("resources")
 local homes = require("homes")
@@ -16,7 +17,65 @@ local types = require("types")
 local configuration = require("configuration")
 local git_roots = require("git_roots")
 local M = {}
-type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}}
+type WriteBack = {projection_id: string, generation: integer, source_digest: string, path: string}
+type WriteBackResult = {projection_id: string, ok: boolean, code: string?, message: string?, written: boolean?}
+type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}, home_path: string, writebacks: {WriteBack}}
+local function provider_home_matches(home: types.ProviderHome, source_path: unknown, format: unknown, source_write_back: unknown): boolean
+    if type(source_path) ~= "string" or type(source_write_back) ~= "boolean" then return false end
+    local file = type(format) == "table" and (format :: {[string]: unknown}).file or nil
+    if type(file) ~= "table" then return false end
+    local file_object = file :: {[string]: unknown}
+    if type(file_object.path) ~= "string" or type(file_object.initialize) ~= "table" then return false end
+    local projected: {[string]: {source_path: string?, kind: string, write_back: boolean}} = {}
+    projected[file_object.path :: string] = {source_path = source_path :: string, kind = "login", write_back = source_write_back :: boolean}
+    for _, raw in ipairs(file_object.initialize :: {unknown}) do
+        if type(raw) ~= "table" then return false end
+        local item = raw :: {[string]: unknown}
+        if type(item.path) ~= "string" then return false end
+        local item_source: string? = nil
+        if item.source_path ~= nil then
+            if type(item.source_path) ~= "string" then return false end
+            item_source = item.source_path :: string
+        end
+        if projected[item.path :: string] ~= nil then return false end
+        projected[item.path :: string] = {source_path = item_source, kind = item_source and "config" or "state", write_back = false}
+    end
+    for path, actual in pairs(projected) do
+        local found = false
+        for _, declared in ipairs(home.files) do
+            if declared.path == path then
+                if actual.source_path ~= declared.source_path or actual.kind ~= declared.kind or actual.write_back ~= declared.write_back then return false end
+                found = true
+                break
+            end
+        end
+        if not found then return false end
+    end
+    for _, expected in ipairs(home.files) do
+        if projected[expected.path] == nil and not expected.optional then return false end
+    end
+    return true
+end
+function M.write_back(home_path: string, writebacks: {WriteBack}, owner_id: string, attempt_id: string): {WriteBackResult}
+    local results: {WriteBackResult} = {}
+    for index, candidate in ipairs(writebacks) do
+        local content, read_error = homes.read_provider_file(home_path, candidate.path)
+        if not content then
+            results[index] = {projection_id = candidate.projection_id, ok = false, code = read_error and "UNAVAILABLE" or "NOT_FOUND", message = read_error}
+        else
+            local raw, call_error = funcs.call(resources.CREDENTIAL_WRITE_BACK, {projection_id = candidate.projection_id, subject = owner_id,
+                audience = owner_id, attempt_id = attempt_id, generation = candidate.generation, source_digest = candidate.source_digest, value = content})
+            local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?, value: {written: boolean}?} or nil
+            if call_error or not reply or not reply.ok or not reply.value then
+                results[index] = {projection_id = candidate.projection_id, ok = false,
+                    code = reply and reply.error and reply.error.code or "UNAVAILABLE"}
+            else
+                results[index] = {projection_id = candidate.projection_id, ok = true, written = reply.value.written == true}
+            end
+        end
+    end
+    return results
+end
 local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
     local result = store.transition(db, attempt_id, {execution = update and update.execution :: types.ExecutionState? or nil,
         fields = update and update.fields :: {[string]: unknown}? or nil, evidence = {kind = kind, detail = detail}})
@@ -109,6 +168,17 @@ end
 -- Check before intent and again when materializing a retained request.
 function M.environment_conflict(request: types.LaunchRequest): string?
     local owners: {[string]: string} = {HOME = "native placement"}
+    local provider_home = request.launch.provider_home
+    if provider_home and provider_home.private and provider_home.variable then
+        if owners[provider_home.variable] then return "provider-home variable " .. provider_home.variable .. " is already assigned" end
+        owners[provider_home.variable] = "native provider home"
+    end
+    if provider_home and provider_home.private then
+        for _, item in ipairs(provider_home.extra_variables or {}) do
+            if owners[item.variable] then return "provider-home variable " .. item.variable .. " is already assigned" end
+            owners[item.variable] = "native provider home"
+        end
+    end
     if request.gateway then
         local gateway = request.gateway
         if owners[gateway.destination] then return "gateway destination " .. gateway.destination .. " is owned by native placement" end
@@ -142,6 +212,13 @@ local function resolve_environment(request: types.LaunchRequest, home: string): 
         end
     else
         values.HOME = home
+    end
+    local provider_home = request.launch.provider_home
+    if provider_home and provider_home.private and provider_home.variable and provider_home.directory then
+        values[provider_home.variable] = home .. "/" .. provider_home.directory
+    end
+    if provider_home and provider_home.private then
+        for _, item in ipairs(provider_home.extra_variables or {}) do values[item.variable] = home .. "/" .. item.directory end
     end
     return values, nil
 end
@@ -196,6 +273,7 @@ local function git_sandbox_arguments(request: types.LaunchRequest, work_dir: str
 end
 function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?): (Prepared?, string?, string?)
     local gateway_binding: string? = nil
+    local writebacks: {WriteBack} = {}
     local function finish_stopped_without_child(): boolean
         local current = store.row(db, attempt_id)
         if not current or current.execution_state ~= "stopping" or current.runner_pid ~= process.pid() then return false end
@@ -241,7 +319,8 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- cleanup. Only the persisted host-generated delivery files are replaced.
     local selected_home_path = home_path
     local retained_home = false
-    if request.session_ref then
+    local provider_home = request.launch.provider_home
+    if request.session_ref and (not provider_home or provider_home.private ~= true) then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
         if not session_path then
@@ -272,8 +351,37 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local file_projection = false
     local composition_bases: {[string]: string} = {}
     for index, projection_id in ipairs(request.projections) do
-        local raw, call_error = funcs.call(resources.CREDENTIAL_MATERIALIZE, {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
-            attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)})
+        local credential_request: {[string]: unknown} = {projection_id = projection_id, subject = request.owner_id, audience = request.owner_id,
+            attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)}
+        local provider_home = request.launch.provider_home
+        if provider_home and provider_home.private then
+            local checked_raw, check_error = funcs.call(resources.CREDENTIAL_CHECK, {projection_id = projection_id,
+                subject = request.owner_id, audience = request.owner_id, attempt_id = attempt_id})
+            local checked = type(checked_raw) == "table" and checked_raw :: {ok: boolean, error: {code: string}?, value: {provider: unknown, projection_kind: unknown}?} or nil
+            if not owns_attempt() then
+                return refused("attempt no longer owns configuration materialization")
+            end
+            if check_error or not checked or checked.ok ~= true or not checked.value then
+                local code = checked and checked.error and checked.error.code or "UNAVAILABLE"
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": " .. code, {execution = "exited"})
+                return refused("projection " .. projection_id .. ": " .. code)
+            end
+            local projection = checked.value
+            if type(projection.provider) ~= "string" or (projection.projection_kind ~= "environment" and projection.projection_kind ~= "file") then
+                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": INVALID", {execution = "exited"})
+                return refused("projection " .. projection_id .. ": INVALID")
+            end
+            if projection.projection_kind == "file" and projection.provider == provider_home.provider then
+                local provider_files: {{source_path: string, path: string, optional: boolean}} = {}
+                for _, file in ipairs(provider_home.files) do
+                    if file.kind == "config" and file.source_path then
+                        provider_files[#provider_files + 1] = {source_path = file.source_path, path = file.path, optional = file.optional}
+                    end
+                end
+                if #provider_files > 0 then credential_request.provider_files = provider_files end
+            end
+        end
+        local raw, call_error = funcs.call(resources.CREDENTIAL_MATERIALIZE, credential_request)
         local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?, value: {destination: string, value: string?, projection_kind: string}?} or nil
         -- Credential materialization reads an external source and can yield
         -- while the owner stops this attempt. Fence the reply before touching
@@ -288,20 +396,30 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         end
         local projected = reply.value :: {destination: string, value: string?, projection_kind: string}
         if projected.projection_kind == "file" then
-            if not retained_home or file_projection then
+            local provider_home = request.launch.provider_home
+            if file_projection or (not retained_home and (not provider_home or not provider_home.private)) then
                 evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
                 return refused("invalid file login projection")
             end
             local login = reply.value :: {destination: string, value: string?, projection_kind: string,
-                provider: unknown, definition_id: unknown, definition_revision: unknown, optional: unknown, present: unknown, format: unknown}
+                provider: unknown, definition_id: unknown, definition_revision: unknown, optional: unknown, present: unknown, format: unknown,
+                source_path: unknown, source_present: unknown, source_digest: unknown, generation: unknown, write_back: unknown}
             local source = homes.decode_login_source({provider = login.provider,
                 definition_id = login.definition_id, definition_revision = login.definition_revision, optional = login.optional, format = login.format})
             if not source or projected.destination ~= (source.path:match("[^/]+$") :: string)
                 or type(login.optional) ~= "boolean" or type(login.present) ~= "boolean"
                 or (login.present == true and type(projected.value) ~= "string")
-                or (login.present == false and (login.optional ~= true or projected.value ~= nil)) then
+                or (login.present == false and (login.optional ~= true or projected.value ~= nil))
+                or login.source_present ~= login.present
+                or (login.present == true and (type(login.source_path) ~= "string" or type(login.source_digest) ~= "string"))
+                or type(login.write_back) ~= "boolean" then
                 evidence(db, attempt_id, "credential.refused", "invalid file login projection", {execution = "exited"})
                 return refused("invalid file login projection")
+            end
+            if provider_home and (provider_home.provider ~= source.source.provider
+                or not provider_home_matches(provider_home, login.source_path, login.format, login.write_back)) then
+                evidence(db, attempt_id, "credential.refused", "provider login files do not match the driver declaration", {execution = "exited"})
+                return refused("provider login files do not match the driver declaration")
             end
             local login_path = source.path
             if not login_path then return refused("file login path unavailable") end
@@ -315,38 +433,62 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 evidence(db, attempt_id, "configuration.refused", "configuration overlaps provider login state", {execution = "exited"})
                 return refused("configuration overlaps provider login state")
             end
-            local session_ref = request.session_ref
-            if not session_ref then return refused("file login session unavailable") end
             local login_value = {provider = source.source.provider, definition_id = source.source.definition_id,
                 definition_revision = source.source.definition_revision, optional = source.source.optional, format = source.format}
-            local replayed, replay_error = homes.login_replayed(selected_home_path, login_value)
-            if replayed == nil then
-                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
-                return refused(replay_error or "file login projection refused")
-            end
-            -- Bind every admitted setup file before retain_login can publish
-            -- the ready marker. A crash after the marker must never leave a
-            -- reusable session whose immutable composition base has no digest.
-            for _, item in ipairs(login_file.initialize) do
-                local expected: string? = nil
-                local binding_error: string? = nil
-                if replayed then
-                    expected, binding_error = store.session_file_digest(db, request.owner_id, session_ref, item.path)
-                    if not expected and not binding_error then binding_error = "retained configuration binding is missing" end
-                else
-                    expected, binding_error = hash.sha256(item.content)
-                    if expected then binding_error = store.bind_session_file(db, request.owner_id, session_ref, item.path, expected) end
+            local replayed = false
+            if retained_home then
+                local session_ref = request.session_ref
+                if not session_ref then return refused("file login session unavailable") end
+                local replay_value, replay_error = homes.login_replayed(selected_home_path, login_value)
+                if replay_value == nil then
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
+                    return refused(replay_error or "file login projection refused")
                 end
-                if not expected or binding_error then
-                    evidence(db, attempt_id, "configuration.refused", binding_error or "retained configuration binding", {execution = "exited"})
-                    return refused(binding_error or "retained configuration binding")
+                replayed = replay_value
+                for _, item in ipairs(login_file.initialize) do
+                    local expected: string? = nil
+                    local binding_error: string? = nil
+                    if replayed then
+                        expected, binding_error = store.session_file_digest(db, request.owner_id, session_ref, item.path)
+                        if not expected and not binding_error then binding_error = "retained configuration binding is missing" end
+                    else
+                        expected, binding_error = hash.sha256(item.content)
+                        if expected then binding_error = store.bind_session_file(db, request.owner_id, session_ref, item.path, expected) end
+                    end
+                    if not expected or binding_error then
+                        evidence(db, attempt_id, "configuration.refused", binding_error or "retained configuration binding", {execution = "exited"})
+                        return refused(binding_error or "retained configuration binding")
+                    end
+                    composition_bases[item.path] = expected
                 end
-                composition_bases[item.path] = expected
-            end
-            local _, login_error, retained_replay = homes.retain_login(selected_home_path, login_value, projected.value, created_parents)
-            if login_error or retained_replay ~= replayed then
-                evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
-                return refused("file login projection refused")
+                local _, login_error, retained_replay = homes.retain_login(selected_home_path, login_value, projected.value, created_parents)
+                if login_error or retained_replay ~= replayed then
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
+                    return refused("file login projection refused")
+                end
+            else
+                for _, item in ipairs(login_file.initialize) do
+                    local expected, digest_error = hash.sha256(item.content)
+                    if not expected or digest_error then return refused("provider setup digest failed") end
+                    composition_bases[item.path] = expected
+                end
+                local _, login_error = homes.project_attempt_login(selected_home_path, login_value, projected.value, created_parents)
+                if login_error then
+                    evidence(db, attempt_id, "credential.refused", "projection " .. projection_id .. ": file login refused", {execution = "exited"})
+                    return refused("file login projection refused")
+                end
+                if login.present == true and provider_home then
+                    local declared_generation = bounds.integer(login.generation)
+                    for _, item in ipairs(provider_home.files) do
+                        if item.path == source.path and item.kind == "login" and item.write_back then
+                            if not login.write_back or not declared_generation or declared_generation < 1 or type(login.source_digest) ~= "string" then
+                                return refused("provider token write-back metadata is invalid")
+                            end
+                            writebacks[#writebacks + 1] = {projection_id = projection_id, generation = declared_generation,
+                                source_digest = login.source_digest :: string, path = item.path}
+                        end
+                    end
+                end
             end
             file_projection = true
             evidence(db, attempt_id, "credential.materialized", "projection " .. projection_id .. " file login " .. (replayed and "retained" or (login.present == true and "seeded" or "unseeded")))
@@ -408,9 +550,10 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     for _, file in ipairs(delivery.files) do
         local base: string? = nil
         if file.composition then
-            if not retained_home then
-                evidence(db, attempt_id, "configuration.refused", "configuration composition requires a retained home", {execution = "exited"})
-                return refused("configuration composition requires a retained home")
+            local provider_home = request.launch.provider_home
+            if not retained_home and (not provider_home or not provider_home.private) then
+                evidence(db, attempt_id, "configuration.refused", "configuration composition requires an admitted provider home", {execution = "exited"})
+                return refused("configuration composition requires an admitted provider home")
             end
             local admitted_digest = composition_bases[file.composition.base_path]
             if not admitted_digest then
@@ -466,6 +609,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     end
     for _, argument in ipairs(sandbox_arguments) do arguments[#arguments + 1] = argument end
     for _, argument in ipairs(request.launch.argv) do arguments[#arguments + 1] = argument end
-    return {environment = environment, working_directory = work_dir, arguments = arguments}, nil, gateway_binding
+    return {environment = environment, working_directory = work_dir, arguments = arguments,
+        home_path = selected_home_path, writebacks = writebacks}, nil, gateway_binding
 end
 return M

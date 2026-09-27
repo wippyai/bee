@@ -10,6 +10,17 @@ M.SANDBOXES = {"read-only", "workspace-write"}
 -- space, an empty value or a leading dash. The name is a bounded identifier,
 -- never a path, so it cannot escape the Codex home.
 M.MAX_CONFIG_PROFILE_BYTES = 64
+local function provider_home(private: boolean, config_profile: string?): types.ProviderHome
+    local files: {types.ProviderHomeFile} = {
+        {source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
+        {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
+    }
+    if config_profile then
+        local path = ".codex/" .. config_profile .. ".config.toml"
+        files[#files + 1] = {source_path = path, path = path, kind = "config", optional = false, write_back = false}
+    end
+    return {provider = "codex", private = private, variable = "CODEX_HOME", directory = ".codex", files = files}
+end
 type Request = {profile_id: string, brief: string, sandbox: string, resume_ref: string?, gateway_hooks: boolean?, effort: string?, config_profile: string?}
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
@@ -89,20 +100,25 @@ function M.specification(request: Request): types.Launch
     -- and layers $CODEX_HOME/<name>.config.toml on top of the base config.
     -- Bee's own session `-c` MCP and hook arguments still arrive through
     -- configuration delivery and layer on top of the named profile.
+    local private_home = request.profile_id ~= "window"
     local required_files: {types.RequiredFile}? = nil
     if request.config_profile then
         table.insert(argv, 1, request.config_profile)
         table.insert(argv, 1, "--profile")
-        required_files = {{variable = "CODEX_HOME", path = request.config_profile .. ".config.toml", default_directory = ".codex"}}
+        if not private_home then
+            required_files = {{variable = "CODEX_HOME", path = request.config_profile .. ".config.toml", default_directory = ".codex"}}
+        end
     end
     local environment: {string} = {}
     if request.profile_id == "window" then
         return {executable = "codex", argv = argv, environment = environment, required_files = required_files, readiness = "terminal:attached",
-            login = {provider = "codex", command = "codex login", files = {{variable = "CODEX_HOME", default_directory = ".codex", path = "auth.json"}}}}
+            login = {provider = "codex", command = "codex login", files = {{variable = "CODEX_HOME", default_directory = ".codex", path = "auth.json"}}},
+            provider_home = provider_home(false, request.config_profile)}
     end
     -- The brief goes in on stdin and Codex reads it until end of file, so
     -- the launch requires a placement that can close stdin after writing.
     local launch: types.Launch = {executable = "codex", argv = argv, stdin = request.brief, stdin_eof = true, environment = environment, required_files = required_files, readiness = "protocol:thread.started"}
+    launch.provider_home = provider_home(private_home, request.config_profile)
     return launch
 end
 return M

@@ -176,7 +176,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session
-    credentials: []
+    credentials: [opencode_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
     unconfined: true
 - name: command
@@ -190,6 +190,17 @@ entries:
     arguments:
     - bee.driver.opencode:default_window
     fullscreen: true
+
+- name: credential_format
+  kind: registry.entry
+  meta:
+    type: bee.credential_format
+  data:
+    schema_revision: bee.credential-format@1
+    file:
+      path: .local/share/opencode/auth.json
+      content_format: json
+      initialize: []
 - name: launch_policy_opencode_batch
   kind: registry.entry
   meta:

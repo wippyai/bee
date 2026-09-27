@@ -616,6 +616,13 @@ entries:
   storage: bee.placement.native:environment
   variable: BEE_FIXTURE_STREAMS
   readonly: true
+- name: ambient_live_provider
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: BEE_AMBIENT_LIVE_PROVIDER
+  default: "none"
+  readonly: true
 - name: carrier_client_policy
   kind: security.policy
   meta: {type: test_support}

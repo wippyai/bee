@@ -153,13 +153,18 @@ local function check_projection(request: types.LaunchRequest, projection_id: str
     if not projection then return fail("DENIED", "projection " .. projection_id .. " has invalid metadata"), nil end
     if projection.projection_kind == "environment" then return nil, "environment" end
     if projection.projection_kind ~= "file" then return fail("DENIED", "projection " .. projection_id .. " has unsupported kind"), nil end
-    if not request.session_ref or not request.launch.home_ref then
-        return fail("DENIED", "file credential projections require a selected retained home"), nil
+    local provider_home = request.launch.provider_home
+    local private_home = provider_home ~= nil and provider_home.private == true
+    if (not request.session_ref or not request.launch.home_ref) and not private_home then
+        return fail("DENIED", "file credential projections require a selected retained or declared private provider home"), nil
     end
     local source, source_error = homes.decode_login_source({provider = projection.provider,
         definition_id = projection.definition_id, definition_revision = projection.definition_revision, format = projection.format})
     if not source or projection.destination ~= (source.path:match("[^/]+$") :: string) then
         return fail("DENIED", "projection " .. projection_id .. " has invalid file login metadata"), nil
+    end
+    if provider_home and provider_home.provider ~= source.source.provider then
+        return fail("DENIED", "file credential provider differs from the driver provider home"), nil
     end
     return nil, "file", projection.source_present == true, source.source.provider, source.path
 end

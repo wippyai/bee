@@ -97,13 +97,13 @@ picker to switch; see [the workspace catalog](../reference/workspace-catalog.md)
 
 ## Managed agent containment
 
-A managed CLI runs with the operating system user's authority, so the host
-confines what it can see. Every orchestrator-launched batch worker runs
-with a private attempt home that holds only the provider login the
-credential broker projects; the launch policy admits no host HOME
-inheritance and no prompt-free permission mode. The one exception is the
-named Codex route, where the person explicitly chose a host-home profile
-so a saved Codex config profile resolves. Each CLI further runs under its
+Managed CLIs run with the operating system user's authority. Every
+orchestrator-launched batch worker uses a private attempt home containing only
+the login, configuration and state files its driver declares and the host
+credential broker projects; the launch policy admits no host HOME inheritance
+and no prompt-free permission mode. When a person chooses a named Codex profile,
+the driver projects that one admitted profile file into the private home so
+Codex resolves it with the selected profile. Each CLI further runs under its
 own permission control where one exists and is proven: Codex
 `--sandbox workspace-write`, Claude Code and Grok default permission
 modes, Muse `on-request` approval, agy `--sandbox`. Grok and OpenCode
@@ -127,23 +127,33 @@ logins outside every granted folder and home.
 
 ## Managed provider login
 
-Each built-in Codex, Claude, agy, Grok, Muse and OpenCode window launch declares its
-provider's login evidence as safe paths relative to its provider home, plus a
-command to show the person. Native placement checks file existence in the
-home selected for that attempt, including `CODEX_HOME`, `CLAUDE_CONFIG_DIR`
-or `GROK_HOME` when set. For a retained home that will receive an admitted
-file login projection, the credential broker also reports whether the source
-file exists without opening it. Missing evidence yields a typed
+Each built-in Codex, Claude, agy, Grok, Muse and OpenCode window launch declares
+its provider's login evidence as safe paths relative to its provider home, plus
+a command to show the person. Native placement checks file existence in the
+home selected for that attempt. Missing evidence yields a typed
 `LOGIN_REQUIRED` notice in placement's prepare reply. The Agent window shows
 the provider and command before starting the CLI; Enter continues to the
 provider's own sign-in flow, and the title keeps a login hint. This is a
 helpful observation, not an authentication decision: Bee checks existence
 only and leaves sign-in to the provider.
 
-The workspace owner inherits the environment of the `bee` invocation that
-started it. Later clients attach to that owner and do not replace its
-provider-home variables. After changing `CODEX_HOME` or another provider
-home variable, run `bee stop` and start Bee again with the new environment.
+Confined batch workers receive only their driver's declared files from the
+machine home:
+
+| Driver | Login | Ambient configuration | Child home selection |
+|---|---|---|---|
+| Claude Code | `.claude/.credentials.json` | `.claude/settings.json`; Bee creates the onboarding marker `.claude.json` only with a present login | `CLAUDE_CONFIG_DIR` points inside the attempt home |
+| Codex | `.codex/auth.json` | `.codex/config.toml` | `CODEX_HOME` points inside the attempt home |
+| Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` | private `HOME` |
+| Grok | `.grok/auth.json` | `.grok/config.toml` | `GROK_HOME` points inside the attempt home |
+| Muse | `.config/muse/auth.json` | `.config/muse/settings.json` | private `HOME` |
+| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json` | XDG config and data roots point inside the attempt home |
+
+Only a provider's login file may be returned to its original path after the
+child exits. The broker requires the active attempt projection and unchanged
+source digest, so a newer machine login is left in place. Provider configuration
+and other home files are not copied back. Codex `--profile NAME` keeps working
+with the selected `NAME.config.toml` projected into that attempt's private home.
 
 The local Hub can inspect, plan and apply host-authorized components. Governed
 overlays can stage bounded content, freeze an immutable candidate, obtain an

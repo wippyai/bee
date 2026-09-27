@@ -261,7 +261,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session
-    credentials: [claude_api_key]
+    credentials: [claude_api_key, claude_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
 
 - name: credential_format
@@ -306,7 +306,7 @@ entries:
     executables: {}
     executable_env: {claude: bee.driver.claude:executable}
     environment: {}
-    environment_refs: {CLAUDE_CONFIG_DIR: bee.driver.claude:config_home}
+    environment_refs: {}
     allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]

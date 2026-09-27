@@ -44,6 +44,46 @@ local function define_tests()
                 (item.launch :: {[string]: unknown}).login = {provider = "claude", command = "claude", files = {}}
             end, "launch.login.files must contain 1 to 8 paths")
         end)
+        test.it("decodes exact provider-home files and bounded private environment roots", function()
+            local value = launch()
+            local spec = value.launch :: {[string]: unknown}
+            spec.provider_home = {provider = "opencode", private = true,
+                extra_variables = {{variable = "XDG_CONFIG_HOME", directory = ".config"}, {variable = "XDG_DATA_HOME", directory = ".local/share"}},
+                files = {{source_path = ".local/share/opencode/auth.json", path = ".local/share/opencode/auth.json", kind = "login", optional = true, write_back = true},
+                    {source_path = ".config/opencode/opencode.json", path = ".config/opencode/.bee-global-opencode.json", kind = "config", optional = true, write_back = false}}}
+            local decoded, err = request.decode(value)
+            if not decoded or not decoded.launch.provider_home then error(tostring(err)) end
+            test.eq(decoded.launch.provider_home.provider, "opencode")
+            test.eq(decoded.launch.provider_home.private, true)
+            test.eq(#(decoded.launch.provider_home.extra_variables or {}), 2)
+            test.eq(#decoded.launch.provider_home.files, 2)
+            rejects(function(item)
+                (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
+                    variable = "CODEX_HOME", directory = ".codex", files = {{source_path = "../auth.json", path = ".codex/auth.json", kind = "login"}}}
+            end, "launch.provider_home.files[1].source_path must be a safe relative path")
+            rejects(function(item)
+                (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
+                    variable = "CODEX_HOME", directory = ".codex", extra_variables = {{variable = "CODEX_HOME", directory = ".codex"}},
+                    files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login"}}}
+            end, "launch.provider_home.extra_variables contains an invalid or duplicate variable")
+            rejects(function(item)
+                (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
+                    variable = "CODEX_HOME", directory = ".codex", files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login",
+                        optional = false, write_back = false}, {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = true}}}
+            end, "launch.provider_home.files[2].write_back is only valid for login files")
+            rejects(function(item)
+                local sparse: {[integer]: unknown} = {[1] = {source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login"},
+                    [3] = {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config"}}
+                (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
+                    variable = "CODEX_HOME", directory = ".codex", files = sparse}
+            end, "launch.provider_home.files must be a dense list")
+            rejects(function(item)
+                local sparse: {[integer]: unknown} = {[2] = {variable = "XDG_CONFIG_HOME", directory = ".config"}}
+                (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
+                    variable = "CODEX_HOME", directory = ".codex", extra_variables = sparse,
+                    files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login"}}}
+            end, "launch.provider_home.extra_variables must be a dense list")
+        end)
         test.it("retains hooks when the admitted MCP tool set is empty", function()
             local raw = launch()
             raw.gateway = {endpoint = "127.0.0.1:4312", tools = {}, destination = "BEE_GATEWAY_TOKEN", hooks = {"SessionStart"}, hook_destination = "BEE_GATEWAY_HOOK_TOKEN"}

@@ -37,6 +37,12 @@ native windows require the exact native binding ID.
   `LOGIN_REQUIRED` notice on its attempt value when the selected provider home
   has no evidence. The notice contains only a provider and display command;
   it does not refuse the attempt or certify authentication.
+- A launch may declare a private `provider_home` with exact source and
+  destination paths for its ambient login and configuration files, plus the
+  provider environment roots that must point inside the private attempt home.
+  Native placement checks file projections against that declaration before
+  projecting them; only a declared login file may request broker write-back.
+  These files do not grant the child access to the rest of the source home.
 - Gateway selections allow at most 16 tool names. Credential projections and
   hook events remain limited to eight each; the host launch policy still
   selects which tools a caller may receive.

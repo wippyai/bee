@@ -59,11 +59,13 @@ def environment(folder):
     # PATH; every shard gets the binary, driver streams, and subsystem stores
     # from its own disposable fixture.
     fixture_bin = folder / "fixtures/harness/bin"
-    return {**database_environment(folder),
-            "WIPPY_CACHE_DIR": str(Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()),
-            "BEE_FIXTURE_BIN": str(fixture_bin),
-            "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
-            "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
+    variables = {**database_environment(folder),
+                 "WIPPY_CACHE_DIR": str(Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()),
+                 "BEE_FIXTURE_BIN": str(fixture_bin),
+                 "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
+                 "BEE_AMBIENT_LIVE_PROVIDER": "none",
+                 "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
+    return variables
 
 
 def run_shard(index, folder, entries, timeout=None):
@@ -71,6 +73,7 @@ def run_shard(index, folder, entries, timeout=None):
     result = subprocess.run([
         str(RUNTIME), "test", "--host", "bee:terminal", "--override",
         "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
+        "--override", "bee:thread_outbox_pump_service:lifecycle.auto_start=false",
         "test", *entries,
     ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
     output = result.stdout + result.stderr
@@ -78,7 +81,8 @@ def run_shard(index, folder, entries, timeout=None):
     selected = re.search(r"(\d+) tests in \d+ suites", plain)
     cases = re.findall(r"(\d+) tests\s+[\d.]+s", plain)
     passed = re.findall(r"(\d+) passed\s+[\d.]+(?:ms|s)", plain)
-    count = int(cases[-1]) if cases else int(passed[-1]) if passed else 0
+    completed = re.findall(r"(\d+) passed\s+(\d+) failed\s+[\d.]+s", plain)
+    count = int(cases[-1]) if cases else sum(map(int, completed[-1])) if completed else int(passed[-1]) if passed else 0
     valid = result.returncode == 0 and selected is not None and int(selected.group(1)) == len(entries) and count > 0
     return index, entries, count, time.monotonic() - started, valid, result.returncode, output
 

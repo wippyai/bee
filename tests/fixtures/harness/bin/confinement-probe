@@ -10,6 +10,7 @@ set -eu
 [ -n "${BEE_FIXTURE_STREAM:-}" ]
 [ -n "${BEE_CONFINEMENT_REAL_HOME:-}" ]
 [ "${ANTHROPIC_API_KEY:-}" = "alternate-setup-sentinel" ]
+[ "${CLAUDE_CONFIG_DIR:-}" = "$HOME/.claude" ]
 
 # No attempt sees the real HOME.
 [ "$HOME" != "$BEE_CONFINEMENT_REAL_HOME" ]
@@ -36,7 +37,7 @@ if cat "$PWD/outside-canary.txt" 2>/dev/null; then exit 32; fi
 # interpreter bookkeeping names itself.
 for name in $(compgen -e); do
   case "$name" in
-    ANTHROPIC_API_KEY|BEE_FIXTURE_STREAM|BEE_CONFINEMENT_REAL_HOME|BEE_GATEWAY_TOKEN|HOME|PATH|PWD|SHLVL|_) ;;
+    ANTHROPIC_API_KEY|BEE_FIXTURE_STREAM|BEE_CONFINEMENT_REAL_HOME|BEE_GATEWAY_TOKEN|CLAUDE_CONFIG_DIR|HOME|PATH|PWD|SHLVL|_) ;;
     *) exit 42 ;;
   esac
 done

@@ -252,32 +252,34 @@ function M.decode_login_source(value: unknown): (LoginDestination?, string?)
     end
     return {path = format.file.path, identity_path = marker, source = source, format = format}, nil
 end
-local function read_bounded(vol: fs.FS, path: string, bound: integer, label: string?): (string?, string?)
-    local what = label or "retained file"
-    local file, open_error = vol:open(path, "r")
-    if not file then return nil, "read " .. what .. ": " .. tostring(open_error) end
+local function read_handle_bounded(file: fs.File, bound: integer, what: string): (string?, string?)
     local found = ""
     while #found <= bound do
         local chunk, read_error = file:read(math.min(M.REPLAY_CHUNK_BYTES, bound + 1 - #found))
         if chunk == nil then
-            -- fs reports EOF as its ordinary final read result.
-            if read_error and tostring(read_error) ~= "EOF" then
-                file:close()
-                return nil, "read " .. what .. ": " .. tostring(read_error)
-            end
+            if read_error and tostring(read_error) ~= "EOF" then return nil, "read " .. what .. ": " .. tostring(read_error) end
             break
         end
-        if type(chunk) ~= "string" then
-            file:close()
-            return nil, "read " .. what .. " returned invalid data"
-        end
+        if type(chunk) ~= "string" then return nil, "read " .. what .. " returned invalid data" end
         if chunk == "" then break end
         found = found .. (chunk :: string)
     end
-    local closed, close_error = file:close()
-    if closed == false then return nil, "close " .. what .. ": " .. tostring(close_error) end
     if #found > bound then return nil, what .. " exceeds bound" end
     return found, nil
+end
+local function read_bounded(vol: fs.FS, path: string, bound: integer, label: string?): (string?, string?)
+    local what = label or "retained file"
+    local file, open_error = vol:open(path, "r")
+    if not file then return nil, "read " .. what .. ": " .. tostring(open_error) end
+    local found, read_error = read_handle_bounded(file, bound, what)
+    local closed, close_error = file:close()
+    if closed == false then return nil, "close " .. what .. ": " .. tostring(close_error) end
+    if found == nil then return nil, read_error end
+    return found, nil
+end
+function M.read_provider_file(_: string, relative: string): (string?, string?)
+    if not formats.path(relative) then return nil, "provider file path escapes the home" end
+    return nil, "provider login write-back requires runtime no-follow fs"
 end
 -- Read a composition base from this retained private home and compare the bytes
 -- read in this call with the durable initializer digest. Provider state is
@@ -412,6 +414,46 @@ function M.retain_login(home_path: string, value: unknown, opaque: string?, crea
     local identity_write_error = write_exclusive(vol, identity_target, identity)
     if identity_write_error then return nil, identity_write_error end
     return target, nil, false
+end
+-- Disposable attempt homes have no retained identity marker. They receive the
+-- same broker-decoded login and setup files, each created once below the new
+-- private home. The token file remains writable to its provider process and
+-- can be returned through the broker's exact-file write-back operation.
+function M.project_attempt_login(home_path: string, value: unknown, opaque: string?, created: {[string]: boolean}?): (string?, string?)
+    local destination, decode_error = M.decode_login_source(value)
+    if not destination then return nil, decode_error end
+    if opaque == nil then
+        if destination.source.optional ~= true then return nil, "required login bytes missing" end
+    elseif #opaque == 0 or #opaque > M.MAX_LOGIN_BYTES then
+        return nil, "login bytes exceed bound"
+    end
+    local vol, vol_error = volume()
+    if not vol then return nil, vol_error end
+    local privacy_error = private_root(vol)
+    if privacy_error then return nil, privacy_error end
+    local root = home_path .. "/home"
+    local parents: {[string]: boolean} = created or {}
+    local target = root .. "/" .. destination.path
+    if vol:exists(target) then return nil, "attempt login destination already exists" end
+    if opaque ~= nil then
+        local parent_error = create_login_parents(vol, root, destination.path, parents)
+        if parent_error then return nil, parent_error end
+        local write_error = write_exclusive(vol, target, opaque)
+        if write_error then return nil, write_error end
+    end
+    local file = destination.format.file
+    if not file then return nil, "login format has no file" end
+    for _, item in ipairs(file.initialize) do
+        if opaque ~= nil or item.on_missing_login == true then
+            local initializer = root .. "/" .. item.path
+            if vol:exists(initializer) then return nil, "attempt provider setup destination already exists" end
+            local parent_error = create_login_parents(vol, root, item.path, parents)
+            if parent_error then return nil, parent_error end
+            local setup_error = write_exclusive(vol, initializer, item.content)
+            if setup_error then return nil, setup_error end
+        end
+    end
+    return target, nil
 end
 function M.os_path(path: string): (string?, string?)
     local root, root_error = resources.root()

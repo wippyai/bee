@@ -6,6 +6,14 @@ M.decode_login_source = real.decode_login_source
 M.login_replayed = real.login_replayed
 M.retain_login = real.retain_login
 M.write_protected = real.write_protected
+-- Publication tests use synthetic home paths and must fail closed if a case
+-- unexpectedly tries to project or inspect provider login state.
+function M.read_provider_file(_: string, _: string): (string?, string?)
+    return nil, "fixture has no provider home"
+end
+function M.project_attempt_login(_: string, _: unknown, _: string?, _: {[string]: boolean}?): (string?, string?)
+    return nil, "fixture has no provider home"
+end
 M.attempt_key = real.attempt_key
 M.session_key = real.session_key
 function M.reset()

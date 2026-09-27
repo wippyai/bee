@@ -60,6 +60,12 @@ type RequiredFile = {variable: string, path: string, default_directory: string?}
 -- Evidence is checked by placement in the selected provider home. Paths are
 -- alternatives: any existing file is enough. The command is display text.
 type LoginEvidence = {provider: string, command: string, files: {RequiredFile}}
+type ProviderHomeFile = {source_path: string?, path: string, kind: "login" | "config" | "state", optional: boolean, write_back: boolean}
+type ProviderHomeEnvironment = {variable: string, directory: string}
+-- A private managed home receives only these provider-owned files from the
+-- machine login source. `variable` and `directory` select the child CLI's
+-- provider home; files stay relative to HOME so the projection is auditable.
+type ProviderHome = {provider: string, private: boolean, variable: string?, directory: string?, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
 type Launch = {
     executable: string,
     -- Arguments only. Placement prepends the separately selected executable.
@@ -74,6 +80,7 @@ type Launch = {
     home_ref: string?,
     required_files: {RequiredFile}?,
     login: LoginEvidence?,
+    provider_home: ProviderHome?,
     readiness: string,
 }
 -- What a normalizer reports when the protocol says the turn is over.

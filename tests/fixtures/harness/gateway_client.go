@@ -540,10 +540,14 @@ func reportLaunch(client *httpClient, url, authorization string, report object, 
 		}
 		for _, raw := range records {
 			record := mustObject(raw)
+			body := mustObject(record["body"])
 			if kind := stringField(record, "kind"); kind == "receipt" && stringField(record, "action_id") == childAction {
 				settled = true
+				outcome := stringField(body, "outcome")
+				if outcome == "succeeded" || outcome == "failed" || outcome == "cancelled" || outcome == "uncertain" {
+					report["child_outcome"] = outcome
+				}
 			}
-			body := mustObject(record["body"])
 			content := mustObject(body["content"])
 			if text := stringField(content, "text"); text != "" && strings.Contains(text, marker) {
 				answered = true

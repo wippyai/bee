@@ -184,7 +184,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: [grok_login]
+    credentials: []
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 - name: research_batch
   kind: registry.entry
@@ -204,7 +204,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session
-    credentials: []
+    credentials: [grok_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
     unconfined: true
 - name: credential_format

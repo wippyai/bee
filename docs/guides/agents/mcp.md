@@ -141,7 +141,7 @@ Worker containment basis:
 | Worker definition | Home | CLI control |
 |---|---|---|
 | Codex batch | private, no host inheritance | `--sandbox workspace-write` |
-| Codex named_batch | host home (the person's explicit saved-profile choice) | `--sandbox workspace-write` |
+| Codex named_batch | private, selected profile projected from the host home | `--sandbox workspace-write` |
 | Claude batch | private, no host inheritance | default permission mode |
 | Muse batch | private, no host inheritance | `on-request` approval |
 | agy batch | private, no host inheritance | `--sandbox` |

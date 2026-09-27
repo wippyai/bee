@@ -7,6 +7,14 @@ configuration for the shared driver contract.
 The host supplies the executable/API-key environment and each route's policy.
 The component declares no process authority, credential access, or MCP
 permissions.
+
+The private batch route receives only `~/.claude/.credentials.json` and the
+optional `~/.claude/settings.json` from the machine home. It points
+`CLAUDE_CONFIG_DIR` into the attempt home. Claude may refresh its own
+`.credentials.json`; placement returns only that login file through the
+credential broker after exit. Configuration is not written back. The format
+creates `.claude.json` with the onboarding-complete marker only when login bytes
+are present. Window launches keep the machine home and the login hint.
 When Bee gateway tools are selected, the launch allows Claude Code's reserved
 `mcp__bee__session` tool in `dontAsk` mode alongside those tools. The gateway
 still checks session operations against the admitted binding. Gateway-only

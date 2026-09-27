@@ -53,9 +53,7 @@ end
 
 local function define_tests()
     test.describe("Saved Codex config profile reachability", function()
-        test.it("offers the field only on Codex policies whose launch can see the inherited Codex home", function()
-            -- The field is Codex-only and only meaningful where the named
-            -- file can exist: a policy that inherits the host Codex home.
+        test.it("offers the field only on Codex policies and keeps the window's inherited home", function()
             test.eq((raw_policy(CODEX_WINDOW).profile_options :: {[string]: unknown}).config_profile.kind, "text")
             test.eq((raw_policy(CODEX_NAMED_BATCH).profile_options :: {[string]: unknown}).config_profile.kind, "text")
             -- A Claude policy must never advertise a Codex-only field.
@@ -72,6 +70,12 @@ local function define_tests()
             end
             if not window then error("codex window profile is missing") end
             test.is_false((window.isolation_env :: {[string]: unknown}).private_home)
+            local named_batch: {[string]: unknown}? = nil
+            for _, item in ipairs(driver.profiles :: {{[string]: unknown}}) do
+                if item.id == "named_batch" then named_batch = item end
+            end
+            if not named_batch then error("codex named_batch profile is missing") end
+            test.is_true((named_batch.isolation_env :: {[string]: unknown}).private_home)
         end)
 
         test.it("accepts the named profile into the shipped Codex window policy and refuses it on Claude", function()
@@ -101,44 +105,35 @@ local function define_tests()
             test.is_true(tostring(offered_launch_error):find("config_profile", 1, true) ~= nil)
         end)
 
-        test.it("keeps the private-home Codex route refusing the named profile, as the design decided", function()
-            -- The batch Codex profile runs in a private home and still offers
-            -- the field, so the refusal names the profile the driver declared
-            -- rather than a vague policy message. This is the documented
-            -- private-home behavior: such a home never carries the named file.
+        test.it("projects the selected named profile into each private Codex route", function()
             test.eq((raw_policy(CODEX_BATCH).profile_options :: {[string]: unknown}).config_profile.kind, "text")
-            local codex, codex_error = registry.get("bee.driver.codex:profiles")
-            if not codex then error(tostring(codex_error)) end
-            local driver = (codex.data :: {[string]: unknown}).driver :: {[string]: unknown}
-            local batch: {[string]: unknown}? = nil
-            for _, item in ipairs(driver.profiles :: {{[string]: unknown}}) do
-                if item.id == "batch" then batch = item end
+            for _, profile_id in ipairs({"batch", "named_batch"}) do
+                local spec = launch.specification(assert(launch.decode({profile_id = profile_id, brief = "work", sandbox = "read-only", config_profile = PROFILE})))
+                test.is_nil(machine.required_file_refusal(spec, true))
+                test.is_nil(spec.required_files)
+                local home = spec.provider_home :: driver_types.ProviderHome
+                test.is_true(home.private)
+                local found = false
+                for _, file in ipairs(home.files) do
+                    if file.path == ".codex/" .. PROFILE .. ".config.toml" then
+                        test.eq(file.source_path, file.path)
+                        test.is_false(file.optional)
+                        found = true
+                    end
+                end
+                test.is_true(found)
             end
-            if not batch then error("codex batch profile is missing") end
-            test.is_true((batch.isolation_env :: {[string]: unknown}).private_home)
-            local spec = launch.specification(assert(launch.decode({profile_id = "batch", brief = "work", sandbox = "read-only", config_profile = PROFILE})))
-            local refusal = machine.required_file_refusal(spec, true)
-            test.not_nil(refusal)
-            test.is_true(refusal:find(PROFILE, 1, true) ~= nil)
-            test.is_true(refusal:find("private home does not carry it", 1, true) ~= nil)
         end)
 
-        test.it("plans the named flag and declares the file only where the home is inherited", function()
+        test.it("plans the named flag and routes its file through the selected home", function()
             local codex, codex_error = launch.decode({profile_id = "named_batch", brief = "work", sandbox = "read-only", config_profile = PROFILE})
             if not codex then error(tostring(codex_error)) end
             local spec = launch.specification(codex)
             test.eq(spec.argv[1], "--profile")
             test.eq(spec.argv[2], PROFILE)
-            local file = (spec.required_files :: {driver_types.RequiredFile})[1]
-            test.eq(file.variable, "CODEX_HOME")
-            test.eq(file.path, PROFILE .. ".config.toml")
-            test.eq(file.default_directory, ".codex")
-            -- An inherited-home launch is allowed; a private home is refused
-            -- with a diagnostic that names the profile the driver declared.
-            test.is_nil(machine.required_file_refusal(spec, false))
-            local refusal = machine.required_file_refusal(spec, true)
-            test.not_nil(refusal)
-            test.is_true(refusal:find(PROFILE, 1, true) ~= nil)
+            test.is_nil(spec.required_files)
+            test.is_true((spec.provider_home :: driver_types.ProviderHome).private)
+            test.is_nil(machine.required_file_refusal(spec, true))
             -- A launch with no named profile is never refused for one.
             local plain = launch.specification(assert(launch.decode({profile_id = "named_batch", brief = "work", sandbox = "read-only"})))
             test.is_nil(machine.required_file_refusal(plain, true))

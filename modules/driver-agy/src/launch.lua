@@ -8,6 +8,13 @@ M.AGY_AUTHENTICATION = "unproven"
 M.AGY_HOOKS = "unproven"
 M.AGY_MCP = "unproven"
 
+local function provider_home(private: boolean): types.ProviderHome
+    return {provider = "agy", private = private, files = {
+        {source_path = ".gemini/antigravity-cli/antigravity-oauth-token", path = ".gemini/antigravity-cli/antigravity-oauth-token", kind = "login", optional = true, write_back = true},
+        {source_path = ".gemini/antigravity-cli/cache/onboarding.json", path = ".gemini/antigravity-cli/cache/onboarding.json", kind = "config", optional = true, write_back = false},
+    }}
+end
+
 M.MODES = {"default", "accept-edits", "plan"}
 M.EFFORTS = {"low", "medium", "high"}
 
@@ -202,6 +209,7 @@ function M.specification(request: Request): types.Launch
             environment = environment,
             readiness = "terminal:attached",
             login = {provider = "agy", command = "agy", files = {{variable = "HOME", path = ".gemini/antigravity-cli/antigravity-oauth-token"}}},
+            provider_home = provider_home(false),
         }
     end
 
@@ -218,6 +226,7 @@ function M.specification(request: Request): types.Launch
         stdin_eof = true,
         environment = environment,
         readiness = "protocol:init",
+        provider_home = provider_home(true),
     }
 end
 

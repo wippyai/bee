@@ -16,6 +16,15 @@ local M = {}
 -- flow; the proof through the placement runner runs only where the pinned
 -- executable is bound, so the gate stays open until the pinned build runs it.
 M.OPENCODE_AUTHENTICATION = "unproven"
+local function provider_home(private: boolean): types.ProviderHome
+    return {provider = "opencode", private = private, extra_variables = {
+        {variable = "XDG_CONFIG_HOME", directory = ".config"},
+        {variable = "XDG_DATA_HOME", directory = ".local/share"},
+    }, files = {
+        {source_path = ".local/share/opencode/auth.json", path = ".local/share/opencode/auth.json", kind = "login", optional = true, write_back = true},
+        {source_path = ".config/opencode/opencode.json", path = ".config/opencode/.bee-global-opencode.json", kind = "config", optional = true, write_back = false},
+    }}
+end
 type Request = {profile_id: string, brief: string, resume_ref: string?}
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
@@ -67,7 +76,8 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = request.brief
         end
         return {executable = "opencode", argv = argv, environment = environment, readiness = "terminal:attached",
-            login = {provider = "opencode", command = "opencode auth login", files = {{variable = "HOME", path = ".local/share/opencode/auth.json"}}}}
+            login = {provider = "opencode", command = "opencode auth login", files = {{variable = "HOME", path = ".local/share/opencode/auth.json"}}},
+            provider_home = provider_home(false)}
     end
     -- The brief travels as the run message in argv. OpenCode never reads a
     -- prompt from stdin, so the launch declares no stdin at all; an inbox
@@ -80,6 +90,6 @@ function M.specification(request: Request): types.Launch
     end
     argv[#argv + 1] = "--"
     argv[#argv + 1] = request.brief
-    return {executable = "opencode", argv = argv, environment = environment, readiness = "protocol:thread.started"}
+    return {executable = "opencode", argv = argv, environment = environment, readiness = "protocol:thread.started", provider_home = provider_home(true)}
 end
 return M

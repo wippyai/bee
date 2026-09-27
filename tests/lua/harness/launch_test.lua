@@ -527,15 +527,15 @@ local function define_tests()
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
                     config = "bee.driver.claude:config_home", option = "max_turns", expected = 1},
                 {definition = "bee.driver.agy:research_batch", policy = "bee.driver.agy:launch_policy_agy_batch",
-                    binding = "bee.driver.agy:binding", executable = "bee.driver.agy:executable",
+                    binding = "bee.driver.agy:binding", credential = "agy_login", executable = "bee.driver.agy:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
                 {definition = "bee.driver.muse:research_batch", policy = "bee.driver.muse:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
                     option = "approval_mode", expected = "on-request", additional_options = {max_steps = 1}},
                 {definition = "bee.driver.opencode:research_batch", policy = "bee.driver.opencode:launch_policy_opencode_batch",
-                    binding = "bee.driver.opencode:binding", executable = "bee.driver.opencode:executable", unconfined = true},
+                    binding = "bee.driver.opencode:binding", credential = "opencode_login", executable = "bee.driver.opencode:executable", unconfined = true},
                 {definition = "bee.driver.grok:research_batch", policy = "bee.driver.grok:launch_policy_grok_batch",
-                    binding = "bee.driver.grok:binding", executable = "bee.driver.grok:executable",
+                    binding = "bee.driver.grok:binding", credential = "grok_login", executable = "bee.driver.grok:executable",
                     option = "permission_mode", expected = "default", unconfined = true},
             }
             for _, selected in ipairs(cases) do
@@ -601,9 +601,9 @@ local function define_tests()
             if not orchestrator then error(tostring(orchestrator_error)) end
             test.eq(#orchestrator.agent_launch_unconfined, 1)
             test.eq(orchestrator.agent_launch_unconfined[1], "bee.driver.grok:research_batch")
-            -- The named Codex route is the person's explicit host-home
-            -- choice, so it keeps the inherited home while gaining the
-            -- workspace-write CLI sandbox.
+            -- The named Codex route projects the selected config profile
+            -- into its private home while gaining the workspace-write CLI
+            -- sandbox.
             local named_entry = assert(registry.get("bee.driver.codex:launch_policy_codex_named_batch"))
             local named, named_error = launch_policy.decode("bee.driver.codex:launch_policy_codex_named_batch", named_entry,
                 function(ref: string): (string?, string?)
@@ -612,7 +612,7 @@ local function define_tests()
                     return nil, "unadmitted environment reference"
                 end)
             if not named then error(tostring(named_error)) end
-            test.is_true(named.allow_host_home)
+            test.is_false(named.allow_host_home)
             test.eq(named.prepare_options.sandbox, "workspace-write")
         end)
         test.it("ships every driver route with thread and workdir overrides its host policy admits, and no placement override", function()
@@ -1461,7 +1461,10 @@ local function define_tests()
                 local started = value(generated_call({operation = "launch", definition_ref = SHIPPED_SHAPE_DEFINITION,
                     brief = "fail during native preparation", idempotency_key = fresh("app-prepare-refused")}))
                 local settled = value(generated_call({operation = "wait", thread_id = started.thread_id,
-                    attempt_id = started.attempt_id, wait_ms = 5000}))
+                    -- The shipped policy admits a 15-second startup window.
+                    -- Let post-claim preparation and settlement complete before
+                    -- asserting the terminal refusal under a loaded host.
+                    attempt_id = started.attempt_id, wait_ms = 60000}))
                 test.eq(settled.state, "ended")
                 test.eq(settled.outcome, "failed")
                 local failure = settled.error :: {[string]: unknown}?

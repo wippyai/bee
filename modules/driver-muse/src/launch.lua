@@ -7,6 +7,12 @@ M.MUSE_AUTHENTICATION = "unproven"
 M.APPROVAL_MODES = {"untrusted", "on-request", "never"}
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.MAX_STEPS = 32
+local function provider_home(private: boolean): types.ProviderHome
+    return {provider = "muse", private = private, files = {
+        {source_path = ".config/muse/auth.json", path = ".config/muse/auth.json", kind = "login", optional = true, write_back = true},
+        {source_path = ".config/muse/settings.json", path = ".config/muse/.bee-global-settings.json", kind = "config", optional = true, write_back = false},
+    }}
+end
 type Request = {profile_id: string, brief: string, approval_mode: string, max_steps: integer?, model: string?, effort: string?, resume_ref: string?, gateway_hooks: boolean?}
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
@@ -78,7 +84,8 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = request.brief
         end
         return {executable = "muse", argv = argv, environment = environment, readiness = "terminal:attached",
-            login = {provider = "muse", command = "muse", files = {{variable = "HOME", path = ".config/muse/auth.json"}}}}
+            login = {provider = "muse", command = "muse", files = {{variable = "HOME", path = ".config/muse/auth.json"}}},
+            provider_home = provider_home(false)}
     end
     local argv: {string} = {"exec", "--json", "--approval-mode", request.approval_mode}
     if request.model then
@@ -99,7 +106,7 @@ function M.specification(request: Request): types.Launch
     end
     argv[#argv + 1] = "--"
     argv[#argv + 1] = request.brief
-    local launch: types.Launch = {executable = "muse", argv = argv, environment = environment, readiness = "protocol:runtime.command.accepted"}
+    local launch: types.Launch = {executable = "muse", argv = argv, environment = environment, readiness = "protocol:runtime.command.accepted", provider_home = provider_home(true)}
     return launch
 end
 return M

@@ -206,7 +206,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session
-    credentials: []
+    credentials: [agy_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
 
 - name: credential_format

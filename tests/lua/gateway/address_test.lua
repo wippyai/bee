@@ -3,7 +3,48 @@ local test = require("test")
 local registry = require("registry")
 local funcs = require("funcs")
 local configuration = require("configuration")
+local events = require("events")
+local system = require("system")
+local channel = require("channel")
+local time = require("time")
 type Object = {[string]: unknown}
+local function listener_ready(status: string, details: string?): boolean
+    return status == "running" and details ~= nil and details:match("^service listening on [%d%.]+:%d+$") ~= nil
+end
+local function await_listener(reference: string)
+    local subscription, subscription_error = events.subscribe("supervisor", "service.update")
+    if subscription_error or not subscription then error("subscribe to listener state: " .. tostring(subscription_error)) end
+    local updates = subscription:channel()
+    local state, state_error = system.supervisor.state(reference)
+    if state_error or not state then
+        subscription:close()
+        error("read listener state: " .. tostring(state_error))
+    end
+    local deadline = time.after("30s")
+    while not listener_ready(state.status, state.details) do
+        if state.status ~= "starting" and state.status ~= "running" then
+            subscription:close()
+            error("gateway listener entered " .. state.status .. ": " .. reference)
+        end
+        local selected = channel.select({updates = updates:case_receive(), deadline = deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then
+            subscription:close()
+            error("timed out waiting for gateway listener: " .. reference)
+        end
+        local raw_event = selected.value
+        if type(raw_event) == "table" then
+            local event = raw_event :: Object
+            if event.system == "supervisor" and event.kind == "service.update" and event.path == reference then
+                state, state_error = system.supervisor.state(reference)
+                if state_error or not state then
+                    subscription:close()
+                    error("read listener state: " .. tostring(state_error))
+                end
+            end
+        end
+    end
+    subscription:close()
+end
 local function run()
     test.describe("Native gateway address", function()
         test.it("validates canonical host-selected loopback and private IPv4 ports", function()
@@ -40,6 +81,7 @@ local function run()
             end
             local ok, failure = pcall(function()
                 update()
+                await_listener("bee.gateway:ephemeral_listener")
                 local address, err = configuration.endpoint()
                 if not address then error(tostring(err)) end
                 test.is_true(configuration.valid_address(address, false))
@@ -57,6 +99,7 @@ local function run()
                 test.is_true(mismatched == nil)
                 changed_listener_link.data = {resource_ref = "bee.gateway:alternate_listener"}
                 update()
+                await_listener("bee.gateway:alternate_listener")
                 local alternate, alternate_error = configuration.endpoint()
                 if not alternate then error(tostring(alternate_error)) end
                 test.is_true(alternate:match("^127%.0%.0%.2:%d+$") ~= nil)

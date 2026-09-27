@@ -9,7 +9,7 @@ import time
 
 import yaml
 
-from workspace import RUNTIME, ROOT, TEST_CACHE, fixture_workspace
+from workspace import RUNTIME, ROOT, TEST_CACHE, database_environment, fixture_workspace
 
 
 # Case times from an unfiltered run; new entries get a small default weight.
@@ -56,9 +56,10 @@ def split(entries):
 
 def environment(folder):
     # The carrier suite resolves its Claude fixture by name in the native host
-    # PATH; every shard gets the binary and driver streams from its own copy.
+    # PATH; every shard gets the binary, driver streams, and subsystem stores
+    # from its own disposable fixture.
     fixture_bin = folder / "fixtures/harness/bin"
-    return {**os.environ,
+    return {**database_environment(folder),
             "WIPPY_CACHE_DIR": str(Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()),
             "BEE_FIXTURE_BIN": str(fixture_bin),
             "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),

@@ -19,10 +19,10 @@ function M.pass(): string?
     return drain_error
 end
 local function main()
-    local registered, register_error = process.registry.register(service.WORKER_NAME)
-    if not registered then error("register approval worker: " .. tostring(register_error)) end
     local events = assert(process.events())
     local inbox = assert(process.listen(service.TOPIC_WAKE, {message = true}))
+    local registered, register_error = process.registry.register(service.WORKER_NAME)
+    if not registered then error("register approval worker: " .. tostring(register_error)) end
     local ticker = time.ticker(tostring(M.INTERVAL_MS) .. "ms")
     M.pass()
     while true do

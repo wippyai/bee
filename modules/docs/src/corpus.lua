@@ -18,6 +18,15 @@ type Document = {id: string, topic: string, title: string, source: string, bytes
 type Manifest = {schema: string, selection_rule: string, totals: {documents: integer, bytes: integer}, documents: {Document}}
 type Excerpt = {id: string, title: string, topic: string, section: string, line: integer, text: string}
 type ReadFile = (string) -> (string?, string?)
+local function source(value: unknown): string?
+    local checked = bounds.line(value, 512)
+    if not checked then return nil end
+    if checked:match("^https://[^/]+/.+$") then return checked end
+    if checked:match("^generated: [%w_ ,:./%-]+$") then return checked end
+    if (checked:match("^docs/[%w_./%-]+$") or checked:match("^modules/[%w_./%-]+$"))
+        and not checked:find("../", 1, true) then return checked end
+    return nil
+end
 -- Opens the corpus volume. The volume does not require release; the system
 -- detaches it with the filesystem. A missing volume is a build fault, not a
 -- caller fault, and is reported as such.
@@ -65,11 +74,11 @@ function M.decode_manifest(decoded: unknown, readfile: ReadFile): (Manifest?, st
         local id = protocol.document_id(entry.id)
         local topic = bounds.line(entry.topic, 64)
         local title = bounds.line(entry.title, 240)
-        local source = bounds.line(entry.source, 512)
+        local document_source = source(entry.source)
         local size = bounds.count(entry.bytes)
         local sha256 = bounds.line(entry.sha256, 64)
-        if not id or seen[id] or not topic or not topic:match("^[a-z0-9_-]+$") or not title or not source
-            or not source:match("^https://[^/]+/.+$") or not sha256 or not sha256:match("^[0-9a-f]+$") or #sha256 ~= 64 then
+        if not id or seen[id] or not topic or not topic:match("^[a-z0-9_-]+$") or not title or not document_source
+            or not sha256 or not sha256:match("^[0-9a-f]+$") or #sha256 ~= 64 then
             return nil, "corpus manifest has an invalid document identity or metadata"
         end
         if not size then return nil, "corpus manifest has an invalid document byte count" end
@@ -83,7 +92,7 @@ function M.decode_manifest(decoded: unknown, readfile: ReadFile): (Manifest?, st
         seen[id] = true
         total_bytes = total_bytes + byte_count
         if total_bytes > ceiling then return nil, "corpus manifest exceeds its declared byte ceiling" end
-        documents[#documents + 1] = {id = id, topic = topic, title = title, source = source,
+        documents[#documents + 1] = {id = id, topic = topic, title = title, source = document_source,
             bytes = byte_count, sha256 = sha256}
     end
     if declared_documents ~= #documents or declared_bytes ~= total_bytes then

@@ -16,26 +16,46 @@ local function define_tests()
         test.it("decodes the view's attached or failed state and nothing else", function()
             local attached = remote.state({version = 1, state = "attached", session_id = "session-1", mode = "control",
                 workspace_id = WORKSPACE, desktop_id = DISPLAY, owner_execution = string.rep("e", 32)})
-            test.eq(attached and attached.session_id, "session-1")
-            test.eq(attached and attached.mode, "control")
-            local _, failed = remote.state({version = 1, state = "failed", code = "DENIED", message = "not admitted"})
-            test.eq(failed and failed.code, "DENIED")
-            test.eq(failed and failed.message, "not admitted")
-            local _, malformed = remote.state({version = 1, state = "attached", session_id = "session-1", mode = "mirror",
-                workspace_id = WORKSPACE, desktop_id = DISPLAY})
-            test.eq(malformed and malformed.code, "INVALID_STATE")
-            local _, unversioned = remote.state({state = "attached"})
-            test.eq(unversioned and unversioned.code, "INVALID_STATE")
+            test.eq(attached.kind, "attached")
+            if attached.kind == "attached" then
+                test.eq(attached.attached.session_id, "session-1")
+                test.eq(attached.attached.mode, "control")
+            end
+            local failed = remote.state({version = 1, state = "failed", code = "DENIED", message = "not admitted"})
+            test.eq(failed.kind, "failed")
+            if failed.kind == "failed" then
+                test.eq(failed.failure.code, "DENIED")
+                test.eq(failed.failure.message, "not admitted")
+            end
+            local malformed = remote.state({version = 1, state = "attached", session_id = "session-1", mode = "mirror",
+                workspace_id = WORKSPACE, desktop_id = DISPLAY, owner_execution = string.rep("e", 32)})
+            test.eq(malformed.kind, "failed")
+            if malformed.kind == "failed" then test.eq(malformed.failure.code, "INVALID_STATE") end
+            local unversioned = remote.state({state = "attached"})
+            test.eq(unversioned.kind, "failed")
+            if unversioned.kind == "failed" then test.eq(unversioned.failure.code, "INVALID_STATE") end
         end)
         test.it("accepts bounded frames only", function()
-            local rows, cursor = remote.frame({version = 1, rows = {"one", "two"}, cursor = {x = 3, y = 1, visible = true}})
-            test.eq(rows and #rows, 2)
-            test.eq(cursor and cursor.x, 3)
-            test.is_nil(remote.frame({version = 1, rows = {"one", 2}}))
+            local frame = remote.frame({version = 1, rows = {"one", "two"}, cursor = {x = 3, y = 1, visible = true}}, 8, 4)
+            test.eq(frame.kind, "valid")
+            if frame.kind == "valid" then
+                test.eq(#frame.frame.rows, 2)
+                test.eq(frame.frame.cursor.x, 3)
+            end
+            test.eq(remote.frame({version = 1, rows = {"one", 2}}, 8, 4).kind, "invalid")
             local many: {string} = {}
             for index = 1, remote.MAX_ROWS + 1 do many[index] = tostring(index) end
-            test.is_nil(remote.frame({version = 1, rows = many}))
-            test.is_nil(remote.frame({version = 2, rows = {}}))
+            test.eq(remote.frame({version = 1, rows = many}, 8, 4).kind, "invalid")
+            test.eq(remote.frame({version = 1, rows = {[1] = "one", [3] = "three"}}, 8, 4).kind, "invalid")
+            test.eq(remote.frame({version = 1, rows = {"one\27[2J"}}, 8, 4).kind, "invalid")
+            test.eq(remote.frame({version = 1, rows = {"one"}, cursor = {x = 8, y = 0, visible = true}}, 8, 4).kind, "invalid")
+            test.eq(remote.frame({version = 1, rows = {"one"}, cursor = {x = 0, y = 4, visible = true}}, 8, 4).kind, "invalid")
+            local large = string.rep("x", remote.MAX_ROW_BYTES)
+            local oversized = {large, large, large, large, large, large, large, large, large, large, large, large,
+                large, large, large, large, large, large, large, large, large, large, large, large, large, large,
+                large, large, large, large, large, large, large, large}
+            test.eq(remote.frame({version = 1, rows = oversized}, 8, 4).kind, "invalid")
+            test.eq(remote.frame({version = 2, rows = {}}, 8, 4).kind, "invalid")
         end)
         test.it("leaves on Alt+Q and forwards input only while controlling", function()
             local control = view("control")

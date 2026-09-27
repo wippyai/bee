@@ -12,9 +12,9 @@ local WORKSPACE = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 local FIRST = "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1"
 local SECOND = "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"
 local FRESH = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"
-type Fake = {opened: {Object}, created: {string}, listed: integer, refuse: {[string]: string}, create_fault: string?, listing: unknown}
+type Fake = {opened: {Object}, created: {string}, listed: integer, refuse: {[string]: string}, create_fault: string?, uncertain_once: boolean, listing: unknown}
 local function fake(listing: unknown): Fake
-    return {opened = {}, created = {}, listed = 0, refuse = {}, create_fault = nil, listing = listing}
+    return {opened = {}, created = {}, listed = 0, refuse = {}, create_fault = nil, uncertain_once = false, listing = listing}
 end
 local function listing(ids: {string}): Object
     local desktops: {Object} = {}
@@ -32,9 +32,13 @@ local function operations(f: Fake): remote.Operations
             if f.create_fault then return types.reply_error("create", types.fault(f.create_fault, "refused")) end
             return types.reply_ok("create", {owner_execution = execution, desktop_id = id})
         end,
-        open = function(target: display.Target): (display.Handle?, display.Fault?)
+        open = function(target: display.Target, idempotency_key: string): (display.Handle?, display.Fault?)
             f.opened[#f.opened + 1] = {desktop_id = target.desktop_id, execution = target.owner_execution, mode = target.mode,
-                workspace_id = target.workspace_id, node_id = target.node_id}
+                workspace_id = target.workspace_id, node_id = target.node_id, idempotency_key = idempotency_key}
+            if f.uncertain_once then
+                f.uncertain_once = false
+                return nil, {code = "UNCERTAIN", message = "attach result was lost"}
+            end
             local code = f.refuse[target.desktop_id]
             if code then
                 local fault: display.Fault = {code = code, message = "refused"}
@@ -51,26 +55,28 @@ local function define_tests()
         test.it("attaches control to the first free display under the listed execution", function()
             local f = fake(listing({FIRST, SECOND}))
             f.refuse[FIRST] = "DESKTOP_CONTROLLED"
-            local opened, fault = remote.choose(operations(f), "node-b", WORKSPACE, "control")
+            local opened, fault = remote.choose(operations(f), "node-b", WORKSPACE, "control", "attach-1")
             test.is_nil(fault)
             test.eq(opened and opened.target.desktop_id, SECOND)
             test.eq(opened and opened.target.owner_execution, EXECUTION)
             test.eq(#f.opened, 2)
             test.eq(f.opened[1].node_id, "node-b")
             test.eq(f.opened[1].workspace_id, WORKSPACE)
+            test.eq(f.opened[1].idempotency_key, "attach-1")
+            test.eq(f.opened[2].idempotency_key, "attach-1")
             test.eq(#f.created, 0)
         end)
         test.it("allocates a display only after every one is controlled", function()
             local f = fake(listing({FIRST}))
             f.refuse[FIRST] = "DESKTOP_CONTROLLED"
-            local opened = remote.choose(operations(f), "node-b", WORKSPACE, "control")
+            local opened = remote.choose(operations(f), "node-b", WORKSPACE, "control", "attach-2")
             test.eq(opened and opened.target.desktop_id, FRESH)
             test.eq(f.created[1], EXECUTION .. ":" .. FRESH)
         end)
         test.it("returns any other refusal without trying further displays", function()
             local f = fake(listing({FIRST, SECOND}))
             f.refuse[FIRST] = "DENIED"
-            local opened, fault = remote.choose(operations(f), "node-b", WORKSPACE, "control")
+            local opened, fault = remote.choose(operations(f), "node-b", WORKSPACE, "control", "attach-3")
             test.is_nil(opened)
             test.eq(fault and fault.code, "DENIED")
             test.eq(#f.opened, 1)
@@ -78,17 +84,34 @@ local function define_tests()
             local uncertain = fake(listing({FIRST}))
             uncertain.refuse[FIRST] = "DESKTOP_CONTROLLED"
             uncertain.create_fault = "UNCERTAIN"
-            local _, create_fault = remote.choose(operations(uncertain), "node-b", WORKSPACE, "control")
+            local _, create_fault = remote.choose(operations(uncertain), "node-b", WORKSPACE, "control", "attach-4")
             test.eq(create_fault and create_fault.code, "UNCERTAIN")
             test.eq(#uncertain.opened, 1)
         end)
+        test.it("replays an uncertain attach with the same display and idempotency key", function()
+            local f = fake(listing({FIRST}))
+            f.uncertain_once = true
+            local ops = operations(f)
+            local selected, fault, target = remote.choose(ops, "node-b", WORKSPACE, "control", "attach-replay")
+            test.is_nil(selected)
+            test.eq(fault and fault.code, "UNCERTAIN")
+            test.not_nil(target)
+            local retried = ops.open(target :: display.Target, "attach-replay")
+            test.not_nil(retried)
+            test.eq(#f.opened, 2)
+            test.eq(f.opened[1].desktop_id, FIRST)
+            test.eq(f.opened[2].desktop_id, FIRST)
+            test.eq(f.opened[1].idempotency_key, "attach-replay")
+            test.eq(f.opened[2].idempotency_key, "attach-replay")
+            test.eq(#f.created, 0)
+        end)
         test.it("observes the default display and never allocates", function()
             local f = fake(listing({FIRST, SECOND}))
-            local opened = remote.choose(operations(f), "node-b", WORKSPACE, "observe")
+            local opened = remote.choose(operations(f), "node-b", WORKSPACE, "observe", "observe-1")
             test.eq(opened and opened.target.desktop_id, FIRST)
             test.eq(opened and opened.target.mode, "observe")
             local none = fake(listing({}))
-            local _, fault = remote.choose(operations(none), "node-b", WORKSPACE, "observe")
+            local _, fault = remote.choose(operations(none), "node-b", WORKSPACE, "observe", "observe-2")
             test.eq(fault and fault.code, "NOT_FOUND")
             test.eq(#none.created, 0)
         end)
@@ -96,10 +119,10 @@ local function define_tests()
             local denied = fake(nil)
             local ops = operations(denied)
             ops.list = function(): types.Reply return types.reply_error("list", types.fault("DENIED", "not admitted")) end
-            local _, fault = remote.choose(ops, "node-b", WORKSPACE, "control")
+            local _, fault = remote.choose(ops, "node-b", WORKSPACE, "control", "attach-5")
             test.eq(fault and fault.code, "DENIED")
             local malformed = fake({owner_execution = "short", desktops = {}})
-            local _, invalid = remote.choose(operations(malformed), "node-b", WORKSPACE, "control")
+            local _, invalid = remote.choose(operations(malformed), "node-b", WORKSPACE, "control", "attach-6")
             test.eq(invalid and invalid.code, "INVALID_STATE")
             test.eq(#malformed.opened, 0)
         end)

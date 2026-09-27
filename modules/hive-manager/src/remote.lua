@@ -8,14 +8,18 @@ local names = require("names")
 local M = {}
 M.MAX_ROWS = 200
 M.MAX_ROW_BYTES = 32768
+M.MAX_FRAME_BYTES = 1048576
 -- Alt+Q leaves the view; the native client keeps Ctrl+] for itself.
 M.LEAVE_HINT = "Alt+Q leave"
 type Mode = "control" | "observe"
 type Cursor = {x: integer, y: integer, visible: boolean}
 type View = {pid: string, node_id: string, node_label: string, workspace_id: string, desktop_id: string, mode: Mode,
     session_id: string, rows: {string}, cursor: Cursor?, leaving: boolean}
-type Attached = {session_id: string, mode: Mode, workspace_id: string, desktop_id: string}
+type Attached = {session_id: string, mode: Mode, workspace_id: string, desktop_id: string, owner_execution: string}
 type Failed = {code: string, message: string}
+type State = {kind: "attached", attached: Attached} | {kind: "failed", failure: Failed}
+type Frame = {rows: {string}, cursor: Cursor}
+type FrameResult = {kind: "valid", frame: Frame} | {kind: "invalid"}
 local function line(value: unknown, limit: integer): string?
     if type(value) ~= "string" or #value > limit or value:find("[%c]") then return nil end
     return value
@@ -24,41 +28,67 @@ local function identity(value: unknown): string?
     if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
     return value
 end
--- The view's one state message: attached, with the session it holds, or failed.
-function M.state(value: unknown): (Attached?, Failed?)
-    if type(value) ~= "table" or value.version ~= 1 then return nil, {code = "INVALID_STATE", message = "The remote view answered a malformed state"} end
-    if value.state == "failed" then
-        return nil, {code = line(value.code, 64) or "UNAVAILABLE", message = line(value.message, 400) or "Remote desktop unavailable"}
-    end
-    local session = line(value.session_id, 160)
-    local workspace, desktop = identity(value.workspace_id), identity(value.desktop_id)
-    local mode: Mode? = value.mode == "control" and "control" or (value.mode == "observe" and "observe" or nil)
-    if value.state ~= "attached" or not session or session == "" or not workspace or not desktop or not mode then
-        return nil, {code = "INVALID_STATE", message = "The remote view answered a malformed state"}
-    end
-    return {session_id = session, mode = mode, workspace_id = workspace, desktop_id = desktop}, nil
+local function failed(code: string, message: string): State
+    return {kind = "failed", failure = {code = code, message = message}}
 end
--- One rendered frame: bounded rows and an optional cursor.
-function M.frame(value: unknown): ({string}?, Cursor?)
-    if type(value) ~= "table" or value.version ~= 1 or type(value.rows) ~= "table" then return nil, nil end
-    local rows: {string} = {}
-    local count = 0
-    for _ in pairs(value.rows) do count = count + 1 end
-    if count > M.MAX_ROWS then return nil, nil end
-    for index = 1, count do
-        local row = value.rows[index]
-        if type(row) ~= "string" or #row > M.MAX_ROW_BYTES then return nil, nil end
-        rows[index] = row
-    end
-    local cursor: Cursor? = nil
-    local raw = value.cursor
-    if type(raw) == "table" then
-        local x, y = raw.x, raw.y
-        if type(x) == "number" and type(y) == "number" and x == math.floor(x) and y == math.floor(y) and x >= 0 and y >= 0 then
-            cursor = {x = math.floor(x), y = math.floor(y), visible = raw.visible == true}
+-- The view's one state message: attached, with the session it holds, or failed.
+function M.state(value: unknown): State
+    local object = bounds.object(value)
+    if not object or object.version ~= 1 then return failed("INVALID_STATE", "The remote view answered a malformed state") end
+    if object.state == "failed" then
+        if bounds.fields(object, {"version", "state", "code", "message"}) then
+            return failed("INVALID_STATE", "The remote view answered a malformed state")
         end
+        local code, message = line(object.code, 64), line(object.message, 400)
+        if not code or not message then return failed("INVALID_STATE", "The remote view answered a malformed state") end
+        return failed(code, message)
     end
-    return rows, cursor
+    if object.state == "uncertain" then
+        if bounds.fields(object, {"version", "state", "code", "message"}) then
+            return failed("INVALID_STATE", "The remote view answered a malformed state")
+        end
+        local code, message = line(object.code, 64), line(object.message, 400)
+        if code ~= "UNCERTAIN" or not message then return failed("INVALID_STATE", "The remote view answered a malformed state") end
+        return failed(code, message)
+    end
+    if object.state ~= "attached" or bounds.fields(object, {"version", "state", "session_id", "mode", "workspace_id", "desktop_id", "owner_execution"}) then
+        return failed("INVALID_STATE", "The remote view answered a malformed state")
+    end
+    local session = line(object.session_id, 160)
+    local workspace, desktop = identity(object.workspace_id), identity(object.desktop_id)
+    local owner_execution = identity(object.owner_execution)
+    local mode: Mode? = object.mode == "control" and "control" or (object.mode == "observe" and "observe" or nil)
+    if not session or session == "" or not workspace or not desktop or not owner_execution or not mode then
+        return failed("INVALID_STATE", "The remote view answered a malformed state")
+    end
+    local attached: Attached = {session_id = session, mode = mode, workspace_id = workspace, desktop_id = desktop, owner_execution = owner_execution}
+    return {kind = "attached", attached = attached}
+end
+-- One rendered frame: bounded in count, total bytes and viewport coordinates.
+function M.frame(value: unknown, width: integer, height: integer): FrameResult
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"version", "rows", "cursor"}) or object.version ~= 1 then return {kind = "invalid"} end
+    local raw_rows = bounds.array(object.rows, M.MAX_ROWS)
+    if not raw_rows then return {kind = "invalid"} end
+    local rows: {string} = {}
+    local total_bytes = 0
+    for index, raw in ipairs(raw_rows) do
+        if type(raw) ~= "string" or #raw > M.MAX_ROW_BYTES or raw:find("%c") then return {kind = "invalid"} end
+        total_bytes = total_bytes + #raw
+        if total_bytes > M.MAX_FRAME_BYTES then return {kind = "invalid"} end
+        rows[index] = raw
+    end
+    local cursor: Cursor = {x = 0, y = 0, visible = false}
+    if object.cursor ~= nil then
+        local raw_cursor = bounds.object(object.cursor)
+        if not raw_cursor or bounds.fields(raw_cursor, {"x", "y", "visible"}) then return {kind = "invalid"} end
+        local x, y = bounds.integer(raw_cursor.x), bounds.integer(raw_cursor.y)
+        if not x or not y or x < 0 or y < 0 or x >= width or y >= height or type(raw_cursor.visible) ~= "boolean" then
+            return {kind = "invalid"}
+        end
+        cursor = {x = x, y = y, visible = raw_cursor.visible}
+    end
+    return {kind = "valid", frame = {rows = rows, cursor = cursor}}
 end
 -- What the window forwards for one input event: nothing, the leave request,
 -- or the event itself, with a mouse row moved below the window's title row.

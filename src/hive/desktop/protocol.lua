@@ -38,6 +38,7 @@ M.VIEW_FRAME = "bee.hive.viewer.frame"
 M.VIEW_INPUT = "bee.hive.viewer.input"
 M.VIEW_RESIZE = "bee.hive.viewer.resize"
 M.VIEW_CLOSE = "bee.hive.viewer.close"
+M.VIEW_RETRY = "bee.hive.viewer.retry"
 -- folder: whether the bridge composes the owner's folder workspace; a daemon's does not.
 type Configuration = {execution: string, expires_at: string, allowed_nodes: {string}, allowed_peers: {string}, application: string?, local_clients: boolean?, folder: boolean}
 type Mode = "control" | "observe"

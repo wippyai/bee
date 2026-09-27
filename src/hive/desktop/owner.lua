@@ -433,7 +433,9 @@ function M.request(state: State, message: process.Message, now: integer): ()
         return
     end
     local key = sender .. "\0" .. call.idempotency_key
-    local digest = types.digest({operation = operation, input = call.input, deadline = call.deadline})
+    -- Deadlines bound each delivery attempt; they do not change the identity
+    -- or meaning of an idempotent desktop operation.
+    local digest = types.digest({operation = operation, input = call.input})
     if not digest then failure(sender, call.request_id, "INVALID_ARGUMENT", "Unmeasurable desktop request"); return end
     local receipt = state.receipts[key]
     if receipt then

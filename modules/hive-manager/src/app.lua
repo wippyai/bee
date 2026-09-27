@@ -21,6 +21,7 @@ local hive = require("hive")
 local types = require("types")
 local remote = require("remote")
 local desktop_protocol = require("desktop_protocol")
+local time_format = require("time_format")
 local NAMES = "bee.hive.manager:names"
 local POLL = "5s"
 local CALL_TIMEOUT = "2s"
@@ -64,6 +65,8 @@ local function main(value: unknown)
     local frames = assert(process.listen(desktop_protocol.VIEW_FRAME, {message = true}))
     -- The open remote view, if any: this window draws its rows until it exits.
     local view: remote.View? = nil
+    local pending_viewers: {[string]: string} = {}
+    local viewer_intents: {[string]: string} = {}
     local state: model.State = model.new(model.names(entry_data(NAMES)))
     -- Attach a confirmed request in a view process on the display client host;
     -- the owner node's bridge admits it and leases the workspace's host.
@@ -74,32 +77,53 @@ local function main(value: unknown)
         if request.node_id == own_node() then
             return {ok = false, code = "UNSUPPORTED_CAPABILITY", message = "This node's workspaces open from the workspace menu (F9, W)"}
         end
+        local viewer = pending_viewers[request.idempotency_key]
         local view_states, listen_error = process.listen(desktop_protocol.VIEW_STATE, {message = true})
         if not view_states then return {ok = false, code = "UNAVAILABLE", message = tostring(listen_error)} end
-        local pid, spawn_error = process.spawn_monitored(desktop_protocol.VIEWER, desktop_protocol.CLIENT_HOST, tostring(process.pid()),
-            request.node_id, request.workspace_id, request.mode, width, math.max(1, height - 1))
-        if not pid then
-            process.unlisten(view_states)
-            return {ok = false, code = "UNAVAILABLE", message = "Remote view: " .. tostring(spawn_error)}
+        if viewer then
+            local sent, send_error = process.send(viewer, desktop_protocol.VIEW_RETRY,
+                {version = 1, idempotency_key = request.idempotency_key})
+            if not sent or send_error then
+                process.unlisten(view_states)
+                return {ok = false, code = "UNCERTAIN", message = "The original remote view is still being reconciled"}
+            end
+        else
+            local pid, spawn_error = process.spawn_monitored(desktop_protocol.VIEWER, desktop_protocol.CLIENT_HOST, tostring(process.pid()),
+                request.node_id, request.workspace_id, request.mode, request.idempotency_key, width, math.max(1, height - 1))
+            if not pid then
+                process.unlisten(view_states)
+                return {ok = false, code = "UNAVAILABLE", message = "Remote view: " .. tostring(spawn_error)}
+            end
+            viewer = tostring(pid)
+            pending_viewers[request.idempotency_key] = viewer
+            viewer_intents[viewer] = request.idempotency_key
         end
-        local viewer = tostring(pid)
         local deadline = time.after(VIEW_TIMEOUT)
         local outcome: directory.Outcome? = nil
         while not outcome do
             local selected = channel.select({view_states:case_receive(), deadline:case_receive()})
             if not selected.ok or selected.channel == deadline then
-                process.send(viewer, desktop_protocol.VIEW_CLOSE, {version = 1})
-                outcome = {ok = false, code = "UNCERTAIN", message = "The remote view did not report within " .. VIEW_TIMEOUT .. "; it is closing"}
+                outcome = {ok = false, code = "UNCERTAIN", message = "The remote view did not report within " .. VIEW_TIMEOUT .. "; retry will reconcile the same owner request"}
             elseif tostring(selected.value:from()) == viewer then
-                local attached, failed = remote.state(selected.value:payload():data())
-                if attached then
+                local decoded = remote.state(selected.value:payload():data())
+                if decoded.kind == "attached" then
+                    local attached = decoded.attached
+                    pending_viewers[request.idempotency_key] = nil
+                    viewer_intents[viewer] = nil
                     local node = model.selected(state)
                     view = {pid = viewer, node_id = request.node_id, node_label = node and node.node_id == request.node_id and node.label or request.node_id,
                         workspace_id = attached.workspace_id, desktop_id = attached.desktop_id, mode = attached.mode,
                         session_id = attached.session_id, rows = {}, cursor = nil, leaving = false}
-                    outcome = {ok = true, code = "", message = "", session_id = attached.session_id, mode = attached.mode, viewer = viewer}
+                    outcome = {ok = true, code = "", message = "", session_id = attached.session_id, mode = attached.mode,
+                        viewer = viewer, owner_execution = attached.owner_execution}
                 else
-                    outcome = {ok = false, code = failed and failed.code or "UNAVAILABLE", message = failed and failed.message or "Remote desktop unavailable"}
+                    local failure = decoded.failure
+                    local code = failure.code
+                    if code ~= "UNCERTAIN" then
+                        pending_viewers[request.idempotency_key] = nil
+                        viewer_intents[viewer] = nil
+                    end
+                    outcome = {ok = false, code = code, message = failure.message}
                 end
             end
         end
@@ -144,7 +168,7 @@ local function main(value: unknown)
         supervisor_running = supervisor.running
         model.set_supervisor(state, supervisor.running, supervisor.detail)
         local members, problem = source:members()
-        model.apply_members(state, members, problem, math.floor(time.now():sub(started):milliseconds()))
+        model.apply_members(state, members, problem, time_format.elapsed_ms(started))
         dirty = true
     end
     local function refresh()
@@ -248,13 +272,25 @@ local function main(value: unknown)
                 view = nil
                 status = failure and ("Remote desktop ended: " .. failure) or "Remote desktop closed"
                 dirty = true
+            elseif happened.kind == process.event.EXIT then
+                local viewer = tostring(happened.from)
+                local idempotency_key = viewer_intents[viewer]
+                if idempotency_key then
+                    viewer_intents[viewer] = nil
+                    pending_viewers[idempotency_key] = nil
+                    model.viewer_lost(state, idempotency_key)
+                    dirty = true
+                end
             end
         elseif event.channel == frames then
             local message = event.value
             local current = view
             if current and tostring(message:from()) == current.pid then
-                local rows, cursor = remote.frame(message:payload():data())
-                if rows then current.rows, current.cursor, dirty = rows, cursor, true end
+                local viewport_height: integer = math.floor(math.max(1, height - 1))
+                local decoded = remote.frame(message:payload():data(), width, viewport_height)
+                if decoded.kind == "valid" then
+                    current.rows, current.cursor, dirty = decoded.frame.rows, decoded.frame.cursor, true
+                end
             end
         elseif view then
             -- The remote view has the window: its input goes to the view.

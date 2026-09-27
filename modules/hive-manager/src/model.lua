@@ -7,6 +7,9 @@ local json = require("json")
 local text = require("text")
 local directory = require("directory")
 local names = require("names")
+local contract = require("contract")
+local hive_types = require("types")
+local hive_bounds = require("hive_bounds")
 local M = {}
 M.TEXT_LIMIT = 160
 M.LABEL_LIMIT = 48
@@ -19,11 +22,12 @@ type Attach = directory.Attach
 type Outcome = directory.Outcome
 type Mode = directory.Mode
 type Status = "unknown" | "reachable" | "unavailable"
+type PresenceSample = {role: string, cluster_size: integer, sampled_at: string}
+type StatsSample = {heap: integer, goroutines: integer}
 type Node = {node_id: string, label: string, client_only: boolean, is_local: boolean, addr: string, member: boolean, departed_at: integer, absent_since: integer?, status: Status, detail: string,
-    role: string, cluster_size: integer, sampled_at: string, heap: integer?, goroutines: integer?}
-type Session = {session_id: string, mode: string}
--- sessions: by workspace identity.
-type NodeSessions = {owner_generation: string, sessions: {[string]: Session}}
+    role: string?, cluster_size: integer?, sampled_at: string?, heap: integer?, goroutines: integer?}
+type Session = {session_id: string, mode: Mode, owner_execution: string}
+type NodeSessions = {owner_execution: string, sessions: {[string]: Session}}
 type Pane = "nodes" | "workspaces"
 -- Where a node's workspace listing stands: its label search, the page cursor
 -- and the cursors back to earlier pages. One page is held, never the list.
@@ -32,11 +36,15 @@ type Hive = "unknown" | "running" | "unavailable"
 type State = {
     hive: Hive, hive_detail: string, membership_detail: string, generation: integer,
     nodes: {Node}, index: {[string]: Node}, names: {[string]: string}, catalogs: {[string]: Catalog},
+    catalog_revisions: {[string]: integer},
     selected_node: string?, selected_workspace: string?, wanted_node: string?, wanted_workspace: string?,
     pane: Pane, pending: Attach?, outcome: string, sessions: {[string]: NodeSessions}, technical: boolean,
     listings: {[string]: Listing}, editing: boolean, search: string,
 }
 type Object = {[string]: unknown}
+local function decode_object(value: unknown): Object?
+    return hive_bounds.object(value)
+end
 function M.text(value: unknown, limit: integer?): string
     return text.bound(value, limit or M.TEXT_LIMIT)
 end
@@ -57,7 +65,7 @@ function M.names(value: unknown): {[string]: string}
 end
 function M.new(names: {[string]: string}): State
     return {hive = "unknown", hive_detail = "", membership_detail = "", generation = 0,
-        nodes = {}, index = {}, names = names, catalogs = {}, selected_node = nil, selected_workspace = nil, wanted_node = nil, wanted_workspace = nil, pane = "nodes",
+        nodes = {}, index = {}, names = names, catalogs = {}, catalog_revisions = {}, selected_node = nil, selected_workspace = nil, wanted_node = nil, wanted_workspace = nil, pane = "nodes",
         pending = nil, outcome = "", sessions = {}, technical = false, listings = {}, editing = false, search = ""}
 end
 local function label_of(state: State, node_id: string): string
@@ -152,7 +160,7 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
         local was_member = node ~= nil and previous_membership[node.node_id] == true
         if not node then
             node = {node_id = member.node_id, label = label_of(state, member.node_id), is_local = member.is_local, addr = M.text(member.addr),
-                member = true, client_only = member.client_only == true, departed_at = 0, status = "unknown", detail = "", role = "", cluster_size = 0, sampled_at = "", heap = nil, goroutines = nil}
+                member = true, client_only = member.client_only == true, departed_at = 0, status = "unknown", detail = "", role = nil, cluster_size = nil, sampled_at = nil, heap = nil, goroutines = nil}
             state.index[member.node_id] = node
             state.nodes[#state.nodes + 1] = node
         else
@@ -200,45 +208,64 @@ local function fault_text(reply: Reply): string
     if not fault then return "no answer" end
     return M.text(fault.code .. ": " .. fault.message)
 end
+local function presence(value: unknown, expected_node: string): PresenceSample?
+    local value_object = decode_object(value)
+    if not value_object or hive_bounds.fields(value_object, {"protocol_revision", "node_id", "role", "cluster_size", "sampled_at"})
+        or value_object.protocol_revision ~= hive_types.REVISION or value_object.node_id ~= expected_node then return nil end
+    local role = hive_bounds.line(value_object.role, 32)
+    local cluster_size = hive_bounds.count(value_object.cluster_size)
+    local sampled_at = hive_bounds.timestamp(value_object.sampled_at)
+    if not role then return nil end
+    if not cluster_size or cluster_size < 1 then return nil end
+    if not sampled_at then return nil end
+    return {role = role, cluster_size = cluster_size, sampled_at = sampled_at}
+end
+local function stats(value: unknown): StatsSample?
+    local value_object = decode_object(value)
+    if not value_object or hive_bounds.fields(value_object, {"memory", "goroutines", "cpu_count", "sampled_at"}) then return nil end
+    local memory = decode_object(value_object.memory)
+    if not memory or hive_bounds.fields(memory, {"alloc", "total_alloc", "sys", "heap_alloc", "heap_objects", "num_gc"}) then return nil end
+    local heap = hive_bounds.count(memory.heap_alloc)
+    local goroutines = hive_bounds.count(value_object.goroutines)
+    local cpu_count = hive_bounds.count(value_object.cpu_count)
+    local sampled_at = hive_bounds.timestamp(value_object.sampled_at)
+    if not heap then return nil end
+    if not goroutines then return nil end
+    if not cpu_count or cpu_count < 1 then return nil end
+    if not sampled_at then return nil end
+    for _, name in ipairs({"alloc", "total_alloc", "sys", "heap_objects", "num_gc"}) do
+        if memory[name] ~= nil and not hive_bounds.count(memory[name]) then return nil end
+    end
+    return {heap = heap, goroutines = goroutines}
+end
 function M.apply_presence(state: State, node_id: string, reply: Reply)
     local node = state.index[node_id]
     if not node or node.client_only then return end
-    if not reply.ok or type(reply.value) ~= "table" then
+    local sample = reply.ok and presence(reply.value, node_id) or nil
+    if not reply.ok or not sample then
         node.status = "unavailable"
-        node.detail = fault_text(reply)
+        node.detail = reply.ok and "telemetry presence reply is malformed" or fault_text(reply)
+        node.role, node.cluster_size, node.sampled_at = nil, nil, nil
         return
     end
-    local value = reply.value :: Object
     node.status = "reachable"
     node.detail = ""
-    node.role = M.text(value.role, 32)
-    node.cluster_size = math.floor(tonumber(value.cluster_size) or 0)
-    node.sampled_at = M.text(value.sampled_at, 40)
+    node.role = sample.role
+    node.cluster_size = sample.cluster_size
+    node.sampled_at = sample.sampled_at
 end
 function M.apply_stats(state: State, node_id: string, reply: Reply)
     local node = state.index[node_id]
     if not node then return end
-    if not reply.ok or type(reply.value) ~= "table" then node.heap = nil; node.goroutines = nil; return end
-    local value = reply.value :: Object
-    local memory = type(value.memory) == "table" and (value.memory :: Object) or {}
-    local heap = tonumber(memory.heap_alloc)
-    node.heap = heap and math.floor(heap) or nil
-    local goroutines = tonumber(value.goroutines)
-    node.goroutines = goroutines and math.floor(goroutines) or nil
+    local sample = reply.ok and stats(reply.value) or nil
+    node.heap = sample and sample.heap or nil
+    node.goroutines = sample and sample.goroutines or nil
 end
 function M.apply_catalog(state: State, node_id: string, catalog: Catalog)
     local node = state.index[node_id]
     if not node or node.client_only then return end
-    local remembered = state.sessions[node_id]
-    if remembered then
-        if not catalog.available or remembered.owner_generation ~= catalog.owner_generation then
-            state.sessions[node_id] = nil
-        else
-            local present: {[string]: boolean} = {}
-            for _, workspace in ipairs(catalog.workspaces) do present[workspace.workspace_id] = true end
-            for key in pairs(remembered.sessions) do if not present[key] then remembered.sessions[key] = nil end end
-        end
-    end
+    state.catalog_revisions[node_id] = (state.catalog_revisions[node_id] or 0) + 1
+    if not catalog.available then state.sessions[node_id] = nil end
     state.catalogs[node_id] = catalog
     if state.selected_node == node_id and state.wanted_workspace then
         for _, workspace in ipairs(catalog.workspaces) do
@@ -261,7 +288,7 @@ end
 function M.session(state: State, node_id: string, workspace_id: string): Session?
     local catalog = state.catalogs[node_id]
     local remembered = state.sessions[node_id]
-    if not catalog or not catalog.available or not remembered or remembered.owner_generation ~= catalog.owner_generation then return nil end
+    if not catalog or not catalog.available or not remembered then return nil end
     return remembered.sessions[workspace_id]
 end
 -- A session ends when the view presenting it ends.
@@ -349,7 +376,7 @@ function M.preview_intent(state: State, mode: Mode, idempotency_key: string): (A
     local workspace = M.selected_workspace(state)
     if not workspace then return nil, "select a workspace first" end
     local intent: Attach = {node_id = node.node_id, workspace_id = workspace.workspace_id,
-        owner_generation = catalog.owner_generation, mode = mode, idempotency_key = idempotency_key}
+        catalog_revision = state.catalog_revisions[node.node_id] or 0, mode = mode, idempotency_key = idempotency_key}
     return intent, nil
 end
 -- Confirmation applies only to the identity shown in the question. A refresh
@@ -358,7 +385,7 @@ function M.confirm_intent(state: State, confirmed: Attach): (Attach?, string?)
     local current, err = M.preview_intent(state, confirmed.mode, confirmed.idempotency_key)
     if not current then return nil, err end
     if current.node_id ~= confirmed.node_id or current.workspace_id ~= confirmed.workspace_id
-        or current.owner_generation ~= confirmed.owner_generation then
+        or current.catalog_revision ~= confirmed.catalog_revision then
         return nil, "Workspace selection changed; confirm the current workspace again"
     end
     state.pending = current
@@ -370,6 +397,8 @@ function M.attach_intent(state: State, mode: Mode, idempotency_key: string): (At
     return M.confirm_intent(state, intent)
 end
 function M.apply_outcome(state: State, intent: Attach, outcome: Outcome)
+    local pending = state.pending
+    if not pending or pending.idempotency_key ~= intent.idempotency_key then return end
     local key = intent.workspace_id
     if not outcome.ok and outcome.code == "UNCERTAIN" then
         state.outcome = M.text("UNCERTAIN: " .. outcome.message .. "; the same request is replayed on retry")
@@ -377,29 +406,24 @@ function M.apply_outcome(state: State, intent: Attach, outcome: Outcome)
     end
     if state.pending and state.pending.idempotency_key == intent.idempotency_key then state.pending = nil end
     if outcome.ok then
-        local catalog = state.catalogs[intent.node_id]
-        local present = false
-        if catalog and catalog.available and catalog.owner_generation == intent.owner_generation then
-            for _, workspace in ipairs(catalog.workspaces) do
-                if workspace.workspace_id == key then present = true; break end
-            end
-        end
-        if not present then
-            state.outcome = "Attachment completed for an earlier catalog; refresh before using the session"
-            return
-        end
         local remembered: NodeSessions? = state.sessions[intent.node_id]
+        if remembered and remembered.owner_execution ~= outcome.owner_execution then remembered = nil end
         if not remembered then
             local sessions: {[string]: Session} = {}
-            remembered = {owner_generation = intent.owner_generation, sessions = sessions}
+            remembered = {owner_execution = outcome.owner_execution, sessions = sessions}
         end
-        local session: Session = {session_id = M.text(outcome.session_id, 80), mode = M.text(outcome.mode or intent.mode, 16)}
+        local session: Session = {session_id = M.text(outcome.session_id, 80), mode = outcome.mode, owner_execution = outcome.owner_execution}
         remembered.sessions[key] = session
         state.sessions[intent.node_id] = remembered
         state.outcome = "Attached " .. session.mode .. " session " .. session.session_id .. " on " .. names.label(intent.workspace_id)
     else
         state.outcome = M.text(outcome.code .. ": " .. outcome.message)
     end
+end
+function M.viewer_lost(state: State, idempotency_key: string)
+    local pending = state.pending
+    if not pending or pending.idempotency_key ~= idempotency_key then return end
+    state.outcome = "Remote view exited before attach could be confirmed; retry will reuse the same request"
 end
 M.SEARCH_LIMIT = 120
 local function listing(state: State, node_id: string): Listing

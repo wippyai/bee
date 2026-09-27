@@ -3,6 +3,7 @@
 -- The host authenticates the sender and owns the store.  This module only
 -- decodes the wire values; it carries no process, database, or permission
 -- authority across the boundary.
+local principal = require("principal")
 type Operation = "prepare" | "activate" | "refresh_join" | "begin_revoke" | "refresh_cleanup" | "finish_revoke"
 type State = "pending" | "active" | "revoked"
 type Object = {[string]: unknown}
@@ -123,10 +124,6 @@ local function operation(value: unknown): Operation?
     return nil
 end
 
-local function application_actor(workspace_id: string, instance_id: string): string
-    return "bee.application:" .. workspace_id .. ":" .. instance_id
-end
-
 local function prepare(value: unknown, workspace_id: string): PrepareValue?
     local input = object(value)
     if not input or not exact(input, {"instance_id", "thread_id", "definition_id", "actor_id", "role", "idempotency_key",
@@ -147,7 +144,7 @@ local function prepare(value: unknown, workspace_id: string): PrepareValue?
         or not idempotency_key or not definition_revision or not initiating_owner_id or not gateway_binding_id
         or not gateway_approval_id or not gateway_proposal_digest or input.access ~= "observe_post"
         or not join_expected_revision then return nil end
-    if actor_id ~= application_actor(workspace_id, instance_id) then return nil end
+    if actor_id ~= principal.actor_id(workspace_id, instance_id) then return nil end
     return {instance_id = instance_id, thread_id = thread_id, definition_id = definition_id, actor_id = actor_id,
         role = "participant", idempotency_key = idempotency_key, definition_revision = definition_revision,
         initiating_owner_id = initiating_owner_id, gateway_binding_id = gateway_binding_id,

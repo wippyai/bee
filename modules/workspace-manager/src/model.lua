@@ -2,11 +2,14 @@
 -- a time (never the whole list), a search that is a label prefix or, after
 -- "/", a folder prefix under every admitted root, and the selected workspace
 -- as its owners describe it.
--- Every value from an owner is bounded here before a view draws it.
+-- Values crossing from workspace owners are decoded before a view draws them.
 local text = require("text")
 local caller = require("caller")
+local bounds = require("bounds")
+local contract = require("contract")
 
-type Summary = {workspace_id: string, label: string, root_ref: string, subpath: string, state: string, created_at: string,
+type WorkspaceState = "active" | "archived"
+type Summary = {workspace_id: string, label: string, root_ref: string, subpath: string, state: WorkspaceState, created_at: string,
     last_used_at: string}
 type Item = {label: string, detail: string}
 type Section = {title: string, items: {Item}, total: integer, error: string?}
@@ -34,8 +37,7 @@ function M.new(): State
 end
 
 local function object(value: unknown): Object?
-    if type(value) ~= "table" then return nil end
-    return value :: Object
+    return bounds.object(value)
 end
 
 local function bounded(value: unknown, limit: integer?): string
@@ -50,10 +52,17 @@ end
 
 function M.summary(value: unknown): Summary?
     local row = object(value)
-    if not row or type(row.workspace_id) ~= "string" or #(row.workspace_id :: string) ~= 32 then return nil end
-    return {workspace_id = row.workspace_id :: string, label = bounded(row.label, M.LABEL_LIMIT), root_ref = bounded(row.root_ref, 160),
-        subpath = bounded(row.subpath), state = row.state == "archived" and "archived" or "active",
-        created_at = bounded(row.created_at, 40), last_used_at = bounded(row.last_used_at, 40)}
+    if not row or bounds.fields(row, {"workspace_id", "label", "root_ref", "subpath", "state", "created_at", "last_used_at"}) then return nil end
+    local workspace_id = contract.workspace_id(row.workspace_id)
+    local label = contract.text(row.label, M.LABEL_LIMIT)
+    local root_ref = bounds.id(row.root_ref)
+    local subpath = bounds.subpath(row.subpath)
+    local state: WorkspaceState? = row.state == "active" and "active" or (row.state == "archived" and "archived" or nil)
+    local created_at = bounds.timestamp(row.created_at)
+    local last_used_at = bounds.timestamp(row.last_used_at)
+    if not workspace_id or not label or not root_ref or not subpath or not state or not created_at or not last_used_at then return nil end
+    return {workspace_id = workspace_id, label = label, root_ref = root_ref, subpath = subpath, state = state,
+        created_at = created_at, last_used_at = last_used_at}
 end
 
 function M.folder(summary: Summary): string
@@ -93,18 +102,25 @@ function M.apply_page(state: State, reply: caller.Reply)
         state.error = failure(reply)
         return
     end
+    if bounds.fields(value, {"items", "next_after"}) then state.error = "The owner returned a malformed workspace page"; return end
+    local listed = bounds.array(value.items, M.PAGE)
+    if not listed then state.error = "The owner returned a malformed workspace page"; return end
     local items: {Summary} = {}
-    local listed = object(value.items)
-    if listed then
-        for _, entry in ipairs(listed :: {unknown}) do
-            local summary = M.summary(entry)
-            if summary and #items < M.PAGE then items[#items + 1] = summary end
-        end
+    local seen: {[string]: boolean} = {}
+    for _, entry in ipairs(listed) do
+        local summary = M.summary(entry)
+        if not summary or seen[summary.workspace_id] then state.error = "The owner returned a malformed workspace page"; return end
+        seen[summary.workspace_id] = true
+        items[#items + 1] = summary
+    end
+    local next_after: string? = nil
+    if value.next_after ~= nil then
+        next_after = bounds.line(value.next_after, 2200)
+        if not next_after then state.error = "The owner returned a malformed workspace cursor"; return end
     end
     state.items = items
     state.error = nil
-    local next_after = value.next_after
-    state.next_after = type(next_after) == "string" and #next_after <= 2200 and next_after or nil
+    state.next_after = next_after
     if not M.selected(state) then state.selected = items[1] and items[1].workspace_id or "" end
 end
 

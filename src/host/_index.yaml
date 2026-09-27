@@ -72,3 +72,5 @@ entries:
 - name: binding_protocol
   kind: library.lua
   source: file://binding_protocol.lua
+  imports:
+    principal: bee.apps:principal

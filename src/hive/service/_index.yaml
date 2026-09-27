@@ -46,7 +46,7 @@ entries:
   source: file://remote_sessions.lua
   imports:
     hive: bee.hive:client
-    bounds: bee.hive:bounds
+    bounds: bee.protocol:bounds
 - name: inbox_sender
   kind: library.lua
   source: file://inbox_sender.lua

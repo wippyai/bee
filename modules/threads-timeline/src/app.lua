@@ -92,7 +92,7 @@ local function main(value: unknown)
         local intent = model.watch_intent(state)
         if not intent then return end
         local future, err = funcs.new():async(intent.target, intent.request)
-        if not future or err then model.apply_watch(state, caller.unknown()); return end
+        if not future or err then return end
         waiting = future
         wait_channel = future:response()
     end
@@ -153,8 +153,7 @@ local function main(value: unknown)
             wait_channel = nil
             if future then
                 local result, err = future:result()
-                if err or not result then model.apply_watch(state, caller.unknown())
-                else model.apply_watch(state, caller.decode(result:data()) or caller.unknown()) end
+                if not err and result then caller.decode(result:data()) end
             end
             if state.phase == "attached" then drain(); arm_wait() end
             dirty = true

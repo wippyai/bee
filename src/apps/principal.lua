@@ -26,7 +26,6 @@ end
 function M.value(workspace_id: unknown, instance_id: unknown, definition_id: unknown,
     definition_revision: unknown, execution_generation: unknown): Value?
     local workspace = text(workspace_id, 32)
-    if not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil end
     local instance = text(instance_id, 80)
     local definition = text(definition_id, 160)
     local revision = text(definition_revision, 80)

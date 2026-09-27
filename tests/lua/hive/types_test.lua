@@ -104,9 +104,9 @@ local function define_tests()
             local _, big = types.decode_call(call({input = {text = string.rep("x", types.MAX_INPUT_BYTES)}}))
             test.eq(big, "input exceeds " .. tostring(types.MAX_INPUT_BYTES) .. " bytes")
             local many: {string} = {}
-            for index = 1, bounds.MAX_LIST_ITEMS + 1 do many[index] = "g" .. tostring(index) end
+            for index = 1, bounds.MAX_ARRAY_ITEMS + 1 do many[index] = "g" .. tostring(index) end
             local _, list_error = bounds.ids(many)
-            test.eq(list_error, "list exceeds " .. tostring(bounds.MAX_LIST_ITEMS) .. " items")
+            test.eq(list_error, "list exceeds " .. tostring(bounds.MAX_ARRAY_ITEMS) .. " items")
             test.is_nil(bounds.id(string.rep("x", bounds.MAX_ID_BYTES + 1)))
             test.is_nil(bounds.id("a\nb"))
             test.is_nil(bounds.line("two\nlines", 160))

@@ -318,7 +318,7 @@ function M.decode_reply(value: unknown): (Reply?, string?)
             if type(key) ~= "number" then return nil, "grants must be a list" end
             count = count + 1
         end
-        if count > bounds.MAX_LIST_ITEMS then return nil, "grants exceed " .. tostring(bounds.MAX_LIST_ITEMS) .. " items" end
+        if count > bounds.MAX_ARRAY_ITEMS then return nil, "grants exceed " .. tostring(bounds.MAX_ARRAY_ITEMS) .. " items" end
         for index = 1, count do
             local grant, grant_error = decode_grant_ref(list[index])
             if not grant then return nil, "grants[" .. tostring(index) .. "]: " .. tostring(grant_error) end

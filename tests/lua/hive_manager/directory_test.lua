@@ -71,16 +71,24 @@ local function define_tests()
             test.is_true(tostring(problem):find("more than 64", 1, true) ~= nil)
             test.is_true(live:supervisor().running)
             local hostile: {unknown} = {{id = "ok", addr = "bad\27addr"}, {id = ""}, {id = "ok"}, "junk", {id = "me", is_local = true}}
-            local decoded = live:members()
-            decoded = ({directory.live({open_view = no_view, local_node = "me", lookup = function(): (string?, string?) return nil, "x" end,
+            local decoded_members, malformed = ({directory.live({open_view = no_view, local_node = "me", lookup = function(): (string?, string?) return nil, "x" end,
                 membership = function(): (unknown, unknown) return hostile, nil end,
                 call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
                     return types.reply_ok("r", {})
-                end}):members()})[1]
-            test.eq(#decoded, 2)
-            test.eq(decoded[1].node_id, "ok")
-            test.eq(decoded[1].addr, "")
-            test.eq(decoded[2].node_id, "me")
+                end}):members()})
+            test.eq(#decoded_members, 1)
+            test.eq(decoded_members[1].node_id, "me")
+            test.is_true(tostring(malformed):find("malformed", 1, true) ~= nil)
+            local sparse: {[integer]: unknown} = {[1] = {id = "ok", is_local = false}, [3] = {id = "other", is_local = false}}
+            local sparse_members, sparse_problem = ({directory.live({open_view = no_view, local_node = "me",
+                lookup = function(): (string?, string?) return nil, "x" end,
+                membership = function(): (unknown, unknown) return sparse, nil end,
+                call = function(_owner: types.OwnerRef, _target: types.Target, _input: {[string]: unknown}, _options: {timeout: string?}): types.Reply
+                    return types.reply_ok("r", {})
+                end}):members()})
+            test.eq(#sparse_members, 1)
+            test.eq(sparse_members[1].node_id, "me")
+            test.is_true(tostring(sparse_problem):find("dense list", 1, true) ~= nil)
         end)
         test.it("preserves catalog denial and opens a confirmed attach as a remote view", function()
             local opened: {directory.Attach} = {}
@@ -96,19 +104,21 @@ local function define_tests()
                 open_view = function(request: directory.Attach): directory.Outcome
                     opened[#opened + 1] = request
                     if request.mode == "observe" then return {ok = false, code = "DENIED", message = "the node does not admit this node's displays"} end
-                    return {ok = true, code = "", message = "", session_id = "session-1", mode = "control", viewer = "{local@bee.hive.desktop:display_host|9}"}
+                    return {ok = true, code = "", message = "", session_id = "session-1", mode = "control", viewer = "{local@bee.hive.desktop:display_host|9}",
+                        owner_execution = string.rep("e", 32)}
                 end,
             })
             local catalog = live:workspaces("local", {})
             test.is_false(catalog.available)
             test.eq(catalog.reason, "DENIED: not admitted")
             test.eq(#catalog.workspaces, 0)
-            local intent: directory.Attach = {node_id = "forge", workspace_id = string.rep("b", 32), owner_generation = "forge",
+            local intent: directory.Attach = {node_id = "forge", workspace_id = string.rep("b", 32), catalog_revision = 1,
                 mode = "control", idempotency_key = "k"}
             local outcome = live:attach(intent)
             test.is_true(outcome.ok)
             test.eq(outcome.session_id, "session-1")
             test.eq(outcome.viewer, "{local@bee.hive.desktop:display_host|9}")
+            test.eq(outcome.owner_execution, string.rep("e", 32))
             test.eq(opened[1].node_id, "forge")
             test.eq(opened[1].workspace_id, string.rep("b", 32))
             intent.mode = "observe"
@@ -150,7 +160,6 @@ local function define_tests()
             end
             local catalog = directory.decode_workspaces(response({{workspace_id = workspace, label = "Main", served = false}}))
             test.is_true(catalog.available)
-            test.eq(catalog.owner_generation, "forge")
             test.is_nil(catalog.next_after)
             test.eq(catalog.workspaces[1].served, false)
             test.is_true(directory.decode_workspaces(response({})).available)

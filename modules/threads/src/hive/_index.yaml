@@ -7,8 +7,8 @@ entries:
   modules: [funcs, security, time]
   imports:
     types: bee.hive:types
-    bounds: bee.hive:bounds
-    canonical: bee.hive:canonical
+    bounds: bee.protocol:bounds
+    canonical: bee.protocol:canonical
     catalog: bee.hive:catalog
     principals: bee.hive:principals
 - name: admit

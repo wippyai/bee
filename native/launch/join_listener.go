@@ -342,6 +342,34 @@ func socketAddress(value string) net.Addr {
 	return &net.TCPAddr{IP: net.IP(address.AsSlice())}
 }
 
+func remoteAddress(connection net.Addr) netip.Addr {
+	tcp, ok := connection.(*net.TCPAddr)
+	if !ok {
+		return netip.Addr{}
+	}
+	address, ok := netip.AddrFromSlice(tcp.IP)
+	if !ok {
+		return netip.Addr{}
+	}
+	return address.Unmap()
+}
+
+func localAddress(connection net.Addr) (netip.Addr, bool) {
+	tcp, ok := connection.(*net.TCPAddr)
+	if !ok {
+		return netip.Addr{}, false
+	}
+	address, ok := netip.AddrFromSlice(tcp.IP)
+	if !ok {
+		return netip.Addr{}, false
+	}
+	address = address.Unmap()
+	if address.IsLoopback() || address.IsUnspecified() {
+		return netip.Addr{}, false
+	}
+	return address, true
+}
+
 // admit redeems the joiner's invite through the supervisor, pins the joiner's
 // identity key as a Hive peer and certifies its mesh leaf.
 func (a *admitter) admit(ctx context.Context, peer ed25519.PublicKey, request invite.Request) invite.Decision {

@@ -23,6 +23,7 @@ M.LIFETIME_EXIT = "bee.desktop.lifetime.exit"
 -- A catalog page holds at most this many workspaces; a cursor is at most this long.
 M.MAX_PAGE = workspace_query.MAX_PAGE
 M.MAX_CURSOR = workspace_query.MAX_CURSOR
+M.MAX_DESKTOPS = 33
 -- A display command is a native client role, but its host is deliberately
 -- separate from the retained owner and ordinary terminal applications. The
 -- owner still checks the caller node against its explicit admission grant.

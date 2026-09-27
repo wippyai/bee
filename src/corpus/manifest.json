@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 20917,
+      "bytes": 21705,
       "id": "docs/workspace_catalog",
-      "sha256": "a0a6f5ead640353ea736cf0d2605372d8f390fe327fe8a9fe1dede4c3ba170a8",
+      "sha256": "4742bb04469ef1448a8dd3f0445f351dfffe39087d7d5b1c76b1c6162a8e046e",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -502,7 +502,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 611621,
+    "bytes": 612409,
     "documents": 62
   }
 }

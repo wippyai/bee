@@ -5,15 +5,18 @@
 -- last status as unavailable, never as idle.
 local test = require("test")
 local reader = require("reader")
+local bounds = require("bounds")
 type Object = {[string]: unknown}
+type MalformedProjection = {name: string, fields: Object}
 local function ok(value: Object): reader.Reply
+    if value.checkpoint == nil then value.checkpoint = {} end
     return {ok = true, error = nil, value = value, replayed = false}
 end
 local function fault(code: string, message: string): reader.Reply
     return {ok = false, error = {code = code, message = message}, value = nil, replayed = false}
 end
 local function status(activity: string, extra: Object?): Object
-    local s: Object = {activity = activity, waiting_on_you = false, waiting_message_ids = {}, open_requests = 0,
+    local s: Object = {activity = activity, stale = false, waiting_on_you = false, waiting_message_ids = {}, open_requests = 0,
         pending_approvals = 0, running_actions = 0, uncertain_actions = 0, open_actions = 0}
     for key, value in pairs(extra or {}) do s[key] = value end
     return s
@@ -33,7 +36,7 @@ local function define_tests()
             test.is_true(reader.needs_refresh(r))
             local read = reader.read_intent(r)
             if not read then error("read") end
-            reader.apply_read(r, read.generation, ok({revision = 1, through_sequence = 64, head_sequence = 130, owner_authority = "auth-1", status = status("running", {running_actions = 1, open_actions = 1})}))
+            reader.apply_read(r, read.generation, ok({revision = 1, through_sequence = 64, head_sequence = 130, owner_authority = "auth-1", owner_incarnation = 1, status = status("running", {running_actions = 1, open_actions = 1})}))
             test.eq(r.availability, "stale")
             test.is_true(reader.value(r).stale)
             test.is_true(reader.needs_refresh(r))
@@ -42,8 +45,8 @@ local function define_tests()
             if not watch then error("watch") end
             test.eq(watch.request.after_sequence, 130)
             -- Caught up: ready, and the change-wait's after-cursor follows.
-            reader.apply_update(r, r.generation, ok({revision = 2, through_sequence = 130, head_sequence = 130, owner_authority = "auth-1"}))
-            reader.apply_read(r, r.generation, ok({revision = 2, through_sequence = 130, head_sequence = 130, owner_authority = "auth-1", status = status("idle")}))
+            reader.apply_update(r, r.generation, ok({revision = 2, through_sequence = 130, head_sequence = 130, owner_authority = "auth-1", owner_incarnation = 1}))
+            reader.apply_read(r, r.generation, ok({revision = 2, through_sequence = 130, head_sequence = 130, owner_authority = "auth-1", owner_incarnation = 1, status = status("idle")}))
             test.eq(r.availability, "ready")
             test.is_false(reader.value(r).stale)
             test.is_false(reader.needs_refresh(r))
@@ -55,7 +58,7 @@ local function define_tests()
             local stale_read = reader.read_intent(r)
             if not stale_read then error("Missing read intent for bound thread") end
             reader.bind(r, "t-2")
-            reader.apply_read(r, stale_read.generation, ok({revision = 5, through_sequence = 9, head_sequence = 9, owner_authority = "auth-1", status = status("running")}))
+            reader.apply_read(r, stale_read.generation, ok({revision = 5, through_sequence = 9, head_sequence = 9, owner_authority = "auth-1", owner_incarnation = 1, status = status("running")}))
             test.eq(r.thread_id, "t-2")
             test.is_nil(r.status)
             test.eq(r.availability, "loading")
@@ -66,10 +69,10 @@ local function define_tests()
         test.it("resets on a replacement owner and ignores a reply older than what it holds", function()
             local r = reader.new()
             reader.bind(r, "t-1")
-            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 40, owner_authority = "auth-1", status = status("waiting", {open_requests = 1})}))
+            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 40, owner_authority = "auth-1", owner_incarnation = 1, status = status("waiting", {open_requests = 1})}))
             test.eq(r.availability, "ready")
             -- A reply older than the held revision under the same owner moves nothing.
-            reader.apply_read(r, r.generation, ok({revision = 2, through_sequence = 20, head_sequence = 40, owner_authority = "auth-1", status = status("idle")}))
+            reader.apply_read(r, r.generation, ok({revision = 2, through_sequence = 20, head_sequence = 40, owner_authority = "auth-1", owner_incarnation = 1, status = status("idle")}))
             test.eq(r.revision, 4)
             test.eq(r.status and r.status.activity, "waiting")
             -- A replacement owner authority resets the view and advances the
@@ -80,6 +83,27 @@ local function define_tests()
             test.eq(r.revision, 1)
             test.is_nil(r.status)
             test.is_true(r.generation > before)
+        end)
+        test.it("rejects malformed projection counts, authority, outcomes, and waiting ids", function()
+            local cases: {MalformedProjection} = {
+                {name = "numeric string", fields = {revision = "1", through_sequence = 1, head_sequence = 1}},
+                {name = "fraction", fields = {revision = 1, through_sequence = 1.5, head_sequence = 2}},
+                {name = "authority", fields = {revision = 1, through_sequence = 1, head_sequence = 1, owner_authority = 7}},
+                {name = "outcome", fields = {revision = 1, through_sequence = 1, head_sequence = 1,
+                    status = status("idle", {last_outcome = {kind = "receipt", outcome = "unknown", at_sequence = 1}})}},
+                {name = "waiting id", fields = {revision = 1, through_sequence = 1, head_sequence = 1,
+                    status = status("waiting", {waiting_message_ids = {string.rep("x", bounds.MAX_ID_BYTES + 1)}})}},
+            }
+            for _, case in ipairs(cases) do
+                local value: Object = {owner_authority = "auth-1", owner_incarnation = 1,
+                    status = status("idle")}
+                for key, item in pairs(case.fields) do value[key] = item end
+                local r = reader.new()
+                reader.bind(r, "t-1")
+                reader.apply_read(r, r.generation, ok(value))
+                test.eq(r.availability, "unavailable", case.name)
+                test.is_nil(r.status, case.name)
+            end
         end)
         test.it("fences a delayed reply from the previous owner after a same-thread replacement", function()
             local r = reader.new()
@@ -103,7 +127,7 @@ local function define_tests()
         test.it("shows an unreachable owner as unavailable, never idle, keeping the last status", function()
             local r = reader.new()
             reader.bind(r, "t-1")
-            reader.apply_read(r, r.generation, ok({revision = 3, through_sequence = 9, head_sequence = 9, owner_authority = "auth-1", status = status("running", {running_actions = 1})}))
+            reader.apply_read(r, r.generation, ok({revision = 3, through_sequence = 9, head_sequence = 9, owner_authority = "auth-1", owner_incarnation = 1, status = status("running", {running_actions = 1})}))
             reader.lost(r)
             test.eq(r.availability, "unavailable")
             test.eq(r.detail, "no answer from the thread owner")
@@ -124,16 +148,16 @@ local function define_tests()
         test.it("does not lower the observed head on an older update", function()
             local r = reader.new()
             reader.bind(r, "t-1")
-            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 60, owner_authority = "auth-1", status = status("running")}))
-            reader.apply_update(r, r.generation, ok({revision = 2, through_sequence = 20, head_sequence = 20, owner_authority = "auth-1"}))
+            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 60, owner_authority = "auth-1", owner_incarnation = 1, status = status("running")}))
+            reader.apply_update(r, r.generation, ok({revision = 2, through_sequence = 20, head_sequence = 20, owner_authority = "auth-1", owner_incarnation = 1}))
             test.eq(r.head_sequence, 60)
             test.is_true(reader.needs_refresh(r))
         end)
         test.it("keeps a newer known head when the same projection is read again", function()
             local r = reader.new()
             reader.bind(r, "t-1")
-            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 60, owner_authority = "auth-1", status = status("running")}))
-            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 40, owner_authority = "auth-1", status = status("running")}))
+            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 60, owner_authority = "auth-1", owner_incarnation = 1, status = status("running")}))
+            reader.apply_read(r, r.generation, ok({revision = 4, through_sequence = 40, head_sequence = 40, owner_authority = "auth-1", owner_incarnation = 1, status = status("running")}))
             test.eq(r.head_sequence, 60)
             test.eq(r.availability, "stale")
             test.is_true(reader.needs_refresh(r))
@@ -141,7 +165,7 @@ local function define_tests()
         test.it("coalesces a change-wait wakeup into one pending refresh", function()
             local r = reader.new()
             reader.bind(r, "t-1")
-            reader.apply_read(r, r.generation, ok({revision = 1, through_sequence = 5, head_sequence = 5, owner_authority = "auth-1", status = status("idle")}))
+            reader.apply_read(r, r.generation, ok({revision = 1, through_sequence = 5, head_sequence = 5, owner_authority = "auth-1", owner_incarnation = 1, status = status("idle")}))
             test.is_false(reader.needs_refresh(r))
             reader.apply_watch(r, r.generation, ok({status = "ready", scanned_through = 5, head_sequence = 7}))
             test.is_true(reader.needs_refresh(r))

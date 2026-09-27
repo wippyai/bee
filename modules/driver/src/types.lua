@@ -60,12 +60,17 @@ type RequiredFile = {variable: string, path: string, default_directory: string?}
 -- Evidence is checked by placement in the selected provider home. Paths are
 -- alternatives: any existing file is enough. The command is display text.
 type LoginEvidence = {provider: string, command: string, files: {RequiredFile}}
-type ProviderHomeFile = {source_path: string?, path: string, kind: "login" | "config" | "state", optional: boolean, write_back: boolean}
+type ProviderHomeFile =
+    {source_path: string, path: string, kind: "login", optional: boolean, write_back: boolean}
+    | {source_path: string, path: string, kind: "config", optional: boolean, write_back: false}
+    | {source_path: nil, path: string, kind: "state", optional: boolean, write_back: false}
 type ProviderHomeEnvironment = {variable: string, directory: string}
 -- A private managed home receives only these provider-owned files from the
 -- machine login source. `variable` and `directory` select the child CLI's
 -- provider home; files stay relative to HOME so the projection is auditable.
-type ProviderHome = {provider: string, private: boolean, variable: string?, directory: string?, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
+type ProviderHome =
+    {provider: string, private: boolean, variable: string, directory: string, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
+    | {provider: string, private: boolean, variable: nil, directory: nil, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
 type Launch = {
     executable: string,
     -- Arguments only. Placement prepends the separately selected executable.
@@ -100,8 +105,21 @@ local values = require("values")
 local M = {}
 -- Executable-backed provider login flows remain an explicit integration gate.
 M.AUTHENTICATION_STATUS = "unproven"
+type GitWritableRootsAdapters = {
+    CODEX_WORKSPACE_WRITE: "codex_workspace_write",
+    CLAUDE_ADD_DIR: "claude_add_dir",
+    AGY_ADD_DIR: "agy_add_dir",
+}
+local git_writable_roots_adapters: GitWritableRootsAdapters = {
+    CODEX_WORKSPACE_WRITE = "codex_workspace_write",
+    CLAUDE_ADD_DIR = "claude_add_dir",
+    AGY_ADD_DIR = "agy_add_dir",
+}
+M.GIT_WRITABLE_ROOTS_ADAPTERS = git_writable_roots_adapters
 function M.git_writable_roots_adapter(value: unknown): GitWritableRootsAdapter?
-    if value == "codex_workspace_write" or value == "claude_add_dir" or value == "agy_add_dir" then
+    if value == git_writable_roots_adapters.CODEX_WORKSPACE_WRITE
+        or value == git_writable_roots_adapters.CLAUDE_ADD_DIR
+        or value == git_writable_roots_adapters.AGY_ADD_DIR then
         return value
     end
     return nil

@@ -7,8 +7,10 @@
 local text = require("text")
 local caller = require("caller")
 local frame = require("frame")
+local bounds = require("bounds")
 
-type Root = {root_ref: string, access: string}
+type Access = "read" | "write"
+type Root = {root_ref: string, access: Access}
 type Folder = {name: string, workspace_id: string?}
 type Intent = {target: string, request: {[string]: unknown}}
 -- held names the workspace that holds the folder shown, when one does.
@@ -28,8 +30,7 @@ function M.new(): Picker
 end
 
 local function object(value: unknown): Object?
-    if type(value) ~= "table" then return nil end
-    return value :: Object
+    return bounds.object(value)
 end
 
 local function failure(reply: caller.Reply): string
@@ -39,8 +40,9 @@ local function failure(reply: caller.Reply): string
 end
 
 local function identifier(value: unknown): string?
-    if type(value) ~= "string" or value == "" or #value > 160 or value:find("[%c/]") then return nil end
-    return value
+    local id = bounds.id(value)
+    if not id or id:find("/") then return nil end
+    return id
 end
 
 -- One folder name: no separator, no control character, never "." or "..".
@@ -51,8 +53,17 @@ function M.name(value: unknown): string?
 end
 
 local function workspace(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
-    return value
+    local id = bounds.id(value)
+    if not id or #id ~= 32 or id:find("[^0-9a-f]") then return nil end
+    return id
+end
+
+local function fields(value: Object, allowed: {string}): boolean
+    return bounds.fields(value, allowed) == nil
+end
+
+local function fail(picker: Picker, message: string)
+    picker.error = text.bound(message, 200)
 end
 
 function M.join(path: string, child: string): string
@@ -80,20 +91,28 @@ end
 function M.apply_roots(picker: Picker, reply: caller.Reply)
     local value = object(reply.value)
     if not reply.ok or not value then
-        picker.error = failure(reply)
+        fail(picker, failure(reply))
         return
     end
+    if not fields(value, {"roots"}) then fail(picker, "The roots reply has unknown fields"); return end
+    local listed, list_error = bounds.array(value.roots, M.PAGE)
+    if not listed then fail(picker, "The roots reply is malformed: " .. tostring(list_error)); return end
     local roots: {Root} = {}
-    local listed = object(value.roots)
-    if listed then
-        for _, entry in ipairs(listed :: {unknown}) do
-            local root = object(entry)
-            local ref = root and identifier(root.root_ref) or nil
-            local access = root and root.access or nil
-            if ref and (access == "read" or access == "write") and #roots < M.PAGE then
-                roots[#roots + 1] = {root_ref = ref, access = access :: string}
-            end
+    local previous = ""
+    for index, entry in ipairs(listed) do
+        local root = object(entry)
+        if not root or not fields(root, {"root_ref", "access"}) then
+            fail(picker, "Root " .. tostring(index) .. " is malformed")
+            return
         end
+        local ref = identifier(root.root_ref)
+        local access = bounds.member(root.access, {"read", "write"})
+        if not ref or ref <= previous or not access then
+            fail(picker, "Root " .. tostring(index) .. " is malformed")
+            return
+        end
+        roots[index] = {root_ref = ref, access = access}
+        previous = ref
     end
     picker.roots, picker.error, picker.selected = roots, nil, 1
 end
@@ -113,24 +132,63 @@ function M.apply_folders(picker: Picker, reply: caller.Reply)
     if not root then return end
     local value = object(reply.value)
     if not reply.ok or not value then
-        picker.error = failure(reply)
+        fail(picker, failure(reply))
         return
     end
-    if value.root_ref ~= root.root_ref or value.path ~= picker.path then return end
+    if not fields(value, {"root_ref", "path", "access", "workspace_id", "folders", "next_after"}) then
+        fail(picker, "The folder reply has unknown fields")
+        return
+    end
+    local root_ref = identifier(value.root_ref)
+    local path, path_error = bounds.subpath(value.path)
+    if not root_ref or path == nil then
+        fail(picker, "The folder reply has an invalid location: " .. tostring(path_error or "root_ref"))
+        return
+    end
+    if root_ref ~= root.root_ref or path ~= picker.path then return end
+    if bounds.member(value.access, {"read", "write"}) ~= root.access then
+        fail(picker, "The admitted root access changed; refresh the roots")
+        return
+    end
+    local held: string? = nil
+    if value.workspace_id ~= nil then
+        held = workspace(value.workspace_id)
+        if not held then fail(picker, "The folder reply has an invalid workspace identity"); return end
+    end
+    local listed, list_error = bounds.array(value.folders, M.PAGE)
+    if not listed then fail(picker, "The folder list is malformed: " .. tostring(list_error)); return end
     local folders: {Folder} = {}
-    local listed = object(value.folders)
-    if listed then
-        for _, entry in ipairs(listed :: {unknown}) do
-            local folder = object(entry)
-            local folder_name = folder and M.name(folder.name) or nil
-            if folder and folder_name and #folders < M.PAGE and #M.join(picker.path, folder_name) <= M.PATH_LIMIT then
-                folders[#folders + 1] = {name = folder_name, workspace_id = workspace(folder.workspace_id)}
-            end
+    local previous = ""
+    for index, entry in ipairs(listed) do
+        local folder = object(entry)
+        if not folder or not fields(folder, {"name", "workspace_id"}) then
+            fail(picker, "Folder " .. tostring(index) .. " is malformed")
+            return
+        end
+        local folder_name = M.name(folder.name)
+        local folder_workspace: string? = nil
+        if folder.workspace_id ~= nil then
+            folder_workspace = workspace(folder.workspace_id)
+        end
+        if not folder_name or folder_name <= previous or #M.join(picker.path, folder_name) > M.PATH_LIMIT
+            or (folder.workspace_id ~= nil and not folder_workspace) then
+            fail(picker, "Folder " .. tostring(index) .. " is malformed")
+            return
+        end
+        folders[index] = {name = folder_name, workspace_id = folder_workspace}
+        previous = folder_name
+    end
+    local next_after: string? = nil
+    if value.next_after ~= nil then
+        next_after = M.name(value.next_after)
+        if not next_after or #folders == 0 or next_after ~= folders[#folders].name then
+            fail(picker, "The folder cursor does not match the end of its page")
+            return
         end
     end
     picker.folders, picker.error, picker.selected = folders, nil, 1
-    picker.held = workspace(value.workspace_id)
-    picker.next_after = M.name(value.next_after)
+    picker.held = held
+    picker.next_after = next_after
 end
 
 local function reset(picker: Picker)

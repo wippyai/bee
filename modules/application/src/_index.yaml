@@ -30,6 +30,8 @@ entries:
 - name: caller
   kind: library.lua
   source: file://caller.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: folder_picker
   kind: library.lua
   source: file://folder_picker.lua
@@ -37,6 +39,7 @@ entries:
     text: bee.application:text
     caller: bee.application:caller
     frame: bee.application:frame
+    bounds: bee.threads.records:bounds
 - name: agent_protocol
   kind: library.lua
   source: file://agent_protocol.lua
@@ -49,22 +52,31 @@ entries:
   imports:
     caller: bee.application:caller
     agent_protocol: bee.application:agent_protocol
+    bounds: bee.threads.records:bounds
+    record_types: bee.threads.records:types
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua
   modules: [process, channel, time, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
 - name: status_reader
   kind: library.lua
   source: file://status_reader.lua
   imports:
-    text: bee.application:text
+    bounds: bee.threads.records:bounds
     caller: bee.application:caller
+    text: bee.application:text
 - name: status_surface
   kind: library.lua
   source: file://status_surface.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: interaction
   kind: library.lua
   source: file://interaction.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
@@ -82,6 +94,8 @@ entries:
   source: file://thread_protocol.lua
   imports:
     bounds: bee.threads.records:bounds
+    record: bee.threads.records:record
+    record_types: bee.threads.records:types
 - name: viz
   kind: library.lua
   source: file://viz.lua

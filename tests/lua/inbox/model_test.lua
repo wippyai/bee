@@ -7,6 +7,7 @@ local test = require("test")
 local json = require("json")
 local model = require("model")
 local inbox = require("inbox")
+local caller = require("caller")
 type Object = {[string]: unknown}
 local function view(id: string, revision: integer, state: string, extra: Object?): Object
     local item: Object = {approval_id = id, workspace_id = "ws-1", requester_id = "bee.test.requester", request_kind = "permission", policy = "inbox-test",
@@ -16,11 +17,53 @@ local function view(id: string, revision: integer, state: string, extra: Object?
     for key, value in pairs(extra or {}) do item[key] = value end
     return item
 end
+local function reply(raw: Object): model.Reply
+    local decoded = model.decode_reply(raw)
+    if not decoded then error("invalid approval reply fixture") end
+    return decoded
+end
 local function page(changes: {Object}, next_seq: integer, more: boolean): model.Reply
-    return {ok = true, error = nil, value = {changes = changes, next_seq = next_seq, more = more}, replayed = false}
+    return reply({ok = true, error = nil, value = {changes = changes, next_seq = next_seq, more = more}, replayed = false})
 end
 local function define_tests()
     test.describe("Inbox model", function()
+        test.it("decodes inbox-specific reset and conflict data without widening generic caller replies", function()
+            local reset_raw: Object = {ok = false, error = {code = "RESET_REQUIRED", message = "compacted", retryable = true}, value = {oldest_seq = 7}, replayed = false}
+            local reset = model.decode_reply(reset_raw)
+            test.not_nil(reset)
+            if not reset then error("reset reply was rejected") end
+            test.eq(reset.kind, "reset")
+            if reset.kind == "reset" then
+                test.eq(reset.oldest_seq, 7)
+                test.is_true(reset.retryable == true)
+            end
+
+            local conflict_raw: Object = {ok = false, error = {code = "CONFLICT", message = "already decided", retryable = false},
+                value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.alice"}), replayed = false}
+            local conflict = model.decode_reply(conflict_raw)
+            test.not_nil(conflict)
+            if not conflict then error("conflict reply was rejected") end
+            test.eq(conflict.kind, "conflict")
+            if conflict.kind == "conflict" then
+                test.eq(conflict.request.approval_id, "r1")
+                test.is_true(conflict.retryable == false)
+            end
+            test.is_nil(caller.decode(conflict_raw))
+
+            local settled = model.decode_reply({ok = false, error = {code = "INVALID_STATE", message = "request expired"},
+                value = view("r1", 3, "expired"), replayed = false})
+            test.not_nil(settled)
+            if settled and settled.kind == "settled" then
+                test.eq(settled.request.state, "expired")
+            else
+                error("settled reply was not decoded")
+            end
+
+            test.is_nil(model.decode_reply({ok = false, error = {code = "DENIED", message = "no"}, value = {oldest_seq = 7}}))
+            test.is_nil(model.decode_reply({ok = false, error = {code = "DENIED", message = "no", retryable = "yes"}, value = nil}))
+            test.is_nil(model.decode_reply({ok = false, error = {code = "RESET_REQUIRED", message = "compacted"}, value = {oldest_seq = 1, cursor = 4}}))
+            test.is_nil(model.decode_reply({ok = true, error = nil, value = view("r1", 1, "pending"), unknown = true}))
+        end)
         test.it("bounds text and replaces every control character, cutting on a character boundary", function()
             local hostile = "run \27[31mred\27[0m\r\nnow\7 " .. string.rep("é", 400)
             local cleaned = model.text(hostile, 64)
@@ -47,9 +90,9 @@ local function define_tests()
             test.eq(rows[1].approval_id, "r2")
             test.eq(rows[1].effect, "Bash")
             test.eq(rows[1].target, "attempt-r2 action action-r2")
-            test.is_true(model.apply_inbox(state, "ws-1", {ok = false, error = {code = "RESET_REQUIRED", message = "compacted"}, value = {oldest_seq = 7}, replayed = false}))
+            test.is_true(model.apply_inbox(state, "ws-1", reply({ok = false, error = {code = "RESET_REQUIRED", message = "compacted"}, value = {oldest_seq = 7}, replayed = false})))
             test.eq(model.inbox_intent(state, "ws-1").request.after_seq, 6)
-            test.is_false(model.apply_inbox(state, "ws-1", {ok = false, error = {code = "DENIED", message = "caller may not read the inbox"}, value = nil, replayed = false}))
+            test.is_false(model.apply_inbox(state, "ws-1", reply({ok = false, error = {code = "DENIED", message = "caller may not read the inbox"}, value = nil, replayed = false})))
             test.is_true(tostring(state.unavailable["ws-1"]):find("DENIED", 1, true) ~= nil)
         end)
         test.it("asks a decision only of an opened pending request at the viewed revision, one at a time", function()
@@ -58,7 +101,7 @@ local function define_tests()
             local _, unopened = model.decision_intent(state, "q1", "approved")
             test.eq(unopened, "open the request before deciding")
             model.select(state, "r1")
-            model.apply_read(state, "r1", {ok = true, error = nil, value = view("r1", 1, "pending"), replayed = false})
+            model.apply_read(state, "r1", reply({ok = true, error = nil, value = view("r1", 1, "pending"), replayed = false}))
             test.not_nil(state.detail)
             local _, bad = model.decision_intent(state, "q1", "maybe")
             test.eq(bad, "decision must be approved or denied")
@@ -69,7 +112,7 @@ local function define_tests()
             test.eq(intent.request.proposal_digest, string.rep("a", 64))
             local _, busy = model.decision_intent(state, "q2", "denied")
             test.eq(busy, "a request is already awaiting the owner")
-            model.apply_answer(state, "q1", {ok = true, error = nil, value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.alice"}), replayed = false})
+            model.apply_answer(state, "q1", reply({ok = true, error = nil, value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.alice"}), replayed = false}))
             test.is_nil(state.pending)
             test.eq(state.rows["r1"].state, "decided")
             test.eq(state.notice, "Recorded: approved by bee.test.alice")
@@ -80,10 +123,10 @@ local function define_tests()
             local state = model.new({"ws-1"})
             model.apply_inbox(state, "ws-1", page({{seq = 1, approval_id = "r1", revision = 1, request = view("r1", 1, "pending")}}, 1, false))
             model.select(state, "r1")
-            model.apply_read(state, "r1", {ok = true, error = nil, value = view("r1", 1, "pending"), replayed = false})
+            model.apply_read(state, "r1", reply({ok = true, error = nil, value = view("r1", 1, "pending"), replayed = false}))
             local intent = model.decision_intent(state, "q1", "denied")
             test.not_nil(intent)
-            model.apply_answer(state, "q1", {ok = false, error = {code = "CONFLICT", message = "request was decided approved by bee.test.bob"}, value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.bob"}), replayed = false})
+            model.apply_answer(state, "q1", reply({ok = false, error = {code = "CONFLICT", message = "request was decided approved by bee.test.bob"}, value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.bob"}), replayed = false}))
             test.is_nil(state.pending)
             test.eq(state.notice, "CONFLICT: approved by bee.test.bob at revision 2")
             test.eq((state.detail :: Object).decision, "approved")
@@ -95,16 +138,16 @@ local function define_tests()
             local state = model.new({"ws-1"})
             model.apply_inbox(state, "ws-1", page({{seq = 1, approval_id = "r1", revision = 1, request = view("r1", 1, "pending")}}, 1, false))
             model.select(state, "r1")
-            model.apply_read(state, "r1", {ok = true, error = nil, value = view("r1", 1, "pending"), replayed = false})
+            model.apply_read(state, "r1", reply({ok = true, error = nil, value = view("r1", 1, "pending"), replayed = false}))
             test.not_nil(model.decision_intent(state, "q1", "approved"))
-            model.apply_answer(state, "other", {ok = true, error = nil, value = view("r1", 2, "decided"), replayed = false})
+            model.apply_answer(state, "other", reply({ok = true, error = nil, value = view("r1", 2, "decided"), replayed = false}))
             test.not_nil(state.pending)
             model.apply_answer(state, "q1", nil)
             test.not_nil(state.pending)
             local recovery = model.recovery_intent(state)
             if not recovery then error("no recovery intent") end
             test.eq(recovery.target, "bee.approvals.binding:read")
-            model.apply_recovery(state, {ok = true, error = nil, value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.alice"}), replayed = false})
+            model.apply_recovery(state, reply({ok = true, error = nil, value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.alice"}), replayed = false}))
             test.is_nil(state.pending)
             test.eq(state.notice, "Recovered: approved by bee.test.alice")
             test.not_nil(model.decision_intent(state, "q4", "approved") == nil)
@@ -112,13 +155,13 @@ local function define_tests()
         test.it("pins confirmation to the exact viewed owner revision and digest", function()
             local state = model.new({"ws-1"})
             model.select(state, "r1")
-            model.apply_read(state, "r1", {ok = true, value = view("r1", 1, "pending")})
+            model.apply_read(state, "r1", reply({ok = true, value = view("r1", 1, "pending")}))
             local asked = model.confirmation(state)
             if not asked then error("missing confirmation") end
             test.is_true(model.confirmation_matches(state, asked))
-            model.apply_read(state, "r1", {ok = true, value = view("r1", 2, "pending")})
+            model.apply_read(state, "r1", reply({ok = true, value = view("r1", 2, "pending")}))
             test.is_false(model.confirmation_matches(state, asked))
-            model.apply_read(state, "r1", {ok = true, value = view("r1", 2, "pending", {proposal_digest = string.rep("b", 64)})})
+            model.apply_read(state, "r1", reply({ok = true, value = view("r1", 2, "pending", {proposal_digest = string.rep("b", 64)})}))
             test.is_false(model.confirmation_matches(state, asked))
             model.select(state, "r2")
             test.is_false(model.confirmation_matches(state, asked))
@@ -126,16 +169,16 @@ local function define_tests()
         test.it("keeps an unknown decision pending when recovery is unavailable", function()
             local state = model.new({"ws-1"})
             model.select(state, "r1")
-            model.apply_read(state, "r1", {ok = true, value = view("r1", 1, "pending")})
+            model.apply_read(state, "r1", reply({ok = true, value = view("r1", 1, "pending")}))
             test.not_nil(model.decision_intent(state, "q1", "approved"))
             model.apply_answer(state, "q1", nil)
-            model.apply_recovery(state, {ok = false, error = {code = "UNAVAILABLE", message = "offline"}, value = nil})
+            model.apply_recovery(state, reply({ok = false, error = {code = "UNAVAILABLE", message = "offline"}, value = nil}))
             test.not_nil(state.pending)
             test.is_nil(model.decision_intent(state, "q2", "denied"))
-            model.apply_recovery(state, {ok = true, value = view("r1", 1, "pending")})
+            model.apply_recovery(state, reply({ok = true, value = view("r1", 1, "pending")}))
             test.not_nil(state.pending)
             test.is_nil(model.decision_intent(state, "q3", "denied"))
-            model.apply_recovery(state, {ok = true, value = view("r1", 2, "decided", {decision = "approved"})})
+            model.apply_recovery(state, reply({ok = true, value = view("r1", 2, "decided", {decision = "approved"})}))
             test.is_nil(state.pending)
         end)
         test.it("renders a proposal payload only as bounded sorted lines and keeps the checkpoint to selection", function()

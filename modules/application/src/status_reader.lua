@@ -1,16 +1,7 @@
--- MIT. A typed status reader for a client session: it drives the thread
--- owner's status projection and hands the shell presentation values,
--- performing no I/O of its own. The owner it belongs to calls the intents
--- this reader emits and feeds the replies back; the presenter renders the
--- value and calls nothing. The reader advances the projection through the
--- authorized bounded update, reads the caller-derived status, and rechecks
--- through the read-only change-wait, coalescing wakeups into one refresh.
--- It carries thread identity, owner authority, its own generation and the
--- projection revision and cursor, fences replies after a thread switch or
--- replacement, shows unavailable or stale explicitly rather than as idle,
--- and never treats a lagging projection as certainty.
+-- MIT. Status projection state machine for a client session.
 local text = require("text")
 local caller = require("caller")
+local bounds = require("bounds")
 local M = {}
 M.UPDATE = "bee.threads.projection:status_update"
 M.READ = "bee.threads.projection:status_read"
@@ -20,11 +11,16 @@ type Reply = caller.Reply
 type Object = {[string]: unknown}
 type Intent = {generation: integer, target: string, request: Object}
 type Availability = "unbound" | "loading" | "ready" | "stale" | "unavailable"
+type Activity = "idle" | "running" | "waiting" | "uncertain"
+type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
+type LastOutcome = {kind: "turn" | "receipt", outcome: Outcome, at_sequence: integer}
+type Owner = {authority: string, incarnation: integer}
 type Status = {
-    activity: string, waiting_on_you: boolean, waiting_message_ids: {string},
+    activity: Activity, stale: boolean, waiting_on_you: boolean, waiting_message_ids: {string},
     open_requests: integer, pending_approvals: integer, running_actions: integer,
-    uncertain_actions: integer, open_actions: integer, last_outcome: unknown,
+    uncertain_actions: integer, open_actions: integer, last_outcome: LastOutcome?,
 }
+type Projection = {revision: integer, through_sequence: integer, head_sequence: integer, owner: Owner?, status: Status?}
 type Value = {
     thread_id: string?, generation: integer, owner_authority: string, owner_incarnation: integer,
     availability: Availability, detail: string,
@@ -35,12 +31,11 @@ type Reader = {
     revision: integer, through_sequence: integer, head_sequence: integer,
     status: Status?, availability: Availability, detail: string, needs_refresh: boolean,
 }
+
 function M.new(): Reader
     return {thread_id = nil, generation = 0, owner_authority = "", owner_incarnation = 0, revision = 0, through_sequence = 0, head_sequence = 0,
         status = nil, availability = "unbound", detail = "", needs_refresh = false}
 end
--- Bind to a thread: a new generation fences every reply from the previous
--- binding, and the reader starts from nothing known about the new thread.
 function M.bind(reader: Reader, thread_id: string)
     reader.thread_id = thread_id
     reader.generation = reader.generation + 1
@@ -54,8 +49,6 @@ function M.bind(reader: Reader, thread_id: string)
     reader.detail = ""
     reader.needs_refresh = false
 end
--- Unbind: the reader shows nothing and its owner cancels any outstanding
--- change-wait. A late reply for the old binding is fenced by generation.
 function M.unbind(reader: Reader)
     reader.thread_id = nil
     reader.generation = reader.generation + 1
@@ -69,74 +62,127 @@ local function fault_text(reply: Reply): string
     if not fault then return "no answer" end
     return text.bound(fault.code .. ": " .. fault.message, 200)
 end
-local function object(value: unknown): Object
-    if type(value) == "table" then return value :: Object end
-    return {}
-end
-local function integer(value: unknown): integer
-    local number = tonumber(value)
-    if not number then return 0 end
-    return math.floor(number)
-end
--- A reply is applied only under the current generation; anything else is a
--- late reply from a superseded binding and is dropped.
 local function current(reader: Reader, generation: integer): boolean
     return reader.thread_id ~= nil and generation == reader.generation
 end
--- Adopts the owner identity a reply carries. A changed durable authority is
--- a replacement owner: the projection is read from scratch, never continued.
--- A projection revision behind what the reader holds is a stale reply under
--- the same owner and moves nothing.
-local function accept_owner(reader: Reader, value: Object): boolean
-    local authority = tostring(value.owner_authority or "")
-    local incarnation = integer(value.owner_incarnation)
-    if authority == "" then return true end
+local function outcome(value: unknown): Outcome?
+    if value == "succeeded" then return "succeeded" end
+    if value == "failed" then return "failed" end
+    if value == "cancelled" then return "cancelled" end
+    if value == "uncertain" then return "uncertain" end
+    return nil
+end
+local function activity(value: unknown): Activity?
+    if value == "idle" then return "idle" end
+    if value == "running" then return "running" end
+    if value == "waiting" then return "waiting" end
+    if value == "uncertain" then return "uncertain" end
+    return nil
+end
+local function decode_last_outcome(value: unknown): LastOutcome?
+    if value == nil then return nil end
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"kind", "outcome", "at_sequence"}) then return nil end
+    local kind = bounds.member(object.kind, {"turn", "receipt"})
+    local selected_outcome = outcome(object.outcome)
+    local sequence = bounds.sequence(object.at_sequence)
+    if not kind or not selected_outcome or not sequence then return nil end
+    local selected_kind: "turn" | "receipt"
+    if kind == "turn" then selected_kind = "turn"
+    elseif kind == "receipt" then selected_kind = "receipt"
+    else return nil end
+    return {kind = selected_kind, outcome = selected_outcome, at_sequence = sequence}
+end
+local function decode_status(value: unknown): Status?
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"activity", "stale", "waiting_on_you", "waiting_message_ids",
+        "open_requests", "pending_approvals", "running_actions", "uncertain_actions", "open_actions", "last_outcome"}) then return nil end
+    local selected_activity = activity(object.activity)
+    local waiting = bounds.ids(object.waiting_message_ids, true)
+    local last = decode_last_outcome(object.last_outcome)
+    if object.last_outcome ~= nil and not last then return nil end
+    if not selected_activity or type(object.stale) ~= "boolean" or type(object.waiting_on_you) ~= "boolean" or not waiting then return nil end
+    local open_requests = bounds.count(object.open_requests)
+    local pending_approvals = bounds.count(object.pending_approvals)
+    local running_actions = bounds.count(object.running_actions)
+    local uncertain_actions = bounds.count(object.uncertain_actions)
+    local open_actions = bounds.count(object.open_actions)
+    if not open_requests or not pending_approvals or not running_actions or not uncertain_actions or not open_actions then return nil end
+    return {activity = selected_activity, stale = object.stale, waiting_on_you = object.waiting_on_you,
+        waiting_message_ids = waiting, open_requests = open_requests, pending_approvals = pending_approvals,
+        running_actions = running_actions, uncertain_actions = uncertain_actions, open_actions = open_actions,
+        last_outcome = last}
+end
+local function decode_projection(value: unknown, include_status: boolean): (Projection?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "projection value must be an object" end
+    local allowed = {"revision", "through_sequence", "head_sequence", "checkpoint", "digest", "owner_authority", "owner_incarnation"}
+    if include_status then allowed[#allowed + 1] = "status" end
+    local unknown = bounds.fields(object, allowed)
+    if unknown then return nil, "projection value: " .. unknown end
+    local revision = bounds.count(object.revision)
+    local through = bounds.cursor(object.through_sequence)
+    local head = bounds.cursor(object.head_sequence)
+    if not revision or not through or not head or through > head then return nil, "projection cursors are malformed" end
+    if not bounds.object(object.checkpoint) then return nil, "projection checkpoint must be an object" end
+    if object.digest ~= nil and not bounds.text(object.digest, 64) then return nil, "projection digest is malformed" end
+    local owner: Owner? = nil
+    if object.owner_authority ~= nil or object.owner_incarnation ~= nil then
+        local authority = bounds.text(object.owner_authority, 160)
+        local incarnation = bounds.count(object.owner_incarnation)
+        if not authority or (authority ~= "" and not bounds.id(authority)) or not incarnation then
+            return nil, "projection owner identity is malformed"
+        end
+        if (authority == "") ~= (incarnation == 0) then return nil, "projection owner identity is inconsistent" end
+        owner = {authority = authority, incarnation = incarnation}
+    elseif include_status then return nil, "status projection has no owner identity" end
+    local status: Status? = nil
+    if include_status then
+        local status_error: string?
+        status, status_error = decode_status(object.status)
+        if not status then return nil, "projection status is malformed: " .. tostring(status_error or "invalid value") end
+    end
+    return {revision = revision, through_sequence = through, head_sequence = head, owner = owner, status = status}, nil
+end
+local function accept_owner(reader: Reader, owner: Owner?): boolean
+    if not owner or owner.authority == "" then return true end
     if reader.owner_authority == "" then
-        reader.owner_authority = authority
-        reader.owner_incarnation = incarnation
+        reader.owner_authority = owner.authority
+        reader.owner_incarnation = owner.incarnation
         return true
     end
-    if authority ~= reader.owner_authority then
-        -- A replacement owner: retire every outstanding intent by advancing
-        -- the generation, so a delayed reply from the previous authority
-        -- cannot switch the reader back, and read the new owner from scratch.
+    if owner.authority ~= reader.owner_authority then
         reader.generation = reader.generation + 1
-        reader.owner_authority = authority
-        reader.owner_incarnation = incarnation
+        reader.owner_authority = owner.authority
+        reader.owner_incarnation = owner.incarnation
         reader.revision = 0
         reader.through_sequence = 0
         reader.head_sequence = 0
         reader.status = nil
         return true
     end
-    -- Same authority: incarnation and revision compare only within it.
-    if incarnation > reader.owner_incarnation then reader.owner_incarnation = incarnation end
+    if owner.incarnation > reader.owner_incarnation then reader.owner_incarnation = owner.incarnation end
     return true
+end
+local function unavailable(reader: Reader, detail: string)
+    reader.availability = "unavailable"
+    reader.detail = detail
 end
 function M.update_intent(reader: Reader, idempotency_key: string): Intent?
     if not reader.thread_id then return nil end
     return {generation = reader.generation, target = M.UPDATE, request = {thread_id = reader.thread_id, idempotency_key = idempotency_key}}
 end
--- The bounded update advances the projection. If it stops short of the head
--- its round budget ended; the reader marks itself stale and asks for another
--- bounded refresh rather than looping until caught up.
 function M.apply_update(reader: Reader, generation: integer, reply: Reply)
     if not current(reader, generation) then return end
-    if not reply.ok or type(reply.value) ~= "table" then
-        reader.availability = "unavailable"
-        reader.detail = fault_text(reply)
-        return
+    if not reply.ok then unavailable(reader, fault_text(reply)); return end
+    local projection, decode_error = decode_projection(reply.value, false)
+    if not projection then unavailable(reader, decode_error or "invalid status update from the thread owner"); return end
+    accept_owner(reader, projection.owner)
+    if projection.revision >= reader.revision then
+        reader.revision = projection.revision
+        reader.through_sequence = projection.through_sequence
     end
-    local value = object(reply.value)
-    accept_owner(reader, value)
-    local revision = integer(value.revision)
-    local through = integer(value.through_sequence)
-    local head = integer(value.head_sequence)
-    if revision >= reader.revision then
-        reader.revision = revision
-        reader.through_sequence = through
-    end
-    reader.head_sequence = math.max(reader.head_sequence, head)
+    reader.head_sequence = math.max(reader.head_sequence, projection.head_sequence)
     reader.needs_refresh = reader.through_sequence < reader.head_sequence
 end
 function M.read_intent(reader: Reader): Intent?
@@ -145,83 +191,47 @@ function M.read_intent(reader: Reader): Intent?
 end
 function M.apply_read(reader: Reader, generation: integer, reply: Reply)
     if not current(reader, generation) then return end
-    if not reply.ok or type(reply.value) ~= "table" then
-        reader.availability = "unavailable"
-        reader.detail = fault_text(reply)
-        return
+    if not reply.ok then unavailable(reader, fault_text(reply)); return end
+    local projection, decode_error = decode_projection(reply.value, true)
+    if not projection or not projection.status then
+        unavailable(reader, decode_error or "invalid status from the thread owner"); return
     end
-    local value = object(reply.value)
-    local status = object(value.status)
-    local activity = status.activity
-    if type(value.status) ~= "table" or (activity ~= "idle" and activity ~= "running"
-        and activity ~= "waiting" and activity ~= "uncertain") then
-        reader.availability = "unavailable"
-        reader.detail = "invalid status from the thread owner"
-        return
+    accept_owner(reader, projection.owner)
+    if projection.revision < reader.revision and reader.status ~= nil then return end
+    reader.revision = projection.revision
+    reader.through_sequence = projection.through_sequence
+    reader.head_sequence = math.max(reader.head_sequence, projection.head_sequence)
+    reader.status = projection.status
+    if reader.through_sequence < reader.head_sequence then
+        reader.availability = "stale"
+        reader.needs_refresh = true
+    else
+        reader.availability = "ready"
+        reader.detail = ""
+        reader.needs_refresh = false
     end
-    accept_owner(reader, value)
-    local revision = integer(value.revision)
-    -- A read older than what the reader holds is a stale reply; keep the
-    -- known status rather than moving backward.
-    if revision < reader.revision and reader.status ~= nil then return end
-    local through = integer(value.through_sequence)
-    local head = integer(value.head_sequence)
-    reader.revision = revision
-    reader.through_sequence = through
-    -- Projection revision and observed thread head advance independently.
-    -- A read of the same projection cannot erase a head already observed.
-    reader.head_sequence = math.max(reader.head_sequence, head)
-    reader.status = {
-        activity = tostring(status.activity or "idle"),
-        waiting_on_you = status.waiting_on_you == true,
-        waiting_message_ids = {},
-        open_requests = integer(status.open_requests),
-        pending_approvals = integer(status.pending_approvals),
-        running_actions = integer(status.running_actions),
-        uncertain_actions = integer(status.uncertain_actions),
-        open_actions = integer(status.open_actions),
-        last_outcome = status.last_outcome,
-    }
-    if type(status.waiting_message_ids) == "table" then
-        for _, id in ipairs(status.waiting_message_ids :: {unknown}) do
-            if type(id) == "string" then reader.status.waiting_message_ids[#reader.status.waiting_message_ids + 1] = id :: string end
-        end
-    end
-    if through < reader.head_sequence then reader.availability = "stale"; reader.needs_refresh = true
-    else reader.availability = "ready"; reader.detail = ""; reader.needs_refresh = false end
 end
--- The change-wait watches past the last observed head: armed when the reader
--- is caught up, it wakes only when the thread moves beyond what the reader
--- has already seen. It is register-then-recheck at the owner and grants no
--- subscription progress.
 function M.watch_intent(reader: Reader): Intent?
     if not reader.thread_id then return nil end
-    return {generation = reader.generation, target = M.WATCH, request = {thread_id = reader.thread_id, after_sequence = reader.head_sequence, wait_ms = M.WAIT_MS}}
+    return {generation = reader.generation, target = M.WATCH, request = {thread_id = reader.thread_id,
+        after_sequence = reader.head_sequence, wait_ms = M.WAIT_MS}}
 end
--- The change-wait is a wakeup hint only; its answer is a reason to refresh,
--- never subscription progress. It advances no cursor and reports nothing the
--- read does not.
 function M.apply_watch(reader: Reader, generation: integer, reply: Reply)
     if not current(reader, generation) then return end
     if reply.ok then reader.needs_refresh = true
     else reader.availability = reader.status ~= nil and "unavailable" or reader.availability; reader.detail = fault_text(reply) end
 end
--- Transport silence: the owner is unavailable; the last known status stays
--- visible, marked, and is never shown as idle.
 function M.lost(reader: Reader)
     if not reader.thread_id then return end
-    reader.availability = "unavailable"
-    reader.detail = "no answer from the thread owner"
+    unavailable(reader, "no answer from the thread owner")
 end
 function M.needs_refresh(reader: Reader): boolean
     return reader.thread_id ~= nil and reader.needs_refresh
 end
 function M.value(reader: Reader): Value
-    return {
-        thread_id = reader.thread_id, generation = reader.generation, owner_authority = reader.owner_authority,
+    return {thread_id = reader.thread_id, generation = reader.generation, owner_authority = reader.owner_authority,
         owner_incarnation = reader.owner_incarnation, availability = reader.availability, detail = reader.detail,
         status = reader.status, revision = reader.revision, through_sequence = reader.through_sequence,
-        head_sequence = reader.head_sequence, stale = reader.through_sequence < reader.head_sequence,
-    }
+        head_sequence = reader.head_sequence, stale = reader.through_sequence < reader.head_sequence}
 end
 return M

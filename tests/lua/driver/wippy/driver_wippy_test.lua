@@ -17,6 +17,8 @@ local time = require("time")
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, error: {code: string, message: string, retryable: boolean}?, value: any}
+type InboxInvoker = (string, Object) -> (unknown, string?)
+local WORKSPACE_ID = string.rep("a", 32)
 
 local THREAD_POLICIES = {
     "bee.threads:client_test_policy",
@@ -76,7 +78,7 @@ local function get_mock_url(): string
 end
 
 local function make_caller(): funcs.Executor
-    local actor = security.new_actor("carrier-tester")
+    local actor = security.new_actor("carrier-tester", {workspace_id = WORKSPACE_ID})
     local policies: {security.Policy} = {}
     for _, name in ipairs(THREAD_POLICIES) do
         local pol, err = security.policy(name)
@@ -88,10 +90,48 @@ end
 
 local function raw_call(target: string, req: Object): Object
     local caller = make_caller()
-    local reply, err = caller:call(target, req)
+    local request = req
+    if target == "bee.driver.wippy:run" and req.operation == "run" and req.workspace_id == nil then
+        local scoped: Object = {}
+        for key, value in pairs(req) do scoped[key] = value end
+        scoped.workspace_id = WORKSPACE_ID
+        request = scoped
+    end
+    local reply, err = caller:call(target, request)
     if err then error("call " .. target .. ": " .. tostring(err)) end
     if type(reply) ~= "table" then error(target .. " returned " .. type(reply)) end
     return reply :: Object
+end
+
+local function one_chunk(value: string): (integer) -> (string?, string?)
+    local delivered = false
+    return function(_: integer): (string?, string?)
+        if delivered then return nil, nil end
+        delivered = true
+        return value, nil
+    end
+end
+
+local function inbox_offer(): Object
+    return {thread_id = "thread-1", action_id = "action-1", inbox_sequence = 1, record_id = "record-1",
+        payload_digest = string.rep("a", 64), message_id = "message-1", message_kind = "notification",
+        content = {text = "follow up"}, sender_action_id = "sender-action", sender_thread_id = "sender-thread",
+        sender_node_id = "sender-node", state = "offered", dispatch = true, offer_count = 1}
+end
+
+local function inbox_reply(value: unknown): Object
+    return {ok = true, value = value}
+end
+
+local function inbox_call(fail_at: string?, failure: unknown, call_error: string?): InboxInvoker
+    return function(operation: string, _: Object): (unknown, string?)
+        if operation == fail_at then return failure, call_error end
+        if operation == "inbox_offer" then return inbox_reply(inbox_offer()), nil end
+        if operation == "inbox_transport" then
+            return inbox_reply({record_id = "record-1", inbox_sequence = 1, state = "transport_accepted"}), nil
+        end
+        return inbox_reply({record_id = "record-1", inbox_sequence = 1, state = "acknowledged"}), nil
+    end
 end
 
 local function driver_call(operation: string, req: Object): Object
@@ -234,10 +274,10 @@ local function seed_registry()
     end
 end
 
-local function define_tests()
+    local function define_tests()
     seed_registry()
     test.describe("Native Wippy Agent Driver", function()
-        local carrier_client = harness.principal("carrier-tester", THREAD_POLICIES)
+        local carrier_client = harness.principal("carrier-tester", THREAD_POLICIES, WORKSPACE_ID)
 
         local function new_thread(title: string): string
             return harness.thread(carrier_client, title)
@@ -245,11 +285,13 @@ local function define_tests()
 
         local function prepare(thread_id: string, action_id: string, attempt_id: string)
             seed_registry()
+            local admitted = harness.admitted()
+            admitted.principal_id = carrier_client.id
             harness.value(carrier_client:call("admit_action", {
                 thread_id = thread_id,
                 idempotency_key = harness.key(),
                 action_id = action_id,
-                admitted = harness.admitted(),
+                admitted = admitted,
             }))
             harness.value(carrier_client:call("prepare_attempt", {
                 thread_id = thread_id,
@@ -258,6 +300,18 @@ local function define_tests()
                 attempt_id = attempt_id,
                 prepared = harness.prepared(),
             }))
+        end
+
+        local function has_attempt_event(thread_id: string, prefix: string): boolean
+            local page = harness.value(carrier_client:call("read_after", {thread_id = thread_id, cursor = 0})) :: Object
+            for _, record in ipairs(page.records :: {Object}) do
+                local body = record.body
+                if type(body) == "table" then
+                    local event_key = (body :: Object).event_key
+                    if type(event_key) == "string" and event_key:find(prefix, 1, true) then return true end
+                end
+            end
+            return false
         end
 
         test.it("executes multi-turn conversation with tool calls and commits observations", function()
@@ -405,6 +459,148 @@ local function define_tests()
             test.is_true(tostring(val2.answer):find("Result:", 1, true) ~= nil)
         end)
 
+        test.it("rejects malformed SSE frames, incomplete streams, missing DONE and read errors", function()
+            local partial = 'data: {"choices":[{"index":0,"delta":{"content":"partial"}}]}\n\n'
+            local closed = false
+            local response, read_error = client.consume_stream(one_chunk(partial), function() closed = true end, nil)
+            test.is_nil(response)
+            test.is_true(tostring(read_error):find("before [DONE]", 1, true) ~= nil)
+            test.is_true(closed)
+
+            closed = false
+            local incomplete, incomplete_error = client.consume_stream(one_chunk(partial:sub(1, -3)), function() closed = true end, nil)
+            test.is_nil(incomplete)
+            test.is_true(tostring(incomplete_error):find("incomplete frame", 1, true) ~= nil)
+            test.is_true(closed)
+
+            closed = false
+            local oversized, oversized_error = client.consume_stream(one_chunk(string.rep("x", client.MAX_SSE_FRAME_BYTES + 1)),
+                function() closed = true end, nil)
+            test.is_nil(oversized)
+            test.is_true(tostring(oversized_error):find("frame SSE stream", 1, true) ~= nil)
+            test.is_true(closed)
+
+            closed = false
+            local stream_oversized, stream_size_error = client.consume_stream(one_chunk(string.rep("x", client.MAX_STREAM_BYTES + 1)),
+                function() closed = true end, nil)
+            test.is_nil(stream_oversized)
+            test.is_true(tostring(stream_size_error):find("SSE stream exceeds", 1, true) ~= nil)
+            test.is_true(closed)
+
+            local read_count = 0
+            closed = false
+            local failed, stream_error = client.consume_stream(function(_: integer): (string?, string?)
+                read_count = read_count + 1
+                if read_count == 1 then return partial, nil end
+                return nil, "fixture read failed"
+            end, function() closed = true end, nil)
+            test.is_nil(failed)
+            test.is_true(tostring(stream_error):find("fixture read failed", 1, true) ~= nil)
+            test.is_true(closed)
+        end)
+
+        test.it("rejects malformed tool arguments before any tool event is committed", function()
+            local thread_id = new_thread("Malformed Tool Arguments")
+            local action_id, attempt_id = "act-bad-args", "att-bad-args"
+            prepare(thread_id, action_id, attempt_id)
+            local res = raw_call("bee.driver.wippy:run", {
+                operation = "run", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id,
+                agent_ref = "bee.driver.wippy.test:test_agent", brief = "call_tool_bad_arguments",
+                host_config = {endpoint = get_mock_url(), stream = true},
+            })
+            test.is_false(res.ok)
+            test.eq((res.value :: Object).outcome, "failed")
+            test.is_false(has_attempt_event(thread_id, "tool_call:" .. attempt_id .. ":"))
+            test.is_false(has_attempt_event(thread_id, "tool_result:" .. attempt_id .. ":"))
+        end)
+
+        test.it("rejects a prospective checkpoint over its bound before tool execution", function()
+            local thread_id = new_thread("Large Tool Checkpoint")
+            local action_id, attempt_id = "act-large-checkpoint", "att-large-checkpoint"
+            prepare(thread_id, action_id, attempt_id)
+            local res = raw_call("bee.driver.wippy:run", {
+                operation = "run", thread_id = thread_id, action_id = action_id, attempt_id = attempt_id,
+                agent_ref = "bee.driver.wippy.test:test_agent", brief = "call_tool_large_checkpoint",
+                host_config = {endpoint = get_mock_url(), stream = false},
+            })
+            test.is_false(res.ok)
+            test.eq((res.value :: Object).outcome, "failed")
+            test.is_true(tostring((res.error :: Object).message):find("prospective tool checkpoint", 1, true) ~= nil)
+            test.is_false(has_attempt_event(thread_id, "tool_call:" .. attempt_id .. ":"))
+            test.is_false(has_attempt_event(thread_id, "tool_result:" .. attempt_id .. ":"))
+        end)
+
+        test.it("decodes checkpoint revision, message variants and terminal fields exactly", function()
+            local valid = {schema_revision = runner.CHECKPOINT_REVISION,
+                normalizer_state = {messages = {{role = "user", content = "resume"}}}}
+            local decoded, decode_error = runner.decode_checkpoint(valid)
+            if not decoded then error(tostring(decode_error)) end
+            test.eq(decoded.messages[1].role, "user")
+
+            local wrong_revision = {schema_revision = "bee.carrier.checkpoint@9", normalizer_state = {messages = {}}}
+            test.is_nil(runner.decode_checkpoint(wrong_revision))
+            local unknown_message = {schema_revision = runner.CHECKPOINT_REVISION,
+                normalizer_state = {messages = {{role = "user", content = "x", extra = true}}}}
+            test.is_nil(runner.decode_checkpoint(unknown_message))
+            local malformed_tool = {schema_revision = runner.CHECKPOINT_REVISION,
+                normalizer_state = {messages = {{role = "assistant", tool_calls = {{id = "call-1", kind = "function",
+                    name = "FileReport", arguments = "[]"}}}}}}
+            test.is_nil(runner.decode_checkpoint(malformed_tool))
+            local malformed_terminal = {schema_revision = runner.CHECKPOINT_REVISION,
+                normalizer_state = {messages = {}}, terminal = {outcome = "succeeded", unexpected = true}}
+            test.is_nil(runner.decode_checkpoint(malformed_terminal))
+            local sparse = {schema_revision = runner.CHECKPOINT_REVISION,
+                normalizer_state = {messages = {[1] = {role = "user", content = "x"}, [3] = {role = "user", content = "y"}}}}
+            test.is_nil(runner.decode_checkpoint(sparse))
+            local oversized = {schema_revision = runner.CHECKPOINT_REVISION,
+                normalizer_state = {messages = {{role = "user", content = string.rep("x", 30000)},
+                    {role = "assistant", content = string.rep("y", 30000)}}}}
+            test.is_nil(runner.decode_checkpoint(oversized))
+        end)
+
+        test.it("preserves inbox offer, transport and acknowledgement failures", function()
+            local offer_error = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key",
+                inbox_call("inbox_offer", nil, "offer transport failed"))
+            test.eq(offer_error.kind, "failed")
+            if offer_error.kind ~= "failed" then error("offer failure was not retained") end
+            test.eq(offer_error.outcome, "failed")
+            test.is_true(offer_error.message:find("offer inbox", 1, true) ~= nil)
+
+            local malformed_offer = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key",
+                inbox_call("inbox_offer", inbox_reply({empty = true, unexpected = true}), nil))
+            test.eq(malformed_offer.kind, "failed")
+
+            local transport_error = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key",
+                inbox_call("inbox_transport", nil, "transport connection lost"))
+            if transport_error.kind ~= "failed" then error("transport failure was not retained") end
+            test.eq(transport_error.outcome, "uncertain")
+
+            local transport_refusal = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key",
+                inbox_call("inbox_transport", {ok = false, value = nil, error = {code = "DENIED", message = "not admitted", retryable = false}}, nil))
+            if transport_refusal.kind ~= "failed" then error("transport refusal was not retained") end
+            test.eq(transport_refusal.outcome, "failed")
+
+            local malformed_transport = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key",
+                inbox_call("inbox_transport", inbox_reply({record_id = "other", inbox_sequence = 1, state = "transport_accepted"}), nil))
+            if malformed_transport.kind ~= "failed" then error("malformed transport receipt was not retained") end
+            test.eq(malformed_transport.outcome, "uncertain")
+
+            local ack_error = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key",
+                inbox_call("inbox_ack", nil, "ack transport failed"))
+            if ack_error.kind ~= "failed" then error("acknowledgement failure was not retained") end
+            test.eq(ack_error.outcome, "uncertain")
+
+            local ack_refusal = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key",
+                inbox_call("inbox_ack", {ok = false, value = nil, error = {code = "DENIED", message = "ack refused", retryable = false}}, nil))
+            if ack_refusal.kind ~= "failed" then error("acknowledgement refusal was not retained") end
+            test.eq(ack_refusal.outcome, "uncertain")
+
+            local delivered = runner.process_inbox("thread-1", "action-1", "attempt-1", 1, "run-key", inbox_call(nil, nil, nil))
+            test.eq(delivered.kind, "item")
+            if delivered.kind ~= "item" then error("valid inbox item was not returned") end
+            test.eq(delivered.content.text, "follow up")
+        end)
+
         test.it("honors cancel receipts, intent and status", function()
             local thread_id = new_thread("Cancel Thread")
             local action_id = "act-can-1"
@@ -545,7 +741,7 @@ local function define_tests()
             local val = res.value :: Object
             test.eq(val.outcome, "failed")
             local rep_err = res.error :: Object
-            test.is_true(tostring(rep_err.message):find("tool calls", 1, true) ~= nil)
+            test.is_true(tostring(rep_err.message):find("tool_calls", 1, true) ~= nil)
         end)
 
         test.it("fences run entry on a moved carrier epoch", function()
@@ -621,6 +817,9 @@ local function define_tests()
             test.eq((raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t"}).error :: Object).code, "INVALID")
             test.eq((raw_call("bee.driver.wippy:run", {operation = "bogus"}).error :: Object).code, "INVALID")
             test.eq((raw_call("bee.driver.wippy:run", {operation = "wait", thread_id = "t", attempt_id = "a", wait_ms = -1}).error :: Object).code, "INVALID")
+            test.eq((raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t", action_id = "a", attempt_id = "b", workspace_id = 42}).error :: Object).code, "INVALID")
+            test.eq((raw_call("bee.driver.wippy:run", {operation = "status", thread_id = "t", attempt_id = "a", workspace_id = "extra"}).error :: Object).code, "INVALID")
+            test.eq((raw_call("bee.driver.wippy:run", {operation = "cancel", thread_id = "t", attempt_id = "a", wait_ms = "soon"}).error :: Object).code, "INVALID")
 
             local thread_id = new_thread("Validate Thread")
             local action_id = "act-val-1"
@@ -732,6 +931,12 @@ local function define_tests()
 
             local bad_envelope = raw_call("bee.driver.wippy.binding:normalize", {index = 0, envelope = {observations = {{source = "stream"}}}})
             test.is_false(bad_envelope.ok)
+            local unknown_state = raw_call("bee.driver.wippy.binding:normalize", {index = 0, eof = true,
+                state = {resumed = false, terminal = nil, unexpected = true}})
+            test.is_false(unknown_state.ok)
+            local bad_state_flag = raw_call("bee.driver.wippy.binding:normalize", {index = 0, eof = true,
+                state = {resumed = "yes"}})
+            test.is_false(bad_state_flag.ok)
 
             local configured = raw_call("bee.driver.wippy.binding:configure", {fixture = false})
             test.is_true(configured.ok)

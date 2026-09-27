@@ -74,25 +74,25 @@ local function through(executor: funcs.Executor): app_caller.Client
     end)
 end
 local function unknown_answer(): model.Reply
-    return app_caller.unknown()
+    return model.unknown_reply()
 end
 local function refresh(state: model.State, owner: app_caller.Client)
     for _, workspace in ipairs(state.workspaces) do
         local intent = model.inbox_intent(state, workspace)
-        model.apply_inbox(state, workspace, owner:invoke(intent.target, intent.request) or unknown_answer())
+        model.apply_inbox(state, workspace, model.decode_reply(owner:invoke(intent.target, intent.request)) or unknown_answer())
     end
 end
 local function open(state: model.State, owner: app_caller.Client, approval_id: string)
     model.select(state, approval_id)
     local intent = model.read_intent(state)
     if not intent then error("no read intent") end
-    model.apply_read(state, approval_id, owner:invoke(intent.target, intent.request) or unknown_answer())
+    model.apply_read(state, approval_id, model.decode_reply(owner:invoke(intent.target, intent.request)) or unknown_answer())
 end
 local function decide(state: model.State, owner: app_caller.Client, decision: string)
     local request_id = key()
     local intent, refused = model.decision_intent(state, request_id, decision)
     if not intent then error("decision refused: " .. tostring(refused)) end
-    model.apply_answer(state, request_id, owner:invoke(intent.target, intent.request))
+    model.apply_answer(state, request_id, model.decode_reply(owner:invoke(intent.target, intent.request)))
 end
 local function lines_have(view: Object, needle: string): boolean
     for _, line in ipairs(model.payload_lines(view)) do

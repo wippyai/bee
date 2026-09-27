@@ -9,7 +9,6 @@ local types = require("types")
 local driver_types = require("driver_types")
 local preferences = require("preferences")
 local M = {}
-type ProviderHomeFileKind = "login" | "config" | "state"
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
 M.MAX_GATEWAY_TOOLS = 32
@@ -101,15 +100,6 @@ local function decode_files(value: unknown, field: string, nonempty: boolean): (
     end
     return files, nil
 end
-local function dense_count(value: {unknown}): integer?
-    local count = 0
-    for key in pairs(value) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil end
-        count = count + 1
-    end
-    for index = 1, count do if value[index] == nil then return nil end end
-    return count
-end
 local function decode_provider_home(value: unknown): (driver_types.ProviderHome?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch.provider_home must be an object" end
@@ -117,7 +107,10 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     if unknown then return nil, "launch.provider_home: " .. unknown end
     local provider = bounds.id(object.provider)
     if not provider then return nil, "launch.provider_home.provider is not an identifier" end
-    if type(object.private) ~= "boolean" then return nil, "launch.provider_home.private must be a boolean" end
+    local private: boolean
+    if object.private == true then private = true
+    elseif object.private == false then private = false
+    else return nil, "launch.provider_home.private must be a boolean" end
     local variable: string? = nil
     if object.variable ~= nil then
         variable = bounds.id(object.variable)
@@ -131,11 +124,9 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     if (variable == nil) ~= (directory == nil) then return nil, "launch.provider_home.variable and directory must be supplied together" end
     local extra_variables: {driver_types.ProviderHomeEnvironment} = {}
     if object.extra_variables ~= nil then
-        if type(object.extra_variables) ~= "table" then return nil, "launch.provider_home.extra_variables must be a list" end
-        local raw_variables = object.extra_variables :: {unknown}
-        local variable_count = dense_count(raw_variables)
-        if not variable_count then return nil, "launch.provider_home.extra_variables must be a dense list" end
-        if variable_count > 4 then return nil, "launch.provider_home.extra_variables exceeds 4 entries" end
+        local raw_variables, list_error = bounds.array(object.extra_variables, bounds.MAX_ARRAY_ITEMS)
+        if not raw_variables then return nil, "launch.provider_home.extra_variables must be a dense list: " .. tostring(list_error) end
+        if #raw_variables > 4 then return nil, "launch.provider_home.extra_variables exceeds 4 entries" end
         local seen_variables: {[string]: boolean} = {}
         if variable then seen_variables[variable] = true end
         for index, raw in ipairs(raw_variables) do
@@ -155,10 +146,9 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
             extra_variables[index] = {variable = item_variable, directory = item_directory}
         end
     end
-    if type(object.files) ~= "table" then return nil, "launch.provider_home.files must be a list" end
-    local raw_files = object.files :: {unknown}
-    local file_count = dense_count(raw_files)
-    if not file_count then return nil, "launch.provider_home.files must be a dense list" end
+    local raw_files, files_error = bounds.array(object.files, bounds.MAX_ARRAY_ITEMS)
+    if not raw_files then return nil, "launch.provider_home.files must be a dense list: " .. tostring(files_error) end
+    local file_count = #raw_files
     if file_count < 1 or file_count > M.MAX_REQUIRED_FILES then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
     local files: {driver_types.ProviderHomeFile} = {}
     local seen: {[string]: boolean} = {}
@@ -178,17 +168,34 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
         end
         local kind = bounds.member(file.kind, {"login", "config", "state"})
         if not kind then return nil, "launch.provider_home.files[" .. tostring(index) .. "].kind is unsupported" end
-        if kind == "state" and source_path ~= nil then return nil, "generated provider state cannot name a source file" end
-        if kind ~= "state" and source_path == nil then return nil, "ambient provider files need a source path" end
         local optional = true
-        if file.optional ~= nil then optional = file.optional end
-        if type(optional) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].optional must be a boolean" end
+        if file.optional ~= nil then
+            if type(file.optional) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].optional must be a boolean" end
+            optional = file.optional
+        end
         local write_back = false
-        if file.write_back ~= nil then write_back = file.write_back end
-        if type(write_back) ~= "boolean" or (write_back and kind ~= "login") then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
-        files[index] = {source_path = source_path, path = path, kind = kind :: ProviderHomeFileKind, optional = optional :: boolean, write_back = write_back :: boolean}
+        if file.write_back ~= nil then
+            if type(file.write_back) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
+            write_back = file.write_back
+        end
+        if kind == "login" then
+            if not source_path then return nil, "ambient provider files need a source path" end
+            files[index] = {source_path = source_path, path = path, kind = "login", optional = optional, write_back = write_back}
+        elseif kind == "config" then
+            if not source_path then return nil, "ambient provider files need a source path" end
+            if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
+            files[index] = {source_path = source_path, path = path, kind = "config", optional = optional, write_back = false}
+        else
+            if source_path ~= nil then return nil, "generated provider state cannot name a source file" end
+            if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
+            files[index] = {source_path = nil, path = path, kind = "state", optional = optional, write_back = false}
+        end
     end
-    return {provider = provider, private = object.private :: boolean, variable = variable, directory = directory,
+    if variable and directory then
+        return {provider = provider, private = private, variable = variable, directory = directory,
+            extra_variables = extra_variables, files = files}, nil
+    end
+    return {provider = provider, private = private, variable = nil, directory = nil,
         extra_variables = extra_variables, files = files}, nil
 end
 function M.launch(value: unknown): (driver_types.Launch?, string?)

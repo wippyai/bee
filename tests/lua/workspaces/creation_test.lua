@@ -20,8 +20,7 @@ local function refused(code: string, message: string): caller.Reply
 end
 
 local function roots(): caller.Reply
-    return ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}, {root_ref = "bee:archive", access = "read"},
-        {root_ref = "\27[2J", access = "write"}, "junk"}})
+    return ok({roots = {{root_ref = "bee.env:workspace_root", access = "write"}, {root_ref = "bee:archive", access = "read"}}})
 end
 
 local function listing(path: string, folders: {Object}, extra: Object?): caller.Reply
@@ -160,9 +159,13 @@ local function define_tests()
             folder_picker.open(form.picker)
             folder_picker.apply_folders(form.picker, refused("NOT_FOUND", "folder x does not exist\27[2J"))
             test.is_nil(tostring(form.picker.error):find("\27", 1, true))
-            folder_picker.apply_folders(form.picker, listing("", {{name = "a"}, {name = "b/c"}, {name = ".."}}))
+            folder_picker.apply_folders(form.picker, listing("", {{name = "a"}}))
             test.eq(#form.picker.folders, 1)
             test.is_nil(form.picker.error)
+            folder_picker.apply_folders(form.picker, listing("", {{name = "a"}, {name = "b/c"}, {name = ".."}}))
+            test.eq(#form.picker.folders, 1)
+            test.eq(form.picker.folders[1].name, "a")
+            test.not_nil(form.picker.error)
             creation.use(form)
             test.eq(creation.back(form), true)
             test.eq(form.step, "folder")

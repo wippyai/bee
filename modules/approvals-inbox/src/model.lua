@@ -8,6 +8,7 @@
 local json = require("json")
 local text = require("text")
 local bounds = require("bounds")
+local caller = require("caller")
 local M = {}
 M.TEXT_LIMIT = 512
 M.LINE_LIMIT = 160
@@ -15,7 +16,6 @@ M.MAX_ROWS = 256
 M.MAX_PAYLOAD_LINES = 24
 M.INBOX_PAGE = 64
 type Object = {[string]: unknown}
-type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown, replayed: boolean?}
 type Decision = "approved" | "denied"
 type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
 type RequestKind = "permission" | "question"
@@ -34,6 +34,12 @@ type ApprovalView = {
     consumer_id: string?, consumed_effect: string?, consumed_at: string?, effect_completed_at: string?,
     effect_result: unknown, updated_at: string?, source_approval_id: string?, source_workspace_id: string?,
 }
+type Reply =
+    {kind: "success", value: unknown, replayed: boolean?} |
+    {kind: "failure", code: string, message: string, retryable: boolean?, replayed: boolean?} |
+    {kind: "reset", code: "RESET_REQUIRED", message: string, oldest_seq: integer, retryable: boolean?, replayed: boolean?} |
+    {kind: "conflict", code: "CONFLICT", message: string, request: ApprovalView, retryable: boolean?, replayed: boolean?} |
+    {kind: "settled", code: "INVALID_STATE", message: string, request: ApprovalView, retryable: boolean?, replayed: boolean?}
 -- A row is the viewer's summary of one request at the revision last seen.
 type Row = {
     approval_id: string,
@@ -236,6 +242,42 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
         source_approval_id = source_approval_id, source_workspace_id = source_workspace_id}
     return decoded_view, nil
 end
+-- The owner wire contract permits data on only two failures: a compacted
+-- inbox cursor and the committed request behind a conflict. Decode those
+-- into explicit variants so generic callers can stay strict.
+function M.decode_reply(raw: unknown): Reply?
+    local reply = caller.envelope(raw)
+    if not reply then return nil end
+    if reply.ok then return {kind = "success", value = reply.value, replayed = reply.replayed} end
+    if reply.ok ~= false then return nil end
+    local fault = reply.error
+    if not fault then return nil end
+    local code: string = fault.code
+    local message: string = fault.message
+    local retryable, replayed = fault.retryable, reply.replayed
+    if reply.value == nil then return {kind = "failure", code = code, message = message, retryable = retryable, replayed = replayed} end
+    if code == "RESET_REQUIRED" then
+        local reset = object(reply.value)
+        if not reset or bounds.fields(reset, {"oldest_seq"}) then return nil end
+        local oldest_seq = bounds.count(reset.oldest_seq)
+        if not oldest_seq or oldest_seq < 1 then return nil end
+        return {kind = "reset", code = "RESET_REQUIRED", message = message, oldest_seq = oldest_seq, retryable = retryable, replayed = replayed}
+    end
+    if code == "CONFLICT" then
+        local request = M.decode_view(reply.value)
+        if not request then return nil end
+        return {kind = "conflict", code = "CONFLICT", message = message, request = request, retryable = retryable, replayed = replayed}
+    end
+    if code == "INVALID_STATE" then
+        local request = M.decode_view(reply.value)
+        if not request then return nil end
+        return {kind = "settled", code = "INVALID_STATE", message = message, request = request, retryable = retryable, replayed = replayed}
+    end
+    return nil
+end
+function M.unknown_reply(): Reply
+    return {kind = "failure", code = "UNAVAILABLE", message = "no answer from the owner", replayed = false}
+end
 type Change = {seq: integer, at: string?, request: ApprovalView}
 type InboxPage = {changes: {Change}, next_seq: integer, more: boolean, replace_source: boolean}
 local function dense_list(value: unknown): {unknown}?
@@ -321,6 +363,13 @@ end
 function M.inbox_intent(state: State, workspace: string): Intent
     return {target = "bee.approvals.binding:inbox", request = {workspace_id = workspace, after_seq = state.cursors[workspace] or 0, limit = M.INBOX_PAGE}}
 end
+local function fault_details(reply: Reply): (string, string)
+    if reply.kind == "failure" then return reply.code, reply.message end
+    if reply.kind == "reset" then return reply.code, reply.message end
+    if reply.kind == "conflict" then return reply.code, reply.message end
+    if reply.kind == "settled" then return reply.code, reply.message end
+    return "INTERNAL", "unexpected successful reply"
+end
 local function keep(state: State, view: ApprovalView, seq: integer)
     local row = M.summary(view, seq)
     local known = state.rows[row.approval_id]
@@ -333,9 +382,9 @@ end
 -- retained change, a refusal marks the workspace unavailable. Returns true
 -- when more changes wait.
 function M.apply_inbox(state: State, workspace: string, reply: Reply): boolean
-    if not reply.ok then
-        local fault = reply.error or {code = "INTERNAL", message = "inbox failed"}
-        if fault.code == "DENIED" or fault.code == "RESET_REQUIRED" then
+    if reply.kind ~= "success" then
+        local code, message = fault_details(reply)
+        if code == "DENIED" or code == "RESET_REQUIRED" then
             for key, row in pairs(state.rows) do
                 if row.workspace_id == workspace then
                     state.rows[key] = nil
@@ -343,17 +392,16 @@ function M.apply_inbox(state: State, workspace: string, reply: Reply): boolean
                 end
             end
         end
-        if fault.code == "RESET_REQUIRED" then
-            local details = object(reply.value)
-            local oldest = details and bounds.count(details.oldest_seq) or nil
-            if oldest then
-                state.cursors[workspace] = math.max(0, oldest - 1)
-                return true
-            end
-            state.unavailable[workspace] = "INVALID_REPLY: reset cursor is malformed"
+        if reply.kind == "reset" then
+            state.cursors[workspace] = reply.oldest_seq - 1
+            state.unavailable[workspace] = nil
+            return true
+        end
+        if code == "RESET_REQUIRED" then
+            state.unavailable[workspace] = M.text("RESET_REQUIRED: " .. message, M.LINE_LIMIT)
             return false
         end
-        state.unavailable[workspace] = M.text(fault.code .. ": " .. fault.message, M.LINE_LIMIT)
+        state.unavailable[workspace] = M.text(code .. ": " .. message, M.LINE_LIMIT)
         return false
     end
     local page, page_error = decode_page(reply.value, workspace)
@@ -445,7 +493,7 @@ function M.confirmation_matches(state: State, asked: Confirmation): boolean
         and current.owner_incarnation == asked.owner_incarnation
 end
 function M.apply_read(state: State, approval_id: string, reply: Reply)
-    if reply.ok then
+    if reply.kind == "success" then
         local view, view_error = M.decode_view(reply.value)
         if not view or view.approval_id ~= approval_id then
             state.notice = M.text("INVALID_REPLY: " .. tostring(view_error or "approval identity mismatch"), M.LINE_LIMIT)
@@ -456,16 +504,16 @@ function M.apply_read(state: State, approval_id: string, reply: Reply)
         if state.selected == approval_id then state.detail = view end
         return
     end
-    local fault = reply.error or {code = "INTERNAL", message = "read failed"}
-    if fault.code == "NOT_FOUND" then
+    local code, message = fault_details(reply)
+    if code == "NOT_FOUND" then
         state.rows[approval_id] = nil
         if state.selected == approval_id then M.select(state, nil) end
         state.notice = "The request no longer exists"
-    elseif fault.code == "DENIED" then
+    elseif code == "DENIED" then
         if state.selected == approval_id then state.detail = nil end
         state.notice = "You may not read this request"
     else
-        state.notice = M.text(fault.code .. ": " .. fault.message, M.LINE_LIMIT)
+        state.notice = M.text(code .. ": " .. message, M.LINE_LIMIT)
     end
 end
 -- decision_intent: an explicit decision on the request whose detail is
@@ -512,7 +560,7 @@ function M.apply_answer(state: State, request_id: string, reply: Reply?)
     end
     local row = state.rows[pending.approval_id]
     local seq = row and row.seq or 0
-    if reply.ok then
+    if reply.kind == "success" then
         local value = object(reply.value)
         local raw_view = value and value.request or reply.value
         local view, view_error = M.decode_view(raw_view)
@@ -533,16 +581,22 @@ function M.apply_answer(state: State, request_id: string, reply: Reply?)
         return
     end
     state.pending = nil
-    local fault = reply.error or {code = "INTERNAL", message = "the owner refused"}
-    local committed, decode_error = M.decode_view(reply.value)
+    local committed: ApprovalView? = nil
+    local notice: string? = nil
+    if reply.kind == "conflict" then
+        committed = reply.request
+        notice = reply.code .. ": " .. outcome_text(reply.request) .. " at revision " .. tostring(reply.request.revision)
+    elseif reply.kind == "settled" then
+        committed = reply.request
+        notice = reply.code .. ": " .. reply.message .. " (" .. outcome_text(reply.request) .. ")"
+    end
     if committed and committed.approval_id == pending.approval_id then
         keep(state, committed, seq)
         if state.selected == pending.approval_id then state.detail = committed end
-        state.notice = fault.code .. ": " .. outcome_text(committed) .. " at revision " .. tostring(committed.revision)
+        state.notice = M.text(notice or "INTERNAL: invalid settled request", M.LINE_LIMIT)
     else
-        local detail = fault.code .. ": " .. fault.message
-        if reply.value ~= nil and decode_error then detail = detail .. " (invalid request view: " .. decode_error .. ")" end
-        state.notice = M.text(detail, M.LINE_LIMIT)
+        local code, message = fault_details(reply)
+        state.notice = M.text(code .. ": " .. message, M.LINE_LIMIT)
     end
 end
 -- recovery_intent: after an unknown answer the request is read; the owner's
@@ -555,7 +609,7 @@ end
 function M.apply_recovery(state: State, reply: Reply)
     local pending = state.pending
     if not pending then return end
-    if reply.ok then
+    if reply.kind == "success" then
         local view, view_error = M.decode_view(reply.value)
         if not view or view.approval_id ~= pending.approval_id then
             state.notice = M.text("INVALID_REPLY: " .. tostring(view_error or "approval identity mismatch"), M.LINE_LIMIT)

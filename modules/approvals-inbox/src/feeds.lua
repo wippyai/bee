@@ -3,7 +3,6 @@
 -- real identity only on the route back to that owner.
 local bounds = require("bounds")
 local sync = require("sync")
-local caller = require("caller")
 local source_config = require("source_config")
 local model = require("model")
 local M = {}
@@ -13,14 +12,14 @@ type ApprovalView = model.ApprovalView
 type Call = (Source, string, unknown) -> (unknown, string?)
 type Address = {source: Source, approval_id: string}
 type AddressBook = {[string]: Address}
-type Catchup = {reply: caller.Reply, reset: boolean}
+type Catchup = {reply: model.Reply, reset: boolean}
 type Client = {
     workspaces: {string}, sources: {[string]: Source}, addresses: {[string]: Address},
     states: {[string]: sync.State}, refreshes: {[string]: integer}, call: Call,
-    invoke: (Client, string, unknown) -> caller.Reply?,
+    invoke: (Client, string, unknown) -> model.Reply?,
 }
-local function failure(code: string, message: string): caller.Reply
-    return {ok = false, error = {code = code, message = message}, value = nil, replayed = false}
+local function failure(code: string, message: string): model.Reply
+    return {kind = "failure", code = code, message = message, replayed = false}
 end
 local function view_for(self: Client, source: Source, raw: unknown, addresses: AddressBook?): (ApprovalView?, string?)
     local decoded, err = model.decode_view(raw)
@@ -38,10 +37,10 @@ local function view_for(self: Client, source: Source, raw: unknown, addresses: A
     address_book[ui_id] = {source = source, approval_id = real_id}
     return qualified, nil
 end
-local function invoke_owner(self: Client, source: Source, target: string, request: unknown): caller.Reply?
+local function invoke_owner(self: Client, source: Source, target: string, request: unknown): model.Reply?
     local raw, err = self.call(source, target, request)
     if err then return nil end
-    return caller.decode(raw)
+    return model.decode_reply(raw)
 end
 local function purge_source(self: Client, source: Source)
     self.states[source.id], self.refreshes[source.id] = nil, nil
@@ -49,8 +48,15 @@ local function purge_source(self: Client, source: Source)
         if address.source.id == source.id then self.addresses[key] = nil end
     end
 end
-local function reject_source(self: Client, source: Source, reply: caller.Reply): caller.Reply
-    local code = reply.error and reply.error.code or "INTERNAL"
+local function fault_code(reply: model.Reply): string?
+    if reply.kind == "failure" then return reply.code end
+    if reply.kind == "reset" then return reply.code end
+    if reply.kind == "conflict" then return reply.code end
+    if reply.kind == "settled" then return reply.code end
+    return nil
+end
+local function reject_source(self: Client, source: Source, reply: model.Reply): model.Reply
+    local code = fault_code(reply)
     if code == "RESET_REQUIRED" or code == "DENIED" then purge_source(self, source) end
     return reply
 end
@@ -64,7 +70,7 @@ local function decode_event_payload(value: unknown): (unknown?, string?)
     if not request then return nil, request_error or "approval event request is invalid" end
     return {request = request}, nil
 end
-local function snapshot(self: Client, source: Source): caller.Reply
+local function snapshot(self: Client, source: Source): model.Reply
     -- Stage a complete snapshot away from the visible cache. An interrupted or
     -- invalid page never exposes a partial snapshot or advances its cursor.
     local next_state = sync.new(source.node_id, source.feed)
@@ -77,7 +83,7 @@ local function snapshot(self: Client, source: Source): caller.Reply
         end
         local reply = invoke_owner(self, source, "bee.approvals.binding:feed_snapshot", request)
         if not reply then return failure("UNAVAILABLE", "approval owner did not answer") end
-        if not reply.ok then return reject_source(self, source, reply) end
+        if reply.kind ~= "success" then return reject_source(self, source, reply) end
         local page, decode_error = sync.snapshot(reply.value, source.node_id, source.feed, model.decode_view)
         if not page then
             purge_source(self, source)
@@ -120,7 +126,7 @@ local function snapshot(self: Client, source: Source): caller.Reply
             for key, address in pairs(staged) do self.addresses[key] = address end
             self.states[source.id] = next_state
             self.refreshes[source.id] = 0
-            return {ok = true, value = {changes = changes, next_seq = next_state.cursor, more = false, replace_source = true}, replayed = false}
+            return {kind = "success", value = {changes = changes, next_seq = next_state.cursor, more = false, replace_source = true}, replayed = false}
         end
     end
     return failure("CAPACITY_EXHAUSTED", "inbox snapshot exceeds eight pages")
@@ -130,8 +136,8 @@ local function catchup(self: Client, source: Source, state: sync.State): Catchup
     local reply = invoke_owner(self, source, "bee.approvals.binding:feed_read_after", {workspace_id = source.workspace_id,
         cursor = state.cursor, limit = 64, expected_scope_revision = state.scope_revision})
     if not reply then return {reply = failure("UNAVAILABLE", "approval owner did not answer"), reset = false} end
-    if not reply.ok then
-        local code = reply.error and reply.error.code or "INTERNAL"
+    if reply.kind ~= "success" then
+        local code = fault_code(reply)
         if code == "RESET_REQUIRED" then return {reply = reply, reset = true} end
         return {reply = reject_source(self, source, reply), reset = false}
     end
@@ -177,17 +183,17 @@ local function catchup(self: Client, source: Source, state: sync.State): Catchup
     end)
     if changed == nil then return {reply = failure("RESET_REQUIRED", fold_error or "approval feed changed"), reset = true} end
     for key, address in pairs(staged) do self.addresses[key] = address end
-    return {reply = {ok = true, value = {changes = changes, next_seq = state.cursor, more = page.more}, replayed = false}, reset = false}
+    return {reply = {kind = "success", value = {changes = changes, next_seq = state.cursor, more = page.more}, replayed = false}, reset = false}
 end
-local function reset_and_snapshot(self: Client, source: Source): caller.Reply
+local function reset_and_snapshot(self: Client, source: Source): model.Reply
     purge_source(self, source)
     local rebuilt = snapshot(self, source)
-    if rebuilt.ok or (rebuilt.error and rebuilt.error.code == "DENIED") then return rebuilt end
+    if rebuilt.kind == "success" or fault_code(rebuilt) == "DENIED" then return rebuilt end
     -- The old cache has already lost its scope. Tell the model to remove it
     -- even when the fresh snapshot is temporarily unavailable.
     return failure("RESET_REQUIRED", "approval feed reset; fresh snapshot is unavailable")
 end
-local function refresh(self: Client, source: Source): caller.Reply
+local function refresh(self: Client, source: Source): model.Reply
     local state = self.states[source.id]
     local count = self.refreshes[source.id] or 0
     if state and count < 8 then
@@ -195,12 +201,12 @@ local function refresh(self: Client, source: Source): caller.Reply
         if caught.reset then
             return reset_and_snapshot(self, source)
         end
-        if caught.reply.ok then self.refreshes[source.id] = count + 1 end
+        if caught.reply.kind == "success" then self.refreshes[source.id] = count + 1 end
         return caught.reply
     end
     return snapshot(self, source)
 end
-local function invoke(self: Client, target: string, value: unknown): caller.Reply?
+local function invoke(self: Client, target: string, value: unknown): model.Reply?
     local request = bounds.object(value)
     if not request then return failure("INVALID_ARGUMENT", "request must be an object") end
     if target == "bee.approvals.binding:inbox" then
@@ -220,6 +226,17 @@ local function invoke(self: Client, target: string, value: unknown): caller.Repl
     outbound.approval_id = address.approval_id
     local answer = invoke_owner(self, address.source, target, outbound)
     if not answer then return nil end
+    if answer.kind == "conflict" then
+        local view, view_error = view_for(self, address.source, answer.request)
+        if not view then return failure("INVALID_REPLY", view_error or "invalid owner reply") end
+        return {kind = "conflict", code = answer.code, message = answer.message, request = view, replayed = answer.replayed}
+    end
+    if answer.kind == "settled" then
+        local view, view_error = view_for(self, address.source, answer.request)
+        if not view then return failure("INVALID_REPLY", view_error or "invalid owner reply") end
+        return {kind = "settled", code = answer.code, message = answer.message, request = view, replayed = answer.replayed}
+    end
+    if answer.kind ~= "success" then return answer end
     local body = bounds.object(answer.value)
     if body and body.request ~= nil then
         local view, view_error = view_for(self, address.source, body.request)
@@ -228,15 +245,14 @@ local function invoke(self: Client, target: string, value: unknown): caller.Repl
         local copied: Object = {}
         for key, item in pairs(body) do copied[key] = item end
         copied.request = view
-        return {ok = answer.ok, error = answer.error, value = copied, replayed = answer.replayed}
+        return {kind = "success", value = copied, replayed = answer.replayed}
     end
     if body and body.approval_id ~= nil then
         local view, view_error = view_for(self, address.source, body)
         if not view then return failure("INVALID_REPLY", view_error or "invalid owner reply") end
-        return {ok = answer.ok, error = answer.error, value = view, replayed = answer.replayed}
+        return {kind = "success", value = view, replayed = answer.replayed}
     end
-    if answer.ok then return failure("INVALID_REPLY", "approval owner returned no request view") end
-    return answer
+    return failure("INVALID_REPLY", "approval owner returned no request view")
 end
 function M.new(configured: source_config.Config, call: Call): Client
     local self: Client = {workspaces = configured.workspaces, sources = configured.sources, addresses = {}, states = {}, refreshes = {}, call = call, invoke = invoke}

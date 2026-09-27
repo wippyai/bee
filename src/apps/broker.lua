@@ -559,9 +559,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         value: unknown, code: string?, message: string?)
         local raw = {version = 1, request_id = request.request_id, instance_id = request.instance_id,
             execution_generation = request.execution_generation, ok = code == nil,
-            value = code == nil and value or nil,
+            operation = request.operation, value = code == nil and value or nil,
             error = code and {code = code, message = message or "Application thread request failed"} or nil}
-        local reply = thread_protocol.reply(raw)
+        local reply = thread_protocol.reply(raw, request.operation)
         if not reply then error("Constructed an invalid application thread reply") end
         process.send(pid, "bee.application.thread.result", reply)
     end

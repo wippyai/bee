@@ -30,6 +30,33 @@ local function handle(): nil
         return prompt
     end
 
+    if user_prompt_of():find("call_tool_bad_arguments", 1, true) then
+        response:set_status(200)
+        response:set_content_type("text/event-stream")
+        response:write("data: " .. json.encode({choices = {{index = 0, delta = {tool_calls = {{index = 0,
+            id = "call_bad_arguments", type = "function", ["function"] = {name = "FileReport", arguments = "[]"}}}}}}}) .. "\n\n")
+        response:write("data: " .. json.encode({choices = {{index = 0, delta = {}, finish_reason = "tool_calls"}}}) .. "\n\n")
+        response:write("data: [DONE]\n\n")
+        return nil
+    end
+
+    if user_prompt_of():find("call_tool_large_checkpoint", 1, true) then
+        local arguments = json.encode({summary = string.rep("x", 8000)})
+        if not arguments then
+            response:set_status(500)
+            return nil
+        end
+        local calls = {}
+        for index = 1, 8 do
+            calls[index] = {id = "call_large_" .. tostring(index), type = "function",
+                ["function"] = {name = "FileReport", arguments = arguments}}
+        end
+        response:set_status(200)
+        response:set_content_type(http.CONTENT.JSON)
+        response:write_json({choices = {{index = 0, message = {role = "assistant", tool_calls = calls}, finish_reason = "tool_calls"}}})
+        return nil
+    end
+
     -- Mode L: Runaway loop. A tool call on every turn, even after tool
     -- results, so the driver must stop at its turn limit.
     if user_prompt_of():find("call_tool_loop", 1, true) then
@@ -111,7 +138,7 @@ local function handle(): nil
                 object = "chat.completion.chunk",
                 created = 1234567,
                 model = "test-model",
-                choices = {{index = 0, finish_reason = "stop"}}
+                choices = {{index = 0, delta = {}, finish_reason = "stop"}}
             }) .. "\n\n")
             response:write("data: [DONE]\n\n")
             return nil
@@ -181,7 +208,7 @@ local function handle(): nil
             }) .. "\n\n")
             response:write("data: " .. json.encode({
                 id = "chatcmpl-stream-tc",
-                choices = {{index = 0, finish_reason = "tool_calls"}}
+                choices = {{index = 0, delta = {}, finish_reason = "tool_calls"}}
             }) .. "\n\n")
             response:write("data: [DONE]\n\n")
             return nil
@@ -260,7 +287,7 @@ local function handle(): nil
         }) .. "\n\n")
         response:write("data: " .. json.encode({
             id = "chatcmpl-stream-plain",
-            choices = {{index = 0, finish_reason = "stop"}}
+            choices = {{index = 0, delta = {}, finish_reason = "stop"}}
         }) .. "\n\n")
         response:write("data: [DONE]\n\n")
         return nil

@@ -7,9 +7,11 @@ type Wire = {version: integer, request_id: string, id: string, instance_id: stri
 type Response = {request_id: string, id: string, instance_id: string, action: "accept" | "cancel", value: string}
 type Result = {version: integer, request_id: string, id: string, instance_id: string, error_code: string, error: string}
 local M = {}
+local bounds = require("bounds")
 local function text(value: unknown, limit: integer, required: boolean): string?
-    if type(value) ~= "string" or #value > limit or value:find("%c") or (required and value == "") then return nil end
-    return value
+    local decoded = bounds.text(value, limit)
+    if not decoded or decoded:find("%c") or (required and decoded == "") then return nil end
+    return decoded
 end
 function M.spec(value: unknown): Spec?
     if type(value) ~= "table" or value.version ~= 1 then return nil end

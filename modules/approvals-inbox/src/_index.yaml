@@ -64,6 +64,7 @@ entries:
   imports:
     text: bee.application:text
     bounds: bee.threads.records:bounds
+    caller: bee.application:caller
 - name: client
   kind: library.lua
   source: file://client.lua

@@ -1461,7 +1461,10 @@ local function define_tests()
                 local started = value(generated_call({operation = "launch", definition_ref = SHIPPED_SHAPE_DEFINITION,
                     brief = "fail during native preparation", idempotency_key = fresh("app-prepare-refused")}))
                 local settled = value(generated_call({operation = "wait", thread_id = started.thread_id,
-                    attempt_id = started.attempt_id, wait_ms = 5000}))
+                    -- The shipped policy admits a 15-second startup window.
+                    -- Let post-claim preparation and settlement complete before
+                    -- asserting the terminal refusal under a loaded host.
+                    attempt_id = started.attempt_id, wait_ms = 60000}))
                 test.eq(settled.state, "ended")
                 test.eq(settled.outcome, "failed")
                 local failure = settled.error :: {[string]: unknown}?

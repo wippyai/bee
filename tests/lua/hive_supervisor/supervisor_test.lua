@@ -12,7 +12,8 @@ local function define_tests()
             local events = assert(process.events())
             local policies: {security.Policy} = {}
             for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
-                "bee.security.hive:hive_dispatch_policy", "bee.hive.supervisor:execute_policy", "bee.hive.supervisor:local_name_policy"}) do
+                "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_telemetry_policy", "bee.hive.supervisor:execute_policy",
+                "bee.hive.supervisor:local_name_policy"}) do
                 local policy, err = security.policy(name)
                 if not policy then error(tostring(err)) end
                 policies[#policies + 1] = policy

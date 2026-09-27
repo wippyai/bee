@@ -43,7 +43,7 @@ func stageHiveSupervisorDesktop(t *testing.T, source string) {
 	if manifest.Namespace != "bee.hive.desktop" {
 		t.Fatalf("Hive desktop fixture namespace = %q", manifest.Namespace)
 	}
-	wanted := map[string]bool{"protocol": true, "catalog": true, "owner": true, "host_policy": true, "catalog_call_policy": true}
+	wanted := map[string]bool{"protocol": true, "catalog": true, "session_policy": true, "owner": true, "host_policy": true, "catalog_call_policy": true}
 	entries := make([]map[string]interface{}, 0, len(wanted))
 	for _, entry := range manifest.Entries {
 		name, _ := entry["name"].(string)
@@ -118,6 +118,13 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 			t.Fatal(err)
 		}
 	}
+	clock, err := os.ReadFile(filepath.Join(repository, "src/clock.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceSnapshot, "clock.lua"), clock, 0600); err != nil {
+		t.Fatal(err)
+	}
 	stageHiveSupervisorDesktop(t, sourceSnapshot)
 	stageHiveExposureAudiences(t, sourceSnapshot)
 	if err := os.CopyFS(fixtureSnapshot, os.DirFS(filepath.Join(repository, "tests/fixtures/hive_supervisor"))); err != nil {
@@ -125,7 +132,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	}
 	for _, dependency := range []struct{ directory, source, manifest string }{
 		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.application\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
-		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.application:arguments\n"},
+		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.application:arguments\n    bounds: bee.protocol:bounds\n"},
 		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
 		{"workspace_binding", "src/storage/binding.lua", "version: '1.0'\nnamespace: bee.storage\nentries:\n- name: binding\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.threads.records:bounds\n"},
 		{"application_host_leases", "modules/application/src/host_leases.lua", "version: '1.0'\nnamespace: bee.application\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n"},
@@ -145,14 +152,31 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 			t.Fatal(err)
 		}
 	}
-	applicationManifest := filepath.Join(sourceSnapshot, "application_protocol/_index.yaml")
-	application, err := os.ReadFile(applicationManifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	application = append(application, []byte("    thread_bounds: bee.threads.records:bounds\n")...)
-	if err := os.WriteFile(applicationManifest, application, 0600); err != nil {
-		t.Fatal(err)
+	protocolDir := filepath.Join(sourceSnapshot, "application_protocol")
+	for _, module := range []struct {
+		name, path, manifest string
+	}{
+		{"bounds", "src/protocol/bounds.lua", "- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n  imports:\n    clock: bee:clock\n"},
+		{"canonical", "src/protocol/canonical.lua", "- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n"},
+	} {
+		body, err := os.ReadFile(filepath.Join(repository, module.path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(protocolDir, module.name+".lua"), body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		manifest, err := os.OpenFile(filepath.Join(protocolDir, "_index.yaml"), os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := manifest.WriteString(module.manifest); err != nil {
+			manifest.Close()
+			t.Fatal(err)
+		}
+		if err := manifest.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	retainedManifest := filepath.Join(sourceSnapshot, "retained_protocol/_index.yaml")
 	retained, err := os.ReadFile(retainedManifest)
@@ -195,6 +219,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	host = append(host, []byte("\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")...)
 	if err := os.WriteFile(filepath.Join(sourceSnapshot, "_index.yaml"), host, 0600); err != nil {
 		t.Fatal(err)
 	}

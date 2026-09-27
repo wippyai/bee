@@ -222,7 +222,8 @@ local function define_tests()
         test.it("enforces narrow dispatch policy requirement on funcs.call", function()
             local req = make_request("bee.hive.telemetry:stats", {})
             -- Scope has exposure policy and catalog policy, but NOT hive_dispatch_policy
-            local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy"}, req)
+            local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
+                "bee.security.hive:hive_telemetry_policy"}, req)
             test.is_false(rep.ok)
             test.not_nil(rep.error)
             if rep.error then
@@ -233,7 +234,8 @@ local function define_tests()
         test.it("succeeds under explicitly scoped narrow policies", function()
             local req = make_request("bee.hive.telemetry:stats", {})
             -- Scope has exactly the necessary policies
-            local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy", "bee.security.hive:hive_dispatch_policy"}, req)
+            local rep = call_scoped({"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_policy",
+                "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_telemetry_policy"}, req)
             test.is_true(rep.ok)
             test.is_nil(rep.error)
         end)
@@ -250,7 +252,7 @@ local function define_tests()
         test.it("admits the host ceiling through the exposure scope", function()
             local req = make_request("bee.hive.telemetry:stats", {})
             local scope = {"bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_facade_policy",
-                "bee.security.hive:hive_dispatch_policy"}
+                "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_telemetry_policy"}
             local rep = call_scoped(scope, req)
             test.is_true(rep.ok)
             test.is_nil(rep.error)

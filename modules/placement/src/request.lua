@@ -101,6 +101,15 @@ local function decode_files(value: unknown, field: string, nonempty: boolean): (
     end
     return files, nil
 end
+local function dense_count(value: {unknown}): integer?
+    local count = 0
+    for key in pairs(value) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil end
+        count = count + 1
+    end
+    for index = 1, count do if value[index] == nil then return nil end end
+    return count
+end
 local function decode_provider_home(value: unknown): (driver_types.ProviderHome?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch.provider_home must be an object" end
@@ -124,7 +133,9 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     if object.extra_variables ~= nil then
         if type(object.extra_variables) ~= "table" then return nil, "launch.provider_home.extra_variables must be a list" end
         local raw_variables = object.extra_variables :: {unknown}
-        if #raw_variables > 4 then return nil, "launch.provider_home.extra_variables exceeds 4 entries" end
+        local variable_count = dense_count(raw_variables)
+        if not variable_count then return nil, "launch.provider_home.extra_variables must be a dense list" end
+        if variable_count > 4 then return nil, "launch.provider_home.extra_variables exceeds 4 entries" end
         local seen_variables: {[string]: boolean} = {}
         if variable then seen_variables[variable] = true end
         for index, raw in ipairs(raw_variables) do
@@ -146,7 +157,9 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     end
     if type(object.files) ~= "table" then return nil, "launch.provider_home.files must be a list" end
     local raw_files = object.files :: {unknown}
-    if #raw_files < 1 or #raw_files > M.MAX_REQUIRED_FILES then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
+    local file_count = dense_count(raw_files)
+    if not file_count then return nil, "launch.provider_home.files must be a dense list" end
+    if file_count < 1 or file_count > M.MAX_REQUIRED_FILES then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
     local files: {driver_types.ProviderHomeFile} = {}
     local seen: {[string]: boolean} = {}
     for index, raw in ipairs(raw_files) do

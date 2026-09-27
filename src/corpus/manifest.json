@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 10319,
+      "bytes": 10012,
       "id": "docs/agent_guide",
-      "sha256": "0dc039fb07c19daa7cc72990fcc67a2bd65e23a2b04980cad983d28be26246e9",
+      "sha256": "100553a43c001bbb025ac187faf4d85854e819ec498afd2747b1a3e88672a1bc",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -307,9 +307,9 @@
       "topic": "component"
     },
     {
-      "bytes": 14722,
+      "bytes": 14718,
       "id": "component/credentials",
-      "sha256": "939d03d991abf475cda1ddfd203ed2c793718b41fc9832267df85500c40a2739",
+      "sha256": "68580d2eb86d3523758ad8da304ab66db0da4e4f8ffc81fb8bb1d38ceeff2d16",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
@@ -459,9 +459,9 @@
       "topic": "component"
     },
     {
-      "bytes": 20294,
+      "bytes": 20396,
       "id": "component/placement:native",
-      "sha256": "6d1d06ab1f73d6e4f7b3403b00daca01aa5c21bea6dcc8b72f8daef74ca20824",
+      "sha256": "7435373468be54422674a9212c6425d3cff373d14c6dc6f9107310e7c3ff8dfb",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -502,7 +502,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 620257,
+    "bytes": 620048,
     "documents": 62
   }
 }

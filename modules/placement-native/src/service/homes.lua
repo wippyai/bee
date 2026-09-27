@@ -252,31 +252,29 @@ function M.decode_login_source(value: unknown): (LoginDestination?, string?)
     end
     return {path = format.file.path, identity_path = marker, source = source, format = format}, nil
 end
-local function read_bounded(vol: fs.FS, path: string, bound: integer, label: string?): (string?, string?)
-    local what = label or "retained file"
-    local file, open_error = vol:open(path, "r")
-    if not file then return nil, "read " .. what .. ": " .. tostring(open_error) end
+local function read_handle_bounded(file: fs.File, bound: integer, what: string): (string?, string?)
     local found = ""
     while #found <= bound do
         local chunk, read_error = file:read(math.min(M.REPLAY_CHUNK_BYTES, bound + 1 - #found))
         if chunk == nil then
-            -- fs reports EOF as its ordinary final read result.
-            if read_error and tostring(read_error) ~= "EOF" then
-                file:close()
-                return nil, "read " .. what .. ": " .. tostring(read_error)
-            end
+            if read_error and tostring(read_error) ~= "EOF" then return nil, "read " .. what .. ": " .. tostring(read_error) end
             break
         end
-        if type(chunk) ~= "string" then
-            file:close()
-            return nil, "read " .. what .. " returned invalid data"
-        end
+        if type(chunk) ~= "string" then return nil, "read " .. what .. " returned invalid data" end
         if chunk == "" then break end
         found = found .. (chunk :: string)
     end
+    if #found > bound then return nil, what .. " exceeds bound" end
+    return found, nil
+end
+local function read_bounded(vol: fs.FS, path: string, bound: integer, label: string?): (string?, string?)
+    local what = label or "retained file"
+    local file, open_error = vol:open(path, "r")
+    if not file then return nil, "read " .. what .. ": " .. tostring(open_error) end
+    local found, read_error = read_handle_bounded(file, bound, what)
     local closed, close_error = file:close()
     if closed == false then return nil, "close " .. what .. ": " .. tostring(close_error) end
-    if #found > bound then return nil, what .. " exceeds bound" end
+    if found == nil then return nil, read_error end
     return found, nil
 end
 function M.read_provider_file(home_path: string, relative: string): (string?, string?)
@@ -287,7 +285,27 @@ function M.read_provider_file(home_path: string, relative: string): (string?, st
     if privacy_error then return nil, privacy_error end
     local target = home_path .. "/home/" .. relative
     if not vol:exists(target) then return nil, "provider file is missing" end
-    return read_bounded(vol, target, M.MAX_LOGIN_BYTES, "provider file")
+    local file, open_error = vol:open(target, "r")
+    if not file then return nil, "read provider file: " .. tostring(open_error) end
+    -- Keep the handle unread until atomic publication has rejected links and
+    -- pinned the directory entry away from the stopped worker.
+    local claimed, claim_error = vol:writefile(target, "", {atomic = true})
+    if not claimed then
+        file:close()
+        local details = bounds.object(claim_error and claim_error:details() or nil)
+        if details and details.published == true then return nil, "provider file claim durability is uncertain" end
+        return nil, "provider file is not a regular file"
+    end
+    local content, read_error = read_handle_bounded(file, M.MAX_LOGIN_BYTES, "provider file")
+    local closed, close_error = file:close()
+    if closed == false then return nil, "close provider file: " .. tostring(close_error) end
+    if content == nil then return nil, read_error end
+    local restored, restore_error = vol:writefile(target, content, {atomic = true})
+    if not restored then
+        local details = bounds.object(restore_error and restore_error:details() or nil)
+        return nil, details and details.published == true and "provider file restore durability is uncertain" or "provider file restore failed"
+    end
+    return content, nil
 end
 -- Read a composition base from this retained private home and compare the bytes
 -- read in this call with the durable initializer digest. Provider state is

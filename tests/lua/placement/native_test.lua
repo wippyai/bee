@@ -115,11 +115,14 @@ local function admit_login_source(source: string, private_codex_home: boolean?)
         list[#list + 1] = source_row
     end
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
-    if not file_policy then error("credential file policy entry") end
+    local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
+    if not file_policy or not write_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
+    write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     changes:update(file_policy)
+    changes:update(write_policy)
     local applied, apply_error = changes:apply()
     if not applied then error("admit login source: " .. tostring(apply_error)) end
 end
@@ -135,11 +138,14 @@ local function admit_grok_login_source(source: string)
         path = ".grok/auth.json", setup_path = ".grok/config.toml",
         setup_destination = ".grok/.bee-global-config.toml", setup_content_format = "opaque", setup_initialize_empty = true, write_back = true}
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
-    if not file_policy then error("credential file policy entry") end
+    local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
+    if not file_policy or not write_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
+    write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     changes:update(file_policy)
+    changes:update(write_policy)
     local applied, apply_error = changes:apply()
     if not applied then error("admit Grok login source: " .. tostring(apply_error)) end
 end
@@ -414,6 +420,23 @@ local function define_tests()
                 local remove_error = homes.remove_attempt(key)
                 test.is_nil(remove_error)
             end
+        end)
+        test.it("refuses provider login reads through links created inside an attempt home", function()
+            local key = assert(homes.attempt_key(OWNER, fresh("provider-home-link")))
+            local attempt_home = assert(homes.create_attempt(key))
+            local home = assert(homes.os_path(attempt_home .. "/home"))
+            local format = {schema_revision = "bee.credential-format@1", file = {
+                path = ".codex/auth.json", content_format = "json", initialize = {}}}
+            local login = '{"fixture":"provider-login"}'
+            local projected, project_error = homes.project_attempt_login(attempt_home,
+                {provider = "codex", definition_id = "bee.test.codex_link_login", definition_revision = 1, format = format}, login, {})
+            if not projected then error(tostring(project_error)) end
+            test.eq(shell("mv " .. quote.posix(home .. "/.codex/auth.json") .. " " .. quote.posix(home .. "/outside-login")
+                .. " && ln -s ../outside-login " .. quote.posix(home .. "/.codex/auth.json")), "")
+            local linked, linked_error = homes.read_provider_file(attempt_home, ".codex/auth.json")
+            test.is_nil(linked)
+            test.eq(linked_error, "provider file is not a regular file")
+            test.is_nil(homes.remove_attempt(key))
         end)
         test.it("checks login evidence in the selected provider home without opening files", function()
             local raw = launch({"sh", "-c", "true"}, "direct_process")
@@ -1898,17 +1921,24 @@ local function define_tests()
             local projection = credential_call("issue_projection", {workspace_id = workspace, name = "codex_ambient", audience = OWNER,
                 attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
                 launch_policy_digest = DIGEST, idempotency_key = fresh("private-provider-home-key")})
-            local script = 'test -s "$CODEX_HOME/auth.json" && test -s "$CODEX_HOME/config.toml"'
+            local script = 'case "$HOME" in */attempts/*/home) ;; *) exit 41;; esac'
+                .. ' && test -s "$CODEX_HOME/auth.json" && test -s "$CODEX_HOME/config.toml"'
                 .. ' && test -s "$CODEX_HOME/ds-flash.config.toml" && test ! -e "$HOME/.codex/other-profile.config.toml"'
                 .. ' && test ! -e "$HOME/machine-home-only.txt"'
                 .. ' && printf projected-fixture-ok && printf %s ' .. quote.posix(refreshed_login) .. ' > "$CODEX_HOME/auth.json"'
-            local request = launch({"sh", "-c", script}, "direct_process")
+            local request = launch({"sh", "-c", script}, "process_group")
             request.attempt_id = attempt_id
+            request.session_ref = fresh("private-provider-session")
             request.projections = {projection.projection_id}
-            (request.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
+            local declared_launch = request.launch :: {[string]: unknown}
+            declared_launch.home_ref = "session"
+            declared_launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
                 files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
                     {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
                     {source_path = ".codex/ds-flash.config.toml", path = ".codex/ds-flash.config.toml", kind = "config", optional = false, write_back = false}}}
+            local request_resources = request.resources :: {{[string]: unknown}}
+            request_resources[#request_resources + 1] = {name = "session", grant_ref = "provider-session-grant", root_ref = ROOT,
+                subpath = "", access = "write", purpose = "session"}
             attempt_of(call(OWNER, "prepare", request))
             local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
             attempt_of(call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1}))
@@ -1946,6 +1976,29 @@ local function define_tests()
             end
             if not wrote_back then error("fixture token write-back evidence was missing") end
             attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
+
+            test.eq(shell("printf %s " .. quote.posix(original_login) .. " > " .. source_root .. "/.codex/auth.json"), "")
+            local unsafe_attempt = fresh("private-provider-descendant")
+            local unsafe_projection = credential_call("issue_projection", {workspace_id = workspace, name = "codex_ambient", audience = OWNER,
+                attempt_id = unsafe_attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
+                launch_policy_digest = DIGEST, idempotency_key = fresh("private-provider-descendant-key")})
+            local unsafe_request = launch({"sh", "-c", "printf %s " .. quote.posix(refreshed_login)
+                .. " > \"$CODEX_HOME/auth.json\"; (sleep 2) >/dev/null 2>&1 &"}, "direct_process")
+            unsafe_request.attempt_id = unsafe_attempt
+            unsafe_request.projections = {unsafe_projection.projection_id}
+            (unsafe_request.timeouts :: {[string]: unknown}).retain_ms = 100
+            (unsafe_request.launch :: {[string]: unknown}).provider_home = declared_launch.provider_home
+            attempt_of(call(OWNER, "prepare", unsafe_request))
+            attempt_of(call(OWNER, "start", {attempt_id = unsafe_attempt}))
+            if not wait_for(function()
+                local observed = kinds(unsafe_attempt)
+                return has(observed, "credential.write_back") or has(observed, "credential.write_back_failed")
+            end, 8000) then error("descendant write-back refusal did not settle: " .. table.concat(kinds(unsafe_attempt), ",")) end
+            test.is_true(has(kinds(unsafe_attempt), "credential.write_back_failed"))
+            test.eq(shell("test \"$(cat " .. quote.posix(source_root .. "/.codex/auth.json") .. ")\" = "
+                .. quote.posix(original_login) .. " && printf unchanged"), "unchanged")
+            time.sleep("2200ms")
+            attempt_of(call(OWNER, "cleanup", {attempt_id = unsafe_attempt}))
         end)
         test.it("starts with an absent optional machine login and permits private CLI sign-in", function()
             local source = "bee.credentials:codex_login_fixture"

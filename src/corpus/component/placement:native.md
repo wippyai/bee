@@ -129,14 +129,17 @@ a composition base. Bee's generated provider configuration is then composed by
 the selected driver.
 
 The CLI may refresh its own login file while it runs. After exit the runner
-reads only declared login destinations and calls the credential broker's
-`write_back` operation with the projection ID, generation and original source
-digest. The broker checks the active projection and source binding, then
-replaces only the original login file if its contents still match that digest.
-A newer machine login is left untouched. Configuration and state files are
-never returned. Evidence records status and projection identity only; it never
-contains login bytes. Host filesystem access for write-back is limited to the
-credential broker and the declared file source.
+first proves that the launch's required process group is empty, then atomically
+claims each declared login destination, refusing linked parents and linked or
+nonregular files. It calls the credential broker's `write_back` operation with
+the projection ID, generation and original source digest. The broker serializes
+comparison and atomic replacement, checks the active projection and source
+binding, and replaces only the original login file if its contents still match
+that digest. A newer machine login is left untouched.
+Configuration and state files are never returned. Evidence records status and
+projection identity only; it never contains login bytes. Host filesystem
+access for write-back is limited to the credential broker and the declared file
+source.
 
 Retained homes keep their existing identity marker and seed rules. The first
 seed records provider, definition ID and revision only after the login file is
@@ -163,8 +166,7 @@ explicitly authorized host HOME and select no login projection; private batch
 profiles project their declared files into attempt homes. Fixture unit tests
 cover all six driver declarations and placement paths, and the confined Codex
 fixture worker verifies that unrelated machine-home files stay outside its
-attempt home. `thread-launch-check` runs real Claude and Codex batch turns
-through the fixture orchestrator when the provider login file and CLI exist.
+attempt home. Standard gates use only synthetic logins and fixture CLIs.
 
 ## Capability
 

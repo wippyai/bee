@@ -427,7 +427,7 @@ entries:
   kind: function.lua
   source: file://agent_launch_acceptance_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "600s"}
+  meta: {type: test, suite: bee, timeout: "240s"}
   modules: [funcs, security, process, registry, env, time, channel, json]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
@@ -615,13 +615,6 @@ entries:
   meta: {type: test_support}
   storage: bee.placement.native:environment
   variable: BEE_FIXTURE_STREAMS
-  readonly: true
-- name: ambient_live_provider
-  kind: env.variable
-  meta: {type: test_support}
-  storage: bee.placement.native:environment
-  variable: BEE_AMBIENT_LIVE_PROVIDER
-  default: none
   readonly: true
 - name: carrier_client_policy
   kind: security.policy

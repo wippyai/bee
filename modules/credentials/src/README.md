@@ -65,14 +65,15 @@ Materialization reads that optional path from the same source. JSON setup is
 bounded to 4 KiB; opaque setup is bounded to 64 KiB. It appends the bytes to the
 transient returned format as an initializer that may be installed even when an
 optional login is absent. The setup declaration and its contents are never
-stored in a definition or projection, and a missing setup file is allowed. The host's `bee.credentials.security:credential_file_policy`
-grants filesystem access separately from source metadata and is attached to
-availability and materializer check for stat-only checks, materialization for
-bounded reads, and token write-back for the admitted login file. Write-back
-revalidates the projection, attempt, generation, provider path and original
-source digest before replacing only that login file. A newer source login
-causes a conflict and remains untouched. Configuration and state files are
-never written back.
+stored in a definition or projection, and a missing setup file is allowed. The
+host's `bee.credentials.security:credential_file_policy` grants filesystem
+access separately from source metadata for availability, checks and bounded
+materialization reads. Only the `write_back` binding receives the separate
+`credential_file_write_policy`. Write-back serializes the source comparison and
+atomic replacement, revalidates the projection, attempt, generation, provider
+path and original source digest, and replaces only that login file. A newer
+source login causes a conflict and remains untouched. Configuration and state
+files are never written back.
 Registry source metadata in `bee.credentials:credential_sources` alone cannot grant filesystem
 read: if a source ref is admitted by metadata but absent from
 `bee.credentials.security:credential_file_policy`, availability and materialization fail closed
@@ -184,9 +185,8 @@ before availability or projection use. A changed source requires explicit
 redefinition. Existing definitions with an older digest are refused rather than
 silently retargeted. Fixture acceptance covers each driver's declared files and
 a confined worker whose attempt home excludes unrelated machine-home files.
-`thread-launch-check` also runs real Claude and Codex batch workers through the
-fixture orchestrator when the corresponding login file and CLI exist. Docker
-delivery is unimplemented.
+The standard test gates use synthetic logins and fixture CLIs; they never
+discover or consume a host account. Docker delivery is unimplemented.
 
 Revocation stops future materialization; a live attempt is stopped by placement at its next
 reconciliation, which the placement sweeper schedules on a fixed delay and

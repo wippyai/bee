@@ -71,6 +71,18 @@ local function define_tests()
                     variable = "CODEX_HOME", directory = ".codex", files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login",
                         optional = false, write_back = false}, {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = true}}}
             end, "launch.provider_home.files[2].write_back is only valid for login files")
+            rejects(function(item)
+                local sparse: {[integer]: unknown} = {[1] = {source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login"},
+                    [3] = {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config"}}
+                (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
+                    variable = "CODEX_HOME", directory = ".codex", files = sparse}
+            end, "launch.provider_home.files must be a dense list")
+            rejects(function(item)
+                local sparse: {[integer]: unknown} = {[2] = {variable = "XDG_CONFIG_HOME", directory = ".config"}}
+                (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
+                    variable = "CODEX_HOME", directory = ".codex", extra_variables = sparse,
+                    files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login"}}}
+            end, "launch.provider_home.extra_variables must be a dense list")
         end)
         test.it("retains hooks when the admitted MCP tool set is empty", function()
             local raw = launch()

@@ -71,6 +71,18 @@ local function call(client: Principal, method: string, value: unknown): broker.R
     if err then error(method .. ": " .. tostring(err)) end
     return reply :: broker.Reply
 end
+local function async_call(client: Principal, method: string, value: unknown): funcs.Future
+    local future, err = executor(client, value):async("bee.credentials.binding:" .. method, value)
+    if not future then error(method .. ": " .. tostring(err)) end
+    return future
+end
+local function await_call(future: funcs.Future): broker.Reply
+    local _, open = future:response():receive()
+    if not open then error("credential call closed without a reply") end
+    local payload, result_error = future:result()
+    if result_error or not payload then error("credential call: " .. tostring(result_error)) end
+    return payload:data() :: broker.Reply
+end
 local function value(reply: broker.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return reply.value :: {[string]: unknown}
@@ -113,6 +125,10 @@ local function fixture_file(ref: string, path: string): string
     file:close()
     return type(content) == "string" and content or ""
 end
+local function has(items: {string}, wanted: string): boolean
+    for _, item in ipairs(items) do if item == wanted then return true end end
+    return false
+end
 local function admit_sources(workspace: string)
     local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
@@ -135,9 +151,12 @@ local function admit_sources(workspace: string)
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
-    if not file_policy then error("credential file policy entry") end
+    local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
+    if not file_policy or not write_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE}
+    write_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE}
     changes:update(file_policy)
+    changes:update(write_policy)
     local applied, err = changes:apply()
     if not applied then error("admit sources: " .. tostring(err)) end
 end
@@ -570,6 +589,37 @@ local function define_tests()
             clean(stale)
             test.is_true(fixture_file(CODEX_LOGIN_SOURCE, "auth.json") == newer_login)
         end)
+        test.it("serializes refreshes from two projections of the same login source", function()
+            local ws = fresh("token-writeback-race")
+            admit_sources(ws)
+            local original = '{"access_token":"fixture-race-original","auth_mode":"chatgpt"}'
+            local first_refresh = '{"access_token":"fixture-race-first","auth_mode":"chatgpt"}'
+            local second_refresh = '{"access_token":"fixture-race-second","auth_mode":"chatgpt"}'
+            write_file(CODEX_LOGIN_SOURCE, "auth.json", original)
+            value(call(manager, "define", {workspace_id = ws, name = "codex_login", provider = "codex",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}}))
+            local first_attempt, second_attempt = fresh("race-attempt"), fresh("race-attempt")
+            local first_projection = issue(user, ws, "codex_login", first_attempt)
+            local second_projection = issue(user, ws, "codex_login", second_attempt)
+            local first = value(call(runner, "materialize", {projection_id = first_projection.projection_id,
+                subject = USER, audience = USER, attempt_id = first_attempt, generation_key = "race-first-generation"}))
+            local second = value(call(runner, "materialize", {projection_id = second_projection.projection_id,
+                subject = USER, audience = USER, attempt_id = second_attempt, generation_key = "race-second-generation"}))
+            test.eq(first.source_digest, second.source_digest)
+            local first_future = async_call(runner, "write_back", {projection_id = first_projection.projection_id,
+                subject = USER, audience = USER, attempt_id = first_attempt, generation = first.generation,
+                source_digest = first.source_digest, value = first_refresh})
+            local second_future = async_call(runner, "write_back", {projection_id = second_projection.projection_id,
+                subject = USER, audience = USER, attempt_id = second_attempt, generation = second.generation,
+                source_digest = second.source_digest, value = second_refresh})
+            local first_result, second_result = await_call(first_future), await_call(second_future)
+            local successes = (first_result.ok and 1 or 0) + (second_result.ok and 1 or 0)
+            test.eq(successes, 1)
+            local refused = first_result.ok and second_result or first_result
+            test.eq(code(refused), "CONFLICT")
+            local stored = fixture_file(CODEX_LOGIN_SOURCE, "auth.json")
+            test.is_true(stored == first_refresh or stored == second_refresh)
+        end)
         test.it("projects one requested Codex profile file and refuses paths outside host admission", function()
             local ws = fresh("codex-profile-file")
             admit_sources(ws)
@@ -861,6 +911,19 @@ local function define_tests()
             local res = call(runner, "materialize", {projection_id = proj.projection_id, subject = USER, audience = USER, attempt_id = attempt, generation_key = fresh("gk")})
             test.eq(code(res), "UNAVAILABLE")
             clean(res)
+        end)
+        test.it("keeps source write authority off read-only credential endpoints", function()
+            local read_policy = registry.get("bee.credentials.security:credential_file_policy")
+            local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
+            if not read_policy or not write_policy then error("credential file policies are unavailable") end
+            local read_actions = (((read_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}).actions :: {string})
+            local write_actions = (((write_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}).actions :: {string})
+            test.is_true(has(read_actions, "fs.get"))
+            test.is_true(has(read_actions, "fs.read"))
+            test.is_false(has(read_actions, "fs.write"))
+            test.is_true(has(write_actions, "fs.get"))
+            test.is_true(has(write_actions, "fs.read"))
+            test.is_true(has(write_actions, "fs.write"))
         end)
         test.it("proves ordinary caller cannot directly read login file or bypass materializer enforcement", function()
             local ws = fresh("ws")

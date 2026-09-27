@@ -131,32 +131,13 @@ end
 -- The orchestrator runs the fixture executable with the launch instruction in
 -- its environment; the worker policy carries the worker instruction, so the
 -- child that the real launch pipeline starts is the scripted worker.
-local function bind_policies(worker_definition: string?)
+local function bind_policies()
     local orchestrator = assert(registry.get(ORCHESTRATOR_POLICY))
     local data = orchestrator.data :: Object
     data.executables = {claude = fixture_bin() .. "/claude"}
     data.environment = {}
-    local gateway_tools = {"thread_read", "thread_wait", "thread_launch"}
-    if worker_definition then
-        local definition = registry.get(worker_definition)
-        local definition_data = definition and definition.data :: Object or nil
-        local policy_ref = definition_data and type(definition_data.policy_ref) == "string" and definition_data.policy_ref :: string or nil
-        local worker_policy = policy_ref and registry.get(policy_ref) or nil
-        local policy_data = worker_policy and worker_policy.data :: Object or nil
-        local worker_tools = policy_data and policy_data.gateway_tools or nil
-        if type(worker_tools) ~= "table" then error("worker gateway tools are unavailable") end
-        local seen: {[string]: boolean} = {}
-        for _, name in ipairs(gateway_tools) do seen[name] = true end
-        for _, name in ipairs(worker_tools :: {unknown}) do
-            if type(name) ~= "string" then error("worker gateway tool is invalid") end
-            if not seen[name] then
-                gateway_tools[#gateway_tools + 1] = name
-                seen[name] = true
-            end
-        end
-    end
-    data.gateway_tools = gateway_tools
-    data.agent_launch = {worker_definition or WORKER_DEFINITION}
+    data.gateway_tools = {"thread_read", "thread_wait", "thread_launch"}
+    data.agent_launch = {WORKER_DEFINITION}
     apply(orchestrator)
     local worker = assert(registry.get(WORKER_POLICY))
     local worker_data = worker.data :: Object
@@ -244,11 +225,11 @@ local function spawn_carrier(request_value: Object): string
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
 end
-local function await_carrier(pid: string, label: string, timeout_ms: integer?): Object
+local function await_carrier(pid: string, label: string): Object
     -- spawn_monitored already monitors the carrier, so its exit arrives here.
     local events, events_error = process.events()
     if not events then error(label .. ": events: " .. tostring(events_error)) end
-    local deadline = time.after(tostring(timeout_ms or 90000) .. "ms")
+    local deadline = time.after("90s")
     while true do
         local selected = channel.select({events:case_receive(), deadline:case_receive()})
         if not selected.ok or selected.channel == deadline then error(label .. " did not finish") end
@@ -261,70 +242,11 @@ local function await_carrier(pid: string, label: string, timeout_ms: integer?): 
     end
     return {}
 end
-local function run_live_provider(provider: string)
-    if provider ~= "claude" and provider ~= "codex" then error("live provider must be claude or codex") end
-    local stage = "host setup"
-    local ok = pcall(function()
-        prepare_host()
-        open_gateway()
-        bind_policies("bee.driver." .. provider .. ":research_batch")
-        local setup = assert(registry.get("bee.harness:harness_setup"))
-        local setup_data = setup.data :: Object
-        local shipped_setup: Object? = nil
-        local saved_setup = saved["bee.harness:harness_setup"]
-        if type(saved_setup) == "table" then shipped_setup = saved_setup :: Object end
-        local shipped_credentials: Object? = nil
-        if shipped_setup and type(shipped_setup.credentials) == "table" then
-            shipped_credentials = shipped_setup.credentials :: Object
-        end
-        if not shipped_credentials then error("shipped host credential map is unavailable") end
-        setup_data.credentials = copy_of(shipped_credentials)
-        apply(setup)
-
-        local thread_id = fresh("ambient-provider-thread")
-        local workspace = fresh("ambient-provider-workspace")
-        call("bee.threads.service:create", {thread_id = thread_id, idempotency_key = thread_id .. "-create", title = "Ambient provider login smoke"})
-        call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
-        call("bee.resources.binding:associate", {workspace_id = workspace, name = "session", root_ref = ROOT, subpath = "", allowed_access = "write"})
-
-        local marker = "bee-ambient-provider-login-smoke-ok"
-        local target = "bee.driver." .. provider .. ":research_batch"
-        local orchestrator = admission(ORCHESTRATOR_POLICY, thread_id, fresh("ambient-orchestrator-attempt"), workspace)
-        orchestrator.origin_view = {view_id = "view-ambient-login-origin", instance_id = "instance-ambient-login-origin"}
-        orchestrator.environment = {
-            BEE_FIXTURE_GATEWAY = "1", BEE_FIXTURE_REPORT_STREAM = "1", BEE_FIXTURE_GATEWAY_LAUNCH = target,
-            BEE_FIXTURE_GATEWAY_BRIEF = "Reply with exactly " .. marker .. " and nothing else.",
-            BEE_FIXTURE_WORKER_MARKER = marker, BEE_FIXTURE_STREAM = stream("plain.jsonl"),
-        }
-        stage = "orchestrator completion"
-        local outcome = await_carrier(spawn_carrier(orchestrator), "live " .. provider .. " orchestrator", 540000)
-        stage = "orchestrator settlement"
-        if (outcome.settlement :: Object).outcome ~= "succeeded" then error("orchestrator turn did not succeed") end
-        stage = "child launch report"
-        local seen = report_with(thread_id, "launch_ok")
-        if seen.launch_ok ~= true then error("worker launch was refused") end
-        stage = "child identity"
-        if seen.child_definition ~= target then error("worker definition did not match") end
-        stage = "child completion"
-        if seen.final_receipt ~= true then error("worker receipt was not observed") end
-        if seen.child_outcome ~= "succeeded" then error("worker receipt did not report success") end
-    end)
-    restore_host()
-    if not ok then
-        error("live " .. provider .. " smoke failed during " .. stage)
-    end
-end
 local function define_tests()
     test.describe("Agent launch acceptance", function()
         local workspace = fresh("agent-launch-ws")
         local thread_id = fresh("agent-launch-thread")
         test.it("starts an allow-listed child, delivers the brief, and waits for its answer and settlement", function()
-            local live_provider, live_provider_error = env.get("bee.harness.catalog:ambient_live_provider")
-            if live_provider_error then error("read live provider test selector: " .. tostring(live_provider_error)) end
-            if live_provider == "claude" or live_provider == "codex" then
-                run_live_provider(live_provider)
-                return
-            end
             -- Host preparation happens here, not at describe time: an earlier
             -- suite restores the shipped host entries as it finishes.
             prepare_host()

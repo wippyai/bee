@@ -500,11 +500,24 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     close_streams()
     if exited and #materialized.writebacks > 0 then
-        for _, result in ipairs(materialization.write_back(materialized.home_path, materialized.writebacks, request.owner_id, attempt_id)) do
-            if result.ok then
-                evidence(db, attempt_id, "credential.write_back", "projection " .. result.projection_id .. (result.written and " refreshed token persisted" or " token unchanged"))
-            else
-                evidence(db, attempt_id, "credential.write_back_failed", "projection " .. result.projection_id .. ": " .. tostring(result.code or "UNAVAILABLE"))
+        local scope_absent = false
+        local scope_error = "write-back requires a proven-empty process group"
+        if request.required_cleanup == "process_group" and recorded and recorded.pgid then
+            local absent, absent_error = identity.group_absent(recorded.pgid)
+            scope_absent = absent == true
+            if absent ~= true then scope_error = absent_error or "provider worker processes remain" end
+        end
+        if scope_absent then
+            for _, result in ipairs(materialization.write_back(materialized.home_path, materialized.writebacks, request.owner_id, attempt_id)) do
+                if result.ok then
+                    evidence(db, attempt_id, "credential.write_back", "projection " .. result.projection_id .. (result.written and " refreshed token persisted" or " token unchanged"))
+                else
+                    evidence(db, attempt_id, "credential.write_back_failed", "projection " .. result.projection_id .. ": " .. tostring(result.code or "UNAVAILABLE"))
+                end
+            end
+        else
+            for _, candidate in ipairs(materialized.writebacks) do
+                evidence(db, attempt_id, "credential.write_back_failed", "projection " .. candidate.projection_id .. ": " .. scope_error)
             end
         end
     end

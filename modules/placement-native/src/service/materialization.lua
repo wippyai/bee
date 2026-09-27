@@ -21,7 +21,7 @@ type WriteBack = {projection_id: string, generation: integer, source_digest: str
 type WriteBackResult = {projection_id: string, ok: boolean, code: string?, written: boolean?}
 type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}, home_path: string, writebacks: {WriteBack}}
 local function provider_home_matches(home: types.ProviderHome, source_path: unknown, format: unknown, source_write_back: unknown): boolean
-    if home.provider == "" or type(source_path) ~= "string" or type(source_write_back) ~= "boolean" then return false end
+    if type(source_path) ~= "string" or type(source_write_back) ~= "boolean" then return false end
     local file = type(format) == "table" and (format :: {[string]: unknown}).file or nil
     if type(file) ~= "table" then return false end
     local file_object = file :: {[string]: unknown}
@@ -319,7 +319,8 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     -- cleanup. Only the persisted host-generated delivery files are replaced.
     local selected_home_path = home_path
     local retained_home = false
-    if request.session_ref then
+    local provider_home = request.launch.provider_home
+    if request.session_ref and (not provider_home or provider_home.private ~= true) then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
         if not session_path then
@@ -354,10 +355,6 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
             attempt_id = attempt_id, generation_key = attempt_id .. ":" .. tostring(index)}
         local provider_home = request.launch.provider_home
         if provider_home and provider_home.private then
-            -- A launch can carry both a provider login file and an optional
-            -- API-key environment projection (Claude). The broker only
-            -- accepts provider_files on file projections, so inspect the
-            -- attempt-bound projection metadata before selecting config files.
             local checked_raw, check_error = funcs.call(resources.CREDENTIAL_CHECK, {projection_id = projection_id,
                 subject = request.owner_id, audience = request.owner_id, attempt_id = attempt_id})
             local checked = type(checked_raw) == "table" and checked_raw :: {ok: boolean, error: {code: string}?, value: {provider: unknown, projection_kind: unknown}?} or nil

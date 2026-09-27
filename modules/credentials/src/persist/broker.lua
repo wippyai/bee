@@ -115,6 +115,7 @@ end
 -- Read one host-selected supplemental file with the same bounded, typed
 -- source read used for provider login files. The bytes remain transient.
 local function read_source_file(volume: fs.FS, path: string, content_format: string, bound: integer, label: string): (string?, string?, string?)
+    if volume:exists("/" .. path) == false then return nil, "MISSING", nil end
     local file, open_error = volume:open("/" .. path, "r")
     if not file then
         if open_error and open_error:kind() == errors.NOT_FOUND then return nil, "MISSING", nil end
@@ -177,8 +178,20 @@ local function projection_of(db: sql.DB, projection_id: string): (Row?, string?)
     if #rows == 0 then return nil, nil end
     return rows[1] :: Row, nil
 end
+local function projection_in(tx: sql.Transaction, projection_id: string): (Row?, string?)
+    local rows, err = tx:query("SELECT * FROM bee_credential_projections WHERE projection_id = ?", {projection_id})
+    if err or not rows then return nil, "read projection" end
+    if #rows == 0 then return nil, nil end
+    return rows[1] :: Row, nil
+end
 local function epoch_of(db: sql.DB, workspace_id: string): (integer?, string?)
     local rows, err = db:query("SELECT epoch FROM bee_credential_epochs WHERE workspace_id = ?", {workspace_id})
+    if err or not rows then return nil, "read authorization epoch" end
+    if #rows == 0 then return 0, nil end
+    return integer(rows[1].epoch) or 0, nil
+end
+local function epoch_in(tx: sql.Transaction, workspace_id: string): (integer?, string?)
+    local rows, err = tx:query("SELECT epoch FROM bee_credential_epochs WHERE workspace_id = ?", {workspace_id})
     if err or not rows then return nil, "read authorization epoch" end
     if #rows == 0 then return 0, nil end
     return integer(rows[1].epoch) or 0, nil
@@ -464,18 +477,14 @@ local function file_binding(definition: Row, workspace_id: string, audience: str
     if not digest or digest ~= definition.digest then return nil, fail("CONFLICT", "credential source changed; redefine before use") end
     return path, nil, setup, write_back
 end
--- The checks every use of a projection repeats; nil means it holds.
-local function holds(db: sql.DB, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
+local function binding_holds(projection: Row, subject: string, audience: string, attempt_id: string,
+    epoch: integer, definition: Row?): Reply?
     if projection.revoked_at ~= nil then return fail("REVOKED", "projection was revoked at " .. tostring(projection.revoked_at)) end
     if tostring(projection.expires_at) <= stamp(now_ms()) then return fail("EXPIRED", "projection expired at " .. tostring(projection.expires_at)) end
     if projection.subject ~= subject or projection.audience ~= audience then return fail("DENIED", "projection binds another subject or audience") end
     if projection.attempt_id ~= attempt_id then return fail("DENIED", "projection is scoped to another attempt") end
     local workspace_id = text(projection.workspace_id) or ""
-    local epoch, epoch_error = epoch_of(db, workspace_id)
-    if not epoch then return fail("STORAGE", epoch_error or "epoch") end
     if (integer(projection.authorization_epoch) or 0) < epoch then return fail("REVOKED", "workspace authorization epoch advanced past the projection") end
-    local definition, definition_error = definition_of(db, workspace_id, text(projection.name) or "")
-    if definition_error then return fail("STORAGE", definition_error) end
     if not definition or definition.definition_id ~= projection.definition_id or definition.revision ~= projection.definition_revision then
         return fail("CONFLICT", "credential definition was replaced; the projection needs re-issue")
     end
@@ -504,6 +513,23 @@ local function holds(db: sql.DB, projection: Row, subject: string, audience: str
         if binding_error then return binding_error end
     end
     return nil
+end
+-- The checks every use of a projection repeats; nil means it holds.
+local function holds(db: sql.DB, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
+    local workspace_id = text(projection.workspace_id) or ""
+    local epoch, epoch_error = epoch_of(db, workspace_id)
+    if not epoch then return fail("STORAGE", epoch_error or "epoch") end
+    local definition, definition_error = definition_of(db, workspace_id, text(projection.name) or "")
+    if definition_error then return fail("STORAGE", definition_error) end
+    return binding_holds(projection, subject, audience, attempt_id, epoch, definition)
+end
+local function holds_in(tx: sql.Transaction, projection: Row, subject: string, audience: string, attempt_id: string): Reply?
+    local workspace_id = text(projection.workspace_id) or ""
+    local epoch, epoch_error = epoch_in(tx, workspace_id)
+    if not epoch then return fail("STORAGE", epoch_error or "epoch") end
+    local definition, definition_error = definition_in(tx, workspace_id, text(projection.name) or "")
+    if definition_error then return fail("STORAGE", definition_error) end
+    return binding_holds(projection, subject, audience, attempt_id, epoch, definition)
 end
 local function decode_use(value: unknown, extra: {string}): ({[string]: unknown}?, string?)
     local object = bounds.object(value)
@@ -896,8 +922,9 @@ function M.write_back(value: unknown): Reply
     end
     local content = object.value :: string
     if #content == 0 or #content > M.MAX_FILE_BYTES then return fail("INVALID", "provider token update exceeds the file bound") end
-    local caller = actor()
-    if not caller then return fail("UNAUTHENTICATED", "no actor") end
+    local next_digest, next_digest_error = hash.sha256(content)
+    if not next_digest or next_digest_error then return fail("UNAVAILABLE", "provider token update could not be measured") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
     if not db then return open_failure :: Reply end
     local projection, projection_error = projection_of(db, object.projection_id :: string)
@@ -910,62 +937,78 @@ function M.write_back(value: unknown): Reply
         db:release()
         return fail("DENIED", "caller is not a token writer admitted in workspace " .. workspace_id)
     end
-    local refused = holds(db, projection, object.subject :: string, object.audience :: string, object.attempt_id :: string)
-    if refused then db:release(); return refused end
-    if projection.projection_kind ~= "file"
-        or integer(projection.materialization_generation) ~= generation then
-        db:release()
-        return fail("DENIED", "write-back does not match the active file projection generation")
-    end
-    local definition, definition_error = definition_of(db, workspace_id, text(projection.name) or "")
-    if definition_error or not definition then
-        db:release()
-        return fail("CONFLICT", definition_error or "credential definition is gone")
-    end
-    local admitted, admitted_error = sources.host_sources()
-    if not admitted then db:release(); return fail("STORAGE", admitted_error or "host sources") end
-    local provider = text(definition.provider) or ""
-    local selected_format, format_error = format_for(admitted, provider, "file")
-    if not selected_format or not selected_format.file then
-        db:release()
-        return fail("CONFLICT", format_error or "provider login format is unavailable")
-    end
-    local path, binding_error, _, write_back = file_binding(definition, workspace_id, text(projection.audience))
-    local source_ref = bounds.id(definition.source_ref)
-    if not path or not source_ref then
-        db:release()
-        return binding_error or fail("FORBIDDEN", "provider login source is unavailable")
-    end
-    if write_back ~= true then
-        db:release()
-        return fail("DENIED", "host admission does not allow token write-back for this file")
-    end
+    local result: TransactionResult = transaction.write(db, "credential token write-back", function(tx: sql.Transaction): TransactionResult
+        local current_projection, current_projection_error = projection_in(tx, object.projection_id :: string)
+        if current_projection_error or not current_projection then
+            return transaction.failure(current_projection_error and "STORAGE" or "NOT_FOUND",
+                current_projection_error or "projection does not exist") :: TransactionResult
+        end
+        local _, serialize_error = tx:execute("UPDATE bee_credential_projections SET materialization_generation = materialization_generation WHERE projection_id = ?", {current_projection.projection_id})
+        if serialize_error then
+            if transaction.busy(serialize_error) then return transaction.storage_failure("credential token write-back database is busy") :: TransactionResult end
+            return transaction.failure("STORAGE", "serialize provider token write-back") :: TransactionResult
+        end
+        local refused = holds_in(tx, current_projection, object.subject :: string, object.audience :: string, object.attempt_id :: string)
+        if refused then return transaction.failure(refused.error and refused.error.code or "DENIED",
+            refused.error and refused.error.message or "projection no longer holds") :: TransactionResult end
+        if current_projection.projection_kind ~= "file" or integer(current_projection.materialization_generation) ~= generation then
+            return transaction.failure("DENIED", "write-back does not match the active file projection generation") :: TransactionResult
+        end
+        local definition, definition_error = definition_in(tx, workspace_id, text(current_projection.name) or "")
+        if definition_error or not definition then
+            return transaction.failure("CONFLICT", definition_error or "credential definition is gone") :: TransactionResult
+        end
+        local admitted, admitted_error = sources.host_sources()
+        if not admitted then return transaction.failure("STORAGE", admitted_error or "host sources") :: TransactionResult end
+        local selected_format, format_error = format_for(admitted, text(definition.provider) or "", "file")
+        if not selected_format or not selected_format.file then
+            return transaction.failure("CONFLICT", format_error or "provider login format is unavailable") :: TransactionResult
+        end
+        local content_format = selected_format.file.content_format
+        if content_format == "json" then
+            local ok, parsed = pcall(json.decode, content)
+            if not ok or type(parsed) ~= "table" then
+                return transaction.failure("INVALID", "provider token update is not valid JSON") :: TransactionResult
+            end
+        end
+        local path, binding_error, _, write_back = file_binding(definition, workspace_id, text(current_projection.audience))
+        local source_ref = bounds.id(definition.source_ref)
+        if not path or not source_ref then
+            return transaction.failure(binding_error and binding_error.error and binding_error.error.code or "FORBIDDEN",
+                binding_error and binding_error.error and binding_error.error.message or "provider login source is unavailable") :: TransactionResult
+        end
+        if write_back ~= true then
+            return transaction.failure("DENIED", "host admission does not allow token write-back for this file") :: TransactionResult
+        end
+        local volume = fs.get(source_ref)
+        if not volume then return transaction.failure("UNAVAILABLE", "provider login source volume unavailable") :: TransactionResult end
+        local current, status, read_error = read_source_file(volume, path, content_format, M.MAX_FILE_BYTES, "login file")
+        if status ~= "PRESENT" or not current then
+            return transaction.failure("CONFLICT", read_error or "the original provider login is no longer present") :: TransactionResult
+        end
+        local current_digest, current_digest_error = hash.sha256(current)
+        if not current_digest or current_digest_error then
+            return transaction.failure("UNAVAILABLE", "provider login could not be measured") :: TransactionResult
+        end
+        if current_digest == next_digest then
+            return transaction.success({generation = generation, written = false}, false) :: TransactionResult
+        end
+        if current_digest ~= source_digest then
+            return transaction.failure("CONFLICT", "the provider login changed after projection") :: TransactionResult
+        end
+        local published, write_error = volume:writefile("/" .. path, content, {atomic = true})
+        if not published then
+            local details = bounds.object(write_error and write_error:details() or nil)
+            if details and details.published == true then
+                return transaction.refusal("UNCERTAIN", "provider token update was published but durability requires inspection", nil) :: TransactionResult
+            end
+            return transaction.failure("UNAVAILABLE", "provider token update was refused") :: TransactionResult
+        end
+        return transaction.success({generation = generation, written = true}, false) :: TransactionResult
+    end) :: TransactionResult
     db:release()
-    local content_format = selected_format.file.content_format
-    if content_format == "json" then
-        local ok, parsed = pcall(json.decode, content)
-        if not ok or type(parsed) ~= "table" then return fail("INVALID", "provider token update is not valid JSON") end
-    end
-    local volume = fs.get(source_ref)
-    if not volume then return fail("UNAVAILABLE", "provider login source volume unavailable") end
-    local current, status, read_error = read_source_file(volume, path, content_format, M.MAX_FILE_BYTES, "login file")
-    if status ~= "PRESENT" or not current then
-        return fail("CONFLICT", read_error or "the original provider login is no longer present")
-    end
-    local current_digest, current_digest_error = hash.sha256(current)
-    if not current_digest or current_digest_error or current_digest ~= source_digest then
-        return fail("CONFLICT", "the provider login changed after projection")
-    end
-    local next_digest, next_digest_error = hash.sha256(content)
-    if not next_digest or next_digest_error then return fail("UNAVAILABLE", "provider token update could not be measured") end
-    if next_digest == source_digest then return succeed({generation = generation, written = false}) end
-    local published, write_error = volume:writefile("/" .. path, content, {atomic = true})
-    if not published then
-        local details = bounds.object(write_error and write_error:details() or nil)
-        if details and details.published == true then return fail("UNCERTAIN", "provider token update was published but durability requires inspection") end
-        return fail("UNAVAILABLE", "provider token update was refused")
-    end
-    return succeed({generation = generation, written = true})
+    if not result.ok then return fail(result.code or "STORAGE", result.message or "provider token write-back failed") end
+    return succeed(result.value)
 end
 function M.revoke(value: unknown): Reply
     local object = bounds.object(value)

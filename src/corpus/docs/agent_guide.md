@@ -155,12 +155,6 @@ source digest, so a newer machine login is left in place. Provider configuration
 and other home files are not copied back. Codex `--profile NAME` keeps working
 with the selected `NAME.config.toml` projected into that attempt's private home.
 
-The workspace owner inherits the environment of the `bee` invocation that
-started it. Later clients attach to that owner and do not replace its
-provider-home variables. After changing a provider home used by a window or
-the named Codex profile, run `bee stop` and start Bee again with the new
-environment.
-
 The local Hub can inspect, plan and apply host-authorized components. Governed
 overlays can stage bounded content, freeze an immutable candidate, obtain an
 exact approval, apply it through the owning host and recover after restart.

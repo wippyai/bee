@@ -124,8 +124,9 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     if (variable == nil) ~= (directory == nil) then return nil, "launch.provider_home.variable and directory must be supplied together" end
     local extra_variables: {driver_types.ProviderHomeEnvironment} = {}
     if object.extra_variables ~= nil then
-        local raw_variables, list_error = bounds.array(object.extra_variables, bounds.MAX_ARRAY_ITEMS)
-        if not raw_variables then return nil, "launch.provider_home.extra_variables must be a dense list: " .. tostring(list_error) end
+        if type(object.extra_variables) ~= "table" then return nil, "launch.provider_home.extra_variables must be a list" end
+        local raw_variables = bounds.array(object.extra_variables, bounds.MAX_ARRAY_ITEMS)
+        if not raw_variables then return nil, "launch.provider_home.extra_variables must be a dense list" end
         if #raw_variables > 4 then return nil, "launch.provider_home.extra_variables exceeds 4 entries" end
         local seen_variables: {[string]: boolean} = {}
         if variable then seen_variables[variable] = true end
@@ -146,8 +147,9 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
             extra_variables[index] = {variable = item_variable, directory = item_directory}
         end
     end
-    local raw_files, files_error = bounds.array(object.files, bounds.MAX_ARRAY_ITEMS)
-    if not raw_files then return nil, "launch.provider_home.files must be a dense list: " .. tostring(files_error) end
+    if type(object.files) ~= "table" then return nil, "launch.provider_home.files must be a list" end
+    local raw_files = bounds.array(object.files, bounds.MAX_ARRAY_ITEMS)
+    if not raw_files then return nil, "launch.provider_home.files must be a dense list" end
     local file_count = #raw_files
     if file_count < 1 or file_count > M.MAX_REQUIRED_FILES then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
     local files: {driver_types.ProviderHomeFile} = {}

@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3089,
+      "bytes": 3377,
       "id": "component/driver",
-      "sha256": "974ebb55df0156eff8856663178f387b0acfee424ab27521392c20458f478967",
+      "sha256": "84e69b06ea053999d198a118096920917328cf563aba08b5e0afcc26769afaa6",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
@@ -502,7 +502,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 620489,
+    "bytes": 620777,
     "documents": 62
   }
 }

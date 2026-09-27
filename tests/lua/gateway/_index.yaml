@@ -116,15 +116,15 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [registry.apply, registry.update.registry.entry, registry.get, funcs.call]
+    actions: [registry.apply, registry.update.registry.entry, registry.get, funcs.call, events.subscribe, system.read]
     resources: ['*']
     effect: allow
 - name: address_test
   kind: function.lua
   source: file://address_test.lua
   method: run
+  modules: [registry, funcs, events, system, channel, time]
   meta: {type: test, suite: bee}
-  modules: [registry, funcs]
   security:
     policies: [bee.gateway:address_test_policy]
   imports:

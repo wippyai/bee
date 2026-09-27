@@ -75,9 +75,9 @@ type admitter struct {
 	// serial keeps one redemption in flight: all share the listener's one
 	// supervisor endpoint.
 	serial sync.Mutex
-	// reached is the local address an admitted join connection arrived on.
-	// The listener records it so this node advertises a path the peer proved
-	// it can reach.
+	// reached is the local address an authenticated, redeemed join connection
+	// arrived on. It is recorded only after admission, so losing candidate
+	// races and unauthenticated connections cannot change mesh routing.
 	reached atomic.Pointer[netip.Addr]
 }
 
@@ -87,6 +87,26 @@ func (a *admitter) reachedAddress() (netip.Addr, bool) {
 		return *value, true
 	}
 	return netip.Addr{}, false
+}
+
+// sameHostJoin reports whether the accepted socket's listener-owned source IP
+// belongs to this host. The complete address set includes loopback-interface
+// aliases used by container and VM hairpin NAT; joiner-declared addresses are
+// deliberately not trusted as evidence of locality.
+func sameHostJoin(observed string, assigned []interfaceAddress, tailnet []netip.Addr) bool {
+	address, err := netip.ParseAddr(observed)
+	return err == nil && isAssignedLocally(address, assigned, tailnet)
+}
+
+// forgetReached removes a path learned before the authenticated request made
+// a same-host hairpin visible. The stable automatic address remains selected.
+func (a *admitter) forgetReached() error {
+	a.reached.Store(nil)
+	err := os.Remove(filepath.Join(ownerDirectory(a.state), reachedFileName))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 func (l *joinListenerComponent) Start(ctx context.Context) error {
@@ -133,9 +153,6 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	l.cancel, l.done = cancel, make(chan struct{})
 	a := &admitter{state: l.state, node: l.node, authority: authority, membership: membership, redeem: redeem}
-	// The listener owns the accepted socket, so it can report the local
-	// address each admitted join arrived on before the handshake is answered.
-	servedListener := &reachedListener{Listener: listener, admitter: a}
 	// The node states whether it expects to be dialed, through the membership
 	// metadata the runtime re-broadcasts. Its internode endpoint needs no
 	// metadata: the runtime dials a member at its membership address, which the
@@ -147,7 +164,7 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	go func() {
 		defer close(served)
 		defer redeem.Close()
-		if err := invite.Serve(lifetime, servedListener, identity, a.admit); err != nil {
+		if err := invite.Serve(lifetime, listener, identity, a.admit); err != nil {
 			log.Warn("join listener stopped", zap.Error(err))
 		}
 	}()
@@ -182,22 +199,6 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 		close(l.done)
 	}()
 	return nil
-}
-
-// reachedListener reports the local address of each accepted join connection
-// to the admitter before the handshake reads it.
-type reachedListener struct {
-	net.Listener
-	admitter *admitter
-}
-
-func (l *reachedListener) Accept() (net.Conn, error) {
-	connection, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	l.admitter.observeReached(connection.RemoteAddr(), connection.LocalAddr())
-	return connection, nil
 }
 
 // adoptReachedAddress persists the address the last admitted join arrived on,
@@ -296,58 +297,33 @@ func refuse(code, message string) *invite.Refused {
 	return &invite.Refused{Code: code, Message: message}
 }
 
-// observeReached records the local address one accepted join connection
+// observeReached records the local address one authenticated, redeemed join
 // arrived on. It is the address this node must advertise to be reachable from
 // that peer, so it outranks the automatic pick while this host owns it.
 //
 // Only a peer on another machine teaches anything. A node on this host is
 // already reachable through the automatic pick, and the local address of a
 // same-host connection may be an address no other machine can route.
-func (a *admitter) observeReached(remote, local net.Addr) {
+func (a *admitter) observeReached(remote, local string) {
 	assigned, err := assignedInterfaceAddresses()
 	if err != nil {
 		return
 	}
 	tailnet, _ := tailscaleIdentity()
-	if isAssignedLocally(remoteAddress(remote), assigned, tailnet) {
+	remoteAddress, err := netip.ParseAddr(remote)
+	if err == nil && isAssignedLocally(remoteAddress, assigned, tailnet) {
 		return
 	}
-	address, ok := localAddress(local)
-	if !ok || !isAssignedLocally(address, assigned, tailnet) {
+	address, err := netip.ParseAddr(local)
+	if err != nil {
+		return
+	}
+	address = address.Unmap()
+	if address.IsLoopback() || address.IsUnspecified() || !isAssignedLocally(address, assigned, tailnet) {
 		return
 	}
 	value := address
 	a.reached.Store(&value)
-}
-
-// remoteAddress reads the peer IP of an accepted TCP connection.
-func remoteAddress(connection net.Addr) netip.Addr {
-	tcp, ok := connection.(*net.TCPAddr)
-	if !ok {
-		return netip.Addr{}
-	}
-	address, ok := netip.AddrFromSlice(tcp.IP)
-	if !ok {
-		return netip.Addr{}
-	}
-	return address.Unmap()
-}
-
-// localAddress reads the local IP of an accepted TCP connection.
-func localAddress(connection net.Addr) (netip.Addr, bool) {
-	tcp, ok := connection.(*net.TCPAddr)
-	if !ok {
-		return netip.Addr{}, false
-	}
-	address, ok := netip.AddrFromSlice(tcp.IP)
-	if !ok {
-		return netip.Addr{}, false
-	}
-	address = address.Unmap()
-	if address.IsLoopback() || address.IsUnspecified() {
-		return netip.Addr{}, false
-	}
-	return address, true
 }
 
 // admit redeems the joiner's invite through the supervisor, pins the joiner's
@@ -379,6 +355,15 @@ func (a *admitter) admit(ctx context.Context, peer ed25519.PublicKey, request in
 			return invite.Admission{}, refused
 		}
 		return invite.Admission{}, refuse("UNAVAILABLE", "the hive node could not redeem the invite")
+	}
+	assigned, assignedError := hostInterfaceAddresses()
+	tailnet, _ := tailscaleIdentity()
+	if assignedError == nil && sameHostJoin(request.Observed, assigned, tailnet) {
+		if err := a.forgetReached(); err != nil {
+			return invite.Admission{}, refuse("INTERNAL", "the hive node could not retain its advertised address")
+		}
+	} else {
+		a.observeReached(request.Observed, request.Local)
 	}
 	now := time.Now()
 	leaf, err := a.authority.Issue(ed25519.PublicKey(key), addresses, now)

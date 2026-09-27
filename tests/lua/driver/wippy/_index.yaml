@@ -36,7 +36,7 @@ entries:
     type: test
     suite: bee
     timeout: "60s"
-  modules: [system, json, registry, funcs, security, time]
+  modules: [system, json, registry, funcs, security, time, events, channel]
   imports:
     test: wippy.test:test
     runner: bee.driver.wippy:runner

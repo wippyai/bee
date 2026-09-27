@@ -104,6 +104,15 @@ local function write_file(ref: string, path: string, content: string)
     local ok, werr = volume:writefile(path, content)
     if not ok then error("writefile " .. path .. ": " .. tostring(werr)) end
 end
+local function fixture_file(ref: string, path: string): string
+    local volume, err = fs.get(ref)
+    if not volume then error("volume " .. ref .. ": " .. tostring(err)) end
+    local file, open_error = volume:open("/" .. path, "r")
+    if not file then error("read fixture " .. path .. ": " .. tostring(open_error)) end
+    local content = file:read(4096)
+    file:close()
+    return type(content) == "string" and content or ""
+end
 local function admit_sources(workspace: string)
     local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
@@ -112,14 +121,17 @@ local function admit_sources(workspace: string)
         {ref = MISSING_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"environment"}},
         {ref = OTHER_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}},
         {ref = BROKEN_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}},
-        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
+        {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}, write_back = true,
+            setup_path = ".codex/config.toml", setup_destination = ".codex/config.toml", setup_content_format = "opaque", setup_initialize_empty = true,
+            auxiliary_files = {{source_prefix = ".codex/", destination_prefix = ".codex/", suffix = ".config.toml", content_format = "opaque"}}},
         {ref = CLAUDE_LOGIN_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"file"}},
         {ref = INVALID_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = MISSING_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
         {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
         {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "grok", projection_kinds = {"file"},
-            path = ".grok/auth.json", setup_path = GROK_CONFIG, setup_destination = GROK_PRIVATE_BASE, setup_content_format = "opaque"}}
+            path = ".grok/auth.json", write_back = true, setup_path = GROK_CONFIG, setup_destination = GROK_PRIVATE_BASE,
+            setup_content_format = "opaque", setup_initialize_empty = true}}
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
@@ -527,6 +539,97 @@ local function define_tests()
             test.eq(claude_mat.projection_kind, "file")
             test.eq(claude_mat.value, CLAUDE_FILE_SENTINEL)
         end)
+        test.it("writes refreshed tokens only to the exact admitted login file while the original digest still matches", function()
+            local ws = fresh("token-writeback")
+            admit_sources(ws)
+            local original = '{"access_token":"fixture-original","auth_mode":"chatgpt"}'
+            local refreshed = '{"access_token":"fixture-refreshed","auth_mode":"chatgpt"}'
+            local newer_login = '{"access_token":"fixture-newer-machine-login","auth_mode":"chatgpt"}'
+            write_file(CODEX_LOGIN_SOURCE, "auth.json", original)
+            value(call(manager, "define", {workspace_id = ws, name = "codex_login", provider = "codex",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}}))
+            local attempt = fresh("writeback-attempt")
+            local projection = issue(user, ws, "codex_login", attempt)
+            local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id,
+                subject = USER, audience = USER, attempt_id = attempt, generation_key = "writeback-generation"}))
+            test.eq(type(materialized.source_digest), "string")
+            test.eq(#(materialized.source_digest :: string), 64)
+            test.eq(code(call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation = materialized.generation, source_digest = materialized.source_digest, value = refreshed, path = "other.json"})), "INVALID")
+            test.eq(code(call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation = (materialized.generation :: number) + 1, source_digest = materialized.source_digest, value = refreshed})), "DENIED")
+            local update = call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation = materialized.generation, source_digest = materialized.source_digest, value = refreshed})
+            clean(update)
+            test.eq(value(update).written, true)
+            test.is_true(fixture_file(CODEX_LOGIN_SOURCE, "auth.json") == refreshed)
+            write_file(CODEX_LOGIN_SOURCE, "auth.json", newer_login)
+            local stale = call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation = materialized.generation, source_digest = materialized.source_digest, value = refreshed})
+            test.eq(code(stale), "CONFLICT")
+            clean(stale)
+            test.is_true(fixture_file(CODEX_LOGIN_SOURCE, "auth.json") == newer_login)
+        end)
+        test.it("projects one requested Codex profile file and refuses paths outside host admission", function()
+            local ws = fresh("codex-profile-file")
+            admit_sources(ws)
+            local profile_path = ".codex/ds-flash.config.toml"
+            local profile_content = 'model = "gpt-5-codex"\n'
+            write_file(CODEX_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
+            write_file(CODEX_LOGIN_SOURCE, ".codex/config.toml", "profile = \"base\"\n")
+            write_file(CODEX_LOGIN_SOURCE, profile_path, profile_content)
+            value(call(manager, "define", {workspace_id = ws, name = "codex_profile_login", provider = "codex",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}}))
+            local attempt = fresh("codex-profile-attempt")
+            local projection = issue(user, ws, "codex_profile_login", attempt)
+            test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "codex-profile-denied", provider_files = {{source_path = ".codex/secrets.json", path = ".codex/secrets.json", optional = false}}})), "FORBIDDEN")
+            local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "codex-profile-present", provider_files = {{source_path = profile_path, path = profile_path, optional = false}}}))
+            local found = false
+            for _, item in ipairs((materialized.format.file.initialize :: {{[string]: unknown}})) do
+                if item.path == profile_path then
+                    test.eq(item.source_path, profile_path)
+                    test.eq(item.content, profile_content)
+                    found = true
+                end
+            end
+            test.is_true(found)
+            local missing_profile = ".codex/not-installed.config.toml"
+            local optional_attempt = fresh("codex-optional-profile-attempt")
+            local optional_projection = issue(user, ws, "codex_profile_login", optional_attempt)
+            local optional_materialization = value(call(runner, "materialize", {projection_id = optional_projection.projection_id,
+                subject = USER, audience = USER, attempt_id = optional_attempt, generation_key = "codex-profile-optional-missing",
+                provider_files = {{source_path = missing_profile, path = missing_profile, optional = true}}}))
+            for _, item in ipairs((optional_materialization.format.file.initialize :: {{[string]: unknown}})) do
+                test.is_false(item.path == missing_profile)
+            end
+        end)
+        test.it("refuses token write-back unless the host source explicitly admits it", function()
+            local ws = fresh("token-writeback-not-admitted")
+            admit_sources(ws)
+            write_file(CODEX_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
+            local entry = registry.get("bee.credentials:credential_sources")
+            if not entry then error("credential sources entry") end
+            for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+                if item.ref == CODEX_LOGIN_SOURCE and item.provider == "codex" and item.audience == USER then item.write_back = false end
+            end
+            local changed = registry.snapshot():changes()
+            changed:update(entry)
+            local applied, apply_error = changed:apply()
+            if not applied then error("disable token write-back: " .. tostring(apply_error)) end
+            local ws_reply = call(manager, "define", {workspace_id = ws, name = "codex_read_only_login", provider = "codex",
+                source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}})
+            clean(ws_reply)
+            local ws_definition = value(ws_reply)
+            local attempt = fresh("read-only-login-attempt")
+            local projection = issue(user, ws, "codex_read_only_login", attempt)
+            local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "read-only-login-generation"}))
+            test.eq(materialized.write_back, false)
+            test.eq(code(call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation = materialized.generation, source_digest = string.rep("0", 64), value = CODEX_FILE_SENTINEL})), "DENIED")
+        end)
         test.it("resolves optional setup files transiently with bounds and preserves the credential revision", function()
             local ws = fresh("agy-setup")
             admit_sources(ws)
@@ -578,6 +681,32 @@ local function define_tests()
             test.eq(persisted.digest, digest)
             test.eq(persisted.revision, revision)
         end)
+        test.it("does not synthesize an absent optional provider settings file", function()
+            local ws = fresh("claude-settings-absent")
+            admit_sources(ws)
+            write_file(CLAUDE_LOGIN_SOURCE, ".credentials.json", CLAUDE_FILE_SENTINEL)
+            local entry = registry.get("bee.credentials:credential_sources")
+            if not entry then error("credential sources entry") end
+            for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+                if item.ref == CLAUDE_LOGIN_SOURCE and item.provider == "claude" then
+                    item.setup_path = ".claude/settings.json"
+                    item.setup_destination = ".claude/settings.json"
+                    item.setup_content_format = "opaque"
+                end
+            end
+            local changed = registry.snapshot():changes()
+            changed:update(entry)
+            local applied, apply_error = changed:apply()
+            if not applied then error("admit Claude settings: " .. tostring(apply_error)) end
+            value(call(manager, "define", {workspace_id = ws, name = "claude_login", provider = "claude",
+                source = {kind = "fs_directory", ref = CLAUDE_LOGIN_SOURCE}, optional = true}))
+            local attempt = fresh("claude-settings-attempt")
+            local projection = issue(user, ws, "claude_login", attempt)
+            local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "claude-settings-generation"}))
+            test.eq(#materialized.format.file.initialize, 1)
+            test.eq(materialized.format.file.initialize[1].path, ".claude.json")
+        end)
         test.it("imports Grok configuration as an opaque private composition base with or without login", function()
             local ws = fresh("grok-setup")
             admit_sources(ws)
@@ -628,6 +757,7 @@ local function define_tests()
                 {field = "setup_path", value = ".grok/other-config.toml"},
                 {field = "setup_destination", value = ".grok/.other-private-base.toml"},
                 {field = "setup_content_format", value = "json"},
+                {field = "setup_initialize_empty", value = false},
             }
             for _, mutation in ipairs(mutations) do
                 local ws = fresh("grok-setup-digest")

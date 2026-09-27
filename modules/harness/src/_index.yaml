@@ -159,6 +159,12 @@ entries:
           kind: fs_directory
           ref: bee.env:machine_login_source
         optional: true
+      opencode_login:
+        provider: opencode
+        source:
+          kind: fs_directory
+          ref: bee.env:machine_login_source
+        optional: true
 - name: target_agent_application_admission
   kind: ns.requirement
   meta:

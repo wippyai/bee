@@ -11,13 +11,21 @@ user home, copy credentials, or grant MCP tools.
 ## User-configured models
 
 OpenCode takes no model, provider or endpoint profiles from Bee. The user
-selects models, providers and permissions in their own OpenCode home, and the
-window and batch routes inherit that home. A configuration request naming a
-provider is refused.
+selects models, providers and permissions in their own OpenCode home. A
+configuration request naming a provider is refused. The window uses the
+machine home. A private batch route receives only the admitted auth file and
+global config base, with its XDG config and data roots pointed into the attempt
+home.
 
 The normal window uses the user's existing OpenCode login (`opencode auth
-login` writes `~/.local/share/opencode/auth.json`). Bee checks that file's
-existence only and never reads its contents.
+login` writes `~/.local/share/opencode/auth.json`). Its login hint checks that
+file's existence only. A private batch route receives the admitted login and
+global config through the credential broker; placement reads only those
+declared files and returns only the login file after a token refresh.
+
+The batch route may refresh `auth.json`; placement returns only that login file
+through the credential broker after exit. Configuration and unrelated home
+files are not written back.
 
 ## Launch
 
@@ -33,9 +41,9 @@ the resumed session while stdin stays closed.
 ## Gateway MCP
 
 A host-selected gateway renders into `.config/opencode/opencode.json` as the
-single scoped `bee` remote entry, composed into the user's own configuration
-without replacing unrelated keys. Credentials stay with the host credential
-path and reach the file through secret fields.
+single scoped `bee` remote entry, composed into the admitted provider config
+without replacing unrelated keys. Gateway credentials reach that file through
+secret fields.
 
 ## Hooks
 

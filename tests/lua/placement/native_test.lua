@@ -18,6 +18,11 @@ local identity = require("identity")
 local configuration = require("configuration")
 local grok_configuration = require("grok_configuration")
 local grok_launch = require("grok_launch")
+local claude_launch = require("claude_launch")
+local codex_launch = require("codex_launch")
+local agy_launch = require("agy_launch")
+local muse_launch = require("muse_launch")
+local opencode_launch = require("opencode_launch")
 local configuration_protocol = require("configuration_protocol")
 local hash = require("hash")
 local json = require("json")
@@ -77,12 +82,38 @@ local function admit_credential_source()
     local applied, err = changes:apply()
     if not applied then error("admit credential source: " .. tostring(err)) end
 end
-local function admit_login_source(source: string)
+local function admit_login_source(source: string, private_codex_home: boolean?)
     local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
     local data = entry.data :: {[string]: unknown}
     local list = data.sources :: {{[string]: unknown}}
-    list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
+    local matched = false
+    for _, item in ipairs(list) do
+        if item.ref == source and item.provider == "codex" and item.audience == OWNER then
+            item.path = private_codex_home and ".codex/auth.json" or nil
+            item.write_back = private_codex_home == true
+            item.setup_path = private_codex_home and ".codex/config.toml" or nil
+            item.setup_destination = private_codex_home and ".codex/config.toml" or nil
+            item.setup_content_format = private_codex_home and "opaque" or nil
+            item.setup_initialize_empty = private_codex_home and true or nil
+            item.auxiliary_files = private_codex_home and {{source_prefix = ".codex/", destination_prefix = ".codex/",
+                suffix = ".config.toml", content_format = "opaque"}} or nil
+            matched = true
+        end
+    end
+    if not matched then
+        local source_row: {[string]: unknown} = {ref = source, workspace_id = "*", audience = OWNER, provider = "codex", projection_kinds = {"file"}}
+        if private_codex_home then
+            source_row.path = ".codex/auth.json"
+            source_row.write_back = true
+            source_row.setup_path = ".codex/config.toml"
+            source_row.setup_destination = ".codex/config.toml"
+            source_row.setup_content_format = "opaque"
+            source_row.setup_initialize_empty = true
+            source_row.auxiliary_files = {{source_prefix = ".codex/", destination_prefix = ".codex/", suffix = ".config.toml", content_format = "opaque"}}
+        end
+        list[#list + 1] = source_row
+    end
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
     if not file_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
@@ -102,7 +133,7 @@ local function admit_grok_login_source(source: string)
     end
     list[#list + 1] = {ref = source, workspace_id = "*", audience = OWNER, provider = "grok", projection_kinds = {"file"},
         path = ".grok/auth.json", setup_path = ".grok/config.toml",
-        setup_destination = ".grok/.bee-global-config.toml", setup_content_format = "opaque"}
+        setup_destination = ".grok/.bee-global-config.toml", setup_content_format = "opaque", setup_initialize_empty = true, write_back = true}
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
     if not file_policy then error("credential file policy entry") end
     file_policy.data.policy.resources = {source}
@@ -159,6 +190,22 @@ local function launch(command: {string}, required: string): {[string]: unknown}
         launch = {executable = command[1], argv = argv, environment = {"PROBE_VALUE"}, working_directory_ref = "project", readiness = "none"},
         resources = {{name = "project", grant_ref = "grant-1", root_ref = ROOT, subpath = "", access = "write", purpose = "project"}},
         environment = {PROBE_VALUE = "probe-42"}, required_cleanup = required, required_exit_observation = "eof_gated", timeouts = {start_ms = 10000, stop_grace_ms = 500}}
+end
+local function provider_home_fixtures(): {{provider: string, launch: {[string]: unknown}}}
+    local result: {{provider: string, launch: {[string]: unknown}}} = {}
+    local claude = assert(claude_launch.decode({profile_id = "batch", brief = "fixture"}))
+    local codex = assert(codex_launch.decode({profile_id = "batch", brief = "fixture", config_profile = "ds-flash"}))
+    local agy = assert(agy_launch.decode({profile_id = "batch", brief = "fixture"}))
+    local grok = assert(grok_launch.decode({profile_id = "batch", brief = "fixture", permission_mode = "default", max_turns = 1}))
+    local muse = assert(muse_launch.decode({profile_id = "batch", brief = "fixture", approval_mode = "never"}))
+    local opencode = assert(opencode_launch.decode({profile_id = "batch", brief = "fixture"}))
+    result[1] = {provider = "claude", launch = claude_launch.specification(claude) :: {[string]: unknown}}
+    result[2] = {provider = "codex", launch = codex_launch.specification(codex) :: {[string]: unknown}}
+    result[3] = {provider = "agy", launch = agy_launch.specification(agy) :: {[string]: unknown}}
+    result[4] = {provider = "grok", launch = grok_launch.specification(grok) :: {[string]: unknown}}
+    result[5] = {provider = "muse", launch = muse_launch.specification(muse) :: {[string]: unknown}}
+    result[6] = {provider = "opencode", launch = opencode_launch.specification(opencode) :: {[string]: unknown}}
+    return result
 end
 local function provider_configuration(): {[string]: unknown}
     local provider = registry.get("bee.placement.native:codex_test_provider")
@@ -321,6 +368,53 @@ local function has(list: {string}, wanted: string): boolean
 end
 local function define_tests()
     test.describe("Native placement", function()
+        test.it("projects only each driver's declared login and configuration files into fixture attempt homes", function()
+            for _, case in ipairs(provider_home_fixtures()) do
+                local home_spec = (case.launch.provider_home :: {[string]: unknown})
+                test.eq(home_spec.provider, case.provider)
+                test.eq(home_spec.private, true)
+                local files = home_spec.files :: {{[string]: unknown}}
+                local login_path: string? = nil
+                local initializers: {{[string]: unknown}} = {}
+                local expected: {[string]: string} = {}
+                for _, file in ipairs(files) do
+                    local path = file.path :: string
+                    if file.kind == "login" then
+                        login_path = path
+                    else
+                        local content = file.kind == "state" and "fixture-private-state" or "fixture-provider-config\n"
+                        local initializer: {[string]: unknown} = {path = path, content = content}
+                        if type(file.source_path) == "string" then initializer.source_path = file.source_path end
+                        initializers[#initializers + 1] = initializer
+                        expected[path] = content
+                    end
+                end
+                if not login_path then error(case.provider .. " driver has no login file") end
+                local content_format = (case.provider == "agy" or case.provider == "muse") and "opaque" or "json"
+                local format = {schema_revision = "bee.credential-format@1", file = {path = login_path, content_format = content_format, initialize = initializers}}
+                local login = content_format == "json" and '{"fixture":"provider-login"}' or "fixture-provider-login"
+                local key, key_error = homes.attempt_key(OWNER, fresh("provider-home-fixture"))
+                if not key then error(tostring(key_error)) end
+                local attempt_home, home_error = homes.create_attempt(key)
+                if not attempt_home then error(tostring(home_error)) end
+                local projected, project_error = homes.project_attempt_login(attempt_home,
+                    {provider = case.provider, definition_id = "bee.test." .. case.provider .. "_login", definition_revision = 1, format = format}, login, {})
+                if not projected then error(case.provider .. " fixture projection: " .. tostring(project_error)) end
+                local login_bytes, login_error = homes.read_provider_file(attempt_home, login_path)
+                if not login_bytes then error(case.provider .. " login missing: " .. tostring(login_error)) end
+                test.is_true(login_bytes == login)
+                for path, expected_bytes in pairs(expected) do
+                    local found, read_error = homes.read_provider_file(attempt_home, path)
+                    if not found then error(case.provider .. " config missing: " .. tostring(read_error)) end
+                    test.is_true(found == expected_bytes)
+                end
+                local unrelated, unrelated_error = homes.read_provider_file(attempt_home, "machine-home-only.txt")
+                test.is_nil(unrelated)
+                test.eq(unrelated_error, "provider file is missing")
+                local remove_error = homes.remove_attempt(key)
+                test.is_nil(remove_error)
+            end
+        end)
         test.it("checks login evidence in the selected provider home without opening files", function()
             local raw = launch({"sh", "-c", "true"}, "direct_process")
             raw.profile_id = "window"
@@ -1787,6 +1881,71 @@ local function define_tests()
             local absent = call(OWNER, "status", {attempt_id = attempt_id})
             test.is_false(absent.ok)
             test.eq(absent.error.code, "NOT_FOUND")
+        end)
+        test.it("runs a confined fixture worker with only its projected Codex home and writes its refreshed token back", function()
+            local source = "bee.credentials:codex_login_fixture"
+            local source_root = ".wippy/codex-login-fixture"
+            admit_login_source(source, true)
+            local original_login = '{"fixture":"ambient-login"}'
+            local refreshed_login = '{"fixture":"ambient-refresh"}'
+            test.eq(shell("mkdir -p " .. source_root .. "/.codex && printf %s " .. quote.posix(original_login) .. " > " .. source_root .. "/.codex/auth.json"
+                .. " && printf %s " .. quote.posix("profile = \"fixture\"\n") .. " > " .. source_root .. "/.codex/config.toml"
+                .. " && printf %s " .. quote.posix("model = \"gpt-5-codex\"\n") .. " > " .. source_root .. "/.codex/ds-flash.config.toml"
+                .. " && printf %s " .. quote.posix("must-not-be-projected") .. " > " .. source_root .. "/machine-home-only.txt"), "")
+            local workspace = fresh("private-provider-home-workspace")
+            credential_call("define", {workspace_id = workspace, name = "codex_ambient", provider = "codex", source = {kind = "fs_directory", ref = source}})
+            local attempt_id = fresh("private-provider-home-attempt")
+            local projection = credential_call("issue_projection", {workspace_id = workspace, name = "codex_ambient", audience = OWNER,
+                attempt_id = attempt_id, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST,
+                launch_policy_digest = DIGEST, idempotency_key = fresh("private-provider-home-key")})
+            local script = 'test -s "$CODEX_HOME/auth.json" && test -s "$CODEX_HOME/config.toml"'
+                .. ' && test -s "$CODEX_HOME/ds-flash.config.toml" && test ! -e "$HOME/.codex/other-profile.config.toml"'
+                .. ' && test ! -e "$HOME/machine-home-only.txt"'
+                .. ' && printf projected-fixture-ok && printf %s ' .. quote.posix(refreshed_login) .. ' > "$CODEX_HOME/auth.json"'
+            local request = launch({"sh", "-c", script}, "direct_process")
+            request.attempt_id = attempt_id
+            request.projections = {projection.projection_id}
+            (request.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
+                files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
+                    {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
+                    {source_path = ".codex/ds-flash.config.toml", path = ".codex/ds-flash.config.toml", kind = "config", optional = false, write_back = false}}}
+            attempt_of(call(OWNER, "prepare", request))
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = attempt_id}))
+            local output = ""
+            local ended: {[string]: boolean} = {}
+            local deadline = time.after("10s")
+            while not ended.stdout or not ended.stderr do
+                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
+                if not selected.ok or selected.channel == deadline then error("fixture provider-home worker did not report success") end
+                local data = selected.value:payload():data() :: protocol.Output
+                if data.attempt_id == attempt_id and data.generation == 1 then
+                    if type(data.data) == "string" then output = output .. (data.data :: string) end
+                    if data.eof then ended[data.stream] = true end
+                    process.send(tostring(selected.value:from()), protocol.TOPIC_ACK,
+                        {generation = 1, consumed_through = data.sequence})
+                end
+            end
+            process.unlisten(outputs)
+            if not output:find("projected-fixture-ok", 1, true) then error("fixture provider-home worker output: " .. output) end
+            if not wait_for(function()
+                local observed = kinds(attempt_id)
+                return has(observed, "credential.write_back") or has(observed, "credential.write_back_failed")
+            end, 8000) then error("refreshed fixture login write-back did not settle") end
+            test.eq(shell("test \"$(cat " .. quote.posix(source_root .. "/.codex/auth.json") .. ")\" = "
+                .. quote.posix(refreshed_login) .. " && printf refreshed"), "refreshed")
+            local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
+            local wrote_back = false
+            for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                test.is_nil(tostring(item.detail):find("ambient-refresh", 1, true))
+                if item.kind == "credential.write_back" then wrote_back = true end
+                if item.kind == "credential.write_back_failed" then
+                    error("refreshed fixture login write-back failed: " .. tostring(item.detail))
+                end
+            end
+            if not wrote_back then error("fixture token write-back evidence was missing") end
+            attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
         end)
         test.it("starts with an absent optional machine login and permits private CLI sign-in", function()
             local source = "bee.credentials:codex_login_fixture"

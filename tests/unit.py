@@ -63,6 +63,7 @@ def environment(folder):
             "WIPPY_CACHE_DIR": str(Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()),
             "BEE_FIXTURE_BIN": str(fixture_bin),
             "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
+            "BEE_AMBIENT_LIVE_PROVIDER": "none",
             "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
 
 

@@ -13,6 +13,13 @@ M.CLAUDE_AUTHENTICATION = "unproven"
 M.PERMISSION_MODES = {"default", "acceptEdits", "plan", "dontAsk"}
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 M.MAX_TURNS = 32
+local function provider_home(private: boolean): types.ProviderHome
+    return {provider = "claude", private = private, variable = "CLAUDE_CONFIG_DIR", directory = ".claude", files = {
+        {source_path = ".claude/.credentials.json", path = ".claude/.credentials.json", kind = "login", optional = true, write_back = true},
+        {source_path = ".claude/settings.json", path = ".claude/settings.json", kind = "config", optional = true, write_back = false},
+        {source_path = nil, path = ".claude.json", kind = "state", optional = true, write_back = false},
+    }}
+end
 -- permission_exchange is set by the host when it enabled an interactive
 -- exchange: the launch then takes its brief over stream-json input, keeps
 -- stdin open for the responses and routes permission prompts to stdin.
@@ -144,13 +151,15 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = request.brief
         end
         return {executable = "claude", argv = argv, environment = environment, readiness = "terminal:attached",
-            login = {provider = "claude", command = "claude", files = {{variable = "CLAUDE_CONFIG_DIR", default_directory = ".claude", path = ".credentials.json"}}}}
+            login = {provider = "claude", command = "claude", files = {{variable = "CLAUDE_CONFIG_DIR", default_directory = ".claude", path = ".credentials.json"}}},
+            provider_home = provider_home(false)}
     end
     if not request.permission_exchange and not request.control_enabled then
         argv[#argv + 1] = "--"
         argv[#argv + 1] = request.brief
     end
     local launch: types.Launch = {executable = "claude", argv = argv, environment = environment, readiness = "protocol:system.init"}
+    launch.provider_home = provider_home(true)
     if request.permission_exchange or request.control_enabled then
         -- Canonical encoding keeps the launch specification, and with it
         -- the plan digest, identical across processes.

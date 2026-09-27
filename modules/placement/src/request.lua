@@ -9,6 +9,7 @@ local types = require("types")
 local driver_types = require("driver_types")
 local preferences = require("preferences")
 local M = {}
+type ProviderHomeFileKind = "login" | "config" | "state"
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
 M.MAX_GATEWAY_TOOLS = 32
@@ -100,10 +101,87 @@ local function decode_files(value: unknown, field: string, nonempty: boolean): (
     end
     return files, nil
 end
+local function decode_provider_home(value: unknown): (driver_types.ProviderHome?, string?)
+    local object = bounds.object(value)
+    if not object then return nil, "launch.provider_home must be an object" end
+    local unknown = bounds.fields(object, {"provider", "private", "variable", "directory", "extra_variables", "files"})
+    if unknown then return nil, "launch.provider_home: " .. unknown end
+    local provider = bounds.id(object.provider)
+    if not provider then return nil, "launch.provider_home.provider is not an identifier" end
+    if type(object.private) ~= "boolean" then return nil, "launch.provider_home.private must be a boolean" end
+    local variable: string? = nil
+    if object.variable ~= nil then
+        variable = bounds.id(object.variable)
+        if not variable or not variable:match(ENVIRONMENT_NAME) then return nil, "launch.provider_home.variable must be an environment name" end
+    end
+    local directory: string? = nil
+    if object.directory ~= nil then
+        directory = bounds.text(object.directory, M.MAX_REQUIRED_PATH_BYTES)
+        if not directory or not safe_relative(directory) then return nil, "launch.provider_home.directory must be a safe relative path" end
+    end
+    if (variable == nil) ~= (directory == nil) then return nil, "launch.provider_home.variable and directory must be supplied together" end
+    local extra_variables: {driver_types.ProviderHomeEnvironment} = {}
+    if object.extra_variables ~= nil then
+        if type(object.extra_variables) ~= "table" then return nil, "launch.provider_home.extra_variables must be a list" end
+        local raw_variables = object.extra_variables :: {unknown}
+        if #raw_variables > 4 then return nil, "launch.provider_home.extra_variables exceeds 4 entries" end
+        local seen_variables: {[string]: boolean} = {}
+        if variable then seen_variables[variable] = true end
+        for index, raw in ipairs(raw_variables) do
+            local item = bounds.object(raw)
+            if not item then return nil, "launch.provider_home.extra_variables[" .. tostring(index) .. "] must be an object" end
+            local item_unknown = bounds.fields(item, {"variable", "directory"})
+            if item_unknown then return nil, "launch.provider_home.extra_variables[" .. tostring(index) .. "]: " .. item_unknown end
+            local item_variable = bounds.id(item.variable)
+            if not item_variable or not item_variable:match(ENVIRONMENT_NAME) or seen_variables[item_variable] then
+                return nil, "launch.provider_home.extra_variables contains an invalid or duplicate variable"
+            end
+            local item_directory = bounds.text(item.directory, M.MAX_REQUIRED_PATH_BYTES)
+            if not item_directory or not safe_relative(item_directory) then
+                return nil, "launch.provider_home.extra_variables[" .. tostring(index) .. "].directory must be a safe relative path"
+            end
+            seen_variables[item_variable] = true
+            extra_variables[index] = {variable = item_variable, directory = item_directory}
+        end
+    end
+    if type(object.files) ~= "table" then return nil, "launch.provider_home.files must be a list" end
+    local raw_files = object.files :: {unknown}
+    if #raw_files < 1 or #raw_files > M.MAX_REQUIRED_FILES then return nil, "launch.provider_home.files must contain 1 to " .. tostring(M.MAX_REQUIRED_FILES) .. " entries" end
+    local files: {driver_types.ProviderHomeFile} = {}
+    local seen: {[string]: boolean} = {}
+    for index, raw in ipairs(raw_files) do
+        local file = bounds.object(raw)
+        if not file then return nil, "launch.provider_home.files[" .. tostring(index) .. "] must be an object" end
+        local file_unknown = bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back"})
+        if file_unknown then return nil, "launch.provider_home.files[" .. tostring(index) .. "]: " .. file_unknown end
+        local path = bounds.text(file.path, M.MAX_REQUIRED_PATH_BYTES)
+        if not path or not safe_relative(path) then return nil, "launch.provider_home.files[" .. tostring(index) .. "].path must be a safe relative path" end
+        if seen[path] then return nil, "launch.provider_home.files contains a duplicate destination" end
+        seen[path] = true
+        local source_path: string? = nil
+        if file.source_path ~= nil then
+            source_path = bounds.text(file.source_path, M.MAX_REQUIRED_PATH_BYTES)
+            if not source_path or not safe_relative(source_path) then return nil, "launch.provider_home.files[" .. tostring(index) .. "].source_path must be a safe relative path" end
+        end
+        local kind = bounds.member(file.kind, {"login", "config", "state"})
+        if not kind then return nil, "launch.provider_home.files[" .. tostring(index) .. "].kind is unsupported" end
+        if kind == "state" and source_path ~= nil then return nil, "generated provider state cannot name a source file" end
+        if kind ~= "state" and source_path == nil then return nil, "ambient provider files need a source path" end
+        local optional = true
+        if file.optional ~= nil then optional = file.optional end
+        if type(optional) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].optional must be a boolean" end
+        local write_back = false
+        if file.write_back ~= nil then write_back = file.write_back end
+        if type(write_back) ~= "boolean" or (write_back and kind ~= "login") then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
+        files[index] = {source_path = source_path, path = path, kind = kind :: ProviderHomeFileKind, optional = optional :: boolean, write_back = write_back :: boolean}
+    end
+    return {provider = provider, private = object.private :: boolean, variable = variable, directory = directory,
+        extra_variables = extra_variables, files = files}, nil
+end
 function M.launch(value: unknown): (driver_types.Launch?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch must be an object" end
-    local unknown_field = bounds.fields(object, {"executable", "argv", "stdin", "stdin_eof", "session_end", "environment", "working_directory_ref", "home_ref", "required_files", "login", "readiness"})
+    local unknown_field = bounds.fields(object, {"executable", "argv", "stdin", "stdin_eof", "session_end", "environment", "working_directory_ref", "home_ref", "required_files", "login", "provider_home", "readiness"})
     if unknown_field then return nil, "launch: " .. unknown_field end
     local executable = bounds.text(object.executable, M.MAX_ARGUMENT_BYTES)
     if not executable or executable == "" or executable:find("\0", 1, true) then return nil, "launch.executable must be nonempty text" end
@@ -158,6 +236,12 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
         if not files then return nil, files_error end
         login = {provider = provider, command = command, files = files}
     end
+    local provider_home: driver_types.ProviderHome? = nil
+    if object.provider_home ~= nil then
+        local decoded, provider_home_error = decode_provider_home(object.provider_home)
+        if not decoded then return nil, provider_home_error end
+        provider_home = decoded
+    end
     local readiness = bounds.text(object.readiness, 256)
     if not readiness or readiness == "" then return nil, "launch.readiness must be nonempty text" end
     local stdin_eof: boolean? = nil
@@ -175,6 +259,7 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     local launch: driver_types.Launch = {executable = executable, argv = argv, stdin = stdin, stdin_eof = stdin_eof, session_end = session_end, environment = names, working_directory_ref = working, home_ref = home, readiness = readiness}
     if #required > 0 then launch.required_files = required end
     launch.login = login
+    launch.provider_home = provider_home
     return launch, nil
 end
 local function decode_environment(value: unknown, field: string, values: boolean): ({[string]: string}?, string?)

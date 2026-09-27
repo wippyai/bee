@@ -17,6 +17,7 @@ Required environment: BEE_RUNTIME (the combined runtime binary) only.
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -31,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ACCEPTANCE = "starts an allow-listed child, delivers the brief, and waits for its answer and settlement"
 RUN_ACCEPTANCE = "launches a Codex worker on a new thread, follows its run by notify and wait, steers it, and cancels a second worker"
 TESTS = ("bee.harness.catalog:agent_launch_acceptance_test", "bee.harness.catalog:agent_run_acceptance_test")
+LIVE_TEST = ("bee.harness.catalog:agent_launch_acceptance_test",)
 
 
 def main():
@@ -47,7 +49,8 @@ def main():
         subprocess.run(["git", "-C", str(repository), "commit", "--quiet", "-m", "fixture base"], check=True)
         subprocess.run(["git", "-C", str(repository), "worktree", "add", "--quiet", "-b", "bee-fixture-worker", str(worktree)], check=True)
         environment = {**os.environ, "BEE_FIXTURE_BIN": str(folder / "fixtures/harness/bin"),
-                       "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"), "BEE_FIXTURE_GIT_COMMIT": "1"}
+                       "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
+                       "BEE_FIXTURE_GIT_COMMIT": "1", "BEE_AMBIENT_LIVE_PROVIDER": "none"}
         environment.pop("ANTHROPIC_API_KEY", None)
         started = time.time()
         run = subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal", "test", *TESTS],
@@ -76,6 +79,44 @@ def main():
               "orchestrator's thread_wait returns its answer and terminal outcome; a managed orchestrator "
               "launches a confined Codex fixture worker that commits in a Git worktree, follows its run by "
               "notify and wait, steers it, and cancels a second worker")
+
+    home = Path(os.environ.get("HOME", str(Path.home())))
+    for provider, login in (("claude", home / ".claude/.credentials.json"), ("codex", home / ".codex/auth.json")):
+        if not login.is_file():
+            print(f"Live {provider} orchestrator smoke: skipped (login file absent)")
+            continue
+        if not shutil.which(provider):
+            print(f"Live {provider} orchestrator smoke: skipped (CLI absent)")
+            continue
+        with fixture_workspace(managed_gateway=True) as folder:
+            environment = {**os.environ, "BEE_FIXTURE_BIN": str(folder / "fixtures/harness/bin"),
+                           "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"), "BEE_AMBIENT_LIVE_PROVIDER": provider}
+            environment.pop("ANTHROPIC_API_KEY", None)
+            started = time.time()
+            run = subprocess.run([str(RUNTIME), "test", "--host", "bee:terminal", "test", *LIVE_TEST],
+                                 cwd=folder, capture_output=True, text=True,
+                                 timeout=int(os.environ.get("BEE_THREAD_LAUNCH_TIMEOUT", "600")), env=environment)
+            out = re.sub(r"\x1b\[[0-9;]*m", "", run.stdout + run.stderr).replace("\r", "\n")
+            passed = re.search(r"^\s+o .*starts an allow-listed child, delivers the brief, and waits for its answer and settlement", out, re.M)
+            if run.returncode != 0 or not passed:
+                safe_failure = "completion proof failed"
+                if re.search(r'assertion failed: expected "succeeded", got "failed"', out):
+                    safe_failure = "provider turn reported failed"
+                elif re.search(r'assertion failed: expected "succeeded", got "uncertain"', out):
+                    safe_failure = "provider turn outcome is uncertain"
+                for stage in ("host setup", "orchestrator completion", "orchestrator settlement", "child launch report",
+                              "child identity", "child completion"):
+                    if f"live {provider} smoke failed during {stage}" in out:
+                        safe_failure = "acceptance stage " + stage
+                        break
+                refusal_code = re.search(r"worker launch refused with ([A-Z_]+)", out)
+                if refusal_code:
+                    safe_failure = "worker launch refusal code " + refusal_code.group(1)
+                source_line = re.search(r"bee\.harness\.catalog:agent_launch_acceptance_test:(\d+):", out)
+                if source_line:
+                    safe_failure += " at acceptance source line " + source_line.group(1)
+                sys.exit(f"Live {provider} orchestrator smoke failed (runtime exit {run.returncode}; {safe_failure}); output withheld")
+            print(f"Live {provider} orchestrator smoke: a real batch worker completed through the orchestrator profile in {time.time() - started:.1f} s")
 
 
 if __name__ == "__main__":

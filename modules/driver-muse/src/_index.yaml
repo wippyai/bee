@@ -172,7 +172,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: new}
     session_resource: session
-    credentials: [muse_login]
+    credentials: []
     presentation: {start_menu: true, fullscreen: true, reuse: never}
 - name: research_batch
   kind: registry.entry

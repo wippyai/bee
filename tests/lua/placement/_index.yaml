@@ -210,6 +210,11 @@ entries:
     configuration: bee.driver.codex:configuration
     grok_configuration: bee.driver.grok:configuration
     grok_launch: bee.driver.grok:launch
+    claude_launch: bee.driver.claude:launch
+    codex_launch: bee.driver.codex:launch
+    agy_launch: bee.driver.agy:launch
+    muse_launch: bee.driver.muse:launch
+    opencode_launch: bee.driver.opencode:launch
     configuration_protocol: bee.driver:configuration
     test: wippy.test:test
     service: bee.placement.native.service:service

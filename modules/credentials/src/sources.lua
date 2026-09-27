@@ -10,8 +10,9 @@ local M = {}
 M.DATABASE_REF = "bee.credentials:database_ref"
 M.SOURCES_REF = "bee.credentials:sources_ref"
 M.MATERIALIZER_REF = "bee.credentials:materializer_ref"
-type Setup = {path: string, destination: string, content_format: string}
-type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?, setup: Setup?}
+type Setup = {path: string, destination: string, content_format: string, initialize_empty: boolean}
+type AuxiliaryFile = {source_prefix: string, destination_prefix: string, suffix: string, content_format: string}
+type Source = {ref: string, workspace_id: string, audience: string, provider: string, projection_kinds: {string}, path: string?, setup: Setup?, auxiliary_files: {AuxiliaryFile}, write_back: boolean}
 type SourceSet = {sources: {Source}, formats: {[string]: string}}
 local function reference(id: string, field: string, label: string): (string?, string?)
     local entry, err = registry.get(id)
@@ -68,9 +69,45 @@ function M.host_sources(): (SourceSet?, string?)
                 local setup_format = declared.setup_content_format == nil and "json" or bounds.member(declared.setup_content_format, {"json", "opaque"})
                 if not setup_path or not setup_destination then return nil, "host credential setup path or destination is invalid" end
                 if not setup_format then return nil, "host credential setup content format is invalid" end
-                setup = {path = setup_path, destination = setup_destination, content_format = setup_format}
-            elseif declared.setup_destination ~= nil or declared.setup_content_format ~= nil then
+                local initialize_empty = declared.setup_initialize_empty == true
+                if declared.setup_initialize_empty ~= nil and type(declared.setup_initialize_empty) ~= "boolean" then
+                    return nil, "host credential setup empty-base flag is invalid"
+                end
+                setup = {path = setup_path, destination = setup_destination, content_format = setup_format, initialize_empty = initialize_empty}
+            elseif declared.setup_destination ~= nil or declared.setup_content_format ~= nil or declared.setup_initialize_empty ~= nil then
                 return nil, "host credential setup destination and format require setup_path"
+            end
+            local auxiliary_files: {AuxiliaryFile} = {}
+            if declared.auxiliary_files ~= nil then
+                if type(declared.auxiliary_files) ~= "table" then return nil, "host auxiliary credential files are invalid" end
+                local items = declared.auxiliary_files :: {unknown}
+                if #items > 8 then return nil, "host auxiliary credential files exceed the limit" end
+                local count = 0
+                for key in pairs(items) do
+                    if type(key) ~= "number" or key < 1 or key > #items or math.floor(key) ~= key then
+                        return nil, "host auxiliary credential files must be a dense array"
+                    end
+                    count = count + 1
+                end
+                if count ~= #items then return nil, "host auxiliary credential files must be a dense array" end
+                for _, raw in ipairs(items) do
+                    local item = bounds.object(raw)
+                    if not item or bounds.fields(item, {"source_prefix", "destination_prefix", "suffix", "content_format"}) then
+                        return nil, "host auxiliary credential file is invalid"
+                    end
+                    local source_prefix = bounds.text(item.source_prefix, 256)
+                    local destination_prefix = bounds.text(item.destination_prefix, 256)
+                    local suffix = bounds.text(item.suffix, 64)
+                    local content_format = bounds.member(item.content_format, {"json", "opaque"})
+                    if not source_prefix or source_prefix:sub(-1) ~= "/" or not formats.path(source_prefix .. "bee-file")
+                        or not destination_prefix or destination_prefix:sub(-1) ~= "/" or not formats.path(destination_prefix .. "bee-file")
+                        or not suffix or not suffix:match("^%.[A-Za-z0-9._-]+$") or suffix:find("..", 1, true) ~= nil
+                        or not content_format then
+                        return nil, "host auxiliary credential file is invalid"
+                    end
+                    auxiliary_files[#auxiliary_files + 1] = {source_prefix = source_prefix, destination_prefix = destination_prefix,
+                        suffix = suffix, content_format = content_format}
+                end
             end
             local kinds: {string} = {}
             if type(declared.projection_kinds) == "table" then
@@ -82,13 +119,74 @@ function M.host_sources(): (SourceSet?, string?)
             local ref = bounds.id(declared.ref)
             local workspace_id = bounds.id(declared.workspace_id)
             local audience = bounds.id(declared.audience)
+            local write_back = false
+            if declared.write_back ~= nil then
+                if type(declared.write_back) ~= "boolean" then return nil, "host credential write-back flag is invalid" end
+                write_back = declared.write_back :: boolean
+            end
+            local file_allowed = false
+            for _, kind in ipairs(kinds) do if kind == "file" then file_allowed = true end end
+            if write_back and not file_allowed then return nil, "host token write-back requires a file source" end
             if ref and workspace_id and audience and provider then
                 sources.sources[#sources.sources + 1] = {ref = ref, workspace_id = workspace_id, audience = audience,
-                    provider = provider, projection_kinds = kinds, path = path, setup = setup}
+                    provider = provider, projection_kinds = kinds, path = path, setup = setup, auxiliary_files = auxiliary_files, write_back = write_back}
             end
         end
     end
     return sources, nil
+end
+-- An auxiliary config file is read only when its exact safe path is requested
+-- by a driver and the host admits its prefix and suffix for this source.
+function M.auxiliary_rules(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): ({AuxiliaryFile}?, string?)
+    local selected: {AuxiliaryFile}? = nil
+    for _, source in ipairs(sources.sources) do
+        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
+            and (audience == nil or source.audience == "*" or source.audience == audience) then
+            for _, kind in ipairs(source.projection_kinds) do
+                if kind == "file" then
+                    local same = selected == nil or #selected == #source.auxiliary_files
+                    if same and selected ~= nil then
+                        for index, rule in ipairs(source.auxiliary_files) do
+                            local prior = selected[index]
+                            if not prior or prior.source_prefix ~= rule.source_prefix or prior.destination_prefix ~= rule.destination_prefix
+                                or prior.suffix ~= rule.suffix or prior.content_format ~= rule.content_format then
+                                same = false
+                                break
+                            end
+                        end
+                    end
+                    if not same then return nil, "host auxiliary credential file declarations are ambiguous" end
+                    if selected == nil then selected = source.auxiliary_files end
+                end
+            end
+        end
+    end
+    if selected == nil then return nil, "host file source is not admitted" end
+    return selected, nil
+end
+function M.additional_file(ref: string, workspace_id: string, provider: string, audience: string,
+    source_path: string, destination: string): (string?, string?)
+    if not formats.path(source_path) or not formats.path(destination) then return nil, "auxiliary provider path is invalid" end
+    local sources, sources_error = M.host_sources()
+    if not sources then return nil, sources_error or "host sources unavailable" end
+    local rules, rules_error = M.auxiliary_rules(sources, ref, workspace_id, provider, audience)
+    if not rules then return nil, rules_error or "host auxiliary file rule unavailable" end
+    local selected: string? = nil
+    for _, rule in ipairs(rules) do
+        if source_path:sub(1, #rule.source_prefix) == rule.source_prefix and source_path:sub(-#rule.suffix) == rule.suffix then
+            local leaf = source_path:sub(#rule.source_prefix + 1)
+            local name = leaf:sub(1, #leaf - #rule.suffix)
+            if leaf:find("/", 1, true) == nil and name:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$")
+                and destination == rule.destination_prefix .. leaf then
+                if selected ~= nil and selected ~= rule.content_format then
+                    return nil, "host auxiliary credential file declarations are ambiguous"
+                end
+                selected = rule.content_format
+            end
+        end
+    end
+    if not selected then return nil, "host does not admit this auxiliary provider file" end
+    return selected, nil
 end
 -- An optional provider setup file is a host-selected path paired with a file
 -- source. It is metadata only; the file policy still authorizes fs.get/read.
@@ -110,7 +208,7 @@ function M.setup(sources: SourceSet, ref: string, workspace_id: string, provider
                         local candidate = source.setup
                         local same = (selected == nil and candidate == nil) or (selected ~= nil and candidate ~= nil
                             and selected.path == candidate.path and selected.destination == candidate.destination
-                            and selected.content_format == candidate.content_format)
+                            and selected.content_format == candidate.content_format and selected.initialize_empty == candidate.initialize_empty)
                         if not same then return nil, "host credential setup files are ambiguous" end
                     end
                 end
@@ -118,6 +216,24 @@ function M.setup(sources: SourceSet, ref: string, workspace_id: string, provider
         end
     end
     if not matched then return nil, "host file source is not admitted" end
+    return selected, nil
+end
+-- Token write-back is a separate host admission bit; file readability alone
+-- never permits returning child changes to the machine login source.
+function M.token_write_back(sources: SourceSet, ref: string, workspace_id: string, provider: string, audience: string?): (boolean?, string?)
+    local selected: boolean? = nil
+    for _, source in ipairs(sources.sources) do
+        if source.ref == ref and source.provider == provider and (source.workspace_id == "*" or source.workspace_id == workspace_id)
+            and (audience == nil or source.audience == "*" or source.audience == audience) then
+            for _, kind in ipairs(source.projection_kinds) do
+                if kind == "file" then
+                    if selected ~= nil and selected ~= source.write_back then return nil, "host token write-back declarations are ambiguous" end
+                    selected = source.write_back
+                end
+            end
+        end
+    end
+    if selected == nil then return nil, "host file source is not admitted" end
     return selected, nil
 end
 -- Whether the host admits a source for a workspace, provider and kind, and

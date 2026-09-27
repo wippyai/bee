@@ -468,6 +468,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     local outcome = exits:receive()
                     if type(outcome) == "table" and type(outcome.code) == "number" then exit_code = math.floor(outcome.code :: number) end
                     store.transition(db, attempt_id, {execution = "exited", fields = {exit_code = exit_code, exit_source = "runner"}, evidence = {kind = "child.exited", detail = "after runner cancellation, exit code " .. tostring(exit_code)}})
+                    exited = true
                 end
                 retire_gateway("runner cancelled")
                 break
@@ -498,6 +499,15 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         end
     end
     close_streams()
+    if exited and #materialized.writebacks > 0 then
+        for _, result in ipairs(materialization.write_back(materialized.home_path, materialized.writebacks, request.owner_id, attempt_id)) do
+            if result.ok then
+                evidence(db, attempt_id, "credential.write_back", "projection " .. result.projection_id .. (result.written and " refreshed token persisted" or " token unchanged"))
+            else
+                evidence(db, attempt_id, "credential.write_back_failed", "projection " .. result.projection_id .. ": " .. tostring(result.code or "UNAVAILABLE"))
+            end
+        end
+    end
     executor:release()
     process.unlisten(controls)
     process.unlisten(inputs)

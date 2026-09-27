@@ -8,6 +8,12 @@ M.GROK_AUTHENTICATION = "unproven"
 M.PERMISSION_MODES = {"default", "acceptEdits", "auto", "dontAsk", "bypassPermissions", "plan"}
 M.EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 M.MAX_TURNS = 32
+local function provider_home(private: boolean): types.ProviderHome
+    return {provider = "grok", private = private, variable = "GROK_HOME", directory = ".grok", files = {
+        {source_path = ".grok/auth.json", path = ".grok/auth.json", kind = "login", optional = true, write_back = true},
+        {source_path = ".grok/config.toml", path = ".grok/.bee-global-config.toml", kind = "config", optional = true, write_back = false},
+    }}
+end
 
 type Request = {
     profile_id: string,
@@ -142,9 +148,10 @@ function M.specification(request: Request): types.Launch
             argv[#argv + 1] = request.brief
         end
         return {executable = "grok", argv = argv, environment = environment, readiness = "terminal:attached",
-            login = {provider = "grok", command = "grok", files = {{variable = "GROK_HOME", default_directory = ".grok", path = "auth.json"}}}}
+            login = {provider = "grok", command = "grok", files = {{variable = "GROK_HOME", default_directory = ".grok", path = "auth.json"}}},
+            provider_home = provider_home(false)}
     end
-    return {executable = "grok", argv = argv, environment = environment, readiness = "none"}
+    return {executable = "grok", argv = argv, environment = environment, readiness = "none", provider_home = provider_home(true)}
 end
 
 return M

@@ -245,10 +245,13 @@ First-use setup also prepares definition-declared credential names from the host
 `define(expected_revision = 0)` and accepts an existing matching definition;
 it never replaces a differing definition or reads secret bytes. The fixed setup
 scope admits only the resource and credential define/list operations it needs.
-Missing credential configuration is refused before creating resources. A later
-operation failure may leave earlier creations intact; retries reuse them.
-Production's credential map remains empty, so this does not yet discover or
-project the user's machine login automatically.
+Missing credential configuration is refused before creating resources. The
+shipped host map names the machine login source for Claude Code, Codex, Agy,
+Grok, Muse, and OpenCode, so a component launch definition that names one of
+those credentials gets its broker definition on first use without a separate
+workspace setup step. The broker still checks the source file and host path
+admission when it projects the login. A later operation failure may leave
+earlier creations intact; retries reuse them.
 
 The Agent picker source summarizes the selected measured profile: project or
 configured directory, whether persistent profile instructions are selected, and

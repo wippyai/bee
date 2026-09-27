@@ -2,7 +2,7 @@
 -- Login layout is host-selected data; this decoder grants no resource access.
 local bounds = require("bounds")
 local M = {}
-type Initializer = {path: string, content: string, on_missing_login: boolean?}
+type Initializer = {path: string, content: string, source_path: string?, on_missing_login: boolean?}
 type File = {path: string, content_format: string, initialize: {Initializer}}
 type Format = {schema_revision: string, environment_destination: string?, file: File?}
 M.MAX_INITIALIZATION_BYTES = 65536
@@ -45,12 +45,17 @@ function M.decode(value: unknown): (Format?, string?)
             if count ~= #items then return nil, "credential initialization must be a dense array" end
             for _, value in ipairs(items :: {unknown}) do
                 local item = bounds.object(value)
-                if not item or bounds.fields(item, {"path", "content", "on_missing_login"}) then return nil, "invalid credential initialization fields" end
+                if not item or bounds.fields(item, {"path", "content", "source_path", "on_missing_login"}) then return nil, "invalid credential initialization fields" end
                 local target, content = M.path(item.path), bounds.text(item.content, M.MAX_INITIALIZATION_BYTES)
                 if not target then return nil, "invalid or duplicate credential initialization file" end
                 if content == nil then return nil, "invalid or duplicate credential initialization file" end
                 if seen[target] then return nil, "invalid or duplicate credential initialization file" end
                 if item.on_missing_login ~= nil and type(item.on_missing_login) ~= "boolean" then return nil, "invalid credential initialization condition" end
+                local source_path: string? = nil
+                if item.source_path ~= nil then
+                    source_path = M.path(item.source_path)
+                    if not source_path then return nil, "invalid credential initialization source path" end
+                end
                 for existing in pairs(seen) do
                     if target:sub(1, #existing + 1) == existing .. "/" or existing:sub(1, #target + 1) == target .. "/" then
                         return nil, "credential files cannot also be parent directories"
@@ -59,7 +64,7 @@ function M.decode(value: unknown): (Format?, string?)
                 bytes = bytes + #content
                 if bytes > M.MAX_INITIALIZATION_BYTES then return nil, "credential initialization exceeds byte limit" end
                 seen[target] = true
-                local initializer: Initializer = {path = target, content = content}
+                local initializer: Initializer = {path = target, content = content, source_path = source_path}
                 if item.on_missing_login == true then initializer.on_missing_login = true end
                 initializers[#initializers + 1] = initializer
             end

@@ -181,7 +181,7 @@ entries:
           variables:
           - HOME
           - CODEX_HOME
-          private_home: false
+          private_home: true
         exit_codes_trustworthy: false
         input_ready:
           strategy: protocol
@@ -261,7 +261,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned structured Codex route that inherits the host Codex home, so a saved profile may name one Codex config profile and the answer lands on the caller's thread as a stream observation
+    comment: Component-owned structured Codex route that projects its selected named profile, login and required configuration into a private home
   data:
     schema_revision: bee.launch-definition@1
     launch_id: codex-named-batch
@@ -275,7 +275,7 @@ entries:
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
     session_resource: session
-    credentials: []
+    credentials: [codex_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
 
 - name: credential_format
@@ -318,7 +318,7 @@ entries:
     executables: {}
     executable_env: {codex: bee.driver.codex:executable}
     environment: {}
-    environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
+    environment_refs: {}
     allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
@@ -329,7 +329,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected structured Codex route that inherits the host Codex home so a saved profile may name one Codex config profile; read-only, one bounded turn on a caller-owned thread
+    comment: Host-selected structured Codex route that projects one admitted named Codex profile into its private home; read-only, one bounded turn on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides: [thread, workdir]
@@ -342,8 +342,8 @@ entries:
     executables: {}
     executable_env: {codex: bee.driver.codex:executable}
     environment: {}
-    environment_refs: {CODEX_HOME: bee.driver.codex:config_home}
-    allow_host_home: true
+    environment_refs: {}
+    allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true

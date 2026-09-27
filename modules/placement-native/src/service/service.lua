@@ -823,6 +823,22 @@ function M.enforce_grants(attempt: types.Attempt): Reply?
     if not noted.ok then return noted end
     return M.stop_attempt(attempt, "cooperative")
 end
+-- A resource epoch advance reports attempts whose grants it fenced. The
+-- resource owner alone may call this entry; recheck the recorded launch so
+-- a stale or unrelated grant reference cannot stop an attempt.
+function M.stop_revoked(value: unknown): Reply
+    local id, invalid = named(value)
+    if not id then return invalid :: Reply end
+    local db, open_error = store.open()
+    if not db then return fail("STORAGE", open_error or "open placement store") end
+    local attempt, read_error = store.attempt(db, id)
+    db:release()
+    if read_error then return fail("STORAGE", read_error) end
+    if not attempt then return fail("NOT_FOUND", "attempt is not recorded") end
+    local stopped = M.enforce_grants(attempt)
+    if not stopped then return fail("CONFLICT", "attempt has no revoked resource grant") end
+    return stopped
+end
 -- cleanup: only a proven-exited attempt whose cleanup scope is proven gone
 -- loses its home.
 function M.cleanup(value: unknown): Reply

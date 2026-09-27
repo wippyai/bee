@@ -23,8 +23,11 @@ entries:
   kind: function.lua
   source: file://revoke_all_method.lua
   method: handle
-  imports: {authority: bee.resources.persist:authority}
-  security: {policies: [bee.resources.security:resource_store_policy]}
+  modules: [funcs]
+  imports:
+    authority: bee.resources.persist:authority
+    bounds: bee.threads.records:bounds
+  security: {policies: [bee.resources.security:resource_store_policy, bee.resources.security:resource_revoke_stop_policy]}
 - name: resolve
   kind: function.lua
   source: file://resolve_method.lua

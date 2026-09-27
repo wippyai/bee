@@ -59,6 +59,14 @@ entries:
     - '*'
     - bee.resources.binding:resolve
     effect: allow
+- name: resource_revoke_stop_policy
+  kind: security.policy
+  meta:
+    comment: The resource revocation owner may stop only placement attempts its epoch advance fenced
+  policy:
+    actions: [funcs.call]
+    resources: [bee.placement.native.binding:stop_revoked]
+    effect: allow
 - name: resource_environment_policy
   kind: security.policy
   meta:

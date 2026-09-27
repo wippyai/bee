@@ -1731,6 +1731,34 @@ local function define_tests()
             end
             resource_mode("host_configured")
         end)
+        test.it("stops a running attempt reported by revoke_all", function()
+            local workspace = fresh("epoch-stop")
+            resource_call("associate", {workspace_id = workspace, name = "project", root_ref = ROOT,
+                subpath = "", allowed_access = "write"})
+            resource_mode("granted")
+            local attempt_id = fresh("attempt")
+            local granted = resource_call("grant", {workspace_id = workspace, name = "project", access = "write",
+                purpose = "project", audience = OWNER, attempt_id = attempt_id})
+            local request = launch({"sh", "-c", "trap '' TERM; sleep 8"}, "direct_process")
+            request.attempt_id = attempt_id
+            local grant = (request.resources :: {{[string]: unknown}})[1]
+            grant.grant_ref = granted.grant_id
+            grant.root_ref = "bee.placement.native:root"
+            attempt_of(call(OWNER, "prepare", request))
+            test.eq(attempt_of(call(OWNER, "start", {attempt_id = attempt_id})).execution_state, "running")
+            local revoked = resource_call("revoke_all", {workspace_id = workspace})
+            local fenced = revoked.fenced_attempts :: {unknown}
+            local results = revoked.stop_results :: {{[string]: unknown}}
+            test.eq(#fenced, 1)
+            test.eq(fenced[1], attempt_id)
+            test.eq(#results, 1)
+            test.eq(results[1].attempt_id, attempt_id)
+            test.is_true(results[1].stopped == true, tostring(results[1].error))
+            if not wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 8000) then error("revoke_all did not stop the child: " .. table.concat(kinds(attempt_id), ",")) end
+            resource_mode("host_configured")
+        end)
         test.it("refuses file credentials before intent without a selected retained home", function()
             local source = "bee.credentials:codex_login_fixture"
             admit_login_source(source)

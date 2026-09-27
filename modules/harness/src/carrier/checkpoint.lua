@@ -3,6 +3,7 @@
 local bounds = require("bounds")
 local canonical = require("canonical")
 local driver_types = require("driver_types")
+local record_values = require("record_values")
 local M = {}
 M.REVISION = "bee.carrier.checkpoint@1"
 -- Carry bytes per stream: a frame the carrier cannot checkpoint is never
@@ -25,6 +26,7 @@ type EventCursor = {envelope_index: integer, events_committed: integer}
 -- recorded; a resuming carrier asks the runner before deciding.
 type PendingWrite = {write_id: string, input_digest: string, data: string, dispatched: boolean}
 type PermissionPhase = "intended" | "requested" | "decided" | "consumed" | "declined" | "written" | "acknowledged" | "closed"
+type PermissionDecision = "approved" | "denied" | "expired" | "withdrawn"
 type AttemptState = "prepared" | "running" | "ended"
 type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
 -- One permission exchange from the request the harness emitted to the
@@ -44,7 +46,7 @@ type Permission = {
     write_id: string,
     phase: PermissionPhase,
     approval_id: string?,
-    decision: string?,
+    decision: PermissionDecision?,
     incarnation: integer?,
     response: string?,
 }
@@ -115,16 +117,19 @@ local function permission_phase(value: unknown): PermissionPhase?
     if value == "closed" then return "closed" end
     return nil
 end
+local function permission_decision(value: unknown): PermissionDecision?
+    if value == "approved" then return "approved" end
+    if value == "denied" then return "denied" end
+    if value == "expired" then return "expired" end
+    if value == "withdrawn" then return "withdrawn" end
+    return nil
+end
 local function terminal(value: unknown): (driver_types.Terminal?, string?)
     local object, object_error = bounded_json_object(value, "terminal", M.MAX_TERMINAL_BYTES)
     if not object then return nil, object_error end
     local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
     if unknown_field then return nil, "terminal: " .. unknown_field end
-    local outcome: "succeeded" | "failed" | "cancelled" | "uncertain" | nil = nil
-    if object.outcome == "succeeded" then outcome = "succeeded"
-    elseif object.outcome == "failed" then outcome = "failed"
-    elseif object.outcome == "cancelled" then outcome = "cancelled"
-    elseif object.outcome == "uncertain" then outcome = "uncertain" end
+    local outcome = record_values.outcome(object.outcome)
     if not outcome then return nil, "terminal outcome is invalid" end
     local answer: string? = nil
     if object.answer ~= nil then
@@ -136,20 +141,17 @@ local function terminal(value: unknown): (driver_types.Terminal?, string?)
         resume_ref = bounds.id(object.resume_ref)
         if resume_ref == nil then return nil, "terminal resume_ref is invalid" end
     end
-    local usage: {[string]: unknown}? = nil
+    local usage: driver_types.Usage? = nil
     if object.usage ~= nil then
-        usage, object_error = bounded_json_object(object.usage, "terminal usage", M.MAX_TERMINAL_BYTES)
-        if not usage then return nil, object_error end
+        local decoded_usage, usage_error = record_values.usage(object.usage)
+        if not decoded_usage then return nil, "terminal usage is malformed: " .. tostring(usage_error) end
+        usage = decoded_usage
     end
-    local terminal_error: {code: string, message: string, retryable: boolean}? = nil
+    local terminal_error: driver_types.Fault? = nil
     if object.error ~= nil then
-        local error_object = bounds.object(object.error)
-        if not error_object then return nil, "terminal error must be an object" end
-        local error_field = bounds.fields(error_object, {"code", "message", "retryable"})
-        if error_field then return nil, "terminal error: " .. error_field end
-        local code, message = bounds.id(error_object.code), bounds.text(error_object.message, 4096)
-        if not code or not message or type(error_object.retryable) ~= "boolean" then return nil, "terminal error is malformed" end
-        terminal_error = {code = code, message = message, retryable = error_object.retryable}
+        local decoded_error, fault_error = record_values.fault(object.error)
+        if not decoded_error then return nil, "terminal error is malformed: " .. tostring(fault_error) end
+        terminal_error = decoded_error
     end
     return {outcome = outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = terminal_error}, nil
 end
@@ -360,9 +362,9 @@ function M.decode(value: unknown): (Checkpoint?, string?)
                 approval_id = bounds.id(permission.approval_id)
                 if not approval_id then return nil, "permissions[" .. tostring(index) .. "] approval_id is not an identifier" end
             end
-            local decision: string? = nil
+            local decision: PermissionDecision? = nil
             if permission.decision ~= nil then
-                decision = bounds.id(permission.decision)
+                decision = permission_decision(permission.decision)
                 if not decision then return nil, "permissions[" .. tostring(index) .. "] decision is not an identifier" end
             end
             local incarnation: integer? = nil
@@ -403,7 +405,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
     local stream_ended: boolean? = nil
     if object.stream_ended ~= nil then
         if type(object.stream_ended) ~= "boolean" then return nil, "stream_ended must be a boolean" end
-        stream_ended = object.stream_ended :: boolean
+        stream_ended = object.stream_ended
     end
     if object.dropping_stdout ~= nil and type(object.dropping_stdout) ~= "boolean" then
         return nil, "dropping_stdout must be a boolean"
@@ -411,7 +413,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
     local input_closed: boolean? = nil
     if object.input_closed ~= nil then
         if type(object.input_closed) ~= "boolean" then return nil, "input_closed must be a boolean" end
-        input_closed = object.input_closed :: boolean
+        input_closed = object.input_closed
     end
     local hint_subscription: string? = nil
     if object.hint_subscription ~= nil then

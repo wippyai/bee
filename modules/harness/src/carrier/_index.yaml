@@ -14,12 +14,49 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     driver_types: bee.driver:types
+    record_values: bee.threads.records:values
 - name: prestart
   kind: library.lua
   source: file://prestart.lua
   imports:
     placement_decode: bee.placement:decode
     service_reply: bee.protocol:reply
+- name: types
+  kind: library.lua
+  source: file://types.lua
+  imports:
+    classify: bee.harness.catalog:classify
+    driver_types: bee.driver:types
+    placement_types: bee.placement:types
+    policy: bee.harness.carrier:policy
+    permission: bee.harness.permission:adapter
+    checkpoint: bee.harness.carrier:checkpoint
+    stream_json: bee.driver.transport:stream_json
+    settle: bee.harness.carrier:settle
+    record_types: bee.threads.records:types
+- name: inbox
+  kind: library.lua
+  source: file://inbox.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    record_types: bee.threads.records:types
+    record_values: bee.threads.records:values
+    thread_record: bee.threads.records:record
+    checkpoint: bee.harness.carrier:checkpoint
+    service_reply: bee.protocol:reply
+    carrier_types: bee.harness.carrier:types
+- name: permission_exchange
+  kind: library.lua
+  source: file://permission_exchange.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    permission: bee.harness.permission:adapter
+    checkpoint: bee.harness.carrier:checkpoint
+    placement_decode: bee.placement:decode
+    service_reply: bee.protocol:reply
+    carrier_types: bee.harness.carrier:types
 - name: settle
   kind: library.lua
   source: file://settle.lua
@@ -85,6 +122,9 @@ entries:
     record_values: bee.threads.records:values
     gateway_protocol: bee.gateway:protocol
     service_reply: bee.protocol:reply
+    carrier_types: bee.harness.carrier:types
+    inbox: bee.harness.carrier:inbox
+    permission_exchange: bee.harness.carrier:permission_exchange
     hook_records: bee.harness.carrier:hook_records
 - name: lease
   kind: library.lua

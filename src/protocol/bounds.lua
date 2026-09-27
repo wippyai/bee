@@ -105,13 +105,11 @@ function M.optional_id(value: {[string]: unknown}, name: string): (string?, bool
     return result, true
 end
 
-function M.subpath(value: unknown, options: RelativePathOptions | integer?): (string?, string?)
+function M.subpath(value: unknown, maximum: integer?, options: RelativePathOptions?): (string?, string?)
     if type(value) ~= "string" then return nil, "subpath must be a string" end
-    local maximum: integer = M.MAX_SUBPATH_BYTES
-    local rules: RelativePathOptions = {}
-    if type(options) == "number" then maximum = options
-    elseif options ~= nil then rules = options end
-    if #value > maximum then return nil, "subpath is too long" end
+    local limit = maximum or M.MAX_SUBPATH_BYTES
+    local rules = options or {}
+    if #value > limit then return nil, "subpath is too long" end
     if value == "" then
         if rules.nonempty then return nil, "subpath must not be empty" end
         return "", nil

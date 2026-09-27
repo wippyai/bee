@@ -9,7 +9,7 @@ local function digest(value: unknown): string?
     return decoded
 end
 
-local function execution(value: unknown): types.ExecutionState?
+function M.execution(value: unknown): types.ExecutionState?
     if value == "intended" then return "intended" end
     if value == "starting" then return "starting" end
     if value == "running" then return "running" end
@@ -19,21 +19,21 @@ local function execution(value: unknown): types.ExecutionState?
     return nil
 end
 
-local function cleanup(value: unknown): types.CleanupState?
+function M.cleanup(value: unknown): types.CleanupState?
     if value == "pending" then return "pending" end
     if value == "complete" then return "complete" end
     if value == "uncertain" then return "uncertain" end
     return nil
 end
 
-local function capability(value: unknown): types.Capability?
+function M.capability(value: unknown): types.Capability?
     if value == "direct_process" then return "direct_process" end
     if value == "process_group" then return "process_group" end
     if value == "contained_tree" then return "contained_tree" end
     return nil
 end
 
-local function exit_observation(value: unknown): types.ExitObservation?
+function M.exit_observation(value: unknown): types.ExitObservation?
     if value == "independent" then return "independent" end
     if value == "eof_gated" then return "eof_gated" end
     return nil
@@ -47,9 +47,9 @@ function M.attempt(value: unknown): (types.Attempt?, string?)
     local attempt_id, action_id, owner_id = bounds.id(object.attempt_id), bounds.id(object.action_id), bounds.id(object.owner_id)
     local owner_incarnation = bounds.count(object.owner_incarnation)
     local request_digest = digest(object.request_digest)
-    local execution_state, cleanup_state = execution(object.execution_state), cleanup(object.cleanup_state)
-    local capability_value, required_cleanup = capability(object.capability), capability(object.required_cleanup)
-    local observation = exit_observation(object.exit_observation)
+    local execution_state, cleanup_state = M.execution(object.execution_state), M.cleanup(object.cleanup_state)
+    local capability_value, required_cleanup = M.capability(object.capability), M.capability(object.required_cleanup)
+    local observation = M.exit_observation(object.exit_observation)
     local attachment_generation, evidence_count = bounds.count(object.attachment_generation), bounds.count(object.evidence_count)
     local created_at, updated_at = bounds.timestamp(object.created_at), bounds.timestamp(object.updated_at)
     if not attempt_id or not action_id or not owner_id or not owner_incarnation or owner_incarnation < 1

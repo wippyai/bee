@@ -7,6 +7,38 @@ local placement_types = require("placement_types")
 local classify = require("classify")
 local checkpoint = require("checkpoint")
 local stream_json = require("stream_json")
+local bounds = require("bounds")
+local function claim_reply(epoch: integer): {[string]: unknown}
+    return {ok = true, value = {attempt_id = "attempt", action_id = "action", carrier_epoch = epoch,
+        checkpoint_revision = 0, attempt_state = "prepared"}}
+end
+local function commit_reply(request_value: unknown, revision: integer): {[string]: unknown}
+    local request = request_value :: {[string]: unknown}
+    return {ok = true, value = {attempt_id = request.attempt_id, carrier_epoch = request.carrier_epoch,
+        checkpoint_revision = revision, records = {}}}
+end
+local function inbox_page(items: {unknown}): {[string]: unknown}
+    local scanned_through: integer = 0
+    if #items > 0 then scanned_through = (items[#items] :: {[string]: unknown}).inbox_sequence :: integer end
+    return {items = items, has_more = false, scanned_through = scanned_through}
+end
+local function placement_attempt(notice: unknown?): {[string]: unknown}
+    return {attempt_id = "attempt", action_id = "action", owner_id = "actor", owner_incarnation = 1, request_digest = string.rep("a", 64),
+        execution_state = "intended", cleanup_state = "pending", capability = "direct_process", required_cleanup = "direct_process",
+        exit_observation = "eof_gated", attachment_generation = 0, evidence_count = 0,
+        created_at = "2025-01-01T00:00:00.000Z", updated_at = "2025-01-01T00:00:00.000Z", notice = notice}
+end
+local function prepare_reply(notice: unknown?): {[string]: unknown}
+    return {ok = true, value = placement_attempt(notice)}
+end
+local function thread_record(kind: string, sequence: integer, record_id: string, action_id: string,
+    body: {[string]: unknown}, attempt_id: string?): {[string]: unknown}
+    local record: {[string]: unknown} = {schema_revision = "bee.thread-record@1", record_id = record_id, thread_id = "thread",
+        sequence = sequence, recorded_at = "2025-01-01T00:00:00.000Z", producer_id = "test", source = "bee",
+        action_id = action_id, kind = kind, body = body}
+    if attempt_id then record.attempt_id = attempt_id end
+    return record
+end
 local function plan(mode: string, protocol: string): machine.Plan
     local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached"}
     local policy_value: policy.Policy = {ref = "policy", digest = "policy-digest", prepare_options = {}, required_cleanup = "direct_process", required_exit_observation = "eof_gated",
@@ -62,9 +94,17 @@ local function define_tests()
             local inbox_state = "offered"
             local io: machine.IO = {call = function(target: string, request: unknown): (unknown, string?)
                     calls[#calls + 1] = target
-                    if target == "bee.threads.carrier:commit" then return {ok = true, value = {checkpoint_revision = session.revision + 1}}, nil end
+                    if target == "bee.threads.carrier:commit" then return commit_reply(request, session.revision + 1), nil end
                     if target == "bee.threads.service:inbox_offer" then return {ok = true, value = offer}, nil end
-                    if target == "bee.threads.service:inbox_list" then return {ok = true, value = {items = {{record_id = offer.record_id, inbox_sequence = offer.inbox_sequence, state = inbox_state}}}}, nil end
+                    if target == "bee.threads.service:inbox_list" then return {ok = true, value = inbox_page({{thread_id = offer.thread_id,
+                        inbox_sequence = offer.inbox_sequence, record_id = offer.record_id, thread_sequence = 1, payload_digest = offer.payload_digest,
+                        state = inbox_state, delivery_status = inbox_state, sender_action_id = offer.sender_action_id,
+                        sender_node_id = offer.sender_node_id, sender_thread_id = offer.sender_thread_id, message_id = offer.message_id,
+                        content = offer.content, message_kind = offer.message_kind}})}, nil end
+                    if target == "bee.threads.service:inbox_transport" then
+                        local transport = request :: {[string]: unknown}
+                        return {ok = true, value = {record_id = transport.record_id, inbox_sequence = transport.inbox_sequence, state = "transport_accepted"}}, nil
+                    end
                     return {ok = true, value = {}}, nil
                 end,
                 send = function(target: string, topic: string, value: unknown)
@@ -145,6 +185,38 @@ local function define_tests()
             test.eq(#writes, 2)
             test.is_true(writes[2]:find("record-1", 1, true) ~= nil)
         end)
+        test.it("refuses an unserializable normalizer state before commit or output acknowledgment", function()
+            local selected = plan("session", "stream-json")
+            local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)
+            local session: machine.Session = {plan = selected, turn_id = "turn:attempt:1", turn_open = true, epoch = 1, revision = 0,
+                checkpoint = point, decoder = stream_json.new(machine.MAX_FRAME_BYTES), normalizer = nil, terminal = nil,
+                stream_ended = false, exit = nil, eof = {stdout = false, stderr = false}, runner = "runner", settled = nil, recovered = false,
+                output = "open", pending_hint = nil, placement_evidence = 0, stderr_sequence = 0, last_sequence = {stdout = 0, stderr = 0},
+                held_from = nil, dropping_stdout = false}
+            local calls: {string} = {}
+            local topics: {string} = {}
+            local io: machine.IO = {call = function(target: string, _: unknown): (unknown, string?)
+                    calls[#calls + 1] = target
+                    if target == "normalize" then
+                        return {ok = true, state = {invalid = function() end}, observations = {}}, nil
+                    end
+                    return nil, "unexpected call " .. target
+                end,
+                send = function(_: string, topic: string, _: unknown) topics[#topics + 1] = topic end,
+                self_pid = function(): string return "carrier" end,
+                now_ms = function(): integer return 1 end,
+                key = function(): string return "key" end}
+            local accepted, refusal = machine.on_output(io, session, "runner", {attempt_id = "attempt", generation = 1, stream = "stdout",
+                sequence = 1, data = "{}\n", eof = false})
+            test.is_false(accepted)
+            test.is_true(tostring(refusal):find("normalizer state", 1, true) ~= nil)
+            test.eq(#calls, 1)
+            test.eq(calls[1], "normalize")
+            test.eq(#topics, 0)
+            test.eq(session.revision, 0)
+            test.eq(session.checkpoint.consumed.stdout, 0)
+            test.eq(session.last_sequence.stdout, 0)
+        end)
         test.it("refuses a required host file in a private home but allows it in the inherited home", function()
             local launch: driver_types.Launch = {executable = "codex", argv = {}, environment = {}, readiness = "terminal:attached",
                 required_files = {{variable = "CODEX_HOME", path = "ds-flash.config.toml", default_directory = ".codex"}}}
@@ -201,9 +273,9 @@ local function define_tests()
                         if type(input) ~= "table" then error("missing action content") end
                         test.eq(input.text, "Open Codex window")
                     end
-                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
+                    if target == "bee.threads.carrier:claim" then return claim_reply(7), nil end
                     if target == "bee.placement.native.binding:prepare" then
-                        return {ok = true, value = {notice = {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login"}}}, nil
+                        return prepare_reply({code = "LOGIN_REQUIRED", provider = "codex", command = "codex login"}), nil
                     end
                     return {ok = true, value = {}}, nil
                 end,
@@ -223,9 +295,9 @@ local function define_tests()
         test.it("rejects a malformed placement login notice", function()
             local io: machine.IO = {
                 call = function(target: string, value: unknown): (unknown, string?)
-                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
+                    if target == "bee.threads.carrier:claim" then return claim_reply(7), nil end
                     if target == "bee.placement.native.binding:prepare" then
-                        return {ok = true, value = {notice = {code = "LOGIN_REQUIRED", provider = "codex", command = "codex login\nextra"}}}, nil
+                        return prepare_reply({code = "LOGIN_REQUIRED", provider = "codex", command = "codex login\nextra"}), nil
                     end
                     return {ok = true, value = {}}, nil
                 end,
@@ -236,7 +308,7 @@ local function define_tests()
             }
             local prepared, err = machine.prepare_attempt(io, plan("window", "pty"))
             test.is_nil(prepared)
-            test.eq(err, "placement prepare returned an invalid notice")
+            test.eq(err, "placement prepare returned an invalid attempt: attempt notice is malformed")
         end)
         test.it("dispatches preparation through the selected placement binding", function()
             local selected: machine.Plan = plan("window", "pty")
@@ -253,7 +325,8 @@ local function define_tests()
                 call = function(target: string, value: unknown): (unknown, string?)
                     calls[#calls + 1] = target
                     if target == "example.placement:prepare" then test.eq(value, selected.placement_request) end
-                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 7}}, nil end
+                    if target == "bee.threads.carrier:claim" then return claim_reply(7), nil end
+                    if target == "example.placement:prepare" then return prepare_reply(nil), nil end
                     return {ok = true, value = {}}, nil
                 end,
                 send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
@@ -276,7 +349,7 @@ local function define_tests()
                 call = function(target: string, value: unknown): (unknown, string?)
                     if target == "bee.threads.service:inbox_list" then
                         listed = listed + 1
-                        return {ok = true, value = {items = {item}}}, nil
+                        return {ok = true, value = inbox_page({item})}, nil
                     end
                     return nil, "unexpected call " .. target
                 end,
@@ -326,7 +399,7 @@ local function define_tests()
                     call = function(target: string, value: unknown): (unknown, string?)
                         if target == "bee.threads.service:inbox_list" then
                             if failure then return nil, failure end
-                            return {ok = true, value = {items = items or {}}}, nil
+                            return {ok = true, value = inbox_page(items or {})}, nil
                         end
                         return nil, "unexpected call " .. target
                     end,
@@ -354,12 +427,12 @@ local function define_tests()
             local huge = {{thread_id = "thread", inbox_sequence = 4, record_id = "record-4", thread_sequence = 5,
                 payload_digest = string.rep("e", 64), state = "committed", delivery_status = "committed", sender_action_id = "sender",
                 sender_node_id = "node", sender_thread_id = "sender-thread", message_id = "message-4",
-                content = {text = string.rep("x", 20000)}, message_kind = "request"}}
+                content = {text = string.rep("x", bounds.MAX_TEXT_BYTES)}, message_kind = "request"}}
             local bounded = machine.carry_brief(io_for(huge, nil), request(), "codex", "session")
             test.is_true(#bounded <= 16383, "brief bound: " .. tostring(#bounded))
-            test.is_true(bounded:find("record-4", 1, true) ~= nil)
-            test.is_true(bounded:find("session_inbox", 1, true) ~= nil)
-            test.is_true(bounded:sub(-9) == "follow up")
+            test.is_true(bounded:find("record-4", 1, true) ~= nil, "record identity was not carried")
+            test.is_true(bounded:find("session_ack", 1, true) ~= nil, "acknowledgment guidance was not carried")
+            test.is_true(bounded:sub(-9) == "follow up", "the original brief was not preserved")
         end)
         test.it("attaches a fresh sequential attempt to its own admitted action and chains the settled attempt", function()
             local selected = plan("session", "stream-json")
@@ -370,15 +443,17 @@ local function define_tests()
                     if target == "bee.threads.service:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
                     if target == "bee.threads.service:read_after" then
                         return {ok = true, value = {records = {
-                            {kind = "action.admitted", action_id = "action", sequence = 2, body = {principal_id = "actor"}},
-                            {kind = "receipt", action_id = "action", attempt_id = "attempt-1", sequence = 9, body = {scope = "attempt", outcome = "succeeded"}},
+                            thread_record("action.admitted", 2, "admitted-record", "action", {request_id = "request", principal_id = "actor",
+                                binding_ref = "binding", binding_digest = string.rep("a", 64), grant_refs = {}, budget_ref = "budget", input = {text = "request"}}),
+                            thread_record("receipt", 9, "receipt-record", "action", {scope = "attempt", outcome = "succeeded", evidence_refs = {}}, "attempt-1"),
                         }, has_more = false, scanned_through = 9}}, nil
                     end
                     if target == "bee.threads.service:prepare_attempt" then
                         prepared_body = value :: {[string]: unknown}
                         return {ok = true, value = {}}, nil
                     end
-                    if target == "bee.threads.carrier:claim" then return {ok = true, value = {carrier_epoch = 2}}, nil end
+                    if target == "bee.threads.carrier:claim" then return claim_reply(2), nil end
+                    if target == "bee.placement.native.binding:prepare" then return prepare_reply(nil), nil end
                     return {ok = true, value = {}}, nil
                 end,
                 send = function(target: string, topic: string, value: unknown) error("unexpected send") end,
@@ -394,7 +469,8 @@ local function define_tests()
                     if target == "bee.threads.service:admit_action" then return {ok = false, error = {code = "CONFLICT", message = "action already exists"}}, nil end
                     if target == "bee.threads.service:read_after" then
                         return {ok = true, value = {records = {
-                            {kind = "action.admitted", action_id = "action", sequence = 2, body = {principal_id = "someone-else"}},
+                            thread_record("action.admitted", 2, "foreign-admitted-record", "action", {request_id = "request", principal_id = "someone-else",
+                                binding_ref = "binding", binding_digest = string.rep("a", 64), grant_refs = {}, budget_ref = "budget", input = {text = "request"}}),
                         }, has_more = false, scanned_through = 2}}, nil
                     end
                     return {ok = true, value = {}}, nil

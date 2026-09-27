@@ -20,6 +20,10 @@ entries:
     bounds: bee.threads.records:bounds
     configuration: bee.placement.native:configuration
     types: bee.placement:types
+    gateway_protocol: bee.gateway:protocol
+    credential_protocol: bee.credentials:protocol
+    service_reply: bee.protocol:reply
+    formats: bee.credentials:formats
 - name: required_file_test
   kind: function.lua
   source: file://required_file_test.lua

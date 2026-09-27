@@ -33,6 +33,7 @@ local protocol = require("protocol")
 local homes = require("homes")
 local quote = require("quote")
 local types = require("types")
+local executable_stream = require("executable_stream")
 type PreparedConfiguration = {environment: {[string]: string}, working_directory: string, arguments: {string}}
 local CODEX_LOGIN_FORMAT = {schema_revision = "bee.credential-format@1", file = {
     path = ".codex/auth.json", content_format = "json", initialize = {}}}
@@ -1178,6 +1179,33 @@ local function define_tests()
             test.is_true(has(kinds(prepared.attempt_id), "executable.measured"))
             shell("rm -f " .. script)
         end)
+        test.it("refuses executable read errors and streams shorter than the stat size", function()
+            local function reader(chunks: {string}, failure: string?): ((integer) -> (unknown, unknown), () -> (boolean?, unknown?), () -> boolean)
+                local reads = 0
+                local closed = false
+                local function read(_: integer): (unknown, unknown)
+                    reads = reads + 1
+                    if reads <= #chunks then return chunks[reads], nil end
+                    if reads == #chunks + 1 then return nil, failure or "EOF" end
+                    return nil, "EOF"
+                end
+                local function close(): (boolean?, unknown?)
+                    closed = true
+                    return true, nil
+                end
+                return read, close, function(): boolean return closed end
+            end
+            local failed_read, failed_close, failed_closed = reader({"prefix"}, "device read failed")
+            local failed, read_error = executable_stream.digest(failed_read, failed_close, 16)
+            test.is_nil(failed)
+            test.is_true(tostring(read_error):find("device read failed", 1, true) ~= nil)
+            test.is_true(failed_closed())
+            local short_read, short_close, short_closed = reader({"abc"}, nil)
+            local short, short_error = executable_stream.digest(short_read, short_close, 4)
+            test.is_nil(short)
+            test.is_true(tostring(short_error):find("measured 3 of 4 bytes", 1, true) ~= nil)
+            test.is_true(short_closed())
+        end)
         test.it("closes a live child's stdin at the owner's request and records it, or answers why it cannot", function()
             -- The shell reads stdin itself, so no descendant outlives a kill
             -- holding the pipes on a runtime without process groups.
@@ -2289,7 +2317,7 @@ local function define_tests()
             end
             local function retire(db, attempt_id: string)
                 local retired = store.transition(db, attempt_id, {execution = "exited",
-                    fields = {runner_pid = "", exit_source = "runner"},
+                    fields = {runner_pid = sql.NULL, exit_source = "runner"},
                     evidence = {kind = "child.not_started", detail = "composition acceptance did not create a child"}})
                 if not retired.ok then error(tostring(retired.message or "retire Grok composition attempt")) end
             end

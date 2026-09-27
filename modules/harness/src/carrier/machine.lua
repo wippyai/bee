@@ -36,10 +36,13 @@ local configuration_protocol = require("configuration")
 local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
 local hook_records = require("hook_records")
+local carrier_types = require("carrier_types")
+local inbox = require("inbox")
+local permission_exchange = require("permission_exchange")
 local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
-M.THREADS = "bee.threads.service"
+M.THREADS = inbox.THREADS
 M.CARRIER_OPS = "bee.threads.carrier"
 M.GATEWAY = "bee.gateway.binding"
 M.MAX_RECORDS_PER_COMMIT = 64
@@ -47,118 +50,56 @@ M.MAX_RECORDS_PER_COMMIT = 64
 -- checkpoint carries only a partial frame up to checkpoint.MAX_CARRY_BYTES.
 M.MAX_FRAME_BYTES = placement_protocol.MAX_OUTSTANDING_CHUNKS * placement_protocol.MAX_CHUNK_BYTES
 M.APPROVALS = "bee.approvals.binding"
-M.DELIVERY = "bee.threads.delivery"
+M.DELIVERY = inbox.DELIVERY
 M.WAITER_NAME = "bee.threads.waiter"
 M.HINT_REGISTRATION_MS = 60000
-M.MAX_CONSUME_ATTEMPTS = 3
 type Object = {[string]: unknown}
 type Reply = service_reply.Reply
-type IO = {
-    call: (string, unknown) -> (unknown, string?),
-    send: (string, string, unknown) -> (),
-    self_pid: () -> string,
-    now_ms: () -> integer,
-    key: () -> string,
-    after: ((string) -> ())?,
-}
-type Request = {
-    preferences: placement_types.Preferences?,
-    thread_id: string,
-    action_id: string,
-    attempt_id: string,
-    owner_id: string,
-    owner_incarnation: integer,
-    binding_ref: string,
-    profile_id: string,
-    brief: string,
-    policy_ref: string,
-    placement_binding_ref: string?,
-    placement_binding_digest: string?,
-    resources: {placement_types.ResourceGrant},
-    environment: {[string]: string},
-    session_ref: string?,
-    previous_attempt_id: string?,
-    reauthorize: boolean?,
-    working_directory: string?,
-    projections: {string}?,
-    workspace_id: string?,
-    parent_action_id: string?,
-    origin_view: {view_id: string, instance_id: string}?,
-}
--- The permission exchange the host enabled for this launch: the measured
--- adapter, the acceptance record it stands on, and how the carrier asks.
-type Exchange = {adapter: permission.Adapter, acceptance_ref: string, acceptance_digest: string, executable_revision: string, executable_kind: string, executable_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
--- push: the verified production inbox-push acceptance: the profile-pinned
--- adapter, the acceptance record and the executable measurement the host
--- accepted. A fixture policy carries no acceptance and needs none. Push
--- authorizes no tool effect, so unlike the exchange it names no approver
--- policy and no poll window; the acceptance's recorded executable kind
--- still binds what the digest covers.
-type Push = {adapter: permission.Adapter, acceptance_ref: string, acceptance_digest: string, executable_revision: string, executable_kind: string, executable_digest: string}
-type Plan = {
-    request: Request,
-    binding: classify.Binding,
-    profile: classify.Profile,
-    launch: driver_types.Launch,
-    policy: policy.Policy,
-    placement_binding: placement_types.PlacementBinding,
-    plan_digest: string,
-    placement_request: placement_types.LaunchRequest,
-    exit_codes_trustworthy: boolean,
-    -- A refusal the exchange's requirements produced at plan time: a new
-    -- attempt never opens with it; a recovered attempt keeps its plan so it
-    -- can close its exchange on record and settle, and dispatches nothing.
-    exchange_refusal: string?,
-    -- A refusal the push requirements produced at plan time: a new attempt
-    -- never opens with it; a recovered attempt keeps its plan so it can
-    -- settle, and dispatches no inbox item.
-    push_refusal: string?,
-    prepare_target: string,
-    resume_ref: string?,
-    normalize_target: string,
-    exchange: Exchange?,
-    push: Push?,
-    -- The gateway projection the launch policy admits: tools and the
-    -- host-approved MCP configuration. The binding is admitted at open.
-    gateway: placement_types.Gateway?,
-}
--- What the carrier knows about the child's output: complete only when
--- both streams ended on their own; truncated when the runner closed them
--- at the drain deadline; unobserved when the runner was gone at recovery.
-type OutputState = "open" | "complete" | "truncated" | "unobserved" | "incomplete"
-type Session = {
-    plan: Plan,
-    turn_id: string,
-    turn_open: boolean,
-    epoch: integer,
-    revision: integer,
-    checkpoint: checkpoint.Checkpoint,
-    decoder: stream_json.Decoder,
-    normalizer: unknown,
-    terminal: driver_types.Terminal?,
-    -- stream_ended: the terminal came from the end of stdout, not from an
-    -- envelope.
-    stream_ended: boolean,
-    exit: settle.Exit?,
-    eof: {stdout: boolean, stderr: boolean},
-    runner: string?,
-    settled: settle.Settlement?,
-    recovered: boolean,
-    output: OutputState,
-    pending_hint: {page_id: string, scanned_through: integer}?,
-    placement_evidence: integer,
-    stderr_sequence: integer,
-    last_sequence: {stdout: integer, stderr: integer},
-    -- held_from: the first chunk whose stdout bytes sit in a partial frame too
-    -- large to checkpoint. The runner keeps it and every later chunk until
-    -- the frame completes, so acknowledgment stops just before it.
-    held_from: integer?,
-    dropping_stdout: boolean,
-}
-type Offer = {thread_id: string, action_id: string, record_id: string, inbox_sequence: integer, payload_digest: string, message_id: string,
-    message_kind: "request" | "progress" | "reply" | "notification", sender_action_id: string, sender_thread_id: string, sender_node_id: string,
-    content: record_types.Content, in_reply_to: record_types.Ref?, state: "offered" | "transport_accepted", dispatch: boolean, offer_count: integer}
-local function step(io: IO, name: string)
+type IO = carrier_types.IO
+type Request = carrier_types.Request
+type Exchange = carrier_types.Exchange
+type Push = carrier_types.Push
+type Plan = carrier_types.Plan
+type OutputState = carrier_types.OutputState
+type Session = carrier_types.Session
+type Offer = carrier_types.Offer
+type InboxPromptItem = inbox.InboxPromptItem
+local inbox_context_value: inbox.Context? = nil
+local permission_context_value: permission_exchange.Context? = nil
+local function inbox_context(): inbox.Context
+    if inbox_context_value == nil then error("carrier inbox context is not initialized") end
+    return inbox_context_value
+end
+local function permission_context(): permission_exchange.Context
+    if permission_context_value == nil then error("carrier permission context is not initialized") end
+    return permission_context_value
+end
+
+M.inbox_prompt = inbox.inbox_prompt
+M.push_line = inbox.push_line
+function M.open_hints(io: IO, session: Session): (integer?, string?)
+    return inbox.open_hints(inbox_context(), io, session)
+end
+function M.take_hints(io: IO, session: Session): (boolean, integer?, string?)
+    return inbox.take_hints(inbox_context(), io, session)
+end
+function M.acknowledge_hints(io: IO, session: Session): (boolean, string?)
+    return inbox.acknowledge_hints(inbox_context(), io, session)
+end
+function M.close_hints(io: IO, session: Session)
+    inbox.close_hints(inbox_context(), io, session)
+end
+function M.offer_inbox(io: IO, session: Session): (Offer?, string?)
+    return inbox.offer_inbox(inbox_context(), io, session)
+end
+function M.carry_brief(io: IO, request: Request, driver_id: string, mode: string): string
+    return inbox.carry_brief(inbox_context(), io, request, driver_id, mode)
+end
+function M.begin_push_turn(io: IO, session: Session, item: Offer): (string?, string?)
+    return inbox.begin_push_turn(inbox_context(), io, session, item)
+end
+
+local function step(io: IO, name: string): ()
     if io.after then io.after(name) end
 end
 -- The durable states travel in the checkpoint so a replacement keeps what
@@ -239,120 +180,6 @@ local function thread_page(value: unknown, cursor: integer, limit: integer): (Th
     end
     if #records > 0 and page_cursor < previous_sequence then return nil, "page cursor precedes its final record" end
     return {records = records, scanned_through = page_cursor, has_more = has_more}, nil
-end
-type InboxState = "committed" | "offered" | "transport_accepted" | "acknowledged" | "replied"
-type InboxItem = {thread_id: string, inbox_sequence: integer, record_id: string, thread_sequence: integer, payload_digest: string, state: InboxState,
-    delivery_status: string, sender_action_id: string, sender_node_id: string, sender_thread_id: string, message_id: string,
-    content: record_types.Content, message_kind: "request" | "progress" | "reply" | "notification", in_reply_to: record_types.Ref?}
-type InboxPage = {items: {InboxItem}, has_more: boolean, scanned_through: integer}
-local function decode_inbox_offer(value: unknown, expected_thread: string, expected_action: string): (Offer?, string?)
-    local item = bounds.object(value)
-    if not item then return nil, "inbox offer must be an object" end
-    local unknown_field = bounds.fields(item, {"empty", "thread_id", "action_id", "record_id", "inbox_sequence", "payload_digest", "message_id", "message_kind",
-        "sender_action_id", "sender_thread_id", "sender_node_id", "content", "in_reply_to", "state", "dispatch", "offer_count"})
-    if unknown_field then return nil, "inbox offer: " .. unknown_field end
-    if item.empty ~= nil then
-        if item.empty ~= true then return nil, "inbox offer empty flag is invalid" end
-        if bounds.fields(item, {"empty"}) ~= nil then return nil, "empty inbox offer carries an item" end
-        return nil, nil
-    end
-    local thread_id, action_id = bounds.id(item.thread_id), bounds.id(item.action_id)
-    local record_id, digest, message_id = bounds.id(item.record_id), bounds.text(item.payload_digest, 64), bounds.id(item.message_id)
-    local sequence, offer_count = bounds.count(item.inbox_sequence), bounds.count(item.offer_count)
-    local sender_action, sender_thread, sender_node = bounds.id(item.sender_action_id), bounds.id(item.sender_thread_id), bounds.id(item.sender_node_id)
-    local content, content_error = record_values.content(item.content)
-    local message_kind = bounds.member(item.message_kind, {"request", "progress", "reply", "notification"})
-    local state = bounds.member(item.state, {"offered", "transport_accepted"})
-    local in_reply_to: record_types.Ref? = nil
-    if item.in_reply_to ~= nil then
-        local reference, reference_error = record_values.ref(item.in_reply_to)
-        if not reference then return nil, "inbox offer reply reference is malformed: " .. tostring(reference_error) end
-        in_reply_to = {thread_id = reference.thread_id, record_id = reference.record_id}
-    end
-    if not thread_id or thread_id ~= expected_thread then return nil, "inbox offer thread is invalid" end
-    if not action_id or action_id ~= expected_action then return nil, "inbox offer action is invalid" end
-    if not record_id then return nil, "inbox offer record id is invalid" end
-    if digest == nil then return nil, "inbox offer digest is invalid" end
-    if #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "inbox offer digest is invalid" end
-    if not message_id then return nil, "inbox offer message id is invalid" end
-    if sequence == nil or sequence < 1 or offer_count == nil or offer_count < 1 then return nil, "inbox offer sequence is invalid" end
-    if not sender_action or not sender_thread or not sender_node then return nil, "inbox offer sender is invalid" end
-    if not content then return nil, "inbox offer content is invalid: " .. tostring(content_error) end
-    if not message_kind or not state then return nil, "inbox offer kind or state is invalid" end
-    if type(item.dispatch) ~= "boolean" then return nil, "inbox offer dispatch flag is invalid" end
-    local valid_kind: "request" | "progress" | "reply" | "notification"
-    if message_kind == "request" then valid_kind = "request"
-    elseif message_kind == "progress" then valid_kind = "progress"
-    elseif message_kind == "reply" then valid_kind = "reply"
-    else valid_kind = "notification" end
-    local valid_state: "offered" | "transport_accepted"
-    if state == "offered" then valid_state = "offered" else valid_state = "transport_accepted" end
-    local offer: Offer = {thread_id = thread_id, action_id = action_id, record_id = record_id, inbox_sequence = sequence, payload_digest = digest,
-        message_id = message_id, message_kind = valid_kind, sender_action_id = sender_action, sender_thread_id = sender_thread,
-        sender_node_id = sender_node, content = content, in_reply_to = in_reply_to, state = valid_state, dispatch = item.dispatch, offer_count = offer_count}
-    return offer, nil
-end
-local function inbox_list_page(value: unknown, limit: integer): (InboxPage?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "inbox page must be an object" end
-    local unknown_field = bounds.fields(object, {"items", "has_more", "scanned_through"})
-    local raw_items, array_error = bounds.array(object.items, limit)
-    local scanned = bounds.count(object.scanned_through)
-    if unknown_field or not raw_items or type(object.has_more) ~= "boolean" or scanned == nil then
-        return nil, "inbox page fields are malformed: " .. tostring(array_error)
-    end
-    local items: {InboxItem} = {}
-    local previous = 0
-    for index, raw in ipairs(raw_items) do
-        local item = bounds.object(raw)
-        if not item then return nil, "inbox page items[" .. tostring(index) .. "] must be an object" end
-        local item_field = bounds.fields(item, {"thread_id", "inbox_sequence", "record_id", "thread_sequence", "payload_digest", "state", "delivery_status",
-            "sender_action_id", "sender_node_id", "sender_thread_id", "message_id", "content", "message_kind", "in_reply_to"})
-        local thread_id, record_id = bounds.id(item.thread_id), bounds.id(item.record_id)
-        local sequence, thread_sequence = bounds.count(item.inbox_sequence), bounds.count(item.thread_sequence)
-        local digest = bounds.text(item.payload_digest, 64)
-        local state = bounds.member(item.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
-        local delivery_status = bounds.member(item.delivery_status, {"committed", "offered", "transport_accepted", "acknowledged", "replied", "undeliverable", "waiting_for_restart"})
-        local sender_action, sender_node, sender_thread = bounds.id(item.sender_action_id), bounds.id(item.sender_node_id), bounds.id(item.sender_thread_id)
-        local message_id = bounds.id(item.message_id)
-        local content, content_error = record_values.content(item.content)
-        local message_kind = bounds.member(item.message_kind, {"request", "progress", "reply", "notification"})
-        local in_reply_to: record_types.Ref? = nil
-        if item.in_reply_to ~= nil then
-            local reference = bounds.object(item.in_reply_to)
-            if not reference then return nil, "inbox page items[" .. tostring(index) .. "] has an invalid reply reference" end
-            local reference_fields = bounds.fields(reference, {"thread_id", "record_id"})
-            local reference_thread, reference_record = bounds.id(reference.thread_id), bounds.id(reference.record_id)
-            if reference_fields or not reference_thread or not reference_record then
-                return nil, "inbox page items[" .. tostring(index) .. "] has an invalid reply reference"
-            end
-            in_reply_to = {thread_id = reference_thread, record_id = reference_record}
-        end
-        if item_field or not thread_id or not record_id or sequence == nil or sequence < 1 or thread_sequence == nil or thread_sequence < 1
-            or not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") or not state or not delivery_status or not sender_action or not sender_node
-            or not sender_thread or not message_id or not content or not message_kind then
-            return nil, "inbox page items[" .. tostring(index) .. "] is malformed: " .. tostring(content_error)
-        end
-        if sequence <= previous or sequence > scanned then return nil, "inbox page items are out of sequence" end
-        previous = sequence
-        items[index] = {thread_id = thread_id, inbox_sequence = sequence, record_id = record_id, thread_sequence = thread_sequence,
-            payload_digest = digest, state = state, delivery_status = delivery_status, sender_action_id = sender_action,
-            sender_node_id = sender_node, sender_thread_id = sender_thread, message_id = message_id, content = content,
-            message_kind = message_kind, in_reply_to = in_reply_to}
-    end
-    if #items > 0 and items[#items].inbox_sequence ~= scanned then return nil, "inbox page cursor does not match its final item" end
-    return {items = items, has_more = object.has_more, scanned_through = scanned}, nil
-end
-local function inbox_transport(value: unknown, record_id: string, sequence: integer): (boolean, string?)
-    local object = bounds.object(value)
-    if not object then return false, "inbox transport result must be an object" end
-    local unknown_field = bounds.fields(object, {"record_id", "inbox_sequence", "state"})
-    local returned_record, returned_sequence = bounds.id(object.record_id), bounds.count(object.inbox_sequence)
-    local state = bounds.member(object.state, {"transport_accepted", "acknowledged", "replied"})
-    if unknown_field or returned_record ~= record_id or returned_sequence ~= sequence or not state then
-        return false, "inbox transport result is malformed or names another item"
-    end
-    return true, nil
 end
 type StdinClosure = {closed: boolean, reason: string?}
 local function stdin_closure(value: unknown, attempt_id: string): (StdinClosure?, string?)
@@ -862,10 +689,10 @@ function M.drain_hooks(io: IO, session: Session): (integer, string?)
             if fault.code == "DENIED" or fault.code == "CONFLICT" then return drained, nil end
             return drained, "hook claim: " .. fault.code .. ": " .. fault.message
         end
-        local items, claim_error = gateway_protocol.hook_claim(reply.value)
-        if not items then return drained, "hook claim returned malformed data: " .. tostring(claim_error) end
+        local claim, claim_error = gateway_protocol.hook_claim(reply.value, binding_id, session.epoch)
+        if not claim then return drained, "hook claim returned malformed data: " .. tostring(claim_error) end
         local turn_id = session.turn_open and session.turn_id or nil
-        local batch, batch_error = hook_records.batch(binding_id, turn_id, items)
+        local batch, batch_error = hook_records.batch(binding_id, turn_id, claim.hooks)
         if not batch then return drained, "hook batch: " .. tostring(batch_error) end
         if #batch.event_ids == 0 then return drained, nil end
         step(io, "hooks_claimed")
@@ -904,7 +731,7 @@ end
 -- Anything unverified fails closed with the admit refusal. The owner still
 -- enforces the chain, the open thread and the single live attempt.
 M.ATTACH_SCAN_PAGES = 8
-M.ATTACH_PAGE_RECORDS = 64
+M.ATTACH_PAGE_RECORDS = inbox.DELIVERY_PAGE_RECORDS
 function M.attach_action(io: IO, request: Request): (string?, boolean, string?)
     local owned = false
     local previous: string? = nil
@@ -1323,98 +1150,6 @@ end
 -- Permission exchange. Every key is derived once from owner, attempt and
 -- the request's event key and kept in the checkpoint; the thread carries
 -- one control record per phase under a deterministic key.
-local function permission_record(session: Session, state: checkpoint.Permission, phase: string, extra: {[string]: unknown}): {[string]: unknown}
-    local payload: {[string]: unknown} = {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id, tool_name = state.tool_name, input_digest = state.input_digest,
-        proposal_digest = state.proposal_digest, idempotency_key = state.idempotency_key, effect_key = state.effect_key, write_id = state.write_id, attempt_id = session.plan.request.attempt_id,
-        attachment_generation = session.epoch, phase = phase}
-    local key = "permission:" .. state.permission_request_id .. ":" .. phase
-    for name, value in pairs(extra) do
-        payload[name] = value
-        if name == "incarnation" then key = key .. ":" .. tostring(value) end
-    end
-    local record: {[string]: unknown} = {source = "bee", body = {type = "extension", event_key = key, data = {type = "extension", event_name = "bee.carrier.permission", event_revision = "1", payload_json = json.encode(payload)}}}
-    if session.turn_open then record.turn_id = session.turn_id end
-    return record
-end
-local function request_of(state: checkpoint.Permission): permission.Request
-    return {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id, acknowledgment_id = state.acknowledgment_id or state.correlation_id, tool_name = state.tool_name,
-        input_digest = state.input_digest, input = {}, prompt = state.prompt}
-end
-local function proposal_of(session: Session, exchange: Exchange, state: checkpoint.Permission): {[string]: unknown}
-    local request = session.plan.request
-    return permission.proposal(exchange.adapter, {action_id = request.action_id, attempt_id = request.attempt_id, plan_digest = session.plan.plan_digest}, request_of(state))
-end
-local function live_permissions(session: Session): {permission.Request}
-    local pending: {permission.Request} = {}
-    for _, state in ipairs(session.checkpoint.permissions) do
-        if state.phase ~= "closed" and state.phase ~= "acknowledged" then pending[#pending + 1] = request_of(state) end
-    end
-    return pending
-end
--- detect: permission requests among a chunk's observations become intents
--- in the checkpoint and intent records in the same commit; a request the
--- protocol could not tell apart from a pending one is refused on record.
-local function detect_permissions(session: Session, records: {{[string]: unknown}}): (integer, string?)
-    local exchange = session.plan.exchange
-    if not exchange then return 0, nil end
-    local added = 0
-    local count = #records
-    for index = 1, count do
-        local record = records[index]
-        local found, request_error = permission.request(exchange.adapter, record.body)
-        if request_error then return added, request_error end
-        if found then
-            local known = false
-            for _, state in ipairs(session.checkpoint.permissions) do
-                if state.permission_request_id == found.permission_request_id then known = true end
-            end
-            if not known then
-                local admitted, ambiguity = permission.admit_pending(live_permissions(session), found)
-                local identity = permission.identity(session.plan.request.owner_id, session.plan.request.attempt_id, found.permission_request_id)
-                local proposal_digest = digest_of(permission.proposal(exchange.adapter, {action_id = session.plan.request.action_id, attempt_id = session.plan.request.attempt_id, plan_digest = session.plan.plan_digest}, found)) or ""
-                local state: checkpoint.Permission = {permission_request_id = found.permission_request_id, correlation_id = found.correlation_id, acknowledgment_id = found.acknowledgment_id, tool_name = found.tool_name, input_digest = found.input_digest,
-                    prompt = found.prompt, proposal_digest = proposal_digest, idempotency_key = permission.idempotency_key(identity), effect_key = permission.effect_key(identity),
-                    write_id = permission.write_id(identity), phase = "intended", approval_id = nil, decision = nil, incarnation = nil, response = nil}
-                if not admitted or #session.checkpoint.permissions >= checkpoint.MAX_PERMISSIONS then
-                    state.phase = "closed"
-                    records[#records + 1] = permission_record(session, state, "refused", {reason = ambiguity or ("more than " .. tostring(checkpoint.MAX_PERMISSIONS) .. " permission requests in one attempt")})
-                else
-                    session.checkpoint.permissions[#session.checkpoint.permissions + 1] = state
-                    records[#records + 1] = permission_record(session, state, "intended", {})
-                    added = added + 1
-                end
-            end
-        end
-    end
-    return added, nil
-end
--- Acknowledgments: a written response is acknowledged by the observation
--- the adapter names for its decision; a denial an adapter cannot name
--- stays written, and settlement reports it as unproven.
-local function acknowledge_permissions(session: Session, records: {{[string]: unknown}})
-    local exchange = session.plan.exchange
-    if not exchange then return end
-    local count = #records
-    for _, state in ipairs(session.checkpoint.permissions) do
-        if state.phase == "written" then
-            for index = 1, count do
-                local body = records[index].body
-                local acknowledged = false
-                if state.decision == "approved" then
-                    acknowledged = permission.acknowledged(exchange.adapter, request_of(state), body)
-                else
-                    acknowledged = permission.deny_acknowledged(exchange.adapter, request_of(state), body)
-                end
-                if acknowledged and state.phase == "written" then
-                    state.phase = "acknowledged"
-                    records[#records + 1] = permission_record(session, state, "acknowledged", {})
-                end
-            end
-        end
-    end
-end
--- The runner may forget every chunk through this sequence: all of it is
--- committed, and no partial frame beyond the checkpoint's carry needs it.
 local function acknowledged_through(session: Session, sequence: integer): integer
     local held = session.held_from
     if held and held - 1 < sequence then return held - 1 end
@@ -1520,9 +1255,9 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     -- stdout position; records committed beyond it replay idempotently from
     -- the chunks the runner still holds.
     local at_boundary = session.held_from == nil
-    local detected, detect_error = detect_permissions(session, records)
+    local detected, detect_error = permission_exchange.detect(permission_context(), session, records)
     if detect_error then return refuse(detect_error) end
-    acknowledge_permissions(session, records)
+    permission_exchange.acknowledge(session, records)
     local total = #records
     local offset = 0
     while true do
@@ -1565,541 +1300,12 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     return true, nil
 end
 type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
-type ApprovalDecision = "approved" | "denied"
-type ApprovalView =
-    {approval_id: string, workspace_id: string, proposal_digest: string, owner_incarnation: integer, state: "decided", decision: ApprovalDecision}
-    | {approval_id: string, workspace_id: string, proposal_digest: string, owner_incarnation: integer,
-        state: "pending" | "expired" | "withdrawn", decision: nil}
-local function approval_view(value: unknown): (ApprovalView?, string?)
-    local view = bounds.object(value)
-    if not view then return nil, "approval must be an object" end
-    local unknown_field = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "request_kind", "policy",
-        "proposal", "proposal_digest", "prompt", "response_schema", "thread_id", "binding", "revision", "state", "decision", "decider_id",
-        "decided_at", "response", "validated_incarnation", "validated_by", "validated_at", "consumer_id", "consumed_effect", "consumed_at",
-        "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at"})
-    if unknown_field then return nil, "approval: " .. unknown_field end
-    local approval_id, workspace_id = bounds.id(view.approval_id), bounds.id(view.workspace_id)
-    local proposal_digest = bounds.text(view.proposal_digest, 64)
-    local incarnation, state = bounds.count(view.owner_incarnation), bounds.member(view.state, {"pending", "decided", "expired", "withdrawn"})
-    local decision: ApprovalDecision? = nil
-    if view.decision ~= nil then
-        local selected = bounds.member(view.decision, {"approved", "denied"})
-        if selected == "approved" then decision = "approved"
-        elseif selected == "denied" then decision = "denied"
-        else return nil, "approval decision is invalid" end
-    end
-    if unknown_field then return nil, "approval: " .. unknown_field end
-    if not approval_id then return nil, "approval identifier is malformed" end
-    if not workspace_id then return nil, "approval workspace is malformed" end
-    if proposal_digest == nil then return nil, "approval proposal digest is malformed" end
-    if #proposal_digest ~= 64 or not proposal_digest:match("^[0-9a-f]+$") then return nil, "approval proposal digest is malformed" end
-    if incarnation == nil or incarnation < 1 then return nil, "approval owner incarnation is malformed" end
-    if not state then return nil, "approval state is malformed" end
-    if (state == "decided") ~= (decision ~= nil) then return nil, "approval decision disagrees with its state" end
-    if state == "decided" then
-        if decision == "approved" then
-            return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
-                owner_incarnation = incarnation, state = "decided", decision = "approved"}, nil
-        elseif decision == "denied" then
-            return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
-                owner_incarnation = incarnation, state = "decided", decision = "denied"}, nil
-        end
-        return nil, "decided approval has no decision"
-    end
-    if decision ~= nil then return nil, "undecided approval carries a decision" end
-    if state == "pending" then
-        return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
-            owner_incarnation = incarnation, state = "pending", decision = nil}, nil
-    elseif state == "expired" then
-        return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
-            owner_incarnation = incarnation, state = "expired", decision = nil}, nil
-    end
-    return {approval_id = approval_id, workspace_id = workspace_id, proposal_digest = proposal_digest,
-        owner_incarnation = incarnation, state = "withdrawn", decision = nil}, nil
-end
--- request_approval: the durable intent is asked under its idempotency key,
--- so a crash between the owner creating the approval and the checkpoint
--- recording it replays the same approval.
-local function request_approval(io: IO, session: Session, exchange: Exchange, state: checkpoint.Permission): (boolean, string?)
-    local request = session.plan.request
-    local value, err = must(io, M.APPROVALS .. ":request", {workspace_id = request.workspace_id, idempotency_key = state.idempotency_key, request_kind = "permission", policy = exchange.approver_policy,
-        proposal = proposal_of(session, exchange, state), prompt = {text = state.prompt}, thread_id = request.thread_id, ttl_ms = exchange.ttl_ms})
-    if err then return false, err end
-    step(io, "approval_created")
-    local view, view_error = approval_view(value)
-    if not view then return false, "approval owner returned malformed data: " .. tostring(view_error) end
-    if view.workspace_id ~= request.workspace_id or view.proposal_digest ~= state.proposal_digest then
-        return false, "approval owner recorded a different workspace or proposal digest"
-    end
-    state.approval_id = view.approval_id
-    state.incarnation = view.owner_incarnation
-    state.phase = "requested"
-    local committed, commit_error = M.commit(io, session, {permission_record(session, state, "requested", {approval_id = state.approval_id})})
-    if not committed then return false, commit_error end
-    step(io, "permission_requested")
-    return true, nil
-end
-local function poll_decision(io: IO, session: Session, state: checkpoint.Permission): (boolean, string?)
-    if not state.approval_id then return false, "approval id is missing" end
-    local value, err = must(io, M.APPROVALS .. ":read", {approval_id = state.approval_id})
-    if err then return false, err end
-    local view, view_error = approval_view(value)
-    if not view then return false, "approval owner returned malformed data: " .. tostring(view_error) end
-    if view.approval_id ~= state.approval_id or view.proposal_digest ~= state.proposal_digest then
-        return false, "approval owner returned another approval or proposal"
-    end
-    if view.state == "pending" then return true, nil end
-    local decision: string
-    if view.state == "decided" then
-        if not view.decision then return false, "decided approval has no decision" end
-        decision = view.decision
-    else
-        decision = view.state
-    end
-    state.decision = decision
-    state.phase = "decided"
-    local committed, commit_error = M.commit(io, session, {permission_record(session, state, "decided", {decision = decision})})
-    if not committed then return false, commit_error end
-    step(io, "permission_decided")
-    return true, nil
-end
-local function close_permission(io: IO, session: Session, state: checkpoint.Permission, reason: string): (boolean, string?)
-    state.phase = "closed"
-    return M.commit(io, session, {permission_record(session, state, "closed", {reason = reason})})
-end
--- revalidate_context: before consuming under a new authority incarnation
--- and before any dispatch after recovery, the carrier re-checks everything
--- the approval was bound to: the attempt still waits with a bound runner,
--- the launch policy, binding, profile, adapter and acceptance still measure
--- as planned, the proposal still digests the same, and the placement,
--- reconciled now, still runs under its grants and projections.
-local function revalidate_context(io: IO, session: Session, exchange: Exchange, state: checkpoint.Permission): string?
-    if session.terminal or session.settled or not session.runner then return "attempt no longer waiting" end
-    local recorded = session.checkpoint.plan_digest
-    if not recorded then return "the checkpoint records no plan digest" end
-    local fresh, plan_error = M.plan(io, session.plan.request)
-    if not fresh then return "measurements unavailable: " .. tostring(plan_error) end
-    if fresh.exchange_refusal then return fresh.exchange_refusal end
-    if fresh.plan_digest ~= recorded then return "plan measurements changed since the checkpoint" end
-    local current = fresh.exchange
-    if not current then return "permission exchange no longer enabled" end
-    if current.adapter.digest ~= exchange.adapter.digest then return "permission adapter changed" end
-    if current.acceptance_digest ~= exchange.acceptance_digest then return "acceptance record changed" end
-    local proposal_digest = digest_of(proposal_of(session, exchange, state))
-    if proposal_digest ~= state.proposal_digest then return "proposal no longer digests as recorded" end
-    local reconcile_target = M.placement_target(session.plan, "reconcile")
-    if not reconcile_target then return "selected placement binds no reconcile" end
-    local reconciled, reconcile_error = must(io, reconcile_target, {attempt_id = session.plan.request.attempt_id})
-    if reconcile_error then return "placement reconcile: " .. reconcile_error end
-    local attempt, attempt_decode_error = placement_decode.attempt(reconciled)
-    if not attempt then return "placement reconcile returned an invalid attempt: " .. tostring(attempt_decode_error) end
-    if attempt.execution_state ~= "running" then return "placement is " .. tostring(attempt.execution_state) .. " under its grants and projections" end
-    return nil
-end
--- consume_effect: the effect is reserved under the authority incarnation the
--- carrier observed; a restarted authority answers REVALIDATE with its current
--- incarnation, the carrier re-checks its own domain, records the validation
--- and asks again. Replays are safe, so a resumed carrier repeats this
--- before creating its write intent.
-local function consume_effect(io: IO, session: Session, state: checkpoint.Permission): (boolean, string?)
-    if not state.approval_id or not state.incarnation then return false, "approval identity or incarnation is missing" end
-    for _ = 1, M.MAX_CONSUME_ATTEMPTS do
-        local raw, call_error = io.call(M.APPROVALS .. ":consume", {approval_id = state.approval_id, proposal_digest = state.proposal_digest, effect_key = state.effect_key, owner_incarnation = state.incarnation})
-        local reply, reply_error = reply_of(raw, call_error)
-        if not reply then return false, "consume: " .. tostring(reply_error) end
-        if reply.ok then return true, nil end
-        local fault = reply.error or {code = "INTERNAL", message = "consume failed"}
-        if fault.code ~= "REVALIDATE" then return false, "consume: " .. fault.code .. ": " .. fault.message end
-        local validation = bounds.object(reply.value)
-        if not validation then return false, "consume: revalidation details must be an object" end
-        local validation_field = bounds.fields(validation, {"request", "current_incarnation"})
-        local current = bounds.count(validation.current_incarnation)
-        if validation_field or not current or current < 1 then return false, "consume: revalidation names no valid incarnation" end
-        local observed, observed_error = approval_view(validation.request)
-        if not observed then return false, "consume: revalidation approval is malformed: " .. tostring(observed_error) end
-        if observed.approval_id ~= state.approval_id or observed.proposal_digest ~= state.proposal_digest then
-            return false, "consume: revalidation names another approval or proposal"
-        end
-        local exchange = session.plan.exchange
-        if not exchange then return false, "consume: no permission exchange" end
-        local refused = revalidate_context(io, session, exchange, state)
-        if refused then return close_permission(io, session, state, "revalidation refused: " .. refused) end
-        local _, revalidate_error = must(io, M.APPROVALS .. ":revalidate", {approval_id = state.approval_id, proposal_digest = state.proposal_digest, owner_incarnation = current})
-        if revalidate_error then return false, revalidate_error end
-        state.incarnation = current
-        local committed, commit_error = M.commit(io, session, {permission_record(session, state, "revalidated", {incarnation = current})})
-        if not committed then return false, commit_error end
-        step(io, "permission_revalidated")
-    end
-    return false, "consume: the authority restarted " .. tostring(M.MAX_CONSUME_ATTEMPTS) .. " times during consumption"
-end
-local function write_response(io: IO, session: Session, exchange: Exchange, state: checkpoint.Permission): (boolean, string?)
-    if not session.runner then return true, nil end
-    local line = state.response
-    if not line then return false, "permission response is missing" end
-    if session.recovered then
-        local refused = revalidate_context(io, session, exchange, state)
-        if refused then return close_permission(io, session, state, "revalidation refused before dispatch: " .. refused) end
-    end
-    state.phase = "written"
-    return M.write(io, session, state.write_id, line)
-end
 -- Wakeup hints: a durable subscription to the thread's approval
 -- transitions whose pages are only reasons to read the approval owner.
 -- The projected decision never authorizes consumption or a write, bounded
 -- polling stays the fallback through every failure here, and a page is
 -- acknowledged only after its hints were processed, which certifies
 -- nothing about consumption or child input.
-type SubscriptionView = {subscription_id: string, after_sequence: integer}
-local function subscription_view(value: unknown, expected_id: string?): (SubscriptionView?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "subscription must be an object" end
-    local unknown_field = bounds.fields(object, {"subscription_id", "consumer_id", "after_sequence", "lease_generation", "owner_incarnation", "owner_authority",
-        "durability", "filter_digest", "closed"})
-    local subscription_id, consumer_id = bounds.id(object.subscription_id), bounds.id(object.consumer_id)
-    local after_sequence, lease_generation = bounds.count(object.after_sequence), bounds.count(object.lease_generation)
-    local owner_incarnation, owner_authority = bounds.count(object.owner_incarnation), bounds.id(object.owner_authority)
-    local durability = bounds.member(object.durability, {"durable", "reconstructible"})
-    local filter_digest = bounds.text(object.filter_digest, 64)
-    if unknown_field then return nil, "subscription: " .. unknown_field end
-    if not subscription_id or (expected_id ~= nil and subscription_id ~= expected_id) then return nil, "subscription identifier is malformed" end
-    if not consumer_id then return nil, "subscription consumer is malformed" end
-    if after_sequence == nil then return nil, "subscription cursor is malformed" end
-    if lease_generation == nil or lease_generation < 1 then return nil, "subscription lease generation is malformed" end
-    if owner_incarnation == nil or owner_incarnation < 1 then return nil, "subscription owner incarnation is malformed" end
-    if not owner_authority then return nil, "subscription owner authority is malformed" end
-    if not durability then return nil, "subscription durability is malformed" end
-    if not filter_digest or #filter_digest ~= 64 or not filter_digest:match("^[0-9a-f]+$") then return nil, "subscription filter digest is malformed" end
-    if type(object.closed) ~= "boolean" then return nil, "subscription closed flag is malformed" end
-    return {subscription_id = subscription_id, after_sequence = after_sequence}, nil
-end
-type DeliveryPage = {subscription_id: string, page_id: string?, scanned_through: integer, has_records: boolean}
-local function delivery_page(value: unknown, expected_subscription: string): (DeliveryPage?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "delivery page must be an object" end
-    local unknown_field = bounds.fields(object, {"subscription_id", "page_id", "lease_generation", "records", "from_sequence", "scanned_through", "has_more"})
-    local subscription_id = bounds.id(object.subscription_id)
-    local from_sequence, scanned = bounds.count(object.from_sequence), bounds.count(object.scanned_through)
-    local lease_generation = object.lease_generation == nil and nil or bounds.count(object.lease_generation)
-    local page_id: string? = nil
-    if object.page_id ~= nil then page_id = bounds.id(object.page_id) end
-    local records, records_error = bounds.array(object.records, M.ATTACH_PAGE_RECORDS)
-    if unknown_field then return nil, "delivery page: " .. unknown_field end
-    if subscription_id ~= expected_subscription then return nil, "delivery page subscription is invalid" end
-    if from_sequence == nil then return nil, "delivery page start cursor is invalid" end
-    if scanned == nil or scanned < from_sequence then return nil, "delivery page scanned cursor is invalid" end
-    if object.lease_generation ~= nil and (lease_generation == nil or lease_generation < 1) then return nil, "delivery page lease generation is invalid" end
-    if object.page_id ~= nil and page_id == nil then return nil, "delivery page identifier is invalid" end
-    if not records then return nil, "delivery page records are malformed: " .. tostring(records_error) end
-    if type(object.has_more) ~= "boolean" then return nil, "delivery page has_more flag is invalid" end
-    local previous = from_sequence
-    for index, raw in ipairs(records) do
-        local record, record_error = thread_record.decode(raw)
-        if not record then return nil, "delivery page records[" .. tostring(index) .. "]: " .. tostring(record_error) end
-        if record.sequence <= previous or record.sequence > scanned then return nil, "delivery page records are out of sequence" end
-        previous = record.sequence
-    end
-    if page_id == nil and (#records > 0 or scanned ~= from_sequence) then return nil, "delivery page identity and extent disagree" end
-    if page_id ~= nil and scanned == from_sequence then return nil, "delivery page has no scanned extent" end
-    if not subscription_id then return nil, "delivery page subscription is invalid" end
-    local scanned_through: integer = scanned
-    return {subscription_id = subscription_id, page_id = page_id, scanned_through = scanned_through, has_records = #records > 0}, nil
-end
-local function hints_call(io: IO, target: string, request: unknown): ({[string]: unknown}?, string?, string?)
-    local raw, call_error = io.call(target, request)
-    local reply, reply_error = reply_of(raw, call_error)
-    if not reply then return nil, "INTERNAL", tostring(reply_error) end
-    if not reply.ok then
-        local fault = reply.error or {code = "INTERNAL", message = "hint operation failed"}
-        return nil, fault.code, fault.message
-    end
-    local value = bounds.object(reply.value)
-    if not value then return nil, "INTERNAL", "hint operation returned a non-object value" end
-    return value, nil, nil
-end
--- open_hints: resume the checkpointed subscription under this carrier's
--- lease, or subscribe afresh; returns the cursor to register wakeups from.
-function M.open_hints(io: IO, session: Session): (integer?, string?)
-    if not session.plan.exchange and not session.plan.policy.inbox_push then return nil, nil end
-    local request = session.plan.request
-    local key = "launch:" .. request.attempt_id .. ":hints:" .. tostring(session.epoch)
-    local existing = session.checkpoint.hint_subscription
-    if existing then
-        local resumed, resume_code, resume_error = hints_call(io, M.DELIVERY .. ":resume", {thread_id = request.thread_id, idempotency_key = key, subscription_id = existing})
-        if resumed then
-            local view, view_error = subscription_view(resumed, existing)
-            if not view then return nil, "delivery resume returned malformed data: " .. tostring(view_error) end
-            return view.after_sequence, nil
-        end
-        -- A subscription that cannot be resumed is closed before another is
-        -- opened, so superseded rows never accumulate.
-        local closed, close_code, close_error = hints_call(io, M.DELIVERY .. ":unsubscribe", {thread_id = request.thread_id, idempotency_key = key .. ":close", subscription_id = existing})
-        if closed then
-            local view, view_error = subscription_view(closed, existing)
-            if not view then return nil, "delivery unsubscribe returned malformed data: " .. tostring(view_error) end
-        elseif close_code ~= "NOT_FOUND" and close_code ~= "INVALID_STATE" and close_code ~= "CONFLICT" then
-            return nil, "delivery unsubscribe: " .. tostring(close_code) .. ": " .. tostring(close_error or resume_code or resume_error)
-        end
-        session.checkpoint.hint_subscription = nil
-    end
-    -- One consumer identity per attempt: a second open subscription under it
-    -- is refused by the owner, which leaves polling as the only source.
-    local kinds: {string} = {}
-    if session.plan.exchange then kinds[#kinds + 1] = "approval.transition" end
-    if session.plan.policy.inbox_push then kinds[#kinds + 1] = "message" end
-    local created, code, message = hints_call(io, M.DELIVERY .. ":subscribe", {thread_id = request.thread_id, idempotency_key = key, consumer_id = "carrier:" .. request.attempt_id,
-        after_sequence = 0, filter = {kinds = kinds}, durability = "durable"})
-    if not created then
-        if code == "CONFLICT" then return nil, nil end
-        return nil, tostring(code) .. ": " .. tostring(message)
-    end
-    local view, view_error = subscription_view(created, nil)
-    if not view then return nil, "delivery subscribe returned malformed data: " .. tostring(view_error) end
-    session.checkpoint.hint_subscription = view.subscription_id
-    local committed, commit_error = M.commit(io, session, {})
-    if not committed then return nil, commit_error end
-    step(io, "hints_opened")
-    return view.after_sequence, nil
-end
--- take_hints: the outstanding or next page; true when it carries any
--- transition, which is the one reason to read the owner now. A lost
--- subscription leaves polling as the only source until the next tick
--- reopens it.
-function M.take_hints(io: IO, session: Session): (boolean, integer?, string?)
-    local subscription = session.checkpoint.hint_subscription
-    if not subscription then return false, nil, nil end
-    local request = session.plan.request
-    local page, code = hints_call(io, M.DELIVERY .. ":page", {thread_id = request.thread_id, subscription_id = subscription, limit = 64})
-    if not page then
-        if code == "NOT_FOUND" or code == "INVALID_STATE" or code == "DENIED" then session.checkpoint.hint_subscription = nil end
-        if code == "INTERNAL" then return false, nil, "delivery page returned malformed data" end
-        return false, nil, nil
-    end
-    local decoded, page_error = delivery_page(page, subscription)
-    if not decoded then return false, nil, "delivery page is malformed: " .. tostring(page_error) end
-    if decoded.page_id then session.pending_hint = {page_id = decoded.page_id, scanned_through = decoded.scanned_through} end
-    return decoded.has_records, decoded.scanned_through, nil
-end
--- acknowledge_hints: after the hints were processed; an acknowledgment the
--- owner refuses for an earlier incarnation is answered by resuming the
--- subscription under a new lease.
-function M.acknowledge_hints(io: IO, session: Session): (boolean, string?)
-    local pending = session.pending_hint
-    local subscription = session.checkpoint.hint_subscription
-    session.pending_hint = nil
-    if not pending or not subscription then return true, nil end
-    local request = session.plan.request
-    local acknowledged, code = hints_call(io, M.DELIVERY .. ":ack_page", {thread_id = request.thread_id, idempotency_key = io.key(), subscription_id = subscription, page_id = pending.page_id, scanned_through = pending.scanned_through})
-    if acknowledged then
-        local view, view_error = subscription_view(acknowledged, subscription)
-        if not view then return false, "delivery acknowledgment returned malformed data: " .. tostring(view_error) end
-        if view.after_sequence ~= pending.scanned_through then return false, "delivery acknowledgment advanced to another cursor" end
-        return true, nil
-    end
-    if code == "CONFLICT" then
-        local resumed, _, resume_error = hints_call(io, M.DELIVERY .. ":resume", {thread_id = request.thread_id, idempotency_key = io.key(), subscription_id = subscription})
-        if resumed then
-            local view, view_error = subscription_view(resumed, subscription)
-            if not view then return false, "delivery resume returned malformed data: " .. tostring(view_error) end
-            return true, nil
-        end
-        if resume_error then return false, resume_error end
-    end
-    session.checkpoint.hint_subscription = nil
-    return true, nil
-end
-function M.close_hints(io: IO, session: Session)
-    local subscription = session.checkpoint.hint_subscription
-    if not subscription then return end
-    local request = session.plan.request
-    hints_call(io, M.DELIVERY .. ":unsubscribe", {thread_id = request.thread_id, idempotency_key = "launch:" .. request.attempt_id .. ":hints:close:" .. tostring(session.epoch), subscription_id = subscription})
-    session.checkpoint.hint_subscription = nil
-end
--- The inbox owner returns at most its oldest outstanding item. Rechecking on
--- every wake and bounded tick also catches a signal lost before registration.
-function M.offer_inbox(io: IO, session: Session): (Offer?, string?)
-    if not session.plan.policy.inbox_push then return nil, nil end
-    local request = session.plan.request
-    local value, err = must(io, M.THREADS .. ":inbox_offer", {thread_id = request.thread_id, action_id = request.action_id,
-        attempt_id = request.attempt_id, carrier_epoch = session.epoch})
-    if err then return nil, err end
-    return decode_inbox_offer(value, request.thread_id, request.action_id)
-end
--- inbox_prompt: the identified prompt naming one inbox item, shared by the
--- Claude controller push line and the bounded-driver attempt brief. The
--- offer count travels only where an offer was made.
-type InboxPromptItem = {thread_id: string, action_id: string, record_id: string, inbox_sequence: integer, offer_count: integer?,
-    payload_digest: string, message_id: string, message_kind: string, sender_action_id: string, sender_thread_id: string,
-    sender_node_id: string, content: record_types.Content, in_reply_to: record_types.Ref?}
-function M.inbox_prompt(item: InboxPromptItem): (string?, string?)
-    local context: Object = {thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id, inbox_sequence = item.inbox_sequence,
-        payload_digest = item.payload_digest,
-        message_id = item.message_id, message_kind = item.message_kind, sender_action_id = item.sender_action_id,
-        sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id, content = item.content}
-    if item.offer_count then context.offer_count = item.offer_count end
-    if item.in_reply_to then context.in_reply_to = item.in_reply_to end
-    local encoded, encode_error = canonical.encode(context)
-    if not encoded then return nil, encode_error end
-    return "Bee action inbox item. Handle this record once. Use session_ack with inbox_sequence, or session_reply to the sender with in_reply_to naming this thread_id and record_id. " .. encoded, nil
-end
-function M.push_line(item: Offer): (string?, string?)
-    local prompt, prompt_error = M.inbox_prompt({thread_id = item.thread_id, action_id = item.action_id, record_id = item.record_id,
-        inbox_sequence = item.inbox_sequence, offer_count = item.offer_count, payload_digest = item.payload_digest,
-        message_id = item.message_id, message_kind = item.message_kind, sender_action_id = item.sender_action_id,
-        sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id, content = item.content, in_reply_to = item.in_reply_to})
-    if not prompt then return nil, prompt_error end
-    local line, line_error = canonical.encode({type = "user", message = {role = "user", content = prompt}})
-    if not line then return nil, line_error end
-    if #line + 1 > checkpoint.MAX_PENDING_WRITE_BYTES then return nil, "inbox item exceeds the controller input bound" end
-    return line .. "\n", nil
-end
--- carry_brief: for a fresh structured attempt on a driver without a
--- between-turns controller, prepend the oldest outstanding inbox item to
--- the brief, so the new attempt starts carrying it. Claude keeps its
--- controller push, windows keep their hook boundary, and resumed attempts
--- keep their provider session: no fixture proves inbox-carry combined
--- with any of those, so none of them is augmented. A read failure or a
--- missing action leaves the brief alone; delivery still waits in
--- session_inbox. The carry is idempotent, so planning the same request
--- twice never prefixes twice.
-M.INBOX_CARRY_LIST_LIMIT = 8
-M.INBOX_CARRY_EXCERPT_BYTES = 4096
-M.BRIEF_BYTES = 16384
-local function carry_text(content: unknown): string
-    local object = bounds.object(content)
-    if object then
-        local text = bounds.text(object.text)
-        if text then return text end
-    end
-    local encoded = canonical.encode(content)
-    if encoded then return encoded end
-    return "undecodable inbox content"
-end
-function M.carry_brief(io: IO, request: Request, driver_id: string, mode: string): string
-    local brief = request.brief
-    if driver_id == "claude" or mode == "window" then return brief end
-    if request.previous_attempt_id ~= nil or request.session_ref ~= nil then return brief end
-    local page, list_error = must(io, M.THREADS .. ":inbox_list", {thread_id = request.thread_id, action_id = request.action_id,
-        after_sequence = 0, limit = M.INBOX_CARRY_LIST_LIMIT})
-    if list_error then return brief end
-    local inbox = inbox_list_page(page, M.INBOX_CARRY_LIST_LIMIT)
-    if not inbox then return brief end
-    local oldest: InboxItem? = nil
-    for _, item in ipairs(inbox.items) do
-        if item.thread_id ~= request.thread_id then return brief end
-        if item.state ~= "acknowledged" and item.state ~= "replied" then oldest = item; break end
-    end
-    if not oldest then return brief end
-    if brief:find(oldest.record_id, 1, true) then return brief end
-    local excerpt = carry_text(oldest.content)
-    local room = M.BRIEF_BYTES - #brief - 1 - 700
-    local capped = math.min(room, M.INBOX_CARRY_EXCERPT_BYTES)
-    local carried: record_types.Content = oldest.content
-    if capped < #excerpt then
-        if capped > 128 then
-            carried = {text = excerpt:sub(1, capped - 128) .. "...[truncated; read the full item with session_inbox]"}
-        else
-            carried = {text = "[content omitted: exceeds the brief bound; read the full item with session_inbox]"}
-        end
-    end
-    local prompt, prompt_error = M.inbox_prompt({thread_id = request.thread_id, action_id = request.action_id, record_id = oldest.record_id,
-        inbox_sequence = oldest.inbox_sequence, payload_digest = oldest.payload_digest, message_id = oldest.message_id, message_kind = oldest.message_kind,
-        sender_action_id = oldest.sender_action_id, sender_thread_id = oldest.sender_thread_id, sender_node_id = oldest.sender_node_id,
-        content = carried, in_reply_to = oldest.in_reply_to})
-    if not prompt then return brief end
-    if #prompt + 1 + #brief > M.BRIEF_BYTES then return brief end
-    return prompt .. "\n" .. brief
-end
--- A second Claude turn is admitted before its user line is written. The
--- previous terminal remains in the checkpoint while idle, so recovery can
--- distinguish a completed turn from one awaiting its result.
-function M.begin_push_turn(io: IO, session: Session, item: Offer): (string?, string?)
-    if not session.plan.policy.inbox_push or not item.dispatch then return nil, "inbox item is not dispatchable" end
-    local turn_prefix = "turn:" .. session.plan.request.attempt_id .. ":inbox:" .. tostring(item.inbox_sequence) .. ":"
-    if session.turn_open and session.turn_id:sub(1, #turn_prefix) ~= turn_prefix then
-        return nil, "a different turn is still open"
-    end
-    if session.exit or not session.runner then return nil, "inbox controller has no live runner" end
-    local line, line_error = M.push_line(item)
-    if not line then return nil, line_error end
-    if not session.turn_open then
-        session.terminal = nil
-        session.checkpoint.terminal = nil
-        session.stream_ended = false
-        session.checkpoint.stream_ended = nil
-        session.normalizer = nil
-        session.checkpoint.normalizer_state = nil
-        local cleared, clear_error = M.commit(io, session, {})
-        if not cleared then return nil, clear_error end
-        local turn_id = turn_prefix .. tostring(item.offer_count)
-        local request = session.plan.request
-        local _, turn_error = thread_call(io, request, "request_turn", {action_id = request.action_id, attempt_id = request.attempt_id,
-            turn_id = turn_id, carrier_epoch = session.epoch,
-            turn = {input_message_ids = {item.message_id}, input = {text = line}, delivery_ids = {}}}, "inbox-turn:" .. item.record_id .. ":" .. tostring(item.offer_count))
-        if turn_error then return nil, turn_error end
-        session.turn_id = turn_id
-        session.turn_open = true
-    end
-    local write_id = "inbox:" .. item.record_id .. ":" .. tostring(item.inbox_sequence) .. ":" .. tostring(session.epoch)
-    local written, write_error = M.write(io, session, write_id, line)
-    if not written then return nil, write_error end
-    return write_id, nil
-end
--- advance_permissions: drives every exchange forward from what the
--- checkpoint holds. Polling the owner happens only on the poll tick.
-function M.advance_permissions(io: IO, session: Session, poll: boolean): (boolean, string?)
-    local exchange = session.plan.exchange
-    if not exchange then return true, nil end
-    for _, state in ipairs(session.checkpoint.permissions) do
-        if state.phase == "intended" then
-            local ok, err = request_approval(io, session, exchange, state)
-            if not ok then return false, err end
-        end
-        if state.phase == "requested" and poll then
-            local ok, err = poll_decision(io, session, state)
-            if not ok then return false, err end
-        end
-        if state.phase == "decided" then
-            local waiting = session.terminal == nil and not session.eof.stdout and session.runner ~= nil
-            local settled = session.settled ~= nil or session.terminal ~= nil
-            local outcome = permission.outcome(exchange.adapter, state.decision or "", waiting, settled)
-            if outcome == "allow" then
-                local consumed, consume_error = consume_effect(io, session, state)
-                if not consumed then return false, consume_error end
-                if state.phase == "decided" then
-                    local line, encode_error = permission.allow(exchange.adapter, request_of(state), nil)
-                    if not line then return false, "encode allow: " .. tostring(encode_error) end
-                    state.response = line
-                    state.phase = "consumed"
-                    local committed, commit_error = M.commit(io, session, {permission_record(session, state, "consumed", {})})
-                    if not committed then return false, commit_error end
-                    step(io, "permission_consumed")
-                end
-            elseif outcome == "deny" then
-                -- A denial or expiry reserves the response write only; no
-                -- effect is consumed and nothing authorizes the tool.
-                local line, encode_error = permission.deny(exchange.adapter, request_of(state), "decision " .. tostring(state.decision))
-                if not line then return false, "encode deny: " .. tostring(encode_error) end
-                state.response = line
-                state.phase = "declined"
-                local committed, commit_error = M.commit(io, session, {permission_record(session, state, "declined", {})})
-                if not committed then return false, commit_error end
-            else
-                local closed, close_error = close_permission(io, session, state, "decision " .. tostring(state.decision) .. " arrived while not waiting")
-                if not closed then return false, close_error end
-            end
-        end
-        if state.phase == "consumed" then
-            local consumed, consume_error = consume_effect(io, session, state)
-            if not consumed then return false, consume_error end
-        end
-        if state.phase == "consumed" or state.phase == "declined" then
-            local written, write_error = write_response(io, session, exchange, state)
-            if not written then return false, write_error end
-        end
-    end
-    return true, nil
-end
 function M.on_exit(io: IO, session: Session, sender: string, message: placement_protocol.Exit)
     if not from_runner(session, sender, message.generation) then return end
     session.exit = {code = message.code, signal = message.signal, uncertain = message.uncertain, stopped = message.stopped == true}
@@ -2295,36 +1501,11 @@ local function settle_write(io: IO, session: Session, write_id: string, phase: s
     step(io, "write_settled")
     return true, nil
 end
-local function accept_push_write(io: IO, session: Session, write_id: string): (boolean, string?)
-    if write_id:sub(1, 6) ~= "inbox:" then return true, nil end
-    local record_id, sequence_text = write_id:match("^inbox:(.+):(%d+):%d+$")
-    local raw_sequence: number? = nil
-    if sequence_text ~= nil then raw_sequence = tonumber(sequence_text) end
-    local sequence = bounds.integer(raw_sequence)
-    if not record_id then return false, "malformed inbox write id" end
-    if sequence == nil or sequence < 1 then return false, "malformed inbox write id" end
-    local inbox_sequence: integer = sequence
-    local request = session.plan.request
-    local page, read_error = must(io, M.THREADS .. ":inbox_list", {thread_id = request.thread_id, action_id = request.action_id,
-        after_sequence = inbox_sequence - 1, limit = 1})
-    if read_error then return false, read_error end
-    local inbox, page_error = inbox_list_page(page, 1)
-    if not inbox then return false, "inbox list returned malformed data: " .. tostring(page_error) end
-    local item = inbox.items[1]
-    if not item or item.thread_id ~= request.thread_id or item.record_id ~= record_id or item.inbox_sequence ~= inbox_sequence then
-        return false, "inbox write no longer names its record"
-    end
-    if item.state == "acknowledged" or item.state == "replied" then return true, nil end
-    local transported, transport_error = must(io, M.THREADS .. ":inbox_transport", {thread_id = request.thread_id, action_id = request.action_id,
-        attempt_id = request.attempt_id, carrier_epoch = session.epoch, inbox_sequence = inbox_sequence, record_id = record_id})
-    if transport_error then return false, transport_error end
-    return inbox_transport(transported, record_id, inbox_sequence)
-end
 function M.on_write_ack(io: IO, session: Session, sender: string, message: placement_protocol.InputAck): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
     if not pending_write(session, message.write_id) then return true, nil end
     if message.accepted then
-        local accepted, accept_error = accept_push_write(io, session, message.write_id)
+        local accepted, accept_error = inbox.accept_write(inbox_context(), io, session, message.write_id)
         if not accepted then return false, accept_error end
     end
     local phase = message.accepted and "accepted" or "uncertain"
@@ -2353,7 +1534,7 @@ function M.on_write_status(io: IO, session: Session, sender: string, message: pl
     local found = pending_write(session, message.write_id)
     if not found then return true, nil end
     if message.status == "accepted" then
-        local accepted, accept_error = accept_push_write(io, session, message.write_id)
+        local accepted, accept_error = inbox.accept_write(inbox_context(), io, session, message.write_id)
         if not accepted then return false, accept_error end
         return settle_write(io, session, message.write_id, "accepted", nil)
     end
@@ -2364,49 +1545,16 @@ function M.on_write_status(io: IO, session: Session, sender: string, message: pl
     found.dispatched = true
     return true, nil
 end
--- settle: only from the terminal envelope, or from exit after the drain.
--- close_exchanges: once the outcome is decided, a write still awaiting
--- its answer is uncertain after the drain, never resent, and every open
--- permission exchange is closed on record. This runs before a declared
--- session end closes input and again, as a no-op, at settlement.
+function M.advance_permissions(io: IO, session: Session, poll: boolean): (boolean, string?)
+    return permission_exchange.advance(permission_context(), io, session, poll)
+end
 function M.close_exchanges(io: IO, session: Session, drain_elapsed: boolean): (boolean, string?)
-    if #session.checkpoint.pending_writes > 0 then
-        if not drain_elapsed then return false, nil end
-        local pending = session.checkpoint.pending_writes
-        for _, write in ipairs(pending) do
-            local settled, err = settle_write(io, session, write.write_id, "uncertain", "no acknowledgment before settlement")
-            if not settled then return false, err end
-        end
-    end
-    for _, state in ipairs(session.checkpoint.permissions) do
-        if state.phase ~= "closed" and state.phase ~= "acknowledged" then
-            local reason = "settled while " .. state.phase
-            if state.phase == "written" then reason = "response accepted by the input transport, harness acknowledgment unproven" end
-            local closed, close_error = close_permission(io, session, state, reason)
-            if not closed then return false, close_error end
-        end
-    end
-    return true, nil
+    return permission_exchange.close_exchanges(permission_context(), io, session, drain_elapsed)
 end
 function M.finish_push_turn(io: IO, session: Session): (boolean, string?)
-    if not session.plan.policy.inbox_push or not session.turn_open or not session.terminal or session.stream_ended or session.exit then return false, nil end
-    if #session.checkpoint.pending_writes > 0 then return false, nil end
-    local result = session.terminal
-    if result.outcome ~= "succeeded" then return false, nil end
-    local closed, close_error = M.close_exchanges(io, session, false)
-    if close_error then return false, close_error end
-    if not closed then return false, nil end
-    local request = session.plan.request
-    local _, hooks_error = M.drain_hooks(io, session)
-    if hooks_error then return false, hooks_error end
-    local _, end_error = thread_call(io, request, "end_turn", {action_id = request.action_id, attempt_id = request.attempt_id,
-        turn_id = session.turn_id, carrier_epoch = session.epoch,
-        turn_end = {outcome = result.outcome, answer_message_ids = {}, evidence_refs = {}, usage = result.usage}}, "inbox-end:" .. session.turn_id)
-    if end_error then return false, end_error end
-    session.turn_open = false
-    step(io, "push_turn_ended")
-    return true, nil
+    return permission_exchange.finish_push_turn(permission_context(), io, session)
 end
+
 function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Settlement?, string?)
     if session.settled then return session.settled, nil end
     local decided = settle.decide(evidence_of(session, drain_elapsed))
@@ -2460,4 +1608,9 @@ function M.capabilities(): {[string]: unknown}
         max_permissions = checkpoint.MAX_PERMISSIONS, permission_exchange = "host_policy_with_acceptance_record",
         takeover = "claim", resource_authority = "host_configured", delegated_resource_grants = false, credential_broker = false}
 end
+inbox_context_value = {threads = M.THREADS, delivery = M.DELIVERY, must = must, commit = M.commit, step = step,
+    thread_call = thread_call, write = M.write}
+permission_context_value = {approvals = M.APPROVALS, max_consume_attempts = permission_exchange.MAX_CONSUME_ATTEMPTS, commit = M.commit, must = must, step = step,
+    digest_of = digest_of, plan = M.plan, placement_target = M.placement_target, write = M.write, settle_write = settle_write,
+    thread_call = thread_call, drain_hooks = M.drain_hooks}
 return M

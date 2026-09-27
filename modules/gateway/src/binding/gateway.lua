@@ -1060,7 +1060,7 @@ function M.ready(value: unknown): Reply
         local ok, reason = M.valid(binding, generation)
         result.binding = view(binding)
         result.binding_valid = ok
-        result.binding_reason = reason
+        if not ok then result.binding_reason = reason end
     end
     return succeed(result)
 end

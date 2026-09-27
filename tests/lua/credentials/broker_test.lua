@@ -272,6 +272,54 @@ local function define_tests()
             local same = value(call(user, "issue_projection", {workspace_id = workspace, name = "anthropic", audience = USER, attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = "replay-" .. attempt}))
             test.eq(same.projection_id, replay.projection_id)
             test.eq(code(call(user, "issue_projection", {workspace_id = workspace, name = "anthropic", audience = USER, attempt_id = "attempt-other", profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = "replay-" .. attempt})), "CONFLICT")
+            local replay_key = fresh("complete-replay")
+            local original: {[string]: unknown} = {workspace_id = workspace, name = "anthropic", audience = USER, attempt_id = fresh("attempt"),
+                profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST,
+                idempotency_key = replay_key, ttl_ms = 60000}
+            value(call(user, "issue_projection", original))
+            local conflicts: {{[string]: unknown}} = {
+                {workspace_id = fresh("workspace")}, {audience = OTHER}, {profile_id = "interactive"},
+                {profile_digest = string.rep("d", 64)}, {binding_digest = string.rep("e", 64)},
+                {launch_policy_digest = string.rep("f", 64)}, {name = "another-name"}, {ttl_ms = 60001},
+            }
+            for _, changes in ipairs(conflicts) do
+                local changed: {[string]: unknown} = {}
+                for key, item in pairs(original) do changed[key] = item end
+                for key, item in pairs(changes) do changed[key] = item end
+                test.eq(code(call(user, "issue_projection", changed)), "CONFLICT", tostring(next(changes)))
+            end
+        end)
+        test.it("reserves unique monotonic materialization generations under concurrent calls", function()
+            local attempt = fresh("parallel-materialization")
+            local projection = issue(user, workspace, "anthropic", attempt)
+            local projection_id = projection.projection_id :: string
+            local first_key, second_key = fresh("generation-a"), fresh("generation-b")
+            local first_future = async_call(runner, "materialize", {projection_id = projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = first_key})
+            local second_future = async_call(runner, "materialize", {projection_id = projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = second_key})
+            local first_result, second_result = await_call(first_future), await_call(second_future)
+            test.is_true(first_result.ok, tostring(first_result.error and first_result.error.message))
+            test.is_true(second_result.ok, tostring(second_result.error and second_result.error.message))
+            local first_generation = value(first_result).generation :: number
+            local second_generation = value(second_result).generation :: number
+            test.is_true(first_generation ~= second_generation)
+            test.eq(math.min(first_generation, second_generation), 1)
+            test.eq(math.max(first_generation, second_generation), 2)
+            local checked = value(call(runner, "check", {projection_id = projection_id, subject = USER, audience = USER, attempt_id = attempt}))
+            test.eq(checked.materialization_generation, 2)
+            local database, database_error = cred_sources.database()
+            if not database then error("database ref: " .. tostring(database_error)) end
+            local db, open_error = persist.open({resource = database, ledger = broker.LEDGER, migrations = migrations.all()})
+            if not db then error("open db: " .. tostring(open_error)) end
+            local rows, query_error = db:query("SELECT generation_key, generation FROM bee_credential_generations WHERE projection_id = ?", {projection_id})
+            db:release()
+            if not rows then error("query materialization generations: " .. tostring(query_error)) end
+            test.eq(#rows, 2)
+            local reserved: {[string]: number} = {}
+            for _, row in ipairs(rows) do reserved[tostring(row.generation_key)] = row.generation :: number end
+            test.eq(reserved[first_key], first_generation)
+            test.eq(reserved[second_key], second_generation)
         end)
         test.it("refuses values an environment cannot carry without echoing them", function()
             local attempt = fresh("attempt")
@@ -903,8 +951,8 @@ local function define_tests()
             test.eq(proj.projection_kind, "file")
             clean(call(user, "issue_projection", {workspace_id = ws, name = "unprivileged", audience = USER, attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")}))
 
-            local checked = value(call(runner, "check", {projection_id = proj.projection_id, subject = USER, audience = USER, attempt_id = attempt}))
-            test.eq(checked.destination, "auth.json")
+            local checked = call(runner, "check", {projection_id = proj.projection_id, subject = USER, audience = USER, attempt_id = attempt})
+            test.eq(code(checked), "UNAVAILABLE")
             clean(call(runner, "check", {projection_id = proj.projection_id, subject = USER, audience = USER, attempt_id = attempt}))
 
             -- Materialization attempts to read via fs.get; fails closed because registry source metadata alone cannot grant filesystem access

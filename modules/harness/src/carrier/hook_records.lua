@@ -9,8 +9,6 @@ local M = {}
 
 M.MAX_CLAIMED_HOOKS = 16
 
-type Object = {[string]: unknown}
-
 type Batch = {
     records: {{[string]: unknown}},
     event_ids: {string},
@@ -56,22 +54,9 @@ function M.batch(binding_id: string, turn_id: string?, items: unknown): (Batch?,
             return nil, "invalid turn_id"
         end
     end
-    if type(items) ~= "table" then
-        return nil, "expected a list of hook records"
-    end
-    local count = 0
-    for key in pairs(items :: Object) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then
-            return nil, "list keys must be dense"
-        end
-        count = count + 1
-    end
-    if count ~= #(items :: {unknown}) then
-        return nil, "list keys must be dense"
-    end
-    if count > M.MAX_CLAIMED_HOOKS then
-        return nil, "hook claim exceeds limit of " .. tostring(M.MAX_CLAIMED_HOOKS)
-    end
+    local rows, array_error = bounds.array(items, M.MAX_CLAIMED_HOOKS)
+    if not rows then return nil, "hook records: " .. tostring(array_error) end
+    local count = #rows
     if count == 0 then
         return {records = {}, event_ids = {}, activity = nil}, nil
     end
@@ -82,7 +67,7 @@ function M.batch(binding_id: string, turn_id: string?, items: unknown): (Batch?,
     local seen_event_ids: {[string]: boolean} = {}
 
     for index = 1, count do
-        local raw_item = (items :: {unknown})[index]
+        local raw_item = rows[index]
         local item = bounds.object(raw_item)
         if not item then
             return nil, "hook record " .. tostring(index) .. " must be an object"

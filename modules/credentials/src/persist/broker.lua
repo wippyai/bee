@@ -818,14 +818,11 @@ function M.materialize(value: unknown): Reply
         local definition, definition_error = definition_in(tx, workspace_id, name)
         if definition_error then return transaction.failure("STORAGE", definition_error) :: TransactionResult end
         if not definition then return transaction.failure("CONFLICT", "credential definition is gone") :: TransactionResult end
-        local current_generation = integer(projection.materialization_generation)
+        local current_generation = bounds.count(projection.materialization_generation)
         if current_generation == nil then
             return transaction.failure("STORAGE", "materialization generation is corrupt") :: TransactionResult
         end
-        if current_generation < 0 then
-            return transaction.failure("STORAGE", "materialization generation is corrupt") :: TransactionResult
-        end
-        if current_generation >= 9007199254740991 then
+        if current_generation == bounds.MAX_SAFE_INTEGER then
             return transaction.failure("STORAGE", "materialization generation has reached its safe integer limit") :: TransactionResult
         end
         local used, used_error = tx:query("SELECT generation_key FROM bee_credential_generations WHERE projection_id = ? AND generation_key = ?",

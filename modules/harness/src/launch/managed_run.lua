@@ -6,6 +6,7 @@ local registry = require("registry")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
 local placement_resolver = require("placement_resolver")
+local prestart = require("prestart")
 
 local M = {}
 local CARRIER = "bee.threads.carrier"
@@ -17,7 +18,6 @@ local CANCEL_STATUS = CARRIER .. ":cancel_status"
 local RECEIPT = THREADS .. ":receipt"
 local THREAD = THREADS .. ":get"
 local WATCH = DELIVERY .. ":watch"
-local CARRIER_REGISTRY_PREFIX = "bee.harness.carrier/"
 
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
 type Run = {thread_id: string, attempt_id: string}
@@ -56,6 +56,10 @@ local function call(target: string, request: unknown): ({[string]: unknown}?, Re
     return answer_of(raw)
 end
 
+local function raw_call(target: string, request: unknown): (unknown, string?)
+    return funcs.call(target, request)
+end
+
 local function checkpoint_intent(stored: {[string]: unknown}): (string?, string?)
     local intent = bounds.object(stored.cancel_intent)
     local state = intent and bounds.member(intent.state, {"cancelling", "ended"})
@@ -64,7 +68,7 @@ local function checkpoint_intent(stored: {[string]: unknown}): (string?, string?
 end
 
 local function carrier_active(attempt_id: string): (boolean?, string?)
-    local pid, lookup_error = process.registry.lookup(CARRIER_REGISTRY_PREFIX .. attempt_id)
+    local pid, lookup_error = process.registry.lookup(prestart.CARRIER_REGISTRY_PREFIX .. attempt_id)
     if lookup_error and errors.is(lookup_error, errors.NOT_FOUND) then return false, nil end
     if lookup_error then return nil, tostring(lookup_error) end
     return pid ~= nil, nil
@@ -91,39 +95,9 @@ local function reconcile_orphan_prestart(run: Run, stored: {[string]: unknown}):
                 outcome = "uncertain"
                 reason = reason .. "; placement could not be inspected: " .. tostring(placement_error or "placement binding")
             else
-                local status_target = placement.methods.status
-                local current: {[string]: unknown}?
-                local status_refused: Reply?
-                if status_target then current, status_refused = call(status_target, {attempt_id = placement_attempt}) end
-                if not status_target then
-                    outcome = "uncertain"
-                    reason = reason .. "; placement binds no status operation"
-                elseif status_refused then
-                    local message = status_refused.error and status_refused.error.message or "status refused"
-                    if status_refused.error and status_refused.error.code ~= "NOT_FOUND" then
-                        outcome = "uncertain"
-                        reason = reason .. "; placement status failed: " .. message
-                    else
-                        reason = reason .. "; placement did not record an attempt"
-                    end
-                elseif current then
-                    local attempt = bounds.object(current.attempt)
-                    local execution = attempt and bounds.member(attempt.execution_state,
-                        {"intended", "starting", "running", "stopping", "exited", "uncertain"})
-                    if execution and execution ~= "intended" then
-                        outcome = "uncertain"
-                        reason = reason .. "; placement had reached " .. execution
-                    else
-                        reason = reason .. "; placement had not started a child"
-                    end
-                    local stop_target = placement.methods.stop
-                    if stop_target then
-                        local _, stop_refused = call(stop_target, {attempt_id = placement_attempt, mode = "cooperative"})
-                        if stop_refused then
-                            reason = reason .. "; placement stop failed: " .. tostring(stop_refused.error and stop_refused.error.message or "stop refused")
-                        end
-                    end
-                end
+                local inspection = prestart.inspect(raw_call, placement.methods.status, placement.methods.stop,
+                    placement_attempt, outcome, reason)
+                outcome, reason = inspection.outcome, inspection.reason
             end
         end
     else

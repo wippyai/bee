@@ -631,10 +631,11 @@ entries:
       bee.driver.codex.binding:configure, bee.harness.catalog:configuration_probe, bee.harness.carrier:capabilities, security]
     effect: allow
 - name: carrier_spawn_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {type: test_support}
   policy:
-    actions: [process.spawn, process.spawn.monitored, process.host, process.monitor, process.send, process.security, security.scope.create, security.policy.get, env.get]
+    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$") || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.monitor" || action == "process.send" || action == "process.security" || action == "security.scope.create" || action == "security.policy.get" || action == "env.get"'
+    actions: [process.registry.register, process.registry.unregister, process.spawn, process.spawn.monitored, process.host, process.monitor, process.send, process.security, security.scope.create, security.policy.get, env.get]
     resources: '*'
     effect: allow
 - name: carrier_faulted

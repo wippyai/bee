@@ -41,7 +41,7 @@ entries:
   meta:
     comment: A carrier registers only its own attempt name so managed-run recovery can distinguish a live carrier from an orphan
   policy:
-    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]harness[.]carrier/attempt:[A-Za-z0-9_.:-]+$")'
+    expression: '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$")'
     actions: [process.registry.register, process.registry.unregister]
     resources: '*'
     effect: allow

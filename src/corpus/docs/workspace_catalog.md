@@ -178,6 +178,18 @@ allocates one node display (`{owner_execution, desktop_id}`); displays belong to
 the node and attach to any workspace. `bee.desktop:current` (`{owner_execution}`)
 answers the sender's current session in the attach receipt's shape.
 
+`bee.desktop:plan` resolves a native session request against the owner's policy.
+Its `request` is one of `{kind="automatic", mode, desktops, excluded}`,
+`{kind="workspace", workspace_id, mode, desktops, excluded}` or
+`{kind="selection", workspace_id, desktop_id, mode, desktops}`. The owner
+answers a tagged `choose_workspace`, `attach` or `allocate` record. Automatic
+requests use the owner's default workspace, or request the picker when there is
+no default. Workspace requests select the next display the client has not
+reported as controlled; control mode returns `allocate` when every display is
+controlled, while observe mode refuses. Selection requests retain the exact
+workspace and display. Planning is read-only: allocation and attachment remain
+separate owner-admitted calls.
+
 A remote display registers its lifetime with the supervisor on its own node
 before attaching to the owner. That supervisor monitors the local display
 process and reports its exact exit to the owner node's supervisor. The owner

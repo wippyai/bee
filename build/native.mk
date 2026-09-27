@@ -143,6 +143,11 @@ native-upgrade-check:
 .PHONY: native-client-check
 native-client-check:
 	python3 tests/native_client.py "$(BEE_BINARY)"
+	@set -eu; fixture_dir=$$(mktemp -d); trap 'rm -rf "$$fixture_dir"' EXIT; \
+	  env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native build -tags 'meshclient,physicalclient' -o "$$fixture_dir/bee-native-client-fixture" ./client/hive/testfixture; \
+	  env GOWORK=off GOTOOLCHAIN=go1.27.0 BEE_HIVE_SUPERVISOR_RUNTIME="$(abspath $(NATIVE_WIPPY))" BEE_NATIVE_DESKTOP_CLIENT="$$fixture_dir/bee-native-client-fixture" \
+	    go -C native test -race -count=1 -timeout=150s -v ../tests/hive_remote.go ../tests/hive_supervisor_test.go ../tests/hive_desktop_remote_test.go ../tests/hive_desktop_admission_test.go -run '^TestHiveDesktopAdmission$$'; \
+	  env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native test -race -count=1 -tags 'meshclient,meshmonitorproof' ./client/mesh -run '^TestNativeRemoteMonitorMustObserveClientActorExit$$'
 
 # Two nodes in two state directories on this host join one hive with a
 # one-line invite over the mesh's identity TLS; disposable state lives under

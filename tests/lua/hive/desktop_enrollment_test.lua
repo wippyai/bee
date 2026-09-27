@@ -35,7 +35,7 @@ local function bridge(local_clients: boolean, topic: string): owner.State
 end
 local function define_tests()
     test.describe("Hive desktop local client enrollment", function()
-        test.it("admits a local client node only while the host enrolls it", function()
+        test.it("admits calls only from the enrolled native client host", function()
             local state = bridge(true, "admits")
             test.is_false(owner.admits(state, client("client-1", "a")), "unenrolled local client admitted")
             owner.enroll(state, {["client-1"] = true}, {}, 0)

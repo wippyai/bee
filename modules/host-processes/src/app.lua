@@ -9,7 +9,7 @@ local appearance = require("appearance")
 local probe = require("probe")
 local view = require("view")
 local frame = require("frame")
-local time_format = require("time_format")
+local clock = require("clock")
 local stop_request = require("stop_request")
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -68,7 +68,7 @@ local function main(value: unknown)
     local function sample()
         local now = time.now():unix_nano()
         local next_snapshot = probe.sample()
-        probe.append(history, next_snapshot, snapshot, time_format.elapsed_seconds(now, last_time))
+        probe.append(history, next_snapshot, snapshot, clock.elapsed_seconds(now, last_time))
         snapshot, last_time = next_snapshot, now
         order(); reveal(); dirty = true
     end

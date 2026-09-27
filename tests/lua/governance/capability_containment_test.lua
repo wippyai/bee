@@ -55,8 +55,14 @@ local function define_tests()
             test.eq(#(compare({old}, {new}).removed :: {unknown}), 1)
             new.resource = old.resource
             new.template_revision = 2
-            test.eq(#(compare({old}, {new}).changed :: {unknown}), 1)
-            test.is_true(compare({old}, {new}).requires_approval)
+            local replaced = compare({old}, {new})
+            test.eq(#(replaced.changed :: {unknown}), 1)
+            test.eq(#(replaced.removed :: {unknown}), 1)
+            local revocation = replaced.revocation :: Object
+            local revoked = revocation.grants :: {Object}
+            test.eq(#revoked, 1)
+            test.eq(revoked[1].template_revision, 1)
+            test.is_true(replaced.requires_approval)
         end)
         test.it("contains HTTP methods and path prefixes only within one origin", function()
             local old = grant("http.api", "http.request", "https://api.example.com",

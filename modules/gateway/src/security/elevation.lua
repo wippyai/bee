@@ -14,6 +14,7 @@ local subject_call = require("subject_call")
 local M = {}
 M.ELEVATION_CALL_POLICY = "bee.gateway.security:elevation_policy"
 M.GRANT_THREAD_POLICY = "bee.resources.security:resource_grant_thread_policy"
+M.RESOURCE_CHECK = "bee.resources.binding:check_grant"
 M.CATALOG_ENTRY = "bee:capability_catalog"
 M.GRANT_CALL = "bee.resources.binding:grant"
 type Object = {[string]: unknown}
@@ -31,6 +32,12 @@ local function grant(binding: Binding, value: Object): Reply
     if not linked then return link_error :: Reply end
     return subject_call.call(binding, {M.ELEVATION_CALL_POLICY, linked[1], linked[2], M.GRANT_THREAD_POLICY},
         M.GRANT_CALL, value)
+end
+local function check_resource(binding: Binding, request: capability.Request): Reply
+    local workspace_id = binding.workspace_id
+    if not workspace_id then return fail("DENIED", "this binding names no workspace to elevate a capability in") end
+    return subject_call.call(binding, {M.ELEVATION_CALL_POLICY, M.GRANT_THREAD_POLICY}, M.RESOURCE_CHECK,
+        {workspace_id = workspace_id, name = request.grant_source, access = request.grant_access})
 end
 local function catalog_entry(): (unknown?, Reply?)
     local entry, entry_error = registry.get(M.CATALOG_ENTRY)
@@ -54,6 +61,8 @@ function M.request(binding: Binding, policy_name: string, raw: unknown): Reply
     if not entry then return entry_error :: Reply end
     local request, measure_error = measured(entry, binding, raw)
     if not request then return measure_error :: Reply end
+    local resource = check_resource(binding, request)
+    if not resource.ok then return resource end
     return approvals(binding)("request", {workspace_id = workspace_id, idempotency_key = "capability:" .. capability.request_key(request),
         request_kind = "permission", policy = policy_name, proposal = capability.proposal(request),
         prompt = {text = capability.wording(request)}, thread_id = binding.thread_id})
@@ -114,6 +123,8 @@ function M.status(binding: Binding, policy_name: string, approval_id_raw: unknow
     if view.state ~= "decided" or view.decision ~= "approved" then
         return {ok = true, value = {approval_id = approval_id, status = view.decision or view.state}}
     end
+    local resource = check_resource(binding, request)
+    if not resource.ok then return resource end
     local consumed = subject_call.consume(owner, approval_id, expected, "capability:" .. approval_id, view.owner_incarnation)
     if not consumed.ok then return consumed end
     local write, write_error = capability.grant_write(request, binding.workspace_id, binding.subject)

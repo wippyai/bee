@@ -97,6 +97,24 @@ local function association_of(db: sql.DB, workspace_id: string, name: string): (
     if #rows == 0 then return nil, nil end
     return rows[1] :: Row, nil
 end
+local function grantable_association(db: sql.DB, workspace_id: string, name: string,
+    access: string): (Row?, Reply?)
+    local association, association_error = association_of(db, workspace_id, name)
+    if association_error then return nil, fail("STORAGE", association_error) end
+    if not association then return nil, fail("NOT_FOUND", "no association " .. name .. " in workspace " .. workspace_id) end
+    local root, root_error = resources.root(text(association.root_ref) or "")
+    if not root then return nil, fail("CONFLICT", root_error or "root is gone") end
+    if digest_of(root) ~= association.root_digest then
+        return nil, fail("CONFLICT", "root definition changed; the association needs replacement")
+    end
+    local ceiling = capability_model.resource(workspace_id, name, text(association.subpath) or "",
+        text(association.allowed_access) or "read")
+    local requested = capability_model.resource(workspace_id, name, text(association.subpath) or "", access)
+    if not ceiling or not requested or not capability_model.contains(ceiling, requested) then
+        return nil, fail("FORBIDDEN", "association " .. name .. " allows " .. tostring(association.allowed_access) .. " only")
+    end
+    return association, nil
+end
 local function association_in(tx: sql.Transaction, workspace_id: string, name: string): (Row?, string?)
     local rows, err = tx:query("SELECT * FROM bee_resource_associations WHERE workspace_id = ? AND name = ?", {workspace_id, name})
     if err or not rows then return nil, "read association" end
@@ -259,31 +277,10 @@ function M.grant(value: unknown): Reply
             return succeed(grant_view(stored))
         end
     end
-    local association, association_error = association_of(db, workspace_id, name)
-    if association_error then
-        db:release()
-        return fail("STORAGE", association_error)
-    end
+    local association, refused = grantable_association(db, workspace_id, name, access)
     if not association then
         db:release()
-        return fail("NOT_FOUND", "no association " .. name .. " in workspace " .. workspace_id)
-    end
-    local root, root_error = resources.root(text(association.root_ref) or "")
-    if not root then
-        db:release()
-        return fail("CONFLICT", root_error or "root is gone")
-    end
-    local root_digest = digest_of(root)
-    if root_digest ~= association.root_digest then
-        db:release()
-        return fail("CONFLICT", "root definition changed; the association needs replacement")
-    end
-    local ceiling = capability_model.resource(workspace_id, name, text(association.subpath) or "",
-        text(association.allowed_access) or "read")
-    local requested = capability_model.resource(workspace_id, name, text(association.subpath) or "", access)
-    if not ceiling or not requested or not capability_model.contains(ceiling, requested) then
-        db:release()
-        return fail("FORBIDDEN", "association " .. name .. " allows " .. tostring(association.allowed_access) .. " only")
+        return refused :: Reply
     end
     local epoch, epoch_error = epoch_of(db, workspace_id)
     if not epoch then
@@ -308,6 +305,29 @@ function M.grant(value: unknown): Reply
     db:release()
     if not stored then return fail("STORAGE", "read grant") end
     return succeed(grant_view(stored))
+end
+-- check_grant: validate the exact workspace association and access a thread
+-- bound grant would use, without writing a grant row.
+function M.check_grant(value: unknown): Reply
+    local object = bounds.object(value)
+    if not object then return fail("INVALID", "request must be an object") end
+    local unknown_field = bounds.fields(object, {"workspace_id", "name", "access"})
+    if unknown_field then return fail("INVALID", unknown_field) end
+    local workspace_id, name = bounds.id(object.workspace_id), bounds.id(object.name)
+    local access = bounds.member(object.access, M.ACCESS)
+    if not workspace_id then return fail("INVALID", "workspace_id is not an identifier") end
+    if not name then return fail("INVALID", "name is not an identifier") end
+    if not access then return fail("INVALID", "access must be read or write") end
+    if not actor() then return fail("UNAUTHENTICATED", "no actor") end
+    if not security.can(M.GRANT_THREAD, workspace_id) then
+        return fail("DENIED", "caller may not validate thread-bound grants in workspace " .. workspace_id)
+    end
+    local db, open_failure = open()
+    if not db then return open_failure :: Reply end
+    local association, refused = grantable_association(db, workspace_id, name, access)
+    db:release()
+    if not association then return refused :: Reply end
+    return succeed({allowed = true})
 end
 -- revoke: the subject or a manager ends a grant; the returned view names
 -- the fenced attempt, subject and thread for propagation. revoke_all

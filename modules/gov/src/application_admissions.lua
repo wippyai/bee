@@ -86,7 +86,7 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
                 installed = package_grant and lookup(package_grant) or nil
             end
         end
-        local vocabulary: unknown = nil
+        local vocabulary: capability_model.Vocabulary? = nil
         if installed then
             vocabulary = capability_model.decode(lookup("bee:capability_catalog"))
             local grant = vocabulary and application_id and capability_grants.decode(installed,

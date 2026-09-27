@@ -1711,12 +1711,19 @@ local function define_tests()
             test.eq(attempt_of(call(OWNER, "start", {attempt_id = attempt_id})).execution_state, "running")
             local before = attempt_of(call(OWNER, "reconcile", {attempt_id = attempt_id}))
             test.is_true(before.execution_state == "running" or before.execution_state == "uncertain")
-            resource_call("revoke", {grant_id = granted.grant_id})
             local db = store.open()
             if not db then error("store") end
             local _, identify_error = db:execute("UPDATE bee_placement_attempts SET pid = COALESCE(pid, 0) WHERE attempt_id = ?", {attempt_id})
             db:release()
             if identify_error then error("identify: " .. tostring(identify_error)) end
+            local revoked = resource_call("revoke", {grant_id = granted.grant_id})
+            local fenced = ((revoked.revocation :: Object).fenced_attempts :: {string})
+            local stop_results = revoked.stop_results :: {{[string]: unknown}}
+            test.eq(#fenced, 1)
+            test.eq(fenced[1], attempt_id)
+            test.eq(#stop_results, 1)
+            test.eq(stop_results[1].attempt_id, attempt_id)
+            test.is_true(stop_results[1].stopped == true, tostring(stop_results[1].error))
             local enforced = call(OWNER, "reconcile", {attempt_id = attempt_id})
             local recorded = kinds(attempt_id)
             if capability == "process_group" then

@@ -177,7 +177,7 @@ local function path_value(entry: Entry, path: unknown): (unknown?, string?)
 end
 
 local function requirement(entry: Entry, package: string, final: {[string]: Entry},
-    catalog: unknown): (Object?, string?)
+    catalog: capability_model.Vocabulary?): (Object?, string?)
     local data = object(entry.data) or entry
     local targets, targets_error = dense(data.targets, "requirement targets", 64)
     if not targets then return nil, targets_error end
@@ -193,6 +193,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
             or meta.reason:find("%c") or #targets ~= 1 or data.default ~= nil then
             return nil, "capability requirement metadata is invalid"
         end
+        if not catalog then return nil, "host capability catalog is absent" end
         local normalized, normalize_error = capability_model.normalize(catalog, capability, meta.parameters)
         if not normalized then return nil, normalize_error or "capability parameters are invalid" end
         local catalog_revision, template_revision = capability_model.revisions(catalog, capability)
@@ -453,11 +454,11 @@ function M.resolve_with(deps_raw: unknown, spec_raw: unknown): (Object?, Object?
     for _, entry in ipairs(incoming) do
         if entry.kind == "ns.requirement" then
             local meta = object(entry.meta)
-            local catalog: unknown = nil
+            local catalog: capability_model.Vocabulary? = nil
             if meta and meta.capability ~= nil then
-                catalog = current_raw["bee:capability_catalog"]
-                if not catalog then return nil, nil, "host capability catalog is absent" end
-                local decoded, catalog_error = capability_model.decode(catalog)
+                local raw_catalog = current_raw["bee:capability_catalog"]
+                if not raw_catalog then return nil, nil, "host capability catalog is absent" end
+                local decoded, catalog_error = capability_model.decode(raw_catalog)
                 if not decoded then return nil, nil, catalog_error end
                 catalog = decoded
             end

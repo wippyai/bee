@@ -14,7 +14,7 @@ M.PREFIX = "bee.gov.grants:"
 -- Decode those exact IDs without rewriting approval-bound policy bytes.
 local PRIOR_PREFIX = "bee.governance.grants:"
 type Object = {[string]: unknown}
-type Proposal = {capabilities: {Object}, policies: {Object}, bindings: {Object},
+type Proposal = {capabilities: {capability_model.Grant}, policies: {Object}, bindings: {Object},
     volumes: {Object}, databases: {Object}, folder: Object?, thread_access: string, digest: string}
 
 local function sha(raw: unknown): string?
@@ -60,28 +60,12 @@ function M.reserved(raw: unknown): boolean
         or raw:sub(1, #PRIOR_PREFIX) == PRIOR_PREFIX)
 end
 
-local function string_list(raw: unknown, pattern: string): {string}?
-    local result = capability_model.strings(raw)
-    if not result then return nil end
-    for _, value in ipairs(result) do if not value:match(pattern) then return nil end end
-    return result
-end
-
 -- Host-composed package applications admit through the shared package
 -- ceiling; each generated body repeats its reviewed static policy exactly.
 -- Other catalog entries remain review vocabulary until their resource and
 -- owner boundaries arrive in later slices.
 local VIEWER_EXPRESSION = '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
 local LEASE_EXPRESSION = '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
-
-local function exposure_audiences(raw: unknown): {string}?
-    local result = capability_model.strings(raw)
-    if not result then return nil end
-    for _, item in ipairs(result) do
-        if item ~= "*" and not item:match("^[a-z][a-z0-9_.-]*$") then return nil end
-    end
-    return result
-end
 
 local function plain(actions: {string}, resources: unknown, comment: string, id: string): Object
     return {id = id, kind = "security.policy", meta = {comment = comment},
@@ -144,9 +128,8 @@ end
 -- policy plus the host-created volume or database it authorizes. A Hive
 -- exposure grant materializes into an exposure-scope policy over exactly the
 -- approved operations; other review-vocabulary entries have no app grant.
-local function policy(owner: string, grant: Object, id: string, folder: unknown): (Object?, Object?, Object?, string?)
-    local scope = bounds.object(grant.scope)
-    if not scope then return nil, nil, nil, "capability scope is malformed" end
+local function policy(owner: string, grant: capability_model.Grant, id: string, folder: unknown): (Object?, Object?, Object?, string?)
+    local scope = grant.scope
     if grant.capability == "threads.read" and grant.operation == "threads.read"
         and grant.resource == "threads" and scope.scope == "owned" then
         return {id = id, kind = "security.policy", meta = {comment = "Host-generated owned thread read grant"},
@@ -183,10 +166,8 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
     end
     if grant.capability == "agents.launch" and grant.operation == "agents.launch"
         and grant.resource == "managed_agents" then
-        local definitions = string_list(scope.definitions, "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$")
-        if not definitions then
-            return nil, nil, nil, "managed agent launch grant names no valid definitions"
-        end
+        local definitions = capability_model.strings(scope.definitions)
+        if not definitions then return nil, nil, nil, "resolved agent definition list is malformed" end
         -- The application reaches the launch facade through its own call, then
         -- the facade checks bee.harness.launch against the exact definition.
         -- The policy names the facade call and the exact approved definitions;
@@ -203,15 +184,12 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
     -- The runtime cannot pair a contract binding with its method or an HTTP
     -- method with its origin, so these grants let the application call the
     -- host gateway, which checks the exact approved scope from this record.
-    if grant.capability == "contract.call" and grant.operation == "contract.call"
-        and bounds.id(grant.resource) and string_list(scope.methods, "^[A-Za-z][A-Za-z0-9_]*$") then
+    if grant.capability == "contract.call" and grant.operation == "contract.call" then
         return {id = id, kind = "security.policy", meta = {comment = "Host-generated contract gateway grant"},
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.CONTRACT_CALL},
                 effect = "allow"}}}, nil, nil, nil
     end
-    if grant.capability == "http.api" and grant.operation == "http.request"
-        and type(grant.resource) == "string" and type(scope.path_prefix) == "string"
-        and string_list(scope.methods, "^[A-Z]+$") then
+    if grant.capability == "http.api" and grant.operation == "http.request" then
         return {id = id, kind = "security.policy", meta = {comment = "Host-generated HTTP gateway grant"},
             data = {policy = {actions = {"funcs.call"}, resources = {gateway.HTTP_REQUEST},
                 effect = "allow"}}}, nil, nil, nil
@@ -222,11 +200,8 @@ local function policy(owner: string, grant: Object, id: string, folder: unknown)
     -- destination audience table, never in this ceiling.
     if grant.capability == "hive.expose" and grant.operation == "hive.expose" then
         local mode = grant.resource
-        local operations = string_list(scope.operations, "^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$")
-        local audiences = exposure_audiences(scope.audiences)
-        if (mode ~= "open" and mode ~= "policy") or not operations or not audiences then
-            return nil, nil, nil, "Hive exposure grant names no valid mode, operations and audiences"
-        end
+        local operations = capability_model.strings(scope.operations)
+        if not operations then return nil, nil, nil, "resolved Hive operation list is malformed" end
         return {id = id, kind = "security.policy", groups = {"bee.security.hive:hive_exposure_scope"},
             meta = {comment = "Host-generated Hive operation exposure grant"},
             data = {policy = {actions = {"hive.expose." .. (mode :: string)},
@@ -242,13 +217,10 @@ end
 -- Runtime requests use the same host policy generator as installation before
 -- they can reach approval. A synthetic workspace lets file templates be
 -- checked without creating entries or needing a destination workspace.
-function M.installable(operations_raw: unknown): (boolean?, string?)
-    local operations = list(operations_raw, 8)
-    if not operations or #operations ~= 1 then return nil, "capability template needs unsupported policy count" end
-    local grant = bounds.object(operations[1])
-    if not grant then return nil, "resolved capability is malformed" end
+function M.installable(operations: {capability_model.Grant}): (boolean?, string?)
+    if #operations ~= 1 then return nil, "capability template needs unsupported policy count" end
     local folder: Object = {root_ref = "bee.resources:capability_check", directory = ".", subpath = ""}
-    local generated, _, _, realize_error = policy("capability_check", grant,
+    local generated, _, _, realize_error = policy("capability_check", operations[1],
         M.PREFIX .. "policy.check", folder)
     if not generated then return nil, realize_error or "capability has no application-installable enforcement" end
     return true, nil
@@ -266,20 +238,20 @@ local function digest_shape(capabilities: {Object}, bindings: {Object}, policies
 end
 
 -- folder is the host-resolved workspace folder file grants are rooted in.
-function M.propose(vocabulary: unknown, owner_raw: unknown, app_raw: unknown,
+function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, app_raw: unknown,
     requirements_raw: unknown, prior: boolean?, folder: unknown?): (Proposal?, string?)
     local owner, app = bounds.id(owner_raw), bounds.id(app_raw)
     local rows = list(requirements_raw, 8)
     if not owner or not app or not rows then return nil, "capability proposal identity is invalid" end
     local capacity: integer = #rows > 0 and #rows or 1
-    local capabilities: {Object} = table.create(capacity, 0)
+    local capabilities: {capability_model.Grant} = table.create(capacity, 0)
     local policies: {Object} = table.create(capacity, 0)
     local bindings: {Object} = table.create(capacity, 0)
     local volumes: {Object} = table.create(1, 0)
     local databases: {Object} = table.create(1, 0)
     local volume_ids: {[string]: boolean} = {}
     local database_ids: {[string]: boolean} = {}
-    local requirement_of: {[Object]: string} = {}
+    local requirement_of: {[capability_model.Grant]: string} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
         local item = bounds.object(raw)
@@ -309,7 +281,7 @@ function M.propose(vocabulary: unknown, owner_raw: unknown, app_raw: unknown,
         end
         local resolved, resolve_error = capability_model.resolve(vocabulary, request.capability, request.parameters)
         if not resolved then return nil, resolve_error end
-        local resolved_operations = resolved :: {Object}
+        local resolved_operations = resolved
         if #resolved_operations ~= 1 then return nil, "capability template needs unsupported policy count" end
         local id = policy_id(owner :: string, requirement_id :: string, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
@@ -337,7 +309,7 @@ function M.propose(vocabulary: unknown, owner_raw: unknown, app_raw: unknown,
     end
     -- Capabilities follow their bindings' requirement order, so a record
     -- pairs each grant with the requirement that asked for it.
-    table.sort(capabilities, function(a: Object, b: Object): boolean
+    table.sort(capabilities, function(a: capability_model.Grant, b: capability_model.Grant): boolean
         return requirement_of[a] < requirement_of[b]
     end)
     table.sort(policies, function(a: Object, b: Object): boolean return tostring(a.id) < tostring(b.id) end)
@@ -378,7 +350,7 @@ function M.record(owner_raw: unknown, workspace_raw: unknown, app_raw: unknown,
 end
 
 function M.decode(raw: unknown, owner_raw: unknown, workspace_raw: unknown,
-    app_raw: unknown, vocabulary: unknown): (Object?, string?)
+    app_raw: unknown, vocabulary: capability_model.Vocabulary): (Object?, string?)
     local item, owner = bounds.object(raw), bounds.id(owner_raw)
     local data = item and bounds.object(item.data) or nil
     local expected = M.record_id(owner)
@@ -499,19 +471,25 @@ function M.live(record: Object, lookup: (string) -> unknown): (boolean, string?)
     return true, nil
 end
 
-function M.diff(vocabulary: unknown, installed: Object?, proposal: Proposal): (Object?, string?)
+function M.diff(vocabulary: capability_model.Vocabulary, installed: Object?, proposal: Proposal): (Object?, string?)
     local old = installed and installed.capabilities or table.create(1, 0)
     local compared, compare_error = capability_model.compare(old, proposal.capabilities)
     if not compared then return nil, compare_error end
     local lines: {string} = {}
-    for _, category in ipairs({"added", "widened", "narrowed", "removed", "changed"}) do
+    for _, category in ipairs({"added", "widened", "narrowed", "changed"}) do
         for _, raw_change in ipairs(compared[category] :: {unknown}) do
             local change = raw_change :: Object
-            local value = category == "removed" and change.before or change.after
+            local value = change.after
             local rendered, render_error = capability_model.render(vocabulary, {value})
             if not rendered then return nil, render_error end
             lines[#lines + 1] = category .. ": " .. tostring(rendered[1])
         end
+    end
+    for _, grant in ipairs(compared.revocation.grants) do
+        local scope, scope_error = canonical.encode(grant.scope)
+        if not scope then return nil, tostring(scope_error or "measure revoked capability scope") end
+        lines[#lines + 1] = "revoked: " .. grant.capability .. " " .. grant.operation
+            .. " on " .. grant.resource .. " " .. scope
     end
     local flows, flow_error = capability_model.render(vocabulary, proposal.capabilities)
     if not flows then return nil, flow_error end

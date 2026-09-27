@@ -79,9 +79,9 @@ entries:
   - name: grant
     description: Issue a grant to the authenticated subject for an audience, pinned to the association revision and root digest; a caller admitted to grant_thread may name a thread-bound subject with its thread instead
   - name: revoke
-    description: End one grant
+    description: End one grant and ask placement to recheck and stop its fenced attempt
   - name: revoke_all
-    description: Advance the workspace authorization epoch so every earlier grant stops resolving, reporting the fenced live attempts for eager stops
+    description: Advance the workspace authorization epoch so every earlier grant stops resolving, then ask placement to recheck and stop the fenced live attempts
   - name: resolve
     description: Re-check a grant for the placement that admitted the subject and audience, and return the exact resource scope
   - name: list

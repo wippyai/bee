@@ -34,8 +34,10 @@ parameters and a TTL; the approval shows the catalog's own wording bound to the
 authenticated thread and attempt. Consuming it writes one resources grant for
 that thread actor, which that attempt's placement resolves and no child attempt
 inherits. A request is measured and checked for a realizable resource grant
-before an approval is filed. A replay returns the same grant; the binding's own
-surface policy selects the approver. Filing the request grants nothing.
+and a present association with sufficient access before an approval is filed.
+The association is checked again before an approved decision is consumed. A
+replay returns the same grant; the binding's own surface policy selects the
+approver. Filing the request grants nothing.
 
 MCP `request_access` records the approved traits as the shared `mcp.access`
 capability scoped to that binding. The gateway keeps the approval and trait

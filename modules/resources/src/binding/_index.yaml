@@ -1,6 +1,11 @@
 version: '1.0'
 namespace: bee.resources.binding
 entries:
+- name: revocation_stops
+  kind: library.lua
+  source: file://revocation_stops.lua
+  modules: [funcs]
+  imports: {bounds: bee.threads.records:bounds}
 - name: associate
   kind: function.lua
   source: file://associate_method.lua
@@ -13,12 +18,21 @@ entries:
   method: handle
   imports: {authority: bee.resources.persist:authority}
   security: {policies: [bee.resources.security:resource_store_policy, bee.resources.security:resource_environment_policy]}
+- name: check_grant
+  kind: function.lua
+  source: file://check_grant_method.lua
+  method: handle
+  imports: {authority: bee.resources.persist:authority}
+  security: {policies: [bee.resources.security:resource_store_policy, bee.resources.security:resource_environment_policy]}
 - name: revoke
   kind: function.lua
   source: file://revoke_method.lua
   method: handle
-  imports: {authority: bee.resources.persist:authority}
-  security: {policies: [bee.resources.security:resource_store_policy]}
+  imports:
+    authority: bee.resources.persist:authority
+    revocation_stops: bee.resources.binding:revocation_stops
+  modules: [funcs]
+  security: {policies: [bee.resources.security:resource_store_policy, bee.resources.security:resource_revoke_stop_policy]}
 - name: revoke_all
   kind: function.lua
   source: file://revoke_all_method.lua
@@ -26,7 +40,7 @@ entries:
   modules: [funcs]
   imports:
     authority: bee.resources.persist:authority
-    bounds: bee.threads.records:bounds
+    revocation_stops: bee.resources.binding:revocation_stops
   security: {policies: [bee.resources.security:resource_store_policy, bee.resources.security:resource_revoke_stop_policy]}
 - name: resolve
   kind: function.lua

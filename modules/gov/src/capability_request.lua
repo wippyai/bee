@@ -19,8 +19,8 @@ M.MAX_PARAMETERS_BYTES = 16384
 type Object = {[string]: unknown}
 type Context = {thread_id: string, attempt_id: string, action_id: string}
 type Decoded = {capability: string, parameters: Object, ttl_ms: integer, idempotency_key: string?}
-type Request = {capability: string, template_revision: integer, parameters: Object, parameters_digest: string,
-    ttl_ms: integer, idempotency_key: string?, operations: {Object}, wording: string,
+type Request = {capability: string, template_revision: integer, parameters: capability_model.Parameters, parameters_digest: string,
+    ttl_ms: integer, idempotency_key: string?, operations: {capability_model.Grant}, wording: string,
     thread_id: string, attempt_id: string, action_id: string, grant_source: string, grant_access: string}
 local function digest_of(value: unknown): (string?, string?)
     local encoded, encode_error = canonical.encode(value)
@@ -69,9 +69,9 @@ local function context_of(raw: unknown): (Context?, string?)
     return {thread_id = thread_id, attempt_id = attempt_id, action_id = action_id}, nil
 end
 -- Runtime elevation writes one resource-owner row. The catalog and install
--- paths share capability_model.resolve; fixed host resolvers create package
+-- paths share the capability model; fixed host resolvers create package
 -- resources and cannot be redirected into a workspace association.
-local function grant_mapping(template: Object, parameters: Object): (string?, string?, string?)
+local function grant_mapping(template: capability_model.Template, parameters: capability_model.Parameters): (string?, string?, string?)
     local raw_resources = template.resources
     if type(raw_resources) ~= "table" then return nil, nil, "capability names no workspace resource grant" end
     local resources = raw_resources :: {unknown}
@@ -100,30 +100,27 @@ function M.request(entry_raw: unknown, context_raw: unknown, raw: unknown): (Req
     if not context then return nil, context_error end
     local catalog_value, catalog_error = capability_model.decode(entry_raw)
     if not catalog_value then return nil, catalog_error end
-    local template_value, template_error = capability_model.template(catalog_value, decoded.capability)
-    local template = bounds.object(template_value)
-    if not template then return nil, "unknown capability or malformed parameters" end
+    local template, template_error = capability_model.template(catalog_value, decoded.capability)
+    if not template then return nil, template_error end
     local parameters, _ = capability_model.normalize(catalog_value, decoded.capability, decoded.parameters)
     if not parameters then return nil, "unknown capability or malformed parameters" end
-    local operations, resolve_error = capability_model.resolve(catalog_value, decoded.capability, parameters)
+    local operations, resolve_error = capability_model.resolve_normalized(catalog_value, decoded.capability, parameters)
     if not operations then return nil, resolve_error end
     local _, realization_error = capability_grants.installable(operations)
     if realization_error then return nil, realization_error end
     local lines, render_error = capability_model.render(catalog_value, operations)
     if not lines then return nil, render_error end
-    local measured_parameters = parameters :: Object
-    local source, access, mapping_error = grant_mapping(template, measured_parameters)
+    local source, access, mapping_error = grant_mapping(template, parameters)
     if not source or not access then return nil, mapping_error or "capability cannot be realized as a workspace resource grant" end
     local parameters_digest, digest_error = digest_of(parameters)
     if not parameters_digest then return nil, "capability parameters are not measurable: " .. tostring(digest_error) end
-    local _, revision = capability_model.revisions(catalog_value, decoded.capability)
-    if not revision then return nil, template_error or "capability template revision is invalid" end
+    local revision = template.revision
     local wording = table.concat(lines, "\n")
         .. "\nFor attempt " .. context.attempt_id .. " in thread " .. context.thread_id
         .. " for " .. tostring(decoded.ttl_ms) .. "ms"
-    return {capability = decoded.capability, template_revision = revision, parameters = measured_parameters,
+    return {capability = decoded.capability, template_revision = revision, parameters = parameters,
         parameters_digest = parameters_digest, ttl_ms = decoded.ttl_ms, idempotency_key = decoded.idempotency_key,
-        operations = operations :: {Object}, wording = wording, thread_id = context.thread_id, attempt_id = context.attempt_id,
+        operations = operations, wording = wording, thread_id = context.thread_id, attempt_id = context.attempt_id,
         action_id = context.action_id, grant_source = source, grant_access = access}, nil
 end
 function M.wording(request: Request): string

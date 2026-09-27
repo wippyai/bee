@@ -146,10 +146,21 @@ local function define_tests()
             test.is_false(unrealizable.ok)
             test.eq((unrealizable.error :: Object).code, "INVALID")
             test.is_true(tostring((unrealizable.error :: Object).message):find("fixed by its host resolver", 1, true) ~= nil)
-            call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
-                name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "write"})
             local previous_source = set_database_source("$name")
             local outcome = (function(): Object
+                local missing = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",
+                    {binding_id = binding_id, capability = "app.database", parameters = {name = "missing"}, ttl_ms = 60000})
+                test.is_false(missing.ok)
+                test.eq(((missing.error :: Object).code), "NOT_FOUND")
+                call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
+                    name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "read"})
+                local insufficient = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",
+                    {binding_id = binding_id, capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
+                test.is_false(insufficient.ok)
+                test.eq(((insufficient.error :: Object).code), "FORBIDDEN")
+                local association = call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
+                    name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "write"})
+                local association_revision = association.revision :: integer
                 local requested = call(AGENT, workspace, "bee.gateway.binding:request_capability", {binding_id = binding_id,
                     capability = "app.database", parameters = {name = "elevdb"}, ttl_ms = 60000})
                 local approval_id = requested.approval_id :: string
@@ -166,6 +177,16 @@ local function define_tests()
                 test.is_true(tostring(proposal.wording):find("Use an isolated application database named elevdb", 1, true) ~= nil)
                 call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = approval_id,
                     expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
+                call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
+                    name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "read",
+                    expected_revision = association_revision})
+                local blocked = raw_call(AGENT, workspace, "bee.gateway.binding:capability_status",
+                    {binding_id = binding_id, approval_id = approval_id})
+                test.is_false(blocked.ok)
+                test.eq(((blocked.error :: Object).code), "FORBIDDEN")
+                call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
+                    name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "write",
+                    expected_revision = association_revision + 1})
                 local granted = call(AGENT, workspace, "bee.gateway.binding:capability_status",
                     {binding_id = binding_id, approval_id = approval_id})
                 test.eq(granted.status, "granted")

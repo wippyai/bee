@@ -11,7 +11,7 @@ local canonical = require("canonical")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
-local context = require("context")
+local subject_call = require("subject_call")
 local gateway = require("gateway")
 local M = {}
 M.SUPPORTED_EVENTS = {UserPromptSubmit = true, Stop = true}
@@ -69,26 +69,12 @@ local function reader(binding: gateway.Binding): (funcs.Executor?, string?)
     if not selected then return nil, "built-in tool policy is not linked by the host" end
     local policy, policy_error = security.policy(selected)
     if policy_error or not policy then return nil, "inbox policy is unavailable" end
-    local meta: {[string]: string} = {}
-    if binding.workspace_id then meta.workspace_id = binding.workspace_id end
-    local subject, subject_error = security.new_actor(binding.subject, meta)
-    if not subject then return nil, tostring(subject_error) end
-    -- The attribution carries the host-derived binding identity the tool
-    -- policies compare the resource with; without it the read is denied
-    -- exactly like a tool call outside its binding.
-    local attributed, attribution_error = context.bind({}, {binding_id = binding.binding_id, thread_id = binding.thread_id,
-        subject = binding.subject, action_id = binding.action_id, attempt_id = binding.attempt_id, policy_ref = binding.policy_ref,
-        workspace_id = binding.workspace_id, origin_view = binding.origin_view})
-    if not attributed then return nil, tostring(attribution_error) end
-    local executor = funcs.new()
-    local contextual, context_error = executor:with_context(attributed)
-    if not contextual then return nil, tostring(context_error) end
-    executor = contextual
-    local acted, actor_error = executor:with_actor(subject)
-    if not acted then return nil, tostring(actor_error) end
-    local scoped, scope_error = acted:with_scope(security.new_scope({policy}))
-    if not scoped then return nil, tostring(scope_error) end
-    return scoped, nil
+    local executor, setup_error = subject_call.executor(binding, {policy}, {}, nil)
+    if not executor then
+        local fault = setup_error and setup_error.error
+        return nil, fault and fault.message or "bound subject executor is unavailable"
+    end
+    return executor, nil
 end
 -- context: the formatted outstanding inbox for the bound action at a
 -- supported boundary, or nil where the event is unsupported, the bearer
@@ -103,16 +89,28 @@ function M.context(binding: gateway.Binding, event: string?): (string?, string?)
         {thread_id = binding.thread_id, action_id = binding.action_id, after_sequence = 0, limit = M.MAX_ITEMS + 1})
     if call_error then return nil, tostring(call_error) end
     local page = bounds.object(reply)
-    local value = page and bounds.object(page.value)
-    local items = value and value.items
-    if type(items) ~= "table" then return nil, nil end
+    if not page or type(page.ok) ~= "boolean" then return nil, "inbox owner returned an invalid reply" end
+    if not page.ok then
+        local code, message = bounds.id(page.code), bounds.text(page.message, 4096)
+        if not code or not message then return nil, "inbox owner returned an invalid failure" end
+        return nil, "inbox read " .. code .. ": " .. message
+    end
+    local value = bounds.object(page.value)
+    if not value then return nil, "inbox owner returned an invalid page" end
+    local items, items_error = bounds.array(value.items, M.MAX_ITEMS + 1)
+    if not items then return nil, "inbox owner returned invalid items: " .. tostring(items_error) end
     local outstanding: {Object} = {}
-    for _, raw in ipairs(items :: {unknown}) do
+    for _, raw in ipairs(items) do
         local item = bounds.object(raw)
-        if item then
-            local state = bounds.member(item.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
-            if state and state ~= "acknowledged" and state ~= "replied" then outstanding[#outstanding + 1] = item end
+        local record_id = item and bounds.id(item.record_id)
+        local message_id = item and bounds.id(item.message_id)
+        local sequence = item and bounds.integer(item.inbox_sequence)
+        local sender = item and bounds.id(item.sender_action_id)
+        local state = item and bounds.member(item.state, {"committed", "offered", "transport_accepted", "acknowledged", "replied"})
+        if not item or not record_id or not message_id or not sequence or sequence < 1 or not sender or not state then
+            return nil, "inbox owner returned an invalid item"
         end
+        if state ~= "acknowledged" and state ~= "replied" then outstanding[#outstanding + 1] = item end
     end
     if #outstanding == 0 then return nil, nil end
     return M.format(outstanding, #outstanding > M.MAX_ITEMS), nil

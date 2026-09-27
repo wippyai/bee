@@ -8,13 +8,18 @@ local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
 local bounds = require("bounds")
+local context = require("context")
 local M = {}
 M.REQUEST_POLICY_REF = "bee.gateway:approval_request_policy_ref"
 M.CONSUME_POLICY_REF = "bee.gateway:approval_consume_policy_ref"
 type Object = {[string]: unknown}
-type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string, workspace_id: string?}
+type Binding = {binding_id: string, subject: string, action_id: string, attempt_id: string, thread_id: string,
+    policy_ref: string?, workspace_id: string?, origin_view: context.OriginView?}
 type Reply = {ok: boolean, value: unknown, error: {code: string, message: string}?}
 type Approvals = (string, Object) -> Reply
+type Runtime = context.Runtime
+type RuntimeGrant = {access_approval_id: string, access_proposal_digest: string,
+    surface_revision: integer, surface_digest: string}
 
 function M.fail(code: string, message: string): Reply return {ok = false, value = nil, error = {code = code, message = message}} end
 
@@ -36,24 +41,45 @@ function M.approval_policies(): ({string}?, Reply?)
     return {request, consume}, nil
 end
 
--- raw_call: one call as the bound subject under exactly these policies; the
--- reply object is the callee's own shape.
-function M.raw_call(binding: Binding, policy_ids: {string}, target: string, value: Object): (Object?, Reply?)
+function M.executor(binding: Binding, policies: {security.Policy}, values: Object, grant: RuntimeGrant?): (funcs.Executor?, Reply?)
     local meta: {[string]: string} = {}
     if binding.workspace_id then meta.workspace_id = binding.workspace_id end
     local actor, actor_error = security.new_actor(binding.subject, meta)
     if not actor then return nil, M.fail("DENIED", tostring(actor_error)) end
+    local runtime: Runtime? = nil
+    if grant then
+        runtime = {thread_id = binding.thread_id, subject = binding.subject, initiating_owner = binding.subject,
+            binding_id = binding.binding_id, access_approval_id = grant.access_approval_id,
+            access_proposal_digest = grant.access_proposal_digest, surface_revision = grant.surface_revision,
+            surface_digest = grant.surface_digest}
+    end
+    local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,
+        thread_id = binding.thread_id, subject = binding.subject, action_id = binding.action_id,
+        attempt_id = binding.attempt_id, policy_ref = binding.policy_ref, workspace_id = binding.workspace_id,
+        origin_view = binding.origin_view, application_runtime = runtime})
+    if not attributed then return nil, M.fail("DENIED", tostring(attribution_error)) end
+    local executor = funcs.new()
+    local contextual, context_error = executor:with_context(attributed)
+    if not contextual then return nil, M.fail("DENIED", tostring(context_error)) end
+    local acted, actor_failure = contextual:with_actor(actor)
+    if not acted then return nil, M.fail("DENIED", tostring(actor_failure)) end
+    local scoped, scope_error = acted:with_scope(security.new_scope(policies))
+    if not scoped then return nil, M.fail("DENIED", tostring(scope_error)) end
+    return scoped, nil
+end
+
+-- raw_call: one call as the bound subject under exactly these policies; the
+-- reply object is the callee's own shape.
+function M.raw_call(binding: Binding, policy_ids: {string}, target: string, value: Object): (Object?, Reply?)
     local policies: {security.Policy} = {}
     for _, id in ipairs(policy_ids) do
         local policy, policy_error = security.policy(id)
         if not policy then return nil, M.fail("UNAVAILABLE", tostring(policy_error)) end
         policies[#policies + 1] = policy
     end
-    local acted, actor_failure = funcs.new():with_actor(actor)
-    if not acted then return nil, M.fail("DENIED", tostring(actor_failure)) end
-    local scoped, scope_error = acted:with_scope(security.new_scope(policies))
-    if not scoped then return nil, M.fail("DENIED", tostring(scope_error)) end
-    local raw, call_error = scoped:call(target, value)
+    local executor, setup_error = M.executor(binding, policies, {}, nil)
+    if not executor then return nil, setup_error or M.fail("DENIED", "subject executor unavailable") end
+    local raw, call_error = executor:call(target, value)
     if call_error then return nil, M.fail("UNAVAILABLE", tostring(call_error)) end
     local reply = bounds.object(raw)
     if not reply then return nil, M.fail("UNAVAILABLE", "invalid owner reply") end

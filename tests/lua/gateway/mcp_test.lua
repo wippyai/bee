@@ -14,6 +14,37 @@ local function entry(id: string): Object
     return found :: Object
 end
 
+local function conforms(value: unknown, schema_value: unknown, location: string)
+    local schema = schema_value :: Object
+    local kind = schema.type
+    if kind == "object" then
+        if type(value) ~= "table" then error(location .. " must be an object") end
+        local object = value :: Object
+        local properties = schema.properties :: Object
+        for _, name in ipairs((schema.required :: {string}?) or {}) do
+            if object[name] == nil then error(location .. " is missing " .. name) end
+        end
+        for name, child in pairs(object) do
+            local child_schema = properties[name]
+            if child_schema == nil and schema.additionalProperties == false then error(location .. " has unexpected " .. name) end
+            if child_schema ~= nil then conforms(child, child_schema, location .. "." .. name) end
+        end
+    elseif kind == "array" then
+        if type(value) ~= "table" then error(location .. " must be an array") end
+        local item_schema = schema.items
+        if item_schema == nil then error(location .. " has no item schema") end
+        for index, child in ipairs(value :: {unknown}) do conforms(child, item_schema, location .. "[" .. tostring(index) .. "]") end
+    elseif kind == "string" then
+        if type(value) ~= "string" then error(location .. " must be a string") end
+    elseif kind == "integer" then
+        if type(value) ~= "number" or value ~= math.floor(value :: number) then error(location .. " must be an integer") end
+    elseif kind == "boolean" then
+        if type(value) ~= "boolean" then error(location .. " must be a boolean") end
+    else
+        error(location .. " has unsupported schema type " .. tostring(kind))
+    end
+end
+
 local function define_tests()
     test.describe("Gateway MCP protocol", function()
         test.it("lists every tool with an input schema whose properties are a JSON object", function()
@@ -431,6 +462,7 @@ local function define_tests()
                 test.not_nil(tool.outputSchema)
                 local output = tool.outputSchema :: {[string]: unknown}
                 test.eq(output.type, "object")
+                test.not_nil(mcp.OUTPUT_SCHEMAS[tostring(tool.name)])
             end
             local fault = mcp.tool_error("NOT_FOUND", "no such session", "session", false, "call thread_sessions")
             test.eq(fault.error.code, "NOT_FOUND")
@@ -447,6 +479,30 @@ local function define_tests()
             if not definitions then error("launch_definitions tool") end
             test.eq(definitions.annotations.readOnlyHint, true)
             test.eq(definitions.operation, "bee.harness.launch:launch_definitions_call")
+        end)
+        test.it("matches typed session, directory and capability results to their advertised output schemas", function()
+            local session_page = {ok = true, value = {sessions = {{session = "agent-a", action_id = "agent-a",
+                attempt_id = "attempt-a", thread_id = "thread-a", title = "A", self = true}}, next_cursor = 1, eof = false, truncated = true}}
+            conforms(session_page, mcp.OUTPUT_SCHEMAS.thread_sessions, "thread_sessions")
+            local directory = {ok = true, value = {peers = {{name = "A", address = {node_id = "node-a", action_id = "agent-a"},
+                action_id = "agent-a", attempt_id = "attempt-a", grant_epoch = 1, sendable = true, self = true,
+                attempt_state = "running", delivery_state = "empty", last_inbox_sequence = 0}}, eof = true, truncated = false}}
+            conforms(directory, mcp.OUTPUT_SCHEMAS.session_directory, "session_directory")
+            local capabilities = {ok = true, value = {workspace_id = "workspace-a", thread_id = "thread-a", action_id = "agent-a",
+                revision = 1, digest = string.rep("a", 64), tools = {{name = "thread_read", description = "Read",
+                    policies = {"bee.gateway:tool_read_policy_ref"}, annotations = {readOnlyHint = true}}},
+                traits = {{id = "bee.traits:read", title = "Read", tools = {"thread_read"}}},
+                allowed_traits = {"bee.traits:read"}, active_traits = {}, launch = {allowed = false},
+                thread_access = {thread_id = "thread-a", note = "read"},
+                authoring = {guide_tool = "overlay", guide_operation = "guide", preflight_tool = "delivery",
+                    preflight_operation = "preflight", note = "read first"}}}
+            conforms(capabilities, mcp.OUTPUT_SCHEMAS.capabilities, "capabilities")
+            local envelope = mcp.OUTPUT_SCHEMAS.capabilities.properties :: Object
+            local value = envelope.value :: Object
+            local capabilities_schema = value.properties :: Object
+            local traits = capabilities_schema.traits :: Object
+            test.eq(traits.type, "array")
+            test.not_nil(((traits.items :: Object).properties :: Object).id)
         end)
         test.it("pages session discovery with stable cursors", function()
             local first = mcp.sessions_arguments({arguments = {limit = 2}})

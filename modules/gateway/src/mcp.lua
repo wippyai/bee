@@ -9,6 +9,7 @@ local docs_protocol = require("docs_protocol")
 local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local agent_protocol = require("agent_protocol")
+local sessions = require("sessions")
 local M = {}
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
@@ -16,8 +17,14 @@ M.MAX_BODY_BYTES = 524288
 M.MAX_WORKSPACE_TEXT_BYTES = 65536
 M.MAX_WORKSPACE_BASE64_BYTES = 87384
 type Object = {[string]: unknown}
-type Call = {id: unknown, method: string, params: Object, notification: boolean}
+type RpcId = string | number
+type RequestCall = {id: RpcId, method: string, params: Object, notification: false}
+type NotificationCall = {method: string, params: Object, notification: true}
+type Call = RequestCall | NotificationCall
+type SessionPageArgs = {cursor: integer, limit: integer}
 type Tool = {name: string, description: string, operation: string, policies: {string}, schema: Object, annotations: Object}
+type ListedTool = {name: string, description: string, inputSchema: Object, outputSchema: Object, annotations: Object}
+type ToolList = {tools: {ListedTool}}
 local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
@@ -57,9 +64,7 @@ local TOOLS: {Tool} = {
             member_thread = {type = "string", minLength = 1, maxLength = 160, description = "A thread the caller is a member of; omit for the bound thread"}}}, annotations = READ_ANNOTATIONS},
     {name = "thread_sessions", description = "Page the running agent sessions in your workspace whose threads you may read, yourself included (self), in stable action order. Each has a session address (its action_id), attempt, thread and title. Pass cursor from the previous reply's next_cursor; a missing next_cursor ends the listing. Pass an action_id, attempt_id, or a thread_id holding one session as session to thread_message or thread_notify.", operation = "bee.threads.service:get",
         policies = {TOOL_POLICY_REFS.read},
-        schema = {type = "object", additionalProperties = false,
-            properties = {cursor = {type = "integer", minimum = 0, description = "offset into the stable session order; omit for the first page"},
-                limit = {type = "integer", minimum = 1, maximum = 64, description = "page size, at most 64"}},
+        schema = {type = "object", additionalProperties = false, properties = sessions.page_schema(),
             examples = {{limit = 32}, {cursor = 32, limit = 32}}}, annotations = READ_ANNOTATIONS},
     {name = "thread_message", description = "Append one message as the authenticated subject: to the bound thread with recipient_ids, or with session to that running session's thread, addressed to it, or with member_thread to a thread the caller belongs to such as a child it launched; the recipient reads the message at its next thread_read and a thread_wait there wakes", operation = "bee.threads.service:record",
         policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
@@ -83,9 +88,7 @@ local TOOLS: {Tool} = {
         }}},
     {name = "session_directory", description = "Page the local agents in your workspace that your host permits you to discover, in stable name order. Each entry has a host-assigned name, an exact node/action address, current acceptance epoch, attempt state and latest inbox delivery state; discovery grants no thread read or send permission. Pass cursor from the previous reply's next_cursor; a missing next_cursor ends the listing.", operation = "bee.threads.service:inbox_describe",
         policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.discover, TOOL_POLICY_REFS.send_grant},
-        schema = {type = "object", additionalProperties = false,
-            properties = {cursor = {type = "integer", minimum = 0, description = "offset into the stable directory order; omit for the first page"},
-                limit = {type = "integer", minimum = 1, maximum = 64, description = "page size, at most 64"}},
+        schema = {type = "object", additionalProperties = false, properties = sessions.page_schema(),
             examples = {{limit = 32}}}, annotations = READ_ANNOTATIONS},
     {name = "capabilities", description = "Read-only report of what this workspace's host admits for this agent: the admitted tool set with the policy each tool runs under, the trait catalog with allowed, active and requestable traits, the bound workspace and thread, and whether this agent may launch children and under which launch policy. Read it before authoring; it names no secret and grants nothing.",
         operation = "bee.gateway.binding:surface",
@@ -280,17 +283,67 @@ local function output_schema(value: Object): Object
     return {type = "object", additionalProperties = false, required = {"ok"},
         properties = {ok = {type = "boolean"}, value = value, error = ERROR_SCHEMA}}
 end
-M.OUTPUT_SCHEMAS = {
+local function array_schema(items: Object): Object
+    return {type = "array", items = items}
+end
+local STRING_SCHEMA: Object = {type = "string"}
+local BOOLEAN_SCHEMA: Object = {type = "boolean"}
+local INTEGER_SCHEMA: Object = {type = "integer"}
+local STRING_ARRAY_SCHEMA = array_schema(STRING_SCHEMA)
+local SESSION_VIEW_SCHEMA: Object = {type = "object", additionalProperties = false,
+    required = {"session", "action_id", "attempt_id", "thread_id", "title", "self"},
+    properties = {session = STRING_SCHEMA, action_id = STRING_SCHEMA, attempt_id = STRING_SCHEMA,
+        thread_id = STRING_SCHEMA, title = STRING_SCHEMA, self = BOOLEAN_SCHEMA}}
+local DIRECTORY_VIEW_SCHEMA: Object = {type = "object", additionalProperties = false,
+    required = {"name", "address", "action_id", "attempt_id", "grant_epoch", "sendable", "self"},
+    properties = {name = STRING_SCHEMA,
+        address = {type = "object", additionalProperties = false, required = {"node_id", "action_id"},
+            properties = {node_id = STRING_SCHEMA, action_id = STRING_SCHEMA}},
+        action_id = STRING_SCHEMA, attempt_id = STRING_SCHEMA, grant_epoch = INTEGER_SCHEMA,
+        sendable = BOOLEAN_SCHEMA, self = BOOLEAN_SCHEMA, attempt_state = STRING_SCHEMA,
+        delivery_state = STRING_SCHEMA, last_inbox_sequence = INTEGER_SCHEMA}}
+local CAPABILITY_TOOL_SCHEMA: Object = {type = "object", additionalProperties = false,
+    required = {"name", "description", "policies", "annotations"},
+    properties = {name = STRING_SCHEMA, description = STRING_SCHEMA, policies = STRING_ARRAY_SCHEMA,
+        annotations = {type = "object", additionalProperties = false,
+            properties = {readOnlyHint = BOOLEAN_SCHEMA, destructiveHint = BOOLEAN_SCHEMA,
+                idempotentHint = BOOLEAN_SCHEMA, openWorldHint = BOOLEAN_SCHEMA}}}}
+local CAPABILITY_TRAIT_SCHEMA: Object = {type = "object", additionalProperties = false,
+    required = {"id", "title", "tools"},
+    properties = {id = STRING_SCHEMA, title = STRING_SCHEMA, tools = STRING_ARRAY_SCHEMA}}
+local LAUNCH_DEFINITION_SCHEMA: Object = {type = "object", additionalProperties = false,
+    required = {"definition_ref", "title", "digest", "default_mode", "profile_id", "policy_ref",
+        "allowed_overrides", "workdir_policy", "thread_policy", "unconfined", "placements"},
+    properties = {definition_ref = STRING_SCHEMA, title = STRING_SCHEMA, digest = STRING_SCHEMA,
+        default_mode = STRING_SCHEMA, profile_id = STRING_SCHEMA, policy_ref = STRING_SCHEMA,
+        allowed_overrides = STRING_ARRAY_SCHEMA,
+        workdir_policy = {type = "object", additionalProperties = false, required = {"kind"},
+            properties = {kind = STRING_SCHEMA, resource_ref = STRING_SCHEMA}},
+        thread_policy = {type = "object", additionalProperties = false, required = {"kind"},
+            properties = {kind = STRING_SCHEMA, thread_ref = STRING_SCHEMA}},
+        unconfined = BOOLEAN_SCHEMA, placements = STRING_ARRAY_SCHEMA}}
+local SAVED_PROFILE_SCHEMA: Object = {type = "object", additionalProperties = false,
+    required = {"profile_id", "revision", "title", "definition_ref"},
+    properties = {profile_id = STRING_SCHEMA, revision = INTEGER_SCHEMA, title = STRING_SCHEMA,
+        definition_ref = STRING_SCHEMA}}
+local DELIVERY_DIAGNOSTIC_SCHEMA: Object = {type = "object", additionalProperties = false,
+    required = {"code", "target", "message", "remedy"},
+    properties = {code = STRING_SCHEMA, target = STRING_SCHEMA, message = STRING_SCHEMA, remedy = STRING_SCHEMA}}
+local OUTPUT_SCHEMAS: {[string]: Object} = {
     session = output_schema({type = "object"}),
     call_tool = output_schema({type = "object"}),
     thread_read = output_schema({type = "object"}),
     thread_wait = output_schema({type = "object"}),
     thread_sessions = output_schema({type = "object", additionalProperties = false,
-        properties = {sessions = {type = "array"}, next_cursor = {type = "integer"}, eof = {type = "boolean"}}}),
+        required = {"sessions", "eof", "truncated"},
+        properties = {sessions = array_schema(SESSION_VIEW_SCHEMA), next_cursor = INTEGER_SCHEMA,
+            eof = BOOLEAN_SCHEMA, truncated = BOOLEAN_SCHEMA}}),
     thread_message = output_schema({type = "object"}),
     thread_notify = output_schema({type = "object"}),
     session_directory = output_schema({type = "object", additionalProperties = false,
-        properties = {peers = {type = "array"}, next_cursor = {type = "integer"}, eof = {type = "boolean"}}}),
+        required = {"peers", "eof", "truncated"},
+        properties = {peers = array_schema(DIRECTORY_VIEW_SCHEMA), next_cursor = INTEGER_SCHEMA,
+            eof = BOOLEAN_SCHEMA, truncated = BOOLEAN_SCHEMA}}),
     session_send = output_schema({type = "object"}),
     session_inbox = output_schema({type = "object"}),
     session_ack = output_schema({type = "object"}),
@@ -307,18 +360,37 @@ M.OUTPUT_SCHEMAS = {
             outcome = {type = "string"}, answer = {type = "string"}, cancel_intent = {type = "boolean"},
             uncertain = {type = "boolean"}}}),
     capabilities = output_schema({type = "object", additionalProperties = false,
-        properties = {workspace_id = {type = "string"}, thread_id = {type = "string"},
-            tools = {type = "array"}, traits = {type = "object"}, launch = {type = "object"}}}),
+        required = {"thread_id", "action_id", "revision", "digest", "tools", "traits", "allowed_traits",
+            "active_traits", "launch", "thread_access", "authoring"},
+        properties = {workspace_id = STRING_SCHEMA, thread_id = STRING_SCHEMA, action_id = STRING_SCHEMA,
+            revision = INTEGER_SCHEMA, digest = STRING_SCHEMA, tools = array_schema(CAPABILITY_TOOL_SCHEMA),
+            traits = array_schema(CAPABILITY_TRAIT_SCHEMA), allowed_traits = STRING_ARRAY_SCHEMA,
+            active_traits = STRING_ARRAY_SCHEMA,
+            requestable_access = {type = "object", additionalProperties = false, required = {"policy", "traits"},
+                properties = {policy = STRING_SCHEMA, traits = STRING_ARRAY_SCHEMA}},
+            launch = {type = "object", additionalProperties = false, required = {"allowed"},
+                properties = {allowed = BOOLEAN_SCHEMA, policy_ref = STRING_SCHEMA, definitions_tool = STRING_SCHEMA}},
+            thread_access = {type = "object", additionalProperties = false, required = {"thread_id", "note"},
+                properties = {thread_id = STRING_SCHEMA, note = STRING_SCHEMA}},
+            authoring = {type = "object", additionalProperties = false,
+                required = {"guide_tool", "guide_operation", "preflight_tool", "preflight_operation", "note"},
+                properties = {guide_tool = STRING_SCHEMA, guide_operation = STRING_SCHEMA, preflight_tool = STRING_SCHEMA,
+                    preflight_operation = STRING_SCHEMA, note = STRING_SCHEMA}}}}),
     launch_definitions = output_schema({type = "object", additionalProperties = false,
-        properties = {workspace_id = {type = "string"}, policy_ref = {type = "string"},
-            definitions = {type = "array"}, saved_profiles = {type = "array"},
-            profiles_complete = {type = "boolean"}}}),
+        required = {"workspace_id", "policy_ref", "definitions", "saved_profiles", "profiles_complete"},
+        properties = {workspace_id = STRING_SCHEMA, policy_ref = STRING_SCHEMA,
+            definitions = array_schema(LAUNCH_DEFINITION_SCHEMA), saved_profiles = array_schema(SAVED_PROFILE_SCHEMA),
+            profiles_complete = BOOLEAN_SCHEMA, profiles_unavailable = STRING_SCHEMA}}),
     overlay = output_schema({type = "object"}),
     docs = output_schema({type = "object"}),
     components = output_schema({type = "object"}),
     delivery = output_schema({type = "object", additionalProperties = false,
         properties = {ready = {type = "boolean"}, staged = {type = "boolean"},
-            diagnostics = {type = "array"}, human_steps = {type = "array"}}}),
+            plan_digest = STRING_SCHEMA, artifact_digest = STRING_SCHEMA, version = STRING_SCHEMA,
+            source_overlay_id = STRING_SCHEMA, component = STRING_SCHEMA, pending_migrations = INTEGER_SCHEMA,
+            diagnostics = array_schema(DELIVERY_DIAGNOSTIC_SCHEMA), human_steps = STRING_ARRAY_SCHEMA,
+            human_steps_where = {type = "object", additionalProperties = false,
+                properties = {review = STRING_SCHEMA, approve = STRING_SCHEMA, open = STRING_SCHEMA}}}}),
     publish = output_schema({type = "object"}),
     application_open = output_schema({type = "object"}),
     request_capability = output_schema({type = "object", additionalProperties = false,
@@ -330,6 +402,7 @@ M.OUTPUT_SCHEMAS = {
     uninstall_request = output_schema({type = "object"}),
     install_status = output_schema({type = "object"}),
 }
+M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
 -- Opening a reviewed application is deliberately not a base capability.  The
 -- surface installs this one built-in trait when the binding admits the tool;
 -- an access receipt must then make it selectable.
@@ -348,21 +421,24 @@ function M.decode(value: unknown): (Call?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be one JSON-RPC object" end
     if object.jsonrpc ~= "2.0" then return nil, "jsonrpc must be 2.0" end
-    if type(object.method) ~= "string" or object.method == "" or #(object.method :: string) > 64 then return nil, "method must be a short string" end
+    local method = bounds.text(object.method, 64)
+    if not method or method == "" then return nil, "method must be a short string" end
     local id = object.id
-    if id ~= nil and type(id) ~= "string" and type(id) ~= "number" then return nil, "id must be a string or number" end
-    -- A JSON-RPC notification carries no id and expects no reply body.
-    local notification = id == nil
-    if notification and not (object.method :: string):find("^notifications/") then return nil, "id is required" end
     local params: Object = {}
     if object.params ~= nil then
         local declared = bounds.object(object.params)
         if not declared then return nil, "params must be an object" end
         params = declared
     end
-    return {id = id, method = object.method :: string, params = params, notification = notification}, nil
+    if id == nil then
+        if not method:find("^notifications/") then return nil, "id is required" end
+        return {method = method, params = params, notification = true}, nil
+    end
+    if type(id) == "string" then return {id = id, method = method, params = params, notification = false}, nil end
+    if type(id) == "number" then return {id = id, method = method, params = params, notification = false}, nil end
+    return nil, "id must be a string or number"
 end
-function M.result(id: unknown, result: unknown): Object
+function M.result(id: RpcId, result: unknown): Object
     return {jsonrpc = "2.0", id = id, result = result}
 end
 M.PARSE_ERROR = -32700
@@ -370,7 +446,7 @@ M.INVALID_REQUEST = -32600
 M.METHOD_NOT_FOUND = -32601
 M.INVALID_PARAMS = -32602
 M.INTERNAL_ERROR = -32603
-function M.failure(id: unknown, code: integer, message: string): Object
+function M.failure(id: RpcId?, code: integer, message: string): Object
     return {jsonrpc = "2.0", id = id, error = {code = code, message = message}}
 end
 function M.initialize(): Object
@@ -381,13 +457,17 @@ end
 -- The tools a binding may call: the closed catalog filtered by the
 -- binding's admitted tool names, in catalog order, each with its input and
 -- output contracts.
-function M.list(admitted: {string}): Object
+function M.list(admitted: {string}): ToolList
     local allowed: {[string]: boolean} = {}
     for _, name in ipairs(admitted) do allowed[name] = true end
-    local tools: {Object} = {}
+    local tools: {ListedTool} = {}
     for _, tool in ipairs(TOOLS) do
-        if allowed[tool.name] then tools[#tools + 1] = {name = tool.name, description = tool.description,
-            inputSchema = tool.schema, outputSchema = M.OUTPUT_SCHEMAS[tool.name], annotations = tool.annotations} end
+        if allowed[tool.name] then
+            local output = OUTPUT_SCHEMAS[tool.name]
+            assert(output, "missing output schema for " .. tool.name)
+            tools[#tools + 1] = {name = tool.name, description = tool.description,
+                inputSchema = tool.schema, outputSchema = output, annotations = tool.annotations}
+        end
     end
     return {tools = tools}
 end
@@ -511,7 +591,7 @@ function M.message_arguments(params: Object): (Object?, string?)
 end
 -- Session discovery pages the binding's workspace in stable order: the
 -- binding selects the workspace, cursor and limit select the window.
-function M.sessions_arguments(params: Object): (Object?, string?)
+function M.sessions_arguments(params: Object): (SessionPageArgs?, string?)
     local arguments: Object = {}
     if params.arguments ~= nil then
         local declared = bounds.object(params.arguments)
@@ -526,10 +606,12 @@ function M.sessions_arguments(params: Object): (Object?, string?)
         if not declared then return nil, "cursor is out of range; pass next_cursor from the previous reply" end
         cursor = declared
     end
-    local limit = 32
+    local limit = sessions.PAGE_DEFAULT
     if arguments.limit ~= nil then
         local declared = bounds.integer(arguments.limit)
-        if not declared or declared < 1 or declared > 64 then return nil, "limit must be between 1 and 64" end
+        if not declared or declared < 1 or declared > sessions.MAX_SESSIONS then
+            return nil, "limit must be between 1 and " .. tostring(sessions.MAX_SESSIONS)
+        end
         limit = declared
     end
     return {cursor = cursor, limit = limit}, nil

@@ -3,6 +3,8 @@ local json = require("json")
 local gateway = require("gateway")
 local hooks = require("hooks")
 local hook_inbox = require("hook_inbox")
+local logger = require("logger")
+local transport_admission = require("admission")
 type Object = {[string]: unknown}
 local function refuse(response: http.Response, status: number, message: string): nil
     response:set_content_type("text/plain; charset=utf-8")
@@ -19,23 +21,9 @@ local function status_of(code: string): number
     return http.STATUS.INTERNAL_ERROR
 end
 local function admitted(request: http.Request, response: http.Response): (gateway.Binding?, string?)
-    local action_id = request:param("action")
-    if not action_id or action_id == "" then refuse(response, http.STATUS.NOT_FOUND, "no action"); return nil, nil end
-    if request:header("Origin") then refuse(response, http.STATUS.FORBIDDEN, "browser origins are not admitted"); return nil, nil end
-    local authorization = request:header("Authorization") or ""
-    local token = authorization:match("^Bearer%s+(%S+)$")
-    if not token then refuse(response, http.STATUS.UNAUTHORIZED, "bearer token required"); return nil, nil end
-    local host = request:host() or ""
-    if not gateway.accepts_host(host) then refuse(response, http.STATUS.FORBIDDEN, "host is not the selected listener"); return nil, nil end
-    local binding, refusal = gateway.authenticate(token, action_id, "hook")
-    if not binding then
-        local fault = refusal and refusal.error or {code = "UNAUTHENTICATED", message = "refused"}
-        refuse(response, status_of(fault.code), fault.message)
-        return nil, nil
-    end
-    local drain = gateway.draining()
-    if drain and drain.past_deadline then refuse(response, http.STATUS.SERVICE_UNAVAILABLE, "the gateway is shutting down"); return nil, nil end
-    return binding, action_id
+    local result = transport_admission.check(request, "hook")
+    if not result.ok then refuse(response, result.status, result.message); return nil, nil end
+    return result.binding, result.action_id
 end
 local function submit(): nil
     local request = http.request()
@@ -66,7 +54,8 @@ local function submit(): nil
     local event: string? = nil
     if type(submitted.hook_event_name) == "string" then event = submitted.hook_event_name
     elseif type(submitted.event) == "string" then event = submitted.event end
-    local context_text = hook_inbox.context(binding, event)
+    local context_text, context_error = hook_inbox.context(binding, event)
+    if context_error then logger:warn("Gateway hook inbox context unavailable", {event = event or "unknown", cause = context_error}) end
     local context_body = hook_inbox.http_body(context_text)
     if outcome.status == "committed" then response:set_status(http.STATUS.OK) else response:set_status(http.STATUS.ACCEPTED) end
     if context_body then

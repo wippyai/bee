@@ -331,7 +331,7 @@ local function define_tests()
             pcall(process.cancel, broker, "finish admission convergence probe")
             wait_exit(broker)
             process.unlisten(catalogs)
-            assert(ok, scenario_error)
+            assert(ok, tostring(scenario_error))
         end)
     end)
 end

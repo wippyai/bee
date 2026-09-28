@@ -83,6 +83,14 @@ entries:
     service: bee.approvals:service
   security:
     policies: [bee.security.approvals:approval_store_policy]
+- name: decide_batch
+  kind: function.lua
+  source: file://decide_batch_method.lua
+  method: handle
+  imports:
+    service: bee.approvals:service
+  security:
+    policies: [bee.security.approvals:approval_store_policy]
 - name: withdraw
   kind: function.lua
   meta:

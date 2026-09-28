@@ -42,6 +42,7 @@ M.DEFAULT_TTL_MS = 600000
 M.MAX_PENDING = 32
 M.MAX_INBOX = 64
 M.MAX_LIST = 64
+M.MAX_BATCH = 16
 M.MAX_PROPOSAL_BYTES = 8192
 M.MAX_SCHEMA_BYTES = 4096
 M.EXPIRE_BOUND = 64
@@ -174,7 +175,7 @@ function M.reply(result: Result): Reply
 end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
-local mutating: {[string]: boolean} = {request = true, decide = true, withdraw = true, consume = true, revalidate = true,
+local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
     complete_installation_effect = true, reconcile = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
@@ -712,6 +713,44 @@ local function op_decide(tx: sql.Transaction, actor: string, object: Object, now
     if not settled then return storage(settle_error or "settle decision") end
     return success(M.view(settled), false)
 end
+-- decide_batch: several pending requests of one requester in one workspace are
+-- decided together in a single transaction. Every item carries exactly the
+-- fields decide requires; the grouping is read from the stored rows, so a
+-- mixed batch is refused before any decision commits and one failing item
+-- rolls the whole batch back.
+local function op_decide_batch(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"decisions"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local items = bounds.dense_list(object.decisions, M.MAX_BATCH, "decisions")
+    if not items or #items < 1 then return failure("INVALID_ARGUMENT", "decisions must list 1 to " .. tostring(M.MAX_BATCH) .. " requests") end
+    local seen: {[string]: boolean} = {}
+    local requester: string? = nil
+    local workspace: string? = nil
+    for _, raw in ipairs(items) do
+        local item = bounds.object(raw)
+        local approval_id = item and bounds.id(item.approval_id) or nil
+        if not item or not approval_id then return failure("INVALID_ARGUMENT", "every decision names an approval_id") end
+        if seen[approval_id] then return failure("INVALID_ARGUMENT", "a request appears once per batch") end
+        seen[approval_id] = true
+        local row, load_error = load(tx, approval_id)
+        if load_error then return storage(load_error) end
+        if not row then return failure("NOT_FOUND", "approval request does not exist") end
+        if requester == nil then requester, workspace = row.requester_id, row.workspace_id end
+        if row.requester_id ~= requester or row.workspace_id ~= workspace then
+            return failure("INVALID_ARGUMENT", "a batch decides requests of one requester in one workspace")
+        end
+    end
+    local views: {unknown} = {}
+    for _, raw in ipairs(items) do
+        local settled = op_decide(tx, actor, raw :: Object, now, prepared)
+        if not settled.ok then
+            local fault = bounds.object(raw)
+            return failure(settled.code or "INTERNAL", tostring(fault and fault.approval_id) .. ": " .. tostring(settled.message), settled.value)
+        end
+        views[#views + 1] = settled.value
+    end
+    return success({decisions = views}, false)
+end
 -- withdraw: the requester ends its own pending request; a request already
 -- settled reports the outcome that actually committed.
 local function op_withdraw(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
@@ -1118,6 +1157,7 @@ end
 function M.node(): (string?, string?)
     return node()
 end
+operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
@@ -1125,6 +1165,7 @@ operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed
 preparations.request = prepare_request
 function M.request(value: unknown): Reply return run(value, "request") end
 function M.decide(value: unknown): Reply return run(value, "decide") end
+function M.decide_batch(value: unknown): Reply return run(value, "decide_batch") end
 function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
 function M.installation_effects(value: unknown): Reply return run(value, "installation_effects") end

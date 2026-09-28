@@ -256,6 +256,34 @@ local function define_tests()
                 expected_scope_revision = {}})), "INVALID_ARGUMENT")
             test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, expected_scope_revision = 7})), "INVALID_ARGUMENT")
         end)
+        test.it("decides several requests of one requester as one batch", function()
+            local workspace = "ws-batch-" .. key()
+            local first = value(call(requester, "request", request_of(workspace)))
+            local second = value(call(requester, "request", request_of(workspace)))
+            local settled = value(call(alice, "decide_batch", {decisions = {
+                {approval_id = first.approval_id, expected_revision = first.revision, proposal_digest = first.proposal_digest, decision = "approved"},
+                {approval_id = second.approval_id, expected_revision = second.revision, proposal_digest = second.proposal_digest, decision = "denied"}}}))
+            local views = settled.decisions :: {{[string]: unknown}}
+            test.eq(#views, 2)
+            test.eq(views[1].decision, "approved")
+            test.eq(views[2].decision, "denied")
+            test.eq(value(call(alice, "read", {approval_id = first.approval_id})).state, "decided")
+        end)
+        test.it("refuses a batch across requesters or with a stale item without deciding any", function()
+            local workspace = "ws-batch-mixed-" .. key()
+            local mine = value(call(requester, "request", request_of(workspace)))
+            local theirs = value(call(other_requester, "request", request_of(workspace)))
+            local item = function(view: {[string]: unknown}, revision: integer?): {[string]: unknown}
+                return {approval_id = view.approval_id, expected_revision = revision or view.revision,
+                    proposal_digest = view.proposal_digest, decision = "approved"}
+            end
+            test.eq(code(call(alice, "decide_batch", {decisions = {item(mine), item(theirs)}})), "INVALID_ARGUMENT")
+            test.eq(code(call(alice, "decide_batch", {decisions = {item(mine), item(mine)}})), "INVALID_ARGUMENT")
+            local sibling = value(call(requester, "request", request_of(workspace)))
+            test.eq(code(call(alice, "decide_batch", {decisions = {item(mine), item(sibling, 9)}})), "CONFLICT")
+            test.eq(value(call(alice, "read", {approval_id = mine.approval_id})).state, "pending")
+            test.eq(code(call(outsider, "decide_batch", {decisions = {item(mine)}})), "DENIED")
+        end)
         test.it("wakes installation effect workers when an approval decision commits", function()
             local workspace = "ws-effect-wake-" .. key()
             local created = value(call(requester, "request", request_of(workspace)))

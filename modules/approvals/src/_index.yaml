@@ -105,6 +105,8 @@ entries:
     description: Ask for a decision on one exact proposal under a host approver policy; the same key replays and a different request under it conflicts
   - name: decide
     description: Settle the pending revision for the recorded proposal digest; an identical retry replays and any other decision conflicts
+  - name: decide_batch
+    description: Settle several pending requests of one requester in one workspace in one transaction; each item is a full decide and one failing item rolls the batch back
   - name: withdraw
     description: End the caller's own pending request, or learn the outcome that already committed
   - name: consume
@@ -136,6 +138,7 @@ entries:
       feed_read_after: bee.approvals.binding:feed_read_after
       request: bee.approvals.binding:request
       decide: bee.approvals.binding:decide
+      decide_batch: bee.approvals.binding:decide_batch
       withdraw: bee.approvals.binding:withdraw
       consume: bee.approvals.binding:consume
       installation_effects: bee.approvals.binding:installation_effects

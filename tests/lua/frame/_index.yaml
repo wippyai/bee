@@ -32,3 +32,14 @@ entries:
     frame: bee.application:frame
     viz: bee.application:viz
     appearance: bee.application:appearance
+- name: forms_test
+  kind: function.lua
+  source: file://forms_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    frame: bee.application:frame
+    forms: bee.application:forms
+    appearance: bee.application:appearance

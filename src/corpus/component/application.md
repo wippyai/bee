@@ -13,6 +13,7 @@ application, select a workspace, open a store, or grant access to a thread.
 | `appearance`, `names` | Shared semantic presentation values for applications and desktop consumers |
 | `frame` | The application frame every Bee application draws with: size classes and layout, header, tabs, action bar, status and key-hint footer, list window, table (full width, or confined to a list pane's `area`), panels, form fields, wizard steps and empty state |
 | `viz` | The visualization kit on the frame: sparklines, line and area charts, bars, columns, stacked bars, histograms, heatmaps, status grids, gauges, progress, stat tiles, inline table bars, timelines, small graphs and bounded live series with a redraw cadence |
+| `forms` | The input kit on the frame: a text field (cursor, word and line motions, select-all, paste, placeholder, `max_length`, masked mode), a bounded number field, a scrolling multi-line text area, a select/dropdown, a checkbox, a radio group and a toggle, plus a form container that owns focus order (Tab/Shift-Tab/click), per-field validation, dirty tracking and a disabled state |
 | `thread_protocol` | Exact bounded requests and replies for the authenticated application-to-broker thread facade |
 | `folder_picker` | A folder picker over the roots the host admits through the workspace catalog's `roots` and `folders` operations: the pure paging and navigation model and its table on the frame |
 | `agent_protocol` | The typed request that starts a managed agent, shared by `agents`, the gateway's `thread_launch` and the harness that admits it |

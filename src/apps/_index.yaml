@@ -54,10 +54,11 @@ entries:
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
-  modules: [registry, system]
+  modules: [registry, system, hash]
   imports:
     contract: bee.protocol:application
     application_admissions: bee.gov:application_admissions
+    canonical: bee.protocol:canonical
 - name: interactions
   kind: library.lua
   source: file://interactions.lua

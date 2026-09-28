@@ -741,19 +741,15 @@ function M.catalog_revision(resource: string, node_raw: unknown, workspace_raw: 
         db:release()
         return failure(code, message)
     end
-    local tables, table_error = db:query("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?", {"bee_governance_activation_slots"})
-    if table_error or not tables then return close_failure("INTERNAL", "read governance activation schema") end
     local revisions: {string} = {}
-    if #tables > 0 then
-        local rows, query_error = db:query("SELECT overlay_owner, revision FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? ORDER BY overlay_owner LIMIT ?",
-            {node, workspace, MAX_DESIRED_SLOTS + 1})
-        if query_error or not rows then return close_failure("INTERNAL", "read governance activation revisions") end
-        if #rows > MAX_DESIRED_SLOTS then return close_failure("CAPACITY", "governance activation slots exceed their bound") end
-        for _, row in ipairs(rows) do
-            local overlay_owner, revision = id(row.overlay_owner), count(row.revision, false)
-            if not overlay_owner or revision == nil then return close_failure("INTERNAL", "governance activation revision is malformed") end
-            revisions[#revisions + 1] = overlay_owner .. "=" .. tostring(revision)
-        end
+    local rows, query_error = db:query("SELECT overlay_owner, revision FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? ORDER BY overlay_owner LIMIT ?",
+        {node, workspace, MAX_DESIRED_SLOTS + 1})
+    if query_error or not rows then return close_failure("INTERNAL", "read governance activation revisions") end
+    if #rows > MAX_DESIRED_SLOTS then return close_failure("CAPACITY", "governance activation slots exceed their bound") end
+    for _, row in ipairs(rows) do
+        local overlay_owner, revision = id(row.overlay_owner), count(row.revision, false)
+        if not overlay_owner or revision == nil then return close_failure("INTERNAL", "governance activation revision is malformed") end
+        revisions[#revisions + 1] = overlay_owner .. "=" .. tostring(revision)
     end
     local released, release_error = db:release()
     if released ~= true or release_error then return failure("UNAVAILABLE", "close governance activation database") end

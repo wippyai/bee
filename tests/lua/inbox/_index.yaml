@@ -45,6 +45,7 @@ entries:
   imports:
     frames: bee.application:frame
     test: wippy.test:test
+    leases: bee.approvals.inbox:leases
     model: bee.approvals.inbox:model
     view: bee.approvals.inbox:view
     appearance: bee.application:appearance
@@ -59,6 +60,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     test: wippy.test:test
+    leases: bee.approvals.inbox:leases
     model: bee.approvals.inbox:model
     inbox: bee.approvals.inbox:client
     view: bee.approvals.inbox:view
@@ -113,3 +115,16 @@ entries:
     model: bee.approvals.inbox:model
     inbox: bee.approvals.inbox:client
     caller: bee.application:caller
+- name: leases_test
+  kind: function.lua
+  source: file://leases_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    appearance: bee.application:appearance
+    model: bee.approvals.inbox:model
+    leases: bee.approvals.inbox:leases
+    lease_form: bee.approvals.inbox:lease_form
+    forms: bee.application:forms
+    view: bee.approvals.inbox:view

@@ -41,6 +41,8 @@ entries:
     inbox: bee.approvals.inbox:client
     caller: bee.application:caller
     feeds: bee.approvals.inbox:feeds
+    leases: bee.approvals.inbox:leases
+    lease_form: bee.approvals.inbox:lease_form
     source_config: bee.approvals.inbox:source_config
     hive: bee.hive:client
     hive_types: bee.hive:types
@@ -65,6 +67,23 @@ entries:
     text: bee.application:text
     bounds: bee.threads.records:bounds
     caller: bee.application:caller
+- name: leases
+  kind: library.lua
+  source: file://leases.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    model: bee.approvals.inbox:model
+- name: lease_form
+  kind: library.lua
+  source: file://lease_form.lua
+  modules: [tty]
+  imports:
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    forms: bee.application:forms
+    model: bee.approvals.inbox:model
+    leases: bee.approvals.inbox:leases
 - name: client
   kind: library.lua
   source: file://client.lua
@@ -97,6 +116,7 @@ entries:
   imports:
     frame: bee.application:frame
     appearance: bee.application:appearance
+    leases: bee.approvals.inbox:leases
     model: bee.approvals.inbox:model
     names: bee.application:names
 - name: workspaces
@@ -112,5 +132,5 @@ entries:
     comment: The inbox reads the owner's inbox and requests and submits explicit decisions and withdrawals under the process actor; the owner authorizes each call
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, bee.approvals.binding:withdraw, bee.approvals.inbox:workspaces, bee.approvals.inbox:sources]
+    resources: [bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, bee.approvals.binding:decide_batch, bee.approvals.binding:withdraw, bee.gov.binding:destination_call, bee.approvals.inbox:workspaces, bee.approvals.inbox:sources]
     effect: allow

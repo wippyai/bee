@@ -14,6 +14,7 @@ type Address = {source: Source, approval_id: string}
 type AddressBook = {[string]: Address}
 type Catchup = {reply: model.Reply, reset: boolean}
 type Client = {
+    lease: (Client, string, unknown) -> unknown?,
     workspaces: {string}, sources: {[string]: Source}, addresses: {[string]: Address},
     states: {[string]: sync.State}, refreshes: {[string]: integer}, call: Call,
     invoke: (Client, string, unknown) -> model.Reply?,
@@ -207,6 +208,38 @@ local function refresh(self: Client, source: Source): model.Reply
     end
     return snapshot(self, source)
 end
+-- A batch is one owner transaction, so every request must route to the same
+-- owner; each UI identity is translated back to the owner's own before the call.
+local function decide_batch(self: Client, request: Object): model.Reply?
+    local items = bounds.dense_list(request.decisions, 16, "decisions")
+    if not items or #items == 0 then return failure("INVALID_ARGUMENT", "decisions must list 1 to 16 requests") end
+    local owner: Source? = nil
+    local outbound: {Object} = {}
+    for _, raw in ipairs(items) do
+        local item = bounds.object(raw)
+        local address = item and bounds.id(item.approval_id) and self.addresses[bounds.id(item.approval_id) :: string] or nil
+        if not item or not address then return failure("DENIED", "approval owner is not known") end
+        if owner and owner.id ~= address.source.id then return failure("INVALID_ARGUMENT", "a batch decides requests of one owner") end
+        owner = address.source
+        local copied: Object = {}
+        for key, value in pairs(item) do copied[key] = value end
+        copied.approval_id = address.approval_id
+        outbound[#outbound + 1] = copied
+    end
+    local answer = invoke_owner(self, owner :: Source, "bee.approvals.binding:decide_batch", {decisions = outbound})
+    if not answer then return nil end
+    if answer.kind ~= "success" then return answer end
+    local body = bounds.object(answer.value)
+    local views = body and body.decisions
+    if type(views) ~= "table" then return failure("INVALID_REPLY", "approval owner returned no decisions") end
+    local converted: {unknown} = {}
+    for _, raw in ipairs(views :: {unknown}) do
+        local view, view_error = view_for(self, owner :: Source, raw)
+        if not view then return failure("INVALID_REPLY", view_error or "invalid owner reply") end
+        converted[#converted + 1] = view
+    end
+    return {kind = "success", value = {decisions = converted}, replayed = answer.replayed}
+end
 local function invoke(self: Client, target: string, value: unknown): model.Reply?
     local request = bounds.object(value)
     if not request then return failure("INVALID_ARGUMENT", "request must be an object") end
@@ -216,6 +249,7 @@ local function invoke(self: Client, target: string, value: unknown): model.Reply
         if not source then return failure("DENIED", "inbox source is not admitted") end
         return refresh(self, source)
     end
+    if target == "bee.approvals.binding:decide_batch" then return decide_batch(self, request) end
     if target ~= "bee.approvals.binding:read" and target ~= "bee.approvals.binding:decide" and target ~= "bee.approvals.binding:withdraw" then
         return failure("DENIED", "operation is not an inbox action")
     end
@@ -255,8 +289,21 @@ local function invoke(self: Client, target: string, value: unknown): model.Reply
     end
     return failure("INVALID_REPLY", "approval owner returned no request view")
 end
+-- Lease operations belong to the governance owner of a local workspace; the
+-- reply keeps governance's own result shape.
+local function lease(self: Client, source_id: string, value: unknown): unknown?
+    local source = self.sources[source_id]
+    local request = bounds.object(value)
+    if not source or not source.local_owner or not request then return nil end
+    local outbound: Object = {}
+    for key, item in pairs(request) do outbound[key] = item end
+    outbound.workspace_id = source.workspace_id
+    local raw, err = self.call(source, "bee.gov.binding:destination_call", outbound)
+    if err then return nil end
+    return raw
+end
 function M.new(configured: source_config.Config, call: Call): Client
-    local self: Client = {workspaces = configured.workspaces, sources = configured.sources, addresses = {}, states = {}, refreshes = {}, call = call, invoke = invoke}
+    local self: Client = {workspaces = configured.workspaces, sources = configured.sources, addresses = {}, states = {}, refreshes = {}, call = call, invoke = invoke, lease = lease}
     return self
 end
 return M

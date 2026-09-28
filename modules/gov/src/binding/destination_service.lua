@@ -630,14 +630,16 @@ end
 local OPERATIONS: Set = {available = true, stage = true, list = true, get = true, changes = true,
     review = true, select = true, prepare = true, step = true, status = true, recover = true,
     lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
-local READS: Set = {available = true, list = true, get = true, changes = true, status = true, lease_list = true}
-local MANAGES: Set = {stage = true, review = true, select = true, lease_propose = true, lease_revoke = true}
+local READS: Set = {available = true, list = true, get = true, changes = true, status = true}
+local MANAGES: Set = {stage = true, review = true, select = true}
+local LEASES: Set = {lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
 
 -- One delivery action per operation, so the public facade authenticates the
 -- exact operation a caller asks for before any store opens.
 function M.required_action(raw: unknown): string?
     local operation = bounds.id(raw)
     if not operation or not OPERATIONS[operation] then return nil end
+    if LEASES[operation] then return "bee.gov.delivery.lease" end
     if READS[operation] then return "bee.gov.delivery.read" end
     if MANAGES[operation] then return "bee.gov.delivery.manage" end
     return "bee.gov.delivery.activate"

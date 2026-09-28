@@ -18,6 +18,8 @@ local model = require("model")
 local view = require("view")
 local inbox = require("inbox")
 local feeds = require("feeds")
+local leases = require("leases")
+local lease_form = require("lease_form")
 local source_config = require("source_config")
 local hive = require("hive")
 local hive_types = require("hive_types")
@@ -71,6 +73,9 @@ local function main(value: unknown)
         end)
     local owner = routed
     local state: model.State = model.new(configured.workspaces)
+    local slice: leases.Slice = leases.new()
+    local request_form: lease_form.State? = nil
+    local form_frame: {rows: {string}, hits: {frame.Hit}} = {rows = {}, hits = {}}
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     local rows: {model.Row} = {}
     local offset = 0
@@ -95,7 +100,7 @@ local function main(value: unknown)
         end)
     end
     -- One dialog at a time: what it asks and what accepting it does.
-    local dialog: {request_id: string, kind: string, confirmation: model.Confirmation}? = nil
+    local dialog: {request_id: string, kind: string, confirmation: model.Confirmation?, view: model.ApprovalView?}? = nil
     local ticker = assert(time.ticker(POLL))
     local ticks = ticker:channel()
     local function refresh()
@@ -112,6 +117,16 @@ local function main(value: unknown)
             end
         end
         rows = model.rows(state)
+        if slice.leases_view then
+            for _, workspace in ipairs(state.workspaces) do
+                local intent = leases.list_intent(workspace, workspace)
+                local raw = owner:lease(workspace, intent.request)
+                if raw ~= nil then
+                    local failure = leases.apply_list(slice, workspace, workspace, raw)
+                    if failure then leases.say(slice, failure) end
+                end
+            end
+        end
         dirty = true
     end
     local function open_selected()
@@ -146,6 +161,65 @@ local function main(value: unknown)
         rows = model.rows(state)
         dirty = true
     end
+    local function lease_answer(kind: string, intent: leases.Intent?, refused: string?)
+        if not intent then status = refused or ""; dirty = true; return end
+        local raw = owner:lease(intent.source, intent.request)
+        leases.say(slice, raw == nil and "Governance did not answer; refresh to see what committed" or leases.notice(kind, raw))
+        refresh()
+    end
+    local function act_batch(decision: string)
+        local intent, refused = leases.batch_intent(slice, state.rows, decision)
+        if not intent then status = refused or ""; dirty = true; return end
+        local reply = owner:invoke(intent.target, intent.request)
+        leases.say(slice, leases.apply_batch(slice, reply, function(view: model.ApprovalView)
+            model.apply_read(state, view.approval_id, {kind = "success", value = view, replayed = false})
+        end))
+        rows = model.rows(state)
+        dirty = true
+    end
+    local function ask_lease(kind: string)
+        if dialog or state.pending or busy then return end
+        local detail = state.detail
+        local selected = model.selected_row(state)
+        if not detail or not selected or detail.approval_id ~= selected.approval_id then status = "Open a request first"; dirty = true; return end
+        local request_id, err
+        if kind == "lease_propose" then
+            if detail.state ~= "pending" or detail.proposal.ref ~= leases.ACTIVATION then status = "Open a pending activation request to lease its application"; dirty = true; return end
+            request_form = lease_form.new(detail)
+            dirty = true
+            return
+        else
+            if detail.state ~= "decided" or detail.decision ~= "approved" or detail.proposal.ref ~= leases.PROPOSAL then status = "Open an approved lease request to grant it"; dirty = true; return end
+            request_id, err = client.query(launch, {kind = "confirm", title = "Grant this lease?",
+                message = model.text(selected.target .. " for " .. selected.requester_id, 512), accept = "Grant"})
+        end
+        if not request_id then status = tostring(err); dirty = true; return end
+        dialog = {request_id = request_id, kind = kind, confirmation = nil, view = detail}
+        dirty = true
+    end
+    local function ask_batch(decision: string)
+        if dialog or state.pending or busy then return end
+        local marked = leases.marked(slice, state.rows)
+        if #marked == 0 then status = "Mark pending requests with M first"; dirty = true; return end
+        local approve = decision == "approved"
+        local request_id, err = client.query(launch, {kind = "confirm",
+            title = (approve and "Approve " or "Deny ") .. tostring(#marked) .. " requests?",
+            message = model.text(marked[1].effect .. " on " .. marked[1].target .. " for " .. marked[1].requester_id, 512),
+            accept = approve and "Approve all" or "Deny all"})
+        if not request_id then status = tostring(err); dirty = true; return end
+        dialog = {request_id = request_id, kind = approve and "batch_approve" or "batch_deny", confirmation = nil, view = nil}
+        dirty = true
+    end
+    local function ask_revoke()
+        if dialog or busy then return end
+        local row = leases.selected(slice)
+        if not row or row.state ~= "active" then status = "Select an active lease"; dirty = true; return end
+        local request_id, err = client.query(launch, {kind = "confirm", title = "Revoke this lease?",
+            message = model.text(row.target .. " used " .. tostring(row.applies_used), 512), accept = "Revoke"})
+        if not request_id then status = tostring(err); dirty = true; return end
+        dialog = {request_id = request_id, kind = "revoke", confirmation = nil, view = nil}
+        dirty = true
+    end
     -- Every decision passes through the shell's confirmation; nothing acts
     -- on a row selection or a key alone.
     local function ask(kind: string)
@@ -168,10 +242,16 @@ local function main(value: unknown)
     end)
     while running do
         if dirty then
-            local drawn = view.draw(width, height, preferences, state, rows, offset, status)
-            hits = drawn.hits
-            offset = drawn.offset
-            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local open_form = request_form
+            if open_form then
+                form_frame = lease_form.draw(width, height, preferences, open_form)
+                assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            else
+                local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice)
+                hits = drawn.hits
+                offset = drawn.offset
+                assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            end
             if not announced then client.ready(launch); announced = true end
             local checkpoint = model.checkpoint(state)
             if checkpoint ~= last_checkpoint then
@@ -204,7 +284,14 @@ local function main(value: unknown)
                 local asked = dialog
                 dialog = nil
                 if result.action ~= "accept" then status = "Cancelled"; dirty = true
-                elseif not model.confirmation_matches(state, asked.confirmation) then
+                elseif asked.kind == "batch_approve" or asked.kind == "batch_deny" then
+                    perform(function() act_batch(asked.kind == "batch_approve" and "approved" or "denied") end)
+                elseif asked.kind == "revoke" then
+                    perform(function() lease_answer("lease_revoke", leases.revoke_intent(slice, uuid.v7())) end)
+                elseif asked.kind == "lease_grant" and asked.view then
+                    local view = asked.view
+                    perform(function() lease_answer("lease_grant", leases.grant_intent(view, uuid.v7())) end)
+                elseif not asked.confirmation or not model.confirmation_matches(state, asked.confirmation) then
                     status = "Request changed; open it and confirm again"; dirty = true
                 else perform(function()
                     if model.confirmation_matches(state, asked.confirmation) then act(asked.kind)
@@ -215,14 +302,44 @@ local function main(value: unknown)
             local data = event.value
             if data.type == "close" then running = false
             elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+            elseif request_form and (data.type == "key" or data.type == "mouse") then
+                local open_form = request_form
+                local outcome = lease_form.input(open_form, data, form_frame)
+                if outcome == "cancel" then request_form = nil; status = "Cancelled"
+                elseif outcome == "submit" then
+                    local spec = lease_form.submit(open_form)
+                    if spec then
+                        local view = open_form.view
+                        request_form = nil
+                        perform(function() lease_answer("lease_propose", leases.propose_intent(view, spec, uuid.v7())) end)
+                    end
+                end
+                dirty = true
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local text = tostring(data.key or "")
                 status = ""
-                if key == "up" or text == "k" then model.move(state, -1); dirty = true
+                if text == "v" then
+                    leases.show_leases(slice, not slice.leases_view); offset = 0
+                    perform(refresh); dirty = true
+                elseif slice.leases_view then
+                    if key == "up" or text == "k" then leases.move(slice, -1); dirty = true
+                    elseif key == "down" or text == "j" then leases.move(slice, 1); dirty = true
+                    elseif text == "x" then ask_revoke()
+                    elseif text == "r" then perform(refresh)
+                    elseif key == "esc" or key == "escape" then leases.show_leases(slice, false); dirty = true end
+                elseif key == "up" or text == "k" then model.move(state, -1); dirty = true
                 elseif key == "down" or text == "j" then model.move(state, 1); dirty = true
                 elseif key == "pgup" then model.move(state, -8); dirty = true
                 elseif key == "pgdown" then model.move(state, 8); dirty = true
+                elseif text == "m" then
+                    local selected = model.selected_row(state)
+                    local refused = selected and leases.toggle_mark(slice, state.rows, selected.approval_id) or "Select a request first"
+                    status = refused or ""; dirty = true
+                elseif text == "b" then ask_batch("approved")
+                elseif text == "n" then ask_batch("denied")
+                elseif text == "l" then ask_lease("lease_propose")
+                elseif text == "g" then ask_lease("lease_grant")
                 elseif key == "enter" or text == "o" then perform(open_selected)
                 elseif text == "a" then ask("approve")
                 elseif text == "d" then ask("deny")
@@ -234,7 +351,21 @@ local function main(value: unknown)
                 local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
                     status = ""
-                    if hit.kind == "row" then
+                    if hit.kind == "lease" then
+                        local row = leases.rows(slice)[hit.index]
+                        if row then leases.select(slice, row); dirty = true end
+                    elseif hit.kind == "revoke" then ask_revoke()
+                    elseif hit.kind == "requests" or hit.kind == "leases" then
+                        leases.show_leases(slice, hit.kind == "leases"); offset = 0; perform(refresh); dirty = true
+                    elseif hit.kind == "mark" then
+                        local selected = model.selected_row(state)
+                        local refused = selected and leases.toggle_mark(slice, state.rows, selected.approval_id) or "Select a request first"
+                        status = refused or ""; dirty = true
+                    elseif hit.kind == "batch_approve" then ask_batch("approved")
+                    elseif hit.kind == "batch_deny" then ask_batch("denied")
+                    elseif hit.kind == "lease" then ask_lease("lease_propose")
+                    elseif hit.kind == "grant" then ask_lease("lease_grant")
+                    elseif hit.kind == "row" then
                         local row = rows[hit.index]
                         if row then model.select(state, row.approval_id); dirty = true end
                     elseif hit.kind == "open" then perform(open_selected)

@@ -160,9 +160,21 @@ application. `bee.gov` exposes the destination operations `lease_propose`,
   boundary. Super-edit and other overlays without a measured capability
   envelope always ask.
 
+The lease operations need the dedicated delivery action
+`bee.gov.delivery.lease`, which the host grants to the bundled inbox. In the
+inbox, `L` on an open pending activation request opens a form with an expiry
+choice, a max-applies number and up to three ceiling extras (a capability id
+and its `key=value` parameters, validated as typed), and files the lease
+request; once a person approves it, `G` on that request grants the lease. `V`
+switches to the Active leases view, which lists each lease with its usage,
+expiry and envelope and revokes the selected one with `X`. Lease operations
+reach a local governance owner only.
+
 `decide_batch` settles up to 16 pending requests of one requester in one
 workspace in a single transaction. Each item carries the same fields as
-`decide`; a mixed batch or a failing item commits nothing.
+`decide`; a mixed batch or a failing item commits nothing. The inbox marks
+pending requests with `M` and decides the marked set with `B` (approve) or
+`N` (deny) after one confirmation.
 
 ## Storage and migrations
 

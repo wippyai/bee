@@ -59,3 +59,4 @@ entries:
     migrations: bee.resources.migrations:migrations
     persist: bee.persist:database
     resources: bee.resources:resources
+    identity_migration: bee.resources.persist:identity_migration

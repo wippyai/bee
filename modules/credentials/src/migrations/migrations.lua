@@ -118,12 +118,24 @@ UPDATE bee_credential_projections SET format_json = CASE provider
     WHEN 'claude' THEN '{"schema_revision":"bee.credential-format@1","environment_destination":"ANTHROPIC_API_KEY","file":{"path":".claude/.credentials.json","content_format":"json","initialize":[{"path":".claude.json","content":"{\"hasCompletedOnboarding\":true}"}]}}'
     ELSE '' END;
 ]]
+local NODE_IDENTITY_SQL = [[
+CREATE TABLE bee_credential_node_identity_migrations (
+    source_node TEXT NOT NULL,
+    destination_node TEXT NOT NULL,
+    migrated_at TEXT NOT NULL,
+    definition_count INTEGER NOT NULL CHECK (definition_count >= 0),
+    projection_count INTEGER NOT NULL CHECK (projection_count >= 0),
+    PRIMARY KEY (source_node, destination_node),
+    CHECK (source_node <> destination_node)
+);
+]]
 local list: {Migration} = {
     {id = 1, name = "credentials", sql = CREDENTIALS_SQL, rebuild = false},
     {id = 2, name = "file_sources", sql = FILE_SOURCES_SQL, rebuild = true},
     {id = 3, name = "optional_files", sql = "ALTER TABLE bee_credential_definitions ADD COLUMN optional INTEGER NOT NULL DEFAULT 0 CHECK(optional IN (0,1));", rebuild = false},
     {id = 4, name = "declared_providers", sql = DECLARED_PROVIDERS_SQL, rebuild = true},
     {id = 5, name = "frozen_formats", sql = FROZEN_FORMATS_SQL, rebuild = false},
+    {id = 6, name = "credentials_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

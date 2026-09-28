@@ -21,6 +21,7 @@ local credential_protocol = require("credential_protocol")
 local persist = require("persist")
 local transaction = require("transaction")
 local migrations = require("migrations")
+local identity_migration = require("identity_migration")
 local sources = require("sources")
 local formats = require("formats")
 local M = {}
@@ -71,6 +72,16 @@ local function open(): (sql.DB?, Reply?)
     if not resource then return nil, fail("STORAGE", resource_error or "credential database") end
     local db, open_error = persist.open({resource = resource, ledger = M.LEDGER, migrations = migrations.all()})
     if not db then return nil, fail("STORAGE", open_error or "open credential store") end
+    local destination, identity_error = node()
+    if not destination then
+        db:release()
+        return nil, fail("STORAGE", identity_error or "credential node identity is unavailable")
+    end
+    local migrated, migration_error = identity_migration.apply(db, destination)
+    if not migrated then
+        db:release()
+        return nil, fail("STORAGE", migration_error or "migrate credential node identity")
+    end
     return db, nil
 end
 local function digest_of(value: unknown): (string?, string?)

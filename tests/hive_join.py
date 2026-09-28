@@ -29,7 +29,7 @@ from native_client import hold_owner, live_owners
 # The primary endpoint is whatever address Bee picked for this host, so the
 # shape is checked rather than one fixed address: Bee no longer defaults to
 # loopback on a machine that has a LAN or Tailscale address.
-INVITE = re.compile(r'^bee-hive://[0-9a-f]{32}:[0-9a-f]{64}@(?P<host>[^:/\s]+):(?P<port>\d+)/(?P<node>bee-owner-[0-9a-f]{16})\?key=[0-9a-f]{64}(?:&c=[^&\s]+){0,8}$')
+INVITE = re.compile(r'^bee-hive://[0-9a-f]{32}:[0-9a-f]{64}@(?P<host>[^:/\s]+):(?P<port>\d+)/(?P<node>(?:bee-owner-[0-9a-f]{16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))\?key=[0-9a-f]{64}(?:&c=[^&\s]+){0,8}$')
 INVITE_ANY = re.compile(r'bee-hive://\S+')
 ROOT = Path(__file__).resolve().parent.parent
 # Every BEE_* variable is dropped from a fixture environment, so a check can

@@ -49,9 +49,21 @@ CREATE INDEX bee_resource_grants_workspace ON bee_resource_grants (workspace_id,
 local THREAD_SUBJECT_SQL = [[
 ALTER TABLE bee_resource_grants ADD COLUMN thread_id TEXT;
 ]]
+local NODE_IDENTITY_SQL = [[
+CREATE TABLE bee_resource_node_identity_migrations (
+    source_node TEXT NOT NULL,
+    destination_node TEXT NOT NULL,
+    migrated_at TEXT NOT NULL,
+    association_count INTEGER NOT NULL CHECK (association_count >= 0),
+    grant_count INTEGER NOT NULL CHECK (grant_count >= 0),
+    PRIMARY KEY (source_node, destination_node),
+    CHECK (source_node <> destination_node)
+);
+]]
 local list: {Migration} = {
     {id = 1, name = "resources", sql = RESOURCES_SQL, rebuild = false},
     {id = 2, name = "resources_thread_subject", sql = THREAD_SUBJECT_SQL, rebuild = false},
+    {id = 3, name = "resources_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

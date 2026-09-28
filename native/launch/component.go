@@ -36,9 +36,11 @@ type Host struct {
 	// is set during planning so Load can add the owner's enrollment publisher.
 	ownerState string
 	// ownerLaunch is the launch identity the starting client handed this owner.
-	ownerLaunch string
-	components  []boot.Component
-	resolver    hostResolver
+	ownerLaunch        string
+	nodeIdentity       string
+	legacyNodeIdentity string
+	components         []boot.Component
+	resolver           hostResolver
 	// clientRoute runs an ordinary launch against the retained owner in the
 	// planned state.
 	clientRoute  func(context.Context, app.Launch, clientIntent) error
@@ -151,6 +153,9 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 	if governance != nil {
 		plan.Command = governanceRecoveryCommand
 		plan.Args = []string{"revert", governance.owner}
+		plan.Prepare = func(ctx context.Context) (boot.Config, func() error, error) {
+			return host.prepareStateIdentity(ctx, state, launch.Dir)
+		}
 		return plan, nil
 	}
 	// The retained owner route keeps the runtime's own application start, so it
@@ -167,7 +172,16 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		host.ownerState, host.ownerLaunch = state, launched
 		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
-			return prepareOwner(state, owner)
+			config, release, err := prepareOwnerForProject(state, launch.Dir, owner)
+			if err != nil {
+				return nil, nil, err
+			}
+			identity, err := readStoredNodeIdentity(state)
+			if err != nil {
+				return nil, nil, errors.Join(err, release())
+			}
+			host.nodeIdentity, host.legacyNodeIdentity = identity.NodeID, identity.LegacyNodeID
+			return config, release, nil
 		}
 		return plan, nil
 	}
@@ -195,7 +209,7 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 				// The exchange runs while no owner holds the state; the owner it then
 				// starts boots into the hive and the route waits for the session.
 				plan.Run = func(ctx context.Context) error {
-					if err := redeemInvite(ctx, state, command.invite); err != nil {
+					if err := redeemInvite(ctx, state, launch.Dir, command.invite); err != nil {
 						return err
 					}
 					await := hiveCommand{verb: hiveAwait, node: command.node}
@@ -204,7 +218,25 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			}
 		}
 	}
+	if application {
+		plan.Prepare = func(ctx context.Context) (boot.Config, func() error, error) {
+			return host.prepareStateIdentity(ctx, state, launch.Dir)
+		}
+	}
 	return plan, nil
+}
+
+func (host *Host) prepareStateIdentity(ctx context.Context, state, projectDir string) (boot.Config, func() error, error) {
+	config, release, err := prepareStateNodeIdentity(ctx, state, projectDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	identity, err := readStoredNodeIdentity(state)
+	if err != nil {
+		return nil, nil, errors.Join(err, release())
+	}
+	host.nodeIdentity, host.legacyNodeIdentity = identity.NodeID, identity.LegacyNodeID
+	return config, release, nil
 }
 
 func (host *Host) Load(ctx context.Context) (context.Context, error) {
@@ -215,6 +247,12 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 	storage, err := newHostEnvironment(host.resolver)
 	if err != nil {
 		return ctx, err
+	}
+	if host.legacyNodeIdentity != "" {
+		storage.facts["node_identity_migration_source"] = host.legacyNodeIdentity
+	}
+	if host.nodeIdentity != "" {
+		storage.facts["node_identity"] = host.nodeIdentity
 	}
 	registry.RegisterStorage(registryID(), storage)
 	return ctx, nil

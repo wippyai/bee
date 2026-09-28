@@ -286,7 +286,7 @@ func TestHiveJoinRefusesWhileTheOwnerRuns(t *testing.T) {
 	defer func() { _ = release() }()
 	line := invite.Invite{ID: strings.Repeat("a", 32), Secret: strings.Repeat("b", 64), Address: netip.MustParseAddrPort("127.0.0.1:1"),
 		Node: "bee-owner-hive", Fingerprint: strings.Repeat("c", 64)}
-	err := redeemInvite(context.Background(), state, line)
+	err := redeemInvite(context.Background(), state, state, line)
 	if err == nil || !strings.Contains(err.Error(), "this Bee is running") {
 		t.Fatalf("join while the owner runs = %v", err)
 	}
@@ -401,7 +401,7 @@ func TestRedeemInviteRecordsTheHiveOnAFreshNode(t *testing.T) {
 	}()
 	line := invite.Invite{ID: strings.Repeat("a", 32), Secret: strings.Repeat("b", 64), Address: netip.MustParseAddrPort(listener.Addr().String()),
 		Node: "bee-owner-hive", Fingerprint: invite.Fingerprint(hiveIdentity.Public().(ed25519.PublicKey))}
-	if err := redeemInvite(context.Background(), state, line); err != nil {
+	if err := redeemInvite(context.Background(), state, state, line); err != nil {
 		t.Fatal(err)
 	}
 	pinned, ok := resolveTrustedKey(ownerPeersDirectory(state), "bee-owner-hive")
@@ -417,7 +417,7 @@ func TestRedeemInviteRecordsTheHiveOnAFreshNode(t *testing.T) {
 	if cluster["membership.join_addrs"] != "127.0.0.1:4100" {
 		t.Fatalf("the joined node does not boot into its hive: %v", cluster)
 	}
-	if err := redeemInvite(context.Background(), state, line); err == nil || !strings.Contains(err.Error(), "running") {
+	if err := redeemInvite(context.Background(), state, state, line); err == nil || !strings.Contains(err.Error(), "running") {
 		t.Fatalf("a second join while the owner runs = %v", err)
 	}
 }

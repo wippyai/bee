@@ -36,6 +36,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import yaml
@@ -148,6 +149,30 @@ def answer_entries():
              "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}}]
 
 
+def state_node_identity(project, state):
+    """Read Bee's identity record or derive the runtime ID used to create it."""
+    identity_path = Path(state) / "hive" / "node.identity.json"
+    if identity_path.is_file():
+        identity = json.loads(identity_path.read_text())
+        assert isinstance(identity.get("node_id"), str) and identity["node_id"], identity
+        return identity
+    for name in ("WIPPY_NODE_ID", "WIPPY_RELAY_NODE_NAME"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            node_id = value
+            break
+    else:
+        try:
+            machine_id = Path("/etc/machine-id").read_text().strip()
+        except OSError:
+            machine_id = ""
+        host = machine_id or socket.gethostname()
+        node_id = str(uuid.uuid5(uuid.NAMESPACE_OID, f"wippy-node:{host}\0{Path(project).resolve()}"))
+    native_alias = "bee-owner-" + hashlib.sha256(str(Path(state).resolve()).encode()).hexdigest()[:16]
+    return {"version": 1, "node_id": node_id,
+            "legacy_node_id": "" if node_id == native_alias else native_alias}
+
+
 def compose(folder):
     project = folder / "project"
     shutil.copytree(ROOT / "src", project / "src")
@@ -170,11 +195,11 @@ def compose(folder):
         name_node(project, HIVE_SOURCE)
         stage_hive_source(project)
     elif NATIVE_OWNER:
-        # A standalone owner derives its relay identity from the native state
-        # directory. Keep authoring and the desktop client on that same node.
+        # Ordinary runtime launches and the retained native owner share the
+        # runtime identity persisted for this state directory.
         native_state = (folder / "native-state").resolve()
-        owner_node = "bee-owner-" + hashlib.sha256(str(native_state).encode()).hexdigest()[:16]
-        name_node(project, owner_node)
+        identity = state_node_identity(project, native_state)
+        name_node(project, identity["node_id"])
     answer = folder / "entries.json"
     answer.write_text(json.dumps(answer_entries()))
     index = project / "src/workspace_app_probe/_index.yaml"
@@ -226,8 +251,13 @@ def author(project, folder):
         brief = LIVE_BRIEF + spec
     else:
         brief = spec
+    identity_environment = {}
+    if NATIVE_OWNER:
+        identity = state_node_identity(project, folder / "native-state")
+        identity_environment = {"WIPPY_NODE_ID": identity["node_id"],
+                                "node_identity_migration_source": identity.get("legacy_node_id", "")}
     author_environment = database_environment(folder, BEE_WORKSPACE_APP_WORKSPACE=workspace_id,
-                                               BEE_WORKSPACE_APP_BRIEF=brief)
+                                               BEE_WORKSPACE_APP_BRIEF=brief, **identity_environment)
     if PROVIDER == "scripted":
         author_environment.update(BEE_CLAUDE_BIN=str(ROOT / "tests/fixtures/harness/bin/claude"),
                                  claude=str(ROOT / "tests/fixtures/harness/bin/claude"),

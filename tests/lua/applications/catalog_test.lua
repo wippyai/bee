@@ -205,10 +205,10 @@ local function define_tests()
             assert(cleanup:apply())
         end)
 
-        test.it("reprojects a locally applied app after the runtime node identity changes", function()
-            local source_node = assert(uuid.v7())
+        test.it("keeps a local app admission under the persisted node identity", function()
+            local source_node = assert(system.node.id())
             local runtime_node = assert(system.node.id())
-            test.is_false(source_node == runtime_node)
+            test.eq(source_node, runtime_node)
             local app_id = "app.catalog_restart_probe:app"
             local source_workspace = "catalog_restart_probe"
             local overlay_owner = "bee.gov.apps:" .. WORKSPACE .. "." .. source_workspace
@@ -231,9 +231,9 @@ local function define_tests()
             assert(changes:create(projected))
             assert(changes:apply())
 
-            -- The real catalog used to reject the delivered local app when its
-            -- source node differed from the restarted owner's runtime identity.
-            test.is_false(has(catalog.read(WORKSPACE), app_id))
+            -- The local workspace rule already names this state's persisted
+            -- identity, so its admission remains selectable after owner restart.
+            test.is_true(has(catalog.read(WORKSPACE), app_id))
             activate(WORKSPACE, source_node, source_node, source_workspace, overlay_owner, measurement)
             local restored = catalog.read(WORKSPACE)
             test.is_true(has(restored, app_id))

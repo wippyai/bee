@@ -22,10 +22,11 @@ entries:
     preflight: bee.gov:preflight
     workspace_applications: bee.gov:workspace_applications
 - name: destination_public_test_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {type: test_support}
   policy:
-    actions: [funcs.call, bee.gov.delivery.read, bee.gov.delivery.activate]
+    expression: 'action != "env.get" || resource == "bee.gov:node_identity_migration_source"'
+    actions: [funcs.call, bee.gov.delivery.read, bee.gov.delivery.activate, env.get]
     resources: '*'
     effect: allow
 - name: gateway_test_policy
@@ -136,11 +137,12 @@ entries:
   file: .wippy/governance-activation-test.db
   lifecycle: {auto_start: true}
 - name: plan_test_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {type: test_support}
   policy:
-    actions: [db.get]
-    resources: [bee.gov:plan_test_db, bee.gov:destination_test_db, bee.gov:destination_refusal_test_db, bee.gov:destination_replica_test_db, bee.gov:activation_test_db, bee.sync:sync_test_db]
+    expression: 'action != "env.get" || resource == "bee.gov:node_identity_migration_source"'
+    actions: [db.get, env.get]
+    resources: [bee.gov:plan_test_db, bee.gov:destination_test_db, bee.gov:destination_refusal_test_db, bee.gov:destination_replica_test_db, bee.gov:activation_test_db, bee.gov:node_identity_migration_source, bee.sync:sync_test_db]
     effect: allow
 - name: plan_store_test
   kind: function.lua
@@ -163,6 +165,9 @@ entries:
     canonical: bee.sync:canonical
     test: wippy.test:test
     activation_store: bee.gov.persist:activation_store
+    database: bee.persist:database
+    migrations: bee.gov.migrations:schema
+    identity_migration: bee.gov.persist:identity_migration
 - name: activation_measure_test
   kind: function.lua
   source: file://activation_measure_test.lua
@@ -312,10 +317,11 @@ entries:
     test: wippy.test:test
     protocol: bee.gov:workspace_protocol
 - name: workspace_method_test_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {type: test_support}
   policy:
-    actions: [funcs.call, bee.gov.overlay.read]
+    expression: 'action != "env.get" || resource == "bee.gov:node_identity_migration_source"'
+    actions: [funcs.call, bee.gov.overlay.read, env.get]
     resources: '*'
     effect: allow
 - name: workspace_method_test

@@ -2,15 +2,17 @@ version: '1.0'
 namespace: bee.security.approvals
 entries:
 - name: approval_store_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
-    comment: The approval owner's store, its linked references, node identity and the wake it sends its worker
+    comment: The approval owner's store, linked references, node identity, exact migration source and worker wake
   policy:
+    expression: 'action != "env.get" || resource == "bee.approvals:node_identity_migration_source"'
     actions:
     - db.get
     - registry.get
     - system.read
     - process.send
+    - env.get
     resources:
     - bee.approvals:db
     - bee.approvals:database_ref

@@ -19,6 +19,7 @@ local resources = require("resources")
 local outbox = require("outbox")
 local migrations = require("migrations")
 local persist = require("persist")
+local identity_migration = require("identity_migration")
 local thread_harness = require("thread_harness")
 local TEST_STORE = "bee.approvals:test_db"
 local REQUESTER, OTHER_REQUESTER, ALICE, BOB, OUTSIDER, MANAGER = "bee.test.launcher", "bee.test.other_launcher", "bee.test.alice", "bee.test.bob", "bee.test.outsider", "bee.test.manager"
@@ -192,6 +193,36 @@ end
 local function define_tests()
     test.describe("Approval owner", function()
         install_policy()
+        test.it("migrates the authority and outstanding requests to the persisted node identity once", function()
+            local db, open_error = persist.open({resource = "bee.approvals:identity_test_db",
+                ledger = service.LEDGER, migrations = migrations.all()})
+            if not db then error("open approval identity migration store: " .. tostring(open_error)) end
+            local destination, node_error = service.node()
+            if not destination then error("read persisted node identity: " .. tostring(node_error)) end
+            assert(service.establish(db))
+            local created = executed(service.execute(db, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
+            local legacy = "legacy-" .. key()
+            local _, authority_error = db:execute(
+                "UPDATE bee_approval_authority SET owner_node = ? WHERE owner_node = ?", {legacy, destination})
+            local _, request_error = db:execute(
+                "UPDATE bee_approval_requests SET owner_node = ? WHERE approval_id = ?", {legacy, created.approval_id})
+            if authority_error or request_error then error(tostring(authority_error or request_error)) end
+
+            local migrated, migration_error = identity_migration.apply(db, destination, legacy)
+            if not migrated then error(tostring(migration_error)) end
+            local repeated, repeated_error = identity_migration.apply(db, destination, legacy)
+            if not repeated then error(tostring(repeated_error)) end
+            local restored = executed(service.execute(db, REQUESTER, "read", {approval_id = created.approval_id}, nil, requester))
+            test.eq(restored.owner_node, destination)
+            local ledger, ledger_error = db:query(
+                "SELECT authority_count, request_count FROM bee_approval_node_identity_migrations WHERE source_node = ? AND destination_node = ?",
+                {legacy, destination})
+            if ledger_error or not ledger then error("read approval identity migration record") end
+            test.eq(#ledger, 1)
+            test.eq(ledger[1].authority_count, 1)
+            test.eq(ledger[1].request_count, 1)
+            db:release()
+        end)
         test.it("exports pinned snapshots and scoped catch-up from the existing approval ledger", function()
             local workspace = "ws-feed-" .. key()
             local created = value(call(requester, "request", request_of(workspace)))

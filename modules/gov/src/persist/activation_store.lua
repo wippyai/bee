@@ -698,34 +698,6 @@ function M.close(store: Store): (boolean, string?)
 end
 local MAX_DESIRED_SLOTS = 1024
 
-function M.applied_admission_source(resource: string, workspace_raw: unknown,
-    overlay_raw: unknown, digest_raw: unknown): Result
-    if type(resource) ~= "string" or resource == "" then
-        return failure("UNAVAILABLE", "governance activation database is not linked")
-    end
-    local workspace, overlay_owner = id(workspace_raw), id(overlay_raw)
-    local admission_digest = hex_digest(digest_raw)
-    if not workspace or not overlay_owner or not admission_digest then
-        return failure("INVALID", "applied application admission identity is invalid")
-    end
-    local db, err = database.open({resource = resource, ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
-    if not db then return failure("UNAVAILABLE", tostring(err or "open governance activation database")) end
-    local result = transaction.read(db, "governance activation", function(tx): Result
-        local rows, query_error = tx:query("SELECT DISTINCT i.source_node FROM bee_governance_activation_slots s JOIN bee_governance_activation_intents i ON i.owner_node = s.owner_node AND i.workspace_id = s.workspace_id AND i.intent_id = s.observed_intent_id AND i.overlay_owner = s.overlay_owner JOIN bee_governance_activation_execution e ON e.owner_node = i.owner_node AND e.workspace_id = i.workspace_id AND e.intent_id = i.intent_id AND e.revision = s.observed_execution_revision WHERE s.workspace_id = ? AND s.overlay_owner = ? AND s.observed_outcome = 'applied' AND e.outcome = 'applied' AND i.application_admission_digest = ? LIMIT 2", {workspace, overlay_owner, admission_digest})
-        if query_error or not rows then return storage(query_error, "read applied application admission source") end
-        if #rows > 1 then return failure("CONFLICT", "applied application admission source is ambiguous") end
-        local row = rows[1]
-        if not row then return failure("NOT_FOUND", "no applied activation slot matches application admission") end
-        local source_node = id(row.source_node)
-        if not source_node then
-            return failure("INTERNAL", "applied application admission source is malformed")
-        end
-        return transaction.success({source_node = source_node}, false)
-    end)
-    db:release()
-    return result
-end
-
 -- Every workspace slot on this node that holds an authorized desired intent,
 -- in a stable order. Boot recovery follows exactly these slots.
 function M.desired_slots(resource: string, node_raw: string): Result
@@ -734,6 +706,11 @@ function M.desired_slots(resource: string, node_raw: string): Result
     if not node then return failure("INVALID", "governance activation node is invalid") end
     local db, err = database.open({resource = resource, ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
     if not db then return failure("UNAVAILABLE", tostring(err or "open governance activation database")) end
+    local migrated, migration_error = identity_migration.apply(db, node)
+    if not migrated then
+        db:release()
+        return failure("UNAVAILABLE", tostring(migration_error or "migrate governance node identity"))
+    end
     local result = transaction.read(db, "governance activation", function(tx): Result
         local rows, query_error = tx:query("SELECT workspace_id, overlay_owner FROM bee_governance_activation_slots WHERE owner_node = ? AND desired_intent_id IS NOT NULL ORDER BY workspace_id, overlay_owner LIMIT ?", {node, MAX_DESIRED_SLOTS + 1})
         if query_error or not rows then return storage(query_error, "list desired activation slots") end
@@ -755,6 +732,11 @@ function M.open(resource: string, node_raw: string, workspace_raw: string): (Sto
     if not node or not workspace then return nil, "governance activation store identity is invalid" end
     local db, err = database.open({resource = resource, ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
     if not db then return nil, err end
+    local migrated, migration_error = identity_migration.apply(db, node)
+    if not migrated then
+        db:release()
+        return nil, migration_error or "migrate governance node identity"
+    end
     return {db = db, node = node, workspace = workspace, closed = false}, nil
 end
 return M

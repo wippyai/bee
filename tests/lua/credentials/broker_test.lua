@@ -13,6 +13,8 @@ local fs = require("fs")
 local broker = require("broker")
 local persist = require("persist")
 local migrations = require("migrations")
+local identity_migration = require("identity_migration")
+local system = require("system")
 local cred_sources = require("cred_sources")
 local SENTINEL = "sentinel-secret-7f3a9c"
 local SOURCE = "bee.credentials:sentinel_key"
@@ -170,6 +172,47 @@ local function define_tests()
     test.describe("Credential broker", function()
         local workspace = fresh("ws")
         admit_sources(workspace)
+        test.it("migrates local definitions and projection identities to the persisted node once", function()
+            local destination, node_error = system.node.id()
+            if not destination then error("read persisted node identity: " .. tostring(node_error)) end
+            local resource, resource_error = cred_sources.database()
+            if not resource then error("credential database: " .. tostring(resource_error)) end
+            local db, open_error = persist.open({resource = resource, ledger = broker.LEDGER, migrations = migrations.all()})
+            if not db then error("open credential identity migration store: " .. tostring(open_error)) end
+            local legacy, workspace_id = "legacy-" .. fresh("node"), fresh("identity")
+            local definition, projection, at = fresh("definition"), fresh("projection"), "2026-09-28T00:00:00.000Z"
+            local _, definition_error = db:execute([[INSERT INTO bee_credential_definitions
+(workspace_id, name, definition_id, revision, provider, source_kind, source_ref, projection_kind, destination,
+ digest, owner_node, created_at, updated_at)
+VALUES (?, 'migration', ?, 1, 'claude', 'env_variable', 'bee.credentials:sentinel_key', 'environment',
+ 'ANTHROPIC_API_KEY', ?, ?, ?, ?)]], {workspace_id, definition, string.rep("a", 64), legacy, at, at})
+            local _, projection_error = db:execute([[INSERT INTO bee_credential_projections
+(projection_id, workspace_id, name, definition_id, definition_revision, issuer_owner, issuer_incarnation, subject,
+ audience, attempt_id, profile_id, profile_digest, binding_digest, launch_policy_digest, provider, projection_kind,
+ destination, materializer, idempotency_key, expires_at, authorization_epoch, created_at)
+VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'claude', 'environment',
+ 'ANTHROPIC_API_KEY', 'bee.placement.native.binding:binding', ?, ?, 0, ?)]],
+                {projection, workspace_id, definition, legacy, USER, legacy, string.rep("b", 64), string.rep("c", 64),
+                    string.rep("d", 64), "migration-key-" .. fresh("key"), "2099-01-01T00:00:00.000Z", at})
+            if definition_error or projection_error then error(tostring(definition_error or projection_error)) end
+
+            local migrated, migration_error = identity_migration.apply(db, destination, legacy)
+            if not migrated then error(tostring(migration_error)) end
+            local repeated, repeated_error = identity_migration.apply(db, destination, legacy)
+            if not repeated then error(tostring(repeated_error)) end
+            local definitions = assert(db:query("SELECT owner_node FROM bee_credential_definitions WHERE definition_id = ?", {definition}))
+            local projections = assert(db:query("SELECT issuer_owner, audience FROM bee_credential_projections WHERE projection_id = ?", {projection}))
+            test.eq(definitions[1].owner_node, destination)
+            test.eq(projections[1].issuer_owner, destination)
+            test.eq(projections[1].audience, destination)
+            local ledger = assert(db:query(
+                "SELECT definition_count, projection_count FROM bee_credential_node_identity_migrations WHERE source_node = ? AND destination_node = ?",
+                {legacy, destination}))
+            test.eq(#ledger, 1)
+            test.eq(ledger[1].definition_count, 1)
+            test.eq(ledger[1].projection_count, 1)
+            db:release()
+        end)
         test.it("defines credentials only from host-admitted sources, for managers, with digests that carry no bytes", function()
             test.eq(code(call(outsider, "define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})), "DENIED")
             test.eq(code(call(manager, "define", {workspace_id = workspace, name = "anthropic", provider = "codex", source = {kind = "env_variable", ref = SOURCE}})), "FORBIDDEN")

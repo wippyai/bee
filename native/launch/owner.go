@@ -75,6 +75,14 @@ func ownerComponents(state, execution, launch string) ([]boot.Component, error) 
 // bridge composes the folder's own workspace (bee start) or serves only the
 // node's catalog workspaces (bee daemon).
 func prepareOwner(state string, folder bool) (boot.Config, func() error, error) {
+	projectDir, err := os.Getwd()
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolve owner project directory: %w", err)
+	}
+	return prepareOwnerForProject(state, projectDir, folder)
+}
+
+func prepareOwnerForProject(state, projectDir string, folder bool) (boot.Config, func() error, error) {
 	if state == "" || !filepath.IsAbs(state) {
 		return nil, nil, errors.New("owner preparation requires an absolute state directory")
 	}
@@ -86,16 +94,20 @@ func prepareOwner(state string, folder bool) (boot.Config, func() error, error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	config, err := prepareLockedOwner(state, folder)
+	identity, identityUnlock, err := ensureStateNodeIdentity(context.Background(), state, projectDir)
 	if err != nil {
 		return nil, nil, errors.Join(err, unlock())
 	}
-	return config, unlock, nil
+	config, err := prepareLockedOwner(state, identity.NodeID, folder)
+	if err != nil {
+		return nil, nil, errors.Join(err, identityUnlock(), unlock())
+	}
+	return config, func() error { return errors.Join(identityUnlock(), unlock()) }, nil
 }
 
 // prepareLockedOwner builds the owner's boot configuration while it holds the
 // owner lock.
-func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
+func prepareLockedOwner(state, node string, folder bool) (boot.Config, error) {
 	address, err := selectedMeshAddress(state)
 	if err != nil {
 		return nil, err
@@ -119,7 +131,6 @@ func prepareLockedOwner(state string, folder bool) (boot.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := ownerNodeName(state)
 	mesh, err := prepareMesh(state, time.Now(), address)
 	if err != nil {
 		return nil, err
@@ -253,11 +264,14 @@ func ownerPeersDirectory(state string) string {
 	return filepath.Join(ownerDirectory(state), peersDirectoryName)
 }
 
-// ownerNodeName derives a stable mesh node name from the exact state directory,
-// so two projects on one machine never share a node identity.
+// ownerNodeName reads the state's persisted identity, falling back to the
+// pre-persistence derivation for read-only routes that have not opened state.
 func ownerNodeName(state string) string {
-	digest := sha256Hex(filepath.Clean(state))
-	return "bee-owner-" + digest[:16]
+	identity, err := readStoredNodeIdentity(state)
+	if err == nil {
+		return identity.NodeID
+	}
+	return ownerNodeNameFromState(state)
 }
 
 func randomExecution() (string, error) {

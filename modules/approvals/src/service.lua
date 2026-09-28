@@ -18,6 +18,7 @@ local values = require("values")
 local persist = require("persist")
 local transaction = require("transaction")
 local migrations = require("migrations")
+local identity_migration = require("identity_migration")
 local resources = require("resources")
 local clock = require("clock")
 local store = require("store")
@@ -138,7 +139,19 @@ end
 function M.open(): (sql.DB?, string?)
     local resource, resource_error = resources.database()
     if not resource then return nil, resource_error or "approval database" end
-    return persist.open({resource = resource, ledger = M.LEDGER, migrations = migrations.all()})
+    local db, open_error = persist.open({resource = resource, ledger = M.LEDGER, migrations = migrations.all()})
+    if not db then return nil, open_error end
+    local destination, identity_error = node()
+    if not destination then
+        db:release()
+        return nil, identity_error or "approval node identity is unavailable"
+    end
+    local migrated, migration_error = identity_migration.apply(db, destination)
+    if not migrated then
+        db:release()
+        return nil, migration_error or "migrate approval node identity"
+    end
+    return db, nil
 end
 local function actor_id(): string?
     local current = security.actor()

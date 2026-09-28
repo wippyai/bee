@@ -122,10 +122,22 @@ ALTER TABLE bee_approval_requests ADD COLUMN effect_result_json TEXT;
 CREATE INDEX bee_approval_requests_effects
     ON bee_approval_requests (state, decision, effect_completed_at, approval_id);
 ]]
+local NODE_IDENTITY_SQL = [[
+CREATE TABLE bee_approval_node_identity_migrations (
+    source_node TEXT NOT NULL,
+    destination_node TEXT NOT NULL,
+    migrated_at TEXT NOT NULL,
+    authority_count INTEGER NOT NULL CHECK (authority_count >= 0),
+    request_count INTEGER NOT NULL CHECK (request_count >= 0),
+    PRIMARY KEY (source_node, destination_node),
+    CHECK (source_node <> destination_node)
+);
+]]
 local list: {Migration} = {
     {id = 1, name = "approvals", sql = APPROVALS_SQL, rebuild = false},
     {id = 2, name = "decision_notice", sql = NOTICE_SQL, rebuild = true},
     {id = 3, name = "effect_completion", sql = INSTALLATION_EFFECT_SQL, rebuild = false},
+    {id = 4, name = "approvals_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

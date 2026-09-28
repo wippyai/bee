@@ -47,10 +47,11 @@ entries:
     resources: '*'
     effect: allow
 - name: recovery_command_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {comment: Headless native governance recovery reads activation facts and restores one retained baseline}
   policy:
-    actions: [db.get, registry.get, registry.snapshot, registry.preview, registry.apply, system.read,
+    expression: 'action != "env.get" || resource == "bee.gov:node_identity_migration_source"'
+    actions: [db.get, registry.get, registry.snapshot, registry.preview, registry.apply, system.read, env.get,
       funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get,
       registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
     resources: '*'
@@ -59,8 +60,8 @@ entries:
   kind: security.policy
   groups: [workspace_execution_scope]
   policy:
-    actions: [registry.get, system.read]
-    resources: [bee.gov:database_ref, node]
+    actions: [registry.get, system.read, env.get]
+    resources: [bee.gov:database_ref, bee.gov:node_identity_migration_source, node]
     effect: allow
 - name: staging_database_policy
   kind: security.policy
@@ -84,11 +85,12 @@ entries:
     resources: [security, bee.gov.security:workspace_execution_scope, bee.gov.binding:workspace_backend_call]
     effect: allow
 - name: destination_service_policy
-  kind: security.policy
+  kind: security.policy.expr
   groups: [destination_execution_scope]
   meta: {comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action}
   policy:
-    actions: [db.get, registry.get, registry.preview, system.read, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+    expression: 'action != "env.get" || resource == "bee.gov:node_identity_migration_source"'
+    actions: [db.get, registry.get, registry.preview, system.read, env.get, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
     resources: '*'
     effect: allow
 - name: destination_execution_policy
@@ -100,10 +102,11 @@ entries:
     resources: [bee.gov.binding:destination_backend_call]
     effect: allow
 - name: publication_service_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {comment: Private host resources for publishing one configured local overlay as immutable Sync content}
   policy:
-    actions: [registry.get, registry.overlay.get, db.get, system.read]
+    expression: 'action != "env.get" || resource == "bee.gov:node_identity_migration_source"'
+    actions: [registry.get, registry.overlay.get, db.get, system.read, env.get]
     resources: '*'
     effect: allow
 - name: publication_profiles_read_policy

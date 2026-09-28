@@ -110,27 +110,26 @@ local function define_tests()
             local bare = assert(profiles.decode({profiles = {}}))
             test.is_nil(profiles.select_decoded(bare, WORKSPACE, NODE, "bee.probe.manager", NODE))
         end)
-        test.it("reprojects an applied local overlay after the runtime node identity changes", function()
+        test.it("requires local application and activation ownership to share the node identity", function()
             local source_node = "node-before-restart"
-            local runtime_node = "bee-owner-after-restart"
+            local runtime_node = "persisted-state-node"
             local raw = {profiles = {}, workspace_applications = {
                 approval_policy = "workspace-application-delivery", kinds = {"process.lua"},
                 modules = {"process"}, policies = {}, thread_access = "none", hive = false}}
             local configured = assert(profiles.configuration(raw, runtime_node))
-            local fresh, fresh_error = profiles.select(configured, WORKSPACE, source_node, "autoresearch")
-            test.is_nil(fresh)
-            test.not_nil(string.find(fresh_error :: string, "no activation profile for overlay", 1, true))
-            local applied, applied_error = profiles.select(configured, WORKSPACE, source_node,
+            local mismatched, mismatch_error = profiles.select(configured, WORKSPACE, source_node,
                 "autoresearch", nil, nil, nil, source_node)
-            if not applied then error(tostring(applied_error)) end
-            test.eq(applied.source_node, source_node)
-            test.eq(applied.source_workspace, "autoresearch")
-            test.eq(applied.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".autoresearch")
+            test.is_nil(mismatched)
+            test.not_nil(string.find(mismatch_error :: string, "no activation profile for overlay", 1, true))
+            local local_profile = assert(profiles.select(configured, WORKSPACE, runtime_node, "autoresearch"))
+            test.eq(local_profile.source_node, runtime_node)
+            test.eq(local_profile.source_workspace, "autoresearch")
+            test.eq(local_profile.overlay_owner, "bee.gov.apps:" .. WORKSPACE .. ".autoresearch")
             local decoded = assert(profiles.decode(raw))
             local projected, projected_error = profiles.select_decoded(decoded, WORKSPACE, source_node,
-                "autoresearch", runtime_node, nil, nil, applied.overlay_owner, source_node)
-            if not projected then error(tostring(projected_error)) end
-            test.eq(projected.overlay_owner, applied.overlay_owner)
+                "autoresearch", runtime_node, nil, nil, local_profile.overlay_owner)
+            test.is_nil(projected)
+            test.not_nil(string.find(projected_error :: string, "no activation profile for overlay", 1, true))
         end)
         test.it("rejects malformed package applications by shape", function()
             local function configured_with(entry: {[string]: unknown}): {[string]: unknown}

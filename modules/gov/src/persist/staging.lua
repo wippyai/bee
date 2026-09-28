@@ -568,6 +568,11 @@ function M.open(resource: string, node_raw: string): (Store?, string?)
     local db, err = database.open({resource = resource,
         ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
     if not db then return nil, err end
+    local migrated, migration_error = identity_migration.apply(db, node)
+    if not migrated then
+        db:release()
+        return nil, migration_error or "migrate governance node identity"
+    end
     return {db = db, node = node, closed = false, call = M.call,
         read_frozen = M.read_frozen, close = M.close}, nil
 end

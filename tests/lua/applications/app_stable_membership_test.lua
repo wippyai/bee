@@ -270,6 +270,69 @@ local function define_tests()
             process.unlisten(catalogs)
             process.unlisten(replies)
         end)
+
+        -- A governed admission a host recovers at boot can still be mid-write
+        -- across several registry commits when the broker's periodic revision
+        -- poll lands between two of them. refresh_admission's own consistency
+        -- check then reports failure for that poll; the broker must retry on
+        -- its next tick rather than treat the torn read as the final catalog.
+        test.it("converges the catalog after several rapid admission changes", function()
+            local owner = tostring(process.pid())
+            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local events = assert(process.events())
+            local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
+                assert(security.policy("bee.security:core_spawn_boundary"))}))
+                :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
+            if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
+            local broker = tostring(broker_pid)
+            local function wait_exit(target: string)
+                local deadline = time.after("30s")
+                while true do
+                    local received = channel.select({events:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == events, target .. " did not exit")
+                    local event = received.value
+                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
+                end
+            end
+            local ok, scenario_error = pcall(function()
+                assert(catalogs:receive():from() == broker)
+                -- Ten bursts of two immediate commits, one burst roughly
+                -- every poll tick, give the broker's once-a-second revision
+                -- check repeated chances to land between refresh_admission's
+                -- own two catalog reads -- the shape of a boot recovery that
+                -- materializes an admission across more than one registry
+                -- commit while the broker keeps polling.
+                for index = 1, 10 do
+                    set_admission_for(OTHER_DEFINITION, false)
+                    set_admission_for(OTHER_DEFINITION, true)
+                    if index < 10 then channel.select({time.after("1s"):case_receive()}) end
+                end
+                local deadline = time.after("15s")
+                local converged = false
+                while not converged do
+                    local received = channel.select({catalogs:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == catalogs,
+                        "broker never converged on the admission left by the last commit")
+                    local message = received.value
+                    if tostring(message:from()) == broker then
+                        local data: unknown = message:payload():data()
+                        if type(data) == "table" then
+                            for _, raw in ipairs(((data :: {[string]: unknown}).items :: {unknown}?) or {}) do
+                                if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id == OTHER_DEFINITION then
+                                    converged = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            set_admission_for(OTHER_DEFINITION, true)
+            pcall(process.cancel, broker, "finish admission convergence probe")
+            wait_exit(broker)
+            process.unlisten(catalogs)
+            assert(ok, scenario_error)
+        end)
     end)
 end
 

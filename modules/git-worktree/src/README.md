@@ -9,7 +9,10 @@ The host selects `bee.git_worktree:binding` through placement's
 composition selects this plugin. Registry metadata never authorizes execution.
 The contract has three methods: `plan` performs read-only inspection, placement
 persists its ownership state, `setup` applies that plan, and `cleanup` consumes
-the recorded state. Setup and cleanup can be repeated after interruption.
+the recorded state. Setup and cleanup can be repeated after interruption. A
+setup replay accepts an existing worktree path only when its repository, common
+directory, administrative directory and backreference match the recorded plan.
+The methods answer only callers holding placement's setup or cleanup action.
 
 Without a dedicated option, setup reads the repository's `.git` and `commondir`
 metadata. Physical directory resolution checks symlinks before contributing

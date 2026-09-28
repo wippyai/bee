@@ -87,6 +87,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: muse
+    accepts_model: true
     profiles_ref: bee.driver.muse:profiles
 - name: profiles
   kind: registry.entry

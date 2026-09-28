@@ -9,7 +9,6 @@ local bounds = require("bounds")
 local M = {}
 M.MAX_BRIEF_BYTES = 16384
 M.MAX_KEY_BYTES = 64
-M.PLACEMENTS = {"native", "docker"}
 -- The working directory: a resource associated in the workspace, or a folder
 -- (path, default the root itself) under a root the host admits.
 type Workdir = {resource: string?, root_ref: string?, path: string?}
@@ -80,10 +79,13 @@ function M.decode(value: unknown): (Launch?, string?)
             thread = {title = title}
         end
     end
+    -- The named placement kind is validated as an identifier only: which
+    -- kinds a launch may actually resolve to is the host's placement
+    -- binding selection, checked where that binding is resolved.
     local placement: string? = nil
     if object.placement ~= nil then
-        placement = bounds.member(object.placement, M.PLACEMENTS)
-        if not placement then return nil, "placement must be native or docker" end
+        placement = bounds.id(object.placement)
+        if not placement then return nil, "placement is not an identifier" end
     end
     local agent_ref: string? = nil
     if object.agent_ref ~= nil then

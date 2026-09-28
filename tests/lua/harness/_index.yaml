@@ -2010,3 +2010,109 @@ entries:
     test: wippy.test:test
     lease: bee.harness.carrier:lease
     leases: bee.application:host_leases
+
+- name: fixture_open_cli_binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: fixture_open_cli
+    accepts_model: true
+    test_support: true
+    profiles_ref: bee.harness.catalog:fixture_open_cli_profiles
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.claude.binding:prepare
+      dispatch: bee.driver.claude.binding:dispatch
+      normalize: bee.driver.claude.binding:normalize
+      configure: bee.driver.claude.binding:configure
+- name: fixture_open_cli_profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.harness.catalog:fixture_open_cli_binding
+    test_support: true
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Fixture open CLI with a model
+      implementation_version: 0.1.0
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: fake-1
+        answer_path: {strategy: terminal_field, adapter_ref: bee.driver.claude:protocol}
+- name: fixture_open_cli_no_model_binding
+  kind: contract.binding
+  meta:
+    type: harness.driver
+    driver_id: fixture_open_cli_no_model
+    accepts_model: false
+    test_support: true
+    profiles_ref: bee.harness.catalog:fixture_open_cli_no_model_profiles
+  contracts:
+  - contract: bee.driver:driver
+    methods:
+      prepare: bee.driver.claude.binding:prepare
+      dispatch: bee.driver.claude.binding:dispatch
+      normalize: bee.driver.claude.binding:normalize
+      configure: bee.driver.claude.binding:configure
+- name: fixture_open_cli_no_model_profiles
+  kind: registry.entry
+  meta:
+    type: harness.profile
+    driver_ref: bee.harness.catalog:fixture_open_cli_no_model_binding
+    test_support: true
+  data:
+    driver:
+      schema_revision: bee.driver@1
+      kind: harness
+      title: Fixture open CLI without a model
+      implementation_version: 0.1.0
+      default_profile: batch
+      profiles:
+      - id: batch
+        mode: batch
+        protocol: stream-json
+        protocol_revision: fake-1
+        answer_path: {strategy: terminal_field, adapter_ref: bee.driver.claude:protocol}
+- name: agent_resolver_test
+  kind: function.lua
+  source: file://agent_resolver_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
+  imports:
+    test: wippy.test:test
+    agent_resolver: bee.harness.launch:agent_resolver
+
+# A placement package installed but not wired into any launch policy: its
+# binding is discoverable like the shipped native one, but no launch selects
+# it until a host policy names it in placement_binding. Methods alias the
+# real native implementation only to satisfy the placement contract's method
+# completeness check; the fixture is never started, so they never run.
+- name: fixture_placement_binding
+  kind: contract.binding
+  meta:
+    type: placement
+    placement_kind: fixture
+    test_support: true
+  contracts:
+  - contract: bee.placement:placement
+    methods:
+      prepare: bee.placement.native.binding:prepare
+      start: bee.placement.native.binding:start
+      status: bee.placement.native.binding:status
+      stop: bee.placement.native.binding:stop
+      reconcile: bee.placement.native.binding:reconcile
+      cleanup: bee.placement.native.binding:cleanup
+      evidence: bee.placement.native.binding:evidence
+      attach: bee.placement.native.binding:attach
+      capabilities: bee.placement.native.binding:capabilities
+      measure_executable: bee.placement.native.binding:measure_executable
+      close_stdin: bee.placement.native.binding:close_stdin

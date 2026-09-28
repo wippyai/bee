@@ -21,7 +21,6 @@ local placement_resolver = require("placement_resolver")
 local continuation = require("continuation")
 local interrupted = require("interrupted")
 local profiles = require("profiles")
-local agent_protocol = require("agent_protocol")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
@@ -273,7 +272,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
             return nil, fail("CONFLICT", "requested spec digest differs from resolved agent closure")
         end
         agent = closure
-        local route, route_code, route_error = agent_resolver.check_route(closure,
+        local route, route_code, route_error = agent_resolver.check_route(pinned, closure,
             {driver_id = binding and binding.driver_id or "", model_map = host_policy.agent_model_map,
                 admitted_delegates = host_policy.agent_delegates})
         if not route then return nil, fail(route_code or "UNAVAILABLE", route_error or "agent route") end
@@ -436,8 +435,8 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     local placement: string? = nil
     if object.placement ~= nil then
-        placement = bounds.member(object.placement, agent_protocol.PLACEMENTS)
-        if not placement then return nil, "placement must be native or docker" end
+        placement = bounds.id(object.placement)
+        if not placement then return nil, "placement is not an identifier" end
     end
     local origin_view: OriginView? = nil
     if object.origin_view ~= nil then

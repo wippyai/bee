@@ -26,14 +26,17 @@ type Line = {values: {number}, role: string?, label: string?}
 type Chart = {min: number?, max: number?, area: boolean?, unit: string?, from: string?, to: string?}
 -- One bar or column. note replaces the printed value when present.
 type Bar = {label: string, value: number, role: string?, note: string?}
--- Scale of a bar chart; values at or past warn or error take that status role.
-type Scale = {max: number?, unit: string?, warn: number?, error: number?}
+-- Scale of a bar chart; values at or past warn or error take that status
+-- role. percent proportions a stacked bar to its own row total (100%
+-- stacked) instead of a scale shared across rows.
+type Scale = {max: number?, unit: string?, warn: number?, error: number?, percent: boolean?}
 -- One stacked row: segment values in the order of the legend names.
 type Stack = {label: string, segments: {number}}
 -- A heatmap grid in rows of numbers with optional row and column labels.
 type Grid = {rows: {{number}}, row_labels: {string}?, column_labels: {string}?, max: number?, role: string?}
--- A labelled meter; label is drawn muted before the bar.
-type Meter = {label: string?, unit: string?, warn: number?, error: number?}
+-- A labelled meter; label is drawn muted before the bar. eta appends a
+-- muted estimate after progress's count, never shown by gauge.
+type Meter = {label: string?, unit: string?, warn: number?, error: number?, eta: string?}
 -- A headline number: muted label, value, optional muted note and optional trend.
 type Tile = {label: string, value: string, note: string?, role: string?, values: {number}?}
 -- A span on a timeline lane, in the caller's time unit.
@@ -45,6 +48,16 @@ type Node = {id: string, label: string, role: string?, note: string?}
 type Edge = {from: string, to: string}
 -- A legend key: glyph in role before the label.
 type Key = {label: string, role: string?, glyph: string?}
+-- One scatter point in data units.
+type Point = {x: number, y: number, role: string?}
+-- The scale of a scatter plot; each bound defaults to the tightest span
+-- over its points.
+type Plane = {x_min: number?, x_max: number?, y_min: number?, y_max: number?, unit: string?}
+-- One candle: the wick spans low..high; with open and close given the body
+-- between them paints ok at or above open and error below it, unless role
+-- overrides it. With no open and close the whole span is a plain range bar;
+-- value marks one extra tick (a mean or a target) inside it.
+type Candle = {label: string?, low: number, high: number, open: number?, close: number?, value: number?, role: string?}
 
 local EIGHTHS_UP: {string} = {"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
 local EIGHTHS_RIGHT: {string} = {"▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"}
@@ -52,6 +65,7 @@ local SHADES: {string} = {"█", "▓", "▒", "░"}
 local RAMP: {string} = {"░", "▒", "▓", "█"}
 local SERIES_ROLES: {string} = {"accent", "text", "muted"}
 local STACK_ROLES: {string} = {"accent", "text", "muted", "border"}
+local SPINNER: {string} = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 local function minimum(a: integer, b: integer): integer if a < b then return a end; return b end
@@ -110,6 +124,13 @@ function M.due(cadence: Cadence, now_ms: integer): boolean
         cadence.next_at = cadence.next_at + cadence.interval
     end
     return true
+end
+
+-- The classic ten-frame braille spinner glyph for tick (any non-negative
+-- integer, typically a frame or elapsed-tick counter); the caller redraws it
+-- itself on its own cadence.
+function M.spinner(tick: integer): string
+    return SPINNER[tick % #SPINNER + 1]
 end
 
 -- The finite range of values, widened by min and max when given. Without
@@ -353,6 +374,132 @@ function M.line(painter: frame.Painter, rect: Rect, lines: {Line}, options: Char
     end
 end
 
+-- A scatter plot in rect: y-axis min and max at the top and bottom of the
+-- plot as in line, an axis row, and the x-axis min and max below it. Each
+-- point is one braille dot in its role (default accent); points that land in
+-- the same cell as a later point keep the later point's color. Each point
+-- records a "point" hit of its index over the one-cell dot it fell in, for a
+-- caller-drawn hover or selection readout. A rect under 3 rows draws nothing.
+function M.scatter(painter: frame.Painter, rect: Rect, points: {Point}, options: Plane?)
+    if rect.width <= 0 or rect.height < 3 or #points == 0 then return end
+    local plane: Plane = options or {}
+    local xs: {number} = {}
+    local ys: {number} = {}
+    for _, point in ipairs(points) do xs[#xs + 1] = point.x; ys[#ys + 1] = point.y end
+    local x_low, x_high = M.extent(xs, plane.x_min, plane.x_max)
+    local y_low, y_high = M.extent(ys, plane.y_min, plane.y_max)
+    local top_label = M.number(y_high, plane.unit)
+    local bottom_label = M.number(y_low, plane.unit)
+    local label_width = maximum(tty.text.width(top_label), tty.text.width(bottom_label))
+    local plot_height = rect.height - 2
+    local plot_x = rect.x + label_width + 2
+    local plot_width = rect.x + rect.width - plot_x
+    if plot_width < 2 or plot_height < 1 then return end
+    local theme = painter.theme
+    for row = 0, plot_height - 1 do
+        local y = rect.y + row
+        local tick = (row == 0 or row == plot_height - 1)
+        if row == 0 then frame.put(painter, rect.x, y, frame.pad(top_label, label_width, "right"), label_width, theme.muted) end
+        if row == plot_height - 1 then frame.put(painter, rect.x, y, frame.pad(bottom_label, label_width, "right"), label_width, theme.muted) end
+        frame.clip(painter, plot_x - 1, y, tick and "┤" or "│", 1, theme.muted)
+    end
+    local axis_y = rect.y + plot_height
+    frame.clip(painter, plot_x - 1, axis_y, "└" .. string.rep("─", plot_width), plot_width + 1, theme.muted)
+    local left = M.number(x_low, nil)
+    local right = M.number(x_high, nil)
+    frame.put(painter, plot_x, axis_y + 1, left, plot_width, theme.muted)
+    local size = tty.text.width(right)
+    if size > 0 and size + tty.text.width(left) + 1 <= plot_width then
+        frame.put(painter, plot_x + plot_width - size, axis_y + 1, right, size, theme.muted)
+    end
+    local x_span = x_high - x_low
+    local y_span = y_high - y_low
+    local dots_x = plot_width * 2
+    local dots_y = plot_height * 4
+    local cells: {[integer]: integer} = {}
+    local fgs: {[integer]: string} = {}
+    for index, point in ipairs(points) do
+        local fg = color(painter, point.role, "accent")
+        local dot_x = clamp(round((point.x - x_low) / x_span * (dots_x - 1)), 0, dots_x - 1)
+        local dot_y = clamp(round((y_high - point.y) / y_span * (dots_y - 1)), 0, dots_y - 1)
+        local key = (dot_y // 4) * plot_width + dot_x // 2
+        cells[key] = (cells[key] or 0) | DOTS[dot_x % 2 + 1][dot_y % 4 + 1]
+        fgs[key] = fg
+        frame.add_hit(painter, "point", index, "", plot_x + dot_x // 2, rect.y + dot_y // 4, 1, 1)
+    end
+    for key, bits in pairs(cells) do
+        frame.clip(painter, plot_x + key % plot_width, rect.y + key // plot_width, braille(bits), 1, fgs[key])
+    end
+end
+
+-- A candlestick, range or box chart in rect: a y-axis as in line, an axis
+-- row and one column per candle. The wick is a muted-role "│" run from high
+-- to low; the body between open and close (or the whole wick when they are
+-- absent) is a solid block in role (default ok above open, error below it),
+-- and value draws one "─" tick inside it. Each candle records a "candle" hit
+-- of its index over its column, and its label (when given) is drawn below
+-- the axis. A rect under 3 rows draws nothing.
+function M.candles(painter: frame.Painter, rect: Rect, candles: {Candle}, options: Chart?)
+    if rect.width <= 0 or rect.height < 3 or #candles == 0 then return end
+    local chart: Chart = options or {}
+    local all: {number} = {}
+    for _, item in ipairs(candles) do all[#all + 1] = item.low; all[#all + 1] = item.high end
+    local low, high = M.extent(all, chart.min, chart.max)
+    local top_label = M.number(high, chart.unit)
+    local bottom_label = M.number(low, chart.unit)
+    local label_width = maximum(tty.text.width(top_label), tty.text.width(bottom_label))
+    local plot_x = rect.x + label_width + 2
+    local plot_width = rect.x + rect.width - plot_x
+    if plot_width < 1 then return end
+    local plot_height = rect.height - 2
+    local theme = painter.theme
+    for row = 0, plot_height - 1 do
+        local y = rect.y + row
+        local tick = (row == 0 or row == plot_height - 1)
+        if row == 0 then frame.put(painter, rect.x, y, frame.pad(top_label, label_width, "right"), label_width, theme.muted) end
+        if row == plot_height - 1 then frame.put(painter, rect.x, y, frame.pad(bottom_label, label_width, "right"), label_width, theme.muted) end
+        frame.clip(painter, plot_x - 1, y, tick and "┤" or "│", 1, theme.muted)
+    end
+    local axis_y = rect.y + plot_height
+    frame.clip(painter, plot_x - 1, axis_y, "└" .. string.rep("─", plot_width), plot_width + 1, theme.muted)
+    local widest = 1
+    for _, item in ipairs(candles) do if item.label then widest = maximum(widest, tty.text.width(item.label)) end end
+    local width = clamp(widest, 1, 5)
+    width = maximum(1, minimum(width, (plot_width + 1) // #candles - 1))
+    local span = high - low
+    local function level_of(value: number): integer
+        return plot_height - 1 - clamp(round((value - low) / span * (plot_height - 1)), 0, plot_height - 1)
+    end
+    for index, item in ipairs(candles) do
+        local x = plot_x + (index - 1) * (width + 1)
+        if x + width - 1 > plot_x + plot_width - 1 then break end
+        local rising = item.open == nil or (item.close or item.open) >= item.open
+        local role = item.role or (item.open ~= nil and (rising and "ok" or "error") or "accent")
+        local fg = color(painter, role, "accent")
+        local wick_top = level_of(item.high)
+        local wick_bottom = level_of(item.low)
+        local body_top, body_bottom = wick_top, wick_bottom
+        if item.open ~= nil and item.close ~= nil then
+            body_top = level_of(math.max(item.open, item.close))
+            body_bottom = level_of(math.min(item.open, item.close))
+        end
+        local mid = (width - 1) // 2
+        for level = wick_top, wick_bottom do
+            local y = rect.y + level
+            if level < body_top or level > body_bottom then
+                frame.clip(painter, x + mid, y, "│", 1, theme.muted)
+            else
+                frame.clip(painter, x, y, string.rep("█", width), width, fg)
+            end
+        end
+        if item.value ~= nil then
+            frame.clip(painter, x, rect.y + level_of(item.value), string.rep("─", width), width, theme.text)
+        end
+        if item.label then frame.put(painter, x, axis_y + 1, frame.fit(item.label, width), width, theme.muted) end
+        frame.add_hit(painter, "candle", index, item.label or "", x, rect.y, width, plot_height)
+    end
+end
+
 local function bar_value(item: Bar, unit: string?): string
     return item.note or M.number(item.value, unit)
 end
@@ -426,7 +573,9 @@ end
 
 -- Stacked horizontal bars: a legend of names on the first row, then one row
 -- per stack with its label, segments in the legend's glyphs and roles scaled
--- to max (default the largest total) and the total right-aligned.
+-- to max (default the largest total) and the total right-aligned. With
+-- percent, each row instead fills its full width in the segments' own share
+-- of that row's total (a 100% stacked bar), the total still shown as given.
 function M.stacked(painter: frame.Painter, rect: Rect, stacks: {Stack}, names: {string}, options: Scale?)
     if rect.width <= 0 or rect.height <= 0 then return end
     local scale: Scale = options or {}
@@ -450,12 +599,13 @@ function M.stacked(painter: frame.Painter, rect: Rect, stacks: {Stack}, names: {
         local y = rect.y + index
         if y > rect.y + rect.height - 1 then break end
         frame.put(painter, rect.x, y, stack.label, label_width)
-        if bar_width > 0 and peak > 0 then
+        local denom = scale.percent and totals[index] or peak
+        if bar_width > 0 and denom > 0 then
             local running = 0
             local drawn = 0
             for segment, value in ipairs(stack.segments) do
                 if not M.is_gap(value) then running = running + value end
-                local finish = clamp(round(running / peak * bar_width), 0, bar_width)
+                local finish = clamp(round(running / denom * bar_width), 0, bar_width)
                 if finish > drawn then
                     local glyph = SHADES[(segment - 1) % #SHADES + 1]
                     frame.clip(painter, rect.x + label_width + 2 + drawn, y, string.rep(glyph, finish - drawn), finish - drawn,
@@ -627,13 +777,66 @@ function M.gauge(painter: frame.Painter, x: integer, y: integer, width: integer,
         status_role(fraction, meter_options.warn, meter_options.error, "accent"))
 end
 
+-- A radial gauge filling rect with a braille ring clockwise from the top: the
+-- arc up to fraction of max in role (warn or error at those fractions,
+-- accent otherwise), the rest of the ring muted, and the percentage centered
+-- when it fits. A rect under 4 dots across or tall (2x1 cells) falls back to
+-- gauge on row y at rect's top.
+function M.ring(painter: frame.Painter, rect: Rect, value: number, max: number, options: Meter?)
+    if rect.width <= 0 or rect.height <= 0 then return end
+    local meter_options: Meter = options or {}
+    local dots_x = rect.width * 2
+    local dots_y = rect.height * 4
+    local diameter = minimum(dots_x, dots_y)
+    if diameter < 4 then
+        M.gauge(painter, rect.x, rect.y, rect.width, value, max, options)
+        return
+    end
+    local fraction = (max > 0 and not M.is_gap(value)) and value / max or 0
+    local role = status_role(fraction, meter_options.warn, meter_options.error, "accent")
+    local fg = color(painter, role, "accent")
+    local muted = painter.theme.muted
+    local radius = diameter / 2
+    local thickness = maximum(1, math.floor(radius / 4))
+    local cx = (dots_x - 1) / 2
+    local cy = (dots_y - 1) / 2
+    local sweep = fraction * math.pi * 2
+    local cells: {[integer]: integer} = {}
+    local lit: {[integer]: boolean} = {}
+    for dy = 0, dots_y - 1 do
+        for dx = 0, dots_x - 1 do
+            local ddx = dx - cx
+            local ddy = dy - cy
+            local dist = math.sqrt(ddx * ddx + ddy * ddy)
+            if dist <= radius and dist > radius - thickness then
+                local angle = math.atan(ddx, -ddy)
+                if angle < 0 then angle = angle + math.pi * 2 end
+                local key = (dy // 4) * rect.width + dx // 2
+                cells[key] = (cells[key] or 0) | DOTS[dx % 2 + 1][dy % 4 + 1]
+                if angle <= sweep then lit[key] = true end
+            end
+        end
+    end
+    for key, bits in pairs(cells) do
+        frame.clip(painter, rect.x + key % rect.width, rect.y + key // rect.width, braille(bits), 1, lit[key] and fg or muted)
+    end
+    local text = M.is_gap(value) and "—" or (tostring(round(fraction * 100)) .. "%")
+    local size = tty.text.width(text)
+    if rect.width >= size and rect.height >= 1 then
+        frame.put(painter, rect.x + (rect.width - size) // 2, rect.y + rect.height // 2, text, size, painter.theme.text)
+    end
+end
+
 -- Task progress on row y: the same bar with the exact "done/total" counts
--- after it; the fill is ok once done reaches total.
+-- after it, plus a muted "· ETA eta" when given; the fill is ok once done
+-- reaches total.
 function M.progress(painter: frame.Painter, x: integer, y: integer, width: integer, done: number, total: number, options: Meter?)
     local meter_options: Meter = options or {}
     local fraction = total > 0 and done / total or 0
     local unit = meter_options.unit
+    local eta = meter_options.eta
     local text = M.count(done) .. "/" .. M.count(total) .. ((unit and unit ~= "") and (" " .. unit) or "")
+        .. ((eta and eta ~= "") and (" · ETA " .. eta) or "")
     meter(painter, x, y, width, fraction, text, meter_options.label, (total > 0 and done >= total) and "ok" or "accent")
 end
 

@@ -25,7 +25,6 @@ entries:
     continuation: bee.harness.carrier:continuation
     interrupted: bee.harness.window:interrupted
     profiles: bee.harness.profiles:protocol
-    agent_protocol: bee.application:agent_protocol
 - name: agent_resolver
   kind: library.lua
   source: file://agent_resolver.lua
@@ -33,6 +32,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    driver_resolver: bee.driver:resolver
 - name: resolve
   kind: function.lua
   source: file://resolve_method.lua

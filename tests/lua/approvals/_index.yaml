@@ -52,3 +52,23 @@ entries:
     persist: bee.persist:database
     identity_migration: bee.approvals:identity_migration
     thread_harness: bee.threads:harness
+- name: lease_flow_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get, registry.apply, funcs.call]
+    resources: '*'
+    effect: allow
+- name: lease_flow_test
+  kind: function.lua
+  source: file://lease_flow_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [funcs, security, registry, uuid]
+  security:
+    policies: [bee.approvals:lease_flow_test_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy]
+  imports:
+    test: wippy.test:test
+    capability_model: bee.capability:model
+    lease_grants: bee.gov.binding:lease_grants
+    lease_store: bee.gov.persist:lease_store

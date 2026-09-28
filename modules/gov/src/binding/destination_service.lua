@@ -16,8 +16,7 @@ local replicas = require("replicas")
 local plans = require("plan_store")
 local activations = require("activation_store")
 local leases = require("lease_store")
-local lease_model = require("lease_model")
-local uuid = require("uuid")
+local lease_grants = require("lease_grants")
 local owner = require("activation_owner")
 local resolver = require("hub_resolver")
 local overlay_resolver = require("overlay_resolver")
@@ -650,8 +649,6 @@ local function exact(request: Object, fields: {string}): string?
     return bounds.fields(request, allowed)
 end
 
-local LEASE_PROPOSAL = "bee.gov:grant-lease"
-
 -- The host-selected vocabulary and the installed grant record of the profile's
 -- application: a lease can only be proposed over something already installed.
 local function installed_envelope(profile_value: Profile): (capability_model.Vocabulary?, {capability_model.Grant}?, string?)
@@ -697,65 +694,9 @@ local function lease_request(operation: string, request: Object, node_id: string
     local key = bounds.id(request.idempotency_key)
     if not key then return failure("INVALID", "idempotency_key is required") end
     if operation == "lease_propose" then
-        local extras = bounds.dense_list(request.extras == nil and {} or request.extras, lease_model.MAX_ENVELOPE, "lease extras")
-        local ttl, max, bound_error = lease_model.bounded(request.ttl_seconds, request.max_applies)
-        if not extras or bound_error then return failure("INVALID", bound_error or "lease extras are invalid") end
-        local envelope, envelope_error = lease_model.envelope(vocabulary, installed, extras :: {capability_model.Grant})
-        if not envelope then return failure("INVALID", envelope_error or "lease envelope is invalid") end
-        local lines, render_error = capability_model.render(vocabulary, envelope)
-        if not lines then return failure("INVALID", render_error or "lease envelope cannot be rendered") end
-        local envelope_digest = lease_model.envelope_digest(envelope)
-        local proposal_seed = canonical.encode({target = chosen.overlay_owner, envelope = envelope_digest, ttl = ttl, max = max})
-        local seed_digest = proposal_seed and hash.sha256(proposal_seed)
-        if not envelope_digest or not seed_digest then return failure("INTERNAL", "measure lease proposal") end
-        local raw, call_error = executor:call("bee.approvals.binding:request", {workspace_id = workspace_id,
-            idempotency_key = key, request_kind = "permission", policy = chosen.approval_policy,
-            proposal = {kind = "operation", ref = LEASE_PROPOSAL, revision = seed_digest, input_digest = seed_digest,
-                payload = {workspace_id = workspace_id, target = chosen.overlay_owner, envelope = envelope,
-                    ttl_seconds = ttl, max_applies = max, resolved_capabilities = lines}},
-            prompt = {text = "Let " .. chosen.source_workspace .. " apply changes inside this envelope without asking again?"}})
-        local reply = bounds.object(raw)
-        if call_error or not reply or reply.ok ~= true then
-            local fault = reply and bounds.object(reply.error) or nil
-            return failure("APPROVAL", tostring(call_error or (fault and fault.message) or "approval owner refused the lease request"))
-        end
-        return transaction.success({approval = reply.value, lines = lines}, false)
+        return lease_grants.propose(executor, vocabulary, installed, chosen, workspace_id, request, key)
     end
-    local approval_id = bounds.id(request.approval_id)
-    if not approval_id then return failure("INVALID", "approval_id is required") end
-    local read_raw, read_error = executor:call("bee.approvals.binding:read", {approval_id = approval_id})
-    local read_reply = bounds.object(read_raw)
-    local approval = read_reply and read_reply.ok == true and bounds.object(read_reply.value) or nil
-    if read_error or not approval then return failure("APPROVAL", "lease approval cannot be read") end
-    local proposal = bounds.object(approval.proposal)
-    local payload = proposal and bounds.object(proposal.payload) or nil
-    local proposal_digest = bounds.text(approval.proposal_digest, 64)
-    local incarnation = bounds.count(approval.owner_incarnation)
-    if approval.state ~= "decided" or approval.decision ~= "approved" or approval.policy ~= chosen.approval_policy
-        or approval.workspace_id ~= workspace_id or not proposal or proposal.ref ~= LEASE_PROPOSAL or not payload
-        or payload.target ~= chosen.overlay_owner or not proposal_digest or not incarnation or incarnation < 1 then
-        return failure("DENIED", "approval is not a decided lease grant for this application")
-    end
-    local envelope = bounds.dense_list(payload.envelope, lease_model.MAX_ENVELOPE, "lease envelope")
-    if not envelope then return failure("INVALID", "approved lease envelope is malformed") end
-    local checked, checked_error = lease_model.envelope(vocabulary, {}, envelope :: {capability_model.Grant})
-    if not checked then return failure("INVALID", checked_error or "approved lease envelope is invalid") end
-    local effect_seed = hash.sha256("bee.gov.lease_grant\n" .. approval_id)
-    if not effect_seed then return failure("INTERNAL", "measure lease effect") end
-    local consume_raw, consume_error = executor:call("bee.approvals.binding:consume", {approval_id = approval_id,
-        proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = "lease-" .. effect_seed})
-    local consume_reply = bounds.object(consume_raw)
-    if consume_error or not consume_reply or consume_reply.ok ~= true then
-        local fault = consume_reply and bounds.object(consume_reply.error) or nil
-        return failure("APPROVAL", tostring(consume_error or (fault and fault.message) or "lease approval cannot be consumed"))
-    end
-    local lease_id = uuid.v7()
-    if not lease_id then return failure("INTERNAL", "lease id") end
-    return leases.call(lease_handle, actor_id, {operation = "grant", idempotency_key = key, lease_id = lease_id,
-        target = chosen.overlay_owner, envelope = checked, source_approval_id = approval_id,
-        source_approval_proposal_digest = proposal_digest, source_approval_owner_incarnation = incarnation,
-        granted_by = tostring(approval.decider_id or actor_id), ttl_seconds = payload.ttl_seconds,
-        max_applies = payload.max_applies})
+    return lease_grants.grant(executor, lease_handle, vocabulary, chosen, workspace_id, actor_id, request, key)
 end
 
 function M.call(raw: unknown): Result

@@ -188,7 +188,7 @@ entries:
 - name: destination_service
   kind: library.lua
   source: file://destination_service.lua
-  modules: [registry, security, system, funcs, hash, time]
+  modules: [registry, security, system, funcs, hash, time, uuid]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
@@ -198,6 +198,8 @@ entries:
     replicas: bee.sync.persist:replicas
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    lease_model: bee.gov:lease_model
     activation_owner: bee.gov.binding:activation_owner
     hub_resolver: bee.gov:hub_resolver
     overlay_resolver: bee.gov:overlay_resolver

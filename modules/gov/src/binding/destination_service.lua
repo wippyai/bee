@@ -15,6 +15,9 @@ local sync_resources = require("sync_resources")
 local replicas = require("replicas")
 local plans = require("plan_store")
 local activations = require("activation_store")
+local leases = require("lease_store")
+local lease_model = require("lease_model")
+local uuid = require("uuid")
 local owner = require("activation_owner")
 local resolver = require("hub_resolver")
 local overlay_resolver = require("overlay_resolver")
@@ -453,7 +456,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
 end
 
 local function owner_config(config: Configuration, profile_value: Profile, plan_store: plans.Store,
-    activation_store: activations.Store): OwnerConfigResult
+    activation_store: activations.Store, lease_handle: leases.Store): OwnerConfigResult
     local executor, executor_error = approval_executor()
     if not executor then return {ok = false, error = tostring(executor_error or "approval executor is unavailable")} end
     local workspace_identity = workspace_applications.identity(profile_value.workspace_id,
@@ -479,7 +482,7 @@ local function owner_config(config: Configuration, profile_value: Profile, plan_
         end,
     }
     local owner_configuration: owner.Config = {plans = plan_store, activations = activation_store, resolver = resolved,
-        approvals = executor, actor_id = ACTOR, consumer_id = ACTOR,
+        approvals = executor, actor_id = ACTOR, consumer_id = ACTOR, leases = lease_handle,
         overlay_owner = profile_value.overlay_owner, approval_policy = profile_value.approval_policy,
         apply = function(overlay_owner: string, entries: unknown, admission: unknown?, intent: unknown): ({[string]: unknown}?, string?)
             local generated, generated_error = generated_install(profile_value, intent)
@@ -599,17 +602,24 @@ local function authorize(workspace_id: unknown): (string?, string?, Result?)
     return node_id, actor:id(), nil
 end
 
-local function stores(node_id: string, workspace_id: string): (plans.Store?, activations.Store?, string?)
+local function stores(node_id: string, workspace_id: string): (plans.Store?, activations.Store?, leases.Store?, string?)
     local resource, resource_error = resources.database()
-    if not resource then return nil, nil, resource_error end
+    if not resource then return nil, nil, nil, resource_error end
     local plan_store, plan_error = plans.open(resource, node_id, workspace_id)
-    if not plan_store then return nil, nil, plan_error end
+    if not plan_store then return nil, nil, nil, plan_error end
     local activation_store, activation_error = activations.open(resource, node_id, workspace_id)
-    if not activation_store then plans.close(plan_store); return nil, nil, activation_error end
-    return plan_store, activation_store, nil
+    if not activation_store then plans.close(plan_store); return nil, nil, nil, activation_error end
+    local lease_handle, lease_error = leases.open(resource, node_id, workspace_id)
+    if not lease_handle then
+        activations.close(activation_store)
+        plans.close(plan_store)
+        return nil, nil, nil, lease_error
+    end
+    return plan_store, activation_store, lease_handle, nil
 end
 
-local function close(plan_store: plans.Store?, activation_store: activations.Store?)
+local function close(plan_store: plans.Store?, activation_store: activations.Store?, lease_handle: leases.Store?)
+    if lease_handle then leases.close(lease_handle) end
     if activation_store then activations.close(activation_store) end
     if plan_store then plans.close(plan_store) end
 end
@@ -619,9 +629,10 @@ local function request_identity(request: Object): (string?, string?, string?)
 end
 
 local OPERATIONS: Set = {available = true, stage = true, list = true, get = true, changes = true,
-    review = true, select = true, prepare = true, step = true, status = true, recover = true}
-local READS: Set = {available = true, list = true, get = true, changes = true, status = true}
-local MANAGES: Set = {stage = true, review = true, select = true}
+    review = true, select = true, prepare = true, step = true, status = true, recover = true,
+    lease_propose = true, lease_grant = true, lease_list = true, lease_revoke = true}
+local READS: Set = {available = true, list = true, get = true, changes = true, status = true, lease_list = true}
+local MANAGES: Set = {stage = true, review = true, select = true, lease_propose = true, lease_revoke = true}
 
 -- One delivery action per operation, so the public facade authenticates the
 -- exact operation a caller asks for before any store opens.
@@ -639,6 +650,114 @@ local function exact(request: Object, fields: {string}): string?
     return bounds.fields(request, allowed)
 end
 
+local LEASE_PROPOSAL = "bee.gov:grant-lease"
+
+-- The host-selected vocabulary and the installed grant record of the profile's
+-- application: a lease can only be proposed over something already installed.
+local function installed_envelope(profile_value: Profile): (capability_model.Vocabulary?, {capability_model.Grant}?, string?)
+    local identity = workspace_applications.identity(profile_value.workspace_id, profile_value.source_workspace)
+    local prior_owner = workspace_applications.prior_owner(profile_value.workspace_id, profile_value.source_workspace)
+    local uses_prior = prior_owner ~= nil and prior_owner == profile_value.overlay_owner
+    if not identity or (identity.overlay_owner ~= profile_value.overlay_owner and not uses_prior)
+        or identity.component ~= profile_value.component then
+        return nil, nil, "activation profile is not a workspace application"
+    end
+    local catalog_entry, catalog_lookup_error = registry.get("bee:capability_catalog")
+    if not catalog_entry then return nil, nil, "host capability catalog lookup failed: " .. tostring(catalog_lookup_error) end
+    local vocabulary, catalog_error = capability_model.decode(catalog_entry)
+    if not vocabulary then return nil, nil, catalog_error end
+    local record_id = uses_prior and capability_grants.prior_record_id(profile_value.overlay_owner)
+        or capability_grants.record_id(profile_value.overlay_owner)
+    local raw = record_id and registry.get(record_id) or nil
+    if not raw then return nil, nil, "no installed grant record to lease over" end
+    local decoded, decode_error = capability_grants.decode(raw, profile_value.overlay_owner,
+        profile_value.workspace_id, identity.definition_id, vocabulary)
+    if not decoded then return nil, nil, decode_error end
+    local live, live_error = capability_grants.live(decoded, function(id: string): unknown return registry.get(id) end)
+    if not live then return nil, nil, live_error end
+    return vocabulary, decoded.capabilities, nil
+end
+
+local function lease_request(operation: string, request: Object, node_id: string, workspace_id: string,
+    actor_id: string, activation_store: activations.Store, lease_handle: leases.Store): Result
+    local source_node, source_workspace = bounds.id(request.source_node), bounds.id(request.source_workspace)
+    local fields = operation == "lease_propose"
+        and {"source_node", "source_workspace", "extras", "ttl_seconds", "max_applies", "idempotency_key"}
+        or {"source_node", "source_workspace", "approval_id", "idempotency_key"}
+    if exact(request, fields) then return failure("INVALID", operation .. " request is invalid") end
+    if not source_node or not source_workspace then return failure("INVALID", operation .. " identity is invalid") end
+    local config, config_error = load()
+    if not config then return failure("BLOCKED", config_error or "activation configuration is unavailable") end
+    local chosen, profile_error = selected(config, workspace_id, source_node, source_workspace, activation_store)
+    if not chosen then return failure("BLOCKED", profile_error or "activation profile is unavailable") end
+    local vocabulary, installed, installed_error = installed_envelope(chosen)
+    if not vocabulary or not installed then return failure("BLOCKED", installed_error or "installed grants are unavailable") end
+    local executor, executor_error = approval_executor()
+    if not executor then return failure("UNAVAILABLE", executor_error or "approval executor is unavailable") end
+    local key = bounds.id(request.idempotency_key)
+    if not key then return failure("INVALID", "idempotency_key is required") end
+    if operation == "lease_propose" then
+        local extras = bounds.dense_list(request.extras == nil and {} or request.extras, lease_model.MAX_ENVELOPE, "lease extras")
+        local ttl, max, bound_error = lease_model.bounded(request.ttl_seconds, request.max_applies)
+        if not extras or bound_error then return failure("INVALID", bound_error or "lease extras are invalid") end
+        local envelope, envelope_error = lease_model.envelope(vocabulary, installed, extras :: {capability_model.Grant})
+        if not envelope then return failure("INVALID", envelope_error or "lease envelope is invalid") end
+        local lines, render_error = capability_model.render(vocabulary, envelope)
+        if not lines then return failure("INVALID", render_error or "lease envelope cannot be rendered") end
+        local envelope_digest = lease_model.envelope_digest(envelope)
+        local proposal_seed = canonical.encode({target = chosen.overlay_owner, envelope = envelope_digest, ttl = ttl, max = max})
+        local seed_digest = proposal_seed and hash.sha256(proposal_seed)
+        if not envelope_digest or not seed_digest then return failure("INTERNAL", "measure lease proposal") end
+        local raw, call_error = executor:call("bee.approvals.binding:request", {workspace_id = workspace_id,
+            idempotency_key = key, request_kind = "permission", policy = chosen.approval_policy,
+            proposal = {kind = "operation", ref = LEASE_PROPOSAL, revision = seed_digest, input_digest = seed_digest,
+                payload = {workspace_id = workspace_id, target = chosen.overlay_owner, envelope = envelope,
+                    ttl_seconds = ttl, max_applies = max, resolved_capabilities = lines}},
+            prompt = {text = "Let " .. chosen.source_workspace .. " apply changes inside this envelope without asking again?"}})
+        local reply = bounds.object(raw)
+        if call_error or not reply or reply.ok ~= true then
+            local fault = reply and bounds.object(reply.error) or nil
+            return failure("APPROVAL", tostring(call_error or (fault and fault.message) or "approval owner refused the lease request"))
+        end
+        return transaction.success({approval = reply.value, lines = lines}, false)
+    end
+    local approval_id = bounds.id(request.approval_id)
+    if not approval_id then return failure("INVALID", "approval_id is required") end
+    local read_raw, read_error = executor:call("bee.approvals.binding:read", {approval_id = approval_id})
+    local read_reply = bounds.object(read_raw)
+    local approval = read_reply and read_reply.ok == true and bounds.object(read_reply.value) or nil
+    if read_error or not approval then return failure("APPROVAL", "lease approval cannot be read") end
+    local proposal = bounds.object(approval.proposal)
+    local payload = proposal and bounds.object(proposal.payload) or nil
+    local proposal_digest = bounds.text(approval.proposal_digest, 64)
+    local incarnation = bounds.count(approval.owner_incarnation)
+    if approval.state ~= "decided" or approval.decision ~= "approved" or approval.policy ~= chosen.approval_policy
+        or approval.workspace_id ~= workspace_id or not proposal or proposal.ref ~= LEASE_PROPOSAL or not payload
+        or payload.target ~= chosen.overlay_owner or not proposal_digest or not incarnation or incarnation < 1 then
+        return failure("DENIED", "approval is not a decided lease grant for this application")
+    end
+    local envelope = bounds.dense_list(payload.envelope, lease_model.MAX_ENVELOPE, "lease envelope")
+    if not envelope then return failure("INVALID", "approved lease envelope is malformed") end
+    local checked, checked_error = lease_model.envelope(vocabulary, {}, envelope :: {capability_model.Grant})
+    if not checked then return failure("INVALID", checked_error or "approved lease envelope is invalid") end
+    local effect_seed = hash.sha256("bee.gov.lease_grant\n" .. approval_id)
+    if not effect_seed then return failure("INTERNAL", "measure lease effect") end
+    local consume_raw, consume_error = executor:call("bee.approvals.binding:consume", {approval_id = approval_id,
+        proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = "lease-" .. effect_seed})
+    local consume_reply = bounds.object(consume_raw)
+    if consume_error or not consume_reply or consume_reply.ok ~= true then
+        local fault = consume_reply and bounds.object(consume_reply.error) or nil
+        return failure("APPROVAL", tostring(consume_error or (fault and fault.message) or "lease approval cannot be consumed"))
+    end
+    local lease_id = uuid.v7()
+    if not lease_id then return failure("INTERNAL", "lease id") end
+    return leases.call(lease_handle, actor_id, {operation = "grant", idempotency_key = key, lease_id = lease_id,
+        target = chosen.overlay_owner, envelope = checked, source_approval_id = approval_id,
+        source_approval_proposal_digest = proposal_digest, source_approval_owner_incarnation = incarnation,
+        granted_by = tostring(approval.decider_id or actor_id), ttl_seconds = payload.ttl_seconds,
+        max_applies = payload.max_applies})
+end
+
 function M.call(raw: unknown): Result
     local request = bounds.object(raw)
     local operation = request and bounds.id(request.operation) or nil
@@ -648,8 +767,8 @@ function M.call(raw: unknown): Result
     local node_id, actor_id, denied = authorize(request.workspace_id)
     if not node_id or not actor_id then return denied :: Result end
     local workspace_id = request.workspace_id :: string
-    local plan_store, activation_store, open_error = stores(node_id, workspace_id)
-    if not plan_store or not activation_store then return failure("UNAVAILABLE", open_error or "open destination stores") end
+    local plan_store, activation_store, lease_handle, open_error = stores(node_id, workspace_id)
+    if not plan_store or not activation_store or not lease_handle then return failure("UNAVAILABLE", open_error or "open destination stores") end
     local result: Result
     if operation == "available" then
         if exact(request, {}) then
@@ -802,6 +921,19 @@ function M.call(raw: unknown): Result
             end
             result = plans.call(plan_store, actor_id, forwarded)
         end
+    elseif operation == "lease_list" then
+        if exact(request, {}) then result = failure("INVALID", "lease_list has unknown fields")
+        else result = leases.list(lease_handle, nil) end
+    elseif operation == "lease_revoke" then
+        if exact(request, {"lease_id", "expected_revision", "idempotency_key"}) then
+            result = failure("INVALID", "lease_revoke has unknown fields")
+        else
+            result = leases.call(lease_handle, actor_id, {operation = "revoke", lease_id = request.lease_id,
+                expected_revision = request.expected_revision, idempotency_key = request.idempotency_key,
+                revoked_by = actor_id})
+        end
+    elseif operation == "lease_propose" or operation == "lease_grant" then
+        result = lease_request(operation, request, node_id, workspace_id, actor_id, activation_store, lease_handle)
     elseif operation == "status" then
         if exact(request, {"intent_id"}) then result = failure("INVALID", "activation status has unknown fields")
         else result = activations.get(activation_store, request.intent_id) end
@@ -811,7 +943,7 @@ function M.call(raw: unknown): Result
             step = {"intent_id", "receipt_key"},
             recover = {"source_node", "source_workspace", "receipt_key"}}
         if exact(request, operation_fields[operation]) then
-            close(plan_store, activation_store)
+            close(plan_store, activation_store, lease_handle)
             return failure("INVALID", "activation request has unknown fields")
         end
         local config, config_error = load()
@@ -832,7 +964,7 @@ function M.call(raw: unknown): Result
         local composed: owner.Config? = nil
         local compose_error: string? = nil
         if chosen and config then
-            local configured = owner_config(config, chosen, plan_store, activation_store)
+            local configured = owner_config(config, chosen, plan_store, activation_store, lease_handle)
             if configured.ok then composed = configured.config else compose_error = configured.error end
         end
         if result == nil then
@@ -851,7 +983,7 @@ function M.call(raw: unknown): Result
             end
         end
     end
-    close(plan_store, activation_store)
+    close(plan_store, activation_store, lease_handle)
     return result
 end
 
@@ -874,12 +1006,12 @@ function M.recover_all(): (boolean, string?)
         local workspace_id = slot and bounds.id(slot.workspace_id) or nil
         local overlay_owner = slot and bounds.id(slot.overlay_owner) or nil
         if not workspace_id or not overlay_owner then return false, "desired activation slot is malformed" end
-        local plan_store, activation_store, open_error = stores(node_id, workspace_id)
-        if not plan_store or not activation_store then return false, open_error or "open destination stores" end
+        local plan_store, activation_store, lease_handle, open_error = stores(node_id, workspace_id)
+        if not plan_store or not activation_store or not lease_handle then return false, open_error or "open destination stores" end
         for attempt = 1, 4 do
             local desired = activations.desired(activation_store, overlay_owner)
             if not desired.ok then
-                close(plan_store, activation_store)
+                close(plan_store, activation_store, lease_handle)
                 if desired.code == "NOT_FOUND" then break end
                 return false, desired.message
             end
@@ -887,26 +1019,26 @@ function M.recover_all(): (boolean, string?)
             local source_node = intent and bounds.id(intent.source_node) or nil
             local source_workspace = intent and bounds.id(intent.source_workspace) or nil
             if not intent or not source_node or not source_workspace then
-                close(plan_store, activation_store)
+                close(plan_store, activation_store, lease_handle)
                 return false, "desired activation intent is malformed"
             end
             local chosen = selected(config, workspace_id, source_node, source_workspace, activation_store)
             if not chosen or chosen.overlay_owner ~= overlay_owner then break end
-            local configured = owner_config(config, chosen, plan_store, activation_store)
+            local configured = owner_config(config, chosen, plan_store, activation_store, lease_handle)
             if not configured.ok then
-                close(plan_store, activation_store)
+                close(plan_store, activation_store, lease_handle)
                 return false, configured.error
             end
             local receipt_bytes = canonical.encode({schema_revision = "bee.governance-recovery@1",
                 workspace_id = workspace_id, intent_id = intent.intent_id, revision = intent.revision, attempt = attempt})
             local receipt = receipt_bytes and hash.sha256(receipt_bytes) or nil
-            if not receipt then close(plan_store, activation_store); return false, "measure activation recovery" end
+            if not receipt then close(plan_store, activation_store, lease_handle); return false, "measure activation recovery" end
             local recovered = owner.recover(configured.config, receipt)
-            if not recovered.ok then close(plan_store, activation_store); return false, recovered.message end
+            if not recovered.ok then close(plan_store, activation_store, lease_handle); return false, recovered.message end
             local recovered_value = bounds.object(recovered.value)
             if recovered_value and recovered_value.phase == "settled" then break end
         end
-        close(plan_store, activation_store)
+        close(plan_store, activation_store, lease_handle)
     end
     return true, nil
 end

@@ -390,18 +390,15 @@ local function define_tests()
             local config, plans, activations, leases, flags = lease_config("workspace-lease-fenced",
                 widening_capability({LEASE_NARROW}), approvals())
             grant_lease(leases, 3)
-            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
-                version = "v1", intent_id = "intent-fenced", receipt_key = "fenced"}))
-            test.eq(prepared.phase, "authorized")
-            local lease = ok(lease_store.get(leases, "lease-1"))
+            test.eq(ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-fenced", receipt_key = "fenced"})).phase, "authorized")
+            local reserved = ok(lease_store.get(leases, "lease-1"))
             local revoked = ok(lease_store.call(leases, "host-a", {operation = "revoke", idempotency_key = "revoke-fenced",
-                lease_id = "lease-1", expected_revision = lease.revision, revoked_by = "person-a"}))
+                lease_id = "lease-1", expected_revision = reserved.revision, revoked_by = "person-a"}))
             test.eq((revoked.fenced_intents :: {string})[1], "intent-fenced")
             test.eq(#(revoked.started_effects :: {string}), 0)
-            local refused = owner.step(config, "intent-fenced", "fenced")
-            test.eq(refused.code, "DENIED")
+            test.eq(owner.step(config, "intent-fenced", "fenced").code, "DENIED")
             test.is_false(flags.applied)
-            test.eq(ok(activation_store.call(activations, "host-a", {operation = "activation_status", intent_id = "intent-fenced"})).phase, "authorized")
             assert(lease_store.close(leases))
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))

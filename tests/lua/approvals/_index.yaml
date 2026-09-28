@@ -70,6 +70,7 @@ entries:
   imports:
     test: wippy.test:test
     capability_model: bee.capability:model
+    bounds: bee.threads.records:bounds
     lease_grants: bee.gov.binding:lease_grants
     lease_store: bee.gov.persist:lease_store
     service: bee.approvals:service

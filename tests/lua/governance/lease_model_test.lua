@@ -5,7 +5,7 @@ local capability_model = require("capability_model")
 
 type Object = {[string]: unknown}
 
-local function grant(capability: string, operation: string, resource: string, scope: Object, revision: integer?): Object
+local function grant(capability: string, operation: string, resource: string, scope: Object, revision: integer?): capability_model.Grant
     return {capability = capability, template_revision = revision or 1, operation = operation,
         resource = resource, scope = scope, parameters = scope}
 end

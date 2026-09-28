@@ -2,6 +2,8 @@
 local registry = require("registry")
 local M = {}
 function M.plan(value: unknown): unknown
+    local entry = registry.get("bee.placement.native:preparer_fixture_config")
+    if entry and entry.data and entry.data.oversized_state then return {ok = true, value = {state = {owned = string.rep("x", 70000)}}} end
     return {ok = true, value = {state = {owned = true}}}
 end
 function M.setup(value: unknown): unknown

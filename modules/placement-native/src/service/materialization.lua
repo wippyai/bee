@@ -14,6 +14,7 @@ local store = require("store")
 local resources = require("resources")
 local homes = require("homes")
 local types = require("types")
+local paths = require("paths")
 local gateway_protocol = require("gateway_protocol")
 local credential_protocol = require("credential_protocol")
 local service_reply = require("service_reply")
@@ -242,15 +243,30 @@ local function resolve_work_dir(request: types.LaunchRequest, home: string): (st
     end
     return nil, "working directory grant is missing"
 end
-local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRequest, attempt_id: string, initial_work_dir: string): (string?, {string}?, string?)
+-- Each write grant admits its granted subpath, physically contained in the
+-- resource root the host resolved for the grant.
+function M.write_roots(request: types.LaunchRequest, executor: string): ({string}?, string?)
     local write_roots: {string} = {}
     for _, grant in ipairs(request.resources) do
         if grant.access == "write" then
             local root, root_error = resources.directory(grant.root_ref)
-            if not root then return nil, nil, root_error or "write-granted root unavailable" end
-            write_roots[#write_roots + 1] = root
+            if not root then return nil, root_error or "write-granted root unavailable" end
+            if grant.subpath == "" then
+                write_roots[#write_roots + 1] = root
+            else
+                local granted, granted_error = paths.admit(root .. "/" .. grant.subpath, {root}, executor)
+                if not granted then return nil, "write grant " .. grant.name .. ": " .. tostring(granted_error) end
+                write_roots[#write_roots + 1] = granted
+            end
         end
     end
+    return write_roots, nil
+end
+local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRequest, attempt_id: string, initial_work_dir: string): (string?, {string}?, string?)
+    local executor, executor_error = resources.executor()
+    if not executor then return nil, nil, executor_error or "placement executor unavailable" end
+    local write_roots, roots_error = M.write_roots(request, executor)
+    if not write_roots then return nil, nil, roots_error or "write-granted root unavailable" end
     local work_dir, extra_roots, preparer_error = workdir_preparers.setup(db, request, attempt_id, initial_work_dir, write_roots)
     if not work_dir or not extra_roots or preparer_error then
         return nil, nil, preparer_error or "workdir preparation failed"

@@ -420,17 +420,24 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 elseif data.command == "attach" and type(data.recipient) == "string" and type(data.generation) == "number" then
                     local next_generation = math.floor(data.generation :: number)
                     if next_generation > generation then
-                        if recipient then process.unmonitor(recipient :: string) end
-                        if takeover_armed then
-                            takeover_armed = false
-                            evidence(db, attempt_id, "carrier.replaced", "generation " .. tostring(next_generation) .. " took over from lost generation " .. tostring(lost_generation) .. "; gateway binding kept")
+                        local same_recipient = recipient == data.recipient
+                        local monitored, monitor_error = true, nil
+                        if not same_recipient then monitored, monitor_error = process.monitor(data.recipient :: string) end
+                        if monitored then
+                            if recipient and not same_recipient then process.unmonitor(recipient :: string) end
+                            if takeover_armed then
+                                takeover_armed = false
+                                evidence(db, attempt_id, "carrier.replaced", "generation " .. tostring(next_generation) .. " took over from lost generation " .. tostring(lost_generation) .. "; gateway binding kept")
+                            end
+                            generation = next_generation
+                            recipient = data.recipient :: string
+                            process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
+                            sent_through = consumed_through
+                            flush()
+                            if exited then process.send(recipient :: string, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
+                        else
+                            evidence(db, attempt_id, "attach.refused", "generation " .. tostring(next_generation) .. " recipient is not monitorable: " .. tostring(monitor_error))
                         end
-                        generation = next_generation
-                        recipient = data.recipient :: string
-                                        process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
-                        sent_through = consumed_through
-                        flush()
-                        if exited then process.send(recipient :: string, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
                     end
                     -- The fence answer goes to the service that asked: from here on
                     -- only the named generation writes or acknowledges.

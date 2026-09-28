@@ -5,6 +5,7 @@ local channel = require("channel")
 local time = require("time")
 local connections = require("connections")
 local contract = require("contract")
+local inventory = require("inventory")
 local identity = "0123456789abcdef0123456789abcdef"
 local display = "fedcba9876543210fedcba9876543210"
 local function spawn_idle(monitored: boolean): string
@@ -38,6 +39,29 @@ local function define_tests()
             test.eq(delivered.reply.error_code, "application_failed")
             test.eq(delivered.reply.error, "Auto Research failed: view error")
             process.unlisten(replies)
+        end)
+        test.it("delivers the current inventory to admitted clients when the host resumes serving", function()
+            local self = tostring(process.pid())
+            local catalogs = assert(process.listen("bee.host.catalog", {message = true}))
+            local views = assert(process.listen("bee.host.views", {message = true}))
+            local assignments = connections.assignment_access(
+                function(_: unknown) return nil, nil end,
+                function() return {}, nil end,
+                function(_: unknown) return nil, nil end)
+            local host = connections.new(self, self, identity, assignments)
+            host.admitted[self] = {recipient = self, connection_id = "connection",
+                permissions = {open = true, close = true, control = true, appearance = true}, detaching = false,
+                renderer = self, renderer_generation = "generation", rendering = false, display_id = display}
+            local current = assert(inventory.set_catalog(inventory.new(identity), {}))
+            connections.publish_all(host, current)
+            local catalog = receive(catalogs)
+            test.eq(catalog.connection_id, "connection")
+            test.eq(catalog.revision, current.catalog_revision)
+            local live = receive(views)
+            test.eq(live.connection_id, "connection")
+            test.eq(live.revision, current.views_revision)
+            process.unlisten(catalogs)
+            process.unlisten(views)
         end)
         test.it("admits a replacement renderer while the crashed renderer's grants are still being released", function()
             local events = assert(process.events())

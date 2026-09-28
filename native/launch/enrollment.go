@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/syncthing/notify"
@@ -460,9 +460,9 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 		}()
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
-		retry := (<-chan time.Time)(ticker.C)
-		tickerStopped := false
 		published := false
+		// A refused publication is retried on the ticker until one succeeds,
+		// so a change that arrives while the registry is busy is not lost.
 		publish := func() {
 			if err := p.publish(lifetime, reg, enrollment); err != nil {
 				// Before the first publish the entry is still being applied.
@@ -471,13 +471,10 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 				} else {
 					log.Debug("enrollment entry not yet writable", zap.Error(err))
 				}
+				ticker.Reset(time.Second)
 			} else {
 				published = true
-				retry = nil
-				if !tickerStopped {
-					ticker.Stop()
-					tickerStopped = true
-				}
+				ticker.Stop()
 			}
 		}
 		publish()
@@ -489,7 +486,7 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 				publish()
 			case <-departures:
 				publish()
-			case <-retry:
+			case <-ticker.C:
 				publish()
 			}
 		}

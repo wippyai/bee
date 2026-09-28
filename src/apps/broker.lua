@@ -111,7 +111,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     -- compares lightweight registry and activation revisions before projecting
     -- the full catalog.
     local next_admission_check = now() + 1
-    local observed_admission_revision: string? = nil
+    local admission_follower = catalog.follower(nil)
     local admission: {current: Admission?, error: string} = {error = ""}
     local instances: {[string]: Instance} = {}
     local binding_engine = thread_binding.new()
@@ -343,6 +343,10 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local settle_exited_replacement: (Instance, boolean) -> boolean
     -- Reconcile one protected registry snapshot. Compatible automatic
     -- producers may follow a later revision through the replacement path below.
+    -- The last admission this broker applied. A failed refresh withdraws
+    -- admission.current, but the families it admitted stay fenceable until a
+    -- later refresh reads a consistent catalog.
+    local applied: Admission? = nil
     local function refresh_admission(initial: boolean?): boolean
         local previous = admission.current
         local ok, loaded = pcall(function(): Admission
@@ -384,8 +388,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             -- A binding the catalog no longer admits fences its stable
             -- family out of every thread: a revoked or uninstalled app
             -- keeps no runs to follow, whether or not it still runs.
-            if previous then
-                for _, old in ipairs(previous.bindings) do
+            if applied then
+                for _, old in ipairs(applied.bindings) do
                     local kept = false
                     for _, new in ipairs(selected.bindings) do
                         if new.definition_id == old.definition_id then kept = true; break end
@@ -395,7 +399,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     end
                 end
             end
-            admission.current, admission.error = selected, ""
+            admission.current, admission.error, applied = selected, "", selected
             assert(process.send(owner, "bee.application.catalog", {version = 1, items = selected.items}))
             -- A compatible automatic application follows its applied
             -- definition behind the same viewport. Once an exit has been
@@ -972,7 +976,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             emit(identified(item, "closing", waiter.control and "" or waiter.request_id))
         else commit_explicit_close(item, force and "force_stop" or "stop") end
     end
-    observed_admission_revision = catalog.revision(workspace_id)
+    admission_follower.observed = catalog.revision(workspace_id)
     refresh_admission(true)
     backfill_retained_aliases(alias_backfill)
     assert(process.send(owner, "bee.app.ready", {version = 1}))
@@ -1053,15 +1057,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             local revision_ok, current_revision = pcall(function(): string
                 return catalog.revision(workspace_id)
             end)
-            if revision_ok and current_revision ~= observed_admission_revision then
-                -- A governed admission can still be mid-write across several
-                -- registry commits (recovery materializes more than one
-                -- entry). refresh_admission's torn-read guard then reports
-                -- failure without applying the change; the observed revision
-                -- only advances once a refresh actually reads a consistent
-                -- catalog, so the next check retries instead of leaving a
-                -- missed change unpolled for the rest of this process.
-                if refresh_admission() then observed_admission_revision = current_revision end
+            if revision_ok then
+                -- A governed admission can be mid-write across several registry
+                -- commits (recovery materializes more than one entry), so a
+                -- refresh may read an inconsistent catalog and fail.
+                catalog.follow(admission_follower, current_revision, refresh_admission)
             end
             next_admission_check = now() + 1
         end

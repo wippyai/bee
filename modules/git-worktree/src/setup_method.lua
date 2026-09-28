@@ -1,6 +1,8 @@
 -- MIT. Entry point for bee.placement:workdir_preparer setup method.
 local worktree = require("worktree")
 local bounds = require("bounds")
+local security = require("security")
+local types = require("types")
 local M = {}
 
 local function prepare(value: unknown, planning: boolean): {[string]: unknown}
@@ -8,6 +10,9 @@ local function prepare(value: unknown, planning: boolean): {[string]: unknown}
     if not obj then return {ok = false, error = {code = "INVALID", message = "setup input must be an object"}} end
     local attempt_id = bounds.id(obj.attempt_id)
     if not attempt_id then return {ok = false, error = {code = "INVALID", message = "attempt_id is required"}} end
+    if not security.can(types.WORKDIR_PREPARER_SETUP, attempt_id) then
+        return {ok = false, error = {code = "DENIED", message = "caller is not placement setting up attempt " .. attempt_id}}
+    end
     local workdir = bounds.text(obj.working_directory, 8192)
     if not workdir or workdir:sub(1, 1) ~= "/" then
         return {ok = false, error = {code = "INVALID", message = "working_directory must be an absolute path"}}

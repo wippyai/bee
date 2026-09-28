@@ -4,6 +4,16 @@ local time = require("time")
 local worktree = require("worktree")
 local setup_method = require("setup_method")
 local cleanup_method = require("cleanup_method")
+local funcs = require("funcs")
+local security = require("security")
+
+local function unauthorized_call(target: string, request: {[string]: unknown}): {[string]: unknown}
+    local policy, policy_error = security.policy("bee.git_worktree.test:caller_policy")
+    if not policy then error("caller policy: " .. tostring(policy_error)) end
+    local reply, err = funcs.new():with_actor(security.new_actor("intruder", {})):with_scope(security.new_scope({policy})):call(target, request)
+    if err then error("call " .. target .. ": " .. tostring(err)) end
+    return reply :: {[string]: unknown}
+end
 
 local counter = 0
 local function temp_dir(): string
@@ -297,6 +307,26 @@ local function define_tests()
             test.eq(path, plan.worktree_path)
             local retained, _, err = worktree.cleanup_dedicated(plan)
             test.is_false(retained); test.is_nil(err)
+            cleanup_dir(repo)
+        end)
+
+        test.it("refuses preparer calls from callers without placement authority", function()
+            local repo = temp_dir()
+            init_repo(repo)
+            local request = {attempt_id = "test-att-denied", owner_id = "intruder", working_directory = repo,
+                write_roots = {repo}, options = {worktree = "dedicated"}, argv = {"test"}}
+            local planned = unauthorized_call("bee.git_worktree:plan", request)
+            test.is_false(planned.ok)
+            test.eq((planned.error :: {[string]: unknown}).code, "DENIED")
+            local setup_res = unauthorized_call("bee.git_worktree:setup", request)
+            test.is_false(setup_res.ok)
+            test.eq((setup_res.error :: {[string]: unknown}).code, "DENIED")
+            local state = assert(worktree.plan_dedicated(repo, "test-att-denied", {repo}))
+            local cleanup_res = unauthorized_call("bee.git_worktree:cleanup", {attempt_id = "test-att-denied", owner_id = "intruder", state = state})
+            test.is_false(cleanup_res.ok)
+            test.eq((cleanup_res.error :: {[string]: unknown}).code, "DENIED")
+            local _, present = worktree.run_git({"test", "-e", state.worktree_path})
+            test.eq(present, 1)
             cleanup_dir(repo)
         end)
 

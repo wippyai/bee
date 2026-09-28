@@ -289,6 +289,10 @@ function M.publish(state: State, value: inventory.State, kind: "catalog" | "view
         end
     end
 end
+function M.publish_all(state: State, value: inventory.State): ()
+    M.publish(state, value, "catalog")
+    M.publish(state, value, "views")
+end
 function M.broker_replaced(state: State, broker: string): ()
     for _, client in pairs(state.admitted) do
         if not client.detaching then

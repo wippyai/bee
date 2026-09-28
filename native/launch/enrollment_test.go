@@ -217,6 +217,51 @@ func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
 	}
 }
 
+// refusingRegistry refuses applies while refuse is set, modelling a registry
+// that is busy when an enrollment change arrives.
+type refusingRegistry struct {
+	recordingRegistry
+	refused atomic.Int64
+	refuse  atomic.Bool
+}
+
+func (r *refusingRegistry) Apply(ctx context.Context, changes registry.ChangeSet) (registry.Version, error) {
+	if r.refuse.Load() {
+		r.refused.Add(1)
+		return nil, errors.New("registry is busy")
+	}
+	return r.recordingRegistry.Apply(ctx, changes)
+}
+
+func TestEnrollmentPublisherRetriesARefusedChangeWithoutAnotherEvent(t *testing.T) {
+	state := t.TempDir()
+	prepareOwnerState(t, state)
+	reg := &refusingRegistry{}
+	base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	component, err := enrollmentPublisher(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := component.(boot.Starter).Start(liveOwner(t, state, registry.WithRegistry(base, reg))); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
+	waitForEnrollment(t, func() bool { return reg.applied.Load() == 1 })
+
+	reg.refuse.Store(true)
+	release, err := enrollClient(context.Background(), state, "client-refused", makeTestPublicKey(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = release() }()
+	waitForEnrollment(t, func() bool { return reg.refused.Load() > 0 })
+	reg.refuse.Store(false)
+	waitForEnrollment(t, func() bool { return reg.applied.Load() == 2 })
+}
+
 func TestEnrollmentPublisherPublishesFilesystemChangesAndStopsRefreshing(t *testing.T) {
 	state := t.TempDir()
 	prepareOwnerState(t, state)

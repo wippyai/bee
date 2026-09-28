@@ -83,7 +83,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [time, exec, json, funcs, sql, registry]
   security:
-    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.git_worktree:worktree_policy]
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.placement.native.security:placement_runner_policy, bee.git_worktree:worktree_policy]
   imports:
     test: wippy.test:test
     workdir_preparers: bee.placement.native.service:workdir_preparers
@@ -239,6 +239,7 @@ entries:
     identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
     materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native:resources
     request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
     executable_stream: bee.placement.native.service:executable_stream

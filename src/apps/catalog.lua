@@ -8,6 +8,7 @@ local canonical = require("canonical")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
+type Follower = {observed: string?}
 type Selection = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor}}
 
 local function static_bindings(entry: Entry?): {contract.Binding}
@@ -200,4 +201,17 @@ function M.replaces(running: contract.Descriptor, replacement: contract.Descript
         and replacement.resume_schema == running.resume_schema
         and replacement.definition_revision ~= running.definition_revision
 end
+-- A revision follower applies each observed revision through a refresh. The
+-- observed revision advances only when the refresh succeeds, so a refresh that
+-- read an inconsistent catalog is retried at the next check.
+function M.follower(observed: string?): Follower
+    return {observed = observed}
+end
+
+function M.follow(follower: Follower, current: string, refresh: () -> boolean): boolean
+    if current == follower.observed then return false end
+    if refresh() then follower.observed = current end
+    return true
+end
+
 return M

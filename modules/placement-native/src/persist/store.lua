@@ -18,6 +18,7 @@ local M = {}
 M.LEDGER = {table = "bee_placement_schema_migrations", label = "placement"}
 M.MAX_EVIDENCE_PAGE = 64
 M.MAX_DETAIL_BYTES = 2048
+M.MAX_PREPARER_STATE_BYTES = 65536
 type Row = {[string]: unknown}
 type Update = {
     expected_execution: types.ExecutionState?,
@@ -335,6 +336,50 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
         return {ok = false, code = "STORAGE", message = attempt_error or "read transitioned attempt"}
     end
     return {ok = true, attempt = attempt}
+end
+-- Records one preparer's plan whole in its own table and the fact of the plan
+-- as evidence, in one transaction.
+function M.record_preparer_plan(db: sql.DB, attempt_id: string, binding_id: string, record_json: string): string?
+    if #record_json > M.MAX_PREPARER_STATE_BYTES then return "preparer state exceeds " .. tostring(M.MAX_PREPARER_STATE_BYTES) .. " bytes" end
+    local tx, begin_err = db:begin()
+    if not tx then return "begin preparer plan" end
+    local rows, read_err = tx:query("SELECT evidence_count FROM bee_placement_attempts WHERE attempt_id = ?", {attempt_id})
+    local count = rows and rows[1] and integer(rows[1].evidence_count)
+    if read_err or not count or count < 0 then
+        rollback(tx)
+        return "read attempt evidence count"
+    end
+    local at = M.now()
+    local sequence, evidence_err = append(tx, attempt_id, count, "workdir_preparer.state", binding_id, at)
+    if not sequence then
+        rollback(tx)
+        return evidence_err
+    end
+    local _, insert_err = tx:execute("INSERT INTO bee_placement_preparer_states (attempt_id, binding_id, position, record_json, created_at) VALUES (?, ?, ?, ?, ?)",
+        {attempt_id, binding_id, sequence, record_json, at})
+    local _, update_err = tx:execute("UPDATE bee_placement_attempts SET evidence_count = ?, updated_at = ? WHERE attempt_id = ?", {sequence, at, attempt_id})
+    if insert_err or update_err then
+        rollback(tx)
+        return "record preparer plan"
+    end
+    local committed, commit_err = tx:commit()
+    if commit_err or committed ~= true then
+        rollback(tx)
+        return "commit preparer plan"
+    end
+    return nil
+end
+-- The preparer plans of one attempt in the order they were recorded.
+function M.preparer_plans(db: sql.DB, attempt_id: string): ({{binding_id: string, record_json: string}}?, string?)
+    local rows, err = db:query("SELECT binding_id, record_json FROM bee_placement_preparer_states WHERE attempt_id = ? ORDER BY position", {attempt_id})
+    if err or not rows then return nil, "read preparer plans" end
+    local plans: {{binding_id: string, record_json: string}} = {}
+    for _, row in ipairs(rows) do
+        local binding_id, record_json = text(row.binding_id), text(row.record_json)
+        if not binding_id or not record_json then return nil, "preparer plan row is corrupt" end
+        plans[#plans + 1] = {binding_id = binding_id, record_json = record_json}
+    end
+    return plans, nil
 end
 function M.evidence(db: sql.DB, attempt_id: string, after: integer, limit: integer): (types.EvidencePage?, string?)
     local page = math.floor(limit)

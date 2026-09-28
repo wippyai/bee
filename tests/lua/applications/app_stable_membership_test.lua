@@ -62,11 +62,11 @@ local function app_code(instance_id: string, target: string, request: unknown): 
     return tostring((reply.error :: {[string]: unknown}).code)
 end
 
-local function run_code(instance_id: string): string?
+local function run_code(instance_id: string, thread_id: string?): string?
     local scope = assert(security.named_scope(LAUNCH_SCOPE))
     local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
     local executor = assert(funcs.new():with_actor(actor):with_scope(scope))
-    local raw, call_error = executor:call(BACKEND, {operation = "status", thread_id = RUN_THREAD, attempt_id = ATTEMPT})
+    local raw, call_error = executor:call(BACKEND, {operation = "status", thread_id = thread_id or RUN_THREAD, attempt_id = ATTEMPT})
     if call_error then error("run status: " .. tostring(call_error)) end
     local reply = raw :: {[string]: unknown}
     if reply.ok == true then return nil end
@@ -93,6 +93,18 @@ local function set_admission_for(definition_id: string, admitted: boolean)
     changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = record.meta, data = {bindings = bindings}})
     local applied, apply_error = changes:apply()
     if not applied then error("apply application admission: " .. tostring(apply_error)) end
+end
+
+local function set_duplicate_admission()
+    local snap = registry.snapshot()
+    local record = assert(snap:get(ADMISSION_ID)) :: {[string]: unknown}
+    local bindings: {{[string]: unknown}} = {}
+    for _, binding in ipairs(baseline_bindings or {}) do bindings[#bindings + 1] = binding end
+    bindings[#bindings + 1] = bindings[1]
+    local changes = snap:changes()
+    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = record.meta, data = {bindings = bindings}})
+    local applied, apply_error = changes:apply()
+    if not applied then error("apply duplicate application admission: " .. tostring(apply_error)) end
 end
 
 local function set_admission(admitted: boolean)
@@ -173,7 +185,7 @@ local function define_tests()
             unwrap(launched)
             local first, first_view = open(DEFINITION, "stable-view-1")
             local created = as_app(first, "bee.threads.service:create",
-                {thread_id = RUN_THREAD, idempotency_key = RUN_THREAD .. "-create", title = "Stable run"})
+                {thread_id = thread_id or RUN_THREAD, idempotency_key = RUN_THREAD .. "-create", title = "Stable run"})
             test.eq(created.thread_id, RUN_THREAD)
             test.eq(run_status(first).state, "starting")
             close(first_view)
@@ -271,6 +283,85 @@ local function define_tests()
             process.unlisten(replies)
         end)
 
+        test.it("fences a removed application family when an earlier refresh was refused", function()
+            local owner = tostring(process.pid())
+            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local events = assert(process.events())
+            local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
+                assert(security.policy("bee.security:core_spawn_boundary"))}))
+                :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
+            if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
+            local broker = tostring(broker_pid)
+            local function wait_exit(target: string)
+                local deadline = time.after("30s")
+                while true do
+                    local received = channel.select({events:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == events, target .. " did not exit")
+                    local event = received.value
+                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
+                end
+            end
+            local function open(definition_id: string, request_id: string): {[string]: unknown}
+                assert(process.send(broker, "bee.app.request", {version = 1, request_id = request_id, op = "open",
+                    workspace_id = WORKSPACE, thread_id = "refused-refresh-thread", definition_id = definition_id, arguments = {}}))
+                local deadline = time.after("30s")
+                while true do
+                    local received = channel.select({replies:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == replies, request_id .. " reply timed out")
+                    local data: unknown = received.value:payload():data()
+                    if tostring(received.value:from()) == broker and type(data) == "table"
+                        and (data :: {[string]: unknown}).request_id == request_id then
+                        return data :: {[string]: unknown}
+                    end
+                end
+                error("reply loop ended")
+            end
+            local ok, scenario_error = pcall(function()
+                assert(catalogs:receive():from() == broker)
+                local launched, launch_error = funcs.call("bee.threads.service:create",
+                    {thread_id = "refused-refresh-thread", idempotency_key = "refused-refresh-thread-create", title = "Refused refresh"})
+                if launch_error then error("create launch thread: " .. tostring(launch_error)) end
+                unwrap(launched)
+                local opened = open(DEFINITION, "refused-refresh-open")
+                test.eq(opened.error_code, "", "application did not become ready")
+                local instance = tostring(opened.instance_id)
+                as_app(instance, "bee.threads.service:create",
+                    {thread_id = "refused-refresh-run", idempotency_key = "refused-refresh-run-create", title = "Refused run"})
+                test.is_nil(run_code(instance, "refused-refresh-run"))
+
+                set_duplicate_admission()
+                test.eq(open(OTHER_DEFINITION, "refused-refresh-open-2").error_code, "not_admitted")
+                set_admission(false)
+                test.eq(open(OTHER_DEFINITION, "refused-refresh-open-3").error_code, "")
+                test.eq(run_code(instance, "refused-refresh-run"), "DENIED")
+            end)
+            set_admission(true)
+            pcall(process.cancel, broker, "finish refused refresh probe")
+            wait_exit(broker)
+            process.unlisten(catalogs)
+            process.unlisten(replies)
+            assert(ok, tostring(scenario_error))
+        end)
+
+        test.it("retries a refused admission refresh at the next revision check", function()
+            local follower = catalog.follower("r1")
+            local attempts = 0
+            local function refused(): boolean attempts = attempts + 1; return false end
+            local function accepted(): boolean attempts = attempts + 1; return true end
+            test.is_false(catalog.follow(follower, "r1", refused))
+            test.eq(attempts, 0)
+            test.is_true(catalog.follow(follower, "r2", refused))
+            test.eq(follower.observed, "r1")
+            test.is_true(catalog.follow(follower, "r2", refused))
+            test.eq(attempts, 2)
+            test.is_true(catalog.follow(follower, "r2", accepted))
+            test.eq(follower.observed, "r2")
+            test.is_false(catalog.follow(follower, "r2", accepted))
+            test.eq(attempts, 3)
+        end)
+
         -- A governed admission a host recovers at boot can still be mid-write
         -- across several registry commits when the broker's periodic revision
         -- poll lands between two of them. refresh_admission's own consistency
@@ -296,7 +387,7 @@ local function define_tests()
                 end
             end
             local ok, scenario_error = pcall(function()
-                assert(catalogs:receive():from() == broker)
+                repeat until tostring(catalogs:receive():from()) == broker
                 -- Ten bursts of two immediate commits, one burst roughly
                 -- every poll tick, give the broker's once-a-second revision
                 -- check repeated chances to land between refresh_admission's

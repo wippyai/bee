@@ -745,7 +745,7 @@ local function op_decide_batch(tx: sql.Transaction, actor: string, object: Objec
         local settled = op_decide(tx, actor, raw :: Object, now, prepared)
         if not settled.ok then
             local fault = bounds.object(raw)
-            return failure(settled.code or "INTERNAL", tostring(fault and fault.approval_id) .. ": " .. tostring(settled.message), settled.value)
+            return failure(settled.code or "INTERNAL", tostring(fault and fault.approval_id) .. ": " .. tostring(settled.message), bounds.object(settled.value))
         end
         views[#views + 1] = settled.value
     end

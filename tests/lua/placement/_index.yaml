@@ -239,6 +239,7 @@ entries:
     identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
     materialization: bee.placement.native.service:materialization
+    resources: bee.placement.native:resources
     request_codec: bee.placement:request
     protocol: bee.placement.native:protocol
     executable_stream: bee.placement.native.service:executable_stream

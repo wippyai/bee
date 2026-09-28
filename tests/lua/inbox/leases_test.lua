@@ -209,6 +209,60 @@ local function define_tests()
             test.is_nil(leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = listed}}))
             test.eq(#leases.rows(slice), 200)
         end)
+        test.it("shows every term and grant of a long ceiling at a small size and approves only after the end", function()
+            local caps: {string} = {}
+            for index = 1, 16 do caps[index] = "Write workspace files under directory-number-" .. tostring(index) .. " " .. string.rep("long ", 30) end
+            local granting = approval("g9", "pending", leases.PROPOSAL, {target = "bee.gov:notes", ttl_seconds = 3600, max_applies = 3, resolved_capabilities = caps})
+            local state = model.new({"ws-1"})
+            model.apply_inbox(state, "ws-1", assert(model.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "g9", revision = 1, request = granting}},
+                next_seq = 1, more = false}, replayed = false})))
+            model.select(state, "g9")
+            model.apply_read(state, "g9", assert(model.decode_reply({ok = true, error = nil, value = granting, replayed = false})))
+            local slice = leases.new()
+            local seen = ""
+            local function page(): {string}
+                local drawn = view.draw(60, 12, appearance.defaults(), state, model.rows(state), 0, "", slice)
+                local plain = table.concat(drawn.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+                seen = seen .. plain
+                return drawn.rows
+            end
+            page()
+            test.is_false(slice.review_complete)
+            local approve_enabled = false
+            for _ = 1, 200 do
+                leases.review_scroll(slice, 1)
+                page()
+            end
+            test.is_true(slice.review_complete)
+            for index = 1, 16 do
+                test.is_true(seen:find("directory-number-" .. tostring(index) .. " ", 1, true) ~= nil)
+            end
+            test.is_true(seen:find("Lasts: 1 hours", 1, true) ~= nil)
+            test.is_true(seen:find("Max applies: 3", 1, true) ~= nil)
+            local last = view.draw(60, 12, appearance.defaults(), state, model.rows(state), 0, "", slice)
+            for _, hit in ipairs(last.hits) do if hit.kind == "approve" then approve_enabled = true end end
+            test.is_true(approve_enabled)
+            local fresh = leases.new()
+            local top = view.draw(60, 12, appearance.defaults(), state, model.rows(state), 0, "", fresh)
+            for _, hit in ipairs(top.hits) do test.is_true(hit.kind ~= "approve") end
+        end)
+        test.it("keeps lease requests out of a batch", function()
+            local granting = approval("g8", "pending", leases.PROPOSAL, {target = "t"})
+            local rows = rows_of({granting})
+            test.is_true(leases.toggle_mark(leases.new(), rows, "g8") ~= nil)
+        end)
+        test.it("revokes an exhausted lease that still has a reservation", function()
+            local slice = leases.new()
+            leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "exhausted", applies_used = 1,
+                revision = 2, granted_by = "p", envelope = {}, max_applies = 1, uses = {{intent_id = "i", state = "reserved"}}},
+                {lease_id = "l-2", target = "t", state = "exhausted", applies_used = 1, revision = 2, granted_by = "p", envelope = {}, max_applies = 1,
+                    uses = {{intent_id = "j", state = "admitted"}}}}}})
+            local rows = leases.rows(slice)
+            leases.select(slice, rows[1])
+            test.is_true(leases.revoke_intent(slice, "k") ~= nil)
+            leases.select(slice, rows[2])
+            test.is_nil((leases.revoke_intent(slice, "k")))
+        end)
         test.it("gives the lease action and the lease rows different hit kinds", function()
             local state = model.new({"ws-1"})
             local pending = approval("r1", "pending", leases.ACTIVATION, ACTIVATION)

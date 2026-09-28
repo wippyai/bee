@@ -133,6 +133,37 @@ local function define_tests()
             ok(store.call(state, "actor-a", grant_input("g-4", "lease-4", "approval-4")))
             assert(store.close(state))
         end)
+        test.it("keeps an exhausted lease with a pending reservation listed and revocable", function()
+            local state = open()
+            ok(store.call(state, "actor-a", grant_input("g-1", "lease-1", "approval-1", {max_applies = 1})))
+            ok(store.call(state, "actor-a", {operation = "use", idempotency_key = "u-1", lease_id = "lease-1",
+                expected_revision = 1, intent_id = "intent-1", proposal_capabilities = {NARROW}}))
+            local listed = ok(store.list(state, nil)).leases :: {Object}
+            test.eq(#listed, 1)
+            test.eq(listed[1].state, "exhausted")
+            local uses = listed[1].uses :: {Object}
+            test.eq(uses[1].state, "reserved")
+            local revoked = ok(store.call(state, "actor-a", {operation = "revoke", idempotency_key = "r-1", lease_id = "lease-1",
+                expected_revision = listed[1].revision, revoked_by = "person-a"}))
+            test.eq((revoked.fenced_intents :: {string})[1], "intent-1")
+            test.eq(#(ok(store.list(state, nil)).leases :: {Object}), 0)
+            assert(store.close(state))
+        end)
+        test.it("replays a lost revocation reply with the fenced and started intents", function()
+            local state = open()
+            ok(store.call(state, "actor-a", grant_input("g-1", "lease-1", "approval-1", {max_applies = 3})))
+            local used = ok(store.call(state, "actor-a", {operation = "use", idempotency_key = "u-1", lease_id = "lease-1",
+                expected_revision = 1, intent_id = "intent-1", proposal_capabilities = {NARROW}}))
+            local request = {operation = "revoke", idempotency_key = "r-1", lease_id = "lease-1",
+                expected_revision = used.revision, revoked_by = "person-a"}
+            local first = ok(store.call(state, "actor-a", request))
+            local again = store.call(state, "actor-a", request)
+            test.is_true(again.ok == true and again.replayed == true)
+            local value = again.value :: Object
+            test.eq((value.fenced_intents :: {string})[1], "intent-1")
+            test.eq(#(value.started_effects :: {string}), #(first.started_effects :: {string}))
+            assert(store.close(state))
+        end)
         test.it("finds only an active lease that covers the proposal", function()
             local state = open()
             ok(store.call(state, "actor-a", grant_input("g-1", "lease-1", "approval-1")))

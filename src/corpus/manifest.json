@@ -227,9 +227,9 @@
       "topic": "application"
     },
     {
-      "bytes": 15420,
+      "bytes": 15829,
       "id": "docs/approvals",
-      "sha256": "c10ec8663659f57d297311715ee15aeac31b2de2660b8ef36f4cc8e39c35bbf8",
+      "sha256": "eb743dc75cf2a61f7387edc6a23a24e2edca0d729871cec05f5c2e4089f1738b",
       "source": "docs/reference/approvals.md",
       "title": "Durable approval requests",
       "topic": "approvals"
@@ -590,7 +590,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 679800,
+    "bytes": 680209,
     "documents": 73
   }
 }

@@ -66,9 +66,10 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [funcs, security, registry, uuid]
   security:
-    policies: [bee.approvals:lease_flow_test_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy]
+    policies: [bee.approvals:lease_flow_test_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
   imports:
     test: wippy.test:test
     capability_model: bee.capability:model
     lease_grants: bee.gov.binding:lease_grants
     lease_store: bee.gov.persist:lease_store
+    service: bee.approvals:service

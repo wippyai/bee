@@ -230,6 +230,9 @@ local function main(value: unknown)
         local selected = model.selected_row(state)
         local confirmation = model.confirmation(state)
         if not selected or not confirmation then status = "Open a pending request before deciding"; dirty = true; return end
+        if kind == "approve" and leases.is_review(state.detail) and not slice.review_complete then
+            status = "Scroll to the end of the lease terms before approving"; dirty = true; return
+        end
         local title = kind == "approve" and "Approve this request?" or (kind == "deny" and "Deny this request?" or "Withdraw this request?")
         local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
         local accept = kind == "approve" and "Approve" or (kind == "deny" and "Deny" or "Withdraw")
@@ -332,6 +335,9 @@ local function main(value: unknown)
                     elseif text == "x" then ask_revoke()
                     elseif text == "r" then perform(refresh)
                     elseif key == "esc" or key == "escape" then leases.show_leases(slice, false); dirty = true end
+                elseif leases.is_review(state.detail) and state.selected ~= nil and (key == "up" or key == "down" or key == "pgup" or key == "pgdown" or text == "j" or text == "k") then
+                    leases.review_scroll(slice, (key == "up" or text == "k") and -1 or (key == "pgup" and -8 or (key == "pgdown" and 8 or 1)))
+                    dirty = true
                 elseif key == "up" or text == "k" then model.move(state, -1); dirty = true
                 elseif key == "down" or text == "j" then model.move(state, 1); dirty = true
                 elseif key == "pgup" then model.move(state, -8); dirty = true
@@ -350,7 +356,9 @@ local function main(value: unknown)
                 elseif text == "w" then ask("withdraw")
                 elseif text == "r" then perform(function() if state.pending then recover() else refresh() end end)
                 elseif text == "t" then model.toggle_technical(state); dirty = true
-                elseif key == "esc" or key == "escape" then running = false end
+                elseif key == "esc" or key == "escape" then
+                    if leases.is_review(state.detail) then model.select(state, nil); dirty = true else running = false end
+                end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                 local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
@@ -378,7 +386,9 @@ local function main(value: unknown)
                     elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
                 end
             elseif data.type == "mouse" and data.action == "wheel" then
-                model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1); dirty = true
+                local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                if leases.is_review(state.detail) then leases.review_scroll(slice, step) else model.move(state, step) end
+                dirty = true
             end
         end
     end

@@ -674,11 +674,12 @@ function M.permission_lines(value: unknown): {string}
         end
         lines[#lines + 1] = max and max > 0 and ("Max applies: " .. tostring(max)) or "Max applies: unlimited"
     end
+    local limit = view.proposal.ref == "bee.gov:grant-lease" and M.TEXT_LIMIT or M.LINE_LIMIT
     local function append(raw: unknown, prefix: string)
         if type(raw) ~= "table" then return end
         for _, value in ipairs(raw :: {unknown}) do
             if #lines >= M.MAX_PAYLOAD_LINES then break end
-            if type(value) == "string" then lines[#lines + 1] = prefix .. M.text(value, M.LINE_LIMIT) end
+            if type(value) == "string" then lines[#lines + 1] = prefix .. M.text(value, limit) end
         end
     end
     if view.proposal.ref ~= "bee.gov:grant-lease" then append(payload.permission_changes, "Change: ") end

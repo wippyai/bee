@@ -168,16 +168,23 @@ application. `bee.gov` exposes the destination operations `lease_propose`,
   later edits that do not widen it follow the installed-grant rule and do not
   consult or charge the lease. Withdrawing installed authority is a separate
   operation.
-- The approval a person reads for a lease states the target, the duration
-  and that it starts when the lease is granted (not when the request
-  expires), the maximum applies and the complete ceiling, which is limited to
-  16 grants so the whole of it is on one screen.
+- A pending lease approval opens as a full review in the inbox: the
+  requester and the request's own expiry, then the target, the duration and
+  that it starts when the lease is granted, the maximum applies and every
+  grant of the ceiling, wrapped to the screen and scrollable. Approve stays
+  disabled until the last line has been on screen, deny is always available,
+  and a lease request cannot join a batch. The ceiling is limited to 16
+  grants.
 - `lease_grant` is safe to repeat: one approval grants one lease with an
   identity derived from that approval, and a repeated call returns it. After
   an approval owner restart the exact proposal is revalidated and consumed
   under the current incarnation.
-- `lease_list` returns the leases able to authorize; ended leases are history
-  and are listed only on request, so they never crowd out an active one.
+- `lease_list` returns the leases able to authorize, plus any lease whose
+  reservation still awaits admission (so it can still be revoked); other
+  ended leases are history, listed with `history: true`.
+- `lease_revoke` returns the intents it fenced and those already admitted;
+  the answer is stored with its receipt, so repeating a lost revocation
+  returns the same lists.
 - `lease_revoke` stops further reservations as described above. Leases are
   keyed by node, workspace and overlay owner; the runtime has no finer
   authenticated principal at this boundary. Super-edit and other overlays

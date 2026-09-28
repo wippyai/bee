@@ -8,6 +8,7 @@ local uuid = require("uuid")
 local capability_model = require("capability_model")
 local lease_grants = require("lease_grants")
 local lease_store = require("lease_store")
+local service = require("service")
 
 type Object = {[string]: unknown}
 local ALICE, POLICY, ACTOR = "bee.test.lease_alice", "lease-flow-test", "bee.gov.activation"
@@ -91,8 +92,18 @@ local function define_tests()
                 {ttl_seconds = 3600}, "propose-2")).approval :: Object
             alice:call("bee.approvals.binding:decide", {approval_id = second.approval_id,
                 expected_revision = second.revision, proposal_digest = second.proposal_digest, decision = "approved"})
+            -- The approval owner restarts between the decision and the grant: the
+            -- real owner answers REVALIDATE and the grant completes under the new incarnation.
+            local store = assert(service.open())
+            local restarted = assert(service.establish(store))
+            store:release()
+            test.is_true(restarted > (second.owner_incarnation :: integer))
             local live = ok(lease_grants.grant(executor, db, vocabulary, profile, workspace, ACTOR,
                 {approval_id = second.approval_id}, "grant-3"))
+            test.eq(live.source_approval_owner_incarnation, restarted)
+            local retried = lease_grants.grant(executor, db, vocabulary, profile, workspace, ACTOR,
+                {approval_id = second.approval_id}, "grant-3")
+            test.is_true(retried.ok == true and retried.replayed == true)
             test.is_true(lease_store.find_active(db, profile.overlay_owner, {narrow[1]}) ~= nil)
             ok(lease_store.call(db, ACTOR, {operation = "revoke", idempotency_key = "revoke-1", lease_id = live.lease_id,
                 expected_revision = live.revision, revoked_by = ALICE}))

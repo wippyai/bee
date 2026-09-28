@@ -20,12 +20,13 @@ type Extra = {capability: string, parameters: {[string]: string}}
 type Spec = {ttl_seconds: integer?, max_applies: integer?, extras: {Extra}}
 type Row = {lease_id: string, source: string, workspace_id: string, target: string, state: string,
     applies_used: integer, max_applies: integer?, expires_at: string?, revision: integer,
-    granted_by: string, uses: integer, envelope_lines: {string}}
-type Slice = {rows: {[string]: Row}, selected: string?, leases_view: boolean, marked: {[string]: boolean}, notice: string}
+    granted_by: string, uses: integer, reserved: integer, envelope_lines: {string}}
+type Slice = {rows: {[string]: Row}, selected: string?, leases_view: boolean, marked: {[string]: boolean}, notice: string,
+    review_for: string, review_offset: integer, review_complete: boolean}
 type Intent = {target: string, request: Object, source: string}
 
 function M.new(): Slice
-    local slice: Slice = {rows = {}, selected = nil, leases_view = false, marked = {}, notice = ""}
+    local slice: Slice = {rows = {}, selected = nil, leases_view = false, marked = {}, notice = "", review_for = "", review_offset = 0, review_complete = false}
     return slice
 end
 
@@ -90,6 +91,50 @@ function M.spec(ttl_seconds: string, applies: string, extras: {{capability: stri
         end
     end
     return spec, nil
+end
+
+-- A pending lease approval opens as a full review: every term and every
+-- grant of the ceiling, wrapped and scrollable, and Approve waits until the
+-- last line has been on screen.
+function M.is_review(view: model.ApprovalView?): boolean
+    return view ~= nil and view.state == "pending" and view.proposal.ref == M.PROPOSAL
+end
+
+function M.review_lines(view: model.ApprovalView, width: integer): {string}
+    local lines: {string} = {"Requester: " .. view.requester_id .. "  policy " .. view.policy,
+        "This request expires " .. view.expires_at .. " (the lease's own term is below)"}
+    for _, line in ipairs(model.permission_lines(view)) do lines[#lines + 1] = line end
+    local wrapped: {string} = {}
+    local room = math.floor(math.max(10, width - 4))
+    for _, line in ipairs(lines) do
+        local rest = line
+        repeat
+            local cut = #rest <= room and #rest or room
+            if #rest > room then
+                local space = rest:sub(1, room):match(".*()%s")
+                if space and space > 1 then cut = space end
+                while cut < #rest and cut > 1 and rest:byte(cut + 1) and rest:byte(cut + 1) >= 0x80 and rest:byte(cut + 1) < 0xC0 do cut = cut - 1 end
+            end
+            wrapped[#wrapped + 1] = rest:sub(1, cut)
+            rest = rest:sub(cut + 1):gsub("^%s+", "")
+        until rest == ""
+    end
+    return wrapped
+end
+
+-- review_frame: the window of lines on screen for this view and whether the
+-- whole review has now been seen; opening another request starts over.
+function M.review_frame(slice: Slice, view: model.ApprovalView, total: integer, visible: integer): (integer, boolean)
+    local identity = view.approval_id .. "#" .. tostring(view.revision)
+    if slice.review_for ~= identity then slice.review_for, slice.review_offset, slice.review_complete = identity, 0, false end
+    local top = math.floor(math.max(0, math.min(slice.review_offset, total - visible)))
+    slice.review_offset = top
+    if top + visible >= total then slice.review_complete = true end
+    return top, slice.review_complete
+end
+
+function M.review_scroll(slice: Slice, delta: integer)
+    slice.review_offset = math.floor(math.max(0, slice.review_offset + delta))
 end
 
 function M.select(slice: Slice, row: Row)
@@ -165,10 +210,17 @@ local function decode_row(source: string, workspace_id: string, raw: unknown): R
     if not lease_id or not target or used == nil or not revision or not state then return nil end
     local max = item.max_applies == nil and nil or bounds.count(item.max_applies)
     local uses = type(item.uses) == "table" and #(item.uses :: {unknown}) or 0
+    local reserved = 0
+    if type(item.uses) == "table" then
+        for _, raw_use in ipairs(item.uses :: {unknown}) do
+            local use = bounds.object(raw_use)
+            if use and use.state == "reserved" then reserved = reserved + 1 end
+        end
+    end
     return {lease_id = lease_id, source = source, workspace_id = workspace_id, target = model.text(target, model.LINE_LIMIT),
         state = model.text(state, 20), applies_used = used, max_applies = max,
         expires_at = type(item.expires_at) == "string" and model.text(item.expires_at, 40) or nil,
-        revision = revision, granted_by = model.text(item.granted_by, 200), uses = uses,
+        revision = revision, granted_by = model.text(item.granted_by, 200), uses = uses, reserved = reserved,
         envelope_lines = envelope_lines(item.envelope)}
 end
 
@@ -220,7 +272,9 @@ end
 function M.revoke_intent(slice: Slice, key: string): (Intent?, string?)
     local row = M.selected(slice)
     if not row then return nil, "select a lease to revoke" end
-    if row.state ~= "active" then return nil, "the lease is " .. row.state end
+    if row.state ~= "active" and not ((row.state == "exhausted" or row.state == "expired") and row.reserved > 0) then
+        return nil, "the lease is " .. row.state
+    end
     return {target = M.FACADE, source = row.source, request = {operation = "lease_revoke", workspace_id = row.workspace_id,
         lease_id = row.lease_id, expected_revision = row.revision, idempotency_key = key}}, nil
 end
@@ -239,6 +293,7 @@ end
 function M.toggle_mark(slice: Slice, rows: {[string]: model.Row}, approval_id: string): string?
     local row = rows[approval_id]
     if not row or row.state ~= "pending" then return "only a pending request can join a batch" end
+    if row.view.proposal.ref == M.PROPOSAL then return "a lease request is reviewed and decided on its own" end
     if slice.marked[approval_id] then slice.marked[approval_id] = nil; return nil end
     local count = 0
     for id in pairs(slice.marked) do

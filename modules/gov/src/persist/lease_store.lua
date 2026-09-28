@@ -104,7 +104,7 @@ end
 local function replay(store: Store, tx: sql.Transaction, actor: string, input: Request, measured: string): Result?
     local key = id(input.idempotency_key)
     if not key then return failure("INVALID", "idempotency_key is required") end
-    local row, err = one(tx, "SELECT actor_id, operation, request_digest, lease_id FROM bee_governance_lease_receipts WHERE owner_node = ? AND workspace_id = ? AND idempotency_key = ?",
+    local row, err = one(tx, "SELECT actor_id, operation, request_digest, lease_id, result_json FROM bee_governance_lease_receipts WHERE owner_node = ? AND workspace_id = ? AND idempotency_key = ?",
         {store.node, store.workspace, key}, "lease receipt")
     if err or not row then return err end
     if row.actor_id ~= actor then return failure("DENIED", "idempotency key belongs to another actor") end
@@ -113,17 +113,25 @@ local function replay(store: Store, tx: sql.Transaction, actor: string, input: R
     end
     local current, current_error = load(tx, store, row.lease_id :: string)
     if current_error or not current then return current_error or failure("INTERNAL", "lease receipt has no lease") end
-    return transaction.success(view(store, current), true)
+    local reply = view(store, current)
+    if type(row.result_json) == "string" then
+        local saved = bounds.object(json.decode(row.result_json :: string))
+        if saved then
+            reply.fenced_intents, reply.started_effects = saved.fenced_intents, saved.started_effects
+        end
+    end
+    return transaction.success(reply, true)
 end
-local function save_receipt(store: Store, tx: sql.Transaction, actor: string, input: Request, measured: string, row: Object): Result?
+local function save_receipt(store: Store, tx: sql.Transaction, actor: string, input: Request, measured: string, row: Object, result: Object?): Result?
     local total, total_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_lease_receipts WHERE owner_node = ? AND workspace_id = ?",
         {store.node, store.workspace}, "lease receipt count")
     if total_error or not total then return total_error or failure("INTERNAL", "lease receipt count is missing") end
     local receipts = count(total.count, false)
     if not receipts then return failure("INTERNAL", "lease receipt count is corrupt") end
     if receipts >= MAX_RECEIPTS then return failure("CAPACITY_EXHAUSTED", "lease receipt capacity is exhausted") end
-    local _, err = tx:execute("INSERT INTO bee_governance_lease_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, request_digest, lease_id, result_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        {store.node, store.workspace, input.idempotency_key, actor, input.operation, measured, row.lease_id, row.revision})
+    local _, err = tx:execute("INSERT INTO bee_governance_lease_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, request_digest, lease_id, result_revision, result_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        {store.node, store.workspace, input.idempotency_key, actor, input.operation, measured, row.lease_id, row.revision,
+            result and json.encode(result) or sql.NULL})
     if err then return storage(err, "record lease receipt") end
     return nil
 end
@@ -330,13 +338,14 @@ local function revoke(store: Store, actor: string, input: Request): Result
         if started_error or not started then return storage(started_error, "read admitted lease uses") end
         local changed, changed_error = load(tx, store, row.lease_id :: string)
         if changed_error or not changed then return changed_error or failure("INTERNAL", "read revoked lease") end
-        local receipt_error = save_receipt(store, tx, actor, input, measured :: string, changed)
-        if receipt_error then return receipt_error end
-        local reply = view(store, changed)
         local fenced_intents: {unknown} = {}
         for _, item in ipairs(fenced) do fenced_intents[#fenced_intents + 1] = item.intent_id end
         local started_effects: {unknown} = {}
         for _, item in ipairs(started) do started_effects[#started_effects + 1] = item.intent_id end
+        local receipt_error = save_receipt(store, tx, actor, input, measured :: string, changed,
+            {fenced_intents = fenced_intents, started_effects = started_effects})
+        if receipt_error then return receipt_error end
+        local reply = view(store, changed)
         reply.fenced_intents, reply.started_effects = fenced_intents, started_effects
         return transaction.success(reply, false)
     end)
@@ -354,7 +363,10 @@ end
 
 -- The leases for one target (or every lease of the workspace), newest first.
 -- Each row carries its use records so a reader sees which intents it authorized.
-local ACTIVE = "state = 'active' AND (expires_at IS NULL OR expires_at > " .. NOW .. ") AND (max_applies IS NULL OR applies_used < max_applies)"
+-- A lease stays listed, and revocable, while it can still authorize or while
+-- a reservation of it awaits admission: revocation may still fence that one.
+local RESERVED = "EXISTS (SELECT 1 FROM bee_governance_lease_uses u WHERE u.owner_node = bee_governance_leases.owner_node AND u.workspace_id = bee_governance_leases.workspace_id AND u.lease_id = bee_governance_leases.lease_id AND u.state = 'reserved')"
+local ACTIVE = "state = 'active' AND (((expires_at IS NULL OR expires_at > " .. NOW .. ") AND (max_applies IS NULL OR applies_used < max_applies)) OR " .. RESERVED .. ")"
 local MAX_HISTORY = 64
 
 -- list: the leases able to authorize something, newest first, so a full

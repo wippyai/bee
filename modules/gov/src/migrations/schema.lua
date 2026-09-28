@@ -526,6 +526,12 @@ CREATE TABLE bee_governance_lease_receipts (
 );
 ]]
 
+-- A revocation's answer (which reserved uses it fenced and which effects had
+-- already started) is kept with its receipt so a lost reply can be replayed.
+local LEASE_RECEIPT_RESULT_SQL = [[
+ALTER TABLE bee_governance_lease_receipts ADD COLUMN result_json TEXT;
+]]
+
 function M.all(): {Migration}
     return {
         {id = 1, name = "governance_workspace_staging", sql = INITIAL, rebuild = false},
@@ -542,6 +548,7 @@ function M.all(): {Migration}
         {id = 12, name = "governance_node_identity_migration", sql = NODE_IDENTITY_MIGRATION_SQL, rebuild = false},
         {id = 13, name = "governance_plan_identity_digest", sql = PLAN_IDENTITY_DIGEST_SQL, rebuild = false},
         {id = 14, name = "governance_capability_leases", sql = LEASES_SQL, rebuild = false},
+        {id = 15, name = "governance_lease_receipt_result", sql = LEASE_RECEIPT_RESULT_SQL, rebuild = false},
     }
 end
 

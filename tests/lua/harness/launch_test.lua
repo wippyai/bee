@@ -1694,9 +1694,16 @@ local function define_tests()
                 -- can be well before the terminal one under a loaded host.
                 -- Loop until the state is actually "ended".
                 local settled: {[string]: unknown}? = nil
+                local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
+                local current: {[string]: unknown} = {}
                 while settled == nil do
-                    local current = value(generated_call({operation = "wait", thread_id = started.thread_id,
-                        attempt_id = started.attempt_id, wait_ms = 60000}))
+                    local remaining_ms = deadline_ms - math.floor(time.now():unix_nano() / 1000000)
+                    if remaining_ms <= 0 then
+                        error("attempt " .. tostring(started.attempt_id) .. " did not end within 120s; last state " .. tostring(current.state)
+                            .. " outcome " .. tostring(current.outcome))
+                    end
+                    current = value(generated_call({operation = "wait", thread_id = started.thread_id,
+                        attempt_id = started.attempt_id, wait_ms = math.min(60000, remaining_ms)}))
                     if current.state == "ended" then settled = current end
                 end
                 test.not_nil(settled)

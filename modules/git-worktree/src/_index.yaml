@@ -34,7 +34,7 @@ entries:
 - name: worktree
   kind: library.lua
   source: file://worktree.lua
-  modules: [exec, fs, registry, hash]
+  modules: [exec, fs, registry, hash, channel]
   imports:
     git_roots: bee.git_worktree:git_roots
     paths: bee.placement:paths

@@ -76,7 +76,13 @@ from the registry and authorized by the host through `target_workdir_preparers` 
 metadata alone never authorizes). The default preparer list is empty; the host
 explicitly selects bindings. Each binding implements read-only `plan`, idempotent
 `setup`, and idempotent `cleanup`. Placement persists plan state and the selected
-method targets before calling setup, including for preparers without state.
+method targets before calling setup, including for preparers without state. The
+plan record lives whole in `bee_placement_preparer_states` (at most 64 KiB; a larger
+state refuses the launch before setup) and one `workdir_preparer.state` evidence row
+names the binding. The preparer methods require the runner's setup action or the
+service's cleanup action, so a caller without placement's policies is denied.
+Write roots handed to preparers are each grant's physical `root/subpath`; Git
+metadata outside a granted subpath needs its own grant.
 Setup declares the option names it handles; unhandled requested options refuse the launch.
 Changed bindings cannot replace a recorded plan during setup replay.
 Cleanup runs on proven attempt ends and the supervisor sweeps outstanding plans.

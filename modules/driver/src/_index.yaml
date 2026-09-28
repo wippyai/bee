@@ -53,6 +53,12 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     instructions: bee.driver:instructions
+    turn_budget: bee.driver:turn_budget
+- name: turn_budget
+  kind: library.lua
+  source: file://turn_budget.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: driver
   kind: contract.definition
   methods:

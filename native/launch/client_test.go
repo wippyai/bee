@@ -131,10 +131,12 @@ func clientLaunch(state string) app.Launch {
 // fakeOwner models a running owner: it answers Owned, publishes a descriptor on
 // demand, and records the join it received.
 type fakeOwner struct {
-	lastJoin   joinRequest
-	joined     int
-	started    int
-	descriptor rendezvous.Descriptor
+	lastJoin    joinRequest
+	joined      int
+	started     int
+	descriptor  rendezvous.Descriptor
+	exitWaitErr error
+	events      []string
 }
 
 func (f *fakeOwner) seams(directory string) clientSeams {
@@ -152,15 +154,32 @@ func (f *fakeOwner) seams(directory string) clientSeams {
 			return f.descriptor, nil
 		},
 		join: func(_ context.Context, join joinRequest) error {
+			f.events = append(f.events, "join")
 			f.lastJoin = join
 			f.joined++
 			return nil
 		},
 		waitEnrolled: func(context.Context, string, string, ed25519.PublicKey) error { return nil },
 		report:       io.Discard,
-		released:     func(context.Context, string) error { return nil },
+		released: func(context.Context, string) error {
+			f.events = append(f.events, "released")
+			return nil
+		},
+		holdOwnerExit: func(int) (ownerExitObserver, error) {
+			f.events = append(f.events, "held")
+			return fakeOwnerExit{owner: f}, nil
+		},
 	}
 }
+
+type fakeOwnerExit struct{ owner *fakeOwner }
+
+func (f fakeOwnerExit) wait(context.Context) error {
+	f.owner.events = append(f.owner.events, "exited")
+	return f.owner.exitWaitErr
+}
+
+func (fakeOwnerExit) close() error { return nil }
 
 func fakeDescriptor(t *testing.T) rendezvous.Descriptor {
 	t.Helper()
@@ -172,6 +191,7 @@ func fakeDescriptor(t *testing.T) rendezvous.Descriptor {
 		Version: 1, Execution: "0123456789abcdef0123456789abcdef", Node: "bee-owner-test",
 		Gossip: "127.0.0.1:7946", Transport: "127.0.0.1:9100",
 		PublicKey: base64.RawStdEncoding.EncodeToString(public), ClientRevision: rendezvous.ClientRevision,
+		OwnerPID: os.Getpid(),
 	}
 	return d
 }

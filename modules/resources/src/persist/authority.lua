@@ -15,6 +15,7 @@ local persist = require("persist")
 local transaction = require("transaction")
 local migrations = require("migrations")
 local resources = require("resources")
+local identity_migration = require("identity_migration")
 local capability_model = require("capability_model")
 local M = {}
 M.LEDGER = {table = "bee_resource_schema_migrations", label = "resource"}
@@ -60,6 +61,16 @@ local function open(): (sql.DB?, Reply?)
     if not resource then return nil, fail("STORAGE", resource_error or "resource database") end
     local db, open_error = persist.open({resource = resource, ledger = M.LEDGER, migrations = migrations.all()})
     if not db then return nil, fail("STORAGE", open_error or "open resource store") end
+    local destination, identity_error = node()
+    if not destination then
+        db:release()
+        return nil, fail("STORAGE", identity_error or "resource node identity is unavailable")
+    end
+    local migrated, migration_error = identity_migration.apply(db, destination)
+    if not migrated then
+        db:release()
+        return nil, fail("STORAGE", migration_error or "migrate resource node identity")
+    end
     return db, nil
 end
 local function digest_of(value: unknown): (string?, string?)

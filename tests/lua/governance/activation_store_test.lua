@@ -3,6 +3,9 @@ local test = require("test")
 local hash = require("hash")
 local canonical = require("canonical")
 local store = require("activation_store")
+local database = require("database")
+local migrations = require("migrations")
+local identity_migration = require("identity_migration")
 
 local function blob(bytes: string): {[string]: string}
     local digest, err = hash.sha256(bytes)
@@ -126,16 +129,14 @@ local function define_tests()
             test.eq(refused.code, "INVALID")
             assert(store.close(partial_store))
         end)
-        test.it("looks up the exact applied admission slot source", function()
+        test.it("migrates activation slots and receipts to the persisted node identity once", function()
             local function settle(workspace: string, owner_node: string, source_node: string,
-                overlay_owner: string, intent_id: string, admission_bytes: string): string
+                overlay_owner: string, intent_id: string): ()
                 local state = assert(store.open("bee.gov:activation_test_db", owner_node, workspace))
                 local input = prepare()
                 input.intent_id, input.idempotency_key = intent_id, intent_id .. "-prepare"
                 input.overlay_owner, input.source_node, input.source_workspace = overlay_owner, source_node, "autoresearch"
-                local admission = blob(admission_bytes)
-                local admission_digest = assert(admission.digest)
-                input.application_admission = admission
+                input.application_admission = blob("local application admission")
                 input.migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
                     destination_node = owner_node, source_node = source_node, base_revision = 0,
                     base_digest = string.rep("a", 64), policy_digest = string.rep("b", 64),
@@ -158,28 +159,47 @@ local function define_tests()
                     outcome = "applied", diagnostics = "definitions observed"}))
                 test.eq(outcome.observed_outcome, "applied")
                 assert(store.close(state))
-                return admission_digest
             end
 
-            local local_workspace = "workspace-applied-local"
-            local local_owner = "node-before-restart"
-            local local_overlay = "bee.gov.apps:" .. local_workspace .. ".autoresearch"
-            local local_digest = settle(local_workspace, local_owner, local_owner, local_overlay,
-                "intent-applied-local", "local application admission")
-            local local_source = store.applied_admission_source("bee.gov:activation_test_db", local_workspace,
-                local_overlay, local_digest)
-            local local_value = ok(local_source)
-            test.eq(local_value.source_node, local_owner)
-            test.eq(store.applied_admission_source("bee.gov:activation_test_db", local_workspace,
-                local_overlay, string.rep("f", 64)).code, "NOT_FOUND")
+            local workspace = "workspace-applied-migration"
+            local legacy_node, persisted_node = "bee-owner-legacy", "persisted-state-node"
+            local overlay = "bee.gov.apps:" .. workspace .. ".autoresearch"
+            local intent = "intent-applied-migration"
+            settle(workspace, legacy_node, legacy_node, overlay, intent)
 
-            local remote_workspace = "workspace-applied-remote"
-            local remote_overlay = "bee.gov.apps:" .. remote_workspace .. ".autoresearch"
-            local remote_digest = settle(remote_workspace, "node-destination", "node-remote", remote_overlay,
-                "intent-applied-remote", "remote application admission")
-            local remote_value = ok(store.applied_admission_source("bee.gov:activation_test_db", remote_workspace,
-                remote_overlay, remote_digest))
-            test.eq(remote_value.source_node, "node-remote")
+            local db, open_error = database.open({resource = "bee.gov:activation_test_db",
+                ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
+            if not db then error(tostring(open_error)) end
+            local migrated, migration_error = identity_migration.apply(db, persisted_node, legacy_node)
+            if not migrated then error(tostring(migration_error)) end
+            local repeated, repeated_error = identity_migration.apply(db, persisted_node, legacy_node)
+            if not repeated then error(tostring(repeated_error)) end
+            local ledger_rows, ledger_error = db:query(
+                "SELECT source_node, destination_node FROM bee_governance_node_identity_migrations WHERE source_node = ?",
+                {legacy_node})
+            db:release()
+            if ledger_error or not ledger_rows then error("read governance identity migration record") end
+            test.eq(#ledger_rows, 1)
+            test.eq(ledger_rows[1].destination_node, persisted_node)
+
+            local reopened = assert(store.open("bee.gov:activation_test_db", persisted_node, workspace))
+            local restored = ok(store.get(reopened, intent))
+            test.eq(restored.source_node, persisted_node)
+            local slots = ok(store.desired_slots("bee.gov:activation_test_db", persisted_node))
+            local found = false
+            for _, item in ipairs(slots.slots) do
+                if item.workspace_id == workspace and item.overlay_owner == overlay then found = true end
+            end
+            test.is_true(found)
+            local replay = store.call(reopened, "actor-a", {operation = "record_outcome", intent_id = intent,
+                expected_revision = 5, idempotency_key = intent .. "-outcome", outcome = "applied",
+                diagnostics = "definitions observed"})
+            test.is_true(replay.ok == true and replay.replayed == true)
+            assert(store.close(reopened))
+
+            local legacy_view = assert(store.open("bee.gov:activation_test_db", legacy_node, workspace))
+            test.eq(store.get(legacy_view, intent).code, "NOT_FOUND")
+            assert(store.close(legacy_view))
         end)
         test.it("persists the exact predecessor digest for grant reuse", function()
             local state = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-reuse"))

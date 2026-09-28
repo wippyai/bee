@@ -403,9 +403,9 @@
       "topic": "component"
     },
     {
-      "bytes": 22187,
+      "bytes": 22262,
       "id": "component/harness",
-      "sha256": "6f11a44773f9644d81ac81143f6ec14fc9748ef27ed166ad1d08e96104376139",
+      "sha256": "c9221a5a828163c0f8ef7ffb907bfabd3700a4464497ab0aed62a1ed19ccb479",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -502,7 +502,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 621042,
+    "bytes": 621117,
     "documents": 62
   }
 }

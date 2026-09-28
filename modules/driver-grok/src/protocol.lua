@@ -156,7 +156,7 @@ local function retained_answer(state: State): string?
     return state.answer
 end
 
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): Step
     local out: {Observation} = {}
     local kind = tostring(envelope.type or envelope.event or "")
 
@@ -250,7 +250,10 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             outcome = "failed"
             local err_msg = tostring(envelope.error or envelope.message or (stop_reason ~= "" and stop_reason) or "turn failed")
             fault = events.fault("turn_failed", err_msg, false)
-        elseif stop_reason == "end_turn" or stop_reason == "max_turn_requests" then
+        elseif stop_reason == "max_turn_requests" then
+            outcome = "failed"
+            fault = events.fault("max_turns", "turn budget reached", false)
+        elseif stop_reason == "end_turn" then
             outcome = "succeeded"
         else
             outcome = "uncertain"

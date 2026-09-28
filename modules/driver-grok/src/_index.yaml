@@ -70,6 +70,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     types: bee.driver:types
+    turn_budget: bee.driver:turn_budget
 - name: binding
   kind: contract.binding
   contracts:
@@ -235,7 +236,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected non-interactive Grok batch policy for bounded research actions on a caller-owned thread
+    comment: Host-selected Grok turn budget for agentic research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides: [thread, workdir]
@@ -250,9 +251,9 @@ entries:
     environment: {}
     allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
-    profile_options: {effort: [low, medium, high]}
+    profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
     profile_instructions: true
-    prepare_options: {permission_mode: default, max_turns: 1}
+    prepare_options: {permission_mode: default, turn_budget: 128}
 - name: launch_policy_grok_window
   kind: registry.entry
   meta:

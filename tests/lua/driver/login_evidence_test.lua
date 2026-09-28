@@ -41,7 +41,7 @@ local function define_tests()
             {provider = "agy", launch = agy.specification(assert(agy.decode({profile_id = "batch", brief = "fixture"}))),
                 paths = {{".gemini/antigravity-cli/antigravity-oauth-token", ".gemini/antigravity-cli/antigravity-oauth-token", "login", true},
                     {".gemini/antigravity-cli/cache/onboarding.json", ".gemini/antigravity-cli/cache/onboarding.json", "config", false}}},
-            {provider = "grok", launch = grok.specification(assert(grok.decode({profile_id = "batch", brief = "fixture", permission_mode = "default", max_turns = 1}))),
+            {provider = "grok", launch = grok.specification(assert(grok.decode({profile_id = "batch", brief = "fixture", permission_mode = "default", turn_budget = 1}))),
                 paths = {{".grok/auth.json", ".grok/auth.json", "login", true}, {".grok/config.toml", ".grok/.bee-global-config.toml", "config", false}}},
             {provider = "muse", launch = muse.specification(assert(muse.decode({profile_id = "batch", brief = "fixture", approval_mode = "never"}))),
                 paths = {{".config/muse/auth.json", ".config/muse/auth.json", "login", true},

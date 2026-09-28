@@ -42,6 +42,7 @@ func defaultClientSeams() clientSeams {
 		waitEnrolled:   waitEnrolled,
 		report:         os.Stdout,
 		released:       waitReleased,
+		holdOwnerExit:  holdOwnerProcessExit,
 	}
 }
 

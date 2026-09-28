@@ -15,6 +15,7 @@ entries:
     database: bee.persist:database
     transaction: bee.persist:transaction
     migrations: bee.gov.migrations:schema
+    identity_migration: bee.gov.persist:identity_migration
     plan_protocol: bee.gov.persist:plan_protocol
 - name: activation_store
   kind: library.lua
@@ -26,6 +27,7 @@ entries:
     database: bee.persist:database
     transaction: bee.persist:transaction
     migrations: bee.gov.migrations:schema
+    identity_migration: bee.gov.persist:identity_migration
     migration_work: bee.gov:migration_work
 - name: staging
   kind: library.lua
@@ -35,6 +37,13 @@ entries:
     database: bee.persist:database
     transaction: bee.persist:transaction
     migrations: bee.gov.migrations:schema
+    identity_migration: bee.gov.persist:identity_migration
     protocol: bee.gov:workspace_protocol
     workspace: bee.gov:workspace
+    bounds: bee.threads.records:bounds
+- name: identity_migration
+  kind: library.lua
+  source: file://identity_migration.lua
+  modules: [sql, env]
+  imports:
     bounds: bee.threads.records:bounds

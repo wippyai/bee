@@ -50,15 +50,46 @@ func TestStopAsksTheRunningOwnerAndWaitsForItToRelease(t *testing.T) {
 	var report bytes.Buffer
 	seams.report = &report
 	waited := false
-	seams.released = func(context.Context, string) error { waited = true; return nil }
+	seams.released = func(context.Context, string) error {
+		waited = true
+		owner.events = append(owner.events, "released")
+		return nil
+	}
 	if err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams, joinRequest{Intent: stopIntent(t)}); err != nil {
 		t.Fatal(err)
 	}
 	if owner.joined != 1 || !owner.lastJoin.Intent.stop || owner.lastJoin.Intent.alone || !waited {
 		t.Fatalf("joined %d with %+v, waited %v", owner.joined, owner.lastJoin.Intent, waited)
 	}
+	if got, want := strings.Join(owner.events, ","), "held,join,released,exited"; got != want {
+		t.Fatalf("stop order = %q, want %q", got, want)
+	}
 	if report.String() != "Stopping Bee…\nBee stopped\n" {
 		t.Fatalf("report %q", report.String())
+	}
+}
+
+func TestStopDoesNotSucceedWhileOwnerProcessRemainsAfterReleasingState(t *testing.T) {
+	state := t.TempDir()
+	owner := &fakeOwner{descriptor: fakeDescriptor(t), started: 1,
+		exitWaitErr: errors.New("Bee owner process PID 4242 is still running after 2m")}
+	seams := owner.seams(filepath.Join(state, rendezvous.DirectoryName))
+	var report bytes.Buffer
+	seams.report = &report
+	seams.released = func(context.Context, string) error {
+		owner.events = append(owner.events, "released")
+		return nil
+	}
+	err := runClientEnsuresOwner(context.Background(), clientLaunch(state), seams,
+		joinRequest{Intent: stopIntent(t)})
+	if !errors.Is(err, owner.exitWaitErr) {
+		t.Fatalf("stop with a live owner process = %v", err)
+	}
+	if report.String() != "Stopping Bee…\n" {
+		t.Fatalf("reported success while the owner process remained alive: %q", report.String())
+	}
+	if got, want := strings.Join(owner.events, ","), "held,join,released,exited"; got != want {
+		t.Fatalf("stop order = %q, want %q", got, want)
 	}
 }
 

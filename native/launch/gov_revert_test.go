@@ -21,8 +21,17 @@ func TestGovernanceRevertUsesHeadlessRecoveryCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	if plan.Command != governanceRecoveryCommand || !reflect.DeepEqual(plan.Args, []string{"revert", owner}) ||
-		plan.Run != nil || plan.Prepare != nil {
+		plan.Run != nil || plan.Prepare == nil {
 		t.Fatalf("governance recovery plan = %#v", plan)
+	}
+	t.Setenv("WIPPY_NODE_ID", "persisted-node")
+	config, release, err := plan.Prepare(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = release() }()
+	if got := config.Sub("relay").GetString("node_name", ""); got != "persisted-node" {
+		t.Fatalf("governance recovery relay identity = %q", got)
 	}
 }
 

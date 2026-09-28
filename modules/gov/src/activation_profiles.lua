@@ -531,7 +531,7 @@ end
 local function derived(rule: Template?, workspace_id: string, source_node: string, source_workspace: string,
     node_id: string, installed_raw: unknown?, vocabulary: capability_model.Vocabulary?,
     owner_hint: string?, slot_source: string?): (DecodedProfile?, Object?, string?)
-    if not rule or (source_node ~= node_id and not rule.hive and slot_source ~= source_node) then
+    if not rule or (source_node ~= node_id and not rule.hive) then
         return nil, nil, missing(workspace_id, source_node, source_workspace)
     end
     if slot_source ~= nil and slot_source ~= source_node then
@@ -543,7 +543,7 @@ end
 
 function M.select_decoded(configuration: DecodedConfiguration, workspace_id: string, source_node: string,
     source_workspace: string, node_id: string, installed_raw: unknown?,
-    vocabulary: capability_model.Vocabulary?, owner_hint: string?, slot_source: string?): (DecodedProfile?, string?)
+    vocabulary: capability_model.Vocabulary?, owner_hint: string?): (DecodedProfile?, string?)
     local index, ambiguous = explicit(configuration.profiles, workspace_id, source_node, source_workspace)
     if ambiguous then return nil, ambiguous end
     if index then return configuration.profiles[index], nil end
@@ -557,7 +557,7 @@ function M.select_decoded(configuration: DecodedConfiguration, workspace_id: str
         end
     end
     local item, _, derive_error = derived(configuration.workspace_applications, workspace_id, source_node,
-        source_workspace, node_id, installed_raw, vocabulary, owner_hint, slot_source)
+        source_workspace, node_id, installed_raw, vocabulary, owner_hint, nil)
     return item, derive_error
 end
 

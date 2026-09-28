@@ -24,12 +24,12 @@ import (
 func sample() Descriptor {
 	return Descriptor{Version: 1, Execution: strings.Repeat("a", 32), Node: "forge",
 		Gossip: "100.70.10.28:40001", Transport: "100.70.10.28:40002",
-		PublicKey: base64.RawStdEncoding.EncodeToString(make([]byte, 32))}
+		PublicKey:      base64.RawStdEncoding.EncodeToString(make([]byte, 32)),
+		ClientRevision: ClientRevision, OwnerPID: os.Getpid()}
 }
 
 func TestStrictDescriptorBoundary(t *testing.T) {
 	d := sample()
-	d.ClientRevision = ClientRevision
 	data, _ := json.Marshal(d)
 	got, err := Decode(data)
 	if err != nil || got != d {
@@ -128,7 +128,6 @@ func (m membership) UpdateMeta(map[string]string) {}
 func TestPublisherRequiresStartedMembershipAndPreservesDescriptor(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "discovery")
 	d := sample()
-	d.ClientRevision = ClientRevision
 	component, err := Publisher(dir, d.Execution, "", false)
 	if err != nil {
 		t.Fatal(err)

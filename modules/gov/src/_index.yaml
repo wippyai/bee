@@ -32,6 +32,14 @@ entries:
   kind: ns.dependency
   component: bee/hub
   version: '*'
+- name: target_node_identity_storage
+  kind: ns.requirement
+  meta:
+    comment: Native state identity and its recorded legacy alias
+  default: bee.harness.host:environment
+  targets:
+  - entry: bee.gov:node_identity_migration_source
+    path: .storage
 - name: preflight
   kind: library.lua
   source: file://preflight.lua
@@ -146,6 +154,12 @@ entries:
 - name: environment
   kind: env.storage.os
   lifecycle: {auto_start: true}
+- name: node_identity_migration_source
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: node_identity_migration_source
+  default: ""
+  readonly: true
 - name: db_path
   kind: env.variable
   storage: bee.gov:environment

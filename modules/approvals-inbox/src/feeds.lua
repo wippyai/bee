@@ -122,6 +122,7 @@ local function snapshot(self: Client, source: Source): model.Reply
                     changes[#changes + 1] = {seq = item.sequence, request = view}
                 end
             end
+            table.sort(changes, function(left, right) return left.seq < right.seq end)
             purge_source(self, source)
             for key, address in pairs(staged) do self.addresses[key] = address end
             self.states[source.id] = next_state

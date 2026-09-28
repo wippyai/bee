@@ -407,7 +407,7 @@ local function without_variable(harness: Harness)
     local stdin: string? = nil
     if harness.name == "claude" then
         local delivery = claude_delivery(gateway_input(address, action_id, nil))
-        local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", max_turns = 3, gateway_tools = {"thread_read", "thread_wait"}})
+        local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", turn_budget = 3, gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(decode_error or "Claude launch request missing") end
         local specification = claude_launch.specification(decoded)
         argv[1] = harness.bin
@@ -537,7 +537,7 @@ local function hooks_through_gateway(harness: Harness)
     local stdin: string? = nil
     if harness.name == "claude" then
         local delivery = claude_delivery(gateway_input(address, action_id, HOOK_EVENTS))
-        local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", max_turns = 3, gateway_tools = {"thread_read", "thread_wait"}})
+        local decoded, decode_error = claude_launch.decode({profile_id = "batch", brief = "read the thread", permission_mode = "dontAsk", turn_budget = 3, gateway_tools = {"thread_read", "thread_wait"}})
         if not decoded then error(tostring(decode_error)) end
         local specification = claude_launch.specification(decoded)
         argv[1] = harness.bin

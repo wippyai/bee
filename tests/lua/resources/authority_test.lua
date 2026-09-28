@@ -11,6 +11,7 @@ local authority = require("authority")
 local migrations = require("migrations")
 local persist = require("persist")
 local resources = require("resources")
+local identity_migration = require("identity_migration")
 local PROJECT = "bee.resources:project_fixture"
 local SHARED = "bee.resources:shared_fixture"
 local UNRELATED_ENV_ROOT = "bee.resources:unrelated_env_root"
@@ -111,6 +112,49 @@ local function define_tests()
             local listed = value(call(manager, "list", {workspace_id = workspace}))
             test.eq(#(listed.associations :: {unknown}), 2)
             test.eq(code(call(user, "list", {workspace_id = workspace})), "DENIED")
+        end)
+        test.it("migrates legacy associations and grants once to the shared state identity", function()
+            local workspace, legacy = fresh("identity"), fresh("legacy-node")
+            local association = value(call(manager, "associate", {workspace_id = workspace, name = "session",
+                root_ref = PROJECT, subpath = "src", allowed_access = "write"}))
+            local grant = value(call(user, "grant", {workspace_id = workspace, name = "session", access = "write",
+                purpose = "session", audience = legacy, attempt_id = "legacy-attempt"}))
+            local destination = association.owner_node :: string
+            local resource = resources.database()
+            local db, open_error = persist.open({resource = resource :: string, ledger = authority.LEDGER,
+                migrations = migrations.all()})
+            if not db then error(tostring(open_error or "open resource migration store")) end
+            local _, association_error = db:execute(
+                "UPDATE bee_resource_associations SET owner_node = ? WHERE workspace_id = ? AND name = ?",
+                {legacy, workspace, "session"})
+            local _, issuer_error = db:execute(
+                "UPDATE bee_resource_grants SET issuer_owner = ? WHERE grant_id = ?", {legacy, grant.grant_id})
+            if association_error or issuer_error then error(tostring(association_error or issuer_error)) end
+
+            local migrated, migration_error = identity_migration.apply(db, destination, legacy)
+            if not migrated then error(tostring(migration_error)) end
+            local repeated, repeated_error = identity_migration.apply(db, destination, legacy)
+            if not repeated then error(tostring(repeated_error)) end
+            db:release()
+
+            local local_list = value(call(manager, "list", {workspace_id = workspace}))
+            local local_association = (local_list.associations :: {{[string]: unknown}})[1]
+            test.eq(local_association.owner_node, destination)
+            local resolved = value(call(placement, "resolve", {grant_id = grant.grant_id, subject = USER,
+                audience = destination, attempt_id = "legacy-attempt"}))
+            test.eq(resolved.workspace_id, workspace)
+            test.eq(resolved.name, "session")
+
+            local verify_db = assert(persist.open({resource = resource :: string, ledger = authority.LEDGER,
+                migrations = migrations.all()}))
+            local records, record_error = verify_db:query(
+                "SELECT association_count, grant_count FROM bee_resource_node_identity_migrations WHERE source_node = ? AND destination_node = ?",
+                {legacy, destination})
+            verify_db:release()
+            if record_error or not records then error("read resource migration record") end
+            test.eq(#records, 1)
+            test.eq(records[1].association_count, 1)
+            test.eq(records[1].grant_count, 1)
         end)
         test.it("creates an association once under concurrent zero CAS and preserves it on stale CAS", function()
             local workspace = fresh("cas")

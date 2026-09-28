@@ -16,6 +16,16 @@ entries:
   kind: library.lua
   source: file://clock.lua
   modules: [time]
+- name: gov_recovery_service
+  kind: process.service
+  process: bee.gov.service:recovery
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    startup: complete
+    security:
+      actor: {id: bee.gov.activation}
+      policies: [bee.gov.security:destination_service_policy]
 - name: workspace_hosts
   kind: process.service
   process: bee.launch:host_manager
@@ -29,15 +39,6 @@ entries:
       policies: [bee.security.desktop:host_policy, bee.security.desktop:local_supervisor_spawn_policy, bee.security.desktop:workspace_host_manager_policy]
   meta:
     comment: Starts a node workspace host when a lease first asks for it, stops it after 15 minutes unleased, and keeps at most 64 live
-- name: gov_recovery_service
-  kind: process.service
-  process: bee.gov.service:recovery
-  host: bee:workers
-  lifecycle:
-    auto_start: true
-    security:
-      actor: {id: bee.gov.activation}
-      policies: [bee.gov.security:destination_service_policy]
 - name: sync_exports
   kind: registry.entry
   meta:

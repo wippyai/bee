@@ -24,6 +24,14 @@ entries:
   targets:
   - entry: bee.approvals:database_ref
     path: .resource_ref
+- name: target_node_identity_storage
+  kind: ns.requirement
+  meta:
+    comment: Native state identity and its recorded legacy alias
+  default: bee.harness.host:environment
+  targets:
+  - entry: bee.approvals:node_identity_migration_source
+    path: .storage
 - name: target_policies
   kind: ns.requirement
   meta:
@@ -45,6 +53,18 @@ entries:
   kind: env.storage.os
   lifecycle:
     auto_start: true
+- name: identity_migration
+  kind: library.lua
+  source: file://identity_migration.lua
+  modules: [sql, env]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: node_identity_migration_source
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: node_identity_migration_source
+  default: ""
+  readonly: true
 - name: db_path
   kind: env.variable
   storage: bee.approvals:environment
@@ -68,6 +88,7 @@ entries:
     persist: bee.persist:database
     transaction: bee.persist:transaction
     migrations: bee.approvals.migrations:migrations
+    identity_migration: bee.approvals:identity_migration
     resources: bee.approvals:resources
     store: bee.approvals.persist:store
     outbox: bee.approvals.persist:outbox

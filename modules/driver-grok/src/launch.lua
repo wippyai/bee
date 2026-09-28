@@ -1,10 +1,11 @@
 local bounds = require("bounds")
 local types = require("types")
+local turn_budget = require("turn_budget")
 local M = {}
 
 M.PERMISSION_MODES = {"default", "acceptEdits", "auto", "dontAsk", "bypassPermissions", "plan"}
 M.EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
-M.MAX_TURNS = 32
+M.MAX_TURNS = turn_budget.MAX
 local function provider_home(private: boolean): types.ProviderHome
     return {provider = "grok", private = private, variable = "GROK_HOME", directory = ".grok", files = {
         {source_path = ".grok/auth.json", path = ".grok/auth.json", kind = "login", optional = true, write_back = true},
@@ -16,7 +17,7 @@ type Request = {
     profile_id: string,
     brief: string,
     permission_mode: string,
-    max_turns: integer,
+    turn_budget: integer?,
     model: string?,
     effort: string?,
     resume_ref: string?,
@@ -26,7 +27,7 @@ type Request = {
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "max_turns", "model", "effort", "resume_ref", "gateway_tools", "gateway_hooks"})
+    local unknown_field = bounds.fields(object, {"profile_id", "brief", "permission_mode", "turn_budget", "model", "effort", "resume_ref", "gateway_tools", "gateway_hooks"})
     if unknown_field then return nil, "launch request: " .. unknown_field end
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "profile_id is not an identifier" end
@@ -52,13 +53,9 @@ function M.decode(value: unknown): (Request?, string?)
         if not declared then return nil, "permission_mode is not one Bee admits" end
         mode = declared
     end
-    if profile_id == "window" and object.max_turns ~= nil then return nil, "max_turns is only supported for structured turns" end
-    local turns = 1
-    if object.max_turns ~= nil then
-        local number = bounds.integer(object.max_turns)
-        if not number or number < 1 or number > M.MAX_TURNS then return nil, "max_turns must be between 1 and " .. tostring(M.MAX_TURNS) end
-        turns = number
-    end
+    if profile_id == "window" and object.turn_budget ~= nil then return nil, "turn_budget is only supported for structured turns" end
+    local turns, turns_error = turn_budget.decode(object.turn_budget)
+    if object.turn_budget ~= nil and not turns then return nil, turns_error end
     local model: string? = nil
     if object.model ~= nil then
         local declared = bounds.text(object.model, 128)
@@ -91,7 +88,7 @@ function M.decode(value: unknown): (Request?, string?)
         profile_id = profile_id,
         brief = brief,
         permission_mode = mode,
-        max_turns = turns,
+        turn_budget = turns,
         model = model,
         effort = effort,
         resume_ref = resume,
@@ -116,9 +113,9 @@ function M.specification(request: Request): types.Launch
         argv[#argv + 1] = "--permission-mode"
         argv[#argv + 1] = request.permission_mode
     end
-    if not window then
+    if not window and request.turn_budget then
         argv[#argv + 1] = "--max-turns"
-        argv[#argv + 1] = tostring(request.max_turns)
+        argv[#argv + 1] = tostring(request.turn_budget)
     end
     if request.model then
         argv[#argv + 1] = "--model"

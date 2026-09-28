@@ -635,18 +635,18 @@ local function define_tests()
                     config = "bee.driver.codex:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude:research_batch", policy = "bee.driver.claude:launch_policy_claude_batch",
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
-                    config = "bee.driver.claude:config_home", option = "max_turns", expected = 1},
+                    config = "bee.driver.claude:config_home", option = "turn_budget", expected = 128},
                 {definition = "bee.driver.agy:research_batch", policy = "bee.driver.agy:launch_policy_agy_batch",
                     binding = "bee.driver.agy:binding", credential = "agy_login", executable = "bee.driver.agy:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
                 {definition = "bee.driver.muse:research_batch", policy = "bee.driver.muse:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
-                    option = "approval_mode", expected = "on-request", additional_options = {max_steps = 1}},
+                    option = "approval_mode", expected = "on-request", additional_options = {turn_budget = 128}},
                 {definition = "bee.driver.opencode:research_batch", policy = "bee.driver.opencode:launch_policy_opencode_batch",
                     binding = "bee.driver.opencode:binding", credential = "opencode_login", executable = "bee.driver.opencode:executable", unconfined = true},
                 {definition = "bee.driver.grok:research_batch", policy = "bee.driver.grok:launch_policy_grok_batch",
                     binding = "bee.driver.grok:binding", credential = "grok_login", executable = "bee.driver.grok:executable",
-                    option = "permission_mode", expected = "default", unconfined = true},
+                    option = "permission_mode", expected = "default", additional_options = {turn_budget = 128}, unconfined = true},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))
@@ -1772,6 +1772,22 @@ local function define_tests()
             test.not_nil(settled)
             test.eq(settled and settled.outcome, "succeeded")
 
+            local settled_replay = app_call(application, granted, {operation = "run", definition_ref = DEFINITION,
+                brief = "ping function", idempotency_key = run_key})
+            test.eq(settled_replay.ok, true)
+            local replayed_settled = value(settled_replay)
+            test.eq(replayed_settled.thread_id, run_val.thread_id)
+            test.eq(replayed_settled.action_id, run_val.action_id)
+            test.eq(replayed_settled.attempt_id, run_val.attempt_id)
+            test.eq(replayed_settled.state, "ended")
+            test.eq(replayed_settled.outcome, "succeeded")
+            test.eq(replayed_settled.answer, settled.answer)
+            local changed_replay = app_call(application, granted, {operation = "run", definition_ref = DEFINITION,
+                brief = "changed brief", idempotency_key = run_key})
+            test.eq(changed_replay.ok, false)
+            local changed_error = changed_replay.error
+            test.eq(changed_error and changed_error.code, "CONFLICT")
+
             -- 4. Cancel before start settles attempt as cancelled with terminal receipt
             local admit_reply = call_as(application, "bee.harness.launch:admit", {
                 request_id = fresh("cancel-before-start-req"),
@@ -1937,7 +1953,13 @@ local function define_tests()
             test.eq(count(list, "action.admitted"), 1)
             test.eq(count(list, "attempt.prepared"), 1)
             test.eq(count(list, "receipt"), 1)
-            test.eq(code(call("bee.harness.launch:start", {request_id = request_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"})), "CONFLICT")
+            local settled_replay = value(call("bee.harness.launch:start", {request_id = request_id,
+                definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
+            test.eq(settled_replay.mode, "settled")
+            test.eq(settled_replay.thread_id, started.thread_id)
+            test.eq(settled_replay.action_id, started.action_id)
+            test.eq(settled_replay.attempt_id, started.attempt_id)
+            test.eq(count(kinds(thread_id), "receipt"), 1)
             local retried_id = fresh("request")
             local first = value(call("bee.harness.launch:start", {request_id = retried_id, definition_ref = DEFINITION, workspace_id = workspace, brief = "ping"}))
             test.eq(await_settled(tostring(first.thread_id), tostring(first.attempt_id)).answer, "pong")
@@ -1993,8 +2015,13 @@ local function define_tests()
                     subscription_id = subscribed.subscription_id}))
                 test.eq(#(caught_up.records :: {unknown}), 0)
                 test.is_nil(caught_up.page_id)
-                test.eq(code(call("bee.harness.launch:start", {request_id = first_id, definition_ref = DEFINITION,
-                    workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared})), "CONFLICT")
+                local settled_replay = value(call("bee.harness.launch:start", {request_id = first_id,
+                    definition_ref = DEFINITION, workspace_id = workspace, brief = "investigate the first hypothesis", thread_id = shared}))
+                test.eq(settled_replay.mode, "settled")
+                test.eq(settled_replay.thread_id, first.thread_id)
+                test.eq(settled_replay.action_id, first.action_id)
+                test.eq(settled_replay.attempt_id, first.attempt_id)
+                test.eq(count(kinds(shared), "receipt"), 2)
                 test.eq(count(kinds(shared), "receipt"), 2)
             end)
             entry.data = original

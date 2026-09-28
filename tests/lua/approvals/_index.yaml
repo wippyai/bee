@@ -21,12 +21,18 @@ entries:
   file: .wippy/approvals-test.db
   lifecycle:
     auto_start: true
+- name: identity_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/approvals-identity-test.db
+  lifecycle:
+    auto_start: true
 - name: store_test_policy
   kind: security.policy
   meta: {type: test_support}
   policy:
     actions: [db.get]
-    resources: [bee.approvals:test_db]
+    resources: [bee.approvals:test_db, bee.approvals:identity_test_db]
     effect: allow
 - name: service_test
   kind: function.lua
@@ -44,4 +50,5 @@ entries:
     outbox: bee.approvals.persist:outbox
     migrations: bee.approvals.migrations:migrations
     persist: bee.persist:database
+    identity_migration: bee.approvals:identity_migration
     thread_harness: bee.threads:harness

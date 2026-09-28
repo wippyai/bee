@@ -557,6 +557,14 @@ local function thread_call(io: IO, session_request: Request, operation: string, 
     fields.idempotency_key = step_key and ("launch:" .. session_request.attempt_id .. ":" .. step_key) or io.key()
     return must(io, M.THREADS .. ":" .. operation, fields)
 end
+function M.admitted_action(request: Request, binding_ref: string, binding_digest: string, budget_ref: string,
+    grant_refs: {string}, input_text: string): record_types.Admitted
+    local admitted: record_types.Admitted = {request_id = "launch:" .. request.attempt_id,
+        principal_id = request.owner_id, binding_ref = binding_ref, binding_digest = binding_digest,
+        grant_refs = grant_refs, budget_ref = budget_ref, input = {text = input_text}}
+    if request.parent_action_id then admitted.parent_action_id = request.parent_action_id end
+    return admitted
+end
 local function placement_observation(io: IO, session: Session, attempt: placement_types.Attempt): (boolean, string?)
     local payload = json.encode({placement_attempt_id = attempt.attempt_id, execution_state = attempt.execution_state, cleanup_state = attempt.cleanup_state,
         exit_source = attempt.exit_source, evidence_count = attempt.evidence_count, capability = attempt.capability})
@@ -782,9 +790,8 @@ function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, Fail
         -- Describe that action in the ledger without sending text to the child.
         local action_input = request.brief
         if action_input == "" and plan.profile.mode == "window" then action_input = "Open " .. plan.binding.title .. " window" end
-        local admitted_body = {request_id = "launch:" .. request.attempt_id, principal_id = request.owner_id,
-            binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry, grant_refs = grant_refs, budget_ref = plan.policy.ref, input = {text = action_input}}
-        if request.parent_action_id then admitted_body.parent_action_id = request.parent_action_id end
+        local admitted_body = M.admitted_action(request, plan.binding.binding_id,
+            plan.binding.binding_digest.entry, plan.policy.ref, grant_refs, action_input)
         local _, admit_error = thread_call(io, request, "admit_action", {action_id = request.action_id, admitted = admitted_body}, "admit")
         if admit_error then
             local previous, attached, attach_error = M.attach_action(io, request)
@@ -1128,7 +1135,8 @@ local function decode_normalized(value: unknown): (Normalized?, string?)
     return {state = state, observations = observations, terminal = terminal}, nil
 end
 local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({record_types.Observation}?, driver_types.Terminal?, string?)
-    local reply, err = io.call(session.plan.normalize_target, {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false})
+    local reply, err = io.call(session.plan.normalize_target, {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false,
+        turn_budget = session.plan.policy.prepare_options.turn_budget})
     if err then return nil, nil, "driver normalize: " .. err end
     local result, decode_error = decode_normalized(reply)
     if not result then return nil, nil, "driver normalize: " .. tostring(decode_error) end

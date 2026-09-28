@@ -89,7 +89,7 @@ local function define_tests()
             -- it, and its driver has no such launch field.
             test.is_nil(preferences.apply(raw_policy(CLAUDE_WINDOW), selected()))
             test.is_nil(preferences.apply(raw_policy(CLAUDE_BATCH), selected()))
-            local claude, claude_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default", max_turns = 1, config_profile = PROFILE})
+            local claude, claude_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default", turn_budget = 1, config_profile = PROFILE})
             test.is_nil(claude)
             test.is_true(tostring(claude_error):find("config_profile", 1, true) ~= nil)
             -- Even if a host accidentally offers the generic text option on a

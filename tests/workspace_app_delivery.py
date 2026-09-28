@@ -36,6 +36,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import yaml
@@ -148,6 +149,30 @@ def answer_entries():
              "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}}]
 
 
+def state_node_identity(project, state):
+    """Read Bee's identity record or derive the runtime ID used to create it."""
+    identity_path = Path(state) / "hive" / "node.identity.json"
+    if identity_path.is_file():
+        identity = json.loads(identity_path.read_text())
+        assert isinstance(identity.get("node_id"), str) and identity["node_id"], identity
+        return identity
+    for name in ("WIPPY_NODE_ID", "WIPPY_RELAY_NODE_NAME"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            node_id = value
+            break
+    else:
+        try:
+            machine_id = Path("/etc/machine-id").read_text().strip()
+        except OSError:
+            machine_id = ""
+        host = machine_id or socket.gethostname()
+        node_id = str(uuid.uuid5(uuid.NAMESPACE_OID, f"wippy-node:{host}\0{Path(project).resolve()}"))
+    native_alias = "bee-owner-" + hashlib.sha256(str(Path(state).resolve()).encode()).hexdigest()[:16]
+    return {"version": 1, "node_id": node_id,
+            "legacy_node_id": "" if node_id == native_alias else native_alias}
+
+
 def compose(folder):
     project = folder / "project"
     shutil.copytree(ROOT / "src", project / "src")
@@ -157,6 +182,12 @@ def compose(folder):
     (project / SHARED_SUBPATH).mkdir(parents=True, exist_ok=True)
     (project / SHARED_SUBPATH / "greeting.txt").write_text(GREETING)
     shutil.copytree(FIXTURE, project / "src/workspace_app_probe")
+    source_entries = yaml.safe_load((project / "src/_index.yaml").read_text())["entries"]
+    recovery = next(entry for entry in source_entries if entry.get("name") == "gov_recovery_service")
+    workspace_hosts = next(entry for entry in source_entries if entry.get("name") == "workspace_hosts")
+    assert recovery["lifecycle"].get("startup") == "complete", recovery
+    assert recovery["lifecycle"].get("auto_start") is True, recovery
+    assert source_entries.index(recovery) < source_entries.index(workspace_hosts)
     for relative in SHIPPED:
         assert (project / relative).read_bytes() == (ROOT / relative).read_bytes(), relative
     # A Hive acceptance later starts this project as its named source node.
@@ -164,11 +195,11 @@ def compose(folder):
         name_node(project, HIVE_SOURCE)
         stage_hive_source(project)
     elif NATIVE_OWNER:
-        # A standalone owner derives its relay identity from the native state
-        # directory. Keep authoring and the desktop client on that same node.
+        # Ordinary runtime launches and the retained native owner share the
+        # runtime identity persisted for this state directory.
         native_state = (folder / "native-state").resolve()
-        owner_node = "bee-owner-" + hashlib.sha256(str(native_state).encode()).hexdigest()[:16]
-        name_node(project, owner_node)
+        identity = state_node_identity(project, native_state)
+        name_node(project, identity["node_id"])
     answer = folder / "entries.json"
     answer.write_text(json.dumps(answer_entries()))
     index = project / "src/workspace_app_probe/_index.yaml"
@@ -181,7 +212,7 @@ def compose(folder):
         policy["environment"] = {}
         policy["environment_refs"] = {"CLAUDE_CONFIG_DIR": "bee.driver.claude:config_home"}
         policy["allow_host_home"] = True
-        policy["prepare_options"] = {"permission_mode": "dontAsk", "max_turns": 32}
+        policy["prepare_options"] = {"permission_mode": "dontAsk", "turn_budget": 128}
         policy["required_exit_observation"] = "independent"
         policy["required_cleanup"] = "process_group"
         policy["stop_grace_ms"] = 5000
@@ -220,8 +251,13 @@ def author(project, folder):
         brief = LIVE_BRIEF + spec
     else:
         brief = spec
+    identity_environment = {}
+    if NATIVE_OWNER:
+        identity = state_node_identity(project, folder / "native-state")
+        identity_environment = {"WIPPY_NODE_ID": identity["node_id"],
+                                "node_identity_migration_source": identity.get("legacy_node_id", "")}
     author_environment = database_environment(folder, BEE_WORKSPACE_APP_WORKSPACE=workspace_id,
-                                               BEE_WORKSPACE_APP_BRIEF=brief)
+                                               BEE_WORKSPACE_APP_BRIEF=brief, **identity_environment)
     if PROVIDER == "scripted":
         author_environment.update(BEE_CLAUDE_BIN=str(ROOT / "tests/fixtures/harness/bin/claude"),
                                  claude=str(ROOT / "tests/fixtures/harness/bin/claude"),
@@ -305,6 +341,22 @@ def stop_native_owner(folder, project):
                              text=True, timeout=90)
     output = stopped.stdout + stopped.stderr
     assert stopped.returncode == 0 and "Bee stopped" in output, output
+    descriptor_path = folder / "native-state" / "local-mesh" / "mesh-owner.json"
+    descriptor = json.loads(descriptor_path.read_text())
+    owner_pid = descriptor.get("owner_pid")
+    assert isinstance(owner_pid, int) and owner_pid > 0, descriptor
+    try:
+        os.kill(owner_pid, 0)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        pass
+    proc_stat = Path(f"/proc/{owner_pid}/stat")
+    if proc_stat.exists():
+        fields = proc_stat.read_text().split()
+        if len(fields) > 2 and fields[2] == "Z":
+            return
+    raise AssertionError(f"bee stop returned success while owner PID {owner_pid} remained running")
 
 
 def assert_native_owner_started_cleanly(folder):
@@ -417,15 +469,9 @@ def exercise():
     try:
         restarted.wait("No applications open", timeout=COLD_BOOT)
         assert_native_owner_started_cleanly(folder)
-        deadline = time.monotonic() + COLD_BOOT
-        while True:
-            restarted.open_start()
-            if TITLE in restarted.text():
-                restarted.choose(TITLE)
-                break
-            restarted.key(b"\x1b")
-            assert time.monotonic() < deadline, restarted.text()
-            restarted.pump(.1)
+        assert_catalog_lists(restarted, TITLE, COLD_BOOT)
+        restarted.open_start()
+        restarted.choose(TITLE)
         if NATIVE_DESKTOP:
             gossip_port = int((folder / "native-state" / "hive" / "gossip.port").read_text().strip())
             assert gossip_port != saved_gossip_port, (gossip_port, saved_gossip_port)

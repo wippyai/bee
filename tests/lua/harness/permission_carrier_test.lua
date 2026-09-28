@@ -238,6 +238,18 @@ local function spawn_carrier(entry: string, request_value: Object, mode: string,
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
 end
+-- Waits for the carrier's report that it holds at the named step, instead
+-- of a fixed sleep guessing how long the carrier takes to reach it under a
+-- busy host. The caller listens for bee.carrier.paused before spawning.
+local function await_paused(paused: Channel<process.Message>, pid: string, wanted: string)
+    local deadline = time.after("60s")
+    while true do
+        local selected = channel.select({paused:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then error(pid .. " never held at " .. wanted) end
+        local message = selected.value
+        if tostring(message:from()) == pid and message:payload():data() == wanted then return end
+    end
+end
 local exited: {[string]: Outcome} = {}
 local function await_carriers(pids: {string}, label: string?): {[string]: Outcome}
     local events = assert(process.events())
@@ -474,12 +486,14 @@ local function define_tests()
         test.it("revalidates again when the authority restarts between revalidation and consumption", function()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "permission_revalidated")
             local view = await_request(workspace)
             local db = assert(approvals.open())
             assert(approvals.establish(db))
             decide(view, "approved")
-            time.sleep("1500ms")
+            await_paused(paused, pid, "permission_revalidated")
+            process.unlisten(paused)
             assert(approvals.establish(db))
             db:release()
             process.send(pid, "bee.carrier.continue", {go = true})
@@ -494,8 +508,10 @@ local function define_tests()
         test.it("keeps deciding through polling when the hint subscription is lost", function()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "hints_opened")
-            time.sleep("1500ms")
+            await_paused(paused, pid, "hints_opened")
+            process.unlisten(paused)
             local stored = call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = launch.attempt_id :: string})
             local point = stored.checkpoint :: Object
             local subscription_id = tostring(point.hint_subscription)
@@ -587,12 +603,14 @@ local function define_tests()
             local copy, original = bind_copy()
             local thread_id, workspace = thread(), fresh("ws")
             local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
+            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
             local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "permission_revalidated")
             local view = await_request(workspace)
             local db = assert(approvals.open())
             assert(approvals.establish(db))
             decide(view, "approved")
-            time.sleep("1500ms")
+            await_paused(paused, pid, "permission_revalidated")
+            process.unlisten(paused)
             shell('printf "# changed between revalidation and consumption\\n" >> ' .. copy)
             assert(approvals.establish(db))
             db:release()
@@ -613,18 +631,28 @@ local function define_tests()
         end)
         test.it("leaves a write uncertain when the runner is lost during recovery and sends nothing after settlement", function()
             local thread_id, workspace = thread(), fresh("ws")
-            local launch = request(thread_id, fresh("attempt"), workspace, stream, "1")
+            -- The child's own permission wait races decide()'s approval
+            -- delivery; give it the suite's standard window so a busy host
+            -- cannot make it time out before the carrier reaches the crash
+            -- checkpoint below.
+            local launch = request(thread_id, fresh("attempt"), workspace, stream, "12")
             local first = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "write_intended")
             decide(await_request(workspace), "approved")
             local crashed = await_carrier(first, "write_intended")
             test.is_true(tostring(crashed.error):find("crash after write_intended", 1, true) ~= nil)
-            time.sleep("2500ms")
+            -- The runner is lost: its child is ended by the host, not by a
+            -- permission window that a busy host could outlast or undershoot.
+            call("bee.placement.native.binding:stop", {attempt_id = launch.attempt_id :: string, mode = "forced"})
             local settlement = settlement_of(await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil), "lost runner"), "lost runner")
             test.neq(settlement.outcome, "succeeded")
             local records = records_of(thread_id)
             test.eq(table.concat(writes(records), ","), "intended,uncertain")
             test.eq(tool_results(records), 0)
             local late_thread, late_workspace = thread(), fresh("ws")
+            -- This carrier crashes at "permission_requested", immediately
+            -- on submission, before any decision round-trip: the short
+            -- window is what lets the 2500ms sleep below outlast the
+            -- underlying child's own abandoned permission wait.
             local late_launch = request(late_thread, fresh("attempt"), late_workspace, stream, "1")
             local paused = spawn_carrier("bee.harness.catalog:carrier_faulted", late_launch, "open", "permission_requested")
             local late_view = await_request(late_workspace)

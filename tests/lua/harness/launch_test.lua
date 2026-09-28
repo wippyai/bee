@@ -1454,14 +1454,11 @@ local function define_tests()
             apply(policy_entry)
             local ok, failure = pcall(function()
                 local held = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "hold", idempotency_key = fresh("app-hold")}))
-                local cancelled = false
-                for _ = 1, 50 do
-                    local reply = app_call(application, granted, {operation = "cancel", thread_id = held.thread_id, attempt_id = held.attempt_id})
-                    if reply.ok then cancelled = true break end
-                    test.eq(code(reply), "NOT_STARTED")
-                    time.sleep("100ms")
-                end
-                test.is_true(cancelled)
+                -- A wait_ms budget lets cancel itself long-poll for the
+                -- child to start and stop it, instead of a client retry
+                -- loop racing the child's own startup under a busy host.
+                local cancel_reply = app_call(application, granted, {operation = "cancel", thread_id = held.thread_id, attempt_id = held.attempt_id, wait_ms = 60000})
+                test.is_true(cancel_reply.ok)
                 -- Only the attempt's owner stops it.
                 test.eq(code(app_call("bee.application:" .. workspace .. ":other", granted, {operation = "cancel", thread_id = held.thread_id, attempt_id = held.attempt_id})), "DENIED")
                 test.eq(settle(held).outcome, "cancelled")
@@ -1653,14 +1650,20 @@ local function define_tests()
             end, function()
                 local started = value(generated_call({operation = "launch", definition_ref = SHIPPED_SHAPE_DEFINITION,
                     brief = "fail during native preparation", idempotency_key = fresh("app-prepare-refused")}))
-                local settled = value(generated_call({operation = "wait", thread_id = started.thread_id,
-                    -- The shipped policy admits a 15-second startup window.
-                    -- Let post-claim preparation and settlement complete before
-                    -- asserting the terminal refusal under a loaded host.
-                    attempt_id = started.attempt_id, wait_ms = 60000}))
-                test.eq(settled.state, "ended")
-                test.eq(settled.outcome, "failed")
-                local failure = settled.error :: {[string]: unknown}?
+                -- wait_ms bounds one poll's watch, not the time to settle:
+                -- it returns as soon as any new thread record lands, which
+                -- can be well before the terminal one under a loaded host.
+                -- Loop until the state is actually "ended".
+                local settled: {[string]: unknown}? = nil
+                while settled == nil do
+                    local current = value(generated_call({operation = "wait", thread_id = started.thread_id,
+                        attempt_id = started.attempt_id, wait_ms = 60000}))
+                    if current.state == "ended" then settled = current end
+                end
+                test.not_nil(settled)
+                test.eq(settled and settled.state, "ended")
+                test.eq(settled and settled.outcome, "failed")
+                local failure = settled and settled.error :: {[string]: unknown}?
                 test.not_nil(failure)
                 test.is_true(tostring(failure and failure.message):find("native placement does not support placement_options", 1, true) ~= nil)
                 local inspected = value(generated_call({operation = "status", thread_id = started.thread_id,
@@ -1844,7 +1847,7 @@ local function define_tests()
                     operation = "cancel",
                     thread_id = held_run.thread_id,
                     attempt_id = held_run.attempt_id,
-                    wait_ms = 5000,
+                    wait_ms = 60000,
                     idempotency_key = fresh("cancel-run-key")
                 })
                 test.eq(cancel_running.ok, true)

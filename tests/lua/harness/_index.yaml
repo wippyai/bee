@@ -1460,7 +1460,7 @@ entries:
   kind: function.lua
   source: file://launch_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "300s"}
+  meta: {type: test, suite: bee, timeout: "600s"}
   modules: [funcs, security, process, channel, registry, env, exec, time]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.placement.native.security:placement_store_policy]
@@ -1513,7 +1513,7 @@ entries:
   source: file://profile_environment_isolation_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "300s"}
-  modules: [funcs, security, registry, env, time, json]
+  modules: [funcs, security, process, channel, registry, env, time, json]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
   imports:
@@ -1702,7 +1702,7 @@ entries:
   kind: function.lua
   source: file://permission_carrier_test.lua
   method: run
-  meta: {type: test, suite: bee, timeout: "300s"}
+  meta: {type: test, suite: bee, timeout: "600s"}
   modules: [funcs, security, process, registry, env, time, channel, json, exec, hash]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.security.approvals:approval_store_policy, bee.placement.native.security:placement_exec_policy]

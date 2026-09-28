@@ -260,36 +260,14 @@ function M.prepare(raw_config: Config, raw: unknown): Result
     if review and review.requires_approval == true and installed and proposal and config.leases then
         local proposed = proposal.capabilities :: {unknown}
         local lease = lease_store.find_active(config.leases, config.overlay_owner, proposed)
-        local lease_key = key(prefix, "lease-use")
+        local lease_key = key(prefix, "lease-authorize")
         if lease and lease_key then
-            local used = lease_store.call(config.leases, config.actor_id, {operation = "use",
-                idempotency_key = lease_key, lease_id = lease.lease_id,
-                expected_revision = lease.revision, intent_id = intent_id, proposal_capabilities = proposed})
-            local approval_digest = bounds.text(lease.source_approval_proposal_digest, 64)
-            local approval_id = bounds.id(lease.source_approval_id)
-            local incarnation = bounds.count(lease.source_approval_owner_incarnation)
-            if used.ok and approval_digest and approval_id and incarnation then
-                local bound = activations.call(config.activations, config.actor_id, {operation = "bind_approval",
-                    intent_id = intent_id, expected_revision = intent.revision, idempotency_key = bind_key,
-                    approval_id = approval_id, approval_proposal_digest = approval_digest,
-                    approval_owner_incarnation = incarnation})
-                if not bound.ok then return bound end
-                local linked = object(bound.value)
-                local consume_key = key(prefix, "lease-start")
-                local record_key = key(prefix, "lease-record")
-                if not linked or not consume_key or not record_key then
-                    return failure("INVALID", "activation receipt_key is too long")
-                end
-                local started = activations.call(config.activations, config.actor_id, {operation = "begin_consume",
-                    intent_id = intent_id, expected_revision = linked.revision, idempotency_key = consume_key})
-                if not started.ok then return started end
-                local consuming = object(started.value)
-                if not consuming then return failure("INTERNAL", "lease authorization has no consuming intent") end
-                return activations.call(config.activations, config.actor_id, {operation = "record_consumption",
-                    intent_id = intent_id, expected_revision = consuming.revision, idempotency_key = record_key,
-                    consumer_id = LEASE_CONSUMER, proposal_digest = approval_digest,
-                    effect_key = consuming.effect_key})
-            end
+            -- The use, its proof and the intent's authorization commit together.
+            -- A refusal leaves the intent prepared and falls to a person.
+            local authorized = activations.call(config.activations, config.actor_id, {operation = "authorize_lease",
+                intent_id = intent_id, expected_revision = intent.revision, idempotency_key = lease_key,
+                lease_id = lease.lease_id, lease_expected_revision = lease.revision, proposal_capabilities = proposed})
+            if authorized.ok then return authorized end
         end
     end
     local bound, approval_error = approval.request_activation(config.approvals, intent,
@@ -375,15 +353,6 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     end
 
     if intent.phase == "consuming" then
-        local leased = config.leases and lease_store.authorized(config.leases, intent_id) or nil
-        if leased then
-            local approval_digest = bounds.text(intent.approval_proposal_digest, 64)
-            local lease_key = key(prefix, "lease-record")
-            if not approval_digest or not lease_key then return failure("INVALID", "lease authorization identity is invalid") end
-            return activations.call(config.activations, config.actor_id, {operation = "record_consumption",
-                intent_id = intent_id, expected_revision = intent.revision, idempotency_key = lease_key,
-                consumer_id = LEASE_CONSUMER, proposal_digest = approval_digest, effect_key = intent.effect_key})
-        end
         if intent.grant_reuse_digest ~= nil then
             local current, current_error = remeasure_authorized(config, intent)
             if not current then return current_error :: Result end
@@ -432,6 +401,13 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "authorized" then
         local current, measurement_error = remeasure_authorized(config, intent)
         if not current then return measurement_error :: Result end
+        if intent.consumed_consumer_id == LEASE_CONSUMER then
+            local proof = config.leases and lease_store.authorized(config.leases, intent_id) or nil
+            if not proof or proof.approval_id ~= intent.approval_id
+                or proof.approval_proposal_digest ~= intent.approval_proposal_digest then
+                return failure("CONFLICT", "lease proof does not match the intent's authorization")
+            end
+        end
         if intent.grant_reuse_digest ~= nil then
             local installed = object(current.capability_installed)
             if not installed or installed.record_digest ~= intent.grant_reuse_digest then

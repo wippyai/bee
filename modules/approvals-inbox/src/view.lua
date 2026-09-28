@@ -44,7 +44,7 @@ local function draw_leases(width: integer, height: integer, preferences: appeara
     for slot = 1, window.capacity do
         local row = rows[window.offset + slot]
         if not row then break end
-        frame.row(painter, list_first + slot - 1, lease_label(row), window.offset + slot == selected_index, "lease", window.offset + slot, row.lease_id)
+        frame.row(painter, list_first + slot - 1, lease_label(row), window.offset + slot == selected_index, "lease_row", window.offset + slot, row.lease_id)
     end
     if selected and detail_rows > 0 then
         local y = list_last + 1
@@ -68,8 +68,41 @@ local function draw_leases(width: integer, height: integer, preferences: appeara
     frame.footer(painter, status ~= "" and status or notice, LEASE_HINTS)
     return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
 end
+local REVIEW_HINTS = frame.hints({{key = "↑↓ PgUp PgDn", verb = "scroll"}, {key = "A", verb = "approve at the end"}, {key = "D", verb = "deny"}, {key = "Esc", verb = "back"}})
+local function draw_review(width: integer, height: integer, preferences: appearance.Preferences, state: model.State,
+    detail: model.ApprovalView, slice: leases.Slice, status: string): Frame
+    local painter = frame.new(width, height, preferences)
+    local theme = painter.theme
+    local lines = leases.review_lines(detail, width)
+    local visible = math.floor(math.max(1, height - 5))
+    local top, complete = leases.review_frame(slice, detail, #lines, visible)
+    frame.header(painter, "LEASE APPROVAL", "lines " .. tostring(math.min(#lines, top + visible)) .. " of " .. tostring(#lines))
+    for slot = 1, visible do
+        local value = lines[top + slot]
+        if not value then break end
+        frame.line(painter, 2 + slot, value, theme.text)
+    end
+    if height >= 4 then
+        local idle = state.pending == nil
+        frame.actions(painter, height - 1, {
+            {kind = "approve", label = "Approve", enabled = complete and idle, primary = true},
+            {kind = "deny", label = "Deny", enabled = idle},
+            {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
+        })
+    end
+    local message = status
+    if message == "" then message = state.notice end
+    if message == "" and not complete then message = "Scroll to the end of the terms to approve" end
+    frame.footer(painter, message, REVIEW_HINTS)
+    return {rows = frame.rows(painter), hits = painter.hits, capacity = visible, offset = 0}
+end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice): Frame
     if slice.leases_view then return draw_leases(width, height, preferences, slice, offset, status, slice.notice) end
+    local open = state.detail
+    local chosen = model.selected_row(state)
+    if open and chosen and open.approval_id == chosen.approval_id and leases.is_review(open) then
+        return draw_review(width, height, preferences, state, open, slice, status)
+    end
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
     local pending_total = 0
@@ -149,6 +182,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local message = status
     if message == "" then message = state.notice end
+    if message == "" then message = slice.notice end
     if message == "" and state.pending then message = "Waiting for the approval owner…" end
     for _, workspace in ipairs(state.workspaces) do
         local unavailable = state.unavailable[workspace]

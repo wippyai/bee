@@ -22,6 +22,7 @@ local MAX_TTL_SECONDS = 86400 * 30
 
 type Result = transaction.Result
 type Store = {db: sql.DB, node: string, workspace: string, closed: boolean}
+type Scope = {node: string, workspace: string}
 type Object = {[string]: unknown}
 type Request = Object
 
@@ -74,7 +75,7 @@ local function request_digest(value: Request): (string?, Result?)
     return measured, nil
 end
 
-local function load(tx: sql.Transaction, store: Store, lease_id: string): (Object?, Result?)
+local function load(tx: sql.Transaction, store: Scope, lease_id: string): (Object?, Result?)
     return one(tx, "SELECT *, (expires_at IS NOT NULL AND expires_at <= " .. NOW .. ") AS past_expiry FROM bee_governance_leases WHERE owner_node = ? AND workspace_id = ? AND lease_id = ?",
         {store.node, store.workspace, lease_id}, "lease")
 end
@@ -89,7 +90,7 @@ local function effective(row: Object): string
     return "active"
 end
 
-local function view(store: Store, row: Object): Object
+local function view(store: Scope, row: Object): Object
     local envelope = type(row.envelope_bytes) == "string" and json.decode(row.envelope_bytes :: string) or nil
     return {owner_node = store.node, workspace_id = store.workspace, lease_id = row.lease_id, target = row.target,
         envelope = envelope, envelope_digest = row.envelope_digest, source_approval_id = row.source_approval_id,
@@ -103,7 +104,7 @@ end
 local function replay(store: Store, tx: sql.Transaction, actor: string, input: Request, measured: string): Result?
     local key = id(input.idempotency_key)
     if not key then return failure("INVALID", "idempotency_key is required") end
-    local row, err = one(tx, "SELECT actor_id, operation, request_digest, lease_id FROM bee_governance_lease_receipts WHERE owner_node = ? AND workspace_id = ? AND idempotency_key = ?",
+    local row, err = one(tx, "SELECT actor_id, operation, request_digest, lease_id, result_json FROM bee_governance_lease_receipts WHERE owner_node = ? AND workspace_id = ? AND idempotency_key = ?",
         {store.node, store.workspace, key}, "lease receipt")
     if err or not row then return err end
     if row.actor_id ~= actor then return failure("DENIED", "idempotency key belongs to another actor") end
@@ -112,17 +113,25 @@ local function replay(store: Store, tx: sql.Transaction, actor: string, input: R
     end
     local current, current_error = load(tx, store, row.lease_id :: string)
     if current_error or not current then return current_error or failure("INTERNAL", "lease receipt has no lease") end
-    return transaction.success(view(store, current), true)
+    local reply = view(store, current)
+    if type(row.result_json) == "string" then
+        local saved = bounds.object(json.decode(row.result_json :: string))
+        if saved then
+            reply.fenced_intents, reply.started_effects = saved.fenced_intents, saved.started_effects
+        end
+    end
+    return transaction.success(reply, true)
 end
-local function save_receipt(store: Store, tx: sql.Transaction, actor: string, input: Request, measured: string, row: Object): Result?
+local function save_receipt(store: Store, tx: sql.Transaction, actor: string, input: Request, measured: string, row: Object, result: Object?): Result?
     local total, total_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_lease_receipts WHERE owner_node = ? AND workspace_id = ?",
         {store.node, store.workspace}, "lease receipt count")
     if total_error or not total then return total_error or failure("INTERNAL", "lease receipt count is missing") end
     local receipts = count(total.count, false)
     if not receipts then return failure("INTERNAL", "lease receipt count is corrupt") end
     if receipts >= MAX_RECEIPTS then return failure("CAPACITY_EXHAUSTED", "lease receipt capacity is exhausted") end
-    local _, err = tx:execute("INSERT INTO bee_governance_lease_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, request_digest, lease_id, result_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        {store.node, store.workspace, input.idempotency_key, actor, input.operation, measured, row.lease_id, row.revision})
+    local _, err = tx:execute("INSERT INTO bee_governance_lease_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, request_digest, lease_id, result_revision, result_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        {store.node, store.workspace, input.idempotency_key, actor, input.operation, measured, row.lease_id, row.revision,
+            result and json.encode(result) or sql.NULL})
     if err then return storage(err, "record lease receipt") end
     return nil
 end
@@ -138,11 +147,12 @@ local function decode(raw: unknown): (Request?, string?)
         return {operation = operation, lease_id = lease_id}, nil
     end
     if operation == "list" then
-        local extra = unknown(value, {"operation", "target"})
+        local extra = unknown(value, {"operation", "target", "history"})
         if extra then return nil, extra end
         local target = value.target == nil and nil or id(value.target)
         if value.target ~= nil and not target then return nil, "lease target is invalid" end
-        return {operation = operation, target = target}, nil
+        if value.history ~= nil and type(value.history) ~= "boolean" then return nil, "history is a boolean" end
+        return {operation = operation, target = target, history = value.history}, nil
     end
     local key = id(value.idempotency_key)
     if not key then return nil, "idempotency_key is required" end
@@ -201,7 +211,7 @@ local function grant(store: Store, actor: string, input: Request): Result
     return transaction.write(store.db, "governance lease", function(tx: sql.Transaction): Result
         local already = replay(store, tx, actor, input, measured :: string)
         if already then return already end
-        local total, total_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_leases WHERE owner_node = ? AND workspace_id = ?",
+        local total, total_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_leases WHERE owner_node = ? AND workspace_id = ? AND state = 'active' AND (expires_at IS NULL OR expires_at > " .. NOW .. ") AND (max_applies IS NULL OR applies_used < max_applies)",
             {store.node, store.workspace}, "lease count")
         if total_error or not total then return total_error or failure("INTERNAL", "lease count is missing") end
         local leases = count(total.count, false)
@@ -232,34 +242,68 @@ local function grant(store: Store, actor: string, input: Request): Result
     end)
 end
 
+-- reserve_in: check one lease and record the proof of the intent it
+-- authorizes, inside the caller's transaction. Containment is checked here,
+-- in the same transaction that counts the use, so no earlier lookup can go
+-- stale. The approval identity the intent will carry is copied from the lease.
+function M.reserve_in(tx: sql.Transaction, store: Scope, input: Request): (Object?, Result?)
+    local row, row_error = load(tx, store, input.lease_id :: string)
+    if row_error or not row then return nil, row_error or failure("NOT_FOUND", "lease does not exist") end
+    if input.expected_revision ~= row.revision then return nil, failure("CONFLICT", "expected_revision does not match lease") end
+    local state = effective(row)
+    if state ~= "active" then return nil, failure("DENIED", "lease is " .. state) end
+    local envelope = json.decode(row.envelope_bytes :: string)
+    if type(envelope) ~= "table" or not lease_model.covers(envelope :: {any}, input.proposal_capabilities :: {any}) then
+        return nil, failure("DENIED", "proposal is outside the lease envelope")
+    end
+    local snapshot = canonical.encode(input.proposal_capabilities, MAX_ENVELOPE_BYTES)
+    local snapshot_digest = snapshot and digest(snapshot)
+    if not snapshot or not snapshot_digest then return nil, failure("INVALID", "proposed capabilities are too large or unmeasurable") end
+    local next_revision = (row.revision :: number) + 1
+    local updated, err = tx:execute("UPDATE bee_governance_leases SET applies_used = applies_used + 1, revision = ? WHERE owner_node = ? AND workspace_id = ? AND lease_id = ? AND revision = ? AND state = 'active'",
+        {next_revision, store.node, store.workspace, row.lease_id, row.revision})
+    local update_error = cas(updated, err, "use lease")
+    if update_error then return nil, update_error end
+    local _, use_error = tx:execute("INSERT INTO bee_governance_lease_uses (owner_node, workspace_id, lease_id, intent_id, approval_id, approval_proposal_digest, proposal_snapshot_bytes, proposal_snapshot_digest, state, applied_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reserved', " .. NOW .. ")",
+        {store.node, store.workspace, row.lease_id, input.intent_id, row.source_approval_id,
+            row.source_approval_proposal_digest, snapshot, snapshot_digest})
+    if use_error then return nil, failure("CONFLICT", "an intent takes one lease authorization") end
+    return load(tx, store, row.lease_id :: string)
+end
+
+-- admit_in: the effect of a lease-authorized intent starts. It is refused
+-- once the lease was revoked or expired, and refused when the recorded proof
+-- names another approval than the intent carries. Admission and revocation
+-- are both writes to this store, so exactly one of them lands first.
+function M.admit_in(tx: sql.Transaction, store: Scope, intent_id: string, approval_id: unknown, approval_digest: unknown): Result?
+    local use, use_error = one(tx, "SELECT * FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND intent_id = ?",
+        {store.node, store.workspace, intent_id}, "lease use")
+    if use_error then return use_error end
+    if not use then return failure("CONFLICT", "the intent has no lease authorization") end
+    if use.approval_id ~= approval_id or use.approval_proposal_digest ~= approval_digest then
+        return failure("CONFLICT", "lease proof does not match the intent's authorization")
+    end
+    if use.state == "admitted" then return nil end
+    if use.state == "fenced" then return failure("DENIED", "lease was revoked before the effect started") end
+    local lease, lease_error = load(tx, store, use.lease_id :: string)
+    if lease_error or not lease then return lease_error or failure("INTERNAL", "lease use has no lease") end
+    local state = effective(lease)
+    if lease.state == "revoked" or tonumber(lease.past_expiry) == 1 or lease.past_expiry == true then
+        return failure("DENIED", "lease is " .. (lease.state == "revoked" and "revoked" or "expired") .. "; the effect is not admitted")
+    end
+    local updated, err = tx:execute("UPDATE bee_governance_lease_uses SET state = 'admitted', admitted_at = " .. NOW .. " WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND state = 'reserved'",
+        {store.node, store.workspace, intent_id})
+    return cas(updated, err, "admit lease use")
+end
+
 local function use(store: Store, actor: string, input: Request): Result
     local measured, measure_error = request_digest(input)
     if not measured then return measure_error :: Result end
-    local snapshot = canonical.encode(input.proposal_capabilities, MAX_ENVELOPE_BYTES)
-    local snapshot_digest = snapshot and digest(snapshot)
-    if not snapshot or not snapshot_digest then return failure("INVALID", "proposed capabilities are too large or unmeasurable") end
     return transaction.write(store.db, "governance lease", function(tx: sql.Transaction): Result
         local already = replay(store, tx, actor, input, measured :: string)
         if already then return already end
-        local row, row_error = load(tx, store, input.lease_id :: string)
-        if row_error or not row then return row_error or failure("NOT_FOUND", "lease does not exist") end
-        if input.expected_revision ~= row.revision then return failure("CONFLICT", "expected_revision does not match lease") end
-        local state = effective(row)
-        if state ~= "active" then return failure("DENIED", "lease is " .. state) end
-        local envelope = json.decode(row.envelope_bytes :: string)
-        if type(envelope) ~= "table" or not lease_model.covers(envelope :: {any}, input.proposal_capabilities :: {any}) then
-            return failure("DENIED", "proposal is outside the lease envelope")
-        end
-        local next_revision = (row.revision :: number) + 1
-        local updated, err = tx:execute("UPDATE bee_governance_leases SET applies_used = applies_used + 1, revision = ? WHERE owner_node = ? AND workspace_id = ? AND lease_id = ? AND revision = ? AND state = 'active'",
-            {next_revision, store.node, store.workspace, row.lease_id, row.revision})
-        local update_error = cas(updated, err, "use lease")
-        if update_error then return update_error end
-        local _, use_error = tx:execute("INSERT INTO bee_governance_lease_uses (owner_node, workspace_id, lease_id, intent_id, proposal_snapshot_bytes, proposal_snapshot_digest, applied_at) VALUES (?, ?, ?, ?, ?, ?, " .. NOW .. ")",
-            {store.node, store.workspace, row.lease_id, input.intent_id, snapshot, snapshot_digest})
-        if use_error then return failure("CONFLICT", "lease already authorized this intent") end
-        local changed, changed_error = load(tx, store, row.lease_id :: string)
-        if changed_error or not changed then return changed_error or failure("INTERNAL", "read used lease") end
+        local changed, reserve_error = M.reserve_in(tx, store, input)
+        if reserve_error or not changed then return reserve_error or failure("INTERNAL", "read used lease") end
         local receipt_error = save_receipt(store, tx, actor, input, measured :: string, changed)
         if receipt_error then return receipt_error end
         return transaction.success(view(store, changed), false)
@@ -281,11 +325,29 @@ local function revoke(store: Store, actor: string, input: Request): Result
             {input.revoked_by, next_revision, store.node, store.workspace, row.lease_id, row.revision})
         local update_error = cas(updated, err, "revoke lease")
         if update_error then return update_error end
+        -- A reservation whose effect has not started is fenced; one whose
+        -- effect was admitted first is reported as started.
+        local fenced, fenced_error = tx:query("SELECT intent_id FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND lease_id = ? AND state = 'reserved' ORDER BY intent_id",
+            {store.node, store.workspace, row.lease_id})
+        if fenced_error or not fenced then return storage(fenced_error, "read reserved lease uses") end
+        local _, fence_error = tx:execute("UPDATE bee_governance_lease_uses SET state = 'fenced' WHERE owner_node = ? AND workspace_id = ? AND lease_id = ? AND state = 'reserved'",
+            {store.node, store.workspace, row.lease_id})
+        if fence_error then return storage(fence_error, "fence lease uses") end
+        local started, started_error = tx:query("SELECT intent_id FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND lease_id = ? AND state = 'admitted' ORDER BY intent_id",
+            {store.node, store.workspace, row.lease_id})
+        if started_error or not started then return storage(started_error, "read admitted lease uses") end
         local changed, changed_error = load(tx, store, row.lease_id :: string)
         if changed_error or not changed then return changed_error or failure("INTERNAL", "read revoked lease") end
-        local receipt_error = save_receipt(store, tx, actor, input, measured :: string, changed)
+        local fenced_intents: {unknown} = {}
+        for _, item in ipairs(fenced) do fenced_intents[#fenced_intents + 1] = item.intent_id end
+        local started_effects: {unknown} = {}
+        for _, item in ipairs(started) do started_effects[#started_effects + 1] = item.intent_id end
+        local receipt_error = save_receipt(store, tx, actor, input, measured :: string, changed,
+            {fenced_intents = fenced_intents, started_effects = started_effects})
         if receipt_error then return receipt_error end
-        return transaction.success(view(store, changed), false)
+        local reply = view(store, changed)
+        reply.fenced_intents, reply.started_effects = fenced_intents, started_effects
+        return transaction.success(reply, false)
     end)
 end
 
@@ -301,27 +363,49 @@ end
 
 -- The leases for one target (or every lease of the workspace), newest first.
 -- Each row carries its use records so a reader sees which intents it authorized.
-function M.list(store: Store, target: string?): Result
+-- A lease stays listed, and revocable, while it can still authorize or while
+-- a reservation of it awaits admission: revocation may still fence that one.
+local RESERVED = "EXISTS (SELECT 1 FROM bee_governance_lease_uses u WHERE u.owner_node = bee_governance_leases.owner_node AND u.workspace_id = bee_governance_leases.workspace_id AND u.lease_id = bee_governance_leases.lease_id AND u.state = 'reserved')"
+local ACTIVE = "state = 'active' AND (((expires_at IS NULL OR expires_at > " .. NOW .. ") AND (max_applies IS NULL OR applies_used < max_applies)) OR " .. RESERVED .. ")"
+local MAX_HISTORY = 64
+
+-- list: the leases able to authorize something, newest first, so a full
+-- history never crowds out an active lease. history adds the most recent
+-- ended leases instead, bounded separately.
+function M.list(store: Store, target: string?, history: boolean?): Result
     return transaction.read(store.db, "governance lease", function(tx: sql.Transaction): Result
-        local rows, err
-        if target then
-            rows, err = tx:query("SELECT *, (expires_at IS NOT NULL AND expires_at <= " .. NOW .. ") AS past_expiry FROM bee_governance_leases WHERE owner_node = ? AND workspace_id = ? AND target = ? ORDER BY created_at DESC, lease_id LIMIT ?",
-                {store.node, store.workspace, target, MAX_LEASES})
-        else
-            rows, err = tx:query("SELECT *, (expires_at IS NOT NULL AND expires_at <= " .. NOW .. ") AS past_expiry FROM bee_governance_leases WHERE owner_node = ? AND workspace_id = ? ORDER BY created_at DESC, lease_id LIMIT ?",
-                {store.node, store.workspace, MAX_LEASES})
-        end
+        local filter = history and "NOT (" .. ACTIVE .. ")" or ACTIVE
+        local limit = history and MAX_HISTORY or MAX_LEASES
+        local statement = "SELECT *, (expires_at IS NOT NULL AND expires_at <= " .. NOW .. ") AS past_expiry FROM bee_governance_leases WHERE owner_node = ? AND workspace_id = ? AND " .. filter
+        local params: {unknown} = {store.node, store.workspace}
+        if target then statement = statement .. " AND target = ?"; params[#params + 1] = target end
+        statement = statement .. " ORDER BY created_at DESC, lease_id LIMIT ?"
+        params[#params + 1] = limit
+        local rows, err = tx:query(statement, params)
         if err or not rows then return storage(err, "list leases") end
         local leases: {Object} = {}
         for _, row in ipairs(rows) do
             local item = view(store, row)
-            local uses, use_error = tx:query("SELECT intent_id, proposal_snapshot_digest, applied_at FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND lease_id = ? ORDER BY applied_at, intent_id",
+            local uses, use_error = tx:query("SELECT intent_id, state, proposal_snapshot_digest, applied_at FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND lease_id = ? ORDER BY applied_at, intent_id",
                 {store.node, store.workspace, row.lease_id})
             if use_error or not uses then return storage(use_error, "list lease uses") end
             item.uses = uses
             leases[#leases + 1] = item
         end
         return transaction.success({leases = leases}, false)
+    end)
+end
+
+-- The lease one approval granted, if any.
+function M.by_approval(store: Store, approval_raw: unknown): Result
+    local approval_id = id(approval_raw)
+    if not approval_id then return failure("INVALID", "approval_id is required") end
+    return transaction.read(store.db, "governance lease", function(tx: sql.Transaction): Result
+        local row, err = one(tx, "SELECT *, (expires_at IS NOT NULL AND expires_at <= " .. NOW .. ") AS past_expiry FROM bee_governance_leases WHERE owner_node = ? AND workspace_id = ? AND source_approval_id = ?",
+            {store.node, store.workspace, approval_id}, "lease by approval")
+        if err then return err end
+        if not row then return failure("NOT_FOUND", "no lease was granted from this approval") end
+        return transaction.success(view(store, row), false)
     end)
 end
 
@@ -346,7 +430,7 @@ function M.authorized(store: Store, intent_raw: unknown): (Object?, string?)
     local intent_id = id(intent_raw)
     if not intent_id then return nil, "intent_id is required" end
     local result = transaction.read(store.db, "governance lease", function(tx: sql.Transaction): Result
-        local row, err = one(tx, "SELECT lease_id, proposal_snapshot_digest FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND intent_id = ?",
+        local row, err = one(tx, "SELECT lease_id, state, approval_id, approval_proposal_digest, proposal_snapshot_digest FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND intent_id = ?",
             {store.node, store.workspace, intent_id}, "lease use")
         if err then return err end
         return transaction.success(row or {}, false)
@@ -364,7 +448,7 @@ function M.call(store: Store, actor_raw: string, raw: unknown): Result
     local input, decode_error = decode(raw)
     if not input then return failure("INVALID", decode_error or "invalid lease request") end
     if input.operation == "get" then return M.get(store, input.lease_id) end
-    if input.operation == "list" then return M.list(store, input.target :: string?) end
+    if input.operation == "list" then return M.list(store, input.target :: string?, input.history == true) end
     if input.operation == "grant" then return grant(store, actor, input) end
     if input.operation == "use" then return use(store, actor, input) end
     return revoke(store, actor, input)

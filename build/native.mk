@@ -78,6 +78,7 @@ native-binary-check:
 	python3 tests/processes_check.py
 	python3 tests/native_binary.py "$(BEE_BINARY)"
 	python3 tests/native_modules.py "$(BEE_BINARY)"
+	$(MAKE) native-inbox-leases-check BEE_BINARY="$(BEE_BINARY)"
 	BEE_ABOUT_SOURCE="$(BEE_ABOUT_SOURCE)" python3 tests/native_about.py "$(BEE_BINARY)"
 	$(MAKE) native-agent-selector-check BEE_BINARY="$(BEE_BINARY)"
 	$(MAKE) window-command-hooks-check BEE_BINARY="$(BEE_BINARY)"

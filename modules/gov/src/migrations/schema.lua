@@ -469,7 +469,8 @@ UPDATE bee_governance_plans
 -- second decision. Its authority traces to one approval (source_approval_*);
 -- expiry and use-count are computed at read time from expires_at/max_applies/
 -- applies_used, so the stored state only ever tracks whether a person has
--- explicitly revoked it.
+-- explicitly revoked it. A use is reserved when it authorizes an intent,
+-- admitted when the effect starts, and fenced when a revocation lands first.
 local LEASES_SQL = [[
 CREATE TABLE bee_governance_leases (
   owner_node TEXT NOT NULL,
@@ -500,10 +501,15 @@ CREATE TABLE bee_governance_lease_uses (
   workspace_id TEXT NOT NULL,
   lease_id TEXT NOT NULL,
   intent_id TEXT NOT NULL,
+  approval_id TEXT NOT NULL,
+  approval_proposal_digest TEXT NOT NULL CHECK(length(approval_proposal_digest) = 64),
   proposal_snapshot_bytes BLOB NOT NULL CHECK(length(CAST(proposal_snapshot_bytes AS BLOB)) BETWEEN 1 AND 65536),
   proposal_snapshot_digest TEXT NOT NULL CHECK(length(proposal_snapshot_digest) = 64),
+  state TEXT NOT NULL CHECK(state IN ('reserved', 'admitted', 'fenced')),
   applied_at TEXT NOT NULL,
+  admitted_at TEXT,
   PRIMARY KEY(owner_node, workspace_id, lease_id, intent_id),
+  UNIQUE(owner_node, workspace_id, intent_id),
   FOREIGN KEY(owner_node, workspace_id, lease_id)
     REFERENCES bee_governance_leases(owner_node, workspace_id, lease_id)
 );
@@ -518,6 +524,12 @@ CREATE TABLE bee_governance_lease_receipts (
   result_revision INTEGER NOT NULL CHECK(result_revision >= 1),
   PRIMARY KEY(owner_node, workspace_id, idempotency_key)
 );
+]]
+
+-- A revocation's answer (which reserved uses it fenced and which effects had
+-- already started) is kept with its receipt so a lost reply can be replayed.
+local LEASE_RECEIPT_RESULT_SQL = [[
+ALTER TABLE bee_governance_lease_receipts ADD COLUMN result_json TEXT;
 ]]
 
 function M.all(): {Migration}
@@ -536,6 +548,7 @@ function M.all(): {Migration}
         {id = 12, name = "governance_node_identity_migration", sql = NODE_IDENTITY_MIGRATION_SQL, rebuild = false},
         {id = 13, name = "governance_plan_identity_digest", sql = PLAN_IDENTITY_DIGEST_SQL, rebuild = false},
         {id = 14, name = "governance_capability_leases", sql = LEASES_SQL, rebuild = false},
+        {id = 15, name = "governance_lease_receipt_result", sql = LEASE_RECEIPT_RESULT_SQL, rebuild = false},
     }
 end
 

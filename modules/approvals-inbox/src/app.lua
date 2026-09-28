@@ -178,7 +178,8 @@ local function main(value: unknown)
         dirty = true
     end
     local function ask_lease(kind: string)
-        if dialog or state.pending or busy then return end
+        if busy then status = "Sync in progress"; dirty = true; return end
+        if dialog or state.pending then return end
         local detail = state.detail
         local selected = model.selected_row(state)
         if not detail or not selected or detail.approval_id ~= selected.approval_id then status = "Open a request first"; dirty = true; return end
@@ -198,7 +199,8 @@ local function main(value: unknown)
         dirty = true
     end
     local function ask_batch(decision: string)
-        if dialog or state.pending or busy then return end
+        if busy then status = "Sync in progress"; dirty = true; return end
+        if dialog or state.pending then return end
         local marked = leases.marked(slice, state.rows)
         if #marked == 0 then status = "Mark pending requests with M first"; dirty = true; return end
         local approve = decision == "approved"
@@ -211,7 +213,8 @@ local function main(value: unknown)
         dirty = true
     end
     local function ask_revoke()
-        if dialog or busy then return end
+        if busy then status = "Sync in progress"; dirty = true; return end
+        if dialog then return end
         local row = leases.selected(slice)
         if not row or row.state ~= "active" then status = "Select an active lease"; dirty = true; return end
         local request_id, err = client.query(launch, {kind = "confirm", title = "Revoke this lease?",
@@ -227,6 +230,9 @@ local function main(value: unknown)
         local selected = model.selected_row(state)
         local confirmation = model.confirmation(state)
         if not selected or not confirmation then status = "Open a pending request before deciding"; dirty = true; return end
+        if kind == "approve" and leases.is_review(state.detail) and not slice.review_complete then
+            status = "Scroll to the end of the lease terms before approving"; dirty = true; return
+        end
         local title = kind == "approve" and "Approve this request?" or (kind == "deny" and "Deny this request?" or "Withdraw this request?")
         local message = model.text(selected.effect .. " on " .. selected.target .. " for " .. selected.requester_id, 512)
         local accept = kind == "approve" and "Approve" or (kind == "deny" and "Deny" or "Withdraw")
@@ -319,6 +325,7 @@ local function main(value: unknown)
                 local key = data.key_type
                 local text = tostring(data.key or "")
                 status = ""
+                leases.say(slice, "")
                 if text == "v" then
                     leases.show_leases(slice, not slice.leases_view); offset = 0
                     perform(refresh); dirty = true
@@ -328,6 +335,9 @@ local function main(value: unknown)
                     elseif text == "x" then ask_revoke()
                     elseif text == "r" then perform(refresh)
                     elseif key == "esc" or key == "escape" then leases.show_leases(slice, false); dirty = true end
+                elseif leases.is_review(state.detail) and state.selected ~= nil and (key == "up" or key == "down" or key == "pgup" or key == "pgdown" or text == "j" or text == "k") then
+                    leases.review_scroll(slice, (key == "up" or text == "k") and -1 or (key == "pgup" and -8 or (key == "pgdown" and 8 or 1)))
+                    dirty = true
                 elseif key == "up" or text == "k" then model.move(state, -1); dirty = true
                 elseif key == "down" or text == "j" then model.move(state, 1); dirty = true
                 elseif key == "pgup" then model.move(state, -8); dirty = true
@@ -346,12 +356,14 @@ local function main(value: unknown)
                 elseif text == "w" then ask("withdraw")
                 elseif text == "r" then perform(function() if state.pending then recover() else refresh() end end)
                 elseif text == "t" then model.toggle_technical(state); dirty = true
-                elseif key == "esc" or key == "escape" then running = false end
+                elseif key == "esc" or key == "escape" then
+                    if leases.is_review(state.detail) then model.select(state, nil); dirty = true else running = false end
+                end
             elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                 local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
                     status = ""
-                    if hit.kind == "lease" then
+                    if hit.kind == "lease_row" then
                         local row = leases.rows(slice)[hit.index]
                         if row then leases.select(slice, row); dirty = true end
                     elseif hit.kind == "revoke" then ask_revoke()
@@ -374,7 +386,9 @@ local function main(value: unknown)
                     elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
                 end
             elseif data.type == "mouse" and data.action == "wheel" then
-                model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1); dirty = true
+                local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                if leases.is_review(state.detail) then leases.review_scroll(slice, step) else model.move(state, step) end
+                dirty = true
             end
         end
     end

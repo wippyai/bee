@@ -9,9 +9,18 @@ entries:
     - db.get
     - registry.get
     - system.read
-    - env.get
     - security.policy.get
     resources: '*'
+    effect: allow
+- name: identity_policy
+  kind: security.policy
+  meta:
+    comment: The probe opens the governance store directly, which reads its exact migration source
+  policy:
+    actions:
+    - env.get
+    resources:
+    - bee.gov:node_identity_migration_source
     effect: allow
 - name: seed
   kind: process.lua
@@ -20,6 +29,8 @@ entries:
   modules:
   - funcs
   - system
+  - process
+  - time
   - logger
   imports:
     staging: bee.gov:staging_resources
@@ -27,6 +38,7 @@ entries:
   security:
     policies:
     - bee.approvals.inbox.leases.probe:seed_policy
+    - bee.approvals.inbox.leases.probe:identity_policy
     - bee.security.approvals:approval_request_policy
     - bee.security.approvals:approval_consume_policy
   meta:

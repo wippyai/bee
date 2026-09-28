@@ -188,7 +188,7 @@ entries:
 - name: lease_grants
   kind: library.lua
   source: file://lease_grants.lua
-  modules: [hash, uuid]
+  modules: [hash]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical

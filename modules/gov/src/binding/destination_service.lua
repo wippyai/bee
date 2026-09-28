@@ -865,8 +865,9 @@ function M.call(raw: unknown): Result
             result = plans.call(plan_store, actor_id, forwarded)
         end
     elseif operation == "lease_list" then
-        if exact(request, {}) then result = failure("INVALID", "lease_list has unknown fields")
-        else result = leases.list(lease_handle, nil) end
+        if exact(request, {"history"}) or (request.history ~= nil and type(request.history) ~= "boolean") then
+            result = failure("INVALID", "lease_list takes only a history flag")
+        else result = leases.list(lease_handle, nil, request.history == true) end
     elseif operation == "lease_revoke" then
         if exact(request, {"lease_id", "expected_revision", "idempotency_key"}) then
             result = failure("INVALID", "lease_revoke has unknown fields")

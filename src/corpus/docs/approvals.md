@@ -150,15 +150,45 @@ application. `bee.gov` exposes the destination operations `lease_propose`,
   comes from the approved proposal, never from the caller.
 - While a lease is active, a revision whose full proposed capability set is
   contained in the envelope is authorized by `bee.gov.lease_apply` without a
-  new request. The use is counted and recorded with the proposal snapshot in
-  the same transaction that checks expiry, use count and containment. Any
-  proposal outside the envelope, and any revision after expiry, exhaustion or
-  revocation, asks a person as before.
-- `lease_revoke` stops further uses. It does not uninstall a capability an
-  earlier use already installed. Leases are keyed by node, workspace and
-  overlay owner; the runtime has no finer authenticated principal at this
-  boundary. Super-edit and other overlays without a measured capability
-  envelope always ask.
+  new request. The activation store reserves the use, records its proof (the
+  proposal snapshot and the lease's approval identity) and authorizes the
+  intent in one commit, and one intent takes one lease authorization.
+  Expiry, use count and containment are checked in that commit. A proposal
+  outside the envelope, or one that finds the lease expired, exhausted or
+  revoked, asks a person as before.
+- The effect is admitted when the apply begins, in the same transaction as
+  the activation's `begin_apply`. A revocation that lands first fences every
+  reservation whose effect has not started (that apply is refused, and
+  recovery re-checks the same rule); one that lands after admission reports
+  those intents as `started_effects` and does not stop them, because their
+  effect began under a valid lease.
+- What the limits govern: expiry, `max_applies` and revocation limit new
+  lease-authorized reservations and effect admissions. A capability a
+  lease-authorized apply installed is an ordinary installed grant afterwards;
+  later edits that do not widen it follow the installed-grant rule and do not
+  consult or charge the lease. Withdrawing installed authority is a separate
+  operation.
+- A pending lease approval opens as a full review in the inbox: the
+  requester and the request's own expiry, then the target, the duration and
+  that it starts when the lease is granted, the maximum applies and every
+  grant of the ceiling, wrapped to the screen and scrollable. Approve stays
+  disabled until the last line has been on screen, deny is always available,
+  and a lease request cannot join a batch. The ceiling is limited to 16
+  grants.
+- `lease_grant` is safe to repeat: one approval grants one lease with an
+  identity derived from that approval, and a repeated call returns it. After
+  an approval owner restart the exact proposal is revalidated and consumed
+  under the current incarnation.
+- `lease_list` returns the leases able to authorize, plus any lease whose
+  reservation still awaits admission (so it can still be revoked); other
+  ended leases are history, listed with `history: true`.
+- `lease_revoke` returns the intents it fenced and those already admitted;
+  the answer is stored with its receipt, so repeating a lost revocation
+  returns the same lists.
+- `lease_revoke` stops further reservations as described above. Leases are
+  keyed by node, workspace and overlay owner; the runtime has no finer
+  authenticated principal at this boundary. Super-edit and other overlays
+  without a measured capability envelope always ask.
 
 The lease operations need the dedicated delivery action
 `bee.gov.delivery.lease`, which the host grants to the bundled inbox. In the

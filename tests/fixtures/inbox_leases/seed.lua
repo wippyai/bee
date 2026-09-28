@@ -3,6 +3,8 @@
 -- with a recorded use so the leases view shows usage and can revoke it.
 local funcs = require("funcs")
 local system = require("system")
+local process = require("process")
+local time = require("time")
 local logger = require("logger")
 local staging = require("staging")
 local lease_store = require("lease_store")
@@ -29,7 +31,19 @@ local function request(key: string, ref: string, payload: Object, prompt: string
         proposal = {kind = "operation", ref = ref, revision = "r1", payload = payload}, prompt = {text = prompt}})
 end
 
+-- The approval authority registers its name after it establishes its
+-- incarnation; a command that starts alongside the services waits for it.
+local function await_authority()
+    for _ = 1, 250 do
+        local pid = process.registry.lookup("bee.approvals.authority")
+        if pid then return end
+        time.sleep("20ms")
+    end
+    error("approval authority did not start")
+end
+
 local function main()
+    await_authority()
     request("batch-a", "bee.smoke:first", {operation = "first"}, "First batched request")
     request("batch-b", "bee.smoke:second", {operation = "second"}, "Second batched request")
     request("activation", "bee.gov:establish-overlay", {operation = "establish", workspace_id = WORKSPACE,

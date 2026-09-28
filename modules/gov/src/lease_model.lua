@@ -12,6 +12,8 @@ local super_edit = require("super_edit")
 local M = {}
 M.MAX_ENVELOPE = 128
 M.MAX_TTL_SECONDS = 86400 * 30
+-- What one approval screen can show completely: every grant of the ceiling.
+M.MAX_REVIEWED = 16
 type Object = {[string]: unknown}
 type Grant = capability_model.Grant
 type Vocabulary = capability_model.Vocabulary

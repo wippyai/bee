@@ -104,7 +104,8 @@ local function installed_capability(review: capability_grants.Review?): prefligh
     return {kind = "installed", proposal = proposal, installed = installed, review = review or measured_review}
 end
 
-local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorld): owner.Resolver
+local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorld,
+    read_revision: boolean?): owner.Resolver
     local entry_bytes, encode_error = canonical.encode(entry)
     if not entry_bytes then error(tostring(encode_error)) end
     local selected_digest, digest_error = hash.sha256(entry_bytes)
@@ -135,6 +136,9 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
                 entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
                 migration_barrier = false, auto_start = true, host_evidence = host_evidence}
         return candidate, context, nil
+    end
+    if read_revision then
+        function value:revision(): (integer?, string?) return world.revision, nil end
     end
     return value :: owner.Resolver
 end
@@ -338,6 +342,41 @@ local function define_tests()
             test.eq(settled.outcome, "applied")
             test.eq(settled.version, "v1")
             test.is_true(applied)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("yields after exact materialization and remeasures before settling next step", function()
+            local workspace = "workspace-activation-yield"
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
+            local entry = {id = "demo:yield", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local world: ResolverWorld = {revision = 4, digest = SHA}
+            local applied, apply_count = false, 0
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world, true), approvals = approvals(), actor_id = "host-a",
+                consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
+                approval_policy = "local-install", migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?)
+                    return applied, nil
+                end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
+                    applied, apply_count = true, apply_count + 1
+                    return {changed = true}, nil
+                end}
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-yield", receipt_key = "activation-yield"}))
+            test.eq(ok(owner.step(config, "intent-yield", "activation-yield")).phase, "consuming")
+            test.eq(ok(owner.step(config, "intent-yield", "activation-yield")).phase, "authorized")
+            test.eq(ok(owner.step(config, "intent-yield", "activation-yield")).phase, "applying")
+            local materialized = ok(owner.step(config, "intent-yield", "activation-yield"))
+            test.eq(materialized.phase, "applying")
+            test.is_true(applied)
+            test.eq(apply_count, 1)
+            local settled = ok(owner.step(config, "intent-yield", "activation-yield"))
+            test.eq(settled.outcome, "applied")
+            test.eq(apply_count, 1)
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)

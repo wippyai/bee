@@ -16,7 +16,8 @@ local application_admission = require("application_admission")
 local M = {}
 type Object = {[string]: unknown}
 type Result = transaction.Result
-type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
+type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?),
+    revision: ((Resolver) -> (integer?, string?))?}
 type Executor = approval.Executor
 type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?)
 type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?)
@@ -89,6 +90,7 @@ local function measured(config: Config, spec: Object): (Object?, Result?)
     end
     local result, measurement_error = measure.measure(spec, candidate, context)
     if not result then return nil, failure("BLOCKED", tostring(measurement_error)) end
+    result.registry_revision = context.registry_revision
     return result, nil
 end
 
@@ -467,6 +469,16 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             if observed ~= true then
                 return uncertain(observed == nil and tostring(applied_observe_error)
                     or "overlay apply completed without an exact observed match")
+            end
+            local read_revision = config.resolver.revision
+            if read_revision then
+                local current_revision = read_revision(config.resolver)
+                if current_revision == spec.registry_revision then
+                    -- The materializer writes only this owner's overlay, which
+                    -- does not advance the captured base revision. Yield here;
+                    -- the next step fully remeasures before recording outcome.
+                    return transaction.success(intent, false)
+                end
             end
             local reverified, reverify_error = remeasure_progress(config, intent)
             if not reverified then

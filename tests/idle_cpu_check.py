@@ -22,6 +22,28 @@ def cpu_ticks(pid: int) -> int:
     return int(fields[13]) + int(fields[14])
 
 
+def wait_ready(owner: subprocess.Popen, marker: bytes, timeout: float) -> bool:
+    if owner.stdout is None:
+        return False
+    pending = bytearray()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        readable, _, _ = select.select([owner.stdout], [], [], 1)
+        if readable:
+            chunk = os.read(owner.stdout.fileno(), 65536)
+            if not chunk:
+                return False
+            pending.extend(chunk)
+            while b"\n" in pending:
+                line, _, rest = pending.partition(b"\n")
+                pending = bytearray(rest)
+                if line.startswith(marker):
+                    return True
+        if owner.poll() is not None:
+            return False
+    return False
+
+
 def sample_owner(pid: int, label: str, ticks_per_second: int, ui: NativeDesktop | None = None) -> float:
     before_ticks = cpu_ticks(pid)
     before_bytes = len(ui.raw) if ui is not None else 0
@@ -45,24 +67,10 @@ def start_owner(binary: pathlib.Path, folder: pathlib.Path) -> subprocess.Popen:
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
+        bufsize=0,
     )
     try:
-        ready = False
-        deadline = time.monotonic() + 60
-        while time.monotonic() < deadline:
-            readable, _, _ = select.select([owner.stdout], [], [], 1)
-            if not readable:
-                if owner.poll() is not None:
-                    break
-                continue
-            line = owner.stdout.readline()
-            if not line:
-                break
-            if line.startswith("BEE_DAEMON_READY "):
-                ready = True
-                break
-        if not ready:
+        if not wait_ready(owner, b"BEE_DAEMON_READY ", 60):
             raise RuntimeError("standalone Bee owner did not become ready")
         return owner
     except BaseException:
@@ -86,24 +94,10 @@ def start_folder_owner(binary: pathlib.Path, folder: pathlib.Path) -> subprocess
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
+        bufsize=0,
     )
     try:
-        ready = False
-        deadline = time.monotonic() + 90
-        while time.monotonic() < deadline:
-            readable, _, _ = select.select([owner.stdout], [], [], 1)
-            if not readable:
-                if owner.poll() is not None:
-                    break
-                continue
-            line = owner.stdout.readline()
-            if not line:
-                break
-            if line.startswith("BEE_RETAINED_OWNER_READY "):
-                ready = True
-                break
-        if not ready:
+        if not wait_ready(owner, b"BEE_RETAINED_OWNER_READY ", 90):
             raise RuntimeError("standalone Bee folder owner did not become ready")
         return owner
     except BaseException:

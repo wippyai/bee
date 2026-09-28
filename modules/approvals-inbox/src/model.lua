@@ -658,6 +658,22 @@ function M.permission_lines(value: unknown): {string}
     if not view then return {} end
     local payload = view.proposal.payload
     local lines: {string} = {}
+    -- A lease approval states its terms from the typed values the lease is
+    -- stored with, ahead of the ceiling: what it covers, how long it lasts and
+    -- when that starts, and how many applies it allows. The request's own
+    -- expiry is a different deadline and is shown apart.
+    if view.proposal.ref == "bee.gov:grant-lease" then
+        local ttl, max = bounds.count(payload.ttl_seconds), bounds.count(payload.max_applies)
+        lines[#lines + 1] = "Lease for: " .. M.text(payload.target, M.LINE_LIMIT)
+        if ttl and ttl > 0 then
+            local words = ttl % 86400 == 0 and (tostring(ttl // 86400) .. " days") or (ttl % 3600 == 0 and (tostring(ttl // 3600) .. " hours")
+                or (ttl % 60 == 0 and (tostring(ttl // 60) .. " minutes") or (tostring(ttl) .. " seconds")))
+            lines[#lines + 1] = "Lasts: " .. words .. " from the moment it is granted (not this request's expiry)"
+        else
+            lines[#lines + 1] = "Lasts: no expiry"
+        end
+        lines[#lines + 1] = max and max > 0 and ("Max applies: " .. tostring(max)) or "Max applies: unlimited"
+    end
     local function append(raw: unknown, prefix: string)
         if type(raw) ~= "table" then return end
         for _, value in ipairs(raw :: {unknown}) do
@@ -665,7 +681,7 @@ function M.permission_lines(value: unknown): {string}
             if type(value) == "string" then lines[#lines + 1] = prefix .. M.text(value, M.LINE_LIMIT) end
         end
     end
-    append(payload.permission_changes, "Change: ")
+    if view.proposal.ref ~= "bee.gov:grant-lease" then append(payload.permission_changes, "Change: ") end
     append(payload.resolved_capabilities, "Capability: ")
     return lines
 end

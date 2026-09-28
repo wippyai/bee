@@ -33,6 +33,9 @@ check: hub-migration-service-check
 .PHONY: native-modules-lifecycle-check
 native-modules-lifecycle-check:
 	python3 tests/native_modules_lifecycle.py "$(BEE_BINARY)"
+.PHONY: native-inbox-leases-check
+native-inbox-leases-check:
+	python3 tests/native_inbox_leases.py "$(BEE_BINARY)"
 .PHONY: modules-app-check
 modules-app-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/modules_app.py
@@ -372,6 +375,7 @@ desktop-delivery-check: desktop-delivery-inbox-check desktop-delivery-journey-ch
 desktop-delivery-inbox-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_app.py
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_decide.py
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/inbox_leases.py
 desktop-delivery-journey-check: desktop-delivery-app-journey-check desktop-delivery-review-check
 desktop-delivery-app-journey-check:
 	$(MAKE) app-journey-check WIPPY="$(abspath $(WIPPY))"

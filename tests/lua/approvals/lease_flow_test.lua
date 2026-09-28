@@ -75,7 +75,8 @@ local function define_tests()
             test.eq(granted.state, "active")
             local again = lease_grants.grant(executor, db, vocabulary, profile, workspace, ACTOR,
                 {approval_id = approval_id}, "grant-2")
-            test.is_false(again.ok == true)
+            test.is_true(again.ok == true and again.replayed == true)
+            test.eq((again.value :: Object).lease_id, granted.lease_id)
 
             local covered = lease_store.find_active(db, profile.overlay_owner, {narrow[1], widened[1]})
             test.is_true(covered ~= nil)

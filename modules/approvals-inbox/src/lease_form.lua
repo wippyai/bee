@@ -58,12 +58,12 @@ function M.new(view: model.ApprovalView): State
                     return nil
                 end)})
         fields[parameter_index] = forms.field_text("params" .. tostring(index), "  parameters", "",
-            {placeholder = "key=value,key=a|b", max_length = 256,
+            {placeholder = "none, or key=value,key=a|b", max_length = 256,
                 validate = guard(function(form: forms.Form): string?
                     local capability = forms.value(form.fields[capability_index])
                     local parameters = forms.value(form.fields[parameter_index])
                     if capability == "" then return nil end
-                    if parameters == "" then return "Give the capability's parameters" end
+                    if parameters == "" then return nil end
                     local _, parameter_error = leases.parse_parameters(parameters)
                     return parameter_error
                 end)})

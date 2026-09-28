@@ -355,7 +355,7 @@ local function main(value: unknown)
                 local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
                 if hit then
                     status = ""
-                    if hit.kind == "lease" then
+                    if hit.kind == "lease_row" then
                         local row = leases.rows(slice)[hit.index]
                         if row then leases.select(slice, row); dirty = true end
                     elseif hit.kind == "revoke" then ask_revoke()

@@ -8,7 +8,7 @@ local bounds = require("bounds")
 local model = require("model")
 local M = {}
 M.MAX_MARKS = 16
-M.MAX_LEASES = 64
+M.MAX_LEASES = 256
 M.MAX_EXTRAS = 8
 M.MAX_TTL_SECONDS = 86400 * 30
 M.FACADE = "bee.gov.binding:destination_call"
@@ -16,7 +16,7 @@ M.BATCH = "bee.approvals.binding:decide_batch"
 M.PROPOSAL = "bee.gov:grant-lease"
 M.ACTIVATION = "bee.gov:establish-overlay"
 type Object = {[string]: unknown}
-type Extra = {capability: string, parameters: {[string]: unknown}}
+type Extra = {capability: string, parameters: {[string]: string}}
 type Spec = {ttl_seconds: integer?, max_applies: integer?, extras: {Extra}}
 type Row = {lease_id: string, source: string, workspace_id: string, target: string, state: string,
     applies_used: integer, max_applies: integer?, expires_at: string?, revision: integer,
@@ -41,30 +41,23 @@ local function duration(raw: string): integer?
     return math.floor(seconds)
 end
 
--- parse_parameters: key=value pairs separated by commas; a value with | is a
--- list. The governance owner resolves the capability and its parameters
--- through its own catalog.
-function M.parse_parameters(input: string): ({[string]: unknown}?, string?)
+-- parse_parameters: key=value pairs separated by commas, or nothing for a
+-- capability that takes none. Values stay text; a value with | lists members
+-- and the governance owner reads set-valued parameters from the catalog.
+function M.parse_parameters(input: string): ({[string]: string}?, string?)
     if #input > 256 or input:find("%c") then return nil, "parameters are too long" end
-    local parameters: {[string]: unknown} = {}
+    local parsed: {[string]: string} = {}
     local count = 0
-    for pair in input:gmatch("[^,]+") do
-        local key, item = pair:match("^%s*([a-z_]+)%s*=%s*(.-)%s*$")
-        if not key or not item or item == "" or parameters[key] ~= nil then return nil, "use key=value pairs, comma separated" end
-        count = count + 1
-        if count > 8 then return nil, "at most 8 parameters" end
-        if item:find("|", 1, true) then
-            local list: {string} = {}
-            for part in item:gmatch("[^|]+") do list[#list + 1] = part end
-            parameters[key] = list
-        else
-            parameters[key] = item
+    if not input:match("^%s*$") then
+        for pair in input:gmatch("[^,]+") do
+            local key, item = pair:match("^%s*([a-z_]+)%s*=%s*(.-)%s*$")
+            if not key or not item or item == "" or parsed[key] ~= nil then return nil, "use key=value pairs, comma separated" end
+            count = count + 1
+            if count > 8 then return nil, "at most 8 parameters" end
+            parsed[key] = item
         end
     end
-    if count == 0 then return nil, "use key=value pairs, comma separated" end
-    local result: {[string]: unknown} = {}
-    for key, item in pairs(parameters) do result[key] = item end
-    return result, nil
+    return parsed, nil
 end
 
 function M.capability_name(input: string): boolean

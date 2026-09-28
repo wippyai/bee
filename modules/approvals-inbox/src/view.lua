@@ -44,7 +44,7 @@ local function draw_leases(width: integer, height: integer, preferences: appeara
     for slot = 1, window.capacity do
         local row = rows[window.offset + slot]
         if not row then break end
-        frame.row(painter, list_first + slot - 1, lease_label(row), window.offset + slot == selected_index, "lease", window.offset + slot, row.lease_id)
+        frame.row(painter, list_first + slot - 1, lease_label(row), window.offset + slot == selected_index, "lease_row", window.offset + slot, row.lease_id)
     end
     if selected and detail_rows > 0 then
         local y = list_last + 1

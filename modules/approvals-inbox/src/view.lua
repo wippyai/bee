@@ -60,7 +60,7 @@ local function draw_leases(width: integer, height: integer, preferences: appeara
     end
     if height >= 4 then
         frame.actions(painter, height - 1, {
-            {kind = "revoke", label = "Revoke", enabled = selected ~= nil and selected.state == "active", primary = true},
+            {kind = "revoke", label = "Revoke", enabled = selected ~= nil and leases.revocable(selected), primary = true},
             {kind = "refresh", label = "Refresh", enabled = true},
             {kind = "requests", label = "Requests", enabled = true},
         })

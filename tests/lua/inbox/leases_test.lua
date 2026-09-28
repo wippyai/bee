@@ -246,6 +246,28 @@ local function define_tests()
             local top = view.draw(60, 12, appearance.defaults(), state, model.rows(state), 0, "", fresh)
             for _, hit in ipairs(top.hits) do test.is_true(hit.kind ~= "approve") end
         end)
+        test.it("renders a capability description far past 512 bytes without truncation", function()
+            local members: {string} = {}
+            for index = 1, 120 do members[index] = "Get" .. string.format("%03d", index) end
+            local long = "Call app binding a:b using " .. table.concat(members, ", ")
+            test.is_true(#long > 900)
+            local granting = approval("g7", "pending", leases.PROPOSAL, {target = "bee.gov:notes", ttl_seconds = 60, resolved_capabilities = {long}})
+            local joined = table.concat(leases.review_lines(granting, 60), ""):gsub("%s+", "")
+            test.is_true(joined:find("Get120", 1, true) ~= nil)
+            test.is_true(joined:find("Get001", 1, true) ~= nil)
+        end)
+        test.it("enables Revoke for an exhausted lease that holds a reservation", function()
+            local state = model.new({"ws-1"})
+            local slice = leases.new()
+            leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "exhausted", applies_used = 1,
+                revision = 2, granted_by = "p", envelope = {}, max_applies = 1, uses = {{intent_id = "i", state = "reserved"}}}}}})
+            leases.show_leases(slice, true)
+            leases.select(slice, leases.rows(slice)[1])
+            local drawn = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", slice)
+            local revoke = false
+            for _, hit in ipairs(drawn.hits) do if hit.kind == "revoke" then revoke = true end end
+            test.is_true(revoke)
+        end)
         test.it("keeps lease requests out of a batch", function()
             local granting = approval("g8", "pending", leases.PROPOSAL, {target = "t"})
             local rows = rows_of({granting})

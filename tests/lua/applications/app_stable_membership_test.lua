@@ -362,12 +362,10 @@ local function define_tests()
             test.eq(attempts, 3)
         end)
 
-        -- A governed admission a host recovers at boot can still be mid-write
-        -- across several registry commits when the broker's periodic revision
-        -- poll lands between two of them. refresh_admission's own consistency
-        -- check then reports failure for that poll; the broker must retry on
-        -- its next tick rather than treat the torn read as the final catalog.
-        test.it("converges the catalog after several rapid admission changes", function()
+        -- A malformed admission makes refresh_admission fail closed. Once the
+        -- record is repaired, the periodic follower must run again and publish
+        -- the catalog left by that repair.
+        test.it("retries the admission poll after a refused refresh", function()
             local owner = tostring(process.pid())
             local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
             local events = assert(process.events())
@@ -388,31 +386,63 @@ local function define_tests()
             end
             local ok, scenario_error = pcall(function()
                 repeat until tostring(catalogs:receive():from()) == broker
-                -- Ten bursts of two immediate commits, one burst roughly
-                -- every poll tick, give the broker's once-a-second revision
-                -- check repeated chances to land between refresh_admission's
-                -- own two catalog reads -- the shape of a boot recovery that
-                -- materializes an admission across more than one registry
-                -- commit while the broker keeps polling.
-                for index = 1, 10 do
-                    set_admission_for(OTHER_DEFINITION, false)
-                    set_admission_for(OTHER_DEFINITION, true)
-                    if index < 10 then channel.select({time.after("1s"):case_receive()}) end
-                end
+                set_duplicate_admission()
                 local deadline = time.after("15s")
+                local refused = false
+                while not refused do
+                    local received = channel.select({catalogs:case_receive(), events:case_receive(), deadline:case_receive()})
+                    assert(received.ok, "broker refresh wait was interrupted")
+                    if received.channel == events then
+                        local event = received.value
+                        if event.kind == process.event.EXIT and tostring(event.from) == broker then
+                            local result: unknown = event.result
+                            local failure = type(result) == "table" and tostring((result :: {[string]: unknown}).error) or "unknown exit"
+                            error("broker exited during refused refresh: " .. failure)
+                        end
+                    elseif received.channel == deadline then
+                        error("broker did not fail closed on the invalid admission")
+                    else
+                        local message = received.value
+                        if tostring(message:from()) == broker then
+                            local data: unknown = message:payload():data()
+                            local items = type(data) == "table" and (data :: {[string]: unknown}).items or nil
+                            if type(items) == "table" and #items == 0 then refused = true end
+                        end
+                    end
+                end
+                local refused_revision = catalog.revision(WORKSPACE)
+                set_admission_for(OTHER_DEFINITION, false)
+                test.is_true(catalog.revision(WORKSPACE) ~= refused_revision,
+                    "repair did not advance the application catalog revision")
                 local converged = false
                 while not converged do
-                    local received = channel.select({catalogs:case_receive(), deadline:case_receive()})
-                    assert(received.ok and received.channel == catalogs,
-                        "broker never converged on the admission left by the last commit")
-                    local message = received.value
-                    if tostring(message:from()) == broker then
-                        local data: unknown = message:payload():data()
-                        if type(data) == "table" then
-                            for _, raw in ipairs(((data :: {[string]: unknown}).items :: {unknown}?) or {}) do
-                                if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id == OTHER_DEFINITION then
-                                    converged = true
+                    local received = channel.select({catalogs:case_receive(), events:case_receive(), deadline:case_receive()})
+                    assert(received.ok, "broker convergence wait was interrupted")
+                    if received.channel == events then
+                        local event = received.value
+                        if event.kind == process.event.EXIT and tostring(event.from) == broker then
+                            local result: unknown = event.result
+                            local failure = type(result) == "table" and tostring((result :: {[string]: unknown}).error) or "unknown exit"
+                            error("broker exited before catalog convergence: " .. failure)
+                        end
+                    elseif received.channel == deadline then
+                        error("broker never converged on the repaired admission")
+                    else
+                        local message = received.value
+                        if tostring(message:from()) == broker then
+                            local data: unknown = message:payload():data()
+                            if type(data) == "table" then
+                                local items = ((data :: {[string]: unknown}).items :: {unknown}?) or {}
+                                local has_definition = false
+                                local has_other = false
+                                for _, raw in ipairs(items) do
+                                    if type(raw) == "table" then
+                                        local definition_id = (raw :: {[string]: unknown}).definition_id
+                                        if definition_id == DEFINITION then has_definition = true end
+                                        if definition_id == OTHER_DEFINITION then has_other = true end
+                                    end
                                 end
+                                if has_definition and not has_other then converged = true end
                             end
                         end
                     end

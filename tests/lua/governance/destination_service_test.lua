@@ -26,6 +26,13 @@ local function define_tests()
             test.eq(#profile.policy_digest, 64)
         end)
 
+        test.it("maps lease operations to their own delivery actions", function()
+            test.eq(service.required_action("lease_list"), "bee.gov.delivery.read")
+            test.eq(service.required_action("lease_propose"), "bee.gov.delivery.manage")
+            test.eq(service.required_action("lease_revoke"), "bee.gov.delivery.manage")
+            test.eq(service.required_action("lease_grant"), "bee.gov.delivery.activate")
+        end)
+
         test.it("rejects duplicate destination and source mappings", function()
             local config = valid()
             local profiles = config.profiles :: {unknown}

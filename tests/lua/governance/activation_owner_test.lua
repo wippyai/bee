@@ -9,6 +9,7 @@ local artifact = require("artifact")
 local plan_store = require("plan_store")
 local activation_store = require("activation_store")
 local owner = require("activation_owner")
+local lease_store = require("lease_store")
 local preflight = require("preflight")
 local application_admission = require("application_admission")
 local capability_grants = require("capability_grants")
@@ -215,6 +216,57 @@ local function lossy_approvals(): owner.Executor
     return value :: owner.Executor
 end
 
+local LEASE_GRANT: {[string]: unknown} = {capability = "workspace.files.write", template_revision = 1,
+    operation = "files.write", resource = "workspace", scope = {subpath = "alpha"}, parameters = {subpath = "alpha"}}
+local LEASE_NARROW: {[string]: unknown} = {capability = "workspace.files.write", template_revision = 1,
+    operation = "files.write", resource = "workspace", scope = {subpath = "alpha/child"},
+    parameters = {subpath = "alpha/child"}}
+local LEASE_OUTSIDE: {[string]: unknown} = {capability = "workspace.files.write", template_revision = 1,
+    operation = "files.write", resource = "workspace", scope = {subpath = "beta"}, parameters = {subpath = "beta"}}
+
+-- Installed evidence whose measured proposal widens beyond the installed set.
+local function widening_capability(proposed: {{[string]: unknown}}): preflight.CapabilityEvidence
+    local evidence = installed_capability(nil)
+    if evidence.kind ~= "installed" then error("installed capability evidence is missing") end
+    local proposal = evidence.proposal
+    proposal.capabilities = proposed :: {capability_model.Grant}
+    local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {},
+        requires_approval = true, revocation = {grants = {}, fenced_attempts = {}},
+        lines = {"widened: Write alpha"}, resolved = {"Write alpha"}, delta = {"widened: Write alpha"}}
+    return {kind = "installed", proposal = proposal, installed = evidence.installed, review = review}
+end
+
+local function lease_config(workspace: string, capability: preflight.CapabilityEvidence,
+    executor: owner.Executor): (owner.Config, plan_store.Store, activation_store.Store, lease_store.Store, {[string]: boolean})
+    local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+    local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
+    local leases = assert(lease_store.open("bee.gov:activation_test_db", "node-owner", workspace))
+    local entry = {id = "demo:run", kind = "function.lua", data = {source = "return true"}}
+    local exact = assert(artifact.create({entry}))
+    selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+    local flags: {[string]: boolean} = {applied = false}
+    local config: owner.Config = {plans = plans, activations = activations,
+        resolver = shifting_resolver(entry, {revision = 4, digest = SHA, capability = capability}),
+        approvals = executor, actor_id = "host-a", consumer_id = "destination-host",
+        overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
+        leases = leases,
+        matches = function(_overlay: string, _entries: unknown, _admission: unknown?,
+            _intent: unknown): (boolean?, string?) return flags.applied, nil end,
+        apply = function(_overlay: string, _entries: unknown, _admission: unknown?,
+            _intent: unknown): ({[string]: unknown}?, string?)
+            flags.applied = true
+            return {changed = true}, nil
+        end}
+    return config, plans, activations, leases, flags
+end
+
+local function grant_lease(leases: lease_store.Store, max_applies: integer): {[string]: unknown}
+    return ok(lease_store.call(leases, "host-a", {operation = "grant", idempotency_key = "grant-lease",
+        lease_id = "lease-1", target = "bee.gov:test-overlay", envelope = {LEASE_GRANT},
+        source_approval_id = "lease-approval", source_approval_proposal_digest = SHA_B,
+        source_approval_owner_incarnation = 2, granted_by = "person-a", max_applies = max_applies}))
+end
+
 local function define_tests()
     test.describe("Governance activation owner", function()
         test.it("reuses a contained live grant without requesting a permission decision", function()
@@ -306,6 +358,58 @@ local function define_tests()
             test.eq(ok(owner.step(config, "intent-widened", "widened")).phase, "consuming")
             test.eq(owner.step(config, "intent-widened", "widened").code, "DENIED")
             test.is_false(applied)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("applies a widening covered by an active lease without asking Approvals", function()
+            local requests = 0
+            local executor = {}
+            function executor:call(_method: string, _request: unknown): (unknown?, unknown?)
+                requests = requests + 1
+                return nil, "a lease-covered change must not call Approvals"
+            end
+            local config, plans, activations, leases, flags = lease_config("workspace-lease-covered",
+                widening_capability({LEASE_NARROW}), executor :: owner.Executor)
+            grant_lease(leases, 1)
+            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-lease", receipt_key = "lease"}))
+            test.eq(prepared.phase, "authorized")
+            test.eq(prepared.approval_id, "lease-approval")
+            test.eq(prepared.consumed_consumer_id, "bee.gov.lease_apply")
+            test.eq(requests, 0)
+            test.eq(ok(owner.step(config, "intent-lease", "lease")).phase, "applying")
+            test.eq(ok(owner.step(config, "intent-lease", "lease")).outcome, "applied")
+            test.is_true(flags.applied)
+            test.eq(ok(lease_store.get(leases, "lease-1")).applies_used, 1)
+            test.is_true(lease_store.authorized(leases, "intent-lease") ~= nil)
+            assert(lease_store.close(leases))
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("asks a person when the proposal is outside the lease envelope", function()
+            local config, plans, activations, leases = lease_config("workspace-lease-outside",
+                widening_capability({LEASE_NARROW, LEASE_OUTSIDE}), approvals())
+            grant_lease(leases, 1)
+            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-outside", receipt_key = "outside"}))
+            test.eq(prepared.phase, "approval_bound")
+            test.eq(prepared.approval_id, "approval-v1")
+            test.eq(ok(lease_store.get(leases, "lease-1")).applies_used, 0)
+            assert(lease_store.close(leases))
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("asks a person after the lease is revoked or exhausted", function()
+            local config, plans, activations, leases = lease_config("workspace-lease-revoked",
+                widening_capability({LEASE_NARROW}), approvals())
+            local granted = grant_lease(leases, 1)
+            ok(lease_store.call(leases, "host-a", {operation = "revoke", idempotency_key = "revoke-lease",
+                lease_id = "lease-1", expected_revision = granted.revision, revoked_by = "person-a"}))
+            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-revoked", receipt_key = "revoked"}))
+            test.eq(prepared.phase, "approval_bound")
+            test.eq(prepared.approval_id, "approval-v1")
+            assert(lease_store.close(leases))
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)

@@ -168,6 +168,7 @@ entries:
     transaction: bee.persist:transaction
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
     activation_measure: bee.gov:activation_measure
     migration_work: bee.gov:migration_work
     approval: bee.gov.binding:approval
@@ -184,6 +185,17 @@ entries:
     migration_runner: bee.hub.binding:migration_runner
     migration_work: bee.gov:migration_work
     materializer: bee.gov:materializer
+- name: lease_grants
+  kind: library.lua
+  source: file://lease_grants.lua
+  modules: [hash, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    transaction: bee.persist:transaction
+    capability_model: bee.capability:model
+    lease_model: bee.gov:lease_model
+    lease_store: bee.gov.persist:lease_store
 - name: destination_service
   kind: library.lua
   source: file://destination_service.lua
@@ -197,6 +209,8 @@ entries:
     replicas: bee.sync.persist:replicas
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
+    lease_grants: bee.gov.binding:lease_grants
     activation_owner: bee.gov.binding:activation_owner
     hub_resolver: bee.gov:hub_resolver
     overlay_resolver: bee.gov:overlay_resolver

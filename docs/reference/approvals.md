@@ -130,6 +130,40 @@ not look committed. The first intended remote use is a destination-owned
 Terminal request through the supervisor; that remote enrollment and execution
 flow remains a proposal until its destination admission contract is complete.
 
+## Capability envelopes and leases
+
+A contained upgrade needs no decision: when the host-measured capability diff
+of a new revision against the installed grant record adds, widens or changes
+nothing, the activation reuses the installed grant (see Inbox above).
+
+A person can also lease a bounded envelope for one installed workspace
+application. `bee.gov` exposes the destination operations `lease_propose`,
+`lease_grant`, `lease_list` and `lease_revoke`:
+
+- `lease_propose` builds the envelope from the installed grant record plus
+  optional explicit extras, each validated against the host capability
+  catalog, and files an ordinary approval (`bee.gov:grant-lease`) under the
+  profile's approver policy. It requires a `ttl_seconds` (at most 30 days), a
+  `max_applies`, or both.
+- `lease_grant` reads that exact approval, requires it decided and approved
+  for this application, consumes it once, and stores the lease. The envelope
+  comes from the approved proposal, never from the caller.
+- While a lease is active, a revision whose full proposed capability set is
+  contained in the envelope is authorized by `bee.gov.lease_apply` without a
+  new request. The use is counted and recorded with the proposal snapshot in
+  the same transaction that checks expiry, use count and containment. Any
+  proposal outside the envelope, and any revision after expiry, exhaustion or
+  revocation, asks a person as before.
+- `lease_revoke` stops further uses. It does not uninstall a capability an
+  earlier use already installed. Leases are keyed by node, workspace and
+  overlay owner; the runtime has no finer authenticated principal at this
+  boundary. Super-edit and other overlays without a measured capability
+  envelope always ask.
+
+`decide_batch` settles up to 16 pending requests of one requester in one
+workspace in a single transaction. Each item carries the same fields as
+`decide`; a mixed batch or a failing item commits nothing.
+
 ## Storage and migrations
 
 The approval owner opens its host-selected resource through its private

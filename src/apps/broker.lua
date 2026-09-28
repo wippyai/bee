@@ -1025,8 +1025,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local replace_started = 0
     local replace_retry_at = 0
     local deadline_timer: time.Timer? = nil
+    local admission_poller = assert(time.ticker("1s"))
     local function arm_deadline()
-        local due: number? = next_admission_check
+        local due: number? = nil
         local function consider(value: number)
             if value > 0 and (due == nil or value < due) then due = value end
         end
@@ -1051,9 +1052,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             deadline_timer = assert(time.timer(tostring(delay) .. "ms"))
         end
     end
-    local function process_deadlines()
+    local function process_deadlines(admission_poll: boolean?)
         local current = now()
-        if current >= next_admission_check then
+        if admission_poll or current >= next_admission_check then
             local revision_ok, current_revision = pcall(function(): string
                 return catalog.revision(workspace_id)
             end)
@@ -1119,12 +1120,14 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local cases = {requests:case_receive(), app_ready:case_receive(), titles:case_receive(), queries:case_receive(), answers:case_receive(), close_replies:case_receive(), shutdown_requests:case_receive(), appearance_requests:case_receive(),
             appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), replace_acks:case_receive(), thread_requests:case_receive(), fences:case_receive(), events:case_receive()}
         if deadline_timer then cases[#cases + 1] = deadline_timer:channel():case_receive() end
+        cases[#cases + 1] = admission_poller:channel():case_receive()
         local selected = channel.select(cases)
         if not selected.ok then break end
         local deadline_fired = deadline_timer ~= nil and selected.channel == deadline_timer:channel()
+        local admission_poll_fired = selected.channel == admission_poller:channel()
         if deadline_timer then deadline_timer:stop(); deadline_timer = nil end
-        if deadline_fired then
-            process_deadlines()
+        if deadline_fired or admission_poll_fired then
+            process_deadlines(admission_poll_fired)
         elseif selected.channel == replace_acks then
             local message = selected.value
             local data: unknown = message:payload():data()
@@ -1768,6 +1771,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         arm_deadline()
     end
     if deadline_timer then deadline_timer:stop() end
+    admission_poller:stop()
     -- Owner loss and CANCEL are the emergency path; normal shutdown has already
     -- cooperated. Each live execution is cancelled so it can stop what it owns,
     -- and the broker exits only after every one has.

@@ -52,7 +52,6 @@ local function define_tests()
             install_policy()
             local vocabulary = assert(capability_model.decode(assert(registry.get("bee:capability_catalog"))))
             local installed = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "alpha"}))
-            local extra = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "beta"}))
             local narrow = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "alpha/child"}))
             local widened = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "beta/child"}))
             local outside = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "gamma"}))
@@ -61,7 +60,7 @@ local function define_tests()
             local db = assert(lease_store.open("bee.gov:activation_test_db", "node-lease-flow", workspace))
 
             local proposed = ok(lease_grants.propose(executor, vocabulary, installed, profile, workspace,
-                {extras = extra, max_applies = 1}, "propose-1"))
+                {extras = {{capability = "workspace.files.write", parameters = {subpath = "beta"}}}, max_applies = 1}, "propose-1"))
             local approval = proposed.approval :: Object
             local approval_id, digest = approval.approval_id :: string, approval.proposal_digest :: string
 

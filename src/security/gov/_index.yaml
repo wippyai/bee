@@ -19,6 +19,13 @@ entries:
     actions: [bee.gov.delivery.activate]
     resources: '*'
     effect: allow
+- name: governance_delivery_lease_policy
+  kind: security.policy
+  meta: {comment: Propose, grant, list and revoke approval leases; separate from activation so an inbox can manage leases without preparing overlays}
+  policy:
+    actions: [bee.gov.delivery.lease]
+    resources: '*'
+    effect: allow
 - name: governance_delivery_publish_policy
   kind: security.policy
   policy:

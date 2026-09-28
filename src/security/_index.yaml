@@ -16,6 +16,7 @@ entries:
     policies:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.security.approvals:approval_decide_policy
+    - bee.security.gov:governance_delivery_lease_policy
     - bee.approvals.inbox:client_policy
 - name: base_app_policy
   kind: security.policy

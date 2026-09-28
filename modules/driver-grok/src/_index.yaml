@@ -83,6 +83,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: grok
+    accepts_model: true
     profiles_ref: bee.driver.grok:profiles
 - name: profiles
   kind: registry.entry

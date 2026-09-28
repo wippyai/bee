@@ -105,8 +105,13 @@ local function define_tests()
             test.eq(both, "thread names either a thread_id or a title")
             local _, escaping = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", workdir = {root_ref = "r", path = "../x"}}})
             test.eq(escaping, "workdir.path: subpath has an invalid segment")
-            local _, placement = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", placement = "vm"}})
-            test.eq(placement, "placement must be native or docker")
+            -- Any bounded identifier names a placement kind; which kinds this
+            -- host actually admits is decided where the launch resolves its
+            -- placement binding, never by a fixed set here.
+            local installable = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", placement = "vm"}})
+            test.eq(installable and installable.placement, "vm")
+            local _, malformed = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", placement = "bad\0placement"}})
+            test.eq(malformed, "placement is not an identifier")
             local tool = mcp.tool("thread_launch")
             if not tool then error("thread_launch tool") end
             local properties = tool.schema.properties :: Object

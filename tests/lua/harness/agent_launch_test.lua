@@ -112,7 +112,12 @@ local function define_tests()
             test.eq(select(2, with("thread", {})), "thread names either a thread_id or a title")
             local docker = with("placement", "docker")
             test.eq(docker and docker.placement, "docker")
-            test.eq(select(2, with("placement", "vm")), "placement must be native or docker")
+            -- Any bounded identifier decodes as a placement kind; an
+            -- installed placement package's kind is admitted or refused
+            -- only where its binding is resolved, never by a fixed set here.
+            local installable = with("placement", "vm")
+            test.eq(installable and installable.placement, "vm")
+            test.eq(select(2, with("placement", "bad\0placement")), "placement is not an identifier")
             local profiled = agent_protocol.decode({definition_ref = PERMITTED, brief = "x", idempotency_key = "k", saved_profile_id = "p", saved_profile_revision = 2})
             test.eq(profiled and profiled.saved_profile_revision, 2)
             test.eq(select(2, with("saved_profile_id", "p")), "a saved profile needs saved_profile_id and a positive saved_profile_revision")

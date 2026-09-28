@@ -121,6 +121,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: claude
+    accepts_model: true
     profiles_ref: bee.driver.claude:profiles
 - name: profiles
   kind: registry.entry

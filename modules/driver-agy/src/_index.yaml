@@ -83,6 +83,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: agy
+    accepts_model: true
     profiles_ref: bee.driver.agy:profiles
 - name: profiles
   kind: registry.entry

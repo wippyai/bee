@@ -108,6 +108,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: codex
+    accepts_model: false
     profiles_ref: bee.driver.codex:profiles
 - name: profiles
   kind: registry.entry

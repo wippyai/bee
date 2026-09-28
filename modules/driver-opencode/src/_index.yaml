@@ -84,6 +84,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: opencode
+    accepts_model: false
     profiles_ref: bee.driver.opencode:profiles
 - name: profiles
   kind: registry.entry

@@ -31,19 +31,23 @@ and the tuning hints with the owner-permitted declinable set. A missing
 entry is refused (`NOT_FOUND`); an unknown agent, trait or tool field is
 refused (`INVALID`).
 
-A CLI harness route (Claude, Codex, agy, Grok or Muse) admits the closure
-only through the route check in launch admission
-(`modules/harness/src/launch/admission.lua`). The route honors the exact
-agent identity, the composed prompt and context, the selected trait and tool
-schemas, the admitted delegates and the host-approved model mapping from the
-launch policy's `agent_model_map`
-(`modules/harness/src/carrier/policy.lua`). A tuning hint passes only as a
-declined entry when the agent owner lists it as declinable; required memory,
-trait behavior, contracts, wrappers, hooks or options are refused
-(`UNSUPPORTED_CAPABILITY`), so a trait is never reduced to its prompt.
-Delegates outside the policy's `agent_delegates` are refused (`FORBIDDEN`).
-Codex takes no model input, so an agent that names a model is refused on a
-Codex route. The plan pins the closure digest, the exact gateway tool
+A CLI harness route admits the closure only through the route check in
+launch admission (`modules/harness/src/launch/admission.lua`). The route is
+any `harness.driver` contract binding the host activates
+(`bee.harness:harness_activation`); no driver id is listed in
+`bee.harness.launch:agent_resolver`, so an installed driver package (Claude,
+Codex, agy, Grok, Muse, opencode or a later addition) routes framework
+agents the moment its binding is activated. Each binding's `meta` declares
+`accepts_model`, and the route honors the exact agent identity, the composed
+prompt and context, the selected trait and tool schemas, the admitted
+delegates and the host-approved model mapping from the launch policy's
+`agent_model_map` (`modules/harness/src/carrier/policy.lua`). A tuning hint
+passes only as a declined entry when the agent owner lists it as declinable;
+required memory, trait behavior, contracts, wrappers, hooks or options are
+refused (`UNSUPPORTED_CAPABILITY`), so a trait is never reduced to its
+prompt. Delegates outside the policy's `agent_delegates` are refused
+(`FORBIDDEN`). Codex and opencode declare `accepts_model: false`, so an
+agent that names a model is refused on either route. The plan pins the closure digest, the exact gateway tool
 aliases, the mapped model and the declined hints; a changed agent, trait,
 tool, delegate or contract reference returns `CONFLICT` before any grant or
 credential projection. The closure's composed text travels through the

@@ -1348,8 +1348,29 @@ local function define_tests()
                 test.eq(code(refused), "PLACEMENT_UNAVAILABLE")
             end)
             test.eq(code(call("bee.threads.service:get", {thread_id = "thread:" .. request_id})), "NOT_FOUND")
+            -- "vm" names no installed placement package, but decoding no
+            -- longer refuses it by shape: the definition's own override
+            -- allow-list is what refuses it here, same as "docker" above.
             test.eq(code(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
-                workspace_id = workspace, brief = "ping", placement = "vm"})), "INVALID")
+                workspace_id = workspace, brief = "ping", placement = "vm"})), "FORBIDDEN")
+            test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("placement-malformed"), definition_ref = DEFINITION,
+                workspace_id = workspace, brief = "ping", placement = "bad\0placement"})), "INVALID")
+        end)
+        test.it("selects an installed placement package once the host's policy names its binding", function()
+            local FIXTURE_PLACEMENT = "bee.harness.catalog:fixture_placement_binding"
+            with_overrides({"brief", "placement"}, {"placement"}, function()
+                local unselected = call("bee.harness.launch:admit", {request_id = fresh("placement-fixture-unselected"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", placement = "fixture"})
+                test.eq(code(unselected), "PLACEMENT_UNAVAILABLE")
+                test.is_true(refusal_message(unselected):find("it places it native", 1, true) ~= nil)
+                with_entry(POLICY, function(changed) changed.placement_binding = FIXTURE_PLACEMENT end, function()
+                    local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
+                    test.eq(plan.placement_kind, "fixture")
+                    local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("placement-fixture-selected"), definition_ref = DEFINITION,
+                        workspace_id = workspace, brief = "ping", placement = "fixture"}))
+                    test.eq((admitted.plan :: {[string]: unknown}).placement_kind, "fixture")
+                end)
+            end)
         end)
         test.it("sets up a folder under an admitted root as the working directory only under a workdir override", function()
             local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))

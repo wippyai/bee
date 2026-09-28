@@ -255,7 +255,7 @@ function M.resolve_agent(pinned: registry.Snapshot, agent_ref: string, host_conf
         end
     end
 
-    local checked, route_code, route_err = resolver.check_route(closure, {
+    local checked, route_code, route_err = resolver.check_route(pinned, closure, {
         driver_id = "wippy",
         model_map = model_map,
         admitted_delegates = admitted_delegates,

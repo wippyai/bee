@@ -75,6 +75,14 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.application:thread_protocol
+- name: client_test
+  kind: function.lua
+  source: file://client_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    client: bee.application:client
 - name: folder_picker_test
   kind: function.lua
   source: file://folder_picker_test.lua

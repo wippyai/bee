@@ -41,6 +41,7 @@ local json = require("json")
 local time = require("time")
 
 type Object = {[string]: unknown}
+type ThreadOperation = "read" | "post" | "subscribe" | "page" | "ack_page" | "resume" | "unsubscribe"
 
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -141,7 +142,7 @@ local function main(value: unknown)
     end
 
     local function run_thread_probe(thread_id: string)
-        local function await(operation: string, arguments: Object): Object
+        local function await(operation: ThreadOperation, arguments: Object): Object
             local request_id, request_error = client.thread_request(launch, operation, arguments)
             if not request_id then error(operation .. " request failed: " .. tostring(request_error)) end
             while true do
@@ -151,7 +152,7 @@ local function main(value: unknown)
                     if selected.value.kind == process.event.CANCEL then error(operation .. " cancelled") end
                 else
                     local message = selected.value
-                    local reply = client.thread_result(launch, message:from(), message:payload():data())
+                    local reply = client.thread_result(launch, message:from(), operation, message:payload():data())
                     if reply and reply.request_id == request_id then
                         if not reply.ok then
                             local failure = reply.error
@@ -247,7 +248,7 @@ local function main(value: unknown)
                 if selected.value.kind == process.event.CANCEL then error("fresh read cancelled") end
             else
                 local message = selected.value
-                local reply = client.thread_result(launch, message:from(), message:payload():data())
+                local reply = client.thread_result(launch, message:from(), "read", message:payload():data())
                 if reply and reply.request_id == request_id then
                     local code = reply.error and tostring(reply.error.code) or ""
                     if reply.ok then thread_status = "active"

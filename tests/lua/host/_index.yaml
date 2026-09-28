@@ -80,3 +80,4 @@ entries:
     test: wippy.test:test
     connections: bee.host:clients
     contract: bee.protocol:application
+    inventory: bee.host:inventory

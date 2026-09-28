@@ -173,6 +173,12 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local function deliver(topic: string, value: unknown)
         assert(process.send(owner, topic, value))
     end
+    -- Inventory changes made while the host is not ready reach no admitted
+    -- client, so becoming ready publishes the current inventory to all of them.
+    local function resume_clients()
+        ready = true
+        connections.publish_all(client_connections, live_inventory)
+    end
     local function send(topic: string, value: unknown)
         local sent, err = process.send(broker, topic, value)
         if not sent then error("Core delivery failed: " .. topic .. ": " .. tostring(err)) end
@@ -267,7 +273,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
         else
             if not ready and broker_started then
                 resolve_prepared_intents()
-                ready = true
+                resume_clients()
                 if broker_replacements_done > 0 then
                     broker_replacing = false
                     connections.broker_replaced(client_connections, broker)
@@ -362,7 +368,8 @@ local function main(owner: string, workspace: unknown, database_resource: string
                     database:close()
                     process.upgrade("", owner, workspace, database_resource, saved)
                 else
-                    host_upgrading, ready, upgrade_deadline = false, true, nil
+                    host_upgrading, upgrade_deadline = false, nil
+                resume_clients()
                     deliver("bee.host.upgrade_failed", {version = 1, schema = 1,
                         workspace_id = workspace_id, reason = "owner_ack_timeout"})
                 end
@@ -385,7 +392,8 @@ local function main(owner: string, workspace: unknown, database_resource: string
             if open_timer then open_timer:stop(); open_timer = nil end
             if not selected.ok then break end
             if upgrade_deadline and selected.channel == upgrade_deadline then
-                host_upgrading, ready, upgrade_deadline = false, true, nil
+                host_upgrading, upgrade_deadline = false, nil
+                resume_clients()
                 deliver("bee.host.upgrade_failed", {version = 1, schema = 1,
                     workspace_id = workspace_id, reason = "drain_timeout"})
             elseif expired then

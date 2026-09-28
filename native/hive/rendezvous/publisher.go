@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"os"
 
 	"github.com/wippyai/runtime/api/boot"
 	"github.com/wippyai/runtime/api/cluster"
@@ -48,6 +49,7 @@ func Publisher(directory, execution, launch string, localAlias bool) (boot.Compo
 			}
 			descriptor.Launch = launch
 			descriptor.ClientRevision = ClientRevision
+			descriptor.OwnerPID = os.Getpid()
 			return store.Publish(ctx, descriptor)
 		},
 	}), nil

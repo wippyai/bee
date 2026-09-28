@@ -157,6 +157,12 @@ def compose(folder):
     (project / SHARED_SUBPATH).mkdir(parents=True, exist_ok=True)
     (project / SHARED_SUBPATH / "greeting.txt").write_text(GREETING)
     shutil.copytree(FIXTURE, project / "src/workspace_app_probe")
+    source_entries = yaml.safe_load((project / "src/_index.yaml").read_text())["entries"]
+    recovery = next(entry for entry in source_entries if entry.get("name") == "gov_recovery_service")
+    workspace_hosts = next(entry for entry in source_entries if entry.get("name") == "workspace_hosts")
+    assert recovery["lifecycle"].get("startup") == "complete", recovery
+    assert recovery["lifecycle"].get("auto_start") is True, recovery
+    assert source_entries.index(recovery) < source_entries.index(workspace_hosts)
     for relative in SHIPPED:
         assert (project / relative).read_bytes() == (ROOT / relative).read_bytes(), relative
     # A Hive acceptance later starts this project as its named source node.
@@ -305,6 +311,22 @@ def stop_native_owner(folder, project):
                              text=True, timeout=90)
     output = stopped.stdout + stopped.stderr
     assert stopped.returncode == 0 and "Bee stopped" in output, output
+    descriptor_path = folder / "native-state" / "local-mesh" / "mesh-owner.json"
+    descriptor = json.loads(descriptor_path.read_text())
+    owner_pid = descriptor.get("owner_pid")
+    assert isinstance(owner_pid, int) and owner_pid > 0, descriptor
+    try:
+        os.kill(owner_pid, 0)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        pass
+    proc_stat = Path(f"/proc/{owner_pid}/stat")
+    if proc_stat.exists():
+        fields = proc_stat.read_text().split()
+        if len(fields) > 2 and fields[2] == "Z":
+            return
+    raise AssertionError(f"bee stop returned success while owner PID {owner_pid} remained running")
 
 
 def assert_native_owner_started_cleanly(folder):
@@ -417,15 +439,9 @@ def exercise():
     try:
         restarted.wait("No applications open", timeout=COLD_BOOT)
         assert_native_owner_started_cleanly(folder)
-        deadline = time.monotonic() + COLD_BOOT
-        while True:
-            restarted.open_start()
-            if TITLE in restarted.text():
-                restarted.choose(TITLE)
-                break
-            restarted.key(b"\x1b")
-            assert time.monotonic() < deadline, restarted.text()
-            restarted.pump(.1)
+        assert_catalog_lists(restarted, TITLE, COLD_BOOT)
+        restarted.open_start()
+        restarted.choose(TITLE)
         if NATIVE_DESKTOP:
             gossip_port = int((folder / "native-state" / "hive" / "gossip.port").read_text().strip())
             assert gossip_port != saved_gossip_port, (gossip_port, saved_gossip_port)

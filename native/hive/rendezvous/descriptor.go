@@ -25,7 +25,7 @@ const MaxBytes = 4096
 
 // ClientRevision is the local client protocol this owner can answer. An absent
 // value identifies a descriptor published before owners advertised this bound.
-const ClientRevision = "bee.hive@1"
+const ClientRevision = "bee.hive@2"
 
 var ErrDescriptor = errors.New("invalid Bee mesh rendezvous descriptor")
 
@@ -39,6 +39,9 @@ type Descriptor struct {
 	Transport      string `json:"transport"`
 	PublicKey      string `json:"public_key"`
 	ClientRevision string `json:"client_revision,omitempty"`
+	// OwnerPID is the local OS process holding the application-state lock. It is
+	// used only to observe a stop; it is not part of the cluster endpoint.
+	OwnerPID int `json:"owner_pid,omitempty"`
 	// Supervisor is the owner's Hive supervisor process address
 	// ({node@bee.hive.service:supervisor_host|uniq}). A raft-disabled owner never
 	// publishes the cluster-wide name, so a local client addresses the
@@ -63,6 +66,7 @@ func (d Descriptor) Endpoint() Descriptor {
 	d.Join = ""
 	d.Launch = ""
 	d.ClientRevision = ""
+	d.OwnerPID = 0
 	return d
 }
 
@@ -87,6 +91,12 @@ func (d Descriptor) validate() error {
 		return ErrDescriptor
 	}
 	if len(d.ClientRevision) > 64 {
+		return ErrDescriptor
+	}
+	if d.OwnerPID < 0 || int64(d.OwnerPID) > 1<<31-1 {
+		return ErrDescriptor
+	}
+	if (d.ClientRevision == ClientRevision) != (d.OwnerPID > 0) {
 		return ErrDescriptor
 	}
 	for _, r := range d.ClientRevision {
@@ -227,7 +237,7 @@ func Decode(data []byte) (Descriptor, error) {
 			return Descriptor{}, ErrDescriptor
 		}
 		switch name {
-		case "version", "execution", "node", "gossip", "transport", "public_key", "client_revision", "supervisor", "join", "launch":
+		case "version", "execution", "node", "gossip", "transport", "public_key", "client_revision", "owner_pid", "supervisor", "join", "launch":
 		default:
 			return Descriptor{}, ErrDescriptor
 		}
@@ -242,7 +252,7 @@ func Decode(data []byte) (Descriptor, error) {
 	// listens and its supervisor address once the supervisor has registered,
 	// and names its launch identity when a client started it.
 	required := 6
-	for _, optional := range []string{"client_revision", "supervisor", "join", "launch"} {
+	for _, optional := range []string{"client_revision", "owner_pid", "supervisor", "join", "launch"} {
 		if fields[optional] != nil {
 			required++
 		}

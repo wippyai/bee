@@ -92,7 +92,8 @@ app-journey-check: fixture-gateway-client
 # profiles: overlay, freeze and delivery request through its gateway tools,
 # review in Overlays, approval in Approvals, apply, open from Start, restore.
 workspace-app-delivery-check: fixture-gateway-client
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_app_delivery.py
+	$(MAKE) standalone BEE_NATIVE_LOCAL=1
+	BEE_WORKSPACE_APP_NATIVE_DESKTOP=1 BEE_WORKSPACE_APP_DESKTOP_RUNTIME="$(abspath $(BEE_BINARY))" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/workspace_app_delivery.py
 # Explicit live-provider proof of the same journey: the installed, logged-in
 # Claude Code builds the application from the spec; consumes inference.
 .PHONY: workspace-app-delivery-live-check

@@ -81,6 +81,45 @@ local function define_tests()
             test.eq(snapshots, 2)
             test.eq(reads, 2)
         end)
+        test.it("orders complete snapshot changes by their inbox sequence", function()
+            local configured = assert(source_config.configure("node-a", {"ws"}))
+            local source = configured.sources.ws
+            if not source then error("source configuration omitted ws") end
+            local ids = {"approval-a", "approval-b", "approval-c", "approval-d", "approval-e"}
+            local probe: {[string]: boolean} = {}
+            for _, id in ipairs(ids) do probe[id] = true end
+            local pair_order: {string} = {}
+            for id in pairs(probe) do pair_order[#pair_order + 1] = id end
+            local sequence_by_id: {[string]: integer} = {}
+            for index, id in ipairs(pair_order) do sequence_by_id[id] = #ids - index + 1 end
+
+            local items: {Object} = {}
+            for _, id in ipairs(ids) do
+                local item = view(1)
+                item.approval_id = id
+                local sequence = sequence_by_id[id]
+                if not sequence then error("test inbox sequence is missing") end
+                items[#items + 1] = projection(source, item, sequence)
+            end
+            local page: Object = {ok = true, value = {schema = "bee.sync-snapshot@1", owner_id = source.node_id,
+                feed = source.feed, cursor = #ids, earliest_cursor = 0, scope_revision = "scope-1", items = items,
+                complete = true, reset_required = false}, replayed = false}
+            local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
+                if target == "bee.approvals.binding:feed_snapshot" then return page, nil end
+                return nil, "unexpected target"
+            end)
+
+            local result = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
+            if not result or result.kind ~= "success" then error("complete inbox snapshot failed") end
+            local previous = 0
+            for _, raw in ipairs(((result.value :: Object).changes :: {unknown})) do
+                local change = raw :: Object
+                local sequence = change.seq :: integer
+                test.is_true(sequence > previous, "snapshot changes are not ordered by inbox sequence")
+                previous = sequence
+            end
+            test.eq(previous, #ids)
+        end)
         test.it("rejects malformed approval projections and malformed feed pages", function()
             local configured = assert(source_config.configure("node-a", {"ws"}))
             local malformed = view(1)

@@ -48,6 +48,14 @@ type clientSeams struct {
 	report io.Writer
 	// released waits until no owner holds state.
 	released func(ctx context.Context, state string) error
+	// holdOwnerExit pins the owner process before a stop request so success can
+	// wait for that exact process to exit, even after it releases the state lock.
+	holdOwnerExit func(pid int) (ownerExitObserver, error)
+}
+
+type ownerExitObserver interface {
+	wait(ctx context.Context) error
+	close() error
 }
 
 // clientIntent is what one ordinary invocation asks of the retained owner.
@@ -234,6 +242,17 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	if owner.ClientRevision != rendezvous.ClientRevision {
 		return incompatibleOwner(launch.State, owner.ClientRevision)
 	}
+	var ownerExit ownerExitObserver
+	if join.Intent.stop {
+		if seams.holdOwnerExit == nil {
+			return errors.New("cannot observe the Bee owner process before stopping it")
+		}
+		ownerExit, err = seams.holdOwnerExit(owner.OwnerPID)
+		if err != nil {
+			return fmt.Errorf("cannot observe Bee owner process PID %d before stopping it: %w", owner.OwnerPID, err)
+		}
+		defer func() { result = errors.Join(result, ownerExit.close()) }()
+	}
 	join.Directory = directory
 	join.Owner = owner
 	if join.Key == nil {
@@ -274,6 +293,9 @@ func runClientEnsuresOwner(ctx context.Context, launch app.Launch, seams clientS
 	}
 	if join.Intent.stop {
 		if err := seams.released(ctx, launch.State); err != nil {
+			return err
+		}
+		if err := ownerExit.wait(ctx); err != nil {
 			return err
 		}
 		_, err := fmt.Fprintln(seams.report, "Bee stopped")

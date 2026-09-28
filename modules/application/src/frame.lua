@@ -30,6 +30,21 @@ type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: strin
     area: Rect?}
 -- The rows of the canonical anatomy; tabs and actions are 0 when absent.
 type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
+-- One flattened, already-filtered tree row; the caller walks the tree and
+-- owns which nodes are expanded.
+type TreeRow = {label: string, depth: integer, expandable: boolean?, expanded: boolean?, role: string?, key: string?}
+type TreeView = {rows: {TreeRow}, selected: integer, offset: integer, focused: boolean?}
+-- One key-value inspector row.
+type Entry = {label: string, value: string, role: string?}
+type Inspector = {entries: {Entry}, selected: integer, offset: integer, label_width: integer?, focused: boolean?}
+-- One log line; role colors it (default text).
+type LogLine = {text: string, role: string?}
+type LogView = {lines: {LogLine}, selected: integer, offset: integer, query: string?, focused: boolean?}
+-- One toast notification, drawn in role's color (default accent).
+type Toast = {text: string, role: string?}
+-- One command palette choice.
+type Choice = {label: string, key: string?, note: string?}
+type Palette = {query: string, choices: {Choice}, selected: integer, offset: integer}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 local function minimum(a: integer, b: integer): integer if a < b then return a end; return b end
@@ -490,6 +505,210 @@ function M.empty(painter: Painter, y: integer, title: string, action: string?, a
     end
     M.line(painter, y, title, painter.theme.text)
     if has_action then M.line(painter, y + 1, action or "", painter.theme.muted) end
+end
+
+-- A tree view between rows first and last: only the visible window is ever
+-- drawn. Each row is indented two cells per depth, then "▾" expanded, "▸"
+-- collapsed, or two blank cells for a leaf, then its label; role colors the
+-- label (default text). The selected row takes the row selection; every
+-- drawn row carries hit kind "tree" and its key. Returns the visible window.
+function M.tree(painter: Painter, first: integer, last: integer, value: TreeView): Window
+    local count = #value.rows
+    if last < first then return {offset = 0, capacity = 0} end
+    local window = M.window(count, last - first + 1, value.selected, value.offset)
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
+        local row = value.rows[index]
+        if not row then break end
+        local marker = row.expandable and (row.expanded and "▾ " or "▸ ") or "  "
+        local text = string.rep("  ", maximum(0, row.depth)) .. marker .. row.label
+        draw_row(painter, nil, first + slot - 1, text, index == value.selected, "tree", index, row.key or "",
+            row.role and appearance.role(painter.theme, row.role) or nil, value.focused)
+    end
+    return window
+end
+
+-- A key-value inspector between rows first and last: the muted label padded
+-- to label_width (default the widest label, capped to a third of the
+-- canvas) then the value in role (default text). The selected row takes the
+-- row selection and carries hit kind "kv"; every row keeps its label as the
+-- key. Returns the visible window.
+function M.kv(painter: Painter, first: integer, last: integer, value: Inspector): Window
+    local count = #value.entries
+    if last < first then return {offset = 0, capacity = 0} end
+    local label_width = value.label_width or 0
+    if label_width <= 0 then
+        for _, entry in ipairs(value.entries) do label_width = maximum(label_width, tty.text.width(entry.label)) end
+    end
+    label_width = minimum(label_width, painter.width // 3)
+    local window = M.window(count, last - first + 1, value.selected, value.offset)
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
+        local entry = value.entries[index]
+        if not entry then break end
+        local y = first + slot - 1
+        local text = M.pad(entry.label, label_width) .. "  " .. entry.value
+        draw_row(painter, nil, y, text, index == value.selected, "kv", index, entry.label,
+            entry.role and appearance.role(painter.theme, entry.role) or nil, value.focused)
+        if index ~= value.selected then M.put(painter, 2, y, M.pad(entry.label, label_width), label_width, painter.theme.muted) end
+    end
+    return window
+end
+
+-- text painted at (x, y) in fg over bg, with every case-insensitive
+-- occurrence of query picked out in the accent pair. A valid UTF-8 query
+-- only ever matches on a UTF-8 character boundary of a valid UTF-8 text, so
+-- the split never lands inside a multi-byte glyph.
+local function highlighted(painter: Painter, x: integer, y: integer, text: string, room: integer, query: string?, fg: string?, bg: string?)
+    if not query or query == "" or room <= 0 then M.put(painter, x, y, text, room, fg, bg); return end
+    local fitted = M.fit(text, room)
+    local haystack = fitted:lower()
+    local needle = query:lower()
+    local theme = painter.theme
+    local column = x
+    local budget = room
+    local at = 1
+    while budget > 0 do
+        local found = haystack:find(needle, at, true)
+        if not found then
+            column = column + M.put(painter, column, y, fitted:sub(at), budget, fg, bg)
+            break
+        end
+        if found > at then
+            local used = M.put(painter, column, y, fitted:sub(at, found - 1), budget, fg, bg)
+            column = column + used
+            budget = budget - used
+        end
+        if budget <= 0 then break end
+        local used = M.put(painter, column, y, fitted:sub(found, found + #query - 1), budget, appearance.selection_text(theme), theme.accent)
+        column = column + used
+        budget = budget - used
+        at = found + maximum(1, #query)
+    end
+end
+
+-- A virtualized log viewer between rows first and last: only the visible
+-- window of lines is ever drawn. Each line is colored by its role (default
+-- text), and every occurrence of query (case-insensitive) is picked out in
+-- the accent pair. The selected line takes the row selection; every drawn
+-- line carries hit kind "log" and its index. Returns the visible window.
+function M.log(painter: Painter, first: integer, last: integer, value: LogView): Window
+    local count = #value.lines
+    if last < first then return {offset = 0, capacity = 0} end
+    local window = M.window(count, last - first + 1, value.selected, value.offset)
+    local theme = painter.theme
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
+        local line = value.lines[index]
+        if not line then break end
+        local y = first + slot - 1
+        local selected = index == value.selected
+        local has_focus = value.focused == nil or value.focused
+        local fg = line.role and appearance.role(theme, line.role) or theme.text
+        local bg = theme.surface
+        if selected and has_focus then fg, bg = appearance.selection_text(theme), theme.accent
+        elseif selected then fg = theme.accent end
+        M.fill(painter, y, bg)
+        if selected then M.put(painter, 1, y, MARKER, 1, fg, bg) end
+        highlighted(painter, 2, y, line.text, painter.width - 2, value.query, fg, bg)
+        M.add_hit(painter, "log", index, "", 1, y, painter.width, 1)
+    end
+    return window
+end
+
+-- A status badge at (x, y): text padded with one cell on each side, filled
+-- in role's color (default accent) with a contrasting foreground. Returns
+-- the drawn width.
+function M.badge(painter: Painter, x: integer, y: integer, text: string, role: string?): integer
+    local label = " " .. text .. " "
+    local size = tty.text.width(label)
+    local bg = appearance.role(painter.theme, role or "accent")
+    return M.put(painter, x, y, label, size, appearance.selection_text(painter.theme), bg)
+end
+
+-- A one-row toast notification: the message centered on row y, filled in
+-- role's color (default accent) with a contrasting foreground, overwriting
+-- whatever was on that row. The caller owns when a toast is shown and for
+-- how long; this only draws the row.
+function M.toast(painter: Painter, y: integer, toast: Toast)
+    if y < 1 or y > painter.height then return end
+    local bg = appearance.role(painter.theme, toast.role or "accent")
+    M.fill(painter, y, bg)
+    local text = M.fit(toast.text, maximum(0, painter.width - 4))
+    local size = tty.text.width(text)
+    M.put(painter, maximum(1, (painter.width - size) // 2 + 1), y, text, size, appearance.selection_text(painter.theme), bg)
+end
+
+-- A centered modal panel: a box-drawing border in the border role clipped to
+-- width by height (each capped to the painter's size), the title on its top
+-- edge and the surface cleared underneath. Returns the inner rectangle for
+-- the caller's own content; too little room returns a zero rectangle and
+-- paints nothing.
+function M.modal(painter: Painter, width: integer, height: integer, title: string): Rect
+    local w = maximum(0, minimum(width, painter.width))
+    local h = maximum(0, minimum(height, painter.height))
+    if w < 4 or h < 3 then return {x = 0, y = 0, width = 0, height = 0} end
+    local x = maximum(1, (painter.width - w) // 2 + 1)
+    local y = maximum(1, (painter.height - h) // 2 + 1)
+    local theme = painter.theme
+    for row = 0, h - 1 do
+        painter.canvas:put(x, y + row, appearance.style(theme.text, theme.surface) .. string.rep(" ", w) .. RESET, w)
+    end
+    M.put(painter, x, y, "┌" .. string.rep("─", w - 2) .. "┐", w, theme.border)
+    for row = 1, h - 2 do
+        M.put(painter, x, y + row, "│", 1, theme.border)
+        M.put(painter, x + w - 1, y + row, "│", 1, theme.border)
+    end
+    M.put(painter, x, y + h - 1, "└" .. string.rep("─", w - 2) .. "┘", w, theme.border)
+    if title ~= "" then M.put(painter, x + 2, y, " " .. title .. " ", maximum(0, w - 4), theme.text) end
+    return {x = x + 2, y = y + 1, width = maximum(0, w - 4), height = maximum(0, h - 2)}
+end
+
+-- A subsequence match score for a command palette: nil when query's
+-- characters (case-folded) do not all appear in order within text, else a
+-- score where a lower number ranks a tighter, earlier match higher.
+function M.fuzzy(query: string, text: string): integer?
+    if query == "" then return 0 end
+    local needle = query:lower()
+    local haystack = text:lower()
+    local at = 1
+    local first: integer? = nil
+    local last = 0
+    for position = 1, #needle do
+        local found = haystack:find(needle:sub(position, position), at, true)
+        if not found then return nil end
+        first = first or found
+        last = found
+        at = found + 1
+    end
+    return (last - (first or 1)) + (first or 1)
+end
+
+-- A command palette overlay: a modal titled "Command Palette" sized to
+-- width by height, the query on its first content row with a block caret,
+-- and the choices below as selectable rows carrying hit kind "choice" and
+-- each choice's key. An empty choices list draws the empty state instead of
+-- a list. Returns the visible window of choices.
+function M.palette(painter: Painter, width: integer, height: integer, value: Palette): Window
+    local content = M.modal(painter, width, height, "Command Palette")
+    if content.width <= 0 or content.height <= 0 then return {offset = 0, capacity = 0} end
+    M.put(painter, content.x, content.y, "› " .. value.query .. "█", content.width, painter.theme.text)
+    if #value.choices == 0 then
+        M.empty(painter, content.y + 2, "No matches", nil, {x = content.x, y = content.y, width = content.width, height = content.height})
+        return {offset = 0, capacity = 0}
+    end
+    if content.height < 3 then return {offset = 0, capacity = 0} end
+    local first = content.y + 2
+    local last = content.y + content.height - 1
+    local window = M.window(#value.choices, last - first + 1, value.selected, value.offset)
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
+        local choice = value.choices[index]
+        if not choice then break end
+        local text = choice.label .. ((choice.note and choice.note ~= "") and ("  " .. choice.note) or "")
+        draw_row(painter, content, first + slot - 1, text, index == value.selected, "choice", index, choice.key or "", nil, true)
+    end
+    return window
 end
 
 return M

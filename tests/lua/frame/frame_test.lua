@@ -54,6 +54,54 @@ end
 local function cells(): {{string}}
     return {{"bee.host:main", "idle", "96"}, {"bee.apps:broker\27[2J", "running\r", "70"}, {"bee.session:main", "idle", "16"}}
 end
+local function golden(painter: frame.Painter, expected: {string})
+    local rows = text(painter)
+    test.eq(#rows, #expected)
+    for index, row in ipairs(expected) do test.eq(rows[index], row) end
+end
+local BADGE: {string} = {
+    "  OK                "}
+local TOAST: {string} = {
+    "            Saved             "}
+local MODAL: {string} = {
+    "                              ",
+    "                              ",
+    "     ┌─ Confirm ────────┐     ",
+    "     │                  │     ",
+    "     │                  │     ",
+    "     │                  │     ",
+    "     │                  │     ",
+    "     └──────────────────┘     ",
+    "                              ",
+    "                              "}
+local TREE: {string} = {
+    " ▾ root                       ",
+    "›    child                    ",
+    "                              ",
+    "                              ",
+    "                              "}
+local KV: {string} = {
+    "›Node    fire-01              ",
+    " Status  ready                ",
+    "                              ",
+    "                              "}
+local LOG: {string} = {
+    " boot ok                      ",
+    "›error: timeout               ",
+    "                              "}
+local PALETTE: {string} = {
+    "                              ",
+    "                              ",
+    "   ┌─ Command Palette ────┐   ",
+    "   │ › de█                │   ",
+    "   │                      │   ",
+    "   │›Deploy Board         │   ",
+    "   │ Deps                 │   ",
+    "   │                      │   ",
+    "   │                      │   ",
+    "   └──────────────────────┘   ",
+    "                              ",
+    "                              "}
 
 local function define_tests()
     test.describe("Application frame", function()
@@ -202,6 +250,80 @@ local function define_tests()
             local rows = text(painter)
             test.eq(rows[3]:sub(1, 13), " No requests ")
             test.is_true(rows[4]:find("R refresh", 1, true) ~= nil)
+        end)
+        test.it("fills a status badge and a one-row toast in their role's color", function()
+            local badge = frame.new(20, 1, appearance.defaults())
+            test.eq(frame.badge(badge, 2, 1, "OK", "ok"), 4)
+            golden(badge, BADGE)
+            local theme = appearance.theme("honey")
+            local badge_cell = style_at(frame.rows(badge)[1], "OK")
+            test.eq(badge_cell and badge_cell.bg or "", rgb(theme.ok))
+
+            local toast = frame.new(30, 1, appearance.defaults())
+            frame.toast(toast, 1, {text = "Saved"})
+            golden(toast, TOAST)
+            local toast_cell = style_at(frame.rows(toast)[1], "Saved")
+            test.eq(toast_cell and toast_cell.bg or "", rgb(theme.accent))
+        end)
+        test.it("centers a bordered modal and returns its inner content rectangle", function()
+            local painter = frame.new(30, 10, appearance.defaults())
+            local inner = frame.modal(painter, 20, 6, "Confirm")
+            test.eq(inner.x .. "," .. inner.y .. "," .. inner.width .. "," .. inner.height, "8,4,16,4")
+            golden(painter, MODAL)
+
+            local tiny = frame.new(2, 2, appearance.defaults())
+            local none = frame.modal(tiny, 20, 6, "Confirm")
+            test.eq(none.width, 0)
+            test.eq(none.height, 0)
+        end)
+        test.it("indents a flattened tree by depth and marks expand state", function()
+            local painter = frame.new(30, 5, appearance.defaults())
+            local window = frame.tree(painter, 1, 5, {rows = {
+                {label = "root", depth = 0, expandable = true, expanded = true},
+                {label = "child", depth = 1, expandable = false},
+            }, selected = 2, offset = 0})
+            test.eq(window.offset, 0)
+            test.eq(window.capacity, 5)
+            golden(painter, TREE)
+            local hit = frame.hit(painter.hits, 5, 2)
+            test.eq(hit and (hit.kind .. ":" .. hit.index) or "", "tree:2")
+        end)
+        test.it("pads key-value labels and colors the value by role", function()
+            local painter = frame.new(30, 4, appearance.defaults())
+            frame.kv(painter, 1, 4, {entries = {{label = "Node", value = "fire-01"}, {label = "Status", value = "ready", role = "ok"}},
+                selected = 1, offset = 0})
+            golden(painter, KV)
+            local theme = appearance.theme("honey")
+            local status_cell = style_at(frame.rows(painter)[2], "ready")
+            test.eq(status_cell and status_cell.fg or "", rgb(theme.ok))
+        end)
+        test.it("virtualizes a log window and highlights a case-insensitive search", function()
+            local painter = frame.new(30, 3, appearance.defaults())
+            local window = frame.log(painter, 1, 3, {lines = {{text = "boot ok"}, {text = "error: timeout", role = "error"}},
+                selected = 2, offset = 0, query = "time"})
+            test.eq(window.offset, 0)
+            test.eq(window.capacity, 3)
+            golden(painter, LOG)
+            local theme = appearance.theme("honey")
+            local match_cell = style_at(frame.rows(painter)[2], "time")
+            test.eq(match_cell and match_cell.bg or "", rgb(theme.accent))
+            local hit = frame.hit(painter.hits, 2, 2)
+            test.eq(hit and (hit.kind .. ":" .. hit.index) or "", "log:2")
+        end)
+        test.it("filters a command palette with a subsequence score and shows its choices", function()
+            test.eq(frame.fuzzy("dpl", "Deploy Board"), 4)
+            test.is_nil(frame.fuzzy("xyz", "Deploy Board"))
+            test.eq(frame.fuzzy("", "Deploy Board"), 0)
+
+            local painter = frame.new(30, 12, appearance.defaults())
+            local window = frame.palette(painter, 24, 8, {query = "de", choices = {{label = "Deploy Board"}, {label = "Deps"}}, selected = 1, offset = 0})
+            test.eq(window.offset, 0)
+            test.eq(window.capacity, 4)
+            golden(painter, PALETTE)
+
+            local empty_palette = frame.new(30, 12, appearance.defaults())
+            local empty_window = frame.palette(empty_palette, 24, 8, {query = "zz", choices = {}, selected = 0, offset = 0})
+            test.eq(empty_window.capacity, 0)
         end)
     end)
 end

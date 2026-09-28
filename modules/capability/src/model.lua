@@ -43,6 +43,8 @@ local function collection_kind(kind: string): boolean
         or kind == "hive_operations" or kind == "hive_audiences"
 end
 
+M.collection_kind = collection_kind
+
 local function template_value(raw: unknown, parameters: {[string]: string}): boolean
     if type(raw) == "string" then
         local parameter = raw:match("^%$([a-z_]+)$")

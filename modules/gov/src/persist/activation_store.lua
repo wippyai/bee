@@ -10,6 +10,7 @@ local database = require("database")
 local transaction = require("transaction")
 local migrations = require("migrations")
 local migration_work = require("migration_work")
+local lease_store = require("lease_store")
 
 local M = {}
 local MAX_INTENTS = 128
@@ -245,6 +246,12 @@ local function decode(raw: unknown): (Request?, string?)
         if value.grant_reuse_digest ~= nil and result.grant_reuse_digest ~= result.approval_proposal_digest then
             return nil, "grant reuse digest is invalid"
         end
+    elseif operation == "authorize_lease" then
+        local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key", "lease_id", "lease_expected_revision", "proposal_capabilities"})
+        if extra then return nil, extra end
+        result.lease_id, result.lease_expected_revision = id(value.lease_id), count(value.lease_expected_revision, true)
+        result.proposal_capabilities = bounds.dense_list(value.proposal_capabilities, 128, "proposed capabilities")
+        if not result.lease_id or not result.lease_expected_revision or not result.proposal_capabilities then return nil, "lease authorization identity is invalid" end
     elseif operation == "begin_consume" then
         local extra = unknown(value, {"operation", "intent_id", "expected_revision", "idempotency_key"})
         if extra then return nil, extra end
@@ -317,58 +324,108 @@ local function finish(store: Store, tx: sql.Transaction, actor: string, input: R
     if receipt_error then return receipt_error end
     return transaction.success(view(store, row, current_slot), false)
 end
+-- The tx-level steps below serve both the ordinary approval path and the lease
+-- authorization, which performs all of them in one commit.
+local function bind_in(tx: sql.Transaction, store: Store, row: Object, input: Request): (Object?, Result?)
+    local next_revision = (row.revision :: number) + 1
+    local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'approval_bound', approval_id = ?, approval_proposal_digest = ?, approval_owner_incarnation = ?, grant_reuse_digest = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {input.approval_id, input.approval_proposal_digest, input.approval_owner_incarnation, input.grant_reuse_digest, next_revision, store.node, store.workspace, row.intent_id, row.revision})
+    local update_error = cas_result(updated, err, "bind activation approval")
+    if update_error then return nil, update_error end
+    local changed, changed_error = load(tx, store, row.intent_id :: string)
+    if changed_error or not changed then return nil, changed_error or failure("INTERNAL", "read bound activation") end
+    return changed, nil
+end
+local function begin_in(tx: sql.Transaction, store: Store, row: Object): (Object?, Result?)
+    local next_revision = (row.revision :: number) + 1
+    local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'consuming', revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {next_revision, store.node, store.workspace, row.intent_id, row.revision})
+    local update_error = cas_result(updated, err, "begin activation consumption")
+    if update_error then return nil, update_error end
+    local changed, changed_error = load(tx, store, row.intent_id :: string)
+    if changed_error or not changed then return nil, changed_error or failure("INTERNAL", "read consuming activation") end
+    return changed, nil
+end
+local function record_in(tx: sql.Transaction, store: Store, row: Object, input: Request): (Object?, Object?, Result?)
+    if row.effect_key ~= input.effect_key or row.approval_proposal_digest ~= input.proposal_digest then return nil, nil, failure("CONFLICT", "consumption does not match the bound approval") end
+    local next_revision = (row.revision :: number) + 1
+    local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'authorized', consumed_consumer_id = ?, consumed_proposal_digest = ?, consumed_effect_key = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {input.consumer_id, input.proposal_digest, input.effect_key, next_revision, store.node, store.workspace, row.intent_id, row.revision})
+    local update_error = cas_result(updated, err, "record activation consumption")
+    if update_error then return nil, nil, update_error end
+    local changed, changed_error = load(tx, store, row.intent_id :: string)
+    if changed_error or not changed then return nil, nil, changed_error or failure("INTERNAL", "read authorized activation") end
+    local current_slot, slot_error = slot(tx, store, row.overlay_owner :: string, true)
+    if slot_error or not current_slot then return nil, nil, slot_error or failure("INTERNAL", "read activation slot") end
+    if current_slot.desired_intent_id ~= nil and current_slot.desired_intent_id ~= row.intent_id then
+        local active, active_error = load(tx, store, current_slot.desired_intent_id :: string)
+        if active_error or not active then
+            return nil, nil, active_error or failure("INTERNAL", "desired activation intent is missing")
+        end
+        if active.phase == "applying" or (active.phase == "settled" and active.outcome == "uncertain") then
+            return nil, nil, failure("CONFLICT", "another activation effect requires settlement")
+        end
+    end
+    local slot_revision = (count(current_slot.revision, false) :: number) + 1
+    local slot_updated, slot_error_write = tx:execute("UPDATE bee_governance_activation_slots SET revision = ?, desired_intent_id = ?, desired_execution_revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ? AND revision = ?", {slot_revision, row.intent_id, next_revision, store.node, store.workspace, row.overlay_owner, current_slot.revision})
+    local slot_update_error = cas_result(slot_updated, slot_error_write, "authorize activation slot")
+    if slot_update_error then return nil, nil, slot_update_error end
+    local changed_slot, changed_slot_error = slot(tx, store, row.overlay_owner :: string, false)
+    if changed_slot_error or not changed_slot then return nil, nil, changed_slot_error or failure("INTERNAL", "read authorized activation slot") end
+    return changed, changed_slot, nil
+end
 function M.bind_approval(store: Store, actor: string, input: Request): Result
     local measured = request_digest(input) :: string
     return transition(store, actor, input, {prepared = true}, function(tx, row)
-        local next_revision = (row.revision :: number) + 1
-        local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'approval_bound', approval_id = ?, approval_proposal_digest = ?, approval_owner_incarnation = ?, grant_reuse_digest = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {input.approval_id, input.approval_proposal_digest, input.approval_owner_incarnation, input.grant_reuse_digest, next_revision, store.node, store.workspace, row.intent_id, row.revision})
-        local update_error = cas_result(updated, err, "bind activation approval")
-        if update_error then return update_error :: Result end
-        local changed, changed_error = load(tx, store, row.intent_id :: string)
-        if changed_error or not changed then return changed_error or failure("INTERNAL", "read bound activation") end
+        local changed, bind_error = bind_in(tx, store, row, input)
+        if not changed then return bind_error :: Result end
         return finish(store, tx, actor, input, measured, changed, nil)
     end)
 end
 function M.begin_consume(store: Store, actor: string, input: Request): Result
     local measured = request_digest(input) :: string
     return transition(store, actor, input, {approval_bound = true, consuming = true}, function(tx, row)
-        local next_revision = (row.revision :: number) + 1
-        local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'consuming', revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {next_revision, store.node, store.workspace, row.intent_id, row.revision})
-        local update_error = cas_result(updated, err, "begin activation consumption")
-        if update_error then return update_error :: Result end
-        local changed, changed_error = load(tx, store, row.intent_id :: string)
-        if changed_error or not changed then return changed_error or failure("INTERNAL", "read consuming activation") end
+        local changed, begin_error = begin_in(tx, store, row)
+        if not changed then return begin_error :: Result end
         return finish(store, tx, actor, input, measured, changed, nil)
     end)
 end
 function M.record_consumption(store: Store, actor: string, input: Request): Result
     local measured = request_digest(input) :: string
     return transition(store, actor, input, {consuming = true}, function(tx, row)
-        if row.effect_key ~= input.effect_key or row.approval_proposal_digest ~= input.proposal_digest then return failure("CONFLICT", "consumption does not match the bound approval") end
-        local next_revision = (row.revision :: number) + 1
-        local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'authorized', consumed_consumer_id = ?, consumed_proposal_digest = ?, consumed_effect_key = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {input.consumer_id, input.proposal_digest, input.effect_key, next_revision, store.node, store.workspace, row.intent_id, row.revision})
-        local update_error = cas_result(updated, err, "record activation consumption")
-        if update_error then return update_error :: Result end
-        local changed, changed_error = load(tx, store, row.intent_id :: string)
-        if changed_error or not changed then return changed_error or failure("INTERNAL", "read authorized activation") end
-        local current_slot, slot_error = slot(tx, store, row.overlay_owner :: string, true)
-        if slot_error or not current_slot then return slot_error or failure("INTERNAL", "read activation slot") end
-        if current_slot.desired_intent_id ~= nil and current_slot.desired_intent_id ~= row.intent_id then
-            local active, active_error = load(tx, store, current_slot.desired_intent_id :: string)
-            if active_error or not active then
-                return active_error or failure("INTERNAL", "desired activation intent is missing")
-            end
-            if active.phase == "applying" or (active.phase == "settled" and active.outcome == "uncertain") then
-                return failure("CONFLICT", "another activation effect requires settlement")
-            end
-        end
-        local slot_revision = (count(current_slot.revision, false) :: number) + 1
-        local slot_updated, slot_error_write = tx:execute("UPDATE bee_governance_activation_slots SET revision = ?, desired_intent_id = ?, desired_execution_revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND overlay_owner = ? AND revision = ?", {slot_revision, row.intent_id, next_revision, store.node, store.workspace, row.overlay_owner, current_slot.revision})
-        local slot_update_error = cas_result(slot_updated, slot_error_write, "authorize activation slot")
-        if slot_update_error then return slot_update_error :: Result end
-        local changed_slot, changed_slot_error = slot(tx, store, row.overlay_owner :: string, false)
-        if changed_slot_error or not changed_slot then return changed_slot_error or failure("INTERNAL", "read authorized activation slot") end
+        local changed, changed_slot, record_error = record_in(tx, store, row, input)
+        if not changed then return record_error :: Result end
         return finish(store, tx, actor, input, measured, changed, changed_slot)
+    end)
+end
+-- authorize_lease: reserve one lease use, record its proof and authorize the
+-- intent in a single commit, so the use and the authorization cannot diverge
+-- after an interruption. A replay of the same intent and lease returns the
+-- authorized intent.
+function M.authorize_lease(store: Store, actor: string, input: Request): Result
+    return transaction.write(store.db, "governance activation", function(tx: sql.Transaction): Result
+        local row, row_error = load(tx, store, input.intent_id :: string)
+        if row_error or not row then return row_error or failure("NOT_FOUND", "activation intent does not exist") end
+        if row.phase ~= "prepared" then
+            local proof = one(tx, "SELECT lease_id, approval_id FROM bee_governance_lease_uses WHERE owner_node = ? AND workspace_id = ? AND intent_id = ?", {store.node, store.workspace, row.intent_id}, "lease use")
+            if proof and proof.lease_id == input.lease_id and proof.approval_id == row.approval_id then
+                local current_slot = slot(tx, store, row.overlay_owner :: string, false)
+                return transaction.success(view(store, row, current_slot), true)
+            end
+            return failure("CONFLICT", "activation intent is not in the required phase")
+        end
+        if input.expected_revision ~= row.revision then return failure("CONFLICT", "expected_revision does not match activation intent") end
+        local lease, reserve_error = lease_store.reserve_in(tx, store, {lease_id = input.lease_id,
+            expected_revision = input.lease_expected_revision, intent_id = input.intent_id,
+            proposal_capabilities = input.proposal_capabilities})
+        if not lease then return reserve_error :: Result end
+        local bound, bind_error = bind_in(tx, store, row, {approval_id = lease.source_approval_id,
+            approval_proposal_digest = lease.source_approval_proposal_digest,
+            approval_owner_incarnation = lease.source_approval_owner_incarnation})
+        if not bound then return bind_error :: Result end
+        local consuming, begin_error = begin_in(tx, store, bound)
+        if not consuming then return begin_error :: Result end
+        local authorized, authorized_slot, record_error = record_in(tx, store, consuming, {consumer_id = "bee.gov.lease_apply",
+            proposal_digest = lease.source_approval_proposal_digest, effect_key = consuming.effect_key})
+        if not authorized then return record_error :: Result end
+        return transaction.success(view(store, authorized, authorized_slot), false)
     end)
 end
 function M.begin_apply(store: Store, actor: string, input: Request): Result
@@ -380,6 +437,10 @@ function M.begin_apply(store: Store, actor: string, input: Request): Result
         local work, work_error = migration_work.decode(row.migration_work_bytes, row.migration_work_digest)
         if not work then return failure("INTERNAL", tostring(work_error or "decode activation migration work")) end
         local completed = #work.migrations == 0 and 1 or 0
+        if row.consumed_consumer_id == "bee.gov.lease_apply" then
+            local admit_error = lease_store.admit_in(tx, store, row.intent_id :: string, row.approval_id, row.approval_proposal_digest)
+            if admit_error then return admit_error end
+        end
         local next_revision = (row.revision :: number) + 1
         local updated, err = tx:execute("UPDATE bee_governance_activation_execution SET phase = 'applying', migrations_completed = ?, revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND intent_id = ? AND revision = ?", {completed, next_revision, store.node, store.workspace, row.intent_id, row.revision})
         local update_error = cas_result(updated, err, "begin activation apply")
@@ -683,6 +744,7 @@ function M.call(store: Store, actor_raw: string, raw: unknown): Result
     if input.operation == "revert_activation" then return M.revert_activation(store, actor, input) end
     if input.operation == "prepare_activation" then return M.prepare(store, actor, input) end
     if input.operation == "bind_approval" then return M.bind_approval(store, actor, input) end
+    if input.operation == "authorize_lease" then return M.authorize_lease(store, actor, input) end
     if input.operation == "begin_consume" then return M.begin_consume(store, actor, input) end
     if input.operation == "record_consumption" then return M.record_consumption(store, actor, input) end
     if input.operation == "begin_apply" then return M.begin_apply(store, actor, input) end

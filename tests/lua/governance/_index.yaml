@@ -376,6 +376,18 @@ entries:
   imports:
     test: wippy.test:test
     capability_containment: bee.capability:model
+- name: lease_grants_test
+  kind: function.lua
+  source: file://lease_grants_test.lua
+  method: run
+  modules: [registry, uuid]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    capability_model: bee.capability:model
+    lease_grants: bee.gov.binding:lease_grants
+    lease_store: bee.gov.persist:lease_store
 - name: lease_model_test
   kind: function.lua
   source: file://lease_model_test.lua

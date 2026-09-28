@@ -386,6 +386,82 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+        test.it("fences a reserved lease use when the lease is revoked before the effect is admitted", function()
+            local config, plans, activations, leases, flags = lease_config("workspace-lease-fenced",
+                widening_capability({LEASE_NARROW}), approvals())
+            grant_lease(leases, 3)
+            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-fenced", receipt_key = "fenced"}))
+            test.eq(prepared.phase, "authorized")
+            local lease = ok(lease_store.get(leases, "lease-1"))
+            local revoked = ok(lease_store.call(leases, "host-a", {operation = "revoke", idempotency_key = "revoke-fenced",
+                lease_id = "lease-1", expected_revision = lease.revision, revoked_by = "person-a"}))
+            test.eq((revoked.fenced_intents :: {string})[1], "intent-fenced")
+            test.eq(#(revoked.started_effects :: {string}), 0)
+            local refused = owner.step(config, "intent-fenced", "fenced")
+            test.eq(refused.code, "DENIED")
+            test.is_false(flags.applied)
+            test.eq(ok(activation_store.call(activations, "host-a", {operation = "activation_status", intent_id = "intent-fenced"})).phase, "authorized")
+            assert(lease_store.close(leases))
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("reports an effect admitted before revocation as started and lets recovery finish it", function()
+            local config, plans, activations, leases, flags = lease_config("workspace-lease-started",
+                widening_capability({LEASE_NARROW}), approvals())
+            grant_lease(leases, 3)
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-started", receipt_key = "started"}))
+            test.eq(ok(owner.step(config, "intent-started", "started")).phase, "applying")
+            local lease = ok(lease_store.get(leases, "lease-1"))
+            local revoked = ok(lease_store.call(leases, "host-a", {operation = "revoke", idempotency_key = "revoke-started",
+                lease_id = "lease-1", expected_revision = lease.revision, revoked_by = "person-a"}))
+            test.eq((revoked.started_effects :: {string})[1], "intent-started")
+            test.eq(#(revoked.fenced_intents :: {string}), 0)
+            test.eq(ok(owner.step(config, "intent-started", "started")).outcome, "applied")
+            test.is_true(flags.applied)
+            assert(lease_store.close(leases))
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("authorizes an intent and records its lease proof in one commit, once per intent", function()
+            local config, plans, activations, leases = lease_config("workspace-lease-atomic",
+                widening_capability({LEASE_NARROW}), approvals())
+            grant_lease(leases, 1)
+            local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-atomic", receipt_key = "atomic"}))
+            local proof = assert(lease_store.authorized(leases, "intent-atomic"))
+            test.eq(proof.approval_id, prepared.approval_id)
+            test.eq(proof.approval_proposal_digest, prepared.approval_proposal_digest)
+            local lease = ok(lease_store.get(leases, "lease-1"))
+            test.eq(lease.applies_used, 1)
+            -- The one authorization of this intent cannot be charged again.
+            local again = lease_store.call(leases, "host-a", {operation = "use", idempotency_key = "again",
+                lease_id = "lease-1", expected_revision = lease.revision, intent_id = "intent-atomic",
+                proposal_capabilities = {LEASE_NARROW}})
+            test.is_false(again.ok == true)
+            -- A retried prepare replays the authorized intent and charges nothing.
+            local replayed = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-atomic", receipt_key = "atomic"}))
+            test.eq(replayed.phase, "authorized")
+            test.eq(ok(lease_store.get(leases, "lease-1")).applies_used, 1)
+            assert(lease_store.close(leases))
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
+        test.it("refuses to apply when the lease proof does not match the intent's authorization", function()
+            local config, plans, activations, leases, flags = lease_config("workspace-lease-mismatch",
+                widening_capability({LEASE_NARROW}), approvals())
+            grant_lease(leases, 3)
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-mismatch", receipt_key = "mismatch"}))
+            assert(leases.db:execute("UPDATE bee_governance_lease_uses SET approval_id = 'another-approval'"))
+            test.eq(owner.step(config, "intent-mismatch", "mismatch").code, "CONFLICT")
+            test.is_false(flags.applied)
+            assert(lease_store.close(leases))
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
         test.it("asks a person when the proposal is outside the lease envelope", function()
             local config, plans, activations, leases = lease_config("workspace-lease-outside",
                 widening_capability({LEASE_NARROW, LEASE_OUTSIDE}), approvals())

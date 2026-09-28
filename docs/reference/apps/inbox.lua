@@ -57,7 +57,7 @@ function M.draw(painter: frame.Painter, work: frame.Rect, model: Model): frame.W
     local inner = frame.panel(painter, detail, "Request details")
     if inner.height < 3 then return window end
     frame.put(painter, inner.x, inner.y, item.request, inner.width, painter.theme.text)
-    frame.kv(painter, inner.y + 2, inner.y + inner.height - 1, {entries = item.detail, selected = 0, offset = 0})
+    frame.kv(painter, inner.y + 2, inner.y + inner.height - 1, {entries = item.detail, selected = 0, offset = 0, area = inner})
     return window
 end
 

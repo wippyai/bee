@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 4241,
+      "bytes": 4251,
       "id": "component/application",
-      "sha256": "07928a46ca037c47b75cba2bb10632f907173d44913d4f167d66ad03429215e3",
+      "sha256": "d74118c6c402258cd5d7717743ba4231185d710f45d8cc5536b814b3dfb9b089",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -515,41 +515,41 @@
       "topic": "reference_apps"
     },
     {
-      "bytes": 5005,
+      "bytes": 5326,
       "id": "reference_apps/deploy_form",
-      "sha256": "a314177a46e1056cfeb8e719ff3208e596dfc0db4c9e9118d9aad328426cd12b",
+      "sha256": "190220079ad8272ceb4329cb0ce3f3f6f60385adec359e6c24bcbfb8d24e20e7",
       "source": "docs/reference/apps/deploy_form.lua",
       "title": "Reference application: deploy wizard",
       "topic": "reference_apps"
     },
     {
-      "bytes": 3832,
+      "bytes": 3846,
       "id": "reference_apps/inbox",
-      "sha256": "db25e4e2302d2fc21867851add018cb128d6171ec50cbc20309639f03d977107",
+      "sha256": "0e24f982999c79f31967627abfaaaba0d437d6e84dd720e3885fb5093eb29836",
       "source": "docs/reference/apps/inbox.lua",
       "title": "Reference application: inbox and approvals",
       "topic": "reference_apps"
     },
     {
-      "bytes": 2551,
+      "bytes": 2579,
       "id": "reference_apps/log_viewer",
-      "sha256": "e51de4e7674682eea4652d1088c1412359d39474d0e7510a605d9ebf0557f3b8",
+      "sha256": "208abbd94a37a88f757a5b973fffc8fb89bfe8d46ffb05a9d96bb66a62efa7b5",
       "source": "docs/reference/apps/log_viewer.lua",
       "title": "Reference application: log viewer with a workspace tree",
       "topic": "reference_apps"
     },
     {
-      "bytes": 3994,
+      "bytes": 3998,
       "id": "reference_apps/metrics",
-      "sha256": "c7d392d44bce877b2d7d301324d4b8d98f2331c225d99af293a0c306b3dc1eff",
+      "sha256": "a7d7f28772d24bcd34c437019ffbb8db26468284b0c5de91a358aaa54e36ce3a",
       "source": "docs/reference/apps/metrics.lua",
       "title": "Reference application: live metrics monitor",
       "topic": "reference_apps"
     },
     {
-      "bytes": 4525,
+      "bytes": 4576,
       "id": "reference_apps/overlays",
-      "sha256": "9a5d017028dd53cb24f13493b87106bfae6515f9e58753d05f3c7b7d1d7b3124",
+      "sha256": "ca36b0d571b62d39783e4a66684020b2687f5ecfc0bb98d6f64e153d7939bf2f",
       "source": "docs/reference/apps/overlays.lua",
       "title": "Reference application: command palette, confirmation modal and toast",
       "topic": "reference_apps"
@@ -579,9 +579,9 @@
       "topic": "reference_apps"
     },
     {
-      "bytes": 40510,
+      "bytes": 40549,
       "id": "toolkit",
-      "sha256": "edc85fadd16967ad13d353969005f65b1f0f6e7a090e83227479ba96205e1100",
+      "sha256": "ead4ad2706e387ff474620e302327553f9d8db31e566ab02c79d6e74ce8a78c3",
       "source": "generated: modules/application/src, src application views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -590,7 +590,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 675069,
+    "bytes": 675536,
     "documents": 73
   }
 }

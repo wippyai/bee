@@ -44,6 +44,10 @@ local function contains(painter: frame.Painter, needle: string): boolean
     return false
 end
 
+local function rgb(hex: string): string
+    return tostring(tonumber(hex:sub(2, 3), 16)) .. ";" .. tostring(tonumber(hex:sub(4, 5), 16)) .. ";" .. tostring(tonumber(hex:sub(6, 7), 16))
+end
+
 local function key(name: string, character: string?): {[string]: unknown}
     return {type = "key", action = "press", key_type = name, key = character or name}
 end
@@ -110,6 +114,55 @@ local function define_tests()
             test.is_true(contains(painter, "Deploy edge-api"))
             test.eq(deploy_form.key(model, key("enter")), "done")
             test.is_false(model.confirming)
+        end)
+
+        test.it("keeps the log viewer and inbox panes inside their own regions", function()
+            local logs = screen({width = 120, height = 36}, function(p, work) log_viewer.draw(p, work, log_viewer.sample(240)) end)
+            test.is_true(contains(logs, "app.lua"))
+            test.is_true(contains(logs, "workspace"))
+            for _, hit in ipairs(logs.hits) do
+                if hit.kind == "log" then test.is_true(hit.x >= 31) end
+                if hit.kind == "tree" then test.is_true(hit.x + hit.width - 1 <= 31) end
+            end
+            local requests = screen({width = 120, height = 36}, function(p, work) inbox.draw(p, work, inbox.sample()) end)
+            test.is_true(contains(requests, "Merge release/2.14 into main"))
+            local table_end, detail_start = 0, 1000
+            for _, hit in ipairs(requests.hits) do
+                if hit.kind == "request" then table_end = math.max(table_end, hit.x + hit.width - 1) end
+                if hit.kind == "kv" then detail_start = math.min(detail_start, hit.x) end
+            end
+            test.is_true(table_end > 0 and table_end < detail_start)
+        end)
+
+        test.it("lets an open dropdown consume Enter before the wizard advances", function()
+            local model = deploy_form.new()
+            forms.focus_next(model.target)
+            deploy_form.key(model, key("down"))
+            deploy_form.key(model, key("down"))
+            deploy_form.key(model, key("enter"))
+            test.eq(model.step, 1)
+            test.eq(forms.value(model.target.fields[2]), "us-east")
+            deploy_form.key(model, key("enter"))
+            test.eq(model.step, 2)
+        end)
+
+        test.it("ignores palette input while no overlay is open", function()
+            local commands = {"Deploy edge-api", "Open inbox"}
+            local model = overlays.new()
+            test.is_nil(overlays.key(model, key("enter"), commands))
+            overlays.key(model, key("char", "i"), commands)
+            test.eq(model.query, "")
+        end)
+
+        test.it("colors a capacity ring over 90 percent in the error role", function()
+            local live = metrics.new()
+            for _ = 1, 24 do metrics.sample(live) end
+            local painter = screen({width = 160, height = 48}, function(p, work) metrics.draw(p, work, live) end)
+            local found = false
+            for _, row in ipairs(frame.rows(painter)) do
+                if row:find("38;2;" .. rgb(painter.theme.error), 1, true) then found = true end
+            end
+            test.is_true(found)
         end)
 
         test.it("drives the palette, the confirmation and the toast", function()

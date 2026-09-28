@@ -310,6 +310,118 @@ local function define_tests()
         end)
     end)
 
+    test.describe("Forms editing and rendering bounds", function()
+        test.it("moves a text area cursor between lines on character boundaries", function()
+            local field = forms.area_new("a\né", 200)
+            field.cursor = 1
+            test.is_true(forms.area_key(field, key("down")))
+            test.eq(field.cursor, 4)
+            test.is_true(forms.area_key(field, rune("x")))
+            test.eq(field.value, "a\néx")
+            local wide = forms.area_new("éa\nab", 200)
+            wide.cursor = 2
+            test.is_true(forms.area_key(wide, key("down")))
+            test.eq(wide.cursor, 5)
+        end)
+        test.it("deletes exactly one character across newlines in a text area", function()
+            local field = forms.area_new("a\n", 200)
+            test.is_true(forms.area_key(field, key("backspace")))
+            test.eq(field.value, "a")
+            test.eq(field.cursor, 1)
+            local joined = forms.area_new("ab\ncd", 200)
+            joined.cursor = 3
+            test.is_true(forms.area_key(joined, key("backspace")))
+            test.eq(joined.value, "abcd")
+            test.eq(joined.cursor, 2)
+            local forward = forms.area_new("a\nb", 200)
+            forward.cursor = 1
+            test.is_true(forms.area_key(forward, key("delete")))
+            test.eq(forward.value, "ab")
+            test.eq(forward.cursor, 1)
+            local right = forms.area_new("a\nb", 200)
+            right.cursor = 1
+            test.is_true(forms.area_key(right, key("right")))
+            test.eq(right.cursor, 2)
+            test.is_true(forms.area_key(right, key("left")))
+            test.eq(right.cursor, 1)
+        end)
+        test.it("validates a numeric insertion against the whole buffer", function()
+            local field = forms.number_new(nil, nil, nil, nil)
+            forms.number_set(field, 0.1)
+            field.value, field.cursor = ".1", 0
+            test.is_false(forms.number_key(field, rune(".")))
+            test.eq(field.value, ".1")
+            field.value, field.cursor = "-12", 0
+            test.is_false(forms.number_key(field, rune("-")))
+            test.eq(field.value, "-12")
+            field.value, field.cursor = "12", 0
+            test.is_true(forms.number_key(field, paste("-")))
+            test.eq(field.value, "-12")
+            field.value, field.cursor = "12", 1
+            test.is_false(forms.number_key(field, rune("-")))
+            test.eq(field.value, "12")
+        end)
+        test.it("closes an open dropdown when it is clicked again", function()
+            local form = forms.form_new({forms.field_select("region", "Region", {{label = "EU", value = "eu"}, {label = "US", value = "us"}}, "eu")})
+            local painter = frame.new(40, 6, appearance.defaults())
+            forms.draw(painter, {x = 1, y = 1, width = 40, height = 4}, form, 1)
+            local hit = frame.hit(painter.hits, 20, 1)
+            test.not_nil(hit)
+            if hit then
+                test.is_true(forms.click(form, hit))
+                local widget = form.fields[1].select
+                test.is_true(widget ~= nil and widget.open)
+                test.is_true(forms.click(form, hit))
+                test.is_false(widget ~= nil and widget.open)
+            end
+        end)
+        test.it("keeps other dropdowns closed when one is clicked", function()
+            local options = {{label = "A", value = "a"}, {label = "B", value = "b"}}
+            local form = forms.form_new({forms.field_select("one", "One", options, "a"), forms.field_select("two", "Two", options, "a")})
+            local first, second = form.fields[1].select, form.fields[2].select
+            test.is_true(forms.click(form, {kind = "field", index = 1, key = "", x = 1, y = 1, width = 10, height = 1}))
+            test.is_true(forms.click(form, {kind = "field", index = 2, key = "", x = 1, y = 2, width = 10, height = 1}))
+            test.is_true(first ~= nil and not first.open)
+            test.is_true(second ~= nil and second.open)
+        end)
+        test.it("starts clean when a widget normalizes its initial value", function()
+            local text = forms.field_text("k", "K", "abcdef", {max_length = 3})
+            test.is_false(forms.dirty(text))
+            local picked = forms.field_select("s", "S", {{label = "A", value = "a"}, {label = "B", value = "b"}}, "missing")
+            test.is_false(forms.dirty(picked))
+            local radio = forms.field_radio("r", "R", {{label = "A", value = "a"}, {label = "B", value = "b"}}, "missing")
+            test.is_false(forms.dirty(radio))
+            local area = forms.field_textarea("t", "T", "a\1b", {})
+            test.is_false(forms.dirty(area))
+            local form = forms.form_new({forms.field_text("k", "K", "abcdef", {max_length = 3})})
+            forms.key(form, key("backspace"))
+            test.is_true(forms.form_dirty(form))
+            forms.reset(form)
+            test.is_false(forms.form_dirty(form))
+        end)
+        test.it("paints nothing outside a narrow field rectangle", function()
+            local options = {{label = "EU", value = "eu"}, {label = "US", value = "us"}}
+            local form = forms.form_new({
+                forms.field_text("name", "Name", "value", {}),
+                forms.field_number("n", "Count", 5, {}),
+                forms.field_select("region", "Region", options, "eu"),
+            })
+            for width = 1, 6 do
+                for index = 1, 3 do
+                    local painter = frame.new(20, 3, appearance.defaults())
+                    forms.draw(painter, {x = 8, y = index, width = width, height = 1}, form, index)
+                    for row, line in ipairs(text(painter)) do
+                        for column = 1, 20 do
+                            local inside = row == index and column >= 8 and column < 8 + width
+                            if not inside then test.eq(tty.text.cut(line, column - 1, column), " ") end
+                        end
+                    end
+                    for _, hit in ipairs(painter.hits) do test.is_true(hit.x >= 8 and hit.x + hit.width <= 8 + width) end
+                end
+            end
+        end)
+    end)
+
     test.describe("Forms fixture: fill, validate and submit", function()
         test.it("blocks submit until every required field is valid, then allows it", function()
             local form = forms.form_new({

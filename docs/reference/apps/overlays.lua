@@ -46,6 +46,7 @@ function M.key(model: Model, event: {[string]: unknown}, commands: {string}): st
         if name == "enter" then M.open(model, ""); return "confirm" end
         return nil
     end
+    if model.kind ~= "palette" then return nil end
     local found = frame.ranked(model.query, commands)
     if name == "up" then model.choice = math.max(1, model.choice - 1)
     elseif name == "down" then model.choice = math.min(math.max(1, #found), model.choice + 1)

@@ -325,6 +325,31 @@ local function define_tests()
             local empty_window = frame.palette(empty_palette, 24, 8, {query = "zz", choices = {}, selected = 0, offset = 0})
             test.eq(empty_window.capacity, 0)
         end)
+        test.it("keeps an empty palette inside a short modal", function()
+            for height = 3, 6 do
+                local painter = frame.new(30, 12, appearance.defaults())
+                frame.palette(painter, 24, height, {query = "zz", choices = {}, selected = 0, offset = 0})
+                local rows = text(painter)
+                local top = (12 - height) // 2 + 1
+                test.is_true(rows[top + height - 1]:find("└", 1, true) ~= nil)
+            end
+        end)
+        test.it("confines a log, tree and inspector to their area", function()
+            local painter = frame.new(60, 6, appearance.defaults())
+            for row = 1, 6 do frame.put(painter, 1, row, string.rep("#", 60), 60) end
+            frame.log(painter, 2, 5, {lines = {{text = "boot ok"}, {text = "error: timeout"}}, selected = 1, offset = 0, query = "ok",
+                area = {x = 32, y = 2, width = 20, height = 4}})
+            frame.tree(painter, 2, 5, {rows = {{label = "root", depth = 0, expandable = true, expanded = true}, {label = "child", depth = 1}}, selected = 2, offset = 0,
+                area = {x = 32, y = 2, width = 20, height = 4}})
+            frame.kv(painter, 2, 5, {entries = {{label = "name", value = "bee"}, {label = "state", value = "running"}}, selected = 1, offset = 0,
+                area = {x = 32, y = 2, width = 20, height = 4}})
+            for row, line in ipairs(text(painter)) do
+                test.eq(tty.text.cut(line, 0, 30), string.rep("#", 30))
+                test.eq(tty.text.cut(line, 52, 60), string.rep("#", 8))
+                if row == 1 or row == 6 then test.eq(line, string.rep("#", 60)) end
+            end
+            for _, hit in ipairs(painter.hits) do test.is_true(hit.x >= 31 and hit.x + hit.width - 1 <= 51) end
+        end)
         test.it("draws a selectable card as a hit with the selection marker", function()
             local painter = frame.new(30, 8, appearance.defaults())
             local inner = frame.card(painter, {x = 3, y = 2, width = 12, height = 4}, "card", 2, "Load", true)

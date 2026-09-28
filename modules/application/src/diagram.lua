@@ -67,8 +67,8 @@ function M.mesh(painter: frame.Painter, rect: Rect, nodes: {MeshNode}, edges: {M
             cy[index] = rect.y + clamp(round(node.y * (rect.height - 1)), 0, rect.height - 1)
         else
             local angle = (index - 1) / count * math.pi * 2
-            local rx = maximum(1, (rect.width - 1) // 2)
-            local ry = maximum(1, (rect.height - 1) // 2)
+            local rx = (rect.width - 1) // 2
+            local ry = (rect.height - 1) // 2
             cx[index] = rect.x + rx + round(math.sin(angle) * rx)
             cy[index] = rect.y + ry - round(math.cos(angle) * ry)
         end

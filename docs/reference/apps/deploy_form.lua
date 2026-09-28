@@ -44,9 +44,15 @@ local function summary(model: Model): {frame.Entry}
     return entries
 end
 
+local function dropdown_open(form: forms.Form): boolean
+    local field = form.fields[form.focus]
+    if not field or not field.select then return false end
+    return field.select.open
+end
+
 -- Routes one tty event. Enter advances a valid step and opens the
--- confirmation on the last one; Esc goes back or dismisses the modal.
--- Returns "done" when the confirmation is accepted.
+-- confirmation on the last one; Esc goes back or dismisses the modal. An
+-- open dropdown consumes Enter and Esc first. Returns "done" when the confirmation is accepted.
 function M.key(model: Model, event: {[string]: unknown}): string?
     if event.type ~= "key" or event.action == "release" then return nil end
     local name = event.key_type
@@ -56,6 +62,7 @@ function M.key(model: Model, event: {[string]: unknown}): string?
         return nil
     end
     local form = current(model)
+    if form and dropdown_open(form) and forms.key(form, event) then return nil end
     if name == "enter" and (form == nil or forms.validate(form)) then
         if model.step < #STEPS then model.step = model.step + 1 else model.confirming = true end
     elseif (name == "esc" or name == "escape") and model.step > 1 then

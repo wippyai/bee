@@ -36,12 +36,12 @@ function M.draw(painter: frame.Painter, work: frame.Rect, model: Model): frame.W
     if painter.width >= 100 then
         local panes = frame.split(work, {30, 0}, 2)
         local inner = frame.panel(painter, panes[1], "Workspace")
-        frame.tree(painter, inner.y, inner.y + inner.height - 1, {rows = TREE, selected = 0, offset = 0})
+        frame.tree(painter, inner.y, inner.y + inner.height - 1, {rows = TREE, selected = 0, offset = 0, area = inner})
         logs = panes[2]
     end
     local inner = frame.panel(painter, logs, string.format("Log · %d lines · search \"%s\"", #model.lines, model.query))
     return frame.log(painter, inner.y, inner.y + inner.height - 1,
-        {lines = model.lines, selected = model.selected, offset = model.offset, query = model.query, focused = true})
+        {lines = model.lines, selected = model.selected, offset = model.offset, query = model.query, focused = true, area = inner})
 end
 
 return M

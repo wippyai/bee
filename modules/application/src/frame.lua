@@ -31,15 +31,16 @@ type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: strin
 -- The rows of the canonical anatomy; tabs and actions are 0 when absent.
 type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
 -- One flattened, already-filtered tree row; the caller walks the tree and
--- owns which nodes are expanded.
+-- owns which nodes are expanded. On a tree, an inspector or a log view, area
+-- confines the rows to a region's columns, as it does on a table.
 type TreeRow = {label: string, depth: integer, expandable: boolean?, expanded: boolean?, role: string?, key: string?}
-type TreeView = {rows: {TreeRow}, selected: integer, offset: integer, focused: boolean?}
+type TreeView = {rows: {TreeRow}, selected: integer, offset: integer, focused: boolean?, area: Rect?}
 -- One key-value inspector row.
 type Entry = {label: string, value: string, role: string?}
-type Inspector = {entries: {Entry}, selected: integer, offset: integer, label_width: integer?, focused: boolean?}
+type Inspector = {entries: {Entry}, selected: integer, offset: integer, label_width: integer?, focused: boolean?, area: Rect?}
 -- One log line; role colors it (default text).
 type LogLine = {text: string, role: string?}
-type LogView = {lines: {LogLine}, selected: integer, offset: integer, query: string?, focused: boolean?}
+type LogView = {lines: {LogLine}, selected: integer, offset: integer, query: string?, focused: boolean?, area: Rect?}
 -- One toast notification, drawn in role's color (default accent).
 type Toast = {text: string, role: string?}
 -- One command palette choice.
@@ -559,7 +560,7 @@ function M.tree(painter: Painter, first: integer, last: integer, value: TreeView
         if not row then break end
         local marker = row.expandable and (row.expanded and "▾ " or "▸ ") or "  "
         local text = string.rep("  ", maximum(0, row.depth)) .. marker .. row.label
-        draw_row(painter, nil, first + slot - 1, text, index == value.selected, "tree", index, row.key or "",
+        draw_row(painter, value.area, first + slot - 1, text, index == value.selected, "tree", index, row.key or "",
             row.role and appearance.role(painter.theme, row.role) or nil, value.focused)
     end
     return window
@@ -577,7 +578,8 @@ function M.kv(painter: Painter, first: integer, last: integer, value: Inspector)
     if label_width <= 0 then
         for _, entry in ipairs(value.entries) do label_width = maximum(label_width, tty.text.width(entry.label)) end
     end
-    label_width = minimum(label_width, painter.width // 3)
+    local span = value.area and value.area.width or painter.width
+    label_width = minimum(label_width, span // 3)
     local window = M.window(count, last - first + 1, value.selected, value.offset)
     for slot = 1, window.capacity do
         local index = window.offset + slot
@@ -585,9 +587,9 @@ function M.kv(painter: Painter, first: integer, last: integer, value: Inspector)
         if not entry then break end
         local y = first + slot - 1
         local text = M.pad(entry.label, label_width) .. "  " .. entry.value
-        draw_row(painter, nil, y, text, index == value.selected, "kv", index, entry.label,
+        draw_row(painter, value.area, y, text, index == value.selected, "kv", index, entry.label,
             entry.role and appearance.role(painter.theme, entry.role) or nil, value.focused)
-        if index ~= value.selected then M.put(painter, 2, y, M.pad(entry.label, label_width), label_width, painter.theme.muted) end
+        if index ~= value.selected then M.put(painter, value.area and value.area.x or 2, y, M.pad(entry.label, label_width), label_width, painter.theme.muted) end
     end
     return window
 end
@@ -645,10 +647,19 @@ function M.log(painter: Painter, first: integer, last: integer, value: LogView):
         local bg = theme.surface
         if selected and has_focus then fg, bg = appearance.selection_text(theme), theme.accent
         elseif selected then fg = theme.accent end
-        M.fill(painter, y, bg)
-        if selected then M.put(painter, 1, y, MARKER, 1, fg, bg) end
-        highlighted(painter, 2, y, line.text, painter.width - 2, value.query, fg, bg)
-        M.add_hit(painter, "log", index, "", 1, y, painter.width, 1)
+        local area = value.area
+        if area then
+            local marker_x = maximum(1, area.x - 1)
+            band(painter, area, y, "", fg, bg)
+            if selected and marker_x < area.x then M.put(painter, marker_x, y, MARKER, 1, fg, bg) end
+            highlighted(painter, area.x, y, line.text, area.width, value.query, fg, bg)
+            M.add_hit(painter, "log", index, "", marker_x, y, area.x + area.width - marker_x, 1)
+        else
+            M.fill(painter, y, bg)
+            if selected then M.put(painter, 1, y, MARKER, 1, fg, bg) end
+            highlighted(painter, 2, y, line.text, painter.width - 2, value.query, fg, bg)
+            M.add_hit(painter, "log", index, "", 1, y, painter.width, 1)
+        end
     end
     return window
 end
@@ -747,11 +758,11 @@ function M.palette(painter: Painter, width: integer, height: integer, value: Pal
     local content = M.modal(painter, width, height, "Command Palette")
     if content.width <= 0 or content.height <= 0 then return {offset = 0, capacity = 0} end
     M.put(painter, content.x, content.y, "› " .. value.query .. "█", content.width, painter.theme.text)
+    if content.height < 3 then return {offset = 0, capacity = 0} end
     if #value.choices == 0 then
         M.empty(painter, content.y + 2, "No matches", nil, {x = content.x, y = content.y, width = content.width, height = content.height})
         return {offset = 0, capacity = 0}
     end
-    if content.height < 3 then return {offset = 0, capacity = 0} end
     local first = content.y + 2
     local last = content.y + content.height - 1
     local window = M.window(#value.choices, last - first + 1, value.selected, value.offset)

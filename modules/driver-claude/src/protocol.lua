@@ -95,7 +95,7 @@ local function content_blocks(state: State, index: integer, message: unknown, ou
     end
 end
 -- One envelope in, observations out; the terminal report only from result.
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): Step
     local out: {Observation} = {}
     local kind: unknown = envelope.type
     if state.terminal then

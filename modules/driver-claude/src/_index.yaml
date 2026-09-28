@@ -79,6 +79,7 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     types: bee.driver:types
+    turn_budget: bee.driver:turn_budget
 - name: permission_adapter
   kind: registry.entry
   meta:
@@ -294,7 +295,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected one-turn Claude batch policy for bounded research actions on a caller-owned thread
+    comment: Host-selected Claude turn budget for agentic research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides: [thread, workdir]
@@ -311,9 +312,9 @@ entries:
     allow_host_home: false
     gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    profile_options: {effort: [low, medium, high]}
+    profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
     profile_instructions: true
-    prepare_options: {permission_mode: default, max_turns: 1}
+    prepare_options: {permission_mode: default, turn_budget: 128}
 - name: launch_policy_claude_window
   kind: registry.entry
   meta:

@@ -52,7 +52,7 @@ entries:
       BEE_FIXTURE_STREAM: ''
     prepare_options:
       permission_mode: dontAsk
-      max_turns: 1
+      turn_budget: 128
     gateway_tools:
     - thread_read
     - thread_wait

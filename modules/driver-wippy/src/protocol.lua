@@ -64,7 +64,7 @@ local function terminal(value: unknown): ({[string]: unknown}?, string?)
     return object, nil
 end
 
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}): (Step?, string?)
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): (Step?, string?)
     if index < 0 then return nil, "index must be a nonnegative integer" end
     if state.terminal then return nil, "envelope arrived after the turn ended" end
     if bounds.fields(envelope, {"observations", "terminal"}) then return nil, "envelope carries an unknown field" end

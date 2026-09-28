@@ -1135,7 +1135,8 @@ local function decode_normalized(value: unknown): (Normalized?, string?)
     return {state = state, observations = observations, terminal = terminal}, nil
 end
 local function normalize(io: IO, session: Session, index: integer, envelope: {[string]: unknown}?, eof: boolean): ({record_types.Observation}?, driver_types.Terminal?, string?)
-    local reply, err = io.call(session.plan.normalize_target, {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false})
+    local reply, err = io.call(session.plan.normalize_target, {state = session.normalizer, index = index, envelope = envelope, eof = eof, resumed = false,
+        turn_budget = session.plan.policy.prepare_options.turn_budget})
     if err then return nil, nil, "driver normalize: " .. err end
     local result, decode_error = decode_normalized(reply)
     if not result then return nil, nil, "driver normalize: " .. tostring(decode_error) end

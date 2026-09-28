@@ -635,18 +635,18 @@ local function define_tests()
                     config = "bee.driver.codex:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude:research_batch", policy = "bee.driver.claude:launch_policy_claude_batch",
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
-                    config = "bee.driver.claude:config_home", option = "max_turns", expected = 1},
+                    config = "bee.driver.claude:config_home", option = "turn_budget", expected = 128},
                 {definition = "bee.driver.agy:research_batch", policy = "bee.driver.agy:launch_policy_agy_batch",
                     binding = "bee.driver.agy:binding", credential = "agy_login", executable = "bee.driver.agy:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
                 {definition = "bee.driver.muse:research_batch", policy = "bee.driver.muse:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
-                    option = "approval_mode", expected = "on-request", additional_options = {max_steps = 1}},
+                    option = "approval_mode", expected = "on-request", additional_options = {turn_budget = 128}},
                 {definition = "bee.driver.opencode:research_batch", policy = "bee.driver.opencode:launch_policy_opencode_batch",
                     binding = "bee.driver.opencode:binding", credential = "opencode_login", executable = "bee.driver.opencode:executable", unconfined = true},
                 {definition = "bee.driver.grok:research_batch", policy = "bee.driver.grok:launch_policy_grok_batch",
                     binding = "bee.driver.grok:binding", credential = "grok_login", executable = "bee.driver.grok:executable",
-                    option = "permission_mode", expected = "default", unconfined = true},
+                    option = "permission_mode", expected = "default", additional_options = {turn_budget = 128}, unconfined = true},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))

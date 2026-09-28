@@ -25,7 +25,7 @@ local function define_tests()
             test.eq(decoded.profile_id, "session")
             test.eq(decoded.brief, "hello grok")
             test.eq(decoded.permission_mode, "default")
-            test.eq(decoded.max_turns, 1)
+            test.is_nil(decoded.turn_budget)
             test.is_nil(decoded.model)
             test.is_nil(decoded.effort)
             test.is_nil(decoded.resume_ref)
@@ -40,12 +40,11 @@ local function define_tests()
             test.eq(spec.argv[4], "streaming-json")
             test.eq(spec.argv[5], "--permission-mode")
             test.eq(spec.argv[6], "default")
-            test.eq(spec.argv[7], "--max-turns")
-            test.eq(spec.argv[8], "1")
+            test.is_true(table.concat(spec.argv, " "):find("--max-turns", 1, true) == nil)
         end)
 
         test.it("runs the shipped batch worker in the default permission mode with no sandbox flag", function()
-            local decoded, err = launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default", max_turns = 1})
+            local decoded, err = launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default", turn_budget = 32})
             if not decoded then error(tostring(err)) end
             local spec = launch.specification(decoded)
             test.eq(spec.argv[1], "-p")
@@ -104,14 +103,14 @@ local function define_tests()
                 brief = "refactor code",
                 model = "grok-4.6",
                 effort = "high",
-                max_turns = 10,
+                turn_budget = 10,
                 resume_ref = "session-1234",
                 gateway_tools = {"fs_read", "fs_write"},
             })
             if not decoded then error(tostring(err)) end
             test.eq(decoded.model, "grok-4.6")
             test.eq(decoded.effort, "high")
-            test.eq(decoded.max_turns, 10)
+            test.eq(decoded.turn_budget, 10)
             test.eq(decoded.resume_ref, "session-1234")
             test.eq(#decoded.gateway_tools, 2)
 
@@ -148,15 +147,15 @@ local function define_tests()
             local _, err_brief = launch.decode({profile_id = "session", brief = ""})
             test.eq(err_brief, "brief must be nonempty bounded text")
 
-            -- max_turns on window
-            local _, err_win_turns = launch.decode({profile_id = "window", brief = "", max_turns = 5})
-            test.eq(err_win_turns, "max_turns is only supported for structured turns")
+            -- turn_budget on window
+            local _, err_win_turns = launch.decode({profile_id = "window", brief = "", turn_budget = 5})
+            test.eq(err_win_turns, "turn_budget is only supported for structured turns")
 
-            -- max_turns bounds
-            local _, err_zero = launch.decode({profile_id = "session", brief = "hi", max_turns = 0})
-            test.eq(err_zero, "max_turns must be between 1 and 32")
-            local _, err_high = launch.decode({profile_id = "session", brief = "hi", max_turns = 33})
-            test.eq(err_high, "max_turns must be between 1 and 32")
+            -- turn_budget bounds
+            local _, err_zero = launch.decode({profile_id = "session", brief = "hi", turn_budget = 0})
+            test.eq(err_zero, "turn_budget must be between 1 and 128")
+            local _, err_high = launch.decode({profile_id = "session", brief = "hi", turn_budget = 129})
+            test.eq(err_high, "turn_budget must be between 1 and 128")
 
             -- invalid permission_mode
             local _, err_perm = launch.decode({profile_id = "session", brief = "hi", permission_mode = "yolo"})

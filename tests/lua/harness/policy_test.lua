@@ -144,22 +144,25 @@ local function define_tests()
             test.eq(#narrowed.gateway_tools, 1)
             test.eq(narrowed.gateway_tools[1], "thread_read")
         end)
-        test.it("keeps the host authority digest while applying admitted preferences", function()
+        test.it("keeps the host turn budget when applying an admitted preference", function()
             local raw = entry({claude = "/bin/claude"})
             local data = raw.data :: Entry
-            data.prepare_options = {max_turns = 1}
-            data.profile_options = {max_turns = {1, 3}}
+            data.prepare_options = {turn_budget = 3}
+            data.profile_options = {turn_budget = {1, 3, 5}}
             data.profile_instructions = true
             data.instructions = "Host instructions"
             local host, host_error = policy.decode("test:policy", raw)
             if not host then error(tostring(host_error)) end
-            local selected, selected_error = policy.decode("test:policy", raw, nil, {options = {max_turns = 3}, mcp_tools = {}, instructions = "Profile instructions"})
+            local selected, selected_error = policy.decode("test:policy", raw, nil, {options = {turn_budget = 1}, mcp_tools = {}, instructions = "Profile instructions"})
             if not selected then error(tostring(selected_error)) end
-            test.eq(host.digest, selected.digest)
-            test.eq(host.prepare_options.max_turns, 1)
-            test.eq(selected.prepare_options.max_turns, 3)
+            test.eq(host.prepare_options.turn_budget, 3)
+            test.eq(selected.prepare_options.turn_budget, 1)
             test.eq(selected.instructions, "Host instructions\n\nProfile instructions")
             test.eq(selected.executables.claude, host.executables.claude)
+            local over_budget, over_budget_error = policy.decode("test:policy", raw, nil,
+                {options = {turn_budget = 5}, mcp_tools = {}, instructions = ""})
+            test.is_nil(over_budget)
+            test.eq(over_budget_error, "test:policy: option turn_budget exceeds the host policy turn budget of 3")
         end)
         test.it("applies declared text options without widening host policy", function()
             local raw = entry({codex = "/bin/codex"})

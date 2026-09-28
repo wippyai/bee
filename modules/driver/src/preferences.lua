@@ -3,6 +3,7 @@
 -- permissions, and it never expands the host-selected authority.
 local bounds = require("bounds")
 local instructions = require("instructions")
+local turn_budget = require("turn_budget")
 
 local M = {}
 -- Nine leaves room for one historical top-level option translated by the
@@ -12,6 +13,7 @@ M.MAX_OPTION_VALUES = 32
 M.MAX_OPTION_VALUE_BYTES = 512
 M.MAX_MCP_TOOLS = 64
 M.MAX_INSTRUCTIONS_BYTES = instructions.MAX_BYTES
+M.MAX_TURN_BUDGET = turn_budget.MAX
 
 type Object = {[string]: unknown}
 type Scalar = string | number | boolean
@@ -147,6 +149,28 @@ end
 
 M.decode_profile_options = decode_profile_options
 
+function M.decode_prepare_options(value: unknown): (Object?, string?)
+    local object = bounds.object(value == nil and {} or value)
+    if not object then return nil, "prepare_options must be an object" end
+    local prepare_options, options_error = decode_options(object, "prepare_options")
+    if not prepare_options then return nil, options_error end
+    local selected: integer? = nil
+    for name in pairs(object) do
+        if turn_budget.is_option(name) then
+            if selected ~= nil then return nil, "prepare_options may name only one turn budget" end
+            local decoded, budget_error = turn_budget.decode(object[name], "prepare_options." .. name)
+            if not decoded then return nil, budget_error end
+            selected = decoded
+        end
+    end
+    if selected ~= nil then
+        prepare_options.turn_budget = selected
+        prepare_options.max_turns = nil
+        prepare_options.max_steps = nil
+    end
+    return prepare_options, nil
+end
+
 local function dense_tools(value: unknown, label: string): ({string}?, string?)
     if value == nil then return {}, nil end
     local tools, tools_error = bounds.ids(value, true)
@@ -194,15 +218,31 @@ function M.apply(policy_data: Object, raw: unknown): (Object?, string?)
     if profile_instructions == nil then profile_instructions = false end
     if type(profile_instructions) ~= "boolean" then return nil, "profile_instructions must be a boolean" end
 
-    local host_options = bounds.object(policy.prepare_options == nil and {} or policy.prepare_options)
-    if not host_options then return nil, "prepare_options must be an object" end
-    local prepare_options: {[string]: unknown} = {}
-    for name, value in pairs(host_options) do prepare_options[name] = value end
+    local prepare_options, prepare_options_error = M.decode_prepare_options(policy.prepare_options)
+    if not prepare_options then return nil, prepare_options_error end
+    local selected_budget_name: string? = nil
+    for name in pairs(saved.options) do
+        if turn_budget.is_option(name) then
+            if selected_budget_name ~= nil then return nil, "profile may select only one turn budget" end
+            selected_budget_name = name
+        end
+    end
     for name, selected in pairs(saved.options) do
         local allowed = profile_options[name]
         if not allowed then return nil, "option " .. name .. " is not allowed by the host policy" end
         if not allowed_option(allowed, selected) then return nil, "option " .. name .. " has a value that is not allowed by the host policy" end
-        prepare_options[name] = selected
+        if turn_budget.is_option(name) then
+            local selected_budget, budget_error = turn_budget.decode(selected, "option turn_budget")
+            if not selected_budget then return nil, budget_error end
+            local host_budget = bounds.integer(prepare_options.turn_budget)
+            if not host_budget then return nil, "option turn_budget requires a host policy turn budget" end
+            if selected_budget > host_budget then
+                return nil, "option turn_budget exceeds the host policy turn budget of " .. tostring(host_budget)
+            end
+            prepare_options.turn_budget = selected_budget
+        else
+            prepare_options[name] = selected
+        end
     end
 
     local host_tools, host_tools_error = dense_tools(policy.gateway_tools, "gateway_tools")

@@ -254,19 +254,8 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     -- Host-owned options for the driver's prepare: scalar values the
     -- driver decodes under its own rules (permission mode, turn bound,
     -- sandbox); the caller never chooses them.
-    local prepare_options: {[string]: unknown} = {}
-    if data.prepare_options ~= nil then
-        local declared = bounds.object(data.prepare_options)
-        if not declared then return nil, ref .. ": prepare_options must be an object" end
-        local count = 0
-        for name, item in pairs(declared) do
-            count = count + 1
-            if count > preferences.MAX_OPTIONS then return nil, ref .. ": prepare_options carries more than " .. tostring(preferences.MAX_OPTIONS) .. " options" end
-            if not bounds.id(name) then return nil, ref .. ": prepare_options names a non-identifier" end
-            if type(item) ~= "string" and type(item) ~= "number" and type(item) ~= "boolean" then return nil, ref .. ": prepare_options." .. name .. " must be a scalar" end
-            prepare_options[name] = item
-        end
-    end
+    local prepare_options, prepare_options_error = preferences.decode_prepare_options(data.prepare_options)
+    if not prepare_options then return nil, ref .. ": " .. tostring(prepare_options_error) end
     local instructions, instructions_error = configuration.instructions(data.instructions)
     if instructions_error then return nil, ref .. ": " .. instructions_error end
     local instruction_builder, builder_error = configuration.instruction_builder(data.instruction_builder)

@@ -15,6 +15,7 @@ entries:
   source: file://normalize.lua
   imports:
     bounds: bee.threads.records:bounds
+    turn_budget: bee.driver:turn_budget
 - name: events
   kind: library.lua
   source: file://events.lua

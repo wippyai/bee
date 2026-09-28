@@ -1,20 +1,21 @@
 local bounds = require("bounds")
 local types = require("types")
+local turn_budget = require("turn_budget")
 local M = {}
 M.APPROVAL_MODES = {"untrusted", "on-request", "never"}
 M.EFFORTS = {"low", "medium", "high", "xhigh", "max"}
-M.MAX_STEPS = 32
+M.MAX_STEPS = turn_budget.MAX
 local function provider_home(private: boolean): types.ProviderHome
     return {provider = "muse", private = private, files = {
         {source_path = ".config/muse/auth.json", path = ".config/muse/auth.json", kind = "login", optional = true, write_back = true},
         {source_path = ".config/muse/settings.json", path = ".config/muse/.bee-global-settings.json", kind = "config", optional = true, write_back = false},
     }}
 end
-type Request = {profile_id: string, brief: string, approval_mode: string, max_steps: integer?, model: string?, effort: string?, resume_ref: string?, gateway_hooks: boolean?}
+type Request = {profile_id: string, brief: string, approval_mode: string, turn_budget: integer?, model: string?, effort: string?, resume_ref: string?, gateway_hooks: boolean?}
 function M.decode(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"profile_id", "brief", "approval_mode", "max_steps", "model", "effort", "resume_ref", "gateway_tools", "gateway_hooks"})
+    local unknown_field = bounds.fields(object, {"profile_id", "brief", "approval_mode", "turn_budget", "model", "effort", "resume_ref", "gateway_tools", "gateway_hooks"})
     if unknown_field then return nil, unknown_field end
     -- Gateway tools reach Muse through the settings file's mcpServers
     -- section; the launch line carries nothing for them.
@@ -40,12 +41,8 @@ function M.decode(value: unknown): (Request?, string?)
         if not declared then return nil, "approval_mode is not one Bee admits" end
         mode = declared
     end
-    local steps: integer? = nil
-    if object.max_steps ~= nil then
-        local number = bounds.integer(object.max_steps)
-        if not number or number < 1 or number > M.MAX_STEPS then return nil, "max_steps must be between 1 and " .. tostring(M.MAX_STEPS) end
-        steps = number
-    end
+    local steps, steps_error = turn_budget.decode(object.turn_budget)
+    if object.turn_budget ~= nil and not steps then return nil, steps_error end
     local model: string? = nil
     if object.model ~= nil then
         local declared = bounds.text(object.model, 128)
@@ -66,7 +63,7 @@ function M.decode(value: unknown): (Request?, string?)
     if profile_id == "window" and resume ~= nil and brief ~= "" then
         return nil, "window resume cannot carry a brief"
     end
-    return {profile_id = profile_id, brief = brief, approval_mode = mode, max_steps = steps, model = model, effort = effort, resume_ref = resume, gateway_hooks = hooks}, nil
+    return {profile_id = profile_id, brief = brief, approval_mode = mode, turn_budget = steps, model = model, effort = effort, resume_ref = resume, gateway_hooks = hooks}, nil
 end
 function M.specification(request: Request): types.Launch
     local environment: {string} = {}
@@ -93,9 +90,9 @@ function M.specification(request: Request): types.Launch
         argv[#argv + 1] = "--reasoning-effort"
         argv[#argv + 1] = request.effort
     end
-    if request.max_steps then
+    if request.turn_budget then
         argv[#argv + 1] = "--max-model-steps"
-        argv[#argv + 1] = tostring(request.max_steps)
+        argv[#argv + 1] = tostring(request.turn_budget)
     end
     if request.resume_ref then
         argv[#argv + 1] = "--session-id"

@@ -212,7 +212,7 @@ def compose(folder):
         policy["environment"] = {}
         policy["environment_refs"] = {"CLAUDE_CONFIG_DIR": "bee.driver.claude:config_home"}
         policy["allow_host_home"] = True
-        policy["prepare_options"] = {"permission_mode": "dontAsk", "max_turns": 32}
+        policy["prepare_options"] = {"permission_mode": "dontAsk", "turn_budget": 128}
         policy["required_exit_observation"] = "independent"
         policy["required_cleanup"] = "process_group"
         policy["stop_grace_ms"] = 5000

@@ -454,6 +454,15 @@ CREATE TABLE bee_governance_node_identity_migrations (
 );
 ]]
 
+-- Keep the identity inputs used by an existing plan digest when its owner
+-- partition is migrated. The approval remains bound to that historical digest.
+local PLAN_IDENTITY_DIGEST_SQL = [[
+ALTER TABLE bee_governance_plans ADD COLUMN identity_digest_owner_node TEXT NOT NULL DEFAULT '';
+ALTER TABLE bee_governance_plans ADD COLUMN identity_digest_source_node TEXT NOT NULL DEFAULT '';
+UPDATE bee_governance_plans
+  SET identity_digest_owner_node = owner_node, identity_digest_source_node = source_node;
+]]
+
 
 function M.all(): {Migration}
     return {
@@ -469,6 +478,7 @@ function M.all(): {Migration}
         {id = 10, name = "governance_activation_grant_reuse", sql = ACTIVATION_GRANT_REUSE_SQL, rebuild = false},
         {id = 11, name = "governance_activation_rollback", sql = ACTIVATION_ROLLBACK_SQL, rebuild = false},
         {id = 12, name = "governance_node_identity_migration", sql = NODE_IDENTITY_MIGRATION_SQL, rebuild = false},
+        {id = 13, name = "governance_plan_identity_digest", sql = PLAN_IDENTITY_DIGEST_SQL, rebuild = false},
     }
 end
 

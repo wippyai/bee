@@ -154,6 +154,9 @@ entries:
   imports:
     test: wippy.test:test
     plan_store: bee.gov.persist:plan_store
+    database: bee.persist:database
+    migrations: bee.gov.migrations:schema
+    identity_migration: bee.gov.persist:identity_migration
 - name: activation_store_test
   kind: function.lua
   source: file://activation_store_test.lua

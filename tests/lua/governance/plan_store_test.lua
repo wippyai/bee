@@ -2,6 +2,9 @@
 local test = require("test")
 local hash = require("hash")
 local store = require("plan_store")
+local database = require("database")
+local migrations = require("migrations")
+local identity_migration = require("identity_migration")
 
 local function blob(bytes: string): {[string]: string}
     local digest, err = hash.sha256(bytes)
@@ -21,6 +24,30 @@ end
 
 local function define_tests()
     test.describe("Governance destination plan store", function()
+        test.it("keeps historical plan digests and receipts valid after owner identity migration", function()
+            local legacy, destination, workspace = "legacy-owner-node", "persisted-owner-node", "workspace-identity-migration"
+            local state = assert(store.open("bee.gov:plan_test_db", legacy, workspace))
+            local stage = identity("stage", 0, "identity-stage-1", "author-workspace")
+            stage.candidate, stage.artifact, stage.preflight = blob("identity-candidate"), blob("identity-artifact"), blob("identity-preflight")
+            stage.source_node = "remote-author-node"
+            local staged = ok(store.call(state, "reviewer-a", stage))
+            assert(store.close(state))
+
+            local db, open_error = database.open({resource = "bee.gov:plan_test_db",
+                ledger = {table = "bee_governance_migrations", label = "governance"}, migrations = migrations.all()})
+            if not db then error(tostring(open_error)) end
+            local migrated, migration_error = identity_migration.apply(db, destination, legacy)
+            db:release()
+            if not migrated then error(tostring(migration_error)) end
+
+            local reopened = assert(store.open("bee.gov:plan_test_db", destination, workspace))
+            local restored = ok(store.call(reopened, "reader-a", {operation = "get", source_node = "remote-author-node",
+                source_workspace = "author-workspace", version = "v1"}))
+            test.eq(restored.plan_digest, staged.plan_digest)
+            local replay = store.call(reopened, "reviewer-a", stage)
+            test.is_true(replay.ok == true and replay.replayed == true)
+            assert(store.close(reopened))
+        end)
         test.it("retains review, selection and exact approval binding across reopen", function()
             local state, open_error = store.open("bee.gov:plan_test_db", "node-a", "workspace-a")
             if not state then error(tostring(open_error)) end

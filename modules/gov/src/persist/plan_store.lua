@@ -30,6 +30,7 @@ type ApprovalRequest = {operation: string, source_node: string, source_workspace
     approval_plan_digest: string, approval_proposal_digest: string, approval_owner_incarnation: integer}
 type Store = {db: sql.DB, node: string, workspace: string, closed: boolean}
 type Row = {source_node: string, source_workspace: string, version: string,
+    identity_digest_owner_node: string, identity_digest_source_node: string,
     candidate: Blob, artifact: Blob, preflight: Blob, revision: integer, status: string,
     plan_digest: string, review_status: string?, review_reason: string?, reviewer_id: string?, approval_id: string?,
     approval_plan_digest: string?, approval_proposal_digest: string?, approval_owner_incarnation: integer?,
@@ -61,9 +62,10 @@ local function checked_blob(value: Blob, label: string): Result?
     return nil
 end
 
-local function plan_digest(store: Store, source_node: string, source_workspace: string, version: string, candidate: Blob, artifact: Blob, preflight: Blob): string?
-    local encoded = canonical.encode({schema_revision = "bee.governance-plan@1", destination_node = store.node,
-        destination_workspace = store.workspace, source_node = source_node, source_workspace = source_workspace,
+local function plan_digest(destination_node: string, destination_workspace: string, source_node: string,
+    source_workspace: string, version: string, candidate: Blob, artifact: Blob, preflight: Blob): string?
+    local encoded = canonical.encode({schema_revision = "bee.governance-plan@1", destination_node = destination_node,
+        destination_workspace = destination_workspace, source_node = source_node, source_workspace = source_workspace,
         version = version, candidate_digest = candidate.digest, artifact_digest = artifact.digest,
         preflight_digest = preflight.digest})
     if not encoded then return nil end
@@ -91,8 +93,13 @@ end
 
 local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
     local source_node, source_workspace, version = bounds.id(raw.source_node), bounds.id(raw.source_workspace), bounds.id(raw.version)
+    local identity_digest_owner_node = bounds.id(raw.identity_digest_owner_node)
+    local identity_digest_source_node = bounds.id(raw.identity_digest_source_node)
     local revision = integer(raw.revision)
-    if not source_node or not source_workspace or not version or not revision or revision < 1 then return nil, failure("INTERNAL", "governance plan identity is corrupt") end
+    if not source_node or not source_workspace or not version or not identity_digest_owner_node
+        or not identity_digest_source_node or not revision or revision < 1 then
+        return nil, failure("INTERNAL", "governance plan identity is corrupt")
+    end
     local function row_blob(bytes: unknown, measured: unknown, limit: integer, label: string): (Blob?, Result?)
         if type(bytes) ~= "string" or #bytes == 0 or #bytes > limit or type(measured) ~= "string" or #measured ~= 64 or not measured:match("^[0-9a-f]+$") then
             return nil, failure("INTERNAL", label .. " is corrupt")
@@ -144,6 +151,8 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
     end
     local verified_plan_digest = plan_digest_value :: string
     return {source_node = source_node, source_workspace = source_workspace, version = version,
+        identity_digest_owner_node = identity_digest_owner_node,
+        identity_digest_source_node = identity_digest_source_node,
         candidate = candidate :: Blob, artifact = artifact :: Blob, preflight = preflight :: Blob,
         plan_digest = verified_plan_digest, revision = revision, status = status :: string, review_status = review_status,
         review_reason = raw.review_reason :: string?, reviewer_id = raw.reviewer_id :: string?,
@@ -180,7 +189,9 @@ local function find(tx: sql.Transaction, store: Store, source_node: string, sour
     if #rows > 1 then return nil, failure("INTERNAL", "governance plan identity is duplicated") end
     local row, row_error = decode_row(rows[1])
     if not row then return nil, row_error end
-    local expected = plan_digest(store, row.source_node, row.source_workspace, row.version, row.candidate, row.artifact, row.preflight)
+    local expected = plan_digest(row.identity_digest_owner_node, store.workspace,
+        row.identity_digest_source_node, row.source_workspace, row.version,
+        row.candidate, row.artifact, row.preflight)
     if not expected or expected ~= row.plan_digest then return nil, failure("INTERNAL", "governance plan digest is corrupt") end
     return row, nil
 end
@@ -234,7 +245,9 @@ function M.stage(store: Store, actor_raw: string, input: StageRequest): Result
         if artifact_error then return artifact_error end
         local preflight_error = checked_blob(input.preflight :: Blob, "preflight")
         if preflight_error then return preflight_error end
-        local measured_plan = plan_digest(store, input.source_node :: string, input.source_workspace :: string, input.version :: string, input.candidate :: Blob, input.artifact :: Blob, input.preflight :: Blob)
+        local measured_plan = plan_digest(store.node, store.workspace, input.source_node :: string,
+            input.source_workspace :: string, input.version :: string, input.candidate :: Blob,
+            input.artifact :: Blob, input.preflight :: Blob)
         if not measured_plan then return failure("INTERNAL", "measure governance plan") end
         local existing, existing_error = find(tx, store, input.source_node :: string, input.source_workspace :: string, input.version :: string)
         if existing_error then return existing_error end
@@ -255,7 +268,7 @@ function M.stage(store: Store, actor_raw: string, input: StageRequest): Result
         if count == nil then return failure("INTERNAL", "governance plan count is corrupt") end
         if count >= MAX_PLANS then return failure("CAPACITY_EXHAUSTED", "governance plan capacity is exhausted") end
         local now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
-        local _, insert_error = tx:execute("INSERT INTO bee_governance_plans (owner_node, workspace_id, source_node, source_workspace, version, candidate_bytes, candidate_digest, artifact_bytes, artifact_digest, preflight_bytes, preflight_digest, plan_digest, revision, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'staged', " .. now .. ", " .. now .. ")", {store.node, store.workspace, input.source_node, input.source_workspace, input.version, input.candidate.bytes, input.candidate.digest, input.artifact.bytes, input.artifact.digest, input.preflight.bytes, input.preflight.digest, measured_plan})
+        local _, insert_error = tx:execute("INSERT INTO bee_governance_plans (owner_node, workspace_id, source_node, source_workspace, version, candidate_bytes, candidate_digest, artifact_bytes, artifact_digest, preflight_bytes, preflight_digest, plan_digest, identity_digest_owner_node, identity_digest_source_node, revision, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'staged', " .. now .. ", " .. now .. ")", {store.node, store.workspace, input.source_node, input.source_workspace, input.version, input.candidate.bytes, input.candidate.digest, input.artifact.bytes, input.artifact.digest, input.preflight.bytes, input.preflight.digest, measured_plan, store.node, input.source_node})
         if insert_error then return storage(insert_error, "stage governance plan") end
         local row, row_error = find(tx, store, input.source_node :: string, input.source_workspace :: string, input.version :: string)
         if row_error or not row then return row_error or failure("INTERNAL", "read staged governance plan") end

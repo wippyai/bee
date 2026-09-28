@@ -77,7 +77,8 @@ def exercise():
             ui.key(b"k")
             ui.key(b"k")
             ui.key(b"o")
-            ui.wait("bee.gov:establish-overlay", timeout=20)
+            ui.wait("Asked: Apply smoke-notes", timeout=20)
+            ui.pump(2)
             ui.key(b"l")
             ui.wait("LEASE REQUEST", timeout=20)
             ui.wait("Max applies", timeout=10)
@@ -91,11 +92,23 @@ def exercise():
             ui.wait("LEASES", timeout=20)
             ui.wait("used 1/5", timeout=20)
             ui.key(b"j")
-            ui.key(b"x")
-            ui.wait("Revoke this lease?", timeout=20)
-            ui.key(b"\t")
-            ui.key(b"\r")
-            ui.wait("Lease revoked", timeout=30)
+            # A background refresh can hold the app busy; a person retries, so does the smoke.
+            for attempt in range(6):
+                ui.pump(1.5)
+                ui.key(b"x")
+                try:
+                    ui.wait("Revoke this lease?", timeout=6)
+                except AssertionError:
+                    continue
+                ui.key(b"\t")
+                ui.key(b"\r")
+                try:
+                    ui.wait("Lease revoked", timeout=8)
+                    break
+                except AssertionError:
+                    continue
+            else:
+                raise AssertionError("the lease was not revoked: " + ui.text())
             ui.wait("revoked", timeout=20)
             ui.key(b"\x1b")
             ui.pump(.5)

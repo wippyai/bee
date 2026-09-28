@@ -178,7 +178,8 @@ local function main(value: unknown)
         dirty = true
     end
     local function ask_lease(kind: string)
-        if dialog or state.pending or busy then return end
+        if busy then status = "Sync in progress"; dirty = true; return end
+        if dialog or state.pending then return end
         local detail = state.detail
         local selected = model.selected_row(state)
         if not detail or not selected or detail.approval_id ~= selected.approval_id then status = "Open a request first"; dirty = true; return end
@@ -198,7 +199,8 @@ local function main(value: unknown)
         dirty = true
     end
     local function ask_batch(decision: string)
-        if dialog or state.pending or busy then return end
+        if busy then status = "Sync in progress"; dirty = true; return end
+        if dialog or state.pending then return end
         local marked = leases.marked(slice, state.rows)
         if #marked == 0 then status = "Mark pending requests with M first"; dirty = true; return end
         local approve = decision == "approved"
@@ -211,7 +213,8 @@ local function main(value: unknown)
         dirty = true
     end
     local function ask_revoke()
-        if dialog or busy then return end
+        if busy then status = "Sync in progress"; dirty = true; return end
+        if dialog then return end
         local row = leases.selected(slice)
         if not row or row.state ~= "active" then status = "Select an active lease"; dirty = true; return end
         local request_id, err = client.query(launch, {kind = "confirm", title = "Revoke this lease?",
@@ -319,6 +322,7 @@ local function main(value: unknown)
                 local key = data.key_type
                 local text = tostring(data.key or "")
                 status = ""
+                leases.say(slice, "")
                 if text == "v" then
                     leases.show_leases(slice, not slice.leases_view); offset = 0
                     perform(refresh); dirty = true

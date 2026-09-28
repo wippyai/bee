@@ -146,7 +146,8 @@ local function fault(raw: unknown): string?
     local reply = bounds.object(raw)
     if not reply then return "no answer from governance" end
     if reply.ok == true then return nil end
-    return model.text(tostring(reply.code or "FAILED") .. ": " .. tostring(reply.message or "governance refused the request"), model.LINE_LIMIT)
+    local detail = bounds.object(reply.error) or reply
+    return model.text(tostring(detail.code or "FAILED") .. ": " .. tostring(detail.message or "governance refused the request"), model.LINE_LIMIT)
 end
 
 local function envelope_lines(envelope: unknown): {string}

@@ -149,6 +149,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local message = status
     if message == "" then message = state.notice end
+    if message == "" then message = slice.notice end
     if message == "" and state.pending then message = "Waiting for the approval owner…" end
     for _, workspace in ipairs(state.workspaces) do
         local unavailable = state.unavailable[workspace]

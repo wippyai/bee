@@ -152,6 +152,10 @@ M.PURPOSES = {"project", "output", "cache", "session"}
 M.STOP_MODES = {"cooperative", "forced"}
 M.WORKDIR_PREPARER_CONTRACT = "bee.placement:workdir_preparer"
 M.WORKDIR_PREPARER_BINDING_TYPE = "bee.placement.workdir_preparer"
+-- Actions a preparer method requires of its caller. Placement's runner holds
+-- the setup action and its service holds the cleanup action.
+M.WORKDIR_PREPARER_SETUP = "bee.placement.workdir_preparer.setup"
+M.WORKDIR_PREPARER_CLEANUP = "bee.placement.workdir_preparer.cleanup"
 -- Capability order: a runtime that controls a group also controls the
 -- direct process; a contained tree covers both.
 function M.rank(capability: Capability): integer

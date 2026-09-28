@@ -44,27 +44,33 @@ entries:
   kind: function.lua
   source: file://setup_method.lua
   method: plan
+  modules: [security]
   imports:
     worktree: bee.git_worktree:worktree
     bounds: bee.threads.records:bounds
+    types: bee.placement:types
   security:
     policies: [bee.git_worktree:worktree_policy]
 - name: setup
   kind: function.lua
   source: file://setup_method.lua
   method: handle
+  modules: [security]
   imports:
     worktree: bee.git_worktree:worktree
     bounds: bee.threads.records:bounds
+    types: bee.placement:types
   security:
     policies: [bee.git_worktree:worktree_policy]
 - name: cleanup
   kind: function.lua
   source: file://cleanup_method.lua
   method: handle
+  modules: [security]
   imports:
     worktree: bee.git_worktree:worktree
     bounds: bee.threads.records:bounds
+    types: bee.placement:types
   security:
     policies: [bee.git_worktree:worktree_policy]
 - name: binding

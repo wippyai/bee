@@ -57,6 +57,7 @@ entries:
     - process.unmonitor
     - process.send
     - funcs.call
+    - bee.placement.workdir_preparer.cleanup
     resources:
     - bee.placement.native.service:runner
     - bee:workers
@@ -73,12 +74,13 @@ entries:
 - name: placement_runner_policy
   kind: security.policy
   meta:
-    comment: A runner answers its starter and its bound recipient, and watches the recipient so a lost carrier retires the
-      gateway binding
+    comment: A runner answers its starter and its bound recipient, watches the recipient so a lost carrier retires the
+      gateway binding, and invokes the plan and setup methods of host-authorized workdir preparers
   policy:
     actions:
     - process.send
     - process.monitor
     - process.unmonitor
+    - bee.placement.workdir_preparer.setup
     resources: '*'
     effect: allow

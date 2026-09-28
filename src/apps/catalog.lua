@@ -58,11 +58,12 @@ end
 -- broker's admission projection. The latter does not advance registry history.
 function M.revision(workspace_id: string): string
     if not contract.workspace_id(workspace_id) then error("Invalid application catalog workspace") end
-    local version, version_error = registry.current_version()
-    if not version or version_error then error("Read application catalog revision: " .. tostring(version_error)) end
+    local pinned, snapshot_error = registry.snapshot()
+    if not pinned or snapshot_error then error("Read application catalog snapshot: " .. tostring(snapshot_error)) end
+    local version = pinned:version()
     local node_id, node_error = system.node.id()
     if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
-    local admission, admission_error = registry.get("bee.security:application_admission")
+    local admission, admission_error = pinned:get("bee.security:application_admission")
     if not admission or admission_error or type(admission.data) ~= "table" then
         error("Read application admission revision: " .. tostring(admission_error or "invalid admission entry"))
     end

@@ -205,6 +205,7 @@ function M.drain_approved(): (integer, string?)
         return 0, "approval owner returned no installation effect queue"
     end
     local count = 0
+    local retry_error: string? = nil
     for _, raw_view in ipairs(queue.effects :: {unknown}) do
         local view = bounds.object(raw_view)
         local approval_id = view and bounds.id(view.approval_id) or nil
@@ -213,6 +214,7 @@ function M.drain_approved(): (integer, string?)
         local binding_id = payload and bounds.id(payload.binding_id) or nil
         if approval_id and view.policy == policy and proposal and proposal.ref == installation.REF and payload and binding_id then
             local raw_resolved, resolve_error = funcs.new():call("bee.gateway.binding:installation_binding", {binding_id = binding_id})
+            if resolve_error then return count, tostring(resolve_error) end
             local resolved_reply = not resolve_error and bounds.object(raw_resolved) or nil
             local resolved = resolved_reply and resolved_reply.ok == true and bounds.object(resolved_reply.value) or nil
             local workspace_id = resolved and bounds.id(resolved.workspace_id) or nil
@@ -226,10 +228,16 @@ function M.drain_approved(): (integer, string?)
                     thread_id = tostring(resolved.thread_id), workspace_id = workspace_id}
                 local applied = M.apply_approved(M.port(binding), binding, policy, {request_id = approval_id})
                 if applied.ok then count = count + 1 end
+                if not applied.ok then
+                    local fault = applied.error
+                    retry_error = fault and (fault.code .. ": " .. fault.message) or "installation effect remains pending"
+                end
+            else
+                retry_error = "approved installation binding is not available"
             end
         end
     end
-    return count, nil
+    return count, retry_error
 end
 
 return M

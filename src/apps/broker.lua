@@ -1106,6 +1106,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         recovery_received = true
         assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
     end
+    arm_deadline()
     while running do
         local cases = {requests:case_receive(), app_ready:case_receive(), titles:case_receive(), queries:case_receive(), answers:case_receive(), close_replies:case_receive(), shutdown_requests:case_receive(), appearance_requests:case_receive(),
             appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), replace_acks:case_receive(), thread_requests:case_receive(), fences:case_receive(), events:case_receive()}

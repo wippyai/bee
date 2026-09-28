@@ -9,6 +9,7 @@ local security = require("security")
 local funcs = require("funcs")
 local time = require("time")
 local registry = require("registry")
+local catalog = require("catalog")
 local appearance = require("appearance")
 local ADMISSION_ID = "bee.security:application_admission"
 local DEFINITION = "bee.harness.window:app"
@@ -236,7 +237,10 @@ local function define_tests()
                 -- Simulate the overlay becoming available after the broker's
                 -- initial catalog. The same retained instance must still see the
                 -- thread it created before restart.
+                local previous_revision = catalog.revision(WORKSPACE)
                 set_admission_for(OTHER_DEFINITION, true)
+                test.is_true(catalog.revision(WORKSPACE) ~= previous_revision,
+                    "application admission overlay did not change its catalog revision")
                 local catalog_deadline = time.after("30s")
                 local definition_returned = false
                 while not definition_returned do

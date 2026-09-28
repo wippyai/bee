@@ -134,6 +134,7 @@ entries:
   imports:
     test: wippy.test:test
     appearance: bee.application:appearance
+    catalog: bee.apps:catalog
 - name: broker_stop_test
   kind: function.lua
   source: file://broker_stop_test.lua

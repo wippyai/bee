@@ -86,11 +86,12 @@ def start_owner(binary: pathlib.Path, folder: pathlib.Path) -> subprocess.Popen:
 
 def start_folder_owner(binary: pathlib.Path, folder: pathlib.Path) -> subprocess.Popen:
     state = folder / "state"
+    project = pathlib.Path(__file__).resolve().parents[1]
     environment = database_environment(folder, HOME=str(folder), TERM="xterm-256color",
                                        PATH="/usr/bin:/bin", XDG_CONFIG_HOME=str(folder / ".config"))
     owner = subprocess.Popen(
         [str(binary), "--state", str(state), "run", "start"],
-        cwd=folder,
+        cwd=project,
         env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

@@ -550,6 +550,9 @@ local function define_tests()
             end
             process.unlisten(outputs)
             test.is_true(output:find("claude-private-home-ok", 1, true) ~= nil)
+            test.is_true(wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 5000), "Claude private-home fixture exit was not recorded")
             attempt_of(call(OWNER, "cleanup", {attempt_id = attempt_id}))
         end)
         test.it("refuses provider login write-back until runtime no-follow fs is available and leaves files unchanged", function()

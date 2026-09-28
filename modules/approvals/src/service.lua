@@ -32,6 +32,7 @@ M.OWN = "bee.approvals.own"
 M.CONSUME = "bee.approvals.consume"
 M.INSTALLATION_EFFECTS = "installation_effects"
 M.WORKER_NAME = "bee.approvals.outbox"
+M.INSTALLATION_WORKER_NAME = "bee.approvals.installation_effect_worker"
 M.AUTHORITY_NAME = "bee.approvals.authority"
 M.THREAD_GET = "bee.threads.service:get"
 M.THREAD_READ = "bee.threads.service:read_after"
@@ -158,10 +159,14 @@ local function actor_id(): string?
     if not current then return nil end
     return bounds.id(current:id())
 end
-local function wake()
-    local pid, err = process.registry.lookup(M.WORKER_NAME)
+local function wake_worker(name: string)
+    local pid, err = process.registry.lookup(name)
     if err or not pid then return end
     process.send(tostring(pid), M.TOPIC_WAKE, {version = 1})
+end
+local function wake()
+    wake_worker(M.WORKER_NAME)
+    wake_worker(M.INSTALLATION_WORKER_NAME)
 end
 function M.reply(result: Result): Reply
     if result.ok then return {ok = true, error = nil, value = result.value, replayed = result.replayed} end

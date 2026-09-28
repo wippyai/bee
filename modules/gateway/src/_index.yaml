@@ -20,6 +20,10 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
+- name: dependency_approvals
+  kind: ns.dependency
+  component: bee/approvals
+  version: '*'
 - name: dependency_governance
   kind: ns.dependency
   component: bee/gov

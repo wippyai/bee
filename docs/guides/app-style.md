@@ -335,6 +335,17 @@ drawn. Draw it with `viz.tiles`, `viz.line` and `frame.table` (section 12).
  Sampled 1s ago                          Enter refresh · P pause · Esc close
 ```
 
+### Reference applications
+
+Each archetype above has a proven, copyable screen in `docs/reference/apps/`,
+served to agents through the docs tool as topic `reference_apps` (start with
+`reference_apps/index`): `deploy_board`, `ci_bench`, `inbox`, `log_viewer`,
+`topology`, `workflow`, `metrics`, `deploy_form` (wizard on the input kit) and
+`overlays` (palette, confirmation modal, toast). They use only the public
+`frame`, `viz`, `diagram` and `forms` libraries, keep state in a model the
+application owns, and are drawn at every size class by
+`make reference-apps-check`.
+
 ## 12. Visualizations
 
 The visualization kit is `bee.application:viz`. Choose by the question:

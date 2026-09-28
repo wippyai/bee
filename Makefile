@@ -458,6 +458,11 @@ cross-session-check: fixture-gateway-client
 nested-names-upgrade-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/nested_names_upgrade.py
 
+.PHONY: reference-apps-check
+# The reference applications under docs/reference/apps compile and draw against the public application library.
+reference-apps-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/reference_apps.py
+
 .PHONY: docs-agent-check agent-corpus agent-corpus-local
 # The embedded documentation corpus: build the selected runtime references and
 # Bee's own contracts, or verify the committed snapshot offline.

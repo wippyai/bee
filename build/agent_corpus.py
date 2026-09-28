@@ -26,6 +26,11 @@ Selection rule, stated once and enforced by this table:
     process and design pages are left out.
   * component READMEs: one page per Bee component, the owner's own statement
     of that package's contract.
+  * reference applications: every source in docs/reference/apps, one page per
+    application class (deploy board, CI board, inbox, log viewer, topology,
+    workflow, metrics, deploy wizard, overlays) plus an index. They are proven
+    by `make reference-apps-check`, which lints and draws them against the
+    public application library; they are documentation, never registered.
   * toolkit: one generated reference to Bee's terminal toolkit (tty plus the
     appearance, frame, visualization kit and application client libraries
     Bee's own apps use), with visualization examples taken from their golden
@@ -483,6 +488,43 @@ def component_documents() -> "list[tuple[str, str, bytes, str]]":
     return documents
 
 
+def reference_app_documents() -> "list[tuple[str, str, bytes, str]]":
+    """One page per reference application source, and the index that lists them.
+
+    The header comment of a source (the lines after the SPDX line up to the
+    first non-comment line) states what it demonstrates; the page is that text
+    followed by the whole source."""
+    documents = []
+    index = ["# Reference applications", "",
+             "Proven, self-contained Bee application screens for copying: each is a pure",
+             "view over `bee.application:frame`, `viz`, `diagram` or `forms` with the model",
+             "the application owns, and each is drawn at every size class by",
+             "`make reference-apps-check`. Read one, copy it into an application's `view.lua`",
+             "and replace the sample data. Overlay and form interaction patterns are in",
+             "`overlays` and `deploy_form`.", ""]
+    for path in sorted((ROOT / "docs/reference/apps").glob("*.lua")):
+        source = path.read_text()
+        header = []
+        for line in source.splitlines()[1:]:
+            if not line.startswith("--"):
+                break
+            header.append(line[3:] if line.startswith("-- ") else "")
+        if not header or not header[0].startswith("Reference: "):
+            raise SystemExit(f"{path.relative_to(ROOT)} needs a `-- Reference: <name>.` header comment")
+        name = header[0][len("Reference: "):].rstrip(".")
+        title = "Reference application: " + name
+        summary = " ".join(line.strip() for line in header[1:] if line.strip() and not line.startswith("Library calls"))
+        payload = "\n".join([f"# {title}", "", summary, "", "## Source", "", "```lua", source.rstrip(), "```", ""])
+        documents.append((f"reference_apps/{path.stem}", "reference_apps", payload.encode("utf-8"),
+                          str(path.relative_to(ROOT))))
+        index.append(f"* `reference_apps/{path.stem}`: {name}. {summary.split('. ')[0].rstrip('.')}.")
+    if not documents:
+        raise SystemExit("docs/reference/apps has no reference applications")
+    documents.append(("reference_apps/index", "reference_apps", ("\n".join(index) + "\n").encode("utf-8"),
+                      "generated: docs/reference/apps"))
+    return documents
+
+
 def title_of(payload: bytes, fallback: str) -> str:
     """The document's own first heading, quoted form stripped for runtime pages."""
     for line in payload.decode("utf-8", "replace").splitlines():
@@ -538,6 +580,8 @@ def build(local: bool = False) -> int:
             raise SystemExit(f"docs/{name} is listed in the selection rule but missing")
         record(f"docs/{stable_name}", topic, origin.read_bytes(), f"docs/{name}")
     for identity, topic, payload, source in component_documents():
+        record(identity, topic, payload, source)
+    for identity, topic, payload, source in reference_app_documents():
         record(identity, topic, payload, source)
     record("toolkit", "terminal", toolkit_reference(),
            "generated: modules/application/src, src application views, tests/lua/frame")
@@ -609,7 +653,8 @@ SELECTION_RULE = (
     "pages that state an implemented callable boundary or the path a frozen artifact travels "
     "(application, threads, placement, gateway, carrier, storage, ui, harness, approvals, "
     "registry, platform), excluding repository process and design pages. "
-    "Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from "
+    "Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in "
+    "docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from "
     "modules/application/src, src/apps and compact examples; visualization examples are extracted from "
     "tests/lua/frame. The corpus is digest-checked with the rest."
 )

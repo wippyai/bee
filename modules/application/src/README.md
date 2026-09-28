@@ -21,6 +21,13 @@ application, select a workspace, open a store, or grant access to a thread.
 | `agents` | Managed agents for applications and agents: `launch` or `run` one on an existing or a new thread with a chosen working directory and placement, read its `status`, `wait` for it through its thread and `cancel` it, all as the caller's own actor through `bee.harness.launch:agent_call`; `run` returns a durable receipt promptly; `cancel` supports idempotent cancel intents and terminal carrier wait; the host grants `bee.harness.launch` on each definition a caller may start |
 | `host_leases` | Leases on node-managed workspace hosts: the holder registers a lease name, asks the node host manager for a workspace's host and releases it; the manager answers only the holder of that name, and the host policy `bee.security.desktop:workspace_host_lease_policy` decides who may name leases |
 
+Proven reference screens for each application class (deploy board, CI board,
+inbox, log viewer, topology, workflow, live metrics, deploy wizard with forms,
+and the palette, modal and toast overlays) live in `docs/reference/apps/`. They
+use only this public API, are not registered entries and never ship as an
+application; `make reference-apps-check` lints and draws them against these
+libraries, and the agent corpus serves them under the `reference_apps` topic.
+
 Applications still run as standalone processes. The host admits their exact
 definition and policies; the broker supplies execution identity and durable
 thread bindings. Registry metadata and SDK imports do not authorize an

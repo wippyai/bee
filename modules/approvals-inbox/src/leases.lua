@@ -41,49 +41,61 @@ local function duration(raw: string): integer?
     return math.floor(seconds)
 end
 
--- for=2h applies=5 extra=workspace.files.write:subpath=docs
--- Values with | are lists. An extra names a capability and its parameters;
--- the governance owner resolves it through its own catalog.
-function M.parse_spec(input: unknown): (Spec?, string?)
-    if type(input) ~= "string" or #input > 512 or input:find("%c") then return nil, "lease spec is invalid" end
-    local spec: Spec = {ttl_seconds = nil, max_applies = nil, extras = {}}
+-- parse_parameters: key=value pairs separated by commas; a value with | is a
+-- list. The governance owner resolves the capability and its parameters
+-- through its own catalog.
+function M.parse_parameters(input: string): ({[string]: unknown}?, string?)
+    if #input > 256 or input:find("%c") then return nil, "parameters are too long" end
+    local parameters: {[string]: unknown} = {}
     local count = 0
-    for token in input:gmatch("%S+") do
+    for pair in input:gmatch("[^,]+") do
+        local key, item = pair:match("^%s*([a-z_]+)%s*=%s*(.-)%s*$")
+        if not key or not item or item == "" or parameters[key] ~= nil then return nil, "use key=value pairs, comma separated" end
         count = count + 1
-        if count > 16 then return nil, "lease spec has too many parts" end
-        local name, value = token:match("^([a-z]+)=(.+)$")
-        if not name or not value then return nil, "unknown lease spec part " .. model.text(token, 40) end
-        if name == "for" then
-            spec.ttl_seconds = duration(value)
-            if not spec.ttl_seconds then return nil, "for= takes a duration such as 30m, 2h or 7d (at most 30d)" end
-        elseif name == "applies" then
-            local applies: number = tonumber(value) or 0
-            if applies ~= math.floor(applies) or applies < 1 or applies > 1000000 then
-                return nil, "applies= takes a positive whole number"
-            end
-            spec.max_applies = math.floor(applies)
-        elseif name == "extra" then
-            if #spec.extras >= M.MAX_EXTRAS then return nil, "a lease takes at most " .. tostring(M.MAX_EXTRAS) .. " extras" end
-            local capability, rest = value:match("^([a-z][a-z0-9_.-]*):(.+)$")
-            if not capability then return nil, "extra= takes capability:key=value" end
-            local parameters: {[string]: unknown} = {}
-            for pair in rest:gmatch("[^,]+") do
-                local key, item = pair:match("^([a-z_]+)=(.+)$")
-                if not key or parameters[key] ~= nil then return nil, "extra parameters are key=value pairs" end
-                if item:find("|", 1, true) then
-                    local list: {string} = {}
-                    for part in item:gmatch("[^|]+") do list[#list + 1] = part end
-                    parameters[key] = list
-                else
-                    parameters[key] = item
-                end
-            end
-            spec.extras[#spec.extras + 1] = {capability = capability, parameters = parameters}
+        if count > 8 then return nil, "at most 8 parameters" end
+        if item:find("|", 1, true) then
+            local list: {string} = {}
+            for part in item:gmatch("[^|]+") do list[#list + 1] = part end
+            parameters[key] = list
         else
-            return nil, "unknown lease spec part " .. model.text(token, 40)
+            parameters[key] = item
         end
     end
-    if not spec.ttl_seconds and not spec.max_applies then return nil, "a lease needs for=, applies=, or both" end
+    if count == 0 then return nil, "use key=value pairs, comma separated" end
+    local result: {[string]: unknown} = {}
+    for key, item in pairs(parameters) do result[key] = item end
+    return result, nil
+end
+
+function M.capability_name(input: string): boolean
+    return #input <= 160 and input:match("^[a-z][a-z0-9_.-]*$") ~= nil
+end
+
+-- spec: the form's values as one lease bound. ttl_seconds is a duration in
+-- seconds or "none"; applies is empty or a whole number; each extra is a
+-- capability with its parameter text.
+function M.spec(ttl_seconds: string, applies: string, extras: {{capability: string, parameters: string}}): (Spec?, string?)
+    local spec: Spec = {ttl_seconds = nil, max_applies = nil, extras = {}}
+    if ttl_seconds ~= "none" then
+        local seconds = tonumber(ttl_seconds)
+        if not seconds or seconds < 1 or seconds > M.MAX_TTL_SECONDS then return nil, "expiry is out of range" end
+        spec.ttl_seconds = math.floor(seconds)
+    end
+    if applies ~= "" then
+        local count: number = tonumber(applies) or 0
+        if count ~= math.floor(count) or count < 1 or count > 1000000 then return nil, "max applies is a positive whole number" end
+        spec.max_applies = math.floor(count)
+    end
+    if not spec.ttl_seconds and not spec.max_applies then return nil, "a lease needs an expiry, a use limit, or both" end
+    for _, extra in ipairs(extras) do
+        if extra.capability ~= "" then
+            if #spec.extras >= M.MAX_EXTRAS then return nil, "too many extras" end
+            if not M.capability_name(extra.capability) then return nil, "capability is not an identifier" end
+            local parameters, parameter_error = M.parse_parameters(extra.parameters)
+            if not parameters then return nil, parameter_error end
+            spec.extras[#spec.extras + 1] = {capability = extra.capability, parameters = parameters}
+        end
+    end
     return spec, nil
 end
 

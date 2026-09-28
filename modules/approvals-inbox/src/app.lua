@@ -19,6 +19,7 @@ local view = require("view")
 local inbox = require("inbox")
 local feeds = require("feeds")
 local leases = require("leases")
+local lease_form = require("lease_form")
 local source_config = require("source_config")
 local hive = require("hive")
 local hive_types = require("hive_types")
@@ -73,6 +74,8 @@ local function main(value: unknown)
     local owner = routed
     local state: model.State = model.new(configured.workspaces)
     local slice: leases.Slice = leases.new()
+    local request_form: lease_form.State? = nil
+    local form_frame: {rows: {string}, hits: {frame.Hit}} = {rows = {}, hits = {}}
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     local rows: {model.Row} = {}
     local offset = 0
@@ -182,8 +185,9 @@ local function main(value: unknown)
         local request_id, err
         if kind == "lease_propose" then
             if detail.state ~= "pending" or detail.proposal.ref ~= leases.ACTIVATION then status = "Open a pending activation request to lease its application"; dirty = true; return end
-            request_id, err = client.query(launch, {kind = "text", title = "Lease this application",
-                message = "for=DURATION applies=N extra=capability:key=value", accept = "Request lease", initial = "for=24h applies=10"})
+            request_form = lease_form.new(detail)
+            dirty = true
+            return
         else
             if detail.state ~= "decided" or detail.decision ~= "approved" or detail.proposal.ref ~= leases.PROPOSAL then status = "Open an approved lease request to grant it"; dirty = true; return end
             request_id, err = client.query(launch, {kind = "confirm", title = "Grant this lease?",
@@ -238,10 +242,16 @@ local function main(value: unknown)
     end)
     while running do
         if dirty then
-            local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice)
-            hits = drawn.hits
-            offset = drawn.offset
-            assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            local open_form = request_form
+            if open_form then
+                form_frame = lease_form.draw(width, height, preferences, open_form)
+                assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            else
+                local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice)
+                hits = drawn.hits
+                offset = drawn.offset
+                assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
+            end
             if not announced then client.ready(launch); announced = true end
             local checkpoint = model.checkpoint(state)
             if checkpoint ~= last_checkpoint then
@@ -278,13 +288,6 @@ local function main(value: unknown)
                     perform(function() act_batch(asked.kind == "batch_approve" and "approved" or "denied") end)
                 elseif asked.kind == "revoke" then
                     perform(function() lease_answer("lease_revoke", leases.revoke_intent(slice, uuid.v7())) end)
-                elseif asked.kind == "lease_propose" and asked.view then
-                    local spec, spec_error = leases.parse_spec(result.value)
-                    if not spec then status = spec_error or "Invalid lease spec"; dirty = true
-                    else
-                        local view = asked.view
-                        perform(function() lease_answer("lease_propose", leases.propose_intent(view, spec, uuid.v7())) end)
-                    end
                 elseif asked.kind == "lease_grant" and asked.view then
                     local view = asked.view
                     perform(function() lease_answer("lease_grant", leases.grant_intent(view, uuid.v7())) end)
@@ -299,6 +302,19 @@ local function main(value: unknown)
             local data = event.value
             if data.type == "close" then running = false
             elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+            elseif request_form and (data.type == "key" or data.type == "mouse") then
+                local open_form = request_form
+                local outcome = lease_form.input(open_form, data, form_frame)
+                if outcome == "cancel" then request_form = nil; status = "Cancelled"
+                elseif outcome == "submit" then
+                    local spec = lease_form.submit(open_form)
+                    if spec then
+                        local view = open_form.view
+                        request_form = nil
+                        perform(function() lease_answer("lease_propose", leases.propose_intent(view, spec, uuid.v7())) end)
+                    end
+                end
+                dirty = true
             elseif data.type == "key" and data.action ~= "release" then
                 local key = data.key_type
                 local text = tostring(data.key or "")

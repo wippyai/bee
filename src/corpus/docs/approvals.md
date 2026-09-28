@@ -162,8 +162,9 @@ application. `bee.gov` exposes the destination operations `lease_propose`,
 
 The lease operations need the dedicated delivery action
 `bee.gov.delivery.lease`, which the host grants to the bundled inbox. In the
-inbox, `L` on an open pending activation request asks for `for=DURATION`,
-`applies=N` and `extra=capability:key=value` (repeatable) and files the lease
+inbox, `L` on an open pending activation request opens a form with an expiry
+choice, a max-applies number and up to three ceiling extras (a capability id
+and its `key=value` parameters, validated as typed), and files the lease
 request; once a person approves it, `G` on that request grants the lease. `V`
 switches to the Active leases view, which lists each lease with its usage,
 expiry and envelope and revokes the selected one with `X`. Lease operations

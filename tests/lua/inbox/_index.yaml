@@ -125,4 +125,6 @@ entries:
     appearance: bee.application:appearance
     model: bee.approvals.inbox:model
     leases: bee.approvals.inbox:leases
+    lease_form: bee.approvals.inbox:lease_form
+    forms: bee.application:forms
     view: bee.approvals.inbox:view

@@ -42,6 +42,7 @@ entries:
     caller: bee.application:caller
     feeds: bee.approvals.inbox:feeds
     leases: bee.approvals.inbox:leases
+    lease_form: bee.approvals.inbox:lease_form
     source_config: bee.approvals.inbox:source_config
     hive: bee.hive:client
     hive_types: bee.hive:types
@@ -73,6 +74,16 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     model: bee.approvals.inbox:model
+- name: lease_form
+  kind: library.lua
+  source: file://lease_form.lua
+  modules: [tty]
+  imports:
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    forms: bee.application:forms
+    model: bee.approvals.inbox:model
+    leases: bee.approvals.inbox:leases
 - name: client
   kind: library.lua
   source: file://client.lua

@@ -18,7 +18,9 @@ contract. When a rule and a wish conflict, follow the rule.
   `frame.stack`, `frame.grid`).
 - No borders around regions. A region is named by a muted uppercase title on
   its first row (`frame.panel`). A full-width `border` rule (`frame.rule`) may
-  separate the navigation from the work once per screen.
+  separate the navigation from the work once per screen. The one exception is
+  an overlay (`frame.modal`, `frame.palette`): it floats above the anatomy and
+  a `border` box separates it from the screen beneath.
 
 ## 2. Anatomy
 
@@ -266,6 +268,46 @@ never grow without bound.
  Paused at line 1,203                      ↑↓ scroll · F follow · Esc close
 ```
 
+### Log viewer and browsers
+
+Streaming logs, thread transcripts, workspace and database browsers.
+`frame.log` draws a virtualized window of lines with a highlighted search
+`query`; the process owns the line list, the offset and the follow flag.
+`frame.tree` draws a flattened, already-filtered tree (the process owns which
+nodes are expanded) and `frame.kv` a key-value inspector for the selected
+node, side by side through `frame.split(work, {40, 0})`. Rows carry hit kinds
+`log`, `tree` and `kv`.
+
+### Deploy and CI board
+
+A row of headline numbers, a table of runs and a pipeline. `viz.tiles` on top,
+`frame.table` with `frame.badge` beside the state word, `viz.timeline` for what
+ran when, `viz.graph` for stage dependencies, `viz.progress` with `eta` for a
+running stage and `viz.spinner` for work in flight. Result history by attempt
+is `viz.candles` (range and open/close) or `viz.scatter` (score against cost).
+
+### Inbox and approvals
+
+Who asked, from which bee, for what, by when. `frame.table` with columns
+`From`, `Bee`, `Request`, `Due`; `frame.kv` for the selected request's
+details; primary action `Approve`, destructive `Deny` last; `frame.toast`
+confirms the committed decision.
+
+### Topology and hierarchy
+
+`diagram.mesh` for nodes at chosen positions (hosting node per workspace,
+one layout across many bees) with braille-routed edges; `viz.graph` for a
+layered flow or durable workflow; `diagram.treemap` for sizes (disk, rows,
+tokens); `diagram.flame` for a call tree or a workflow's step durations.
+
+### Overlays
+
+`frame.modal(painter, width, height, title)` returns the inner rectangle for a
+confirmation or form; `frame.palette` draws the command palette from a query
+and the choices the process filtered with `frame.fuzzy`; `frame.toast` shows
+one transient row and the process decides when to stop drawing it. Esc
+dismisses every overlay.
+
 ### Monitor with live charts
 
 A measurement over time. A top row of stat tiles, then one large chart, then
@@ -310,7 +352,13 @@ The visualization kit is `bee.application:viz`. Choose by the question:
 | What are the headline numbers? | `viz.tiles` |
 | How do rows compare inside a table? | `viz.bar_cell` in a `frame.table` column |
 | What ran when? | `viz.timeline` |
-| How are nodes connected? | `viz.graph` |
+| How are nodes connected? | `viz.graph` (layered), `diagram.mesh` (placed nodes) |
+| How do two measures relate, point by point? | `viz.scatter` |
+| What was the range or open/close of each attempt? | `viz.candles` |
+| How full is one capacity, compactly? | `viz.ring` |
+| What share of the whole is each part? | `viz.stacked` with `percent = true`, `diagram.treemap` |
+| Where did the time go in a call tree? | `diagram.flame` |
+| Is work in flight? | `viz.spinner`, `viz.progress` with `eta` |
 | How do I keep a live series bounded? | `viz.series`, `viz.push`, `viz.values`, `viz.cadence`, `viz.due` |
 
 Chart rules:

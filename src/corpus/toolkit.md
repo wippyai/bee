@@ -81,6 +81,15 @@ type Column = {title: string, width: integer, align: string?}
 type Rect = {x: integer, y: integer, width: integer, height: integer}
 type Table = {columns: {Column}, cells: {{string}}, keys: {string}?, kind: string, selected: integer, offset: integer, focused: boolean?, area: Rect?}
 type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer: integer}
+type TreeRow = {label: string, depth: integer, expandable: boolean?, expanded: boolean?, role: string?, key: string?}
+type TreeView = {rows: {TreeRow}, selected: integer, offset: integer, focused: boolean?}
+type Entry = {label: string, value: string, role: string?}
+type Inspector = {entries: {Entry}, selected: integer, offset: integer, label_width: integer?, focused: boolean?}
+type LogLine = {text: string, role: string?}
+type LogView = {lines: {LogLine}, selected: integer, offset: integer, query: string?, focused: boolean?}
+type Toast = {text: string, role: string?}
+type Choice = {label: string, key: string?, note: string?}
+type Palette = {query: string, choices: {Choice}, selected: integer, offset: integer}
 ```
 
 | Call | Meaning |
@@ -114,6 +123,14 @@ type Layout = {size: string, tabs: integer, work: Rect, actions: integer, footer
 | `frame.field(painter: Painter, y: integer, label: string, value: string, label_width: integer, selected: boolean, index: integer, error_text: string?)` | One form field on row y: the muted label padded to label_width, then the value. The selected field takes the row selection and its target; an error replaces the value's trailing room in the error role after " · ". |
 | `frame.steps(painter: Painter, y: integer, labels: {string}, current: integer)` | A wizard step strip on row y: "1 Source › 2 Review › 3 Deliver". The current step uses the accent pair, finished steps carry "✓" and later steps are muted. On a narrow row only the current step shows, as "Step 2/3 Review". |
 | `frame.empty(painter: Painter, y: integer, title: string, action: string?, area: Rect?)` | An empty, loading or failure state: what is absent or wrong on row y and the next useful action on the row below it. Inside a panel, area bounds both rows to the panel's columns and leaves the rest of the rows untouched. |
+| `frame.tree(painter: Painter, first: integer, last: integer, value: TreeView) -> Window` | A tree view between rows first and last: only the visible window is ever drawn. Each row is indented two cells per depth, then "▾" expanded, "▸" collapsed, or two blank cells for a leaf, then its label; role colors the label (default text). The selected row takes the row selection; every drawn row carries hit kind "tree" and its key. Returns the visible window. |
+| `frame.kv(painter: Painter, first: integer, last: integer, value: Inspector) -> Window` | A key-value inspector between rows first and last: the muted label padded to label_width (default the widest label, capped to a third of the canvas) then the value in role (default text). The selected row takes the row selection and carries hit kind "kv"; every row keeps its label as the key. Returns the visible window. |
+| `frame.log(painter: Painter, first: integer, last: integer, value: LogView) -> Window` | A virtualized log viewer between rows first and last: only the visible window of lines is ever drawn. Each line is colored by its role (default text), and every occurrence of query (case-insensitive) is picked out in the accent pair. The selected line takes the row selection; every drawn line carries hit kind "log" and its index. Returns the visible window. |
+| `frame.badge(painter: Painter, x: integer, y: integer, text: string, role: string?) -> integer` | A status badge at (x, y): text padded with one cell on each side, filled in role's color (default accent) with a contrasting foreground. Returns the drawn width. |
+| `frame.toast(painter: Painter, y: integer, toast: Toast)` | A one-row toast notification: the message centered on row y, filled in role's color (default accent) with a contrasting foreground, overwriting whatever was on that row. The caller owns when a toast is shown and for how long; this only draws the row. |
+| `frame.modal(painter: Painter, width: integer, height: integer, title: string) -> Rect` | A centered modal panel: a box-drawing border in the border role clipped to width by height (each capped to the painter's size), the title on its top edge and the surface cleared underneath. Returns the inner rectangle for the caller's own content; too little room returns a zero rectangle and paints nothing. |
+| `frame.fuzzy(query: string, text: string) -> integer?` | A subsequence match score for a command palette: nil when query's characters (case-folded) do not all appear in order within text, else a score where a lower number ranks a tighter, earlier match higher. |
+| `frame.palette(painter: Painter, width: integer, height: integer, value: Palette) -> Window` | A command palette overlay: a modal titled "Command Palette" sized to width by height, the query on its first content row with a block caret, and the choices below as selectable rows carrying hit kind "choice" and each choice's key. An empty choices list draws the empty state instead of a list. Returns the visible window of choices. |
 
 ## Visualization kit
 
@@ -131,10 +148,10 @@ type Cadence = {interval: integer, next_at: integer}
 type Line = {values: {number}, role: string?, label: string?}
 type Chart = {min: number?, max: number?, area: boolean?, unit: string?, from: string?, to: string?}
 type Bar = {label: string, value: number, role: string?, note: string?}
-type Scale = {max: number?, unit: string?, warn: number?, error: number?}
+type Scale = {max: number?, unit: string?, warn: number?, error: number?, percent: boolean?}
 type Stack = {label: string, segments: {number}}
 type Grid = {rows: {{number}}, row_labels: {string}?, column_labels: {string}?, max: number?, role: string?}
-type Meter = {label: string?, unit: string?, warn: number?, error: number?}
+type Meter = {label: string?, unit: string?, warn: number?, error: number?, eta: string?}
 type Tile = {label: string, value: string, note: string?, role: string?, values: {number}?}
 type Span = {start: number, finish: number, role: string?}
 type Lane = {label: string, spans: {Span}}
@@ -142,6 +159,9 @@ type Window = {from: number, to: number, now: number?, from_label: string?, to_l
 type Node = {id: string, label: string, role: string?, note: string?}
 type Edge = {from: string, to: string}
 type Key = {label: string, role: string?, glyph: string?}
+type Point = {x: number, y: number, role: string?}
+type Plane = {x_min: number?, x_max: number?, y_min: number?, y_max: number?, unit: string?}
+type Candle = {label: string?, low: number, high: number, open: number?, close: number?, value: number?, role: string?}
 ```
 
 | Call | Meaning |
@@ -153,6 +173,7 @@ type Key = {label: string, role: string?, glyph: string?}
 | `viz.latest(series: Series) -> number?` | The newest sample, or nil when the series is empty. |
 | `viz.cadence(interval_ms: integer) -> Cadence` | A redraw clock with interval_ms between frames; the first call to due is true. |
 | `viz.due(cadence: Cadence, now_ms: integer) -> boolean` | True when a frame is due at now_ms, then schedules the next one on the interval grid. Samples arriving between frames are pushed, not drawn. |
+| `viz.spinner(tick: integer) -> string` | The classic ten-frame braille spinner glyph for tick (any non-negative integer, typically a frame or elapsed-tick counter); the caller redraws it itself on its own cadence. |
 | `viz.extent(values: {number}, min: number?, max: number?) -> (number, number)` | The finite range of values, widened by min and max when given. Without samples it is 0..1; a flat range grows by one above its value. |
 | `viz.number(value: number, unit: string?) -> string` | A compact number: 7, 7.5, 42, 1.2k, 12k, 3.4M, 1.1G, with an optional unit after one space. A gap is "—". |
 | `viz.bytes(value: number) -> string` | A byte count in binary units: 512 B, 12.4 KiB, 3.1 MiB, 1.5 GiB. |
@@ -162,15 +183,18 @@ type Key = {label: string, role: string?, glyph: string?}
 | `viz.bar_cell(value: number, max: number, width: integer) -> string` | A proportional bar of width cells for value out of max in eighth blocks, padded with spaces: the inline bar of a table cell. |
 | `viz.legend(painter: frame.Painter, x: integer, y: integer, width: integer, keys: {Key}) -> integer` | One legend row: each key as its glyph (default █) in its role and its label, two cells apart. Returns the drawn width. |
 | `viz.line(painter: frame.Painter, rect: Rect, lines: {Line}, options: Chart?)` | A line or area chart in rect: y-axis labels at the top and bottom rows of the plot, an axis row, and the from/to labels below when given. Lines use braille dots (two samples per cell); the second and third series are dotted. With area the first series fills in eighth blocks, one sample per cell. A rect under 4 rows draws the first series as a sparkline. |
+| `viz.scatter(painter: frame.Painter, rect: Rect, points: {Point}, options: Plane?)` | A scatter plot in rect: y-axis min and max at the top and bottom of the plot as in line, an axis row, and the x-axis min and max below it. Each point is one braille dot in its role (default accent); points that land in the same cell as a later point keep the later point's color. Each point records a "point" hit of its index over the one-cell dot it fell in, for a caller-drawn hover or selection readout. A rect under 3 rows draws nothing. |
+| `viz.candles(painter: frame.Painter, rect: Rect, candles: {Candle}, options: Chart?)` | A candlestick, range or box chart in rect: a y-axis as in line, an axis row and one column per candle. The wick is a muted-role "│" run from high to low; the body between open and close (or the whole wick when they are absent) is a solid block in role (default ok above open, error below it), and value draws one "─" tick inside it. Each candle records a "candle" hit of its index over its column, and its label (when given) is drawn below the axis. A rect under 3 rows draws nothing. |
 | `viz.bars(painter: frame.Painter, rect: Rect, items: {Bar}, options: Scale?)` | Horizontal bars, one item per row: the label, the bar in eighth blocks scaled to max (default the largest value) and the value right-aligned at the end. Items past the last row fold into a muted "+N more". |
 | `viz.columns(painter: frame.Painter, rect: Rect, items: {Bar}, options: Scale?)` | Vertical columns, one per item, growing from the row above the labels in eighth blocks. Column width is the widest label up to 6 cells; items that do not fit are not drawn. |
-| `viz.stacked(painter: frame.Painter, rect: Rect, stacks: {Stack}, names: {string}, options: Scale?)` | Stacked horizontal bars: a legend of names on the first row, then one row per stack with its label, segments in the legend's glyphs and roles scaled to max (default the largest total) and the total right-aligned. |
+| `viz.stacked(painter: frame.Painter, rect: Rect, stacks: {Stack}, names: {string}, options: Scale?)` | Stacked horizontal bars: a legend of names on the first row, then one row per stack with its label, segments in the legend's glyphs and roles scaled to max (default the largest total) and the total right-aligned. With percent, each row instead fills its full width in the segments' own share of that row's total (a 100% stacked bar), the total still shown as given. |
 | `viz.bins(values: {number}, count: integer, min: number?, max: number?) -> {integer}` | Counts of values in count equal bins from min to max (default the sample range); gaps are skipped and the maximum falls in the last bin. |
 | `viz.histogram(painter: frame.Painter, rect: Rect, values: {number}, count: integer, options: Chart?)` | A histogram of values in count bins: adjacent columns in eighth blocks and the range labels under the first and last bins. |
 | `viz.heatmap(painter: frame.Painter, rect: Rect, grid: Grid)` | A heatmap: each value one cell (two when room) in the ramp ░▒▓█ of role (default accent) scaled to max, zero as a muted "·", a gap blank; row labels at the left and the first and last column labels under the grid. |
 | `viz.waffle(painter: frame.Painter, rect: Rect, states: {string}) -> integer` | A status grid of many items, two per cell with the half block ▀ (top item in the foreground, bottom in the background), in reading order. Each state is a role name (ok, warn, error, muted). Returns the number of items drawn; write the counts in words beside it. |
 | `viz.gauge(painter: frame.Painter, x: integer, y: integer, width: integer, value: number, max: number, options: Meter?)` | A capacity meter on row y: optional muted label, █ filled and ░ empty cells, then the percentage. The fill takes warn or error at those thresholds (fractions of max), accent otherwise. |
-| `viz.progress(painter: frame.Painter, x: integer, y: integer, width: integer, done: number, total: number, options: Meter?)` | Task progress on row y: the same bar with the exact "done/total" counts after it; the fill is ok once done reaches total. |
+| `viz.ring(painter: frame.Painter, rect: Rect, value: number, max: number, options: Meter?)` | A radial gauge filling rect with a braille ring clockwise from the top: the arc up to fraction of max in role (warn or error at those fractions, accent otherwise), the rest of the ring muted, and the percentage centered when it fits. A rect under 4 dots across or tall (2x1 cells) falls back to gauge on row y at rect's top. |
+| `viz.progress(painter: frame.Painter, x: integer, y: integer, width: integer, done: number, total: number, options: Meter?)` | Task progress on row y: the same bar with the exact "done/total" counts after it, plus a muted "· ETA eta" when given; the fill is ok once done reaches total. |
 | `viz.tiles(painter: frame.Painter, rect: Rect, tiles: {Tile}, min_width: integer?) -> integer` | Stat tiles in a grid of equal cells at least min_width (default 18) wide: the muted uppercase label and the value with its muted note on the next row, and a sparkline of values on the third row when the rect has it. Returns the number of tiles drawn. |
 | `viz.timeline(painter: frame.Painter, rect: Rect, lanes: {Lane}, window: Window)` | A timeline: one lane per row with its muted label, each span as █ cells in its role (default accent) between from and to (at least one cell), an optional muted "│" at now, and the from and to labels on the last row. |
 | `viz.graph(painter: frame.Painter, rect: Rect, nodes: {Node}, edges: {Edge}) -> integer` | A small directed graph laid out in layers from left to right: a node's layer is one past its furthest predecessor, nodes keep their input order within a layer and are spread over the rect's rows, and each edge runs from the right of its source to an arrow "▸" before its target along box-drawing lines in the border role that never cross a node's text. Each node is "● label" with the dot in its role (default accent) and an optional muted note on the row below when the rows allow. Nodes record hits of kind "node" with their index and id. Returns the number of nodes drawn. |
@@ -491,6 +515,96 @@ viz.graph(pipeline, {x = 2, y = 1, width = 58, height = 3}, {{id = "f", label = 
 
  ● fetch ─────▸● classify ×12 ─────▸● dedupe ─────▸● report
 
+```
+
+### `viz.scatter`
+
+```lua
+local scatter = frame.new(40, 8, appearance.defaults())
+viz.scatter(scatter, {x = 2, y = 2, width = 36, height = 6}, {
+    {x = 1, y = 1},
+    {x = 5, y = 9},
+    {x = 10, y = 3, role = "ok"},
+    {x = 2, y = 8, role = "warn"}})
+```
+
+```text
+
+ 9 ┤      ⠠         ⠈
+   │
+   │                                ⠠
+ 0 ┤   ⠐
+   └─────────────────────────────────
+    0                              10
+
+```
+
+### `viz.candles`
+
+```lua
+local candles = frame.new(40, 8, appearance.defaults())
+viz.candles(candles, {x = 2, y = 2, width = 36, height = 6}, {
+    {label = "a", low = 10, high = 20, open = 12, close = 18},
+    {label = "b", low = 5, high = 15, open = 14, close = 8},
+    {label = "c", low = 8, high = 22, value = 14}})
+```
+
+```text
+
+ 22 ┤│   █
+    │█ █ ─
+    ││ █ █
+  0 ┤
+    └────────────────────────────────
+     a b c
+
+```
+
+### `viz.ring`
+
+```lua
+local ring = frame.new(12, 6, appearance.defaults())
+viz.ring(ring, {x = 2, y = 2, width = 8, height = 4}, 65, 100, {})
+```
+
+```text
+
+ ⢀⣴⠾⠛⠛⠷⣦⡀
+ ⣾⠃    ⠘⣷
+ ⢿⡄65% ⢠⡿
+ ⠈⠻⢶⣤⣤⡶⠟⠁
+
+```
+
+### `viz.spinner`
+
+```lua
+local frames: {string} = {}
+for tick = 0, 11 do frames[#frames + 1] = viz.spinner(tick) end
+table.concat(frames) --> "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠋⠙"
+```
+
+### `viz.stacked`
+
+```lua
+local percent = frame.new(40, 3, appearance.defaults())
+viz.stacked(percent, {x = 2, y = 1, width = 38, height = 3},
+    {{label = "node-a", segments = {6, 3, 1}}, {label = "node-b", segments = {1, 1, 2}}},
+    {"busy", "idle", "failed"}, {percent = true})
+```
+
+```text
+ █ busy  ▓ idle  ▒ failed
+ node-a  ████████████████▓▓▓▓▓▓▓▒▒▒  10
+ node-b  ███████▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒   4
+```
+
+### `viz.progress`
+
+```lua
+local eta = frame.new(40, 1, appearance.defaults())
+viz.progress(eta, 2, 1, 36, 3180, 4000, {eta = "2m"})
+text(eta)[1] --> " ████████████░░░ 3,180/4,000 · ETA 2m   "
 ```
 
 ## Application client

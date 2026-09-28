@@ -65,7 +65,7 @@ local function harness(tag: string): Harness
         bridge_name = "bee.retained.bridge/" .. string.rep("0", 32), owner_name = "bee.retained.owner/" .. string.rep("0", 32), stopped = false, node = NODE,
         allowed = {}, allowed_peers = {}, enrolled = {[client_node] = true}, peers = {}, execution = EXECUTION,
         config = {expires_at = "2099-01-01T00:00:00.000Z", allowed_nodes = {}, allowed_peers = {}, local_clients = true, folder = true},
-        ready = ready, results = results, copies = unused, launches = unused, activations = activations, observers = unused, switches = switches, retiring = {},
+        ready = ready, progress = unused, results = results, copies = unused, launches = unused, activations = activations, observers = unused, switches = switches, retiring = {},
         catalog = catalog.new(), spawn_scope = security.new_scope({}), executor = funcs.new(), folder = folder_served,
         served = {[folder] = folder_served, [leased] = leased_served}, workspaces = {[FOLDER] = folder_served, [LEASED] = leased_served}, served_count = 1,
         clients = {}, receipts = {}, client_count = 0, receipt_count = 0, expires_at = time.now():add("1h"),

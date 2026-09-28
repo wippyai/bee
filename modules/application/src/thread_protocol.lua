@@ -248,4 +248,12 @@ function M.reply(value: unknown, expected_operation: Operation): Reply?
     return success
 end
 
+-- Keep the validated wire envelope when a broker forwards a result. The
+-- decoded Reply intentionally drops its version field and must not be sent as
+-- a replacement for this message.
+function M.wire_reply(value: unknown, expected_operation: Operation): Object?
+    if not M.reply(value, expected_operation) then return nil end
+    return bounds.object(value)
+end
+
 return M

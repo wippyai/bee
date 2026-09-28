@@ -38,7 +38,7 @@ type Receipt = {session_id: string?, digest: string, reply: types.Reply, expires
 type Served = {supervisor: string, workspace_id: string, desktop_id: string, folder: boolean, ready: boolean}
 type State = {
     config: protocol.Configuration, execution: string, node: string, bridge_name: string, owner_name: string,
-    ready: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
+    ready: Channel<process.Message>, progress: Channel<process.Message>, results: Channel<process.Message>, copies: Channel<process.Message>, launches: Channel<process.Message>,
     activations: Channel<process.Message>, switches: Channel<process.Message>,
     observers: Channel<process.Message>, catalog: catalog.State, spawn_scope: security.Scope, executor: funcs.Executor,
     folder: Served?, served: {[string]: Served}, workspaces: {[string]: Served}, served_count: integer,
@@ -103,6 +103,7 @@ function M.start(config: protocol.Configuration, node: string): State
         allowed_peers[peer] = true
     end
     local ready = listen("bee.retained.ready")
+    local progress = listen(retained.TOPIC_PROGRESS)
     local results = listen("bee.retained.result")
     local copies = listen("bee.retained.copied")
     local launches = listen("bee.retained.launched")
@@ -116,7 +117,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local bridge_name = key and retained.bridge_name(key) or ""
     local owner_name = key and retained.owner_name(key) or ""
     local function abandon(cause: unknown)
-        for _, topic in ipairs({ready, results, copies, launches, activations, switches, observers}) do process.unlisten(topic) end
+        for _, topic in ipairs({ready, progress, results, copies, launches, activations, switches, observers}) do process.unlisten(topic) end
         if named then process.registry.unregister(bridge_name) end
         error(tostring(cause))
     end
@@ -130,7 +131,7 @@ function M.start(config: protocol.Configuration, node: string): State
     local registered, name_error = process.registry.register(bridge_name)
     if not registered then abandon(name_error) end
     named = true
-    local state: State = {config = config, execution = execution, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, results = results,
+    local state: State = {config = config, execution = execution, node = node, bridge_name = bridge_name, owner_name = owner_name, ready = ready, progress = progress, results = results,
         copies = copies, launches = launches, activations = activations, switches = switches, observers = observers,
         catalog = catalog.new(), spawn_scope = spawn_scope, executor = executor, folder = nil, served = {}, workspaces = {}, served_count = 0,
         allowed = allowed, allowed_peers = allowed_peers, enrolled = {}, peers = {}, clients = {}, receipts = {}, client_count = 0, receipt_count = 0, retiring = {}, expires_at = expiry,
@@ -335,6 +336,14 @@ function M.ready(state: State, message: process.Message, now: integer): ()
             end
         end
     end
+end
+function M.progress(state: State, message: process.Message): ()
+    local served = state.served[tostring(message:from())]
+    if not served or not served.folder or served.ready or state.stopped then return end
+    local phase = retained.progress(message:payload():data())
+    if not phase then return end
+    local route = process.registry.lookup(state.owner_name)
+    if route then send(tostring(route), retained.TOPIC_PROGRESS, {version = 1, phase = phase}) end
 end
 -- observe answers an owner route that registered after readiness arrived.
 function M.observe(state: State, message: process.Message): ()
@@ -870,7 +879,7 @@ function M.switch(state: State, message: process.Message, now: integer): ()
 end
 function M.close(state: State): ()
     state.stopped = true
-    process.unlisten(state.ready); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
+    process.unlisten(state.ready); process.unlisten(state.progress); process.unlisten(state.results); process.unlisten(state.copies); process.unlisten(state.launches)
     process.unlisten(state.activations); process.unlisten(state.switches); process.unlisten(state.observers)
     process.registry.unregister(state.bridge_name)
     catalog.revoke(state.catalog, "Desktop owner stopped")

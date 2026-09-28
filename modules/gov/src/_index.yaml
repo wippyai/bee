@@ -229,8 +229,11 @@ entries:
 - name: application_admissions
   kind: library.lua
   source: file://application_admissions.lua
-  modules: [registry]
+  modules: [registry, logger]
   imports:
+    bounds: bee.threads.records:bounds
+    activation_store: bee.gov.persist:activation_store
+    resources: bee.gov:staging_resources
     activation_profiles: bee.gov:activation_profile_decoder
     capability_grants: bee.gov:capability_grants
     capability_model: bee.capability:model

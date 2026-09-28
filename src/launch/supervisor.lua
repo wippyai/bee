@@ -36,6 +36,12 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
     local route = ""
     local lease: leases.Lease? = nil
     local workspace_id = ""
+    local function report_startup_progress(phase: string)
+        if not retained_owner or announced then return end
+        local sent, err = process.send(retained_owner, retained_protocol.TOPIC_PROGRESS,
+            {version = 1, phase = phase})
+        if not sent then error("Report retained workspace startup progress: " .. tostring(err)) end
+    end
     local exit_ready: Channel<process.Message>? = nil
     local failure_notified = false
     local function listen(topic: string): Channel<process.Message>
@@ -107,15 +113,18 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             if not policy then error(tostring(err)) end
             policies[#policies + 1] = policy
         end
+        report_startup_progress("booting")
         local self = tostring(process.pid())
         local selection = workspaces.selection(workspace)
         local leased_ready: protocol.Host? = nil
         if retained_owner and selection and selection.workspace_id then
             -- A workspace selected by identity is the node's to serve: the lease
             -- starts its host when none is live and keeps it until released.
+            report_startup_progress("host_leasing")
             local held, refusal = leases.acquire(selection.workspace_id, "30s")
             if not held then error("Lease workspace host: " .. tostring(refusal)) end
             lease = held
+            report_startup_progress("host_attaching")
             local announced_value, attach_error = leases.attach(held, "10s")
             if not announced_value then error("Attach workspace host: " .. tostring(attach_error or "no readiness announcement")) end
             leased_ready = protocol.host(announced_value)
@@ -142,8 +151,10 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
         local question: interaction.Spec? = nil
         local deadline = time.after("10s")
         local function advance(next_phase: Phase)
+            local previous = phase
             phase = next_phase
             if next_phase ~= "running" then deadline = time.after("10s") end
+            if previous ~= next_phase then report_startup_progress(next_phase) end
         end
         local function send(recipient: string, topic: string, value: unknown)
             local sent, err = process.send(recipient, topic, value)

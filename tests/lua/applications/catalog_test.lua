@@ -3,8 +3,12 @@
 local test = require("test")
 local registry = require("registry")
 local system = require("system")
+local uuid = require("uuid")
+local hash = require("hash")
 local catalog = require("catalog")
 local admission = require("admission")
+local activation_store = require("activation_store")
+local canonical = require("canonical")
 
 local WORKSPACE = string.rep("a", 32)
 local FOREIGN = string.rep("b", 32)
@@ -14,6 +18,16 @@ local POLICY = "bee.security:ordinary_app_subsystem_boundary"
 local DIGEST = string.rep("c", 64)
 
 type Object = {[string]: unknown}
+
+local function blob(bytes: string): Object
+    local digest = assert(hash.sha256(bytes))
+    return {bytes = bytes, digest = digest}
+end
+
+local function ok(result: Object): Object
+    test.is_true(result.ok == true, tostring(result.code) .. ": " .. tostring(result.message))
+    return result.value :: Object
+end
 
 local function profile(definition_id: string): Object
     return {workspace_id = WORKSPACE, source_node = "source-node", source_workspace = "source-workspace",
@@ -52,6 +66,44 @@ end
 local function has(snapshot: {bindings: {Object}}, id: string): boolean
     for _, binding in ipairs(snapshot.bindings) do if binding.definition_id == id then return true end end
     return false
+end
+
+local function activate(workspace: string, owner_node: string, source_node: string,
+    source_workspace: string, overlay_owner: string, measurement: Object): ()
+    local state = assert(activation_store.open("bee.gov:activation_test_db", owner_node, workspace))
+    local nonce = assert(uuid.v7())
+    local intent_id = "intent-catalog-" .. nonce
+    local plan_digest = string.rep("a", 64)
+    local migration_work = blob(assert(canonical.encode({schema_revision = "bee.governance-migration-work@2",
+        destination_node = owner_node, source_node = source_node, base_revision = 0,
+        base_digest = plan_digest, policy_digest = string.rep("b", 64),
+        candidate_digest = string.rep("c", 64), artifact_digest = string.rep("d", 64),
+        plan_digest = string.rep("e", 64), migrations = {}, databases = {}})))
+    local input: Object = {operation = "prepare_activation", intent_id = intent_id, expected_revision = 0,
+        idempotency_key = intent_id .. "-prepare", overlay_owner = overlay_owner,
+        source_node = source_node, source_workspace = source_workspace, version = "1.0.0",
+        plan_digest = plan_digest, plan_revision = 1, selection_revision = 1,
+        artifact = blob("catalog artifact " .. nonce), resolution = blob("catalog resolution " .. nonce),
+        preflight = blob("catalog preflight " .. nonce), migration_work = migration_work,
+        application_admission = {bytes = measurement.bytes, digest = measurement.digest}}
+    local prepared = ok(activation_store.call(state, "actor-catalog", input))
+    local proposal_digest = string.rep("f", 64)
+    local bound = ok(activation_store.call(state, "actor-catalog", {operation = "bind_approval",
+        intent_id = intent_id, expected_revision = prepared.revision, idempotency_key = intent_id .. "-bind",
+        approval_id = intent_id .. "-approval", approval_proposal_digest = proposal_digest,
+        approval_owner_incarnation = 1}))
+    local consuming = ok(activation_store.call(state, "actor-catalog", {operation = "begin_consume",
+        intent_id = intent_id, expected_revision = bound.revision, idempotency_key = intent_id .. "-consume"}))
+    local consumed = ok(activation_store.call(state, "actor-catalog", {operation = "record_consumption",
+        intent_id = intent_id, expected_revision = consuming.revision, idempotency_key = intent_id .. "-receipt",
+        consumer_id = "governance-host", proposal_digest = proposal_digest, effect_key = prepared.effect_key}))
+    local applying = ok(activation_store.call(state, "actor-catalog", {operation = "begin_apply",
+        intent_id = intent_id, expected_revision = consumed.revision, idempotency_key = intent_id .. "-apply"}))
+    local applied = ok(activation_store.call(state, "actor-catalog", {operation = "record_outcome",
+        intent_id = intent_id, expected_revision = applying.revision, idempotency_key = intent_id .. "-outcome",
+        outcome = "applied", diagnostics = "definitions observed"}))
+    test.eq(applied.observed_outcome, "applied")
+    assert(activation_store.close(state))
 end
 
 local function define_tests()
@@ -150,6 +202,53 @@ local function define_tests()
             for _, id in ipairs({derived.id :: string, derived_app, foreign.id :: string, foreign_app}) do
                 assert(cleanup:delete(id))
             end
+            assert(cleanup:apply())
+        end)
+
+        test.it("reprojects a locally applied app after the runtime node identity changes", function()
+            local source_node = assert(uuid.v7())
+            local runtime_node = assert(system.node.id())
+            test.is_false(source_node == runtime_node)
+            local app_id = "app.catalog_restart_probe:app"
+            local source_workspace = "catalog_restart_probe"
+            local overlay_owner = "bee.gov.apps:" .. WORKSPACE .. "." .. source_workspace
+            local definition = app(app_id)
+            local projected = project({applications = {{definition_id = app_id, policies = {POLICY},
+                thread_access = "none"}}}, definition, overlay_owner, source_node, source_workspace)
+            local measurement = assert(admission.measure(projected.data))
+            local original_profiles = assert(registry.get("bee.env:gov_activation_profiles"))
+            local original_database_ref = assert(registry.get("bee.gov:database_ref"))
+            local changes = registry.snapshot():changes()
+            local configured = assert(registry.get("bee.env:gov_activation_profiles"))
+            configured.data = {profiles = {}, workspace_applications = {
+                approval_policy = "workspace-application-delivery", kinds = {"process.lua"},
+                modules = {"process"}, policies = {POLICY}, thread_access = "none", hive = false}}
+            local test_database_ref = assert(registry.get("bee.gov:database_ref"))
+            test_database_ref.data = {resource_ref = "bee.gov:activation_test_db"}
+            assert(changes:update(configured))
+            assert(changes:update(test_database_ref))
+            assert(changes:create(definition))
+            assert(changes:create(projected))
+            assert(changes:apply())
+
+            -- The real catalog used to reject the delivered local app when its
+            -- source node differed from the restarted owner's runtime identity.
+            test.is_false(has(catalog.read(WORKSPACE), app_id))
+            activate(WORKSPACE, source_node, source_node, source_workspace, overlay_owner, measurement)
+            local restored = catalog.read(WORKSPACE)
+            test.is_true(has(restored, app_id))
+            local binding: Object? = nil
+            for _, candidate in ipairs(restored.bindings) do
+                if candidate.definition_id == app_id then binding = candidate; break end
+            end
+            if not binding then error("applied local binding missing after owner restart") end
+            test.eq(binding.thread_access, "none")
+
+            local cleanup = registry.snapshot():changes()
+            assert(cleanup:update(original_profiles))
+            assert(cleanup:update(original_database_ref))
+            assert(cleanup:delete(projected.id :: string))
+            assert(cleanup:delete(app_id))
             assert(cleanup:apply())
         end)
 

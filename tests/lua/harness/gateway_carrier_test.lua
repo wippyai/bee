@@ -25,6 +25,7 @@ local CARRIER = "bee.harness.catalog:carrier_faulted"
 -- overlay named by the guide's workspace-application rule; nothing here
 -- configures a profile.
 local AUTHOR_WORKSPACE = "author-dest-ws"
+local SCRIPTED_AUTHOR_TIMEOUT_MS = 90000
 type Object = {[string]: unknown}
 local counter = 0
 local function fresh(prefix: string): string
@@ -149,9 +150,9 @@ local function record_exit(event: process.Event)
     if type(result.value) == "table" then value = result.value :: Object end
     exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
 end
-local function await_carrier(pid: string, label: string): Outcome
+local function await_carrier(pid: string, label: string, timeout_ms: integer?): Outcome
     local events = assert(process.events())
-    local deadline = time.after("40s")
+    local deadline = time.after(tostring(timeout_ms or 40000) .. "ms")
     while not exited[pid] do
         local selected = channel.select({events:case_receive(), deadline:case_receive()})
         if not selected.ok or selected.channel == deadline then error(label .. " did not finish") end
@@ -159,8 +160,8 @@ local function await_carrier(pid: string, label: string): Outcome
     end
     return exited[pid] :: Outcome
 end
-local function run_carrier(request_value: Object, mode: string, crash_after: string?): Outcome
-    return await_carrier(spawn_carrier(request_value, mode, crash_after, nil), mode)
+local function run_carrier(request_value: Object, mode: string, crash_after: string?, timeout_ms: integer?): Outcome
+    return await_carrier(spawn_carrier(request_value, mode, crash_after, nil), mode, timeout_ms)
 end
 local function continue_carrier(pid: string)
     process.send(pid, "bee.carrier.continue", {})
@@ -776,7 +777,7 @@ local function define_tests()
             -- the authoring session is bound to the destination workspace.
             local authoring = request(thread_id, attempt_id, environment, nil, "bee.harness.catalog:gateway_author_policy")
             authoring.workspace_id = AUTHOR_WORKSPACE
-            local outcome = run_carrier(authoring, "open", nil)
+            local outcome = run_carrier(authoring, "open", nil, SCRIPTED_AUTHOR_TIMEOUT_MS)
             if not outcome.value then error("authoring carrier failed: " .. tostring(outcome.error)) end
             test.eq((outcome.value.settlement :: Object).outcome, "succeeded")
             local seen = report(thread_id)

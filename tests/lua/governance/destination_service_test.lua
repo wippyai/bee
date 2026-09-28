@@ -82,6 +82,18 @@ local function define_tests()
             local changed = assert(service.configuration(config, "node-destination"))
             test.is_true(changed.profiles[1].policy_digest ~= original_digest)
         end)
+        test.it("retains empty package provenance for an applied host database", function()
+            local applied, applied_error = service.applied_database_evidence({["vendor:data"] = {
+                target_db = "vendor:data", database_id = "bee.host:application_db", kind = "db.sql.sqlite",
+                package = "", digest = string.rep("a", 64), planned = false}})
+            if not applied then error(tostring(applied_error)) end
+            test.eq(applied["vendor:data"].database_id, "bee.host:application_db")
+            test.eq(applied["vendor:data"].package, "")
+            local malformed = service.applied_database_evidence({["vendor:data"] = {
+                target_db = "vendor:data", database_id = "bee.host:application_db", kind = "db.sql.sqlite",
+                package = "bad\nowner", digest = string.rep("a", 64), planned = false}})
+            test.is_nil(malformed)
+        end)
         test.it("rejects unsafe, duplicate and non-admitted database bindings", function()
             local config = valid()
             local profiles = config.profiles :: {{[string]: unknown}}

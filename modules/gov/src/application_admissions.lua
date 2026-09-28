@@ -2,6 +2,10 @@
 -- Governance owns activation selection and package grant projection; callers
 -- receive the same measured record shape for both sources.
 local registry = require("registry")
+local logger = require("logger")
+local bounds = require("bounds")
+local activation_store = require("activation_store")
+local resources = require("resources")
 local activation_profiles = require("activation_profiles")
 local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
@@ -9,6 +13,7 @@ local workspace_applications = require("workspace_applications")
 local governed_admission = require("governed_admission")
 
 local M = {}
+local log = logger:named("bee.gov.application_admission")
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
 type Lookup = (string) -> Entry?
@@ -31,6 +36,28 @@ local function same_binding(left: Object, right: governed_admission.Binding): bo
     if type(left_policies) ~= "table" or #left_policies ~= #right.policies then return false end
     for index, policy in ipairs(left_policies) do if policy ~= right.policies[index] then return false end end
     return true
+end
+
+local function applied_slot_source(workspace_id: string, record: governed_admission.Record,
+    admission_digest: string): (string?, string?)
+    local resource, resource_error = resources.database()
+    if not resource or resource_error then
+        return nil, tostring(resource_error or "governance activation database is unavailable")
+    end
+    local result = activation_store.applied_admission_source(resource, workspace_id,
+        record.overlay_owner, admission_digest)
+    if not result.ok then
+        return nil, tostring(result.message or result.code or "read applied activation slot")
+    end
+    local value = bounds.object(result.value)
+    local source_node = value and bounds.id(value.source_node) or nil
+    if not source_node then
+        return nil, "applied activation slot source is malformed"
+    end
+    if source_node ~= record.source_node then
+        return nil, "applied activation slot source node does not match its admission"
+    end
+    return source_node, nil
 end
 
 -- A governed record joins the catalog only while the destination's selected
@@ -94,10 +121,23 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
             local live = grant and capability_grants.live(grant, lookup) or false
             if not live then installed = nil; vocabulary = nil end
         end
-        local profile = activation_profiles.select_decoded(configuration,
+        local slot_source: string? = nil
+        local slot_error: string? = nil
+        if record.source_node ~= node_id then
+            slot_source, slot_error = applied_slot_source(workspace_id, record, item.digest)
+        end
+        local profile, profile_error = activation_profiles.select_decoded(configuration,
             workspace_id, record.source_node, record.source_workspace, node_id,
-            installed, vocabulary)
-        if profile and profile.overlay_owner == record.overlay_owner and profile.applications then
+            installed, vocabulary, record.overlay_owner, slot_source)
+        local omission: string? = nil
+        if not profile then
+            omission = tostring(profile_error or "no activation profile selected")
+            if slot_error then omission = omission .. "; applied local slot lookup: " .. slot_error end
+        elseif profile.overlay_owner ~= record.overlay_owner then
+            omission = "selected activation profile belongs to another overlay owner"
+        elseif not profile.applications then
+            omission = "selected activation profile admits no applications"
+        else
             local artifacts: {Object} = {}
             local policies: {Object} = {}
             local policy_ids: {[string]: boolean} = {}
@@ -128,7 +168,18 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
                     end
                 end
                 result[#result + 1] = item
+            elseif not complete then
+                omission = "an admitted application definition or policy is missing"
+            elseif not projected then
+                omission = "the selected activation profile could not be measured"
+            else
+                omission = "the selected activation profile does not match the applied admission"
             end
+        end
+        if omission then
+            log:warn("Governed application admission omitted", {workspace_id = workspace_id,
+                source_workspace = record.source_workspace, source_node = record.source_node,
+                destination_node = node_id, reason = omission})
         end
     end
     return result

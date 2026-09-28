@@ -183,10 +183,23 @@ def deliver(project, folder, deployment=None):
                             timeout=300, env=database_environment(
                                 folder, BEE_APP_JOURNEY_WORKSPACE=classic_workspace(Path(folder) / "workspace.db")))
     output = result.stdout + result.stderr
-    assert result.returncode == 0 and "APP_JOURNEY_DELIVERED" in output, output
+    failure_match = re.search(r'APP_JOURNEY_FAILED\s+(\{.*\})', output)
+    failure_reason = ""
+    if failure_match:
+        try:
+            failure_reason = str(json.loads(failure_match.group(1)).get("error", ""))[:240]
+        except (ValueError, TypeError):
+            failure_reason = "fixture reported an activation failure"
+    assert result.returncode == 0 and "APP_JOURNEY_DELIVERED" in output, (
+        f"app journey delivery failed with exit={result.returncode}; {activation_evidence(folder)}; "
+        f"reason={failure_reason or 'no fixture failure marker'}")
     match = re.search(r"APP_JOURNEY_DELIVERED\s+(\{.*\})", output)
     assert match, output
     evidence = json.loads(match.group(1))
+    assert isinstance(evidence.get("approval_to_settled_ms"), int) and evidence["approval_to_settled_ms"] >= 0, evidence
+    steps = evidence.get("activation_steps")
+    assert isinstance(steps, list) and steps and all(
+        isinstance(item, dict) and isinstance(item.get("elapsed_ms"), int) for item in steps), evidence
     for name in ("artifact_digest", "snapshot_digest", "plan_digest", "preflight_digest", "proposal_digest"):
         assert re.fullmatch(r"[0-9a-f]{64}", evidence[name]), (name, evidence)
     assert evidence["admitted_title"] == TITLE, evidence
@@ -275,7 +288,7 @@ def apply_staged_in_ui(ui, staged, root, expected_capability=None):
     # activation loop consume the one approved effect.
     deadline = time.monotonic() + COLD_BOOT
     while "Overlays" not in ui.screen.display[0]:
-        assert time.monotonic() < deadline, ui.text()
+        if time.monotonic() >= deadline: raise activation_timeout(ui, root)
         ui.pump(.2)
     x = ui.screen.display[0].index("Overlays") + 1
     ui.mouse(0, x, 1)
@@ -286,10 +299,13 @@ def apply_staged_in_ui(ui, staged, root, expected_capability=None):
         ui.pump(.1)
         deadline = time.monotonic() + COLD_BOOT
         while "Working…" in ui.text() or "Request in progress" in ui.text():
-            assert time.monotonic() < deadline, ui.text()
+            if time.monotonic() >= deadline: raise activation_timeout(ui, root)
             ui.pump(.1)
         if "Activation settled" in ui.text(): break
-    ui.wait("Activation settled", timeout=COLD_BOOT)
+    deadline = time.monotonic() + COLD_BOOT
+    while "Activation settled" not in ui.text():
+        if time.monotonic() >= deadline: raise activation_timeout(ui, root)
+        ui.pump(.1)
     ui.window_control("×")
     ui.pump(.3)
     ui.window_control("×")
@@ -598,6 +614,27 @@ def assert_inbox_decider(root, workspace_id, policy="local-app-journey"):
     assert checkpoint["definition_id"] == "bee.approvals.inbox:app", checkpoint
 
 
+def activation_evidence(root):
+    path = Path(root) / "governance.db"
+    if not path.exists():
+        return "governance DB unavailable"
+    try:
+        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+            row = db.execute("SELECT phase, revision, outcome, updated_at, migrations_completed "
+                             "FROM bee_governance_activation_execution "
+                             "ORDER BY updated_at DESC LIMIT 1").fetchone()
+    except sqlite3.Error as error:
+        return "governance DB read failed: " + str(error)
+    if not row:
+        return "no activation execution recorded"
+    return f"phase={row[0]} revision={row[1]} outcome={row[2]} updated_at={row[3]} migrations_completed={row[4]}"
+
+
+def activation_timeout(ui, root):
+    Path(root, "activation-failure.raw").write_bytes(ui.raw)
+    return AssertionError("activation step exceeded its deadline; " + activation_evidence(root) + "\n" + ui.text())
+
+
 def revoke_crash_recovery(project, source_root, report, destination):
     """Crash after the durable revoke fence and before Threads leave.
 
@@ -764,6 +801,10 @@ def exercise():
         finally:
             guide_restarted.close()
         evidence = deliver(project, folder)
+        step_times = ", ".join(f"{item['phase_before']}->{item['phase_after']} {item['elapsed_ms']} ms"
+                                for item in evidence["activation_steps"])
+        print("App journey activation: approval to settled in "
+              + str(evidence["approval_to_settled_ms"]) + " ms; steps: " + step_times, flush=True)
         assert_shared_database(project)
         inspect(project, folder)
 

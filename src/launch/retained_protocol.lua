@@ -11,9 +11,21 @@ local M = {}
 -- names are keyed by the workspace selection (bee.storage:binding key), which
 -- both sides know before the host reports the workspace identity.
 M.TOPIC_OBSERVE = "bee.retained.observe"
+M.TOPIC_PROGRESS = "bee.retained.progress"
 -- A display's switch request, supervisor to bridge, and its answer.
 M.TOPIC_SWITCH = "bee.retained.switch"
 M.TOPIC_SWITCHED = "bee.retained.switched"
+local STARTUP_PHASES: {[string]: boolean} = {
+    booting = true, host_leasing = true, host_attaching = true,
+    client_boot = true, admitting = true, rendering = true, running = true}
+function M.progress(value: unknown): string?
+    if type(value) ~= "table" or value.version ~= 1 or type(value.phase) ~= "string"
+        or not STARTUP_PHASES[value.phase] then return nil end
+    for key in pairs(value) do
+        if key ~= "version" and key ~= "phase" then return nil end
+    end
+    return value.phase
+end
 local function keyed(prefix: string, key: string): string?
     if #key ~= 32 or key:find("[^0-9a-f]") then return nil end
     return prefix .. key

@@ -61,6 +61,19 @@ standalone-sealed:
 	@test -f "$(BEE_BUNDLE_MANIFEST)" || { echo 'Run make native-pack before assembling Bee.' >&2; exit 1; }
 	$(BUILDER) build "$(BEE_BUNDLE_MANIFEST)" --output "$(BEE_BINARY)"
 
+# Build the checked-out standalone binary, then exercise isolated owner
+# stop/start and prior-build upgrade journeys through real TTY clients.
+.PHONY: real-build-check
+REAL_BUILD_PREVIOUS_BEE ?= $(HOME)/.local/bin/bee
+REAL_BUILD_PREVIOUS_COMMIT ?= fa40c76c934e7753258372cf2c5f85d070bc3d4f
+real-build-check:
+	$(MAKE) standalone BEE_NATIVE_LOCAL=1
+	@if test -x "$(REAL_BUILD_PREVIOUS_BEE)"; then \
+		python3 tests/real_build_check.py "$(abspath $(BEE_BINARY))" --previous "$(abspath $(REAL_BUILD_PREVIOUS_BEE))" --previous-commit "$(REAL_BUILD_PREVIOUS_COMMIT)"; \
+	else \
+		python3 tests/real_build_check.py "$(abspath $(BEE_BINARY))"; \
+	fi
+
 native-binary-check:
 	python3 tests/processes_check.py
 	python3 tests/native_binary.py "$(BEE_BINARY)"

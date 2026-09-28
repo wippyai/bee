@@ -42,7 +42,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [funcs, registry, system, env, json, logger, sql]
+  modules: [funcs, registry, system, env, json, logger, sql, time]
   imports:
     bounds: bee.threads.records:bounds
     artifact: bee.gov:artifact

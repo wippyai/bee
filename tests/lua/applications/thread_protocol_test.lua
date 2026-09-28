@@ -56,6 +56,23 @@ local function define_tests()
                     has_more = false}, error = {code = "DENIED", message = "mixed"}}, "read"))
         end)
 
+        test.it("forwards the validated wire envelope with its version intact", function()
+            local raw = {version = 1, request_id = "request-1", instance_id = "instance-1",
+                execution_generation = 2, operation = "subscribe", ok = true,
+                value = {subscription_id = "subscription-1", consumer_id = "application-1", after_sequence = 0,
+                    lease_generation = 1, owner_incarnation = 3, owner_authority = "authority-1",
+                    durability = "durable", filter_digest = string.rep("a", 64), closed = false}}
+            local forwarded = protocol.wire_reply(raw, "subscribe")
+            if not forwarded then error("valid subscribe wire reply was refused") end
+            test.eq(forwarded.version, 1)
+            test.eq(forwarded.request_id, "request-1")
+            test.eq(forwarded.operation, "subscribe")
+            test.is_nil(protocol.wire_reply(raw, "read"))
+
+            raw.version = 2
+            test.is_nil(protocol.wire_reply(raw, "subscribe"))
+        end)
+
         test.it("binds success values and faults to the requested operation", function()
             local identity = {version = 1, request_id = "request-1", instance_id = "instance-1", execution_generation = 2}
             local read = {version = identity.version, request_id = identity.request_id, instance_id = identity.instance_id,

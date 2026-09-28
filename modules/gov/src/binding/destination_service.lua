@@ -62,6 +62,49 @@ local function failure(code: string, message: string): Result
     return transaction.failure(code, message)
 end
 
+local function migration_database_owner(value: unknown): string?
+    if type(value) ~= "string" or #value > 160 or value:find("%c") then return nil end
+    return value
+end
+
+local function applied_database_evidence(raw: unknown): ({[string]: preflight.DatabaseEvidence}?, string?)
+    local historical = bounds.object(raw)
+    if not historical then return nil, "stored applied migration database evidence is malformed" end
+    local result: {[string]: preflight.DatabaseEvidence} = {}
+    for target_key, raw_database in pairs(historical) do
+        local captured = bounds.object(raw_database)
+        local target = bounds.id(target_key)
+        local database_id = captured and bounds.id(captured.database_id) or nil
+        local kind = captured and bounds.id(captured.kind) or nil
+        local package = captured and migration_database_owner(captured.package) or nil
+        local digest = captured and bounds.text(captured.digest, 64) or nil
+        local table_prefix: string? = nil
+        if captured and captured.table_prefix ~= nil then
+            table_prefix = bounds.text(captured.table_prefix, 64)
+            if not table_prefix or not table_prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
+                return nil, "stored applied migration table prefix is malformed"
+            end
+        end
+        if not target or not captured or captured.target_db ~= target then
+            return nil, "stored applied migration database target is malformed"
+        end
+        if not database_id or not kind or not package then
+            return nil, "stored applied migration database identity is malformed"
+        end
+        if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
+            return nil, "stored applied migration database digest is malformed"
+        end
+        if type(captured.planned) ~= "boolean" then
+            return nil, "stored applied migration planned-state evidence is malformed"
+        end
+        result[target] = {database_id = database_id, table_prefix = table_prefix,
+            kind = kind, package = package, digest = digest}
+    end
+    return result, nil
+end
+
+M.applied_database_evidence = applied_database_evidence
+
 function M.configuration(raw: unknown, node_raw: unknown): (Configuration?, string?)
     return activation_profiles.configuration(raw, node_raw)
 end
@@ -287,28 +330,9 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
                     or ordinal == nil then return nil, "stored applied migration fact is malformed" end
                 applied[key] = {id = migration_id, target_db = target, checksum = checksum, ordinal = ordinal}
             end
-            for target_key, raw in pairs(historical_databases) do
-                local captured = bounds.object(raw)
-                local target = bounds.id(target_key)
-                local database_id = captured and bounds.id(captured.database_id) or nil
-                local kind = captured and bounds.id(captured.kind) or nil
-                local package = captured and bounds.id(captured.package) or nil
-                local digest = captured and bounds.text(captured.digest, 64) or nil
-                local table_prefix: string? = nil
-                if captured and captured.table_prefix ~= nil then
-                    table_prefix = bounds.text(captured.table_prefix, 64)
-                    if not table_prefix or not table_prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
-                        return nil, "stored applied migration table prefix is malformed"
-                    end
-                end
-                if not target or not captured or captured.target_db ~= target or not database_id or not kind
-                    or not package or not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$")
-                    or captured.planned ~= false then
-                    return nil, "stored applied migration database evidence is malformed"
-                end
-                applied_databases[target] = {database_id = database_id, table_prefix = table_prefix,
-                    kind = kind, package = package, digest = digest}
-            end
+            local decoded_databases, database_error = applied_database_evidence(historical_databases)
+            if not decoded_databases then return nil, database_error end
+            applied_databases = decoded_databases
             for _, fact in pairs(applied) do
                 local captured = applied_databases[fact.target_db]
                 if not captured then return nil, "stored applied migration has no database evidence" end

@@ -8,6 +8,9 @@ entries:
   kind: library.lua
   source: file://startup_failure.lua
   imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
+- name: startup_watchdog
+  kind: library.lua
+  source: file://startup_watchdog.lua
 - name: owner_handoff
   kind: library.lua
   source: file://owner_handoff.lua
@@ -109,6 +112,7 @@ entries:
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership
     startup_failure: bee.launch:startup_failure
+    startup_watchdog: bee.launch:startup_watchdog
     decode: bee.protocol:decode
     workspaces: bee.storage:binding
     command_stop: bee.launch:command_stop

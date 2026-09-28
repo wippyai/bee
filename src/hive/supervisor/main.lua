@@ -594,6 +594,7 @@ local function main(configuration: unknown)
             advertise(elapsed())
         end
         local desktop_ready = desktop and desktop.ready
+        local desktop_progress = desktop and desktop.progress
         local desktop_results = desktop and desktop.results
         local desktop_copies = desktop and desktop.copies
         local desktop_launches = desktop and desktop.launches
@@ -612,6 +613,7 @@ local function main(configuration: unknown)
             if desktop_activations then cases[#cases + 1] = desktop_activations:case_receive() end
             if desktop_switches then cases[#cases + 1] = desktop_switches:case_receive() end
             if desktop_observers then cases[#cases + 1] = desktop_observers:case_receive() end
+            if desktop_progress then cases[#cases + 1] = desktop_progress:case_receive() end
             if desktop_copies then cases[#cases + 1] = desktop_copies:case_receive() end
             if desktop_launches then cases[#cases + 1] = desktop_launches:case_receive() end
             if desktop_ready and desktop_results then
@@ -672,6 +674,8 @@ local function main(configuration: unknown)
                 desktop_owner.activated(desktop, selected.value, now_ms)
             elseif desktop_switches and selected.channel == desktop_switches and desktop then
                 desktop_owner.switch(desktop, selected.value, now_ms)
+            elseif desktop_progress and selected.channel == desktop_progress and desktop then
+                desktop_owner.progress(desktop, selected.value)
             elseif desktop_ready and selected.channel == desktop_ready and desktop then
                 desktop_owner.ready(desktop, selected.value, now_ms)
             elseif desktop_observers and selected.channel == desktop_observers and desktop then

@@ -11,6 +11,7 @@ local env = require("env")
 local json = require("json")
 local sql = require("sql")
 local logger = require("logger")
+local time = require("time")
 local bounds = require("bounds")
 local artifact = require("artifact")
 local materializer = require("materializer")
@@ -40,6 +41,7 @@ local json = require("json")
 local time = require("time")
 
 type Object = {[string]: unknown}
+type ThreadOperation = "read" | "post" | "subscribe" | "page" | "ack_page" | "resume" | "unsubscribe"
 
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -140,7 +142,7 @@ local function main(value: unknown)
     end
 
     local function run_thread_probe(thread_id: string)
-        local function await(operation: string, arguments: Object): Object
+        local function await(operation: ThreadOperation, arguments: Object): Object
             local request_id, request_error = client.thread_request(launch, operation, arguments)
             if not request_id then error(operation .. " request failed: " .. tostring(request_error)) end
             while true do
@@ -150,7 +152,7 @@ local function main(value: unknown)
                     if selected.value.kind == process.event.CANCEL then error(operation .. " cancelled") end
                 else
                     local message = selected.value
-                    local reply = client.thread_result(launch, message:from(), message:payload():data())
+                    local reply = client.thread_result(launch, message:from(), operation, message:payload():data())
                     if reply and reply.request_id == request_id then
                         if not reply.ok then
                             local failure = reply.error
@@ -246,7 +248,7 @@ local function main(value: unknown)
                 if selected.value.kind == process.event.CANCEL then error("fresh read cancelled") end
             else
                 local message = selected.value
-                local reply = client.thread_result(launch, message:from(), message:payload():data())
+                local reply = client.thread_result(launch, message:from(), "read", message:payload():data())
                 if reply and reply.request_id == request_id then
                     local code = reply.error and tostring(reply.error.code) or ""
                     if reply.ok then thread_status = "active"
@@ -553,18 +555,25 @@ local function main()
 
     -- The person deciding is the same operator identity in this fixture;
     -- the decision itself is the real bee.approvals.binding:decide call.
+    local approval_started = time.now():unix_nano()
     call_api("bee.approvals.binding:decide", {approval_id = approval_id, expected_revision = 1,
         decision = "approved", proposal_digest = proposal_digest})
 
     local stepped: Object = prepared
+    local activation_steps: {Object} = {}
     for _ = 1, 8 do
+        local phase_before = stepped.phase
+        local step_started = time.now():unix_nano()
         stepped = call_api("bee.gov.binding:destination_call", {operation = "step", workspace_id = workspace_id,
             intent_id = intent_id, receipt_key = receipt_key})
+        activation_steps[#activation_steps + 1] = {phase_before = phase_before, phase_after = stepped.phase,
+            elapsed_ms = math.floor((time.now():unix_nano() - step_started) / 1000000)}
         if stepped.phase == "settled" then break end
     end
     if stepped.phase ~= "settled" or stepped.outcome ~= "applied" then
         error("activation did not settle applied; phase=" .. tostring(stepped.phase) .. " outcome=" .. tostring(stepped.outcome))
     end
+    local approval_to_settled_ms = math.floor((time.now():unix_nano() - approval_started) / 1000000)
 
     -- The settled record is the fence's evidence: the composed base this
     -- overlay landed on is the one the owner reviewed and approved.
@@ -634,7 +643,8 @@ local function main()
         plan_digest = plan_digest, preflight_digest = staged.preflight_digest, proposal_digest = proposal_digest,
         workspace_id = workspace_id, admitted_title = title, overlay_owner = tostring(status.overlay_owner),
         refused_overlay_write = tostring(force_error), migration_id = MIGRATION_ID,
-        migration_target = LOGICAL_DB, database_id = PHYSICAL_DB, table_prefix = TABLE_PREFIX})
+        migration_target = LOGICAL_DB, database_id = PHYSICAL_DB, table_prefix = TABLE_PREFIX,
+        approval_to_settled_ms = approval_to_settled_ms, activation_steps = activation_steps})
 end
 
 return {main = function(...)

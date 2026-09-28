@@ -372,11 +372,25 @@ function M.generation(db: sql.DB): (Generation?, Reply?)
     local listener, listener_error = listener_of(db)
     if listener_error then return nil, fail("STORAGE", listener_error) end
     if not listener then return nil, fail("UNAVAILABLE", "the gateway listener has not been opened") end
-    if listener.native_key ~= nil then
-        local current, current_error = configuration.current()
-        if not current or current.native_key ~= listener.native_key then
-            return nil, fail("UNAVAILABLE", current_error or "native listener changed; a new admission is required")
+    local current, current_error = configuration.current()
+    if not current then return nil, fail("UNAVAILABLE", current_error or "gateway endpoint is unavailable") end
+    local stored_epoch = bounds.count(listener.epoch)
+    local stored_address = bounds.line(listener.address, 120)
+    local stored_native_key, native_key_valid = optional_text(listener.native_key, 160)
+    if not stored_epoch or not stored_address or not native_key_valid then return nil, fail("STORAGE", "listener identity is corrupt") end
+    if current.address ~= stored_address or current.native_key ~= stored_native_key then
+        local secret, secret_error = random_text()
+        if not secret then return nil, fail("STORAGE", secret_error or "listener secret") end
+        local reconciled, reconcile_error = listener_store.reconcile(db, stored_epoch, stored_address, stored_native_key,
+            current.address, secret, stamp(now_ms()), current.native_key)
+        if reconcile_error or not reconciled then return nil, fail("STORAGE", "reconcile host-selected listener") end
+        local refreshed, refresh_error = listener_of(db)
+        if refresh_error or not refreshed then return nil, fail("STORAGE", refresh_error or "read reconciled listener") end
+        local rechecked, recheck_error = configuration.current()
+        if not rechecked or refreshed.address ~= rechecked.address or refreshed.native_key ~= rechecked.native_key then
+            return nil, fail("UNAVAILABLE", recheck_error or "gateway listener changed during reconciliation")
         end
+        listener = refreshed
     end
     local count, count_error = restarts()
     if not count then return nil, fail("UNAVAILABLE", count_error or "listener restarts unknown") end
@@ -1021,6 +1035,12 @@ function M.ready(value: unknown): Reply
     if listener_error or not listener then db:release(); return fail("UNAVAILABLE", listener_error or "the gateway listener has not been opened") end
     local generation, generation_failure = M.generation(db)
     if not generation then db:release(); return generation_failure :: Reply end
+    local reconciled_listener, reconcile_error = listener_of(db)
+    if reconcile_error or not reconciled_listener then
+        db:release()
+        return fail("UNAVAILABLE", reconcile_error or "the gateway listener has not been opened")
+    end
+    listener = reconciled_listener
     local binding: Binding? = nil
     if object.binding_id ~= nil then
         local binding_id = bounds.id(object.binding_id)

@@ -660,7 +660,23 @@ function M.start(value: unknown): Reply
     local stored = call(M.CARRIER_OPS .. ":checkpoint", {thread_id = outcome.thread_id, attempt_id = outcome.attempt_id})
     local mode = "open"
     if stored then
-        if stored.attempt_state == "ended" then return fail("CONFLICT", "request " .. tostring(outcome.attempt_id) .. " already settled") end
+        if stored.attempt_state == "ended" then
+            if carrier_request.brief == "" then
+                return fail("CONFLICT", "request " .. tostring(outcome.attempt_id) .. " already settled")
+            end
+            local grant_refs: {string} = {}
+            for index, grant in ipairs(carrier_request.resources) do grant_refs[index] = grant.grant_ref end
+            local admitted = carrier.admitted_action(carrier_request, outcome.plan.binding_ref,
+                outcome.plan.binding_digest, outcome.plan.policy_ref, grant_refs, carrier_request.brief)
+            local checked, replay_refused = call(M.THREADS .. ":admit_action", {thread_id = outcome.thread_id,
+                idempotency_key = "launch:" .. outcome.attempt_id .. ":admit",
+                action_id = outcome.action_id, admitted = admitted})
+            if not checked then
+                return replay_refused or fail("CONFLICT", "settled launch does not match this request")
+            end
+            outcome.mode = "settled"
+            return succeed(outcome)
+        end
         if stored.checkpoint ~= nil then mode = "resume" end
     end
     -- The carrier outlives this call; whoever routes the launch monitors it.

@@ -168,6 +168,7 @@ entries:
     transaction: bee.persist:transaction
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
     activation_measure: bee.gov:activation_measure
     migration_work: bee.gov:migration_work
     approval: bee.gov.binding:approval

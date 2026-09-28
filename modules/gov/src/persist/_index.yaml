@@ -29,6 +29,18 @@ entries:
     migrations: bee.gov.migrations:schema
     identity_migration: bee.gov.persist:identity_migration
     migration_work: bee.gov:migration_work
+- name: lease_store
+  kind: library.lua
+  source: file://lease_store.lua
+  modules: [sql, hash, json]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    database: bee.persist:database
+    transaction: bee.persist:transaction
+    migrations: bee.gov.migrations:schema
+    identity_migration: bee.gov.persist:identity_migration
+    lease_model: bee.gov:lease_model
 - name: staging
   kind: library.lua
   source: file://staging.lua

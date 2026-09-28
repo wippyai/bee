@@ -171,6 +171,16 @@ entries:
     database: bee.persist:database
     migrations: bee.gov.migrations:schema
     identity_migration: bee.gov.persist:identity_migration
+- name: lease_store_test
+  kind: function.lua
+  source: file://lease_store_test.lua
+  method: run
+  modules: [hash, uuid]
+  meta: {type: test, suite: bee}
+  security: {policies: [bee.gov:plan_test_policy]}
+  imports:
+    test: wippy.test:test
+    lease_store: bee.gov.persist:lease_store
 - name: activation_measure_test
   kind: function.lua
   source: file://activation_measure_test.lua
@@ -209,6 +219,7 @@ entries:
     artifact: bee.gov:artifact
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
+    lease_store: bee.gov.persist:lease_store
     activation_owner: bee.gov.binding:activation_owner
     preflight: bee.gov:preflight
     application_admission: bee.gov:governed_application_admission
@@ -365,6 +376,15 @@ entries:
   imports:
     test: wippy.test:test
     capability_containment: bee.capability:model
+- name: lease_model_test
+  kind: function.lua
+  source: file://lease_model_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    lease_model: bee.gov:lease_model
+    capability_model: bee.capability:model
 - name: capability_grants_test
   kind: function.lua
   source: file://capability_grants_test.lua

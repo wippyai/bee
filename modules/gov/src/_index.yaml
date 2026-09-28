@@ -61,6 +61,15 @@ entries:
   kind: library.lua
   source: file://super_edit.lua
   modules: [hash]
+- name: lease_model
+  kind: library.lua
+  source: file://lease_model.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.sync:canonical
+    capability_model: bee.capability:model
+    super_edit: bee.gov:super_edit
 - name: headless_revert
   kind: library.lua
   source: file://headless_revert.lua

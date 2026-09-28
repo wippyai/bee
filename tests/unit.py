@@ -12,16 +12,16 @@ import yaml
 from workspace import RUNTIME, ROOT, TEST_CACHE, database_environment, fixture_workspace
 
 
-# Case times from an unfiltered run; new entries get a small default weight.
+# Entry seconds measured on a loaded host; new entries get a small default weight.
 SLOW = {
-    "bee.harness.catalog:launch_test": 62.05,
-    "bee.harness.catalog:permission_carrier_test": 56.65,
-    "bee.harness.catalog:gateway_carrier_test": 26.52,
-    "bee.harness.catalog:carrier_test": 17.55,
-    "bee.placement.native:native_test": 10.62,
+    "bee.harness.catalog:launch_test": 390.0,
+    "bee.harness.catalog:permission_carrier_test": 125.0,
+    "bee.harness.catalog:gateway_carrier_test": 60.0,
+    "bee.harness.catalog:carrier_test": 40.0,
+    "bee.placement.native:native_test": 25.0,
 }
+DEFAULT_WEIGHT = 1.0
 SHARDS = 4
-LAUNCH_GROUP = {"bee.harness.catalog:launch_test", "bee.harness.catalog:permission_carrier_test"}
 
 
 def test_entries(suites=None):
@@ -43,12 +43,10 @@ def test_entries(suites=None):
 def split(entries):
     groups = [[] for _ in range(SHARDS)]
     loads = [0.0] * SHARDS
-    for entry in sorted(entries, key=lambda name: (-SLOW.get(name, .15), name)):
-        # Permission exchange uses launch_test's host-selected setup in the
-        # original ordered suite, so keep those entries in the same process.
-        shard = 0 if entry in LAUNCH_GROUP else min(range(1, SHARDS), key=lambda index: (loads[index], index))
+    for entry in sorted(entries, key=lambda name: (-SLOW.get(name, DEFAULT_WEIGHT), name)):
+        shard = min(range(SHARDS), key=lambda index: (loads[index], index))
         groups[shard].append(entry)
-        loads[shard] += SLOW.get(entry, .15)
+        loads[shard] += SLOW.get(entry, DEFAULT_WEIGHT)
     assert sorted(entry for group in groups for entry in group) == sorted(entries)
     assert all(groups), "Every Lua unit shard needs at least one entry"
     return groups

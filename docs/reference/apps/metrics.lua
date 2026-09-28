@@ -58,7 +58,7 @@ function M.draw(painter: frame.Painter, work: frame.Rect, model: Model)
         elseif index == 2 then
             for slot, part in ipairs(frame.split(inner, {0, 0, 0}, 1)) do
                 local gauge = GAUGES[slot]
-                if gauge then viz.ring(painter, part, gauge.value, 100, {label = gauge.name, warn = 75, error = 90}) end
+                if gauge then viz.ring(painter, part, gauge.value, 100, {label = gauge.name, warn = 0.75, error = 0.90}) end
             end
         elseif index == 3 then
             viz.stacked(painter, inner, {{label = "web", segments = {60, 30, 10}}, {label = "api", segments = {40, 40, 20}}},

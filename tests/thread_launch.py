@@ -336,14 +336,12 @@ def main():
         sys.exit(f"BEE_RUNTIME must name the combined runtime binary; got {RUNTIME!r}")
     with fixture_workspace(managed_gateway=True) as folder:
         repository = folder / ".wippy/carrier-main"
-        worktree = folder / ".wippy/carrier-worktree"
         subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
         subprocess.run(["git", "-C", str(repository), "config", "user.name", "Bee Fixture"], check=True)
         subprocess.run(["git", "-C", str(repository), "config", "user.email", "bee-fixture@example.test"], check=True)
-        (repository / "seed.txt").write_text("initial worktree commit\n")
+        (repository / "seed.txt").write_text("initial commit\n")
         subprocess.run(["git", "-C", str(repository), "add", "seed.txt"], check=True)
         subprocess.run(["git", "-C", str(repository), "commit", "--quiet", "-m", "fixture base"], check=True)
-        subprocess.run(["git", "-C", str(repository), "worktree", "add", "--quiet", "-b", "bee-fixture-worker", str(worktree)], check=True)
         environment = {**os.environ, "BEE_FIXTURE_BIN": str(folder / "fixtures/harness/bin"),
                        "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"), "BEE_FIXTURE_GIT_COMMIT": "1",
                        "BEE_AMBIENT_LIVE_PROVIDER": "none"}
@@ -362,18 +360,18 @@ def main():
         for acceptance in (ACCEPTANCE, RUN_ACCEPTANCE):
             if not re.search(r"^\s+o .*" + re.escape(acceptance), out, re.M):
                 sys.exit("the thread_launch acceptance did not pass: " + acceptance)
-        subjects = subprocess.run(["git", "-C", str(worktree), "log", "--format=%s"], check=True,
+        subjects = subprocess.run(["git", "-C", str(repository), "log", "--format=%s"], check=True,
                                   capture_output=True, text=True).stdout.splitlines()
         if "bee fixture commit" not in subjects:
-            sys.exit("the confined Codex fixture worker did not commit in its Git worktree")
-        dirty = subprocess.run(["git", "-C", str(worktree), "status", "--porcelain"], check=True,
+            sys.exit("the confined Codex fixture worker did not commit in its Git repository")
+        dirty = subprocess.run(["git", "-C", str(repository), "status", "--porcelain"], check=True,
                                capture_output=True, text=True).stdout
         if dirty:
-            sys.exit("the confined Codex fixture worker left uncommitted worktree changes")
+            sys.exit("the confined Codex fixture worker left uncommitted changes")
         print("Thread launch (fixture provider, no account): an orchestrator agent starts an "
               "allow-listed worker over the real gateway, the worker answers and settles, and the "
               "orchestrator's thread_wait returns its answer and terminal outcome; a managed orchestrator "
-              "launches a confined Codex fixture worker that commits in a Git worktree, follows its run by "
+              "launches a confined Codex fixture worker that commits in a Git repository, follows its run by "
               "notify and wait, steers it, and cancels a second worker")
 
     if run_live:

@@ -27,7 +27,7 @@ local PROVIDER = "bee.harness.catalog:codex_fixture_provider"
 local SOURCE = "bee.harness.catalog:codex_sentinel_key"
 local ROOT = "bee.harness.catalog:project_fixture"
 local GIT_ROOT = "bee.harness.catalog:git_project_fixture"
-local WORKTREE_SUBPATH = "carrier-worktree"
+local WORKDIR_SUBPATH = "carrier-main"
 local ORCHESTRATOR_BINDING = "bee.driver.claude:binding"
 local WORKER_BINDING = "bee.driver.codex:binding"
 local CARRIER = "bee.harness.catalog:carrier_faulted"
@@ -284,7 +284,7 @@ local function define_tests()
                 BEE_FIXTURE_STREAM = stream("claude/stream-json-2/plain.jsonl")}
             if git_commit_enabled() then
                 orchestrator.environment.BEE_FIXTURE_GATEWAY_WORKDIR_ROOT = GIT_ROOT
-                orchestrator.environment.BEE_FIXTURE_GATEWAY_WORKDIR_PATH = WORKTREE_SUBPATH
+                orchestrator.environment.BEE_FIXTURE_GATEWAY_WORKDIR_PATH = WORKDIR_SUBPATH
             end
             local outcome = await_carrier(spawn_carrier(orchestrator), "orchestrator carrier")
             test.eq((outcome.settlement :: Object).outcome, "succeeded")

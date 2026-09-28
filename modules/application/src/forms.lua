@@ -212,17 +212,17 @@ function M.number_value(field: NumberField): number?
     if field.value == "" then return nil end
     return tonumber(field.value)
 end
-local function number_allowed(value: string, cursor: integer, ch: string): boolean
-    if ch == "-" then return cursor == 0 and not value:find("-", 1, true) end
-    if ch == "." then return not value:find(".", 1, true) end
-    return ch:find("^%d$") ~= nil
+-- True when buffer is a well-formed in-progress number: an optional leading
+-- minus, digits, and at most one decimal point.
+local function number_allowed(buffer: string): boolean
+    return buffer:find("^%-?%d*%.?%d*$") ~= nil
 end
 local function number_insert(field: NumberField, text: string): boolean
     local left = field.selected and "" or field.value:sub(1, field.cursor)
     local right = field.selected and "" or field.value:sub(field.cursor + 1)
     local inserted = ""
     for ch in text:gmatch(".") do
-        if #left + #inserted + #right < M.NUMBER_MAX_LENGTH and number_allowed(left .. inserted, #left + #inserted, ch) then
+        if #left + #inserted + #right < M.NUMBER_MAX_LENGTH and number_allowed(left .. inserted .. ch .. right) then
             inserted = inserted .. ch
         end
     end
@@ -346,9 +346,26 @@ local function area_move_line(area: TextArea, delta: integer)
     local lines, starts = area_scan(area.value)
     local line, column = area_position(area.value, area.cursor)
     local target = maximum(1, minimum(#lines, line + delta))
-    local target_line = lines[target] or ""
-    area.cursor = starts[target] - 1 + minimum(#target_line, column)
+    local wanted = tty.text.width((lines[line] or ""):sub(1, column))
+    area.cursor = starts[target] - 1 + #tty.text.truncate(lines[target] or "", wanted, "")
     area.selected = false
+end
+-- The byte cursor one character before cursor: a newline is one character,
+-- and any other character is found within its own line.
+local function area_previous(value: string, cursor: integer): integer
+    if cursor <= 0 then return 0 end
+    if value:byte(cursor) == 10 then return cursor - 1 end
+    local _, column = area_position(value, cursor)
+    local start = cursor - column
+    return start + #pop(value:sub(start + 1, cursor))
+end
+-- The byte cursor one character after cursor, treating a newline as one character.
+local function area_next(value: string, cursor: integer): integer
+    if cursor >= #value then return #value end
+    if value:byte(cursor + 1) == 10 then return cursor + 1 end
+    local stop = value:find("\n", cursor + 1, true) or (#value + 1)
+    local first = shift(value:sub(cursor + 1, stop - 1))
+    return cursor + #first
 end
 local function area_line_home(area: TextArea)
     local _, starts = area_scan(area.value)
@@ -410,13 +427,13 @@ function M.area_key(field: TextArea, event: unknown): boolean
     if key == "left" then
         if field.selected then field.cursor, field.selected = 0, false
         elseif event.ctrl == true then field.cursor = word_back(field.value, field.cursor)
-        else field.cursor = #pop(field.value:sub(1, field.cursor)) end
+        else field.cursor = area_previous(field.value, field.cursor) end
         return true
     end
     if key == "right" then
         if field.selected then field.cursor, field.selected = #field.value, false
         elseif event.ctrl == true then field.cursor = word_forward(field.value, field.cursor)
-        else local first = shift(field.value:sub(field.cursor + 1)); field.cursor = field.cursor + #first end
+        else field.cursor = area_next(field.value, field.cursor) end
         return true
     end
     if key == "backspace" then
@@ -426,9 +443,9 @@ function M.area_key(field: TextArea, event: unknown): boolean
             field.value = field.value:sub(1, target) .. field.value:sub(field.cursor + 1)
             field.cursor = target
         else
-            local prefix = pop(field.value:sub(1, field.cursor))
-            field.value = prefix .. field.value:sub(field.cursor + 1)
-            field.cursor = #prefix
+            local target = area_previous(field.value, field.cursor)
+            field.value = field.value:sub(1, target) .. field.value:sub(field.cursor + 1)
+            field.cursor = target
         end
         return true
     end
@@ -438,8 +455,8 @@ function M.area_key(field: TextArea, event: unknown): boolean
             local target = word_forward(field.value, field.cursor)
             field.value = field.value:sub(1, field.cursor) .. field.value:sub(target + 1)
         else
-            local _, rest = shift(field.value:sub(field.cursor + 1))
-            field.value = field.value:sub(1, field.cursor) .. rest
+            local target = area_next(field.value, field.cursor)
+            field.value = field.value:sub(1, field.cursor) .. field.value:sub(target + 1)
         end
         return true
     end
@@ -519,13 +536,14 @@ end
 -- Returns the number of rows drawn.
 function M.select_draw(painter: frame.Painter, rect: frame.Rect, field: Select, focused: boolean, hit_index: integer?): integer
     local theme = painter.theme
+    if rect.width <= 0 or rect.height <= 0 then return 0 end
     if hit_index then frame.add_hit(painter, "field", hit_index, "", rect.x, rect.y, rect.width, 1) end
     local option = field.options[field.selected]
     local shown_width = maximum(0, rect.width - 2)
     local text = frame.pad(option and option.label or "Select…", shown_width)
     if focused then frame.put(painter, rect.x, rect.y, text, shown_width, appearance.selection_text(theme), theme.accent)
     else frame.put(painter, rect.x, rect.y, text, shown_width, theme.text) end
-    frame.put(painter, rect.x + shown_width, rect.y, field.open and "▲" or "▼", 2, theme.muted)
+    frame.put(painter, rect.x + shown_width, rect.y, field.open and "▲" or "▼", minimum(2, rect.width), theme.muted)
     if not field.open or rect.height <= 1 then return 1 end
     local body_height = rect.height - 1
     local window = frame.window(#field.options, minimum(M.SELECT_MAX_VISIBLE, body_height), field.highlighted, field.scroll)
@@ -647,11 +665,18 @@ function M.reset_field(field: Field)
 end
 function M.reset(form: Form) for _, field in ipairs(form.fields) do M.reset_field(field) end end
 
+-- The field with its baseline taken from the value its widget holds, so a
+-- widget that normalizes its initial value starts clean.
+local function baselined(field: Field): Field
+    field.baseline = M.value(field)
+    return field
+end
+
 local function field_text(key: string, label: string, value: string, settings: FieldOptions): Field
-    return {key = key, label = label, kind = "text", required = settings.required == true, disabled = settings.disabled == true,
+    return baselined({key = key, label = label, kind = "text", required = settings.required == true, disabled = settings.disabled == true,
         hint = settings.hint or "", error = nil, baseline = value, validate = settings.validate, rows = 1,
         text = M.text_new(value, settings.placeholder or "", settings.max_length or M.TEXT_MAX_LENGTH, settings.masked == true),
-        number = nil, area = nil, select = nil, checkbox = nil, radio = nil, toggle = nil}
+        number = nil, area = nil, select = nil, checkbox = nil, radio = nil, toggle = nil})
 end
 -- A single-line text field. opts: required, disabled, hint, validate,
 -- placeholder, max_length, masked.
@@ -659,29 +684,29 @@ function M.field_text(key: string, label: string, value: string, opts: FieldOpti
 
 local function field_number(key: string, label: string, value: number?, settings: FieldOptions): Field
     local baseline = value and tostring(value) or ""
-    return {key = key, label = label, kind = "number", required = settings.required == true, disabled = settings.disabled == true,
+    return baselined({key = key, label = label, kind = "number", required = settings.required == true, disabled = settings.disabled == true,
         hint = settings.hint or "", error = nil, baseline = baseline, validate = settings.validate, rows = 1,
         number = M.number_new(value, settings.min, settings.max, settings.step),
-        text = nil, area = nil, select = nil, checkbox = nil, radio = nil, toggle = nil}
+        text = nil, area = nil, select = nil, checkbox = nil, radio = nil, toggle = nil})
 end
 -- A bounded numeric field. opts: required, disabled, hint, validate, min, max, step.
 function M.field_number(key: string, label: string, value: number?, opts: FieldOptions?): Field return field_number(key, label, value, opts or {}) end
 
 local function field_textarea(key: string, label: string, value: string, settings: FieldOptions): Field
-    return {key = key, label = label, kind = "textarea", required = settings.required == true, disabled = settings.disabled == true,
+    return baselined({key = key, label = label, kind = "textarea", required = settings.required == true, disabled = settings.disabled == true,
         hint = settings.hint or "", error = nil, baseline = value, validate = settings.validate, rows = maximum(2, settings.rows or 5),
         area = M.area_new(value, settings.max_length or M.AREA_MAX_LENGTH),
-        text = nil, number = nil, select = nil, checkbox = nil, radio = nil, toggle = nil}
+        text = nil, number = nil, select = nil, checkbox = nil, radio = nil, toggle = nil})
 end
 -- A multi-line text area. rows is the field's total drawn height, label
 -- included (default 5). opts: required, disabled, hint, validate, max_length, rows.
 function M.field_textarea(key: string, label: string, value: string, opts: FieldOptions?): Field return field_textarea(key, label, value, opts or {}) end
 
 local function field_select(key: string, label: string, options: {Option}, value: string, settings: FieldOptions): Field
-    return {key = key, label = label, kind = "select", required = settings.required == true, disabled = settings.disabled == true,
+    return baselined({key = key, label = label, kind = "select", required = settings.required == true, disabled = settings.disabled == true,
         hint = settings.hint or "", error = nil, baseline = value, validate = settings.validate, rows = 1,
         select = M.select_new(options, value),
-        text = nil, number = nil, area = nil, checkbox = nil, radio = nil, toggle = nil}
+        text = nil, number = nil, area = nil, checkbox = nil, radio = nil, toggle = nil})
 end
 -- A single-choice dropdown. opts: required, disabled, hint, validate.
 function M.field_select(key: string, label: string, options: {Option}, value: string, opts: FieldOptions?): Field
@@ -689,20 +714,20 @@ function M.field_select(key: string, label: string, options: {Option}, value: st
 end
 
 local function field_checkbox(key: string, label: string, checked: boolean, settings: FieldOptions): Field
-    return {key = key, label = label, kind = "checkbox", required = settings.required == true, disabled = settings.disabled == true,
+    return baselined({key = key, label = label, kind = "checkbox", required = settings.required == true, disabled = settings.disabled == true,
         hint = settings.hint or "", error = nil, baseline = tostring(checked), validate = settings.validate, rows = 1,
         checkbox = M.checkbox_new(checked),
-        text = nil, number = nil, area = nil, select = nil, radio = nil, toggle = nil}
+        text = nil, number = nil, area = nil, select = nil, radio = nil, toggle = nil})
 end
 -- required on a checkbox means it must be checked to submit (for example
 -- "I agree"). opts: required, disabled, hint, validate.
 function M.field_checkbox(key: string, label: string, checked: boolean, opts: FieldOptions?): Field return field_checkbox(key, label, checked, opts or {}) end
 
 local function field_radio(key: string, label: string, options: {Option}, value: string, settings: FieldOptions): Field
-    return {key = key, label = label, kind = "radio", required = settings.required == true, disabled = settings.disabled == true,
+    return baselined({key = key, label = label, kind = "radio", required = settings.required == true, disabled = settings.disabled == true,
         hint = settings.hint or "", error = nil, baseline = value, validate = settings.validate, rows = 1,
         radio = M.radio_new(options, value),
-        text = nil, number = nil, area = nil, select = nil, checkbox = nil, toggle = nil}
+        text = nil, number = nil, area = nil, select = nil, checkbox = nil, toggle = nil})
 end
 -- A single-choice group drawn as one row per option. opts: required, disabled, hint, validate.
 function M.field_radio(key: string, label: string, options: {Option}, value: string, opts: FieldOptions?): Field
@@ -710,10 +735,10 @@ function M.field_radio(key: string, label: string, options: {Option}, value: str
 end
 
 local function field_toggle(key: string, label: string, on: boolean, settings: FieldOptions): Field
-    return {key = key, label = label, kind = "toggle", required = settings.required == true, disabled = settings.disabled == true,
+    return baselined({key = key, label = label, kind = "toggle", required = settings.required == true, disabled = settings.disabled == true,
         hint = settings.hint or "", error = nil, baseline = tostring(on), validate = settings.validate, rows = 1,
         toggle = M.toggle_new(on),
-        text = nil, number = nil, area = nil, select = nil, checkbox = nil, radio = nil}
+        text = nil, number = nil, area = nil, select = nil, checkbox = nil, radio = nil})
 end
 -- opts: required, disabled, hint, validate.
 function M.field_toggle(key: string, label: string, on: boolean, opts: FieldOptions?): Field return field_toggle(key, label, on, opts or {}) end
@@ -797,11 +822,12 @@ function M.click(form: Form, hit: frame.Hit): boolean
     local field = form.fields[index]
     if not field or field.disabled then return false end
     if hit.kind == "field" then
+        local was_open = field.select ~= nil and field.select.open
         M.focus_at(form, index)
         if field.kind == "checkbox" and field.checkbox then field.checkbox.checked = not field.checkbox.checked; field.error = nil; return true end
         if field.kind == "toggle" and field.toggle then field.toggle.on = not field.toggle.on; field.error = nil; return true end
         if field.kind == "select" and field.select then
-            field.select.open = not field.select.open
+            field.select.open = not was_open
             field.select.highlighted = maximum(1, field.select.selected)
             return true
         end
@@ -909,21 +935,22 @@ function M.draw(painter: frame.Painter, rect: frame.Rect, form: Form, index: int
     local focused = index == form.focus and not field.disabled
     local hit = field.disabled and nil or index
     local total = minimum(rect.height, base_rows(field))
-    local label_width = minimum(16, maximum(4, rect.width // 3))
+    local label_width = minimum(rect.width, minimum(16, maximum(4, rect.width // 3)))
+    local body_x = rect.x + label_width + 1
+    local body_width = maximum(0, rect.width - label_width - 1)
     if field.kind == "checkbox" and field.checkbox then
         M.checkbox_draw(painter, rect.x, rect.y, rect.width, field.label, field.checkbox, focused, hit)
     elseif field.kind == "toggle" and field.toggle then
         M.toggle_draw(painter, rect.x, rect.y, rect.width, field.label, field.toggle, focused, hit)
     elseif field.kind == "text" and field.text then
         frame.put(painter, rect.x, rect.y, frame.pad(field.label, label_width), label_width, theme.muted)
-        M.text_draw(painter, rect.x + label_width + 1, rect.y, maximum(0, rect.width - label_width - 1), field.text, focused, hit)
+        if body_width > 0 then M.text_draw(painter, body_x, rect.y, body_width, field.text, focused, hit) end
     elseif field.kind == "number" and field.number then
         frame.put(painter, rect.x, rect.y, frame.pad(field.label, label_width), label_width, theme.muted)
-        M.number_draw(painter, rect.x + label_width + 1, rect.y, maximum(0, rect.width - label_width - 1), field.number, focused, hit)
+        if body_width > 0 then M.number_draw(painter, body_x, rect.y, body_width, field.number, focused, hit) end
     elseif field.kind == "select" and field.select then
         frame.put(painter, rect.x, rect.y, frame.pad(field.label, label_width), label_width, theme.muted)
-        M.select_draw(painter, {x = rect.x + label_width + 1, y = rect.y, width = maximum(0, rect.width - label_width - 1), height = total},
-            field.select, focused, hit)
+        M.select_draw(painter, {x = body_x, y = rect.y, width = body_width, height = total}, field.select, focused, hit)
     elseif field.kind == "textarea" and field.area then
         frame.put(painter, rect.x, rect.y, string.upper(field.label), rect.width, theme.muted)
         M.area_draw(painter, {x = rect.x, y = rect.y + 1, width = rect.width, height = maximum(0, total - 1)}, field.area, focused, hit)

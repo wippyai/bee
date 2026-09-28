@@ -82,6 +82,24 @@ local function define_tests()
             test.eq(diagram.mesh(ring, {x = 2, y = 2, width = 16, height = 4},
                 {{id = "1", label = "1"}, {id = "2", label = "2"}, {id = "3", label = "3"}, {id = "4", label = "4"}}, {}), 4)
         end)
+        test.it("keeps automatically placed mesh nodes inside a tiny rectangle", function()
+            local nodes = {{id = "1", label = "one"}, {id = "2", label = "two"}, {id = "3", label = "three"}}
+            for _, size in ipairs({{1, 1}, {2, 1}, {1, 3}, {2, 2}, {3, 2}}) do
+                local painter = frame.new(12, 8, appearance.defaults())
+                local rect = {x = 5, y = 4, width = size[1], height = size[2]}
+                diagram.mesh(painter, rect, nodes, {{from = "1", to = "2"}})
+                for _, hit in ipairs(painter.hits) do
+                    test.is_true(hit.x >= rect.x and hit.x <= rect.x + rect.width - 1)
+                    test.is_true(hit.y >= rect.y and hit.y <= rect.y + rect.height - 1)
+                end
+                for row, line in ipairs(text(painter)) do
+                    for column = 1, 12 do
+                        local inside = column >= rect.x and column < rect.x + rect.width and row >= rect.y and row < rect.y + rect.height
+                        if not inside then test.eq(tty.text.cut(line, column - 1, column), " ") end
+                    end
+                end
+            end
+        end)
         test.it("squarifies a treemap to positive values only and marks tile hits", function()
             local treemap = frame.new(28, 9, appearance.defaults())
             test.eq(diagram.treemap(treemap, {x = 2, y = 2, width = 24, height = 6},

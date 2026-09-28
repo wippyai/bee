@@ -94,12 +94,11 @@ function M.setup(db: sql.DB, request: types.LaunchRequest, attempt_id: string, i
     for _, preparer in ipairs(preparers) do
         local input: types.WorkdirPreparerSetupInput = {attempt_id = attempt_id, owner_id = request.owner_id,
             working_directory = current_work_dir, write_roots = write_roots, options = request.options, argv = request.launch.argv}
-        local rows, query_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparer.state' ORDER BY sequence", {attempt_id})
-        if query_error or not rows then return failed("read preparer intent") end
+        local plans, plans_error = store.preparer_plans(db, attempt_id)
+        if not plans then return failed(plans_error or "read preparer intent") end
         local saved: {[string]: unknown}? = nil
-        for _, row in ipairs(rows) do
-            local detail = bounds.text(row.detail, 65536)
-            local value = detail and bounds.object(json.decode(detail)) or nil
+        for _, plan in ipairs(plans) do
+            local value = bounds.object(json.decode(plan.record_json))
             if not value then return failed("corrupt preparer intent") end
             if value.binding_id == preparer.binding_id then saved = value end
         end
@@ -115,8 +114,8 @@ function M.setup(db: sql.DB, request: types.LaunchRequest, attempt_id: string, i
             local encoded, encode_error = json.encode({binding_id = preparer.binding_id, plan = preparer.plan,
                 setup = preparer.setup, cleanup = preparer.cleanup, state = planned.state})
             if not encoded then return failed(tostring(encode_error)) end
-            local intent_error = record(db, attempt_id, "workdir_preparer.state", encoded)
-            if intent_error then return nil, nil, intent_error end
+            local intent_error = store.record_preparer_plan(db, attempt_id, preparer.binding_id, encoded)
+            if intent_error then return failed(intent_error) end
         end
         local current = store.row(db, attempt_id)
         if not current or current.execution_state ~= "starting" then return failed("attempt stopped before workdir setup") end
@@ -164,18 +163,21 @@ end
 function M.cleanup(attempt: types.Attempt): (boolean, string?)
     local db, open_error = store.open()
     if not db then return false, open_error end
-    local rows, query_error = db:query("SELECT kind, detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind IN ('workdir_preparer.state', 'workdir_preparer.cleaned', 'workdir_preparer.retained') ORDER BY sequence", {attempt.attempt_id})
+    local plans, plans_error = store.preparer_plans(db, attempt.attempt_id)
+    if not plans then db:release(); return false, plans_error end
+    local rows, query_error = db:query("SELECT detail FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparer.cleaned' ORDER BY sequence", {attempt.attempt_id})
     if query_error or not rows then db:release(); return false, "read preparer cleanup evidence" end
     local completed: {[string]: boolean} = {}
     local pending: {{[string]: unknown}} = {}
+    for _, plan in ipairs(plans) do
+        local value = bounds.object(json.decode(plan.record_json))
+        if not value then db:release(); return false, "corrupt preparer intent" end
+        pending[#pending + 1] = value
+    end
     for _, row in ipairs(rows) do
         local detail = bounds.text(row.detail, 65536)
         if not detail then db:release(); return false, "corrupt preparer evidence" end
-        if row.kind == "workdir_preparer.state" then
-            local value = bounds.object(json.decode(detail))
-            if not value then db:release(); return false, "corrupt preparer intent" end
-            pending[#pending + 1] = value
-        elseif row.kind == "workdir_preparer.cleaned" then completed[detail] = true end
+        completed[detail] = true
     end
     local failures: {string} = {}
     for index = #pending, 1, -1 do

@@ -107,6 +107,18 @@ CREATE TABLE bee_placement_session_files (
     PRIMARY KEY (owner_id, session_ref, path)
 );
 ]], rebuild = false},
+    -- A workdir preparer's ownership state is durable recovery input; the
+    -- evidence detail is bounded and cannot hold it whole.
+    {id = 5, name = "workdir_preparer_states", sql = [[
+CREATE TABLE bee_placement_preparer_states (
+    attempt_id TEXT NOT NULL REFERENCES bee_placement_attempts (attempt_id),
+    binding_id TEXT NOT NULL,
+    position INTEGER NOT NULL CHECK (position > 0),
+    record_json TEXT NOT NULL CHECK (length(record_json) <= 65536),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (attempt_id, binding_id)
+);
+]], rebuild = false},
 }
 function M.all(): {Migration}
     return list

@@ -11,7 +11,7 @@ type Row = {[string]: unknown}
 local function reset()
     local db, err = sql.get(RESOURCE)
     if not db then error(tostring(err)) end
-    for _, statement in ipairs({"DROP TABLE IF EXISTS bee_placement_session_files", "DROP TABLE IF EXISTS bee_placement_evidence", "DROP TABLE IF EXISTS bee_placement_attempts",
+    for _, statement in ipairs({"DROP TABLE IF EXISTS bee_placement_preparer_states", "DROP TABLE IF EXISTS bee_placement_session_files", "DROP TABLE IF EXISTS bee_placement_evidence", "DROP TABLE IF EXISTS bee_placement_attempts",
         "DROP TABLE IF EXISTS bee_placement_attempts_next", "DROP TABLE IF EXISTS " .. LEDGER.table}) do
         local _, drop_error = db:execute(statement)
         if drop_error then db:release(); error(statement .. ": " .. tostring(drop_error)) end

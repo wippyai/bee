@@ -285,7 +285,7 @@ local function present(handle: Handle)
     assert(tty.start())
     local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
     local events = assert(tty.events())
-    local ticks = assert(time.ticker("33ms")):channel()
+    local delivery_updates = delivery.updates()
     assert(tty.mouse(true))
     local width, height = tty.screen_size()
     local failure: string? = nil
@@ -296,13 +296,14 @@ local function present(handle: Handle)
         if not resized then failure = resize_error or "resize desktop" end
     end
     while not failure do
-        local selected = channel.select({events:case_receive(), ticks:case_receive()})
+        local selected = channel.select({events:case_receive(), delivery_updates:case_receive()})
         if not selected.ok then break end
-        if selected.channel == ticks then
-            delivery.poll({active.receipt.session_id})
-            local frame, frame_error = M.content(handle, width, height)
-            if frame then output:present(frame.rows, {cursor = frame.cursor})
-            elseif frame_error and frame_error ~= "Attaching" then failure = frame_error end
+        if selected.channel == delivery_updates then
+            if delivery.poll({active.receipt.session_id}) then
+                local frame, frame_error = M.content(handle, width, height)
+                if frame then output:present(frame.rows, {cursor = frame.cursor})
+                elseif frame_error and frame_error ~= "Attaching" then failure = frame_error end
+            end
         else
             local event = input.decode(selected.value)
             if event then

@@ -6,6 +6,8 @@
 -- is strictly actor-local to the running presenter instance and never shared
 -- across actor or process boundaries.
 local tty = require("tty")
+local channel = require("channel")
+type Channel = channel.Channel
 
 type Cursor = {
     x: integer,
@@ -44,6 +46,7 @@ type Entry = {
     mount_generation: integer,
     observer: boolean,
     view: tty.Viewport?,
+    view_updates: Channel<integer>?,
     retired: boolean,
     failed: boolean,
     error: string,
@@ -74,6 +77,25 @@ local is_shutdown: boolean = false
 local completion_dirty: boolean = false
 local failure_notifications: {FailureNotification} = {}
 local next_mount_generation: integer = 0
+local changed_events = channel.new(1) :: Channel<boolean>
+
+local function signal_change()
+    if is_shutdown then return end
+    channel.select({changed_events:case_send(true), default = true})
+end
+
+local function watch_view(entry: Entry, updates: Channel<integer>)
+    coroutine.spawn(function()
+        while not entry.retired do
+            local selected = channel.select({updates:case_receive()})
+            if not selected.ok then
+                signal_change()
+                break
+            end
+            signal_change()
+        end
+    end)
+end
 
 local M = {}
 
@@ -135,6 +157,7 @@ local function fail_entry(entry: Entry, in_flight_err: string)
     entry.error = msg
     push_failure(entry.id, msg)
     completion_dirty = true
+    signal_change()
 end
 
 local function fail_entry_snapshot(entry: Entry, err: string)
@@ -148,6 +171,7 @@ local function fail_entry_snapshot(entry: Entry, err: string)
     entry.error = msg
     push_failure(entry.id, msg)
     completion_dirty = true
+    signal_change()
 end
 
 local function retire_entry(entry: Entry)
@@ -285,6 +309,7 @@ function M.attach(id: string, mount: string, observer: boolean?): (boolean, stri
         mount_generation = next_mount_generation,
         observer = observer == true,
         view = nil,
+        view_updates = nil,
         retired = false,
         failed = false,
         error = "",
@@ -323,11 +348,23 @@ function M.attach(id: string, mount: string, observer: boolean?): (boolean, stri
             push_failure(entry.id, msg)
             set_worker_active(entry, false)
             completion_dirty = true
+            signal_change()
             check_release(entry)
             return
         end
         entry.view = view
+        local updates, updates_error = view:updates()
+        if not updates then
+            fail_entry_snapshot(entry, tostring(updates_error or "Viewport updates unavailable"))
+            set_worker_active(entry, false)
+            check_release(entry)
+            return
+        end
+        local update_channel: Channel<integer> = updates :: Channel<integer>
+        entry.view_updates = update_channel
+        watch_view(entry, update_channel)
         completion_dirty = true
+        signal_change()
         run_worker(entry)
     end)
 
@@ -557,6 +594,10 @@ function M.shutdown(): ()
             retire_entry(entry)
         end
     end
+end
+
+function M.updates(): Channel<boolean>
+    return changed_events
 end
 
 function M.poll(visible_ids: {string}): boolean

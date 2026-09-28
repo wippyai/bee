@@ -150,7 +150,7 @@ local function main(parent: string, node: unknown, workspace: unknown, selected_
     local inputs = assert(process.listen(protocol.VIEW_INPUT, {message = true}))
     local resizes = assert(process.listen(protocol.VIEW_RESIZE, {message = true}))
     local retries = assert(process.listen(protocol.VIEW_RETRY, {message = true}))
-    local ticks = assert(time.ticker("50ms"))
+    local delivery_updates = delivery.updates()
     local failure: string? = nil
     if confirmed_mode == "control" then
         local resized, resize_error = display.resize(handle, confirmed_width, confirmed_height)
@@ -158,23 +158,24 @@ local function main(parent: string, node: unknown, workspace: unknown, selected_
     end
     local shown = ""
     while not failure do
-        local selected = channel.select({ticks:channel():case_receive(), inputs:case_receive(), resizes:case_receive(),
+        local selected = channel.select({delivery_updates:case_receive(), inputs:case_receive(), resizes:case_receive(),
             closes:case_receive(), retries:case_receive(), events:case_receive()})
         if not selected.ok then break end
         if selected.channel == events then
             local event = selected.value
             if event.kind == process.event.CANCEL then break end
             if (event.kind == process.event.EXIT or event.kind == process.event.LINK_DOWN) and tostring(event.from) == parent then break end
-        elseif selected.channel == ticks:channel() then
-            delivery.poll({session})
-            local frame, frame_error = display.content(handle, confirmed_width, confirmed_height)
-            if frame then
-                local signature = table.concat(frame.rows, "\n")
-                if signature ~= shown then
-                    shown = signature
-                    process.send(parent, protocol.VIEW_FRAME, {version = 1, rows = frame.rows, cursor = frame.cursor})
-                end
-            elseif frame_error and frame_error ~= "Attaching" then failure = frame_error end
+        elseif selected.channel == delivery_updates then
+            if delivery.poll({session}) then
+                local frame, frame_error = display.content(handle, confirmed_width, confirmed_height)
+                if frame then
+                    local signature = table.concat(frame.rows, "\n")
+                    if signature ~= shown then
+                        shown = signature
+                        process.send(parent, protocol.VIEW_FRAME, {version = 1, rows = frame.rows, cursor = frame.cursor})
+                    end
+                elseif frame_error and frame_error ~= "Attaching" then failure = frame_error end
+            end
         else
             local message = selected.value
             if tostring(message:from()) == parent then
@@ -208,7 +209,6 @@ local function main(parent: string, node: unknown, workspace: unknown, selected_
             end
         end
     end
-    ticks:stop()
     for _, subscription in ipairs({inputs, resizes, retries}) do process.unlisten(subscription) end
     local detached, detach_error = display.close(handle)
     if failure then error(failure) end

@@ -52,6 +52,17 @@ function M.descriptor(id: string, pinned: registry.Snapshot?): contract.Descript
     return descriptor(id, {[id] = entry :: Entry})
 end
 
+-- Durable registry edits and activation overlay revisions both invalidate the
+-- broker's admission projection. The latter does not advance registry history.
+function M.revision(workspace_id: string): string
+    if not contract.workspace_id(workspace_id) then error("Invalid application catalog workspace") end
+    local version, version_error = registry.current_version()
+    if not version or version_error then error("Read application catalog revision: " .. tostring(version_error)) end
+    local node_id, node_error = system.node.id()
+    if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
+    return version:string() .. ":" .. application_admissions.revision(workspace_id, node_id)
+end
+
 local function items(bindings: {contract.Binding}, pinned: registry.Snapshot): {contract.Descriptor}
     local result: {contract.Descriptor} = {}
     for _, binding in ipairs(bindings) do

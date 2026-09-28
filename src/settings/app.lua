@@ -25,9 +25,7 @@ local function main(value: unknown)
     local preferences: appearance.Preferences = appearance.defaults()
     local confirmed: appearance.Preferences = preferences
     local status = ""
-    local pending_ticks = 0
-    local ticker = assert(time.ticker("1s"))
-    local ticks = ticker:channel()
+    local pending_timeout: time.Timer? = nil
     local pane: view.Pane = "theme"
     local offset = 0
     local last_checkpoint = ""
@@ -45,6 +43,10 @@ local function main(value: unknown)
     local edit_query_op = ""
     local edit_input = ""
     local running, dirty = true, true
+    local function arm_pending_timeout()
+        if pending_timeout then pending_timeout:stop() end
+        pending_timeout = assert(time.timer("5s"))
+    end
     local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or (pane == "background" and #appearance.backgrounds() or (pane == "about" and view.about_count(width) or 0))) end
     local function selected(): integer
         if pane == "taskbar" then return preferences.taskbar == "icons" and 2 or 1 end
@@ -70,19 +72,25 @@ local function main(value: unknown)
         elseif pane == "background" then next_preferences = {theme = preferences.theme, background = appearance.backgrounds()[value], taskbar = preferences.taskbar}
         else next_preferences = {theme = preferences.theme, background = preferences.background, taskbar = value == 2 and "icons" or "labels"} end
         preferences = next_preferences
-        pending = uuid.v7(); pending_ticks = 0; status = ""
+        pending = uuid.v7(); arm_pending_timeout(); status = ""
         if broker then
             local sent, err = process.send(broker, "bee.appearance.request", {version = 1, request_id = pending, op = "set", theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar})
-            if not sent then pending = ""; preferences = confirmed; status = tostring(err) end
+            if not sent then
+                pending = ""; preferences = confirmed; status = tostring(err)
+                if pending_timeout then pending_timeout:stop(); pending_timeout = nil end
+            end
         end
         reveal(); dirty = true
     end
     local function inherit()
         if not broker then return end
-        pending = uuid.v7(); pending_ticks = 0; status = ""
+        pending = uuid.v7(); arm_pending_timeout(); status = ""
         local sent, err = process.send(broker, "bee.appearance.request", {version = 1, request_id = pending,
             op = "inherit", theme = preferences.theme, background = preferences.background, taskbar = preferences.taskbar})
-        if not sent then pending = ""; status = tostring(err) end
+        if not sent then
+            pending = ""; status = tostring(err)
+            if pending_timeout then pending_timeout:stop(); pending_timeout = nil end
+        end
         dirty = true
     end
     local function browse(amount: integer)
@@ -148,16 +156,15 @@ local function main(value: unknown)
             end
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(),
-            queries:case_receive(), ticks:case_receive()})
+        local cases = {input:case_receive(), lifecycle:case_receive(), states:case_receive(), queries:case_receive()}
+        if pending_timeout then cases[#cases + 1] = pending_timeout:channel():case_receive() end
+        local event = channel.select(cases)
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
-        elseif event.channel == ticks then
-            if pending ~= "" then
-                pending_ticks = pending_ticks + 1
-                if pending_ticks >= 5 then pending = ""; preferences = confirmed; status = "Appearance update timed out"; dirty = true end
-            end
+        elseif pending_timeout and event.channel == pending_timeout:channel() then
+            pending_timeout = nil
+            if pending ~= "" then pending = ""; preferences = confirmed; status = "Appearance update timed out"; dirty = true end
         elseif event.channel == states then
             local message = event.value
             if broker and message:from() == broker then
@@ -169,7 +176,9 @@ local function main(value: unknown)
                     -- An older acknowledgement must not undo a newer key/click.
                     if pending == "" or pending == payload.request_id then
                         preferences = confirmed
-                        pending = ""; dirty = true
+                        pending = ""
+                        if pending_timeout then pending_timeout:stop(); pending_timeout = nil end
+                        dirty = true
                         status = type(payload.error) == "string" and payload.error or ""
                     end
                 end
@@ -249,7 +258,7 @@ local function main(value: unknown)
             end
         end
     end
-    ticker:stop()
+    if pending_timeout then pending_timeout:stop() end
     process.unlisten(states)
     process.unlisten(queries)
     output:close()

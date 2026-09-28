@@ -1,10 +1,20 @@
 -- MIT. Failed attachments remain bounded and release their slots on retirement.
 local test = require("test")
 local delivery = require("delivery")
+local channel = require("channel")
 local time = require("time")
 
 local function define_tests()
     test.describe("Presenter delivery lifecycle", function()
+        test.it("signals attachment completion and viewport updates", function()
+            local updates = delivery.updates()
+            assert(delivery.attach("signal", "invalid-signal-mount"))
+            local selected = channel.select({updates:case_receive(), time.after("1s"):case_receive()})
+            test.is_true(selected.ok)
+            test.is_true(selected.channel == updates)
+            delivery.close("signal")
+            delivery.poll_failure()
+        end)
         test.it("reclaims failed attachments and suppresses retired failure notifications", function()
             for round = 1, 3 do
                 for index = 1, 128 do

@@ -9,7 +9,7 @@ executors, directories and receipts; this contract module owns none of them.
 
 | Slice | Responsibility |
 |---|---|
-| `bee.placement` | `types`: request, grant, attempt, evidence and capability values; `request`: exact decoding and canonical digest; `transitions`: the execution and cleanup state machines; contracts `placement` and `workdir_preparer` |
+| `bee.placement` | `types`: request, grant, attempt, evidence and capability values; `request`: exact decoding and canonical digest; `transitions`: the execution and cleanup state machines; `paths`: physical directory resolution and write-root containment shared by placement and its workdir preparers; contracts `placement` and `workdir_preparer` |
 | `bee.placement.registry` | `resolver`: measures one selected placement contract binding and its exact method targets from a caller-owned registry snapshot |
 
 The host resolves one `bee.placement:placement` contract binding from the

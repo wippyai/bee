@@ -195,6 +195,9 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             raise ValueError("The managed gateway belongs to the unit-test composition")
         if unit_tests:
             shutil.copytree(ROOT / "tests/lua", folder / "src/tests")
+            # The reference applications are documentation sources; the test
+            # composition compiles them against the library and never ships them.
+            shutil.copytree(ROOT / "docs/reference/apps", folder / "src/tests/reference_apps/apps")
             # This test-support copy overrides homes while exercising the
             # component's current materialization source; it never enters a
             # production source tree or assembled pack.

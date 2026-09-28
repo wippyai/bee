@@ -53,12 +53,6 @@ entries:
   imports:
     canonical: bee.threads.records:canonical
     driver_types: bee.driver:types
-- name: paths
-  kind: library.lua
-  source: file://paths.lua
-  modules: [exec]
-  imports:
-    quote: bee.driver.kit:quote
 - name: workdir_preparers
   kind: library.lua
   source: file://workdir_preparers.lua
@@ -68,7 +62,7 @@ entries:
     types: bee.placement:types
     bounds: bee.threads.records:bounds
     store: bee.placement.native.persist:store
-    paths: bee.placement.native.service:paths
+    paths: bee.placement:paths
 - name: service
   kind: library.lua
   source: file://service.lua

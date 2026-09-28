@@ -6,6 +6,8 @@ local artifact = require("artifact")
 local plan_store = require("plan_store")
 local staging = require("staging")
 local approval = require("approval")
+local process = require("process")
+local time = require("time")
 
 local M = {}
 M.WORKSPACE = "0123456789abcdef0123456789abcdef"
@@ -23,6 +25,17 @@ function M.blob(bytes: string): {[string]: string}
     local digest, err = hash.sha256(bytes)
     if not digest then error(tostring(err)) end
     return {bytes = bytes, digest = digest}
+end
+
+-- The approval authority registers its name after it establishes its
+-- incarnation; a command that starts alongside the services waits for it.
+function M.await_authority()
+    for _ = 1, 250 do
+        local pid, lerr = process.registry.lookup("bee.approvals.authority")
+        if pid then return end
+        time.sleep("20ms")
+    end
+    error("approval authority did not start")
 end
 
 function M.object(value: unknown, label: string): Object

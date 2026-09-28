@@ -449,6 +449,43 @@ function M.panel(painter: Painter, rect: Rect, title: string, summary: string?):
     return {x = rect.x, y = rect.y + 1, width = rect.width, height = rect.height - 1}
 end
 
+-- A selectable dashboard card: a panel titled title whose whole rectangle is a
+-- hit of kind at index, with the selection marker in column rect.x - 1 when
+-- selected. Returns the panel's content rectangle.
+function M.card(painter: Painter, rect: Rect, kind: string, index: integer, title: string, selected: boolean): Rect
+    if rect.width <= 0 or rect.height <= 0 then return {x = rect.x, y = rect.y, width = 0, height = 0} end
+    local inner = M.panel(painter, rect, title, selected and "selected" or nil)
+    M.add_hit(painter, kind, index, title, rect.x, rect.y, rect.width, rect.height)
+    if selected then M.put(painter, rect.x - 1, rect.y, "›", 1, painter.theme.accent) end
+    return inner
+end
+
+-- Lays count cards in rect and calls draw(cell, index) for each: a grid of two
+-- columns on compact canvases, of two (four or more cards) or count columns on
+-- larger ones, and only the selected card, filling rect, on narrow canvases.
+function M.cards(painter: Painter, rect: Rect, count: integer, selected: integer, draw: (Rect, integer) -> ())
+    if rect.width <= 0 or rect.height <= 0 or count < 1 then return end
+    local size = M.size(painter.width, painter.height)
+    if size == "narrow" then
+        draw(rect, maximum(1, minimum(count, selected)))
+        return
+    end
+    local columns = size == "compact" and 2 or (count >= 4 and 2 or count)
+    local cells = M.grid(rect, columns, (count + columns - 1) // columns)
+    for index = 1, minimum(count, #cells) do draw(cells[index], index) end
+end
+
+-- Splits rect into a list pane and a detail pane on canvases of at least 100
+-- columns by 24 rows (list 60 columns, detail the rest); otherwise the list
+-- fills rect and the detail is nil.
+function M.master_detail(painter: Painter, rect: Rect): (Rect, Rect?)
+    if painter.width >= 100 and painter.height >= 24 then
+        local panes = M.split(rect, {60, 0}, 2)
+        return panes[1], panes[2]
+    end
+    return rect, nil
+end
+
 -- One form field on row y: the muted label padded to label_width, then the
 -- value. The selected field takes the row selection and its target; an error
 -- replaces the value's trailing room in the error role after " · ".
@@ -682,6 +719,23 @@ function M.fuzzy(query: string, text: string): integer?
         at = found + 1
     end
     return (last - (first or 1)) + (first or 1)
+end
+
+-- The palette choices for query over labels: every label that fuzzy matches,
+-- best match first and in list order among equal scores, each keyed by its label.
+function M.ranked(query: string, labels: {string}): {Choice}
+    local scored: {{score: integer, order: integer, label: string}} = {}
+    for order, label in ipairs(labels) do
+        local score = M.fuzzy(query, label)
+        if score then scored[#scored + 1] = {score = score, order = order, label = label} end
+    end
+    table.sort(scored, function(a, b)
+        if a.score ~= b.score then return a.score < b.score end
+        return a.order < b.order
+    end)
+    local choices: {Choice} = {}
+    for _, item in ipairs(scored) do choices[#choices + 1] = {label = item.label, key = item.label} end
+    return choices
 end
 
 -- A command palette overlay: a modal titled "Command Palette" sized to

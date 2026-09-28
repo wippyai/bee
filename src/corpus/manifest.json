@@ -115,17 +115,17 @@
       "topic": "lua"
     },
     {
-      "bytes": 4297,
+      "bytes": 4435,
       "id": "docs/readme",
-      "sha256": "e29ac0ad74fb5b7eafdc035e41a455e634ad208d409ee72cdfca4cea61f50122",
+      "sha256": "8e3b5e030fd5e4bebeb441664b87ecefd3e0bad7746ee4697edf2855184c417e",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
     },
     {
-      "bytes": 10012,
+      "bytes": 10045,
       "id": "docs/agent_guide",
-      "sha256": "100553a43c001bbb025ac187faf4d85854e819ec498afd2747b1a3e88672a1bc",
+      "sha256": "afd66c44c6f4b7b2ca293ad0e2cba38aab629eb54c091271e5776bdb0b04d9ae",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -155,9 +155,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 18041,
+      "bytes": 18613,
       "id": "docs/app_style",
-      "sha256": "34a5e011b10a53188f13ac2d69ade9ee1dda0061b4fdc3b6a84836b6cca84414",
+      "sha256": "af1b97a5688cf1ae25cd9b7faaedcb6cf315ac7681ac88cbe8833dbdf2d0bbf7",
       "source": "docs/guides/app-style.md",
       "title": "Application visual style",
       "topic": "ui"
@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3776,
+      "bytes": 4241,
       "id": "component/application",
-      "sha256": "cac28a41cc522d1b930929f396c6332f18479c87c94391f93280c40efa0ceab2",
+      "sha256": "07928a46ca037c47b75cba2bb10632f907173d44913d4f167d66ad03429215e3",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -395,6 +395,14 @@
       "topic": "component"
     },
     {
+      "bytes": 2995,
+      "id": "component/git:worktree",
+      "sha256": "13da92ddcdaf58d50aa44c9aa4bf7da2f54175b7fe7ba798d23f337f047dfb1f",
+      "source": "modules/git-worktree/src/README.md",
+      "title": "bee.git_worktree",
+      "topic": "component"
+    },
+    {
       "bytes": 21072,
       "id": "component/gov",
       "sha256": "9c5cf1e876baecd45209a79656e66e1a2444d1bb3a0d6cb82934ffeaf0e7bc13",
@@ -451,17 +459,17 @@
       "topic": "component"
     },
     {
-      "bytes": 4689,
+      "bytes": 5192,
       "id": "component/placement",
-      "sha256": "b24b179077b15313d4d98bdeeda528880590fc04581674c73fa69229adf2be81",
+      "sha256": "b3678a3ac80904306ca113c95af43c6741956061684f80be1eb139bde508f4cd",
       "source": "modules/placement/src/README.md",
       "title": "bee.placement",
       "topic": "component"
     },
     {
-      "bytes": 20630,
+      "bytes": 21700,
       "id": "component/placement:native",
-      "sha256": "40d06617a93cb122e8529c10a4913d9fcb4e353cd7d7821328d5f5e9cb7e8b80",
+      "sha256": "8fdd5a69a72785df9566185e69bae6ae46abed2df1b7c2e5bee6272f78604553",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -491,18 +499,98 @@
       "topic": "component"
     },
     {
-      "bytes": 39710,
+      "bytes": 3134,
+      "id": "reference_apps/ci_bench",
+      "sha256": "b8debf03476e07e477734d92c2f6c3db715745e9932cbe76ee33cafa203171a4",
+      "source": "docs/reference/apps/ci_bench.lua",
+      "title": "Reference application: CI and benchmark board",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 5192,
+      "id": "reference_apps/deploy_board",
+      "sha256": "da01c303b64005bbd7966c285da367e1465d2c6a22c4d985bb657d873def665f",
+      "source": "docs/reference/apps/deploy_board.lua",
+      "title": "Reference application: deploy board",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 5005,
+      "id": "reference_apps/deploy_form",
+      "sha256": "a314177a46e1056cfeb8e719ff3208e596dfc0db4c9e9118d9aad328426cd12b",
+      "source": "docs/reference/apps/deploy_form.lua",
+      "title": "Reference application: deploy wizard",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 3832,
+      "id": "reference_apps/inbox",
+      "sha256": "db25e4e2302d2fc21867851add018cb128d6171ec50cbc20309639f03d977107",
+      "source": "docs/reference/apps/inbox.lua",
+      "title": "Reference application: inbox and approvals",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2551,
+      "id": "reference_apps/log_viewer",
+      "sha256": "e51de4e7674682eea4652d1088c1412359d39474d0e7510a605d9ebf0557f3b8",
+      "source": "docs/reference/apps/log_viewer.lua",
+      "title": "Reference application: log viewer with a workspace tree",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 3994,
+      "id": "reference_apps/metrics",
+      "sha256": "c7d392d44bce877b2d7d301324d4b8d98f2331c225d99af293a0c306b3dc1eff",
+      "source": "docs/reference/apps/metrics.lua",
+      "title": "Reference application: live metrics monitor",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 4525,
+      "id": "reference_apps/overlays",
+      "sha256": "9a5d017028dd53cb24f13493b87106bfae6515f9e58753d05f3c7b7d1d7b3124",
+      "source": "docs/reference/apps/overlays.lua",
+      "title": "Reference application: command palette, confirmation modal and toast",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2194,
+      "id": "reference_apps/topology",
+      "sha256": "3dad7da81b3fa910d634de4838f7d0827144225a32431267051aa8eb297b6534",
+      "source": "docs/reference/apps/topology.lua",
+      "title": "Reference application: topology and sizes",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2357,
+      "id": "reference_apps/workflow",
+      "sha256": "537038e04c895ec523ee08444d1e7f0e1af4bac608995393762f7354ce23e3f2",
+      "source": "docs/reference/apps/workflow.lua",
+      "title": "Reference application: durable workflow",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 2291,
+      "id": "reference_apps/index",
+      "sha256": "6b7137c38a247b08a07ddeea3315947eb99941dc7b390e34202eb65c4254ca4f",
+      "source": "generated: docs/reference/apps",
+      "title": "Reference applications",
+      "topic": "reference_apps"
+    },
+    {
+      "bytes": 40510,
       "id": "toolkit",
-      "sha256": "1a361f16dbef8be1fce28e4e40b7ff98dab54be890701850f5bb0f7c26760c1e",
+      "sha256": "edc85fadd16967ad13d353969005f65b1f0f6e7a090e83227479ba96205e1100",
       "source": "generated: modules/application/src, src application views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
     }
   ],
   "schema": "bee.docs-corpus@1",
-  "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
+  "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 632713,
-    "documents": 62
+    "bytes": 674364,
+    "documents": 73
   }
 }

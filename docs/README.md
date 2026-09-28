@@ -15,6 +15,7 @@ generator when the corpus is intentionally updated.
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
 | Bee visual language and accessible terminal UI | [UI brand book](guides/ui.md) |
 | Exact placement, color and breakpoint rules for application screens | [Application visual style](guides/app-style.md) |
+| Copyable, proven application screens (deploy board, inbox, logs, metrics, forms, overlays) | [Reference applications](reference/apps) |
 | Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md) |
 | Application admission, launch, messages, and recovery | [Application contracts](reference/applications.md) |
 | Workspace storage and application state | [Storage](reference/storage.md), [workspace state](reference/workspace-state.md) |

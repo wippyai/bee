@@ -343,7 +343,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local settle_exited_replacement: (Instance, boolean) -> boolean
     -- Reconcile one protected registry snapshot. Compatible automatic
     -- producers may follow a later revision through the replacement path below.
-    local function refresh_admission(initial: boolean?)
+    local function refresh_admission(initial: boolean?): boolean
         local previous = admission.current
         local ok, loaded = pcall(function(): Admission
             local selected = catalog.read(workspace_id)
@@ -380,7 +380,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end)
         if ok then
             local selected: Admission = loaded :: Admission
-            if previous == selected then return end
+            if previous == selected then return true end
             -- A binding the catalog no longer admits fences its stable
             -- family out of every thread: a revoked or uninstalled app
             -- keeps no runs to follow, whether or not it still runs.
@@ -414,12 +414,14 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     transition(item, "force_stop")
                 end
             end
+            return true
         else
             if initial then error(tostring(loaded)) end
             -- An invalid or unreadable replacement must not leave stale grants
             -- available for another launch. Existing instances retain their scope.
             admission.current, admission.error = nil, tostring(loaded):sub(1, 2000)
             if previous then assert(process.send(owner, "bee.application.catalog", {version = 1, items = {}})) end
+            return false
         end
     end
     local function emit(reply: contract.Reply, remember: boolean?)
@@ -1052,8 +1054,14 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 return catalog.revision(workspace_id)
             end)
             if revision_ok and current_revision ~= observed_admission_revision then
-                observed_admission_revision = current_revision
-                refresh_admission()
+                -- A governed admission can still be mid-write across several
+                -- registry commits (recovery materializes more than one
+                -- entry). refresh_admission's torn-read guard then reports
+                -- failure without applying the change; the observed revision
+                -- only advances once a refresh actually reads a consistent
+                -- catalog, so the next check retries instead of leaving a
+                -- missed change unpolled for the rest of this process.
+                if refresh_admission() then observed_admission_revision = current_revision end
             end
             next_admission_check = now() + 1
         end

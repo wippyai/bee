@@ -19,6 +19,7 @@ local function call(target: string, request: unknown): Object
 end
 
 local function main()
+    helper.await_authority()
     local plans = helper.open_plans()
     local plan = helper.selected_plan(plans)
     helper.close(plans)

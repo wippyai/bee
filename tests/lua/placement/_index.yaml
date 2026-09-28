@@ -227,6 +227,7 @@ entries:
     executable_stream: bee.placement.native.service:executable_stream
     resource_resolution: bee.placement.native.service:resource_resolution
     homes: bee.placement.native.service:homes
+    output_buffer: bee.placement.native.service:output_buffer
     quote: bee.driver.kit:quote
     types: bee.placement:types
 - name: provider_configuration_test

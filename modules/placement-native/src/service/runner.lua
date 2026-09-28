@@ -17,8 +17,10 @@ local protocol = require("protocol")
 local quote = require("quote")
 local types = require("types")
 local materialization = require("materialization")
-type Chunk = {stream: string, data: string?, eof: boolean}
-type Pending = {sequence: integer, stream: string, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
+local output_buffer = require("output_buffer")
+type Stream = "stdout" | "stderr"
+type Chunk = {stream: Stream, data: string?, eof: boolean}
+type Pending = {sequence: integer, stream: Stream, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
 local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
     local result = store.transition(db, attempt_id, {execution = update and update.execution :: types.ExecutionState? or nil,
         fields = update and update.fields :: {[string]: unknown}? or nil, evidence = {kind = kind, detail = detail}})
@@ -178,7 +180,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     -- handle and would end signalling and input.
     local chunks = channel.new(4)
     local exits = channel.new(1)
-    local function pump(name: string, stream)
+    local function pump(name: Stream, stream)
         coroutine.spawn(function()
             while true do
                 local data = stream:read(protocol.MAX_CHUNK_BYTES)
@@ -220,6 +222,36 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local next_sequence = 1
     local sent_through = 0
     local consumed_through = 0
+    -- Pipe reads can be much smaller than the requested read size. A short
+    -- coalescing window keeps line-oriented providers from turning each
+    -- flushed JSON line into a separate durable carrier commit.
+    local coalesce_timer = time.after("1ms")
+    local coalesce_armed = false
+    local buffered = output_buffer.new()
+    local function enqueue(stream: Stream, data: string?, eof: boolean, marked: boolean?)
+        local bytes = data and #data or 0
+        pending[#pending + 1] = {sequence = next_sequence, stream = stream, data = data, eof = eof, bytes = bytes, truncated = marked}
+        next_sequence = next_sequence + 1
+    end
+    local function flush_buffer(stream: Stream)
+        local item = output_buffer.flush(buffered, stream)
+        if item then enqueue(item.stream, item.data, false, nil) end
+    end
+    local function flush_buffers()
+        flush_buffer("stdout")
+        flush_buffer("stderr")
+    end
+    local function buffer_data(stream: Stream, data: string)
+        if data == "" then return end
+        spooled = spooled + #data
+        for _, item in ipairs(output_buffer.append(buffered, stream, data)) do
+            enqueue(item.stream, item.data, false, nil)
+        end
+        if not coalesce_armed then
+            coalesce_timer = time.after("20ms")
+            coalesce_armed = true
+        end
+    end
     local remembered: {string} = {}
     local remembered_set: {[string]: boolean} = {}
     local inputs = assert(process.listen(protocol.TOPIC_INPUT, {message = true}))
@@ -277,6 +309,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 spooled = spooled + item.bytes
             end
         end
+        spooled = spooled + output_buffer.size(buffered)
         pending = kept
     end
     local function signal(number: integer, kind: string, why: string)
@@ -300,6 +333,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     while true do
         local cases = {controls:case_receive(), inputs:case_receive(), acks:case_receive(), events:case_receive(), exits:case_receive()}
         if spooled < protocol.MAX_SPOOL_BYTES and eof_seen < 2 then cases[#cases + 1] = chunks:case_receive() end
+        if coalesce_armed then cases[#cases + 1] = coalesce_timer:case_receive() end
         if kill_armed then cases[#cases + 1] = kill_timer:case_receive() end
         if retain_armed then cases[#cases + 1] = retain_timer:case_receive() end
         if drain_armed then cases[#cases + 1] = drain_timer:case_receive() end
@@ -320,15 +354,20 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             pending = {}
             break
         end
-        if selected.channel == chunks then
+        if coalesce_armed and selected.channel == coalesce_timer then
+            coalesce_armed = false
+            flush_buffers()
+            flush()
+        elseif selected.channel == chunks then
             local chunk = selected.value :: Chunk
-            local bytes = chunk.data and #(chunk.data :: string) or 0
             local marked: boolean? = nil
             if chunk.eof and truncated then marked = true end
-            pending[#pending + 1] = {sequence = next_sequence, stream = chunk.stream, data = chunk.data, eof = chunk.eof, bytes = bytes, truncated = marked}
-            next_sequence = next_sequence + 1
-            spooled = spooled + bytes
-            if chunk.eof then eof_seen = eof_seen + 1 end
+            if chunk.data then buffer_data(chunk.stream, chunk.data) end
+            if chunk.eof then
+                flush_buffer(chunk.stream)
+                enqueue(chunk.stream, nil, true, marked)
+                eof_seen = eof_seen + 1
+            end
             if eof_seen >= 2 and not has_done and not exited then reap() end
             flush()
         elseif selected.channel == exits then

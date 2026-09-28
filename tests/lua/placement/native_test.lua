@@ -30,6 +30,7 @@ local store = require("store")
 local materialization = require("materialization")
 local request_codec = require("request_codec")
 local protocol = require("protocol")
+local output_buffer = require("output_buffer")
 local homes = require("homes")
 local quote = require("quote")
 local types = require("types")
@@ -407,6 +408,30 @@ local function has(list: {string}, wanted: string): boolean
 end
 local function define_tests()
     test.describe("Native placement", function()
+        test.it("coalesces short reads within the bounded output chunk and preserves stream bytes", function()
+            local buffers = output_buffer.new()
+            local source = string.rep("x", output_buffer.MAX_BYTES * 2 + 17)
+            local emitted: {string} = {}
+            for offset = 1, #source, 97 do
+                for _, item in ipairs(output_buffer.append(buffers, "stdout", source:sub(offset, offset + 96))) do
+                    emitted[#emitted + 1] = item.data
+                end
+            end
+            local stderr = output_buffer.append(buffers, "stderr", "diagnostic")
+            test.eq(#emitted, 2)
+            test.eq(#emitted[1], output_buffer.MAX_BYTES)
+            test.eq(#emitted[2], output_buffer.MAX_BYTES)
+            test.eq(#stderr, 0)
+            test.eq(output_buffer.size(buffers), 27)
+            local stdout_tail = output_buffer.flush(buffers, "stdout")
+            local stderr_tail = output_buffer.flush(buffers, "stderr")
+            test.is_true(stdout_tail ~= nil)
+            test.is_true(stderr_tail ~= nil)
+            emitted[#emitted + 1] = (stdout_tail :: {data: string}).data
+            test.eq(table.concat(emitted), source)
+            test.eq((stderr_tail :: {data: string}).data, "diagnostic")
+            test.eq(output_buffer.size(buffers), 0)
+        end)
         test.it("projects only each driver's declared login and configuration files into fixture attempt homes", function()
             for _, case in ipairs(provider_home_fixtures()) do
                 local home_spec = (case.launch.provider_home :: {[string]: unknown})

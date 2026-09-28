@@ -519,7 +519,19 @@ func reportLaunch(client *httpClient, url, authorization string, report object, 
 	answered := false
 	settled := false
 	waits := 0
-	for attempt := 0; attempt < 12 && !(answered && settled); attempt++ {
+	waitLimit := 12
+	var waitDeadline time.Time
+	longWait := os.Getenv("BEE_FIXTURE_GATEWAY_LONG_WAIT") == "1" ||
+		os.Getenv("BEE_FIXTURE_WORKER_MARKER") == "bee-long-batch-result-envelope-recorded"
+	if longWait {
+		// Stream observations wake thread_wait before the worker is done, so an
+		// iteration cap expires much sooner than its nominal wait duration during
+		// a noisy research run. Bound this case by elapsed time instead.
+		waitLimit = 1 << 20
+		waitDeadline = time.Now().Add(12 * time.Minute)
+	}
+	for attempt := 0; attempt < waitLimit && !(answered && settled) &&
+		(waitDeadline.IsZero() || time.Now().Before(waitDeadline)); attempt++ {
 		waits++
 		waited := rpcWithTimeout(client, url, authorization, "tools/call", object{
 			"name":      "thread_wait",
@@ -549,7 +561,10 @@ func reportLaunch(client *httpClient, url, authorization string, report object, 
 				}
 			}
 			content := mustObject(body["content"])
-			if text := stringField(content, "text"); text != "" && strings.Contains(text, marker) {
+			observation := mustObject(body["data"])
+			messageText := stringField(content, "text")
+			observationText := stringField(observation, "text")
+			if marker != "" && (strings.Contains(messageText, marker) || strings.Contains(observationText, marker)) {
 				answered = true
 			}
 		}

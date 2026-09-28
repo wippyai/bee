@@ -14,6 +14,11 @@ entries:
   kind: library.lua
   source: file://executable_stream.lua
   modules: [hash]
+- name: output_buffer
+  kind: library.lua
+  source: file://output_buffer.lua
+  imports:
+    protocol: bee.placement.native:protocol
 - name: resource_resolution
   kind: library.lua
   source: file://resource_resolution.lua
@@ -103,6 +108,7 @@ entries:
     executable: bee.placement.native.service:executable
     resources: bee.placement.native:resources
     identity: bee.placement.native.service:identity
+    output_buffer: bee.placement.native.service:output_buffer
     protocol: bee.placement.native:protocol
     quote: bee.driver.kit:quote
     types: bee.placement:types

@@ -3,16 +3,21 @@
 package launch
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"sync"
 	"strings"
 	"time"
 
+	"github.com/syncthing/notify"
 	"go.uber.org/zap"
 
 	"github.com/wippyai/bee/native/hive/rendezvous"
@@ -21,6 +26,8 @@ import (
 
 	"github.com/wippyai/runtime/api/attrs"
 	"github.com/wippyai/runtime/api/boot"
+	clusterapi "github.com/wippyai/runtime/api/cluster"
+	eventapi "github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/logs"
 	"github.com/wippyai/runtime/api/payload"
 	"github.com/wippyai/runtime/api/registry"
@@ -137,9 +144,8 @@ func trustedKeys(trusted string) ([]trustedKey, error) {
 }
 
 // enrollmentPublisher mirrors the owner's trusted client directory into the
-// supervisor's enrollment entry on a bounded interval. It depends on the cluster
-// so the update lands only while the owner's mesh is up. Start returns as soon as
-// the first publish succeeds; the periodic refresh runs until Stop cancels it.
+// supervisor's enrollment entry. It depends on the cluster so the update lands
+// only while the owner's mesh is up.
 func enrollmentPublisher(state string) (boot.Component, error) {
 	if !filepath.IsAbs(state) {
 		return nil, errors.New("enrollment publisher requires an absolute state directory")
@@ -197,13 +203,19 @@ func (p *enrollmentPublisherComponent) publishSupervisor(ctx context.Context) er
 }
 
 type enrollmentPublisherComponent struct {
-	state     string
-	directory string
-	trusted   string
-	execution string
-	node      string
-	secret    []byte
-	cancel    context.CancelFunc
+	state           string
+	directory       string
+	trusted         string
+	execution       string
+	node            string
+	secret          []byte
+	cancel          context.CancelFunc
+	done            chan struct{}
+	registryClients []string
+	registryPeers   []string
+	registryApplied bool
+	seededClients   []trustedKey
+	seeded          bool
 }
 
 // seedEnrollment initializes the owner's local enrollment from its membership
@@ -289,13 +301,130 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 	if err != nil {
 		return err
 	}
-	if _, err := reg.Apply(ctx, enrollmentChange(keys, peers)); err != nil {
-		return err
+	clientNames, peerNames := trustedNames(keys), trustedNames(peers)
+	if !p.registryApplied || !slices.Equal(clientNames, p.registryClients) || !slices.Equal(peerNames, p.registryPeers) {
+		if _, err := reg.Apply(ctx, enrollmentChange(keys, peers)); err != nil {
+			return err
+		}
+		p.registryClients, p.registryPeers, p.registryApplied = clientNames, peerNames, true
 	}
 	if err := p.publishSupervisor(ctx); err != nil {
 		return err
 	}
-	return p.seedEnrollment(ctx, enrollment, keys)
+	if !p.seeded || !sameTrustedKeys(p.seededClients, keys) {
+		if err := p.seedEnrollment(ctx, enrollment, keys); err != nil {
+			return err
+		}
+		p.seededClients, p.seeded = cloneTrustedKeys(keys), true
+	}
+	return nil
+}
+
+func trustedNames(keys []trustedKey) []string {
+	names := make([]string, 0, len(keys))
+	for _, key := range keys {
+		names = append(names, key.node)
+	}
+	return names
+}
+
+func sameTrustedKeys(left, right []trustedKey) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index, key := range left {
+		if key.node != right[index].node || !bytes.Equal(key.key, right[index].key) {
+			return false
+		}
+	}
+	return true
+}
+
+func cloneTrustedKeys(keys []trustedKey) []trustedKey {
+	cloned := make([]trustedKey, len(keys))
+	for index, key := range keys {
+		cloned[index] = trustedKey{node: key.node, key: append(ed25519.PublicKey(nil), key.key...)}
+	}
+	return cloned
+}
+
+func watchEnrollmentDirectories(ctx context.Context, directories ...string) (<-chan struct{}, <-chan struct{}, error) {
+	changed := make(chan struct{}, 1)
+	channels := make([]chan notify.EventInfo, 0, len(directories))
+	for _, directory := range directories {
+		events := make(chan notify.EventInfo, 64)
+		path := filepath.Clean(directory) + string(os.PathSeparator)
+		if err := notify.Watch(path, events, notify.All); err != nil {
+			for _, channel := range channels {
+				notify.Stop(channel)
+			}
+			return nil, nil, err
+		}
+		channels = append(channels, events)
+	}
+	done := make(chan struct{})
+	var wait sync.WaitGroup
+	for _, events := range channels {
+		wait.Add(1)
+		go func(events chan notify.EventInfo) {
+			defer wait.Done()
+			defer notify.Stop(events)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case change, ok := <-events:
+					if !ok || change == nil || !strings.HasSuffix(filepath.Base(change.Path()), ".pub") {
+						continue
+					}
+					select {
+					case changed <- struct{}{}:
+					default:
+					}
+				}
+			}
+		}(events)
+	}
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+	return changed, done, nil
+}
+
+func subscribeDepartures(lifetime, ctx context.Context) (<-chan struct{}, <-chan struct{}) {
+	departures := make(chan struct{}, 1)
+	done := make(chan struct{})
+	bus := eventapi.GetBus(ctx)
+	if bus == nil {
+		close(done)
+		return departures, done
+	}
+	events := make(chan eventapi.Event, 16)
+	subscriber, err := bus.SubscribeP(lifetime, clusterapi.System, clusterapi.NodeLeft, events)
+	if err != nil {
+		close(done)
+		return departures, done
+	}
+	go func() {
+		defer close(done)
+		defer bus.Unsubscribe(context.WithoutCancel(lifetime), subscriber)
+		for {
+			select {
+			case <-lifetime.Done():
+				return
+			case _, ok := <-events:
+				if !ok {
+					return
+				}
+				select {
+				case departures <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}()
+	return departures, done
 }
 
 // Start arms the publisher and returns. It must not publish yet: the runtime
@@ -315,11 +444,26 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 	}
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	p.cancel = cancel
+	changes, changesDone, err := watchEnrollmentDirectories(lifetime, p.trusted, ownerPeersDirectory(p.state))
+	if err != nil {
+		cancel()
+		p.cancel = nil
+		return fmt.Errorf("watch enrollment directories: %w", err)
+	}
+	departures, departuresDone := subscribeDepartures(lifetime, ctx)
+	p.done = make(chan struct{})
 	go func() {
+		defer close(p.done)
+		defer func() {
+			<-changesDone
+			<-departuresDone
+		}()
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
+		retry := (<-chan time.Time)(ticker.C)
+		tickerStopped := false
 		published := false
-		for {
+		publish := func() {
 			if err := p.publish(lifetime, reg, enrollment); err != nil {
 				// Before the first publish the entry is still being applied.
 				if published {
@@ -329,11 +473,24 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 				}
 			} else {
 				published = true
+				retry = nil
+				if !tickerStopped {
+					ticker.Stop()
+					tickerStopped = true
+				}
 			}
+		}
+		publish()
+		for {
 			select {
 			case <-lifetime.Done():
 				return
-			case <-ticker.C:
+			case <-changes:
+				publish()
+			case <-departures:
+				publish()
+			case <-retry:
+				publish()
 			}
 		}
 	}()
@@ -343,7 +500,9 @@ func (p *enrollmentPublisherComponent) Start(ctx context.Context) error {
 func (p *enrollmentPublisherComponent) Stop(context.Context) error {
 	if p.cancel != nil {
 		p.cancel()
+		<-p.done
 		p.cancel = nil
+		p.done = nil
 	}
 	return nil
 }

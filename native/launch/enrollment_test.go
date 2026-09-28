@@ -18,6 +18,8 @@ import (
 	"github.com/wippyai/bee/native/hive/rendezvous"
 	"github.com/wippyai/bee/native/internal/privatefile"
 	"github.com/wippyai/runtime/api/boot"
+	clusterapi "github.com/wippyai/runtime/api/cluster"
+	eventapi "github.com/wippyai/runtime/api/event"
 	"github.com/wippyai/runtime/api/pid"
 	"github.com/wippyai/runtime/api/registry"
 	topapi "github.com/wippyai/runtime/api/topology"
@@ -28,13 +30,14 @@ import (
 
 // recordingRegistry captures the change sets the publisher applies.
 type recordingRegistry struct {
-	applied   int
+	enrollmentRegistryStub
+	applied   atomic.Int64
 	lastNodes []string
 	lastPeers []string
 }
 
 func (r *recordingRegistry) Apply(_ context.Context, changes registry.ChangeSet) (registry.Version, error) {
-	r.applied++
+	r.applied.Add(1)
 	r.lastNodes, r.lastPeers = nil, nil
 	for _, operation := range changes {
 		raw, _ := operation.Entry.Data.Data().(map[string]any)
@@ -109,8 +112,8 @@ func TestEnrollmentPublisherAppliesAddedAndRetiredNodes(t *testing.T) {
 	if _, err := reg.Apply(context.Background(), changes); err != nil {
 		t.Fatal(err)
 	}
-	if reg.applied != 1 {
-		t.Fatalf("applied %d change sets, want 1", reg.applied)
+	if reg.applied.Load() != 1 {
+		t.Fatalf("applied %d change sets, want 1", reg.applied.Load())
 	}
 	if len(reg.lastNodes) != 2 || reg.lastNodes[0] != "client-a" || reg.lastNodes[1] != "client-b" {
 		t.Fatalf("published nodes = %v", reg.lastNodes)
@@ -211,6 +214,74 @@ func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
 		if err := stopper.Stop(context.Background()); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestEnrollmentPublisherPublishesFilesystemChangesAndStopsRefreshing(t *testing.T) {
+	state := t.TempDir()
+	prepareOwnerState(t, state)
+	reg := &recordingRegistry{}
+	base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	component, err := enrollmentPublisher(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := component.(boot.Starter).Start(liveOwner(t, state, registry.WithRegistry(base, reg))); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
+	waitForEnrollment(t, func() bool { return reg.applied.Load() == 1 })
+	time.Sleep(1200 * time.Millisecond)
+	if got := reg.applied.Load(); got != 1 {
+		t.Fatalf("unchanged enrollment applied %d times after startup, want 1", got)
+	}
+
+	public := makeTestPublicKey(t)
+	release, err := enrollClient(context.Background(), state, "client-event", public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execution, err := readExecution(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := rendezvous.NewEnrollment(ownerDirectory(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForEnrollment(t, func() bool {
+		key, ok := local.Resolve(context.Background(), execution, "client-event")
+		return ok && key.Equal(public)
+	})
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	waitForEnrollment(t, func() bool {
+		_, ok := local.Resolve(context.Background(), execution, "client-event")
+		return !ok
+	})
+}
+
+func makeTestPublicKey(t *testing.T) ed25519.PublicKey {
+	t.Helper()
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return public
+}
+
+func waitForEnrollment(t *testing.T, ready func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !ready() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !ready() {
+		t.Fatal("enrollment change was not published")
 	}
 }
 
@@ -403,7 +474,12 @@ func TestEnrollmentPublisherRetiresDepartedClients(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := publisher.Start(liveOwner(t, state, registry.WithRegistry(base, reg))); err != nil {
+	ownerContext := liveOwner(t, state, registry.WithRegistry(base, reg))
+	bus := eventapi.GetBus(ownerContext)
+	if bus == nil {
+		t.Fatal("test owner context has no event bus")
+	}
+	if err := publisher.Start(ownerContext); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
@@ -419,6 +495,8 @@ func TestEnrollmentPublisherRetiresDepartedClients(t *testing.T) {
 		t.Fatal("a live client was never enrolled")
 	}
 	releaseGone()
+	bus.Send(context.Background(), eventapi.Event{System: clusterapi.System, Kind: clusterapi.NodeLeft,
+		Data: clusterapi.NodeEvent{Node: clusterapi.NodeInfo{ID: "client-gone"}}})
 	deadline = time.Now().Add(5 * time.Second)
 	for resolved("client-gone") && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)

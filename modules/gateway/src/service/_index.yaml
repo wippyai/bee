@@ -8,3 +8,4 @@ entries:
   modules: [process, channel, time, logger]
   imports:
     installation: bee.gateway.security:installation
+    approval_service: bee.approvals:service

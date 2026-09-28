@@ -161,7 +161,7 @@ entries:
   kind: function.lua
   source: file://activation_store_test.lua
   method: run
-  modules: [hash]
+  modules: [hash, uuid]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:

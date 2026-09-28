@@ -1,8 +1,10 @@
 -- Read only protected bindings; app metadata cannot select its own permissions.
 local registry = require("registry")
 local system = require("system")
+local hash = require("hash")
 local contract = require("contract")
 local application_admissions = require("application_admissions")
+local canonical = require("canonical")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
@@ -50,6 +52,26 @@ function M.descriptor(id: string, pinned: registry.Snapshot?): contract.Descript
     if pinned then entry, entry_error = pinned:get(id) else entry, entry_error = registry.get(id) end
     if entry_error or not entry then return nil end
     return descriptor(id, {[id] = entry :: Entry})
+end
+
+-- Durable registry edits and activation overlay revisions both invalidate the
+-- broker's admission projection. The latter does not advance registry history.
+function M.revision(workspace_id: string): string
+    if not contract.workspace_id(workspace_id) then error("Invalid application catalog workspace") end
+    local pinned, snapshot_error = registry.snapshot()
+    if not pinned or snapshot_error then error("Read application catalog snapshot: " .. tostring(snapshot_error)) end
+    local version = pinned:version()
+    local node_id, node_error = system.node.id()
+    if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
+    local admission, admission_error = pinned:get("bee.security:application_admission")
+    if not admission or admission_error or type(admission.data) ~= "table" then
+        error("Read application admission revision: " .. tostring(admission_error or "invalid admission entry"))
+    end
+    local encoded, encode_error = canonical.encode(admission.data, 65536)
+    if not encoded then error("Encode application admission revision: " .. tostring(encode_error)) end
+    local fingerprint, digest_error = hash.sha256(encoded)
+    if not fingerprint then error("Hash application admission revision: " .. tostring(digest_error)) end
+    return version:string() .. ":" .. fingerprint .. ":" .. application_admissions.revision(workspace_id, node_id)
 end
 
 local function items(bindings: {contract.Binding}, pinned: registry.Snapshot): {contract.Descriptor}

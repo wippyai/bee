@@ -84,9 +84,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local active_selection: selection.State? = nil
     local pending_clipboard: string? = nil
     local remote_copy_reply: string? = nil
-    local pending_clipboard_at: integer? = nil
+    local clipboard_timeout: time.Timer? = nil
     local pending_transfers: {[string]: {id: string, instance_id: string, target_display_id: string}} = {}
-    local CLIPBOARD_TIMEOUT_NS: integer = 10 * 1000 * 1000 * 1000
     local status: string = "Starting workspace"
     local window_failure: {id: string, text: string}? = nil
     local function set_window_error(id: string, title: string, message: string)
@@ -104,8 +103,15 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local dirty = true
     local running = true
     local hydrated, rejoining = false, false
-    local ticker = assert(time.ticker("33ms"))
-    local ticks = ticker:channel()
+    local delivery_updates = delivery.updates()
+
+    local function clear_pending_clipboard()
+        pending_clipboard = nil
+        if clipboard_timeout then
+            clipboard_timeout:stop()
+            clipboard_timeout = nil
+        end
+    end
 
     -- Predict only input ownership, never committed drawing or producer sizes.
     -- A correlated acknowledgement settles the latest intent, including no-ops.
@@ -173,8 +179,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local function cancel_selection()
         active_selection = selection.cancel(active_selection)
         remote_copy_reply = nil
-        pending_clipboard = nil
-        pending_clipboard_at = nil
+        clear_pending_clipboard()
     end
     local function toggle_connection()
         local selected = active_selection ~= nil
@@ -203,8 +208,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
             mount_generation = attachment.generation, width = body.width, height = body.height}, rows)
         if not captured then status = "Text selection unavailable: " .. tostring(capture_error); return end
         active_selection = captured
-        pending_clipboard = nil
-        pending_clipboard_at = nil
+        clear_pending_clipboard()
         status = "Select text: drag to select; Ctrl+C requests clipboard; Esc cancels"
     end
     local function request_clipboard()
@@ -235,7 +239,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
             return
         end
         pending_clipboard = request_id
-        pending_clipboard_at = time.now():unix_nano()
+        if clipboard_timeout then clipboard_timeout:stop() end
+        clipboard_timeout = assert(time.timer("10s"))
         status = "Clipboard requested"
     end
     local function clipboard_result(value: unknown): {request_id: string, status: string, error: string}?
@@ -401,11 +406,13 @@ local function main(owner: string, initial_application: string?, secondary_appli
     end
     assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))
     while running do
-        local selected = channel.select({input:case_receive(), lifecycle:case_receive(),
+        local cases = {input:case_receive(), lifecycle:case_receive(),
             replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(),
             transfer_updates:case_receive(), transfer_results:case_receive(), attachment_updates:case_receive(),
-            dialog_states:case_receive(), dialog_results:case_receive(), ticks:case_receive(),
-            workspace_pages:case_receive(), switch_results:case_receive()})
+            dialog_states:case_receive(), dialog_results:case_receive(), delivery_updates:case_receive(),
+            workspace_pages:case_receive(), switch_results:case_receive()}
+        if clipboard_timeout then cases[#cases + 1] = clipboard_timeout:channel():case_receive() end
+        local selected = channel.select(cases)
         if not selected.ok then break end
         if selected.channel == lifecycle then
             local event = selected.value
@@ -455,8 +462,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     status = "Clipboard request rejected: " .. reply.error
                     dirty = true
                 elseif reply and active_selection and selection_body(active_selection) and reply.request_id == pending_clipboard then
-                    pending_clipboard = nil
-                    pending_clipboard_at = nil
+                    clear_pending_clipboard()
                     if reply.status == "submitted" then
                         cancel_selection()
                         status = "Clipboard request submitted"
@@ -593,12 +599,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 end
                 dirty = true
             end
-        elseif selected.channel == ticks then
-            if pending_clipboard and pending_clipboard_at and time.now():unix_nano() - pending_clipboard_at >= CLIPBOARD_TIMEOUT_NS then
-                pending_clipboard, pending_clipboard_at = nil, nil
+        elseif clipboard_timeout and selected.channel == clipboard_timeout:channel() then
+            clipboard_timeout = nil
+            if pending_clipboard then
+                pending_clipboard = nil
                 status = "Clipboard request unavailable: timed out"
                 dirty = true
             end
+        elseif selected.channel == delivery_updates then
             local visible_ids: {string} = {}
             for _, win in ipairs(model.visible(scene)) do
                 if win.mode ~= "collapsed" then table.insert(visible_ids, win.id) end
@@ -712,7 +720,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     local x, y = math.floor(tonumber(event.x) or 1), math.floor(tonumber(event.y) or 1)
                     if event.action == "press" and event.button == "left" then
                         active_selection = selection.press(active_selection, x - body.x + 1, y - body.y + 1)
-                        pending_clipboard, pending_clipboard_at = nil, nil
+                        clear_pending_clipboard()
                     elseif event.action == "motion" then
                         active_selection = selection.motion(active_selection, x - body.x + 1, y - body.y + 1)
                     elseif event.action == "release" and event.button == "left" then
@@ -959,7 +967,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         end
         if dirty and hydrated then paint() end
     end
-    ticker:stop()
+    if clipboard_timeout then clipboard_timeout:stop() end
     process.unlisten(dialog_states)
     process.unlisten(dialog_results)
     process.unlisten(clipboard_results)

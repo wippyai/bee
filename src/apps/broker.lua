@@ -105,11 +105,17 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local checkpoint_waiters: {[string]: Checkpoint} = {}
     local events = assert(process.events())
     assert(process.monitor(owner))
-    local ticker = assert(time.ticker("100ms"))
-    local ticks = ticker:channel()
+    -- Effective application admission can change through process-local
+    -- registry overlays, which do not advance registry history and expose no
+    -- change subscription. Requests refresh synchronously; this one-shot check
+    -- compares lightweight registry and activation revisions before projecting
+    -- the full catalog.
+    local next_admission_check = now() + 1
+    local observed_admission_revision: string? = nil
     local admission: {current: Admission?, error: string} = {error = ""}
     local instances: {[string]: Instance} = {}
     local binding_engine = thread_binding.new()
+    local recovery_started = false
     local recovery_received = false
     local membership_policy = assert(security.policy("bee.security.threads:application_thread_membership_policy"))
     local membership_scope = security.new_scope({membership_policy})
@@ -850,6 +856,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if not was_opened and recipient ~= "" then attachment_error = mount(item) end
             if was_opened then emit(identified(item, "title", ""))
             else emit(identified(item, "open", item.open_request), true) end
+            item.title_dirty = false
             appearance_state(item)
             if attachment_error then
                 emit(identified(item, "attached", item.open_request, "attachment_failed", attachment_error))
@@ -963,6 +970,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             emit(identified(item, "closing", waiter.control and "" or waiter.request_id))
         else commit_explicit_close(item, force and "force_stop" or "stop") end
     end
+    observed_admission_revision = catalog.revision(workspace_id)
     refresh_admission(true)
     backfill_retained_aliases(alias_backfill)
     assert(process.send(owner, "bee.app.ready", {version = 1}))
@@ -998,8 +1006,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if item.state.phase == "starting" then item.negotiate_close = negotiate end
         transition(item, "ready")
     end
-    local function tick_instance(item: Instance)
-        transition(item, "tick")
+    local function publish_title(item: Instance)
         if item.opened and lifecycle.accepts_updates(item.state) and item.title_dirty then
             emit(identified(item, "title", ""))
             item.title_dirty = false
@@ -1010,16 +1017,115 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     local replace_acked = false
     local replace_deadline = 0
     local replace_started = 0
+    local replace_retry_at = 0
+    local deadline_timer: time.Timer? = nil
+    local function arm_deadline()
+        local due: number? = next_admission_check
+        local function consider(value: number)
+            if value > 0 and (due == nil or value < due) then due = value end
+        end
+        if replace_requested and not replace_acked then
+            consider(replace_started + 10)
+            consider(replace_retry_at)
+        end
+        if replace_acked then consider(replace_deadline) end
+        if cleanup_request ~= "" and not cleanup_complete then consider(cleanup_deadline) end
+        for _, waiter in pairs(checkpoint_waiters) do consider(waiter.deadline) end
+        for _, item in pairs(instances) do consider(item.state.deadline) end
+        for _, raw_coordinator in pairs(binding_engine.coordinators) do
+            local coordinator: BindingCoordinator = raw_coordinator
+            if coordinator.effect and type(coordinator.effect) ~= "string" then consider(coordinator.retry_at) end
+            if coordinator.state.terminal == "retry" or coordinator.state.terminal == "failed"
+                or coordinator.state.terminal == "cleanup_pending" then
+                if coordinator.state.binding then consider(coordinator.retry_at) end
+            end
+        end
+        if due then
+            local delay = math.max(1, math.ceil((due - now()) * 1000))
+            deadline_timer = assert(time.timer(tostring(delay) .. "ms"))
+        end
+    end
+    local function process_deadlines()
+        local current = now()
+        if current >= next_admission_check then
+            local revision_ok, current_revision = pcall(function(): string
+                return catalog.revision(workspace_id)
+            end)
+            if revision_ok and current_revision ~= observed_admission_revision then
+                observed_admission_revision = current_revision
+                refresh_admission()
+            end
+            next_admission_check = now() + 1
+        end
+        if replace_requested and not replace_acked then
+            if current - replace_started >= 10 then
+                process.send(owner, "bee.application.replace_failed", {version = 1, schema = 1,
+                    workspace_id = workspace_id, broker = tostring(process.pid()), reason = "drain_timeout"})
+                replace_requested = false
+            elseif current >= replace_retry_at then
+                process.send(owner, "bee.application.replacing", {version = 1, schema = 1,
+                    workspace_id = workspace_id, broker = tostring(process.pid())})
+                replace_retry_at = current + 0.1
+            end
+        end
+        for _, raw_coordinator in pairs(binding_engine.coordinators) do
+            local coordinator: BindingCoordinator = raw_coordinator
+            if coordinator.effect and type(coordinator.effect) ~= "string" and current >= coordinator.retry_at then
+                thread_binding.run_effect(binding_engine, binding_context, coordinator, coordinator.effect)
+            end
+            if (coordinator.state.terminal == "retry" or coordinator.state.terminal == "failed"
+                or coordinator.state.terminal == "cleanup_pending") and current >= coordinator.retry_at then
+                local binding = coordinator.state.binding
+                if binding then
+                    thread_binding.reset(coordinator)
+                    thread_binding.drive(binding_engine, binding_context, coordinator, {kind = "recover", binding = binding})
+                end
+            end
+        end
+        for id, waiter in pairs(checkpoint_waiters) do
+            if current >= waiter.deadline then
+                process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
+                    error_code = "timeout", error = "Checkpoint persistence timed out"})
+                checkpoint_waiters[id] = nil
+                local item = find_pid(waiter.pid)
+                if item then start_replacement(item) end
+            end
+        end
+        for _, item in pairs(instances) do
+            if item.state.deadline > 0 and current >= item.state.deadline then transition(item, "tick") end
+        end
+        refresh_shutdown()
+    end
+    local function acknowledge_binding_recovery()
+        if not recovery_started or recovery_received then return end
+        for _, raw_coordinator in pairs(binding_engine.coordinators) do
+            local coordinator: BindingCoordinator = raw_coordinator
+            local terminal = coordinator.state.terminal
+            if terminal ~= "active" and terminal ~= "fenced" and terminal ~= "cleanup_pending" then return end
+        end
+        recovery_received = true
+        assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
+    end
+    arm_deadline()
     while running do
-        local selected = channel.select({requests:case_receive(), app_ready:case_receive(), titles:case_receive(), queries:case_receive(), answers:case_receive(), close_replies:case_receive(), shutdown_requests:case_receive(), appearance_requests:case_receive(),
-            appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), replace_acks:case_receive(), thread_requests:case_receive(), fences:case_receive(), events:case_receive(), ticks:case_receive()})
+        local cases = {requests:case_receive(), app_ready:case_receive(), titles:case_receive(), queries:case_receive(), answers:case_receive(), close_replies:case_receive(), shutdown_requests:case_receive(), appearance_requests:case_receive(),
+            appearance_states:case_receive(), controls:case_receive(), checkpoints:case_receive(), persisted:case_receive(), binding_results:case_receive(), binding_recovery:case_receive(), replace_acks:case_receive(), thread_requests:case_receive(), fences:case_receive(), events:case_receive()}
+        if deadline_timer then cases[#cases + 1] = deadline_timer:channel():case_receive() end
+        local selected = channel.select(cases)
         if not selected.ok then break end
-        if selected.channel == replace_acks then
+        local deadline_fired = deadline_timer ~= nil and selected.channel == deadline_timer:channel()
+        if deadline_timer then deadline_timer:stop(); deadline_timer = nil end
+        if deadline_fired then
+            process_deadlines()
+        elseif selected.channel == replace_acks then
             local message = selected.value
             local data: unknown = message:payload():data()
             if tostring(message:from()) == owner and type(data) == "table" and data.version == 1
                 and data.schema == 1 and data.workspace_id == workspace_id and data.broker == tostring(process.pid()) then
-                if data.accepted == true then replace_acked = true; replace_deadline = now() + 5 end
+                if data.accepted == true then
+                    replace_acked, replace_deadline = true, now() + 5
+                    replace_retry_at = 0
+                elseif replace_requested then replace_retry_at = now() + 0.1 end
             end
         elseif selected.channel == thread_requests then
             local message = selected.value
@@ -1052,6 +1158,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if message:from() == owner and not recovery_received then
                 local recovered = binding_protocol.recovery(message:payload():data(), workspace_id)
                 if not recovered then error("Invalid application thread binding recovery snapshot") end
+                recovery_started = true
                 for _, raw_binding in ipairs(recovered.items) do
                     local binding: binding_protocol.Binding = raw_binding
                     local coordinator = thread_binding.new_coordinator(binding.instance_id)
@@ -1122,6 +1229,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if event.kind == process.event.OUTDATED then
                 replace_requested = true
                 replace_started = now()
+                replace_retry_at = replace_started + 0.1
+                process.send(owner, "bee.application.replacing", {version = 1, schema = 1,
+                    workspace_id = workspace_id, broker = tostring(process.pid())})
             end
             if event.kind == process.event.EXIT then
                 local item = find_pid(tostring(event.from))
@@ -1137,57 +1247,6 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     transition(current, lifecycle.exit_event(current.state, failure ~= nil))
                 end
             end
-        elseif selected.channel == ticks then
-            if replace_requested and not replace_acked then
-                if now() - replace_started >= 10 then
-                    process.send(owner, "bee.application.replace_failed", {version = 1, schema = 1,
-                        workspace_id = workspace_id, broker = tostring(process.pid()), reason = "drain_timeout"})
-                    replace_requested = false
-                else
-                    process.send(owner, "bee.application.replacing", {version = 1, schema = 1,
-                        workspace_id = workspace_id, broker = tostring(process.pid())})
-                end
-            end
-            refresh_admission()
-            for _, raw_coordinator in pairs(binding_engine.coordinators) do
-                local coordinator: BindingCoordinator = raw_coordinator
-                if coordinator.effect and type(coordinator.effect) ~= "string" and now() >= coordinator.retry_at then
-                    thread_binding.run_effect(binding_engine, binding_context, coordinator, coordinator.effect)
-                end
-                if (coordinator.state.terminal == "retry" or coordinator.state.terminal == "failed" or coordinator.state.terminal == "cleanup_pending")
-                    and now() >= coordinator.retry_at then
-                    local binding = coordinator.state.binding
-                    if binding then
-                        thread_binding.reset(coordinator)
-                        thread_binding.drive(binding_engine, binding_context, coordinator, {kind = "recover", binding = binding})
-                    end
-                end
-            end
-            if not recovery_received then
-                local settled = true
-                for _, raw_coordinator in pairs(binding_engine.coordinators) do
-                    local coordinator: BindingCoordinator = raw_coordinator
-                    local terminal = coordinator.state.terminal
-                    if terminal ~= "active" and terminal ~= "fenced" and terminal ~= "cleanup_pending" then settled = false; break end
-                end
-                if settled then
-                    recovery_received = true
-                    assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
-                end
-            end
-            for id, waiter in pairs(checkpoint_waiters) do
-                if now() >= waiter.deadline then
-                    process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
-                        error_code = "timeout", error = "Checkpoint persistence timed out"})
-                    checkpoint_waiters[id] = nil
-                end
-            end
-            for _, item in pairs(instances) do
-                local replacement = item.replacement
-                if replacement and replacement.exited then start_replacement(item)
-                else tick_instance(item) end
-            end
-            refresh_shutdown()
         elseif selected.channel == shutdown_requests and selected.value:from() == owner then
             local data: unknown = selected.value:payload():data()
             if type(data) == "table" and data.version == 1 and data.op == "prepare" then prepare_shutdown() end
@@ -1278,6 +1337,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     if title == "" then title = item.descriptor.title end
                     if title ~= (item.announced_title or item.descriptor.title) then
                         item.announced_title = title; item.title_dirty = true
+                        publish_title(item :: Instance)
                     end
                 end
             end
@@ -1325,6 +1385,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                         error_code = type(data.error_code) == "string" and data.error_code or "invalid_result",
                         error = type(data.error) == "string" and data.error or "Invalid persistence result"})
                     checkpoint_waiters[data.request_id] = nil
+                    local item = find_pid(waiter.pid)
+                    if item then start_replacement(item) end
                 end
             end
         elseif selected.channel == app_ready then
@@ -1693,8 +1755,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 break
             end
         end
+        if now() >= next_admission_check then process_deadlines() end
+        acknowledge_binding_recovery()
+        arm_deadline()
     end
-    ticker:stop()
+    if deadline_timer then deadline_timer:stop() end
     -- Owner loss and CANCEL are the emergency path; normal shutdown has already
     -- cooperated. Each live execution is cancelled so it can stop what it owns,
     -- and the broker exits only after every one has.

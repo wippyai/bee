@@ -9,6 +9,8 @@ local security = require("security")
 local registry = require("registry")
 local env = require("env")
 local time = require("time")
+local process = require("process")
+local channel = require("channel")
 local json = require("json")
 local admission = require("admission")
 
@@ -113,6 +115,22 @@ local function await_receipt(thread_id: string, attempt_id: string): {[string]: 
     error("receipt wait ended without a result")
 end
 
+-- The carrier settles on the terminal envelope, which can precede the
+-- child's exit; the placement state is final once the carrier has closed and
+-- ended, so the carrier's own exit is the event to wait for. A carrier that
+-- ended before it could be monitored has already closed.
+local function await_carrier_exit(events: Channel<process.Event>, carrier: string)
+    local monitored = process.monitor(carrier)
+    if not monitored then return end
+    local deadline = time.after("120s")
+    while true do
+        local selected = channel.select({events:case_receive(), deadline:case_receive()})
+        if not selected.ok or selected.channel == deadline then error("carrier " .. carrier .. " did not end") end
+        local event = selected.value
+        if event.kind == process.event.EXIT and tostring(event.from) == carrier then return end
+    end
+end
+
 local function profile_policy(entry: {[string]: unknown}, bin: string, stream: string): {[string]: unknown}
     local data = entry.data :: {[string]: unknown}
     local configured: {[string]: unknown} = {}
@@ -199,13 +217,19 @@ local function define_tests()
                 local workspace = fresh("profile-workspace")
                 call("bee.resources.binding:associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})
                 call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
+                local events = assert(process.events())
                 local alpha = call("bee.harness.launch:start", {request_id = fresh("profile-alpha"), definition_ref = ALPHA, workspace_id = workspace, brief = "ping"})
                 attempts[#attempts + 1] = tostring(alpha.attempt_id)
                 local beta = call("bee.harness.launch:start", {request_id = fresh("profile-beta"), definition_ref = BETA, workspace_id = workspace, brief = "ping"})
                 attempts[#attempts + 1] = tostring(beta.attempt_id)
                 for _, started in ipairs({alpha, beta}) do
                     local status = await_receipt(tostring(started.thread_id), tostring(started.attempt_id))
-                    test.eq((status.attempt :: {[string]: unknown}).execution_state, "exited")
+                    await_carrier_exit(events, tostring(started.carrier))
+                    status = call("bee.placement.native.binding:status", {attempt_id = tostring(started.attempt_id)})
+                    if (status.attempt :: {[string]: unknown}).execution_state ~= "exited" or (status.attempt :: {[string]: unknown}).exit == nil then
+                        local trail = call("bee.placement.native.binding:evidence", {attempt_id = tostring(started.attempt_id), limit = 64})
+                        error("placement " .. tostring((status.attempt :: {[string]: unknown}).execution_state) .. "; evidence " .. assert(json.encode(trail)))
+                    end
                     test.eq(((status.attempt :: {[string]: unknown}).exit :: {[string]: unknown}).code, 0)
                     local durable = records(tostring(started.thread_id))
                     test.eq(count(durable, "attempt.started"), 1)

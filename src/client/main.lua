@@ -44,8 +44,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
     if not bootstrap then error("Invalid client bootstrap options") end
     local defaults_reader = node_appearance.new()
     local page_reader = workspace_pages.new()
-    local defaults_timer = assert(time.ticker("1s"))
-    local defaults_ticks = defaults_timer:channel()
+    local defaults_timer = bootstrap.node_defaults and assert(time.ticker("1s")) or nil
+    local defaults_ticks = defaults_timer and defaults_timer:channel() or nil
     local owned_database: store.Store? = nil
     local owned_display: physical.Display? = terminal and terminal.display or nil
     local presenter, session = "", ""
@@ -550,7 +550,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 if bootstrap.node_defaults then
                     defaults_pending = node_appearance.advance(defaults_reader, math.floor(time.now():unix_nano() / 1000000))
                 end
-                local cases = {defaults_ticks:case_receive(), events:case_receive(), input:case_receive(), admissions:case_receive(),
+                local cases = {events:case_receive(), input:case_receive(), admissions:case_receive(),
                     presentations:case_receive(), replies:case_receive(),
                     controls:case_receive(), requests:case_receive(), commands:case_receive(), scenes:case_receive(), launch_requests:case_receive(),
                     acknowledgements:case_receive(), updates:case_receive(), question_states:case_receive(),
@@ -569,6 +569,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                     cases[#cases + 1] = assignment_updates:case_receive()
                     cases[#cases + 1] = transfer_results:case_receive()
                 end
+                if defaults_ticks and not saved_for_exit then cases[#cases + 1] = defaults_ticks:case_receive() end
                 if defaults_pending then cases[#cases + 1] = defaults_pending.response:case_receive() end
                 local page_pending = page_reader.pending
                 if page_pending and not saved_for_exit then cases[#cases + 1] = page_pending.response:case_receive() end
@@ -578,7 +579,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
                 if selected.channel == presenter_deadline then
                     log:warn("Presenter readiness timed out", {workspace_id = workspace_id, presenter = presenter})
                     pause_presenter()
-                elseif selected.channel == defaults_ticks then
+                elseif defaults_ticks and selected.channel == defaults_ticks then
                     local defaults = node_defaults
                     if defaults and layout.appearance_mode == "inherit" and defaults_request == "" and next(appearance_pending) == nil
                         and (layout.preferences.theme ~= defaults.preferences.theme
@@ -1059,7 +1060,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         run()
     end
     local completed, err = pcall(boot)
-    defaults_timer:stop()
+    if defaults_timer then defaults_timer:stop() end
     node_appearance.close(defaults_reader)
     workspace_pages.close(page_reader)
     if owned_database then store.close(owned_database) end

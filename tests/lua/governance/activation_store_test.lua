@@ -1,6 +1,7 @@
 -- MIT. Persistence and fencing checks for destination activation state.
 local test = require("test")
 local hash = require("hash")
+local uuid = require("uuid")
 local canonical = require("canonical")
 local store = require("activation_store")
 local database = require("database")
@@ -51,6 +52,26 @@ local function migration_blob(): ({[string]: string}, string)
 end
 local function define_tests()
     test.describe("Governance activation store", function()
+        test.it("changes the catalog revision token when an activation slot is added", function()
+            local workspace = assert(uuid.v7())
+            local state = assert(store.open("bee.gov:activation_test_db", "node-revision", workspace))
+            local before = ok(store.catalog_revision("bee.gov:activation_test_db", "node-revision", workspace)).revision
+            local input = prepare()
+            input.intent_id, input.idempotency_key = "intent-" .. workspace, "prepare-" .. workspace
+            local prepared = ok(store.call(state, "actor-a", input))
+            local bound = ok(store.call(state, "actor-a", {operation = "bind_approval", intent_id = input.intent_id,
+                expected_revision = prepared.revision, idempotency_key = "bind-" .. workspace,
+                approval_id = "approval-" .. workspace, approval_proposal_digest = string.rep("d", 64),
+                approval_owner_incarnation = 8}))
+            local consuming = ok(store.call(state, "actor-a", {operation = "begin_consume", intent_id = input.intent_id,
+                expected_revision = bound.revision, idempotency_key = "consume-" .. workspace}))
+            ok(store.call(state, "actor-a", {operation = "record_consumption", intent_id = input.intent_id,
+                expected_revision = consuming.revision, idempotency_key = "receipt-" .. workspace,
+                consumer_id = "governance-host", proposal_digest = string.rep("d", 64), effect_key = prepared.effect_key}))
+            local after = ok(store.catalog_revision("bee.gov:activation_test_db", "node-revision", workspace)).revision
+            test.is_true(type(before) == "string" and type(after) == "string" and before ~= after)
+            assert(store.close(state))
+        end)
         test.it("keeps immutable facts and separates authorized from observed state", function()
             local state, open_error = store.open("bee.gov:activation_test_db", "node-a", "workspace-a")
             if not state then error(tostring(open_error)) end

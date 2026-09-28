@@ -68,11 +68,12 @@ func joinListener(state string, address netip.Addr) (boot.Component, error) {
 
 // admitter answers one joiner for the running owner.
 type admitter struct {
-	state      string
-	node       string
-	authority  meshtls.Authority
-	membership clusterapi.Membership
-	redeem     redeemer
+	state          string
+	node           string
+	authority      meshtls.Authority
+	membership     clusterapi.Membership
+	redeem         redeemer
+	addressUpdates chan struct{}
 	// serial keeps one redemption in flight: all share the listener's one
 	// supervisor endpoint.
 	serial sync.Mutex
@@ -105,9 +106,19 @@ func (a *admitter) forgetReached() error {
 	a.reached.Store(nil)
 	err := os.Remove(filepath.Join(ownerDirectory(a.state), reachedFileName))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		err = nil
+	}
+	if err == nil {
+		a.signalAddressUpdate()
 	}
 	return err
+}
+
+func (a *admitter) signalAddressUpdate() {
+	select {
+	case a.addressUpdates <- struct{}{}:
+	default:
+	}
 }
 
 func (l *joinListenerComponent) Start(ctx context.Context) error {
@@ -157,7 +168,8 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	log := logs.GetLogger(ctx).Named("bee.launch.join")
 	lifetime, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	l.cancel, l.done = cancel, make(chan struct{})
-	a := &admitter{state: l.state, node: l.node, authority: authority, membership: membership, redeem: redeem}
+	a := &admitter{state: l.state, node: l.node, authority: authority, membership: membership, redeem: redeem,
+		addressUpdates: make(chan struct{}, 1)}
 	// The node states whether it expects to be dialed, through the membership
 	// metadata the runtime re-broadcasts. Its internode endpoint needs no
 	// metadata: the runtime dials a member at its membership address, which the
@@ -175,9 +187,7 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 	}()
 	go func() {
 		defer close(recorded)
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
+		reconcile := func() {
 			if err := recordAddresses(l.state, membership); err != nil {
 				log.Warn("hive address record failed", zap.Error(err))
 			}
@@ -187,14 +197,16 @@ func (l *joinListenerComponent) Start(ctx context.Context) error {
 			if err := l.republishAddress(membership); err != nil {
 				log.Warn("hive address republish failed", zap.Error(err))
 			}
+		}
+		reconcile()
+		for {
 			select {
 			case <-lifetime.Done():
 				return
 			case <-updates:
-				if err := recordAddresses(l.state, membership); err != nil {
-					log.Warn("hive address record failed", zap.Error(err))
-				}
-			case <-ticker.C:
+				reconcile()
+			case <-a.addressUpdates:
+				reconcile()
 			}
 		}
 	}()
@@ -263,7 +275,7 @@ func publishMeshMeta(membership clusterapi.Membership, hint string) {
 // subscribeNodeUpdates reports peer join, leave and metadata changes from the
 // event bus. The peer address files are rewritten on every report, so a peer
 // that restarts with a new address is seeded at its new address on the next
-// boot. A bus is optional: without one the periodic record still runs.
+// boot. A bus is optional: the initial address snapshot still runs without it.
 func subscribeNodeUpdates(lifetime context.Context, ctx context.Context) <-chan struct{} {
 	updates := make(chan struct{}, 1)
 	bus := event.GetBus(ctx)
@@ -331,7 +343,11 @@ func (a *admitter) observeReached(remote, local net.Addr) {
 		return
 	}
 	value := address
+	if previous, ok := a.reachedAddress(); ok && previous == value {
+		return
+	}
 	a.reached.Store(&value)
+	a.signalAddressUpdate()
 }
 
 func socketAddress(value string) net.Addr {

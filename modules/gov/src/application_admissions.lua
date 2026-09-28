@@ -169,6 +169,19 @@ local function packaged(revision: string, configuration: activation_profiles.Dec
     return cached.admissions, nil
 end
 
+-- Admission overlays are process-local registry state, so registry history
+-- alone cannot invalidate the broker's cached catalog. Read their small SQL
+-- revision token without decoding profiles or scanning registry entries.
+function M.revision(workspace_id: string, node_id: string): string
+    local resource = resources.database()
+    if not resource then return "unlinked" end
+    local result = activation_store.catalog_revision(resource, node_id, workspace_id)
+    if not result.ok then return "unavailable" end
+    local value = bounds.object(result.value)
+    if not value or type(value.revision) ~= "string" then return "unavailable" end
+    return value.revision
+end
+
 -- Package projection is memoized by the same registry revision, workspace and
 -- node tuple as the catalog read it replaces.
 function M.read(pinned: registry.Snapshot, revision: string, workspace_id: string,

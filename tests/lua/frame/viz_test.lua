@@ -156,6 +156,35 @@ local PIPELINE: {string} = {
     "                                                            "}
 local LEGEND: {string} = {
     " █ heap  ▓ stack  ▒ free                "}
+local SCATTER: {string} = {
+    "                                        ",
+    " 9 ┤      ⠠         ⠈                   ",
+    "   │                                    ",
+    "   │                                ⠠   ",
+    " 0 ┤   ⠐                                ",
+    "   └─────────────────────────────────   ",
+    "    0                              10   ",
+    "                                        "}
+local CANDLES: {string} = {
+    "                                        ",
+    " 22 ┤│   █                              ",
+    "    │█ █ ─                              ",
+    "    ││ █ █                              ",
+    "  0 ┤                                   ",
+    "    └────────────────────────────────   ",
+    "     a b c                              ",
+    "                                        "}
+local RING: {string} = {
+    "            ",
+    " ⢀⣴⠾⠛⠛⠷⣦⡀   ",
+    " ⣾⠃    ⠘⣷   ",
+    " ⢿⡄65% ⢠⡿   ",
+    " ⠈⠻⢶⣤⣤⡶⠟⠁   ",
+    "            "}
+local STACKED_PERCENT: {string} = {
+    " █ busy  ▓ idle  ▒ failed               ",
+    " node-a  ████████████████▓▓▓▓▓▓▓▒▒▒  10 ",
+    " node-b  ███████▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒   4 "}
 
 type Draw = (painter: frame.Painter, rect: frame.Rect) -> ()
 local function drawings(): {Draw}
@@ -179,6 +208,9 @@ local function drawings(): {Draw}
         function(p: frame.Painter, r: frame.Rect) viz.timeline(p, r, {{label = "build", spans = {{start = 0, finish = 20}}}}, {from = 0, to = 60, now = 30, from_label = "18:00", to_label = "19:00"}) end,
         function(p: frame.Painter, r: frame.Rect) viz.graph(p, r, nodes, edges) end,
         function(p: frame.Painter, r: frame.Rect) viz.legend(p, r.x, r.y, r.width, {{label = "heap"}, {label = "stack"}}) end,
+        function(p: frame.Painter, r: frame.Rect) viz.scatter(p, r, {{x = 1, y = 1}, {x = 5, y = 9, role = "ok"}}) end,
+        function(p: frame.Painter, r: frame.Rect) viz.candles(p, r, {{label = "a", low = 1, high = 9, open = 3, close = 7}}) end,
+        function(p: frame.Painter, r: frame.Rect) viz.ring(p, r, 65, 100) end,
     }
 end
 
@@ -392,6 +424,48 @@ local function define_tests()
             local cycle = frame.new(40, 5, appearance.defaults())
             test.eq(viz.graph(cycle, {x = 2, y = 1, width = 38, height = 5}, {{id = "a", label = "a"}, {id = "b", label = "b"}},
                 {{from = "a", to = "b"}, {from = "b", to = "a"}}), 2)
+        end)
+        test.it("plots points and OHLC-style candles with their own axes", function()
+            -- example: scatter
+            local scatter = frame.new(40, 8, appearance.defaults())
+            viz.scatter(scatter, {x = 2, y = 2, width = 36, height = 6}, {
+                {x = 1, y = 1},
+                {x = 5, y = 9},
+                {x = 10, y = 3, role = "ok"},
+                {x = 2, y = 8, role = "warn"}})
+            golden(scatter, SCATTER)
+
+            -- example: candles
+            local candles = frame.new(40, 8, appearance.defaults())
+            viz.candles(candles, {x = 2, y = 2, width = 36, height = 6}, {
+                {label = "a", low = 10, high = 20, open = 12, close = 18},
+                {label = "b", low = 5, high = 15, open = 14, close = 8},
+                {label = "c", low = 8, high = 22, value = 14}})
+            golden(candles, CANDLES)
+        end)
+        test.it("draws a radial gauge and animates a spinner", function()
+            -- example: ring
+            local ring = frame.new(12, 6, appearance.defaults())
+            viz.ring(ring, {x = 2, y = 2, width = 8, height = 4}, 65, 100, {})
+            golden(ring, RING)
+
+            -- example: spinner
+            local frames: {string} = {}
+            for tick = 0, 11 do frames[#frames + 1] = viz.spinner(tick) end
+            test.eq(table.concat(frames), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠋⠙")
+        end)
+        test.it("stacks bars as a 100% share and appends an ETA to progress", function()
+            -- example: stacked
+            local percent = frame.new(40, 3, appearance.defaults())
+            viz.stacked(percent, {x = 2, y = 1, width = 38, height = 3},
+                {{label = "node-a", segments = {6, 3, 1}}, {label = "node-b", segments = {1, 1, 2}}},
+                {"busy", "idle", "failed"}, {percent = true})
+            golden(percent, STACKED_PERCENT)
+
+            -- example: progress
+            local eta = frame.new(40, 1, appearance.defaults())
+            viz.progress(eta, 2, 1, 36, 3180, 4000, {eta = "2m"})
+            test.eq(text(eta)[1], " ████████████░░░ 3,180/4,000 · ETA 2m   ")
         end)
         test.it("draws only inside its rectangle at every size and keeps rows at the canvas width", function()
             for number, draw in ipairs(drawings()) do

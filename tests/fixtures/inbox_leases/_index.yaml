@@ -1,0 +1,37 @@
+version: '1.0'
+namespace: bee.approvals.inbox.leases.probe
+entries:
+- name: seed_policy
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    - db.get
+    - registry.get
+    - system.read
+    - env.get
+    - security.policy.get
+    resources: '*'
+    effect: allow
+- name: seed
+  kind: process.lua
+  source: file://seed.lua
+  method: main
+  modules:
+  - funcs
+  - system
+  - logger
+  imports:
+    staging: bee.gov:staging_resources
+    lease_store: bee.gov.persist:lease_store
+  security:
+    policies:
+    - bee.approvals.inbox.leases.probe:seed_policy
+    - bee.security.approvals:approval_request_policy
+    - bee.security.approvals:approval_consume_policy
+  meta:
+    command:
+      name: inbox-leases-seed
+      security:
+        actor:
+          id: bee.approvals.inbox.leases.probe

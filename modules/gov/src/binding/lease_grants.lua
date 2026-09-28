@@ -51,7 +51,8 @@ function M.propose(executor: Executor, vocabulary: capability_model.Vocabulary, 
     local raw, call_error = executor:call("bee.approvals.binding:request", {workspace_id = workspace_id,
         idempotency_key = key, request_kind = "permission", policy = chosen.approval_policy,
         proposal = {kind = "operation", ref = LEASE_PROPOSAL, revision = seed_digest, input_digest = seed_digest,
-            payload = {workspace_id = workspace_id, target = chosen.overlay_owner, envelope = envelope,
+            payload = {workspace_id = workspace_id, target = chosen.overlay_owner, operation = "grant lease",
+                source_node = request.source_node, source_workspace = chosen.source_workspace, envelope = envelope,
                 ttl_seconds = ttl, max_applies = max, resolved_capabilities = lines}},
         prompt = {text = "Let " .. chosen.source_workspace .. " apply changes inside this envelope without asking again?"}})
     local reply = bounds.object(raw)
@@ -76,7 +77,7 @@ function M.grant(executor: Executor, lease_handle: lease_store.Store, vocabulary
     local incarnation = bounds.count(approval.owner_incarnation)
     if approval.state ~= "decided" or approval.decision ~= "approved" or approval.policy ~= chosen.approval_policy
         or approval.workspace_id ~= workspace_id or not proposal or proposal.ref ~= LEASE_PROPOSAL or not payload
-        or payload.target ~= chosen.overlay_owner or not proposal_digest or not incarnation or incarnation < 1 then
+        or payload.target ~= chosen.overlay_owner or payload.source_workspace ~= chosen.source_workspace or not proposal_digest or not incarnation or incarnation < 1 then
         return failure("DENIED", "approval is not a decided lease grant for this application")
     end
     local envelope = bounds.dense_list(payload.envelope, lease_model.MAX_ENVELOPE, "lease envelope")

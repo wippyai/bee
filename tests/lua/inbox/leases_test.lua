@@ -1,0 +1,157 @@
+-- MIT. The inbox lease slice: the spec grammar, the governance operations a
+-- lease needs, the marked batch and the lease rows, all pure.
+local test = require("test")
+local appearance = require("appearance")
+local model = require("model")
+local leases = require("leases")
+local view = require("view")
+type Object = {[string]: unknown}
+
+local function approval(id: string, state: string, ref: string, payload: Object, extra: Object?): model.ApprovalView
+    local item: Object = {approval_id = id, workspace_id = "ws-1", requester_id = "bee.gov.activation", request_kind = "permission",
+        policy = "inbox-test", proposal = {kind = "operation", ref = ref, revision = "r1", payload = payload},
+        proposal_digest = string.rep("a", 64), prompt = {text = "Apply notes?"}, revision = 1, state = state,
+        owner_node = "node-1", owner_incarnation = 3, expires_at = "2026-09-09T10:00:00.000Z",
+        created_at = "2026-09-09T09:0" .. tostring(#id % 10) .. ":00.000Z"}
+    for key, value in pairs(extra or {}) do item[key] = value end
+    return assert(model.decode_view(item))
+end
+local ACTIVATION = {workspace_id = "ws-1", source_node = "node-src", source_workspace = "notes"}
+local function rows_of(views: {model.ApprovalView}): {[string]: model.Row}
+    local rows: {[string]: model.Row} = {}
+    for index, item in ipairs(views) do rows[item.approval_id] = model.summary(item, index) end
+    return rows
+end
+
+local function define_tests()
+    test.describe("Inbox lease spec", function()
+        test.it("parses expiry, use limit and extras", function()
+            local spec = assert(leases.parse_spec("for=2h applies=5 extra=workspace.files.write:subpath=docs extra=contract.call:binding=a:b,methods=get|put"))
+            test.eq(spec.ttl_seconds, 7200)
+            test.eq(spec.max_applies, 5)
+            test.eq(#spec.extras, 2)
+            test.eq(spec.extras[1].capability, "workspace.files.write")
+            test.eq(((spec.extras[2].parameters :: Object).methods :: {string})[2], "put")
+        end)
+        test.it("refuses an unbounded, oversized or malformed spec", function()
+            test.is_nil((leases.parse_spec("extra=workspace.files.write:subpath=docs")))
+            test.is_nil((leases.parse_spec("for=31d")))
+            test.is_nil((leases.parse_spec("for=2h applies=0")))
+            test.is_nil((leases.parse_spec("for=2h bogus=1")))
+            test.is_nil((leases.parse_spec("for=2h extra=nocolon")))
+            test.is_nil((leases.parse_spec(string.rep("x", 600))))
+        end)
+    end)
+    test.describe("Inbox lease operations", function()
+        test.it("proposes a lease only from an open pending activation request", function()
+            local spec = assert(leases.parse_spec("for=1h"))
+            local pending = approval("r1", "pending", leases.ACTIVATION, ACTIVATION)
+            local intent = assert(leases.propose_intent(pending, spec, "key-1"))
+            test.eq(intent.target, "bee.gov.binding:destination_call")
+            test.eq(intent.request.operation, "lease_propose")
+            test.eq(intent.request.source_workspace, "notes")
+            local decided = approval("r2", "decided", leases.ACTIVATION, ACTIVATION, {decision = "approved", decider_id = "bee.test.alice"})
+            test.is_nil((leases.propose_intent(decided, spec, "key-2")))
+            test.is_nil((leases.propose_intent(approval("r3", "pending", "bee.other:op", ACTIVATION), spec, "key-3")))
+        end)
+        test.it("grants only an approved lease request", function()
+            local approved = approval("g1", "decided", leases.PROPOSAL, ACTIVATION, {decision = "approved", decider_id = "bee.test.alice"})
+            local intent = assert(leases.grant_intent(approved, "key-1"))
+            test.eq(intent.request.operation, "lease_grant")
+            test.eq(intent.request.approval_id, "g1")
+            local denied = approval("g2", "decided", leases.PROPOSAL, ACTIVATION, {decision = "denied", decider_id = "bee.test.alice"})
+            test.is_nil((leases.grant_intent(denied, "key-2")))
+            test.is_nil((leases.grant_intent(approval("g3", "pending", leases.PROPOSAL, ACTIVATION), "key-3")))
+        end)
+        test.it("lists active leases with usage and revokes the selected one at its revision", function()
+            local slice = leases.new()
+            local raw = {ok = true, value = {leases = {
+                {lease_id = "l-1", target = "bee.gov:notes", state = "active", applies_used = 2, max_applies = 5, revision = 3,
+                    granted_by = "bee.test.alice", uses = {{intent_id = "i-1"}}, envelope = {{capability = "workspace.files.write", scope = {subpath = "docs"}}},
+                    expires_at = "2026-09-10T00:00:00.000Z"},
+                {lease_id = "l-2", target = "bee.gov:notes", state = "revoked", applies_used = 1, revision = 2, granted_by = "bee.test.alice", uses = {},
+                    envelope = {}}}}}
+            test.is_nil(leases.apply_list(slice, "ws-1", "ws-1", raw))
+            local rows = leases.rows(slice)
+            test.eq(#rows, 2)
+            test.eq(rows[1].lease_id, "l-1")
+            test.eq(rows[1].uses, 1)
+            test.is_nil((leases.revoke_intent(slice, "k")))
+            leases.select(slice, rows[1])
+            local intent = assert(leases.revoke_intent(slice, "k"))
+            test.eq(intent.request.operation, "lease_revoke")
+            test.eq(intent.request.expected_revision, 3)
+            leases.select(slice, rows[2])
+            test.is_nil((leases.revoke_intent(slice, "k")))
+            test.is_true(leases.apply_list(slice, "ws-1", "ws-1", {ok = false, code = "DENIED", message = "no"}) ~= nil)
+        end)
+        test.it("words each outcome and a governance refusal", function()
+            test.is_true(leases.notice("lease_grant", {ok = true}):find("granted", 1, true) ~= nil)
+            test.is_true(leases.notice("lease_grant", {ok = false, code = "DENIED", message = "outside"}):find("DENIED", 1, true) ~= nil)
+        end)
+    end)
+    test.describe("Inbox batch", function()
+        test.it("marks pending requests of one requester and decides them in one intent", function()
+            local one = approval("b1", "pending", "bee.x:op", {})
+            local two = approval("b2", "pending", "bee.x:op", {})
+            local other = approval("b3", "pending", "bee.x:op", {}, {requester_id = "bee.other"})
+            local done = approval("b4", "decided", "bee.x:op", {}, {decision = "approved", decider_id = "bee.test.alice"})
+            local rows = rows_of({one, two, other, done})
+            local slice = leases.new()
+            test.is_nil(leases.toggle_mark(slice, rows, "b1"))
+            test.is_nil(leases.toggle_mark(slice, rows, "b2"))
+            test.is_true(leases.toggle_mark(slice, rows, "b3") ~= nil)
+            test.is_true(leases.toggle_mark(slice, rows, "b4") ~= nil)
+            local intent = assert(leases.batch_intent(slice, rows, "approved"))
+            test.eq(intent.target, "bee.approvals.binding:decide_batch")
+            local decisions = intent.request.decisions :: {Object}
+            test.eq(#decisions, 2)
+            test.eq(decisions[1].expected_revision, 1)
+            test.eq(decisions[1].proposal_digest, string.rep("a", 64))
+            test.is_nil((leases.batch_intent(slice, rows, "maybe")))
+            test.is_nil(leases.toggle_mark(slice, rows, "b1"))
+            test.eq(#leases.marked(slice, rows), 1)
+        end)
+        test.it("folds committed views and clears the marks, or keeps them on a refusal", function()
+            local one = approval("b1", "pending", "bee.x:op", {})
+            local rows = rows_of({one})
+            local slice = leases.new()
+            leases.toggle_mark(slice, rows, "b1")
+            local decided = approval("b1", "decided", "bee.x:op", {}, {decision = "approved", decider_id = "bee.test.alice", revision = 2})
+            local folded = 0
+            local refused = leases.apply_batch(slice, {kind = "failure", code = "CONFLICT", message = "stale", replayed = false}, function() folded = folded + 1 end)
+            test.is_true(refused:find("CONFLICT", 1, true) ~= nil)
+            test.eq(#leases.marked(slice, rows), 1)
+            local notice = leases.apply_batch(slice, {kind = "success", value = {decisions = {decided}}, replayed = false}, function() folded = folded + 1 end)
+            test.eq(folded, 1)
+            test.eq(notice, "Decided 1 requests")
+            test.eq(#leases.marked(slice, rows), 0)
+        end)
+    end)
+    test.describe("Inbox lease frame", function()
+        test.it("shows active leases with usage and the revoke action", function()
+            local state = model.new({"ws-1"})
+            local slice = leases.new()
+            leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "bee.gov:notes", state = "active",
+                applies_used = 2, max_applies = 5, revision = 3, granted_by = "bee.test.alice", uses = {}, envelope = {}}}}})
+            leases.show_leases(slice, true)
+            leases.select(slice, leases.rows(slice)[1])
+            local frame = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", slice)
+            local text = table.concat(frame.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+            test.is_true(text:find("LEASES", 1, true) ~= nil)
+            test.is_true(text:find("used 2/5", 1, true) ~= nil)
+            test.is_true(text:find("Revoke", 1, true) ~= nil)
+        end)
+        test.it("marks batched requests in the list", function()
+            local state = model.new({"ws-1"})
+            local one = approval("b1", "pending", "bee.x:op", {})
+            model.apply_inbox(state, "ws-1", assert(model.decode_reply({ok = true, error = nil, value = {changes = {{seq = 1, approval_id = "b1", revision = 1, request = one}},
+                next_seq = 1, more = false}, replayed = false})))
+            local slice = leases.new()
+            leases.toggle_mark(slice, state.rows, "b1")
+            local frame = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "", slice)
+            test.is_true(table.concat(frame.rows, "\n"):gsub("\27%[[0-9;]*m", ""):find("[x]", 1, true) ~= nil)
+        end)
+    end)
+end
+return test.run_cases(define_tests)

@@ -41,6 +41,7 @@ entries:
     inbox: bee.approvals.inbox:client
     caller: bee.application:caller
     feeds: bee.approvals.inbox:feeds
+    leases: bee.approvals.inbox:leases
     source_config: bee.approvals.inbox:source_config
     hive: bee.hive:client
     hive_types: bee.hive:types
@@ -65,6 +66,13 @@ entries:
     text: bee.application:text
     bounds: bee.threads.records:bounds
     caller: bee.application:caller
+- name: leases
+  kind: library.lua
+  source: file://leases.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    model: bee.approvals.inbox:model
 - name: client
   kind: library.lua
   source: file://client.lua
@@ -97,6 +105,7 @@ entries:
   imports:
     frame: bee.application:frame
     appearance: bee.application:appearance
+    leases: bee.approvals.inbox:leases
     model: bee.approvals.inbox:model
     names: bee.application:names
 - name: workspaces

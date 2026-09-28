@@ -14,6 +14,7 @@ local uuid = require("uuid")
 local json = require("json")
 local bounds = require("bounds")
 local model = require("model")
+local leases = require("leases")
 local inbox = require("inbox")
 local view = require("view")
 local appearance = require("appearance")
@@ -104,7 +105,7 @@ local function decide(state: model.State, owner: Owner, decision: string): strin
     return request_id
 end
 local function frame_text(state: model.State): string
-    local frame = view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "")
+    local frame = view.draw(120, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
     return table.concat(frame.rows, "\n")
 end
 local function define_tests()

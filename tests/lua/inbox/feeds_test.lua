@@ -225,6 +225,65 @@ local function define_tests()
                 test.eq(conflict.request.workspace_id, "ws")
             end
         end)
+        test.it("routes a batch to one owner with the owner's own identities and refuses a mixed batch", function()
+            local configured = assert(source_config.configure("node-a", {"ws"}, {{node_id = "node-b", workspace_id = "ws-b"}}))
+            local seen: Object? = nil
+            local function item(id: string, node: string, workspace: string): Object
+                local value = view(1)
+                value.approval_id, value.owner_node, value.workspace_id = id, node, workspace
+                return value
+            end
+            local client = feeds.new(configured, function(source: Source, target: string, request: unknown): (unknown, string?)
+                if target == "bee.approvals.binding:feed_snapshot" then
+                    local remote = source.node_id == "node-b"
+                    return snapshot(source, {projection(source, item(remote and "approval-b" or "approval-a", source.node_id, remote and "ws-b" or "ws"), 1),
+                        projection(source, item(remote and "approval-c" or "approval-d", source.node_id, remote and "ws-b" or "ws"), 2)}), nil
+                end
+                if target == "bee.approvals.binding:decide_batch" then
+                    seen = request :: Object
+                    local views: {Object} = {}
+                    for _, raw in ipairs(((request :: Object).decisions :: {Object})) do
+                        local decided = item(raw.approval_id :: string, source.node_id, source.node_id == "node-b" and "ws-b" or "ws")
+                        decided.revision, decided.state, decided.decision = 2, "decided", "approved"
+                        views[#views + 1] = decided
+                    end
+                    return {ok = true, value = {decisions = views}, replayed = false}, nil
+                end
+                return nil, "unexpected target"
+            end)
+            local local_page = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
+            test.is_true(local_page ~= nil and local_page.kind == "success")
+            local remote_id: string? = nil
+            for _, id in ipairs(configured.workspaces) do if id ~= "ws" then remote_id = id end end
+            local remote_page = client:invoke("bee.approvals.binding:inbox", {workspace_id = remote_id})
+            local remote_changes = ((remote_page :: model.Reply).value :: Object).changes :: {Object}
+            local remote_ui = (remote_changes[1].request :: Object).approval_id :: string
+            local ok = client:invoke("bee.approvals.binding:decide_batch", {decisions = {
+                {approval_id = "approval-a", expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"},
+                {approval_id = "approval-d", expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"}}})
+            test.is_true(ok ~= nil and ok.kind == "success")
+            test.eq(#(((seen :: Object).decisions) :: {unknown}), 2)
+            local mixed = client:invoke("bee.approvals.binding:decide_batch", {decisions = {
+                {approval_id = "approval-a", expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"},
+                {approval_id = remote_ui, expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"}}})
+            test.eq(reply_code(mixed), "INVALID_ARGUMENT")
+            test.eq(reply_code(client:invoke("bee.approvals.binding:decide_batch", {decisions = {}})), "INVALID_ARGUMENT")
+        end)
+        test.it("sends lease operations to a local governance owner only", function()
+            local configured = assert(source_config.configure("node-a", {"ws"}, {{node_id = "node-b", workspace_id = "ws-b"}}))
+            local sent: Object? = nil
+            local client = feeds.new(configured, function(_source: Source, target: string, request: unknown): (unknown, string?)
+                test.eq(target, "bee.gov.binding:destination_call")
+                sent = request :: Object
+                return {ok = true, value = {leases = {}}}, nil
+            end)
+            local answer = client:lease("ws", {operation = "lease_list", workspace_id = "ignored"}) :: Object
+            test.is_true(answer.ok == true)
+            test.eq((sent :: Object).workspace_id, "ws")
+            local remote_id: string? = nil
+            for _, id in ipairs(configured.workspaces) do if id ~= "ws" then remote_id = id end end
+            test.is_nil(client:lease(remote_id :: string, {operation = "lease_list"}))
+        end)
     end)
 end
 return test.run_cases(define_tests)

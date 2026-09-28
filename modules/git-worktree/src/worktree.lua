@@ -7,10 +7,13 @@ local paths = require("paths")
 local bounds = require("bounds")
 local quote = require("quote")
 local hash = require("hash")
+local channel = require("channel")
 
 local M = {}
 M.DEFAULT_EXECUTOR = "bee.git_worktree:git_executor"
 M.DEFAULT_HOST_FILES = "bee.git_worktree:host_files"
+M.MAX_STDOUT_BYTES = 16 * 1024 * 1024
+M.MAX_STDERR_BYTES = 64 * 1024
 
 local function resolve_resource(ref_name: string, default_val: string): string
     local entry, err = registry.get(ref_name)
@@ -36,25 +39,36 @@ function M.run_git(args: {string}, executor_override: string?): (string?, intege
         executor:release()
         return nil, nil, "start failed: " .. tostring(start_error)
     end
+    -- The child blocks on whichever pipe fills first, so both drain at once.
+    local errors = channel.new(1)
+    local err_chunks: {string} = {}
+    local err_bytes = 0
+    coroutine.spawn(function()
+        while stderr do
+            local chunk = stderr:read(4096)
+            if not chunk or chunk == "" then break end
+            if err_bytes < M.MAX_STDERR_BYTES then
+                err_chunks[#err_chunks + 1] = tostring(chunk)
+                err_bytes = err_bytes + #tostring(chunk)
+            end
+        end
+        errors:send(true)
+    end)
     local out_chunks: {string} = {}
+    local out_bytes = 0
     while true do
         local chunk = stdout:read(4096)
         if not chunk or chunk == "" then break end
-        out_chunks[#out_chunks + 1] = tostring(chunk)
+        out_bytes = out_bytes + #tostring(chunk)
+        if out_bytes <= M.MAX_STDOUT_BYTES then out_chunks[#out_chunks + 1] = tostring(chunk) end
     end
+    errors:receive()
     stdout:close()
-    local err_chunks: {string} = {}
-    if stderr then
-        while true do
-            local chunk = stderr:read(4096)
-            if not chunk or chunk == "" then break end
-            err_chunks[#err_chunks + 1] = tostring(chunk)
-        end
-        stderr:close()
-    end
+    if stderr then stderr:close() end
     local code, wait_error = proc:wait()
     executor:release()
     if wait_error then return nil, nil, "wait failed: " .. tostring(wait_error) end
+    if out_bytes > M.MAX_STDOUT_BYTES then return nil, nil, "git output exceeds " .. tostring(M.MAX_STDOUT_BYTES) .. " bytes" end
     local exit_code = (type(code) == "number") and math.floor(code) or -1
     return table.concat(out_chunks), exit_code, table.concat(err_chunks)
 end
@@ -169,6 +183,29 @@ local function safe_parent(state: State, executor: string): string?
     return nil
 end
 
+local function owned_identity_error(state: State, executor: string, host_files_override: string?): string?
+    local physical = paths.resolve(state.worktree_path, executor)
+    local top, top_code = git(state.worktree_path, {"rev-parse", "--show-toplevel"}, executor)
+    if physical ~= state.worktree_path or top_code ~= 0 or top ~= physical then return "worktree identity changed" end
+    local common, common_code = git(state.worktree_path, {"rev-parse", "--path-format=absolute", "--git-common-dir"}, executor)
+    if common_code ~= 0 or not common or paths.resolve(common, executor) ~= state.common_directory then
+        return "worktree repository identity changed"
+    end
+    local git_directory, directory_code = git(state.worktree_path, {"rev-parse", "--absolute-git-dir"}, executor)
+    if directory_code ~= 0 or not git_directory or not paths.contains(state.common_directory .. "/worktrees", git_directory)
+        or paths.resolve(git_directory, executor) ~= git_directory then
+        return "worktree administrative directory changed"
+    end
+    local volume, volume_error = M.get_fs_volume(host_files_override)
+    if not volume then return volume_error end
+    local _, _, read_file = fs_helpers(volume)
+    local backref, backref_error = read_file(git_directory .. "/gitdir")
+    if not backref or backref:gsub("[\r\n]+$", "") ~= state.worktree_path .. "/.git" then
+        return backref_error or "worktree backreference changed"
+    end
+    return nil
+end
+
 function M.plan_dedicated(workdir: string, attempt_id: string, write_roots: {string}, executor_override: string?): (State?, string?)
     local component = path_component(attempt_id)
     if not component then return nil, "unsafe attempt identifier" end
@@ -204,7 +241,10 @@ function M.apply_dedicated(state: State, write_roots: {string}, executor_overrid
     local parent_error = safe_parent(state, executor)
     if parent_error then return nil, nil, state, parent_error end
     local _, present = M.run_git({"test", "-e", state.worktree_path}, executor)
-    if present ~= 0 then
+    if present == 0 then
+        local identity_error = owned_identity_error(state, executor, host_files_override)
+        if identity_error then return nil, nil, state, identity_error end
+    else
         local _, branch_present = git(state.repository, {"show-ref", "--verify", "--quiet", "refs/heads/" .. state.branch}, executor)
         local args = {"worktree", "add"}
         if branch_present ~= 0 then args[#args + 1] = "-b"; args[#args + 1] = state.branch end
@@ -247,25 +287,8 @@ function M.cleanup_dedicated(value: unknown, executor_override: string?): (boole
     local _, exists = M.run_git({"test", "-e", state.worktree_path}, executor)
     if exists == 0 then
         if not registered then return nil, nil, "path is not the registered worktree" end
-        local physical = paths.resolve(state.worktree_path, executor)
-        local top, top_code = git(state.worktree_path, {"rev-parse", "--show-toplevel"}, executor)
-        if physical ~= state.worktree_path or top_code ~= 0 or top ~= physical then return nil, nil, "worktree identity changed" end
-        local common, common_code = git(state.worktree_path, {"rev-parse", "--path-format=absolute", "--git-common-dir"}, executor)
-        if common_code ~= 0 or not common or paths.resolve(common, executor) ~= state.common_directory then
-            return nil, nil, "worktree repository identity changed"
-        end
-        local git_directory, directory_code = git(state.worktree_path, {"rev-parse", "--absolute-git-dir"}, executor)
-        if directory_code ~= 0 or not git_directory or not paths.contains(state.common_directory .. "/worktrees", git_directory)
-            or paths.resolve(git_directory, executor) ~= git_directory then
-            return nil, nil, "worktree administrative directory changed"
-        end
-        local volume, volume_error = M.get_fs_volume()
-        if not volume then return nil, nil, volume_error end
-        local _, _, read_file = fs_helpers(volume)
-        local backref, backref_error = read_file(git_directory .. "/gitdir")
-        if not backref or backref:gsub("[\r\n]+$", "") ~= state.worktree_path .. "/.git" then
-            return nil, nil, backref_error or "worktree backreference changed"
-        end
+        local identity_error = owned_identity_error(state, executor)
+        if identity_error then return nil, nil, identity_error end
         local branch, branch_code = git(state.worktree_path, {"symbolic-ref", "HEAD"}, executor)
         if branch_code ~= 0 or branch ~= "refs/heads/" .. state.branch then return true, "worktree HEAD changed; retained", nil end
         local tracked, tracked_code, tracked_error = git(state.worktree_path, {"ls-files", "-v", "-z"}, executor)

@@ -24,10 +24,6 @@ entries:
   kind: ns.dependency
   component: bee/driver
   version: '*'
-- name: dependency_native
-  kind: ns.dependency
-  component: bee/placement-native
-  version: '*'
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -41,7 +37,7 @@ entries:
   modules: [exec, fs, registry, hash]
   imports:
     git_roots: bee.git_worktree:git_roots
-    paths: bee.placement.native.service:paths
+    paths: bee.placement:paths
     bounds: bee.threads.records:bounds
     quote: bee.driver.kit:quote
 - name: plan

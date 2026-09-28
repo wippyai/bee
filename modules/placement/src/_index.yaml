@@ -97,4 +97,10 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     types: bee.placement:types
+- name: paths
+  kind: library.lua
+  source: file://paths.lua
+  modules: [exec]
+  imports:
+    quote: bee.driver.kit:quote
 

@@ -9,3 +9,11 @@ entries:
   imports:
     test: wippy.test:test
     registry: bee.sessions:executor_registry
+- name: locate_test
+  kind: function.lua
+  source: file://locate_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    locate: bee.sessions.service:locate

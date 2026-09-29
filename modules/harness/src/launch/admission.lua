@@ -555,7 +555,8 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         local visible, thread_refused = call(M.THREADS .. ":get", {thread_id = thread_id})
         if not visible then return nil, thread_refused or fail("DENIED", "caller is not a member of the selected thread") end
         local membership = bounds.object(visible.membership)
-        if not membership or membership.member_id ~= requester or membership.active ~= true then
+        -- Threads authenticates this read as the caller and may resolve an attested application family to its active member.
+        if not membership or membership.active ~= true then
             return nil, fail("DENIED", "caller is not an active member of the selected thread")
         end
     end

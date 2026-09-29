@@ -46,12 +46,17 @@ end
 local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
     "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
-local function scope(): security.Scope
+local function scope(extra: {string}?): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
+    end
+    for _, name in ipairs(extra or {}) do
+        local policy, err = security.policy(name)
+        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
+        policies[#policies + 1] = policy
     end
     return security.new_scope(policies)
 end
@@ -61,10 +66,18 @@ local function call(target: string, request: unknown): admission.Reply
     if err then error(target .. ": " .. tostring(err)) end
     return result :: admission.Reply
 end
-local function call_as(actor_id: string, target: string, request: unknown): admission.Reply
-    local result, err = funcs.new():with_actor(principals.actor(actor_id, principals.workspace(request))):with_scope(scope()):call(target, request)
+local function call_as_bound(actor_id: string, target: string, request: unknown, workspace_id: unknown,
+    extra_policies: {string}?): admission.Reply
+    local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace_id))
+        :with_scope(scope(extra_policies)):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return result :: admission.Reply
+end
+local function call_as_with_policies(actor_id: string, target: string, request: unknown, extra_policies: {string}): admission.Reply
+    return call_as_bound(actor_id, target, request, principals.workspace(request), extra_policies)
+end
+local function call_as(actor_id: string, target: string, request: unknown): admission.Reply
+    return call_as_with_policies(actor_id, target, request, {})
 end
 local function value(reply: admission.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
@@ -796,6 +809,81 @@ local function define_tests()
                 local credentials_after = value(call("bee.credentials.binding:list", {workspace_id = workspace}))
                 test.eq(#(resources_after.grants :: {unknown}), #(resources_before.grants :: {unknown}))
                 test.eq(#(credentials_after.projections :: {unknown}), #(credentials_before.projections :: {unknown}))
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("admits a reopened app through its active stable-family thread membership", function()
+            local entry = assert(registry.get(DEFINITION))
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.allowed_overrides = {"thread"}
+            changed.thread_policy = {kind = "caller"}
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local alias_workspace = string.rep("b", 32)
+                local definition_id = "bee.harness.catalog:stable_family_fixture"
+                local stable = "bee.application:" .. alias_workspace .. ":" .. fresh("stable-family")
+                local old_app = "bee.application:" .. alias_workspace .. ":" .. fresh("old-app")
+                local reopened_app = "bee.application:" .. alias_workspace .. ":" .. fresh("reopened-app")
+                local unattested_app = "bee.application:" .. alias_workspace .. ":" .. fresh("unattested-app")
+                local broker = "bee.test.alias-broker"
+                local alias_policies = {"bee.security.threads:application_thread_alias_call_policy",
+                    "bee.security.threads:application_thread_alias_policy"}
+                local function attest(instance: string)
+                    value(call_as_with_policies(broker, "bee.threads.service:register_app_alias", {
+                        stable = stable, instance = instance, workspace_id = alias_workspace, definition_id = definition_id,
+                    }, alias_policies))
+                end
+                local function workspace_call(target: string, request: {[string]: unknown})
+                    request.workspace_id = alias_workspace
+                    value(call(target, request))
+                end
+                workspace_call("bee.resources.binding:associate", {name = "project", root_ref = ROOT,
+                    subpath = "", allowed_access = "write"})
+                workspace_call("bee.resources.binding:associate", {name = "session", root_ref = ROOT,
+                    subpath = "", allowed_access = "write"})
+                workspace_call("bee.credentials.binding:define", {name = "anthropic", provider = "claude",
+                    source = {kind = "env_variable", ref = SOURCE}})
+                with_entry("bee.credentials:credential_sources", function(source_entry)
+                    local sources = source_entry.sources :: {{[string]: unknown}}
+                    local copied: {{[string]: unknown}} = {}
+                    for index, source in ipairs(sources) do
+                        local item: {[string]: unknown} = {}
+                        for key, value in pairs(source) do item[key] = value end
+                        if item.ref == SOURCE then item.audience = "*" end
+                        copied[index] = item
+                    end
+                    source_entry.sources = copied
+                end, function()
+                    attest(old_app)
+                    local shared = fresh("reopened-app-thread")
+                    value(call_as_bound(old_app, "bee.threads.service:create", {thread_id = shared,
+                        idempotency_key = fresh("create"), title = "Research"}, alias_workspace, {}))
+                    attest(reopened_app)
+
+                    local visible = value(call_as_bound(reopened_app, "bee.threads.service:get", {thread_id = shared},
+                        alias_workspace, {}))
+                    local membership = visible.membership :: {[string]: unknown}
+                    test.eq(membership.member_id, old_app)
+                    test.eq(membership.active, true)
+
+                    local admitted = value(call_as(reopened_app, "bee.harness.launch:admit", {
+                        request_id = fresh("reopened-app-launch"), definition_ref = DEFINITION,
+                        workspace_id = alias_workspace, brief = "continue research", thread_id = shared,
+                    }))
+                    test.eq(admitted.thread_id, shared)
+
+                    test.eq(code(call_as_bound(unattested_app, "bee.threads.service:get", {thread_id = shared},
+                        alias_workspace, {})), "DENIED")
+                    test.eq(code(call_as(unattested_app, "bee.harness.launch:admit", {
+                        request_id = fresh("unattested-app-launch"), definition_ref = DEFINITION,
+                        workspace_id = alias_workspace, brief = "must remain denied", thread_id = shared,
+                    })), "DENIED")
+                end)
             end)
             entry.data = original
             apply(entry)

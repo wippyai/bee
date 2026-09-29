@@ -16,7 +16,7 @@ entries:
     codec: opencode-json-events
     json_paths:
       resume_id: [sessionID]
-      result_text: [text]
+      result_text: [part, text]
       errors: [error, data, message]
       usage: [part, tokens]
     configure: opencode

@@ -15,10 +15,10 @@ entries:
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: grok-streaming-json
     json_paths:
-      resume_id: null
-      result_text: null
+      resume_id: [sessionId]
+      result_text: [data]
       errors: [message]
-      usage: null
+      usage: [usage]
     configure: grok
     options:
       profiles: [window, session, batch]

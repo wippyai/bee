@@ -1,6 +1,9 @@
 version: '1.0'
 namespace: bee.driver.codec
 entries:
+- name: paths
+  kind: library.lua
+  source: file://paths.lua
 - name: claude_stream_json
   kind: library.lua
   source: file://claude_stream_json.lua
@@ -9,6 +12,7 @@ entries:
     events: bee.driver.kit:events
     types: bee.driver:types
     bounds: bee.threads.records:bounds
+    paths: bee.driver.codec:paths
 - name: codex_jsonl
   kind: library.lua
   source: file://codex_jsonl.lua
@@ -17,6 +21,7 @@ entries:
     events: bee.driver.kit:events
     types: bee.driver:types
     bounds: bee.threads.records:bounds
+    paths: bee.driver.codec:paths
 - name: opencode_json_events
   kind: library.lua
   source: file://opencode_json_events.lua
@@ -26,6 +31,7 @@ entries:
     types: bee.driver:types
     bounds: bee.threads.records:bounds
     values: bee.threads.records:values
+    paths: bee.driver.codec:paths
 - name: agy_stream_json
   kind: library.lua
   source: file://agy_stream_json.lua
@@ -35,6 +41,7 @@ entries:
     types: bee.driver:types
     bounds: bee.threads.records:bounds
     values: bee.threads.records:values
+    paths: bee.driver.codec:paths
 - name: grok_streaming_json
   kind: library.lua
   source: file://grok_streaming_json.lua
@@ -44,6 +51,7 @@ entries:
     types: bee.driver:types
     bounds: bee.threads.records:bounds
     values: bee.threads.records:values
+    paths: bee.driver.codec:paths
 - name: muse_record_jsonl
   kind: library.lua
   source: file://muse_record_jsonl.lua
@@ -53,3 +61,4 @@ entries:
     types: bee.driver:types
     bounds: bee.threads.records:bounds
     values: bee.threads.records:values
+    paths: bee.driver.codec:paths

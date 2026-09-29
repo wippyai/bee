@@ -16,8 +16,8 @@ entries:
     codec: muse-record-jsonl
     json_paths:
       resume_id: [stream, id]
-      result_text: [text]
-      errors: [reason]
+      result_text: [payload, text]
+      errors: [payload, reason]
       usage: null
     configure: muse
     options:

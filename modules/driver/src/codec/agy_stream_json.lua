@@ -6,6 +6,7 @@ local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
 local values = require("values")
+local path_reader = require("paths")
 
 local M = {}
 M.PROTOCOL_REVISION = "agy-stream-json-1"
@@ -217,10 +218,10 @@ local function event_body(envelope: {[string]: unknown}, event_name: string): {[
     return envelope
 end
 
-local function extract_cid(envelope: {[string]: unknown}, body: {[string]: unknown}): (string?, string?)
-    local envelope_raw: unknown = envelope.conversation_id
+local function extract_cid(envelope: {[string]: unknown}, body: {[string]: unknown}, paths: {[string]: unknown}?): (string?, string?)
+    local envelope_raw: unknown = path_reader.read(envelope, paths, "resume_id")
     local body_raw: unknown = nil
-    if body ~= envelope then body_raw = body.conversation_id end
+    if body ~= envelope then body_raw = path_reader.read(body, paths, "resume_id") end
     local envelope_cid: string? = nil
     if envelope_raw ~= nil then
         envelope_cid = bounds.id(envelope_raw)
@@ -237,7 +238,7 @@ local function extract_cid(envelope: {[string]: unknown}, body: {[string]: unkno
     return envelope_cid or body_cid, nil
 end
 
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local raw_kind: unknown = envelope.event
     local kind = tostring(raw_kind or "")
@@ -248,7 +249,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     end
 
     local body = event_body(envelope, kind)
-    local envelope_cid, identity_error = extract_cid(envelope, body)
+    local envelope_cid, identity_error = extract_cid(envelope, body, paths)
     if identity_error then
         if kind == "result" then
             local code = "malformed_identity"
@@ -385,7 +386,9 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         local raw_status = string.upper(tostring(body.status or envelope.status or ""))
         local outcome = "succeeded"
         local fault: {code: string, message: string, retryable: boolean}? = nil
-        local decoded_usage, usage_error = decode_usage(body.usage or envelope.usage, "result.usage", true)
+        local decoded_usage, usage_error = decode_usage(path_reader.read(body, paths, "usage") or path_reader.read(envelope, paths, "usage"), "result.usage", true)
+        local response = path_reader.read(body, paths, "result_text")
+        local result_error = path_reader.read(body, paths, "errors")
 
         local is_malformed = false
         if not state.started then
@@ -406,16 +409,16 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         elseif body.status == nil or type(body.status) ~= "string" then
             is_malformed = true
             fault = events.fault("malformed_result", "result status must be a string", false)
-        elseif body.response ~= nil and type(body.response) ~= "string" then
+        elseif response ~= nil and type(response) ~= "string" then
             is_malformed = true
             fault = events.fault("malformed_result", "result response must be text", false)
-        elseif body.error ~= nil and type(body.error) ~= "string" and type(body.error) ~= "table" then
+        elseif result_error ~= nil and type(result_error) ~= "string" and type(result_error) ~= "table" then
             is_malformed = true
             fault = events.fault("malformed_result", "result error must be text or an object", false)
-        elseif body.error ~= nil and raw_status == "SUCCESS" then
+        elseif result_error ~= nil and raw_status == "SUCCESS" then
             is_malformed = true
-            fault = events.fault("status_error_mismatch", text_of(body.error), false)
-        elseif raw_status == "SUCCESS" and type(body.response) ~= "string" then
+            fault = events.fault("status_error_mismatch", text_of(result_error), false)
+        elseif raw_status == "SUCCESS" and type(response) ~= "string" then
             is_malformed = true
             fault = events.fault("malformed_result", "successful result is missing response text", false)
         end
@@ -427,10 +430,10 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         elseif raw_status == "ERROR" or raw_status == "FAILED" then
             outcome = "failed"
             local reason = tostring(body.terminal_reason or raw_status:lower())
-            fault = events.fault(reason, text_of(body.error or body.response or "turn failed"), false)
+            fault = events.fault(reason, text_of(result_error or response or "turn failed"), false)
         elseif raw_status == "CANCELED" or raw_status == "CANCELLED" or raw_status == "INTERRUPTED" then
             outcome = "cancelled"
-            fault = events.fault("cancelled", text_of(body.error or "turn cancelled"), false)
+            fault = events.fault("cancelled", text_of(result_error or "turn cancelled"), false)
         else
             outcome = "uncertain"
             fault = events.fault("unknown_status", "unexpected terminal status: " .. raw_status, false)
@@ -441,9 +444,9 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
 
         local answer: string? = nil
         if outcome == "succeeded" then
-            if type(body.response) == "string" then
-                if #body.response <= M.MAX_ANSWER_BYTES then
-                    answer = body.response
+            if type(response) == "string" then
+                if #(response :: string) <= M.MAX_ANSWER_BYTES then
+                    answer = response :: string
                 else
                     state.answer = nil
                     state.answer_truncated = true

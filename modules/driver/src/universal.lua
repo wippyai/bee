@@ -15,6 +15,7 @@ type ProtocolStep = {observations: {Object}, terminal: unknown?}
 type Descriptor = {[string]: unknown}
 type Request = {[string]: unknown}
 type ConfigureRequest = configuration.Request
+type ConfigureRenderer = (ConfigureRequest) -> Object
 type ProviderHomeFileKind = "login" | "config" | "state"
 type LaunchAPI = {
     decode: (unknown) -> (Request?, string?),
@@ -448,12 +449,17 @@ function M.dispatch(ref: string): (unknown) -> Object
     return function(raw: unknown): Object return launch_reply(ref, raw, true) end
 end
 
--- The contract's configure boundary is shared. Descriptors select a thin
--- renderer for the CLI's distinct configuration format; decoding, bounds,
--- and refusal shape stay in bee.driver.
-function M.configure(ref: string, renderer: (ConfigureRequest) -> Object): (unknown) -> Object
+-- The contract's configure boundary decodes once and dispatches through the
+-- descriptor's renderer id. Renderers contain only the CLI-specific format
+-- operation; decoding, bounds, and refusal shape stay in bee.driver.
+function M.configure(ref: string, renderers: {[string]: ConfigureRenderer}): (unknown) -> Object
     if not bounds.id(ref) then error("CLI descriptor reference is invalid") end
     return function(raw: unknown): Object
+        local descriptor, descriptor_error = descriptor_reader.load(ref)
+        if not descriptor then return {ok = false, error = descriptor_error or "CLI descriptor is unavailable"} end
+        local selected = bounds.id(descriptor.configure)
+        local renderer = selected and renderers[selected] or nil
+        if not renderer then return {ok = false, error = "CLI descriptor selects an unsupported configure renderer"} end
         local request, decode_error = configuration.decode_request(raw)
         if not request then return {ok = false, error = decode_error or "invalid configuration request"} end
         return renderer(request)
@@ -476,7 +482,8 @@ function M.protocol(ref: string): codec_registry.Protocol
     local function selected(): codec_registry.Protocol
         local descriptor, load_error = descriptor_reader.load(ref)
         if not descriptor then error(tostring(load_error or "CLI descriptor is unavailable")) end
-        local protocol = codec_registry.resolve(descriptor.codec :: string)
+        local json_paths = bounds.object(descriptor.json_paths) or {}
+        local protocol = codec_registry.resolve(descriptor.codec :: string, json_paths)
         if not protocol then error("CLI descriptor selects an unsupported codec") end
         return protocol
     end

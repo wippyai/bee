@@ -5,6 +5,7 @@ local json = require("json")
 local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
+local path_reader = require("paths")
 local M = {}
 M.PROTOCOL_REVISION = "stream-json-2"
 M.MAX_ANSWER_BYTES = events.MAX_TEXT_BYTES
@@ -96,7 +97,7 @@ local function content_blocks(state: State, index: integer, message: unknown, ou
     end
 end
 -- One envelope in, observations out; the terminal report only from result.
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local kind: unknown = envelope.type
     if state.terminal then
@@ -106,7 +107,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     if kind == "system" then
         local subtype: unknown = envelope.subtype
         if subtype == "init" then
-            local session: unknown = envelope.session_id
+            local session: unknown = path_reader.read(envelope, paths, "resume_id")
             if type(session) == "string" then state.session_id = session end
             state.started = true
             local phase = "started"
@@ -142,7 +143,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             end
         end
     elseif kind == "result" then
-        local session: unknown = envelope.session_id
+        local session: unknown = path_reader.read(envelope, paths, "resume_id")
         if type(session) == "string" then state.session_id = session end
         local is_error = envelope.is_error == true
         local subtype: unknown = envelope.subtype
@@ -150,8 +151,9 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         local fault: {code: string, message: string, retryable: boolean}? = nil
         if is_error or subtype ~= "success" then
             outcome = "failed"
-            local reason = tostring(envelope.terminal_reason or subtype or "error")
-            fault = events.fault(reason, text_of(envelope.result), reason == "api_error" or reason == "rate_limit")
+            local raw_reason = path_reader.read(envelope, paths, "errors")
+            local reason = tostring(raw_reason or subtype or "error")
+            fault = events.fault(reason, text_of(path_reader.read(envelope, paths, "result_text")), reason == "api_error" or reason == "rate_limit")
         end
         local denials: unknown = envelope.permission_denials
         if type(denials) == "table" then
@@ -162,10 +164,11 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
                 end
             end
         end
-        local usage = usage_of(envelope.usage)
+        local usage = usage_of(path_reader.read(envelope, paths, "usage"))
         out[#out + 1] = events.turn(key(index, "turn"), "ended", outcome, usage)
         local answer: string? = nil
-        if outcome == "succeeded" and type(envelope.result) == "string" then answer = envelope.result end
+        local result = path_reader.read(envelope, paths, "result_text")
+        if outcome == "succeeded" and type(result) == "string" then answer = result :: string end
         state.terminal = {outcome = outcome :: types.Outcome, answer = answer, resume_ref = state.session_id, usage = usage, error = fault}
         return {observations = out, terminal = state.terminal}
     else

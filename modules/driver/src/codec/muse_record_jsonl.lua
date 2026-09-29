@@ -6,6 +6,7 @@ local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
 local values = require("values")
+local path_reader = require("paths")
 
 local M = {}
 M.PROTOCOL_REVISION = "msp-exec-1"
@@ -130,10 +131,8 @@ local function payload_of(envelope: {[string]: unknown}): {[string]: unknown}
     return {}
 end
 
-local function observe_session(state: State, index: integer, envelope: {[string]: unknown}, out: {Observation})
-    local stream: unknown = envelope.stream
-    if type(stream) ~= "table" then return end
-    local raw: unknown = (stream :: {[string]: unknown}).id
+local function observe_session(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?, out: {Observation})
+    local raw = path_reader.read(envelope, paths, "resume_id")
     if raw == nil then return end
     local session = bounds.id(raw)
     if not session then
@@ -155,8 +154,8 @@ local function retained_answer(state: State): string?
     return state.answer
 end
 
-local function terminal_fault(terminal: unknown, payload: {[string]: unknown}): Fault
-    local reason: unknown = payload.reason
+local function terminal_fault(terminal: unknown, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Fault
+    local reason = path_reader.read(envelope, paths, "errors")
     if terminal == "failed" and type(reason) == "string" then
         local normalized = (reason :: string):lower()
         if normalized:find("max_model_steps", 1, true) or normalized:find("max_steps", 1, true)
@@ -231,7 +230,7 @@ local function tool_result(state: State, index: integer, payload: {[string]: unk
     return true
 end
 
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local raw: unknown = envelope.payload_type
     local kind = type(raw) == "string" and raw or "unknown"
@@ -239,7 +238,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         out[#out + 1] = events.notice(key(index, "after-terminal"), "warning", "after_terminal", "envelope after the turn ended: " .. tostring(kind))
         return {observations = out}
     end
-    observe_session(state, index, envelope, out)
+    observe_session(state, index, envelope, paths, out)
     local payload = payload_of(envelope)
     if kind == "runtime.command.accepted" then
         state.command_accepted = true
@@ -249,7 +248,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         state.run_started = true
         out[#out + 1] = events.turn(key(index, "turn"), "started", nil, nil)
     elseif kind == "run.output.delta" then
-        local text: unknown = payload.text
+        local text = path_reader.read(envelope, paths, "result_text")
         if type(text) == "string" and #text > 0 then
             if not state.answer_truncated then
                 local answer = (state.answer or "") .. text
@@ -284,10 +283,10 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             outcome = "succeeded"
         elseif terminal == "failed" then
             outcome = "failed"
-            fault = terminal_fault(terminal, payload)
+            fault = terminal_fault(terminal, envelope, paths)
         elseif terminal == "cancelled" then
             outcome = "cancelled"
-            fault = terminal_fault(terminal, payload)
+            fault = terminal_fault(terminal, envelope, paths)
         else
             outcome = "uncertain"
             fault = events.fault("run_terminal_unknown", "muse reported an unknown terminal: " .. tostring(terminal), false)

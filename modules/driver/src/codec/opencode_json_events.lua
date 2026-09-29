@@ -12,6 +12,7 @@ local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
 local values = require("values")
+local path_reader = require("paths")
 local M = {}
 M.PROTOCOL_REVISION = "opencode-run-json-1"
 M.MAX_ANSWER_BYTES = events.MAX_TEXT_BYTES
@@ -58,8 +59,8 @@ local function accumulate_usage(state: State, value: unknown)
     end
     state.usage = total
 end
-local function observe_session(state: State, index: integer, envelope: {[string]: unknown}, out: {Observation})
-    local raw: unknown = envelope.sessionID
+local function observe_session(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?, out: {Observation})
+    local raw = path_reader.read(envelope, paths, "resume_id")
     if raw == nil then return end
     local session = bounds.id(raw)
     if not session then
@@ -82,24 +83,12 @@ local function retained_answer(state: State): string?
     if state.answer_truncated then return nil end
     return state.answer
 end
-local function error_fault(envelope: {[string]: unknown}): Fault
-    local detail: unknown = envelope.error
-    local name = "run_error"
+local function error_fault(message_value: unknown): Fault
     local message = "opencode reported an error"
-    if type(detail) == "table" then
-        local fields = detail :: {[string]: unknown}
-        if bounds.id(fields.name) then name = fields.name :: string end
-        local data: {[string]: unknown} = {}
-        if type(fields.data) == "table" then data = fields.data :: {[string]: unknown} end
-        if type(data.message) == "string" and #data.message > 0 then
-            message = data.message :: string
-        elseif type(fields.message) == "string" and #fields.message > 0 then
-            message = fields.message :: string
-        end
-    elseif type(detail) == "string" and #detail > 0 then
-        message = detail
+    if type(message_value) == "string" and #(message_value :: string) > 0 then
+        message = message_value :: string
     end
-    return events.fault(name, message, false)
+    return events.fault("run_error", message, false)
 end
 local function tool_observations(state: State, index: integer, envelope: {[string]: unknown}, out: {Observation})
     local part: unknown = envelope.part
@@ -210,21 +199,20 @@ function M.decode_state(value: unknown): (State?, string?)
         answer = answer, answer_truncated = object.answer_truncated :: boolean, usage = usage, error = fault,
         terminal = terminal}, nil
 end
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local kind = type(envelope.type) == "string" and envelope.type :: string or "unknown"
     if state.terminal then
         out[#out + 1] = events.notice(key(index, "after-terminal"), "warning", "after_terminal", "envelope after the turn ended: " .. kind)
         return {observations = out}
     end
-    observe_session(state, index, envelope, out)
+    observe_session(state, index, envelope, paths, out)
     if kind == "step_start" then
         ensure_started(state, index, out)
     elseif kind == "text" then
         ensure_started(state, index, out)
-        local part: unknown = envelope.part
-        local text = ""
-        if type(part) == "table" and type((part :: {[string]: unknown}).text) == "string" then text = (part :: {[string]: unknown}).text :: string end
+        local selected_text = path_reader.read(envelope, paths, "result_text")
+        local text = type(selected_text) == "string" and selected_text :: string or ""
         if #text > 0 then
             if not state.answer_truncated then
                 local answer = (state.answer or "") .. text
@@ -245,11 +233,10 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         -- A finished step is progress, not the turn: usage accumulates and
         -- the stream end reports terminally.
         ensure_started(state, index, out)
-        local part: unknown = envelope.part
-        if type(part) == "table" then accumulate_usage(state, (part :: {[string]: unknown}).tokens) end
+        accumulate_usage(state, path_reader.read(envelope, paths, "usage"))
     elseif kind == "error" then
         ensure_started(state, index, out)
-        local fault = error_fault(envelope)
+        local fault = error_fault(path_reader.read(envelope, paths, "errors"))
         state.error = fault
         out[#out + 1] = events.notice(key(index, "error"), "warning", "provider_error", fault.code .. ": " .. fault.message)
     else

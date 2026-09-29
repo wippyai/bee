@@ -15,9 +15,9 @@ entries:
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: claude-stream-json
     json_paths:
-      resume_id: [system, init, session_id]
+      resume_id: [session_id]
       result_text: [result]
-      errors: [is_error, terminal_reason]
+      errors: [terminal_reason]
       usage: [usage]
     configure: claude
     options:

@@ -15,10 +15,10 @@ entries:
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: codex-jsonl
     json_paths:
-      resume_id: [thread, started, thread_id]
+      resume_id: [thread_id]
       result_text: [item, text]
-      errors: [turn, failed, error, message]
-      usage: [turn, completed, usage]
+      errors: [error, message]
+      usage: [usage]
     configure: codex
     options:
       profiles: [window, batch, named_batch]

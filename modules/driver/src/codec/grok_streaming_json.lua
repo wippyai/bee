@@ -6,6 +6,7 @@ local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
 local values = require("values")
+local path_reader = require("paths")
 
 local M = {}
 M.PROTOCOL_REVISION = "streaming-json-1"
@@ -138,8 +139,8 @@ local function ensure_started(state: State, index: integer, out: {Observation})
     end
 end
 
-local function observe_session(state: State, index: integer, envelope: {[string]: unknown}, out: {Observation})
-    local raw = envelope.sessionId or envelope.session_id
+local function observe_session(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?, out: {Observation})
+    local raw = path_reader.read(envelope, paths, "resume_id")
     if raw == nil then return end
     local session = bounds.id(raw)
     if not session then
@@ -156,7 +157,7 @@ local function retained_answer(state: State): string?
     return state.answer
 end
 
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local kind = tostring(envelope.type or envelope.event or "")
 
@@ -165,12 +166,12 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         return {observations = out}
     end
 
-    observe_session(state, index, envelope, out)
+    observe_session(state, index, envelope, paths, out)
 
     ensure_started(state, index, out)
 
     if kind == "thought" then
-        local raw = envelope.data ~= nil and envelope.data or envelope.text
+        local raw = path_reader.read(envelope, paths, "result_text")
         local text = text_of(raw)
         if #text > 0 then
             for _, piece in ipairs(events.text(key(index, "thought"), "reasoning", "append", text, "reasoning_summary")) do
@@ -178,7 +179,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             end
         end
     elseif kind == "text" then
-        local raw = envelope.data ~= nil and envelope.data or envelope.text
+        local raw = path_reader.read(envelope, paths, "result_text")
         local text = text_of(raw)
         if #text > 0 then
             if not state.answer_truncated then
@@ -225,7 +226,8 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             out[#out + 1] = events.extension(key(index, "tool_update"), "grok.tool_call_update", M.PROTOCOL_REVISION, (not err and encoded) or "{}")
         end
     elseif kind == "usage" then
-        local usage = usage_of(envelope.usage or envelope)
+        local usage_record = path_reader.read(envelope, paths, "usage") or envelope
+        local usage = usage_of(usage_record)
         if usage then
             state.usage = usage
         end
@@ -236,7 +238,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         local encoded, err = json.encode(envelope)
         out[#out + 1] = events.extension(key(index, "plan"), "grok.plan", M.PROTOCOL_REVISION, (not err and encoded) or "{}")
     elseif kind == "error" then
-        local message = tostring(envelope.message or envelope.text or "grok error")
+        local message = tostring(path_reader.read(envelope, paths, "errors") or "grok error")
         out[#out + 1] = events.notice(key(index, "error"), "warning", "provider_error", message)
     elseif kind == "end" then
         local stop_reason = tostring(envelope.stopReason or envelope.stop_reason or "")
@@ -248,7 +250,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
             outcome = "cancelled"
         elseif envelope.is_error == true or status == "error" or status == "failed" or stop_reason == "error" or stop_reason == "failed" then
             outcome = "failed"
-            local err_msg = tostring(envelope.error or envelope.message or (stop_reason ~= "" and stop_reason) or "turn failed")
+            local err_msg = tostring(path_reader.read(envelope, paths, "errors") or (stop_reason ~= "" and stop_reason) or "turn failed")
             fault = events.fault("turn_failed", err_msg, false)
         elseif stop_reason == "max_turn_requests" then
             outcome = "failed"
@@ -258,10 +260,10 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         else
             outcome = "uncertain"
             local reason = stop_reason ~= "" and stop_reason or (status ~= "" and status or "missing stop reason")
-            fault = events.fault("unrecognized_stop_reason", tostring(envelope.message or reason), false)
+            fault = events.fault("unrecognized_stop_reason", tostring(path_reader.read(envelope, paths, "errors") or reason), false)
         end
 
-        local usage = usage_of(envelope.usage) or state.usage
+        local usage = usage_of(path_reader.read(envelope, paths, "usage")) or state.usage
         out[#out + 1] = events.turn(key(index, "turn_end"), "ended", outcome, usage)
         state.terminal = {
             outcome = outcome,

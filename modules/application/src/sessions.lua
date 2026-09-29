@@ -2,22 +2,15 @@
 -- bee.sessions owner contracts as the calling process's own actor and returns
 -- typed values or a typed Fault; it grants no authority and selects no identity.
 --
--- Every mutation carries an operation key. The client derives it from the
--- caller's durable context (an application handler's committed event, or an
--- explicit sessions.scope) plus the operation and target, so a replayed
--- handler reproduces the same keys and receives the original receipts. Several
--- different mutations of one operation on one target within a context need
--- distinct `key` labels; call order never supplies identity.
+-- Every mutation carries a caller-owned operation key. Bee does not expose a
+-- durable application event identity to this client, so keys are explicit.
 local contract = require("contract")
-local hash = require("hash")
 local bounds = require("bounds")
-local canonical = require("canonical")
 local protocol = require("protocol")
 local M = {}
 
 M.SESSIONS = "bee.sessions:contract"
 M.CATALOG = "bee.sessions:catalog"
-M.CONTEXT = "bee.application:context"
 
 type Fault = protocol.Fault
 type WorkAwait = protocol.WorkAwait
@@ -36,30 +29,29 @@ type Losers = "keep" | "cancel_owned"
 type CatalogKind = "definition" | "profile" | "executor"
 
 type AwaitOptions = {timeout_ms: integer?}
-type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, key: string?, operation_key: string?}
-type CloseOptions = {session: SessionArg?, incarnation: integer?, mode: CloseMode?, key: string?, operation_key: string?}
-type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, key: string?,
-    operation_key: string?}
-type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, key: string?, operation_key: string?}
+type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string?}
+type CloseOptions = {session: SessionArg?, incarnation: integer?, mode: CloseMode?, operation_key: string?}
+type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string?}
+type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, operation_key: string?}
 type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, input: Input, output: string?,
-    timeout_ms: integer?, key: string?, operation_key: string?}
+    timeout_ms: integer?, operation_key: string?}
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, losers: Losers?, timeout_ms: integer?,
-    key: string?, operation_key: string?}
-type ListOptions = {filter: {lifecycle: string?, activity: string?, mode: string?}?, after: string?}
-type CatalogOptions = {kind: CatalogKind?, include_unavailable: boolean?, after: string?}
+    operation_key: string?}
+type ListOptions = {filter: {lifecycle: string?, activity: string?}?, cursor: string?}
+type CatalogOptions = {kind: CatalogKind?, include_unavailable: boolean?, cursor: string?}
 
 type Operation = {receipt: protocol.ControlReceipt, ref: (Operation) -> string,
     await: (Operation, AwaitOptions?) -> (OperationAwait?, Fault?)}
 type Work = {receipt: protocol.WorkReceipt?, session: string, incarnation: integer, ref: (Work) -> string,
     await: (Work, AwaitOptions?) -> (WorkAwait?, Fault?),
-    cancel: (Work, CancelOptions?) -> (Operation?, Fault?),
+    cancel: (Work, CancelOptions) -> (Operation?, Fault?),
     state: (Work) -> (protocol.WorkState?, Fault?)}
 type Session = {receipt: protocol.OpenReceipt?, snapshot: protocol.SessionSnapshot, incarnation: integer,
     ref: (Session) -> string,
     send: (Session, SendOptions) -> (Work?, Fault?),
     await: (Session, Work, AwaitOptions?) -> (WorkAwait?, Fault?),
-    close: (Session, CloseOptions?) -> (Operation?, Fault?),
+    close: (Session, CloseOptions) -> (Operation?, Fault?),
     get: (Session) -> (Session?, Fault?)}
 type Call = {work: Work, observation: WorkAwait}
 
@@ -77,12 +69,8 @@ type Client = {
     catalog: (Client, CatalogOptions?) -> (protocol.CatalogPage?, Fault?),
 }
 
-type Context = {id: string, caller: string?}
-type ContextSource = () -> (Context?, string?)
-type State = {source: ContextSource, context: string, seen: {[string]: string}}
-
 local function fault(code: string, message: string, retry: protocol.Retry, key: string?): Fault
-    return {code = code, message = message, retry = retry, operation_key = key}
+    return protocol.fault(code, message, retry, key)
 end
 
 local function invalid(message: string): Fault
@@ -123,54 +111,13 @@ local function unreadable(message: string?, key: string?): Fault
     return fault("UNAVAILABLE", tostring(message), "refresh", nil)
 end
 
-local function label(value: unknown): (string?, Fault?)
-    if value == nil then return nil, nil end
-    if type(value) ~= "string" or #value == 0 or #value > 64 or value:find("%c") then
-        return nil, invalid("key must be a label of 1 to 64 printable bytes")
+local function operation_key(explicit: unknown): (string?, Fault?)
+    if explicit == nil then
+        return nil, fault("KEY_REQUIRED", "pass an explicit operation_key for every mutation", "never", nil)
     end
-    return value, nil
-end
-
--- The stable operation key for one mutation: the caller's durable context,
--- the operation, the target and the optional label.
-local function derive(state: State, operation: string, target: string, tag: string?, request: {[string]: unknown}): (string?, Fault?)
-    local context, context_error = state.source()
-    if not context then
-        return nil, fault("CONTEXT_REQUIRED", "no durable caller context: " .. tostring(context_error)
-            .. "; run inside an application handler, use sessions.scope, or pass operation_key", "never", nil)
-    end
-    if context.id ~= state.context then
-        state.context = context.id
-        state.seen = {}
-    end
-    local encoded, encode_error = canonical.encode(request, 262144, 32)
-    if not encoded then return nil, invalid("request cannot be encoded: " .. tostring(encode_error)) end
-    local digest, digest_error = hash.sha256(encoded)
-    if not digest then return nil, fault("UNAVAILABLE", "request digest: " .. tostring(digest_error), "refresh", nil) end
-    local identity = table.concat({context.id, context.caller or "", operation, target, tag or ""}, "\n")
-    local sum, sum_error = hash.sha256(identity)
-    if not sum then return nil, fault("UNAVAILABLE", "operation key digest: " .. tostring(sum_error), "refresh", nil) end
-    local key = "sdk:" .. sum
-    local prior = state.seen[key]
-    if prior ~= nil and prior ~= digest and tag == nil then
-        return nil, fault("KEY_REQUIRED", "the context already issued a different " .. operation .. " on this target; give each a distinct key label",
-            "never", nil)
-    end
-    state.seen[key] = digest
-    return key, nil
-end
-
-local function operation_key(state: State, explicit: unknown, tag: unknown, operation: string, target: string,
-    request: {[string]: unknown}): (string?, Fault?)
-    if explicit ~= nil then
-        if tag ~= nil then return nil, invalid("pass operation_key or key, not both") end
-        local supplied = protocol.key(explicit)
-        if not supplied then return nil, invalid("operation_key must be 1 to 128 printable bytes") end
-        return supplied, nil
-    end
-    local checked, label_error = label(tag)
-    if label_error then return nil, label_error end
-    return derive(state, operation, target, checked, request)
+    local supplied = protocol.key(explicit)
+    if not supplied then return nil, invalid("operation_key must be nonempty bounded text without control characters") end
+    return supplied, nil
 end
 
 -- The ref of a string or handle argument, checked against the expected kind.
@@ -250,8 +197,7 @@ local function incarnation_of(explicit: unknown, handle: unknown): (integer?, Fa
     return number, nil
 end
 
-local function new_client(source: ContextSource): Client
-    local state: State = {source = source, context = "", seen = {}}
+local function new_client(): Client
     local client: Client = {} :: Client
 
     local function observe(ref: string, timeout: unknown): (unknown, Fault?)
@@ -290,9 +236,9 @@ local function new_client(source: ContextSource): Client
             if observed.subject ~= ref then return nil, unreadable("await answered another subject", nil) end
             return observed, nil
         end
-        handle.cancel = function(_: Work, options: CancelOptions?): (Operation?, Fault?)
+        handle.cancel = function(_: Work, options: CancelOptions): (Operation?, Fault?)
             local request: CancelOptions = {work = ref, incarnation = incarnation, reason = options and options.reason,
-                key = options and options.key, operation_key = options and options.operation_key}
+                operation_key = options.operation_key}
             return client:cancel(request)
         end
         handle.state = function(_: Work): (protocol.WorkState?, Fault?)
@@ -315,7 +261,7 @@ local function new_client(source: ContextSource): Client
         handle.ref = function(_: Session): string return snapshot.session end
         handle.send = function(_: Session, options: SendOptions): (Work?, Fault?)
             local request: SendOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
-                input = options.input, output = options.output, key = options.key, operation_key = options.operation_key}
+                input = options.input, output = options.output, operation_key = options.operation_key}
             return client:send(request)
         end
         handle.await = function(_: Session, work: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
@@ -324,9 +270,9 @@ local function new_client(source: ContextSource): Client
             end
             return work:await(options)
         end
-        handle.close = function(_: Session, options: CloseOptions?): (Operation?, Fault?)
+        handle.close = function(_: Session, options: CloseOptions): (Operation?, Fault?)
             local request: CloseOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
-                mode = options and options.mode, key = options and options.key, operation_key = options and options.operation_key}
+                mode = options.mode, operation_key = options.operation_key}
             return client:close(request)
         end
         handle.get = function(_: Session): (Session?, Fault?)
@@ -344,7 +290,7 @@ local function new_client(source: ContextSource): Client
         local output, output_fault = output_of(options.output)
         if output_fault then return nil, output_fault end
         local request: {[string]: unknown} = {spec = spec, input = input, output = output}
-        local key, key_fault = operation_key(state, options.operation_key, options.key, "run", "", request)
+        local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
         local value, failure = invoke(M.SESSIONS, "run", request, key)
@@ -358,7 +304,7 @@ local function new_client(source: ContextSource): Client
         local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir)
         if not spec then return nil, spec_fault end
         local request: {[string]: unknown} = {spec = spec}
-        local key, key_fault = operation_key(state, options.operation_key, options.key, "open", "", request)
+        local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
         local value, failure = invoke(M.SESSIONS, "open", request, key)
@@ -389,7 +335,7 @@ local function new_client(source: ContextSource): Client
         if incarnation_fault then return nil, incarnation_fault end
         local request: {[string]: unknown} = {session = session, input = input, output = output,
             expected_incarnation = incarnation}
-        local key, key_fault = operation_key(state, options.operation_key, options.key, "send", session, request)
+        local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
         local value, failure = invoke(M.SESSIONS, "send", request, key)
@@ -411,7 +357,7 @@ local function new_client(source: ContextSource): Client
         local incarnation, incarnation_fault = incarnation_of(options.incarnation, options.work)
         if incarnation_fault then return nil, incarnation_fault end
         local request: {[string]: unknown} = {work = work, reason = reason, expected_incarnation = incarnation}
-        local key, key_fault = operation_key(state, options.operation_key, options.key, "cancel", work, request)
+        local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
         local value, failure = invoke(M.SESSIONS, "cancel", request, key)
@@ -431,7 +377,7 @@ local function new_client(source: ContextSource): Client
         local incarnation, incarnation_fault = incarnation_of(options.incarnation, options.session)
         if incarnation_fault then return nil, incarnation_fault end
         local request: {[string]: unknown} = {session = session, mode = options.mode, expected_incarnation = incarnation}
-        local key, key_fault = operation_key(state, options.operation_key, options.key, "close", session, request)
+        local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
         local value, failure = invoke(M.SESSIONS, "close", request, key)
@@ -489,7 +435,7 @@ local function new_client(source: ContextSource): Client
         local timeout, timeout_fault = timeout_of(options.timeout_ms)
         if timeout_fault then return nil, timeout_fault end
         local request: {[string]: unknown} = {works = works, policy = policy, quorum = quorum, losers = options.losers}
-        local key, key_fault = operation_key(state, options.operation_key, options.key, "join", table.concat(works, ","), request)
+        local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
         request.timeout_ms = timeout
@@ -534,9 +480,9 @@ local function new_client(source: ContextSource): Client
         local request: {[string]: unknown} = {}
         if options and options.filter ~= nil then
             local filter = bounds.object(options.filter)
-            if not filter or bounds.fields(filter, {"lifecycle", "activity", "mode"}) then return nil, invalid("filter is malformed") end
+            if not filter or bounds.fields(filter, {"lifecycle", "activity"}) then return nil, invalid("filter is malformed") end
             local allowed: {[string]: {string}} = {lifecycle = {"opening", "active", "suspended", "closing", "closed"},
-                activity = {"idle", "working", "blocked", "stalled"}, mode = {"managed", "manual"}}
+                activity = {"idle", "working", "blocked", "stalled"}}
             for name, raw in pairs(filter) do
                 local matched = false
                 for _, item in ipairs(allowed[name] or {}) do if item == raw then matched = true end end
@@ -544,10 +490,10 @@ local function new_client(source: ContextSource): Client
             end
             request.filter = filter
         end
-        if options and options.after ~= nil then
-            local after = protocol.cursor(options.after)
-            if not after then return nil, invalid("after must be a cursor") end
-            request.after = after
+        if options and options.cursor ~= nil then
+            local cursor = protocol.cursor(options.cursor)
+            if not cursor then return nil, invalid("cursor must be a cursor") end
+            request.cursor = cursor
         end
         local value, failure = invoke(M.SESSIONS, "list", request, nil)
         if failure then return nil, failure end
@@ -568,10 +514,10 @@ local function new_client(source: ContextSource): Client
             if type(options.include_unavailable) ~= "boolean" then return nil, invalid("include_unavailable must be a boolean") end
             request.include_unavailable = options.include_unavailable
         end
-        if options and options.after ~= nil then
-            local after = protocol.cursor(options.after)
-            if not after then return nil, invalid("after must be a cursor") end
-            request.after = after
+        if options and options.cursor ~= nil then
+            local cursor = protocol.cursor(options.cursor)
+            if not cursor then return nil, invalid("cursor must be a cursor") end
+            request.cursor = cursor
         end
         local value, failure = invoke(M.CATALOG, "list", request, nil)
         if failure then return nil, failure end
@@ -583,30 +529,8 @@ local function new_client(source: ContextSource): Client
     return client
 end
 
--- The application handler's durable event, from the application context contract.
-local function ambient(): (Context?, string?)
-    local raw, transport = call_owner(M.CONTEXT, "get_event", {})
-    if transport ~= nil then return nil, transport end
-    local reply, reply_error = protocol.decode_reply(raw)
-    if not reply then return nil, reply_error end
-    if not reply.ok then return nil, reply.error.message end
-    local event = bounds.object(reply.value)
-    if not event or bounds.fields(event, {"event", "caller"}) then return nil, "the application context returned a malformed event" end
-    local id = bounds.id(event.event)
-    local caller = event.caller == nil and nil or bounds.id(event.caller)
-    if not id or (event.caller ~= nil and not caller) then return nil, "the application context returned a malformed event" end
-    return {id = id, caller = caller}, nil
-end
-
-local ambient_client = new_client(ambient)
-
--- A client bound to a persisted durable context, for algorithms that own
--- their own identity such as a graph activation or a saved iteration.
-function M.scope(persisted_id: string): (Client?, Fault?)
-    local id = bounds.id(persisted_id)
-    if not id then return nil, invalid("scope needs a persisted identifier of 1 to 160 printable bytes") end
-    return new_client(function(): (Context?, string?) return {id = id, caller = nil}, nil end), nil
-end
+function M.client(): Client return new_client() end
+local ambient_client = new_client()
 
 function M.open(options: OpenOptions): (Session?, Fault?) return ambient_client:open(options) end
 function M.call(options: CallOptions): (Call?, Fault?) return ambient_client:call(options) end

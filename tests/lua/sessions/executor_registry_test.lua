@@ -4,14 +4,11 @@ local test = require("test")
 local registry = require("registry")
 
 local CONTRACT = "bee.sessions:executor"
-local METHODS = {
-    "describe", "locate", "negotiate", "prepare", "activate",
-    "pull_turn", "accept_turn", "observe", "reconcile", "cancel",
-}
+local METHODS = {"run_turn"}
 
 local function binding(executor_id: string): {[string]: unknown}
     local methods: {[string]: string} = {}
-    for _, name in ipairs(METHODS) do methods[name] = "bee.fake.executor:" .. name end
+    for _, name in ipairs(METHODS) do methods[name] = "bee.fake." .. executor_id .. ":" .. name end
     return {
         kind = "contract.binding",
         meta = {type = "bee.sessions.executor_binding", executor_id = executor_id, version = "1"},
@@ -50,10 +47,10 @@ local function define_tests()
             local data = broken.data :: {[string]: unknown}
             local contracts = data.contracts :: {unknown}
             local contract = contracts[1] :: {[string]: unknown}
-            (contract.methods :: {[string]: string}).activate = "invalid target"
+            (contract.methods :: {[string]: string}).run_turn = "invalid target"
             local built, err = registry.build({["bee.fake:broken"] = broken}, {"bee.fake:broken"})
             test.is_nil(built)
-            test.eq(err, "INVALID: executor binding bee.fake:broken does not bind activate")
+            test.eq(err, "INVALID: selected executor binding bee.fake:broken does not bind run_turn")
         end)
     end)
 end

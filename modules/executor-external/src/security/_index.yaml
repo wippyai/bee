@@ -4,16 +4,13 @@ entries:
 - name: driver_placement_calls
   kind: security.policy
   meta:
-    comment: External turn worker calls only the admitted Claude/Codex codecs and native placement operations
+    comment: External turn worker calls the selected bee.driver operations and native placement operations
   policy:
     actions: [funcs.call]
     resources:
-    - bee.driver.claude.binding:prepare
-    - bee.driver.claude.binding:dispatch
-    - bee.driver.claude.binding:normalize
-    - bee.driver.codex.binding:prepare
-    - bee.driver.codex.binding:dispatch
-    - bee.driver.codex.binding:normalize
+    - bee.driver.*.binding:prepare
+    - bee.driver.*.binding:dispatch
+    - bee.driver.*.binding:normalize
     - bee.placement.native.binding:prepare
     - bee.placement.native.binding:attach
     - bee.placement.native.binding:start

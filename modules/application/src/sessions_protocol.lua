@@ -19,20 +19,22 @@ M.DEFAULT_TIMEOUT_MS = 30000
 
 type Retry = "never" | "same_key" | "refresh" | "reconcile"
 type Evidence = {summary: string, artifacts: {string}}
+type Sender = {kind: "session" | "principal", id: string}
+type FaultExtra = {operation: string?, current_revision: integer?, evidence: Evidence?, retry_after_ms: integer?}
 type Fault = {code: string, message: string, retry: Retry, operation_key: string?, operation: string?,
     current_revision: integer?, evidence: Evidence?, retry_after_ms: integer?}
 type Action = {operation: string, label: string}
-type BlockerKind = "question" | "budget" | "authority" | "dependency" | "capacity" | "recovery" | "stalled"
+type BlockerKind = "budget" | "authority" | "capacity" | "recovery" | "stalled"
 type Blocker = {kind: BlockerKind, message: string, subject: string, actions: {Action}}
 type Succeeded = {outcome: "succeeded", schema: string, value: unknown, artifacts: {string}, usage: {string}}
 type Unsuccessful = {outcome: "failed" | "cancelled" | "expired" | "rejected", error: Fault, artifacts: {string}}
 type Result = Succeeded | Unsuccessful
 type WorkReceipt = {work: string, session: string, operation: string, committed_at: string, sequence: integer,
-    kind: "request", state: "queued", output_schema: string, sender: string?}
+    kind: "request", state: "queued", output_schema: string, sender: Sender}
 type WorkPhase = "queued" | "reserved" | "accepted"
-type WorkState = {work: string, session: string, sender: string, revision: integer, cancelling: boolean,
+type WorkState = {work: string, session: string, sender: Sender, revision: integer, cancelling: boolean,
     blocker: Blocker?, uncertainty: Evidence?, phase: WorkPhase, result: nil}
-    | {work: string, session: string, sender: string, revision: integer, cancelling: false, phase: "settled", result: Result}
+    | {work: string, session: string, sender: Sender, revision: integer, cancelling: false, phase: "settled", result: Result}
 type ControlReceipt = {operation: string, subject: string, state: "requested",
     effect: "cancel" | "close"}
 type Cleanup = "complete" | "pending" | "uncertain"
@@ -55,23 +57,37 @@ type JoinAwait = {subject_kind: "join", subject: string, cursor: string, tag: "r
     | {subject_kind: "join", subject: string, cursor: string, tag: "blocked", children: {WorkAwait}, blocker: Blocker}
     | {subject_kind: "join", subject: string, cursor: string, tag: "uncertain", children: {WorkAwait}, evidence: Evidence}
 
-type Limits = {active_ms: integer?, model_steps: integer?, tool_calls: integer?, recovery_attempts: integer?,
-    queue_ms: integer?, question_ms: integer?}
+type Limits = {active_ms: integer?, model_steps: integer?, tool_calls: integer?, recovery_attempts: integer?, queue_ms: integer?}
 type Continuity = {mode: "exact" | "provider_resume" | "reconstructed" | "fresh", evidence: Evidence?}
 type Execution = {state: "absent" | "starting" | "running" | "quiescent" | "unknown", evidence_at: string, stale: boolean}
 type Lifecycle = "opening" | "active" | "suspended" | "closing" | "closed"
 type Activity = "idle" | "working" | "blocked" | "stalled"
 type SessionSnapshot = {session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
-    mode: "managed" | "manual", activity: Activity, execution: Execution, queue_count: integer, questions: {string},
-    effective_limits: Limits, continuity: Continuity, actions: {Action}}
+    activity: Activity, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type GetValue = {kind: "session", value: SessionSnapshot} | {kind: "work", value: WorkState}
 type ListPage = {items: {SessionSnapshot}, next: string?, feed: string, snapshot: string}
 type CandidateKind = "definition" | "profile" | "executor"
 type Candidate = {ref: string, kind: CandidateKind, revision: integer?, title: string,
-    status: "ready" | "missing" | "unconfigured" | "incompatible" | "unknown", checked_at: string, expires_at: string,
+    status: "ready" | "missing" | "unconfigured" | "incompatible" | "unknown", checked_at: string,
     reasons: {string}, features: {string}, actions: {Action}}
 type CatalogPage = {items: {Candidate}, next: string?, complete: boolean, unavailable_count: integer, diagnostics: {Fault}}
+
+local fault_metatable = {__tostring = function(value: unknown): string
+    local fault = value :: {[string]: unknown}
+    return tostring(fault.code or "FAULT") .. ": " .. tostring(fault.message or "session operation failed")
+end}
+
+function M.fault(code: string, message: string, retry: Retry, operation_key: string?, extra: FaultExtra?): Fault
+    local value: {[string]: unknown} = {code = code, message = message, retry = retry, operation_key = operation_key}
+    if extra then
+        value.operation = extra.operation
+        value.current_revision = extra.current_revision
+        value.evidence = extra.evidence
+        value.retry_after_ms = extra.retry_after_ms
+    end
+    return setmetatable(value, fault_metatable) :: Fault
+end
 
 M.PREFIX = {session = "bs", work = "bw", operation = "bo", join = "bj"}
 type RefKind = "session" | "work" | "operation" | "join"
@@ -155,6 +171,19 @@ local function shape(value: unknown, name: string, allowed: {string}): ({[string
     return object, nil
 end
 
+local function decode_sender(value: unknown): (Sender?, string?)
+    local object, failure = shape(value, "sender", {"kind", "id"})
+    if not object then return nil, failure end
+    local kind = one_of(object.kind, {"session", "principal"})
+    local id = M.any_ref(object.id)
+    if not kind or not id then return nil, "sender is malformed" end
+    local sender_kind: "session" | "principal"
+    if object.kind == "session" then sender_kind = "session"
+    elseif object.kind == "principal" then sender_kind = "principal"
+    else return nil, "sender is malformed" end
+    return {kind = sender_kind, id = id}, nil
+end
+
 
 function M.decode_evidence(value: unknown): (Evidence?, string?)
     local object, failure = shape(value, "evidence", {"summary", "artifacts"})
@@ -201,8 +230,8 @@ function M.decode_fault(value: unknown): (Fault?, string?)
     local decoded_retry: Retry = "never"
     if retry == "same_key" then decoded_retry = "same_key" elseif retry == "refresh" then decoded_retry = "refresh"
     elseif retry == "reconcile" then decoded_retry = "reconcile" end
-    return {code = code, message = message, retry = decoded_retry, operation_key = operation_key, operation = operation,
-        current_revision = revision, evidence = evidence, retry_after_ms = retry_after}, nil
+    return M.fault(code, message, decoded_retry, operation_key,
+        {operation = operation, current_revision = revision, evidence = evidence, retry_after_ms = retry_after}), nil
 end
 
 local function decode_actions(value: unknown): {Action}?
@@ -222,13 +251,12 @@ end
 function M.decode_blocker(value: unknown): (Blocker?, string?)
     local object, failure = shape(value, "blocker", {"kind", "message", "subject", "actions"})
     if not object then return nil, failure end
-    local kind = one_of(object.kind, {"question", "budget", "authority", "dependency", "capacity", "recovery", "stalled"})
+    local kind = one_of(object.kind, {"budget", "authority", "capacity", "recovery", "stalled"})
     local message, subject = bounds.text(object.message, M.MAX_TEXT_BYTES), M.any_ref(object.subject)
     local actions = decode_actions(object.actions)
     if not kind or not message or not subject or not actions then return nil, "blocker is malformed" end
-    local decoded: BlockerKind = "question"
-    if kind == "budget" then decoded = "budget" elseif kind == "authority" then decoded = "authority"
-    elseif kind == "dependency" then decoded = "dependency" elseif kind == "capacity" then decoded = "capacity"
+    local decoded: BlockerKind = "budget"
+    if kind == "authority" then decoded = "authority" elseif kind == "capacity" then decoded = "capacity"
     elseif kind == "recovery" then decoded = "recovery" elseif kind == "stalled" then decoded = "stalled" end
     return {kind = decoded, message = message, subject = subject, actions = actions}, nil
 end
@@ -260,11 +288,8 @@ function M.decode_work_receipt(value: unknown): (WorkReceipt?, string?)
     local object, failure = shape(value, "work receipt", {"work", "session", "operation", "committed_at", "sequence",
         "kind", "state", "output_schema", "sender"})
     if not object then return nil, failure end
-    local sender: string? = nil
-    if object.sender ~= nil then
-        sender = M.any_ref(object.sender)
-        if not sender then return nil, "work receipt sender is invalid" end
-    end
+    local sender, sender_error = decode_sender(object.sender)
+    if not sender then return nil, sender_error end
     local work, session, operation = M.ref("work", object.work), M.ref("session", object.session), M.ref("operation", object.operation)
     local committed, sequence = bounds.timestamp(object.committed_at), M.position(object.sequence)
     local schema = M.any_ref(object.output_schema)
@@ -280,9 +305,9 @@ function M.decode_work_state(value: unknown): (WorkState?, string?)
     if not object then return nil, failure end
     local work, session, revision = M.ref("work", object.work), M.ref("session", object.session), M.position(object.revision)
     local phase = one_of(object.phase, {"queued", "reserved", "accepted", "settled"})
-    local sender = M.any_ref(object.sender)
+    local sender, sender_error = decode_sender(object.sender)
     if not work or not session or not sender or not revision or not phase or type(object.cancelling) ~= "boolean" then
-        return nil, "work state is malformed"
+        return nil, sender_error or "work state is malformed"
     end
     if phase == "settled" then
         if object.cancelling ~= false or object.blocker ~= nil or object.uncertainty ~= nil or object.result == nil then
@@ -484,7 +509,7 @@ function M.decode_join_await(value: unknown): (JoinAwait?, string?)
     return {subject_kind = "join", subject = subject, cursor = cursor, tag = "uncertain", children = children, evidence = evidence}, nil
 end
 
-local LIMIT_FIELDS = {"active_ms", "model_steps", "tool_calls", "recovery_attempts", "queue_ms", "question_ms"}
+local LIMIT_FIELDS = {"active_ms", "model_steps", "tool_calls", "recovery_attempts", "queue_ms"}
 
 local function decode_limits(value: unknown): Limits?
     local object = shape(value, "limits", LIMIT_FIELDS)
@@ -497,7 +522,7 @@ local function decode_limits(value: unknown): Limits?
             if not number then return nil end
             if name == "active_ms" then limits.active_ms = number elseif name == "model_steps" then limits.model_steps = number
             elseif name == "tool_calls" then limits.tool_calls = number elseif name == "recovery_attempts" then limits.recovery_attempts = number
-            elseif name == "queue_ms" then limits.queue_ms = number else limits.question_ms = number end
+            elseif name == "queue_ms" then limits.queue_ms = number end
         end
     end
     return limits
@@ -505,17 +530,16 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "mode", "activity", "execution", "queue_count", "questions", "effective_limits", "continuity", "actions"})
+        "activity", "execution", "queue_count", "effective_limits", "continuity", "actions"})
     if not object then return nil, failure end
     local session, revision, incarnation = M.ref("session", object.session), M.position(object.revision), M.position(object.incarnation)
     local title = bounds.text(object.title, M.MAX_TITLE_BYTES)
     local lifecycle = one_of(object.lifecycle, {"opening", "active", "suspended", "closing", "closed"})
-    local mode = one_of(object.mode, {"managed", "manual"})
     local activity = one_of(object.activity, {"idle", "working", "blocked", "stalled"})
-    local queue_count, questions = bounds.count(object.queue_count), refs(object.questions)
+    local queue_count = bounds.count(object.queue_count)
     local limits, actions = decode_limits(object.effective_limits), decode_actions(object.actions)
-    if not session or not revision or not incarnation or not title or not lifecycle or not mode or not activity
-        or not queue_count or not questions or not limits or not actions then return nil, "session snapshot is malformed" end
+    if not session or not revision or not incarnation or not title or not lifecycle or not activity
+        or not queue_count or not limits or not actions then return nil, "session snapshot is malformed" end
     local execution_object = shape(object.execution, "execution", {"state", "evidence_at", "stale"})
     if not execution_object then return nil, "session execution is malformed" end
     local state = one_of(execution_object.state, {"absent", "starting", "running", "quiescent", "unknown"})
@@ -544,9 +568,9 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     elseif continuity_mode == "reconstructed" then decoded_continuity = "reconstructed"
     elseif continuity_mode == "fresh" then decoded_continuity = "fresh" end
     return {session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
-        mode = mode == "managed" and "managed" or "manual", activity = decoded_activity,
+        activity = decoded_activity,
         execution = {state = decoded_state, evidence_at = evidence_at, stale = execution_object.stale == true},
-        queue_count = queue_count, questions = questions, effective_limits = limits,
+        queue_count = queue_count, effective_limits = limits,
         continuity = {mode = decoded_continuity, evidence = evidence}, actions = actions}, nil
 end
 
@@ -598,15 +622,15 @@ end
 
 local function decode_candidate(value: unknown): (Candidate?, string?)
     local object, failure = shape(value, "candidate", {"ref", "kind", "revision", "title", "status", "checked_at",
-        "expires_at", "reasons", "features", "actions"})
+        "reasons", "features", "actions"})
     if not object then return nil, failure end
     local ref = M.any_ref(object.ref)
     local kind = one_of(object.kind, {"definition", "profile", "executor"})
     local title = bounds.text(object.title, M.MAX_TITLE_BYTES)
     local status = one_of(object.status, {"ready", "missing", "unconfigured", "incompatible", "unknown"})
-    local checked, expires = bounds.timestamp(object.checked_at), bounds.timestamp(object.expires_at)
+    local checked = bounds.timestamp(object.checked_at)
     local reasons, features, actions = texts(object.reasons), refs(object.features), decode_actions(object.actions)
-    if not ref or not kind or not title or not status or not checked or not expires or not reasons or not features
+    if not ref or not kind or not title or not status or not checked or not reasons or not features
         or not actions then return nil, "candidate is malformed" end
     local revision: integer? = nil
     if object.revision ~= nil then
@@ -619,7 +643,7 @@ local function decode_candidate(value: unknown): (Candidate?, string?)
     if status == "missing" then decoded_status = "missing" elseif status == "unconfigured" then decoded_status = "unconfigured"
     elseif status == "incompatible" then decoded_status = "incompatible" elseif status == "unknown" then decoded_status = "unknown" end
     return {ref = ref, kind = decoded_kind, revision = revision, title = title, status = decoded_status,
-        checked_at = checked, expires_at = expires, reasons = reasons, features = features, actions = actions}, nil
+        checked_at = checked, reasons = reasons, features = features, actions = actions}, nil
 end
 
 function M.decode_catalog_page(value: unknown): (CatalogPage?, string?)

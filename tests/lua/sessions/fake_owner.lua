@@ -1,6 +1,5 @@
 -- MIT. A stateless bee.sessions owner: replies follow the request, and a ref's
 -- last segment selects the observation the owner reports for it.
-local security = require("security")
 local M = {}
 local STAMP = "2026-09-29T10:00:00.000Z"
 type Reply = {[string]: unknown}
@@ -23,9 +22,9 @@ end
 
 local function snapshot(session: string): {[string]: unknown}
     return {session = session, revision = 1, incarnation = incarnation(session), title = "session", lifecycle = "active",
-        mode = "managed", activity = "idle", execution = {state = "quiescent", evidence_at = STAMP, stale = false},
-        queue_count = 0, questions = {}, effective_limits = {active_ms = 900000, model_steps = 32, tool_calls = 64,
-        recovery_attempts = 3, queue_ms = 86400000, question_ms = 86400000}, continuity = {mode = "fresh"}, actions = {}}
+        activity = "idle", execution = {state = "quiescent", evidence_at = STAMP, stale = false},
+        queue_count = 0, effective_limits = {active_ms = 900000, model_steps = 32, tool_calls = 64,
+        recovery_attempts = 3, queue_ms = 86400000}, continuity = {mode = "fresh"}, actions = {}}
 end
 
 local function succeeded(): {[string]: unknown}
@@ -71,12 +70,11 @@ function M.run(request: unknown): Reply
     local name = tail(object(object(request).spec).definition)
     return ok({work = "bw:n:w:" .. name, session = "bs:n:w:r" .. name, operation = "bo:n:w:" .. segment(key),
         committed_at = STAMP, sequence = 1, kind = "request", state = "queued",
-        output_schema = object(request).output or "bee:Text@1"})
+        output_schema = object(request).output or "bee:Text@1", sender = {kind = "principal", id = "principal:test"}})
 end
 
 function M.send(request: unknown): Reply
-    local problem = closed(request, {"session", "input", "output", "after", "after_guidance", "expires_at",
-        "expected_incarnation", "operation_key"})
+    local problem = closed(request, {"session", "input", "output", "expected_incarnation", "operation_key"})
     local input = object(request)
     if problem then return refuse("INVALID", problem, input.operation_key) end
     if (input.expected_incarnation or 1) ~= incarnation(input.session) then
@@ -85,7 +83,7 @@ function M.send(request: unknown): Reply
     local word = type(input.input) == "string" and (input.input :: string):match("^%a+$") or "ready"
     return ok({work = "bw:n:w:" .. word, session = input.session, operation = "bo:n:w:" .. segment(input.operation_key),
         committed_at = STAMP, sequence = 2, kind = "request", state = "queued", output_schema = input.output or "bee:Text@1",
-        sender = "bs:n:w:lead"})
+        sender = {kind = "session", id = "bs:n:w:lead"}})
 end
 
 function M.await(request: unknown): Reply
@@ -126,7 +124,7 @@ function M.get(request: unknown): Reply
     if input.work then
         local name = tail(input.work)
         local state: {[string]: unknown} = {work = input.work, session = name == "two" and "bs:n:w:s2" or "bs:n:w:s1",
-            sender = "bs:n:w:lead", revision = 1, cancelling = false}
+            sender = {kind = "session", id = "bs:n:w:lead"}, revision = 1, cancelling = false}
         if name == "ready" then state.phase = "settled"; state.result = succeeded() else state.phase = "accepted" end
         return ok({kind = "work", value = state})
     end
@@ -149,25 +147,16 @@ function M.close(request: unknown): Reply
 end
 
 function M.list(request: unknown): Reply
-    local problem = closed(request, {"filter", "after"})
+    local problem = closed(request, {"filter", "cursor"})
     if problem then return refuse("INVALID", problem, nil) end
     return ok({items = {snapshot("bs:n:w:s1")}, feed = "f1", snapshot = "snap1"})
 end
 
 function M.catalog(request: unknown): Reply
-    local problem = closed(request, {"kind", "include_unavailable", "after"})
+    local problem = closed(request, {"kind", "include_unavailable", "cursor"})
     if problem then return refuse("INVALID", problem, nil) end
     return ok({items = {{ref = "research:quick", kind = "definition", title = "Quick", status = "ready", checked_at = STAMP,
-        expires_at = STAMP, reasons = {}, features = {}, actions = {}}}, complete = true, unavailable_count = 0, diagnostics = {}})
-end
-
--- The event of an application handler: the acting identity `event:<id>`.
-function M.get_event(request: unknown): Reply
-    local actor = security.actor()
-    local id = actor and actor:id() or ""
-    local event = id:match("^event:(.+)$")
-    if not event then return refuse("DENIED", "no durable event", nil) end
-    return ok({event = event})
+        reasons = {}, features = {}, actions = {}}}, complete = true, unavailable_count = 0, diagnostics = {}})
 end
 
 return M

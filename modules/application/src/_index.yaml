@@ -30,10 +30,9 @@ entries:
 - name: sessions
   kind: library.lua
   source: file://sessions.lua
-  modules: [contract, hash]
+  modules: [contract]
   imports:
     bounds: bee.protocol:bounds
-    canonical: bee.protocol:canonical
     protocol: bee.application:sessions_protocol
 - name: arguments
   kind: library.lua

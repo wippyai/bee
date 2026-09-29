@@ -15,7 +15,7 @@ type CandidateInput = {ref: string, kind: Kind, title: string, revision: integer
     binding_digest: string, profile_digest: string?, runtime_identity: string, availability_revision: string}
 type LocateObservation = {status: Status, reasons: {string}?, features: {string}?, actions: {Action}?, revision: integer?}
 type Candidate = {ref: string, kind: Kind, revision: integer?, title: string, status: Status, checked_at: string,
-    expires_at: string, reasons: {string}, features: {string}, actions: {Action}}
+    reasons: {string}, features: {string}, actions: {Action}}
 type Cached = {value: Candidate, expires_at_ms: integer, target: string, key: string}
 type Cache = {ttl_ms: integer, clock: Clock, by_key: {[string]: Cached}, by_ref: {[string]: string}}
 type Probe = (CandidateInput) -> (LocateObservation?, string?)
@@ -125,7 +125,7 @@ local function decode_actions(value: unknown): ({Action}?, string?)
     return actions, nil
 end
 
-local function public_candidate(input: CandidateInput, observation: LocateObservation?, probe_error: string?, checked: integer, expires: integer, clock: Clock): (Candidate?, string?)
+local function public_candidate(input: CandidateInput, observation: LocateObservation?, probe_error: string?, checked: integer, clock: Clock): (Candidate?, string?)
     local status: Status = "unknown"
     local reasons: {string} = {}
     local features: {string} = {}
@@ -153,7 +153,7 @@ local function public_candidate(input: CandidateInput, observation: LocateObserv
         reasons[1] = status == "unknown" and "Readiness could not be established." or "Executor is " .. status .. "."
     end
     return {ref = input.ref, kind = input.kind, revision = revision, title = input.title, status = status,
-        checked_at = clock.format(checked), expires_at = clock.format(expires), reasons = reasons,
+        checked_at = clock.format(checked), reasons = reasons,
         features = features, actions = actions}, nil
 end
 
@@ -179,7 +179,7 @@ function M.locate(cache: Cache, candidate: CandidateInput, probe: Probe): (Candi
     if stored and now < stored.expires_at_ms then return stored.value, nil end
     local observation, probe_error = probe(candidate)
     local expires = now + cache.ttl_ms
-    local result, result_error = public_candidate(candidate, observation, probe_error, now, expires, cache.clock)
+    local result, result_error = public_candidate(candidate, observation, probe_error, now, cache.clock)
     if not result then return nil, "INVALID: " .. tostring(result_error) end
     cache.by_key[cache_key] = {value = result, expires_at_ms = expires, target = candidate.target, key = cache_key}
     return result, nil
@@ -212,7 +212,7 @@ local function valid_candidate_value(raw: unknown): boolean
     if not bounded_id(item.ref) or not member(item.kind, {"definition", "profile", "executor"}) then return false end
     if item.revision ~= nil and not is_integer(item.revision, 1) then return false end
     if not bounded_text(item.title, 512) or item.title == "" or not member(item.status, M.STATUSES) then return false end
-    if not bounded_text(item.checked_at, 64) or not bounded_text(item.expires_at, 64) then return false end
+    if not bounded_text(item.checked_at, 64) then return false end
     if not array(item.reasons, 64, function(value): boolean return bounded_text(value, 16384) ~= nil end) then return false end
     if not array(item.features, 64, function(value): boolean return bounded_id(value) ~= nil end) then return false end
     return decode_actions(item.actions) ~= nil

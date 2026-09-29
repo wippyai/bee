@@ -345,17 +345,23 @@ entries:
   - name: session_transition
     description: Change session lifecycle at a durable revision
   - name: work_send
-    description: Commit immutable work with same-workspace dependencies gated by successful results
+    description: Commit immutable work with owner-set sender identity
   - name: work_describe
     description: Read a work phase and its result when settled
+  - name: work_scan
+    description: Scan the next queued work and unsettled turn for the Sessions scheduler
   - name: turn_reserve
     description: Reserve the FIFO eligible work under a fenced owner epoch
+  - name: turn_recover
+    description: Re-fence one unsettled turn under the current owner epoch
   - name: turn_pull
     description: Pull the exact immutable envelope for a reserved turn
   - name: turn_accept
     description: Commit acceptance of the reserved input checkpoint
   - name: work_settle
     description: Settle one accepted turn with its per-work result
+  - name: work_uncertain
+    description: Persist uncertainty without retrying a turn whose outcome cannot be proven
   - name: operation_lookup
     description: Recover a caller-scoped operation receipt by key
   - name: feed_read
@@ -370,10 +376,13 @@ entries:
       session_transition: bee.threads.service:session_transition
       work_send: bee.threads.service:work_send
       work_describe: bee.threads.service:work_describe
+      work_scan: bee.threads.service:work_scan
       turn_reserve: bee.threads.service:turn_reserve
+      turn_recover: bee.threads.service:turn_recover
       turn_pull: bee.threads.service:turn_pull
       turn_accept: bee.threads.service:turn_accept
       work_settle: bee.threads.service:work_settle
+      work_uncertain: bee.threads.service:work_uncertain
       operation_lookup: bee.threads.service:operation_lookup
       feed_read: bee.threads.service:feed_read
 - name: owner

@@ -55,7 +55,7 @@ local function normalizer_call(target: string, state: unknown, index: integer, e
     return reply, nil
 end
 
-local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean, provider: string): (unknown, string?)
+local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean): (unknown, string?)
     local listener = bounds.object(listener_value) :: Listener?
     local attempt, attempt_error = unwrap_attempt(attempt_value)
     if not listener or not attempt then return nil, attempt_error or "output listener or attempt is malformed" end
@@ -65,7 +65,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local generation = bounds.integer(attempt_object.attachment_generation)
     if not runner or not generation then return nil, "placement start omitted runner attachment identity" end
     local monitored = process.monitor(runner)
-    local decoder = stream.new(provider)
+    local decoder = stream.new()
     local state: unknown = nil
     local terminal: driver_types.Terminal? = nil
     local observations: {{[string]: unknown}} = {}
@@ -181,7 +181,7 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             return service_call(placement_target(request, "start"), {attempt_id = attempt_id})
         end,
         observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean, _checkpoint: unknown?)
-            return observe(listener, attempt, normalizer_target, resumed, tostring(request.provider))
+            return observe(listener, attempt, normalizer_target, resumed)
         end,
         close = function(value: unknown)
             local listener = bounds.object(value)
@@ -190,7 +190,12 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             process.unlisten(listener.exits)
         end,
     }
-    return turn.execute(io, value)
+    local result, execution_error = turn.execute(io, value)
+    if execution_error then
+        return {ok = false, error = {code = "EXECUTOR_FAILED", message = execution_error}}
+    end
+    if not result then return {ok = false, error = {code = "EXECUTOR_FAILED", message = "external turn returned no result"}} end
+    return {ok = true, value = result}
 end
 
 return {handle = handle}

@@ -40,16 +40,18 @@ local function define_tests()
         end)
 
         test.it("keeps a settled result off unsettled work state", function()
-            local base: {[string]: unknown} = {work = "bw:n:w:w1", session = "bs:n:w:s1", sender = "bs:n:w:lead", revision = 1, cancelling = false, phase = "accepted"}
+            local sender = {kind = "session", id = "bs:n:w:lead"}
+            local base: {[string]: unknown} = {work = "bw:n:w:w1", session = "bs:n:w:s1", sender = sender, revision = 1, cancelling = false, phase = "accepted"}
             local state = assert(protocol.decode_work_state(base))
             test.eq(state.phase, "accepted")
-            test.eq(state.sender, "bs:n:w:lead")
+            test.eq(state.sender.kind, "session")
+            test.eq(state.sender.id, "bs:n:w:lead")
             base.sender = nil
             test.is_nil(protocol.decode_work_state(base))
-            base.sender = "bs:n:w:lead"
+            base.sender = sender
             base.result = succeeded()
             test.is_nil(protocol.decode_work_state(base))
-            local settled: {[string]: unknown} = {work = "bw:n:w:w1", session = "bs:n:w:s1", sender = "bs:n:w:lead", revision = 2, cancelling = false,
+            local settled: {[string]: unknown} = {work = "bw:n:w:w1", session = "bs:n:w:s1", sender = sender, revision = 2, cancelling = false,
                 phase = "settled", result = succeeded()}
             local done = assert(protocol.decode_work_state(settled))
             test.eq(done.phase, "settled")
@@ -96,6 +98,11 @@ local function define_tests()
             local refusal = assert(protocol.decode_reply({ok = false, error = {code = "DENIED", message = "no", retry = "never", operation_key = "k"}}))
             test.eq(refusal.ok, false)
             test.is_nil(protocol.decode_reply({ok = false, error = {code = "DENIED", message = "no", retry = "later"}}))
+        end)
+
+        test.it("renders faults as readable text", function()
+            local fault = protocol.fault("DENIED", "session is not admitted", "never", nil)
+            test.eq(tostring(fault), "DENIED: session is not admitted")
         end)
 
         test.it("bounds inline JSON by bytes and depth", function()

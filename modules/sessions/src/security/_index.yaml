@@ -1,3 +1,41 @@
 version: '1.0'
 namespace: bee.sessions.security
-entries: []
+entries:
+- name: owner_admission_policy
+  kind: security.policy
+  meta:
+    comment: Session methods resolve host-admitted definitions and saved profiles before creating durable sessions
+  policy:
+    actions: [registry.get, registry.snapshot, funcs.call]
+    resources:
+    - bee.harness.profiles:contract
+    - bee.harness.profiles:call
+    - bee.harness.launch:admission
+    effect: allow
+- name: scheduler_policy
+  kind: security.policy
+  meta:
+    comment: The Sessions scheduler reads the selected journal and executor bindings and calls their exact operations
+  policy:
+    actions: [process.registry.register, process.listen, channel.select, time.ticker, registry.get, registry.snapshot, funcs.call]
+    resources:
+    - bee.sessions.scheduler
+    - bee.sessions.scheduler.wake
+    - bee.sessions:threads_journal_ref
+    - bee.sessions:executor_selection
+    - bee.executor.external.binding:run_turn
+    - bee.threads.service:session_create
+    - bee.threads.service:session_describe
+    - bee.threads.service:session_transition
+    - bee.threads.service:work_send
+    - bee.threads.service:work_describe
+    - bee.threads.service:work_scan
+    - bee.threads.service:turn_reserve
+    - bee.threads.service:turn_recover
+    - bee.threads.service:turn_pull
+    - bee.threads.service:turn_accept
+    - bee.threads.service:work_settle
+    - bee.threads.service:work_uncertain
+    - bee.threads.service:operation_lookup
+    - bee.threads.service:feed_read
+    effect: allow

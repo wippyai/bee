@@ -1,0 +1,7 @@
+version: '1.0'
+namespace: bee.sessions.service
+entries:
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  modules: [time]

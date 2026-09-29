@@ -1,0 +1,70 @@
+version: '1.0'
+namespace: bee.sessions
+entries:
+- name: definition
+  kind: ns.definition
+  module: sessions
+  readme: file://README.md
+  meta:
+    title: Bee sessions
+    comment: Durable session launch contracts, host-selected executors, location and scheduling
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+- name: executor_registry
+  kind: library.lua
+  source: file://executor_registry.lua
+- name: contract
+  kind: contract.definition
+  methods:
+  - {name: open, description: Open a reusable managed session}
+  - {name: run, description: Atomically open a session and queue its first work item}
+  - {name: send, description: Durably queue work for a session}
+  - {name: await, description: Observe work, operation or question state}
+  - {name: join, description: Join an exact ordered set of work items}
+  - {name: get, description: Read an exact session, work or operation}
+  - {name: list, description: List durable sessions independently of executor readiness}
+  - {name: cancel, description: Request evidence-backed work cancellation}
+  - {name: close, description: Seal a session and reconcile its cleanup}
+- name: catalog
+  kind: contract.definition
+  methods:
+  - {name: list, description: List visible definitions, profiles or executors}
+  - {name: locate, description: Locate one exact candidate on this host}
+  - {name: reprobe, description: Invalidate cached readiness and locate again}
+- name: guidance
+  kind: contract.definition
+  methods:
+  - {name: set_guidance, description: Persist scoped guidance at an evidenced work frontier}
+- name: executor
+  kind: contract.definition
+  methods:
+  - {name: describe, description: Describe executor identity and supported features}
+  - {name: locate, description: Report readiness for an exact target}
+  - {name: negotiate, description: Select a compatible plan before execution effects}
+  - {name: prepare, description: Persist an execution intent for a fenced turn claim}
+  - {name: activate, description: Activate one prepared executor worker}
+  - {name: pull_turn, description: Pull the turn envelope for an authenticated claim}
+  - {name: accept_turn, description: Commit turn acceptance before effects}
+  - {name: observe, description: Read bounded execution observations}
+  - {name: reconcile, description: Reconcile execution intent after interruption}
+  - {name: cancel, description: Stop the whole executor unit and report evidence}
+- name: worker
+  kind: contract.definition
+  meta:
+    comment: Executor-only fenced access to the canonical Threads session journal
+  methods:
+  - {name: pull_turn, description: Pull the turn envelope for a fenced claim}
+  - {name: accept_turn, description: Commit acceptance before effects}
+  - {name: renew, description: Renew a live fenced claim}
+  - {name: heartbeat, description: Record executor liveness and progress frontier}
+  - {name: append_event, description: Append typed session evidence}
+  - {name: checkpoint, description: Commit monotonic execution and context progress}
+  - {name: effect_intent, description: Journal an idempotent effect intent before invocation}
+  - {name: effect_receipt, description: Journal effect outcome evidence}
+  - {name: effect_status, description: Reconcile an effect by its stable identity}
+  - {name: link_execution, description: Link the physical execution address to the turn}
+  - {name: link_child, description: Link an owned child session or work item}
+  - {name: settle, description: Settle work with a validated result}
+  - {name: fail, description: Record a typed work failure}

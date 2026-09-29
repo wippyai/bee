@@ -250,7 +250,13 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         local push_waiting = push_enabled and not session.exit and (not session.terminal or session.terminal.outcome == "succeeded")
         local decision: unknown = nil
         local settle_error: string? = nil
-        if not push_waiting then decision, settle_error = machine.settle(io, session, drain_elapsed) end
+        local hook_output_pending = session.runner ~= nil and session.plan.gateway ~= nil
+            and #session.plan.gateway.hooks > 0 and session.terminal ~= nil and not machine.drained(session)
+        if not push_waiting and hook_output_pending then
+            if not ended and machine.ready_to_settle(session, drain_elapsed) then end_session(false) end
+        elseif not push_waiting then
+            decision, settle_error = machine.settle(io, session, drain_elapsed)
+        end
         if settle_error then error("settle: " .. tostring(settle_error)) end
         if decision then
             settlement = decision

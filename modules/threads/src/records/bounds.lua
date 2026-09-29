@@ -40,7 +40,7 @@ M.MAX_SUBPATH_BYTES = shared.MAX_SUBPATH_BYTES
 
 function M.sequence(value: unknown): integer?
     local number = shared.integer(value)
-    if not number or number < 1 or number > M.MAX_THREAD_RECORDS then return nil end
+    if not number or number < 1 or number > M.MAX_SAFE_INTEGER then return nil end
     return number
 end
 

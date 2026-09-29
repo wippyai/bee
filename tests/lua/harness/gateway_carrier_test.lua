@@ -622,7 +622,7 @@ local function define_tests()
         test.it("commits the child's hooks as records through its own commit path and keeps content out", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            local outcome = run_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_HOOKS = "1"}), "open", nil)
+            local outcome = run_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_HOOKS = "1", BEE_FIXTURE_RESULT_DELAY = "0.1"}), "open", nil)
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
             test.eq((outcome.value.settlement :: Object).outcome, "succeeded")
             local reported = hook_report(thread_id)

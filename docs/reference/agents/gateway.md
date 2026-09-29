@@ -212,5 +212,4 @@ Run the relevant checks with:
 
     make gateway-check
     make managed-launch-fixture-check
-    make cross-session-check
     make app-journey-check

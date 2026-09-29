@@ -220,11 +220,7 @@ the child's ending record triggers the owner's one-shot notice on the caller's
 own thread, and a `thread_wait` there wakes on it. Steering is cooperative and
 between turns only: a `thread_message` written to a child's thread is read at
 that child's next `thread_read`, and its `thread_wait` wakes on the record. No
-tool types into a running turn. Between-turn push into a running model needs a
-pinned acceptance the host records for an exact executable measurement
-(`push_acceptance`); shipped production policies ship none, so they never
-weaken that rule and every push path stays read-at-next-`thread_read` unless a
-host opts in with a pinned acceptance.
+tool types into a running turn. Nothing is pushed into a running model; every steering path is read-at-next-`thread_read`.
 
 Independent Agent windows have separate application actors and threads. For
 them, `session_directory` pages only live workspace peers the host permits

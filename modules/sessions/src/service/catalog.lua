@@ -9,7 +9,6 @@ local bounds = require("bounds")
 local driver_route = require("driver_route")
 local locate = require("locate")
 local placement_resources = require("placement_resources")
-local executors = require("executors")
 
 type Object = {[string]: unknown}
 type Candidate = {ref: string, kind: string, title: string, status: string,
@@ -118,31 +117,6 @@ local function probe(plan: Plan, policy: Object): (locate.LocateObservation?, st
     return observation("ready", nil, {"external", "provider_resume"}), nil
 end
 
-local function executor_items(): {Candidate}
-    local selected, selected_error = registry.get(executors.SELECTION_REF)
-    local data = selected and object(selected.data)
-    local refs = data and data.refs
-    if selected_error or type(refs) ~= "table" then return {} end
-    local snapshot, snapshot_error = registry.snapshot()
-    if snapshot_error or not snapshot then return {} end
-    local entries: {[string]: unknown} = {}
-    for _, raw_ref in ipairs(refs :: {unknown}) do
-        if type(raw_ref) == "string" then
-            local entry = (snapshot :: registry.Snapshot):get(raw_ref)
-            if entry then entries[raw_ref] = entry :: unknown end
-        end
-    end
-    local built = executors.build(entries :: {[string]: unknown}, refs :: {string})
-    if not built then return {} end
-    local items: {Candidate} = {}
-    for executor_id in pairs((built :: executors.Registry).by_id) do
-        items[#items + 1] = {ref = "external:" .. executor_id, kind = "executor", title = executor_id,
-            status = "ready", checked_at = "1970-01-01T00:00:00.000Z", reasons = {}, features = {"run_turn"}, actions = {}}
-    end
-    table.sort(items, function(left: Candidate, right: Candidate): boolean return left.ref < right.ref end)
-    return items
-end
-
 local function saved_profiles(workspace: string, cursor: string?): ({{[string]: unknown}}?, string?, boolean?, string?)
     local after_key: string? = nil
     local expected_cursor: integer? = nil
@@ -216,7 +190,7 @@ function M.list(request: unknown, workspace: string): (Object?, string?)
         return nil, "catalog request is malformed"
     end
     local kind = input.kind == nil and "definition" or input.kind
-    if kind ~= "definition" and kind ~= "profile" and kind ~= "executor" then return nil, "catalog kind is invalid" end
+    if kind ~= "definition" and kind ~= "profile" then return nil, "catalog kind is invalid" end
     if input.include_unavailable ~= nil and type(input.include_unavailable) ~= "boolean" then return nil, "include_unavailable must be boolean" end
     local cursor = input.cursor == nil and nil or bounds.text(input.cursor, 2048)
     if input.cursor ~= nil and not cursor then return nil, "catalog cursor is invalid" end
@@ -224,9 +198,7 @@ function M.list(request: unknown, workspace: string): (Object?, string?)
     local items: {Candidate} = {}
     local diagnostics: {Object} = {}
     local complete = true
-    if kind == "executor" then
-        items = executor_items()
-    elseif kind == "definition" then
+    if kind == "definition" then
         local snapshot, snapshot_error = registry.snapshot()
         if snapshot_error or not snapshot then return nil, "launch registry snapshot is unavailable" end
         local found, find_error = (snapshot :: registry.Snapshot):find({["meta.type"] = "bee.launch_definition"})

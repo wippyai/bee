@@ -134,6 +134,12 @@ function M.new(): Owner
         row.uncertainty = object(request.evidence) or {summary = "turn outcome is uncertain", artifacts = {}}
         return {state = "uncertain"}, nil
     end
+    journal.describe_session = function(_request: {session: string}): (Object?, string?)
+        return {state = "active", queued = 0, active = 0}, nil
+    end
+    journal.transition_session = function(_request: Object): (Object?, string?)
+        return {state = "active"}, nil
+    end
 
     local owner: Owner = {
         journal = journal :: scheduler.Journal,

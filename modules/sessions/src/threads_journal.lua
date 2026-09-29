@@ -7,7 +7,7 @@ local M = {}
 M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.sessions:threads_journal_ref"
 M.METHODS = {"session_create", "session_describe", "session_scan", "session_transition", "work_send", "work_describe",
-    "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "work_settle", "work_uncertain",
+    "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "work_settle", "work_uncertain", "work_cancel",
     "operation_lookup", "operation_describe", "feed_read"}
 
 type Entry = {[string]: unknown}
@@ -112,6 +112,13 @@ function M.adapter(): scheduler.Journal
         end,
         mark_uncertain = function(request: {[string]: unknown}): (unknown?, string?)
             return M.invoke("work_uncertain", request)
+        end,
+        describe_session = function(request: {session: string}): (scheduler.Object?, string?)
+            local value, err = M.invoke("session_describe", request)
+            return value :: scheduler.Object?, err
+        end,
+        transition_session = function(request: {[string]: unknown}): (unknown?, string?)
+            return M.invoke("session_transition", request)
         end,
     }
 end

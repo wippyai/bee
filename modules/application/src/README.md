@@ -46,32 +46,28 @@ evidence?, retry_after_ms?}` and `retry` is `never`, `same_key`, `refresh` or
 deviation is a Fault, never a partial value.
 
 ```lua
-local c = sessions.call{definition = "research:quick", input = "Summarize the repository", timeout_ms = 30000}
+local c = sessions.call{definition = "research:quick", input = "Summarize the repository", operation_key = "call/summary", timeout_ms = 30000}
 -- c.work is the Work handle; c.observation.tag is ready, pending, blocked or uncertain.
-local s = sessions.open{definition = "research:worker"}
-local w = s:send{input = "Check the baseline"}
+local s = sessions.open{definition = "research:worker", operation_key = "open/worker"}
+local w = s:send{input = "Check the baseline", operation_key = "send/baseline"}
 local a = w:await{timeout_ms = 30000}
-local closing = s:close{mode = "drain"}
+local closing = s:close{operation_key = "close/worker"}
 ```
 
-- `call{definition, input, output?, profile?, workdir?, timeout_ms?}` opens a session with its first work in one owner operation and awaits it once. It returns `{work, observation}` on every observation branch. An unsuccessful settlement is a `ready` observation whose `result.outcome` is not `succeeded`.
-- `open{definition, profile?, workdir?}` returns a Session. `send{session?, input, output?}` (or `session:send`) returns a Work whose `receipt` proves intake only. Work is queued; nothing runs inside the call.
-- `cancel` and `close{mode?}` return an Operation whose `await` reports `stopped`/`already_terminal` or `closed`, or an uncertain evidence branch.
+- `call{definition, input, operation_key, output?, profile?, workdir?, timeout_ms?}` opens a session with its first work in one owner operation and awaits it once. It returns `{work, observation}` on every observation branch. An unsuccessful settlement is a `ready` observation whose `result.outcome` is not `succeeded`.
+- `open{definition, profile?, workdir?, operation_key}` returns a Session. `send{session?, input, output?, operation_key}` (or `session:send`) returns a Work whose `receipt` proves intake only. Work is queued; nothing runs inside the call.
+- `cancel{work, operation_key}` and `close{session, operation_key}` return an Operation whose `await` reports `stopped`/`already_terminal` or `closed`, or an uncertain evidence branch.
 - `await{subject}`, `work:await` and `operation:await` observe one work or operation; `timeout_ms` is at most 60000 and bounds observation, never execution. `session:await(work)` also checks that the work belongs to the session.
-- `join{works, policy?, quorum?, losers?, timeout_ms?}` takes 1 to 64 distinct works, returns one `JoinAwait` with every child's observation in input order, and validates `quorum` against the set.
+- `join{works, operation_key, policy?, quorum?, timeout_ms?}` takes 1 to 64 distinct works, returns one `JoinAwait` with every child's observation in input order, and validates `quorum` against the set.
 - `get(session_ref)` and `work(work_ref)` rehydrate a Session or Work from a ref; `work:state()` reads the `WorkState`, which carries `sender`, the owner-set authenticated sender of the work (a SessionRef when the caller is a session, else the principal). Callers never supply a sender. Refs (`bs:`, `bw:`, `bo:`, `bj:` qualified strings) are the only addresses; `:ref()` returns one.
 - Handles capture the session incarnation and send it as `expected_incarnation`; a session reset makes them fail with `STALE` rather than act on the new incarnation.
-- `list{filter?, after?}` filters by `lifecycle`, `activity` (`idle`, `working`, `blocked`, `stalled`) and `mode`; session snapshots carry both. `catalog{kind?, include_unavailable?, after?}` returns the owner's candidates.
+- `list{filter?, cursor?}` filters by `lifecycle` and `activity` (`idle`, `working`, `blocked`, `stalled`); session snapshots carry both. `catalog{kind?, include_unavailable?, cursor?}` returns the owner's candidates.
 
 Requests are validated before dispatch (`INVALID`): bounded text and refs, JSON inputs of at most 64 KiB and depth 16.
 
 ### Operation keys
 
-Every mutation carries an operation key. The client derives it from the caller's
-durable context, the operation, the target and an optional label, so a replayed
-handler reproduces the same keys and receives the original receipts.
-
-- Inside an application handler the context is the durable event the `bee.application:context` contract reports through `get_event`. `sessions.scope(persisted_id)` returns a client bound to an identifier the caller persisted, with the same functions as methods (`owner:open{...}`).
-- Repeating a call with the same arguments reuses its key. A second, different call of the same operation on the same target in one context needs a distinct `key` label on each; without one it fails `KEY_REQUIRED` before dispatch. Call order never supplies identity.
-- With no durable context a mutation fails `CONTEXT_REQUIRED`. An explicit `operation_key` (the caller's own journaled key, exclusive with `key`) is accepted anywhere.
-- A lost or malformed mutation reply is `UNKNOWN_OUTCOME` with `retry = "same_key"` and the key echoed; replaying the call reproduces the key. The client never invents a new key for a retry.
+Every mutation requires an explicit `operation_key`. The SDK cannot derive a
+durable identity from the current application broker or client, so applications
+must persist their own key before dispatch and reuse it after an uncertain
+reply. Reusing a key with different arguments is a conflict.

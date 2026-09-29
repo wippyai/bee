@@ -43,6 +43,9 @@ end
 function M.work_uncertain(request: unknown): types.Reply
     return boundary.run(work_store.work_uncertain, request, true)
 end
+function M.work_cancel(request: unknown): types.Reply
+    return boundary.run(work_store.work_cancel, request, true)
+end
 function M.operation_lookup(request: unknown): types.Reply
     return boundary.run(work_store.operation_lookup, request, false)
 end

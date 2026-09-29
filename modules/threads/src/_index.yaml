@@ -364,6 +364,8 @@ entries:
     description: Settle one accepted turn with its per-work result
   - name: work_uncertain
     description: Persist uncertainty without retrying a turn whose outcome cannot be proven
+  - name: work_cancel
+    description: Cancel queued work or request a placement stop for an unsettled turn
   - name: operation_lookup
     description: Recover a caller-scoped operation receipt by key
   - name: operation_describe
@@ -388,6 +390,7 @@ entries:
       turn_accept: bee.threads.service:turn_accept
       work_settle: bee.threads.service:work_settle
       work_uncertain: bee.threads.service:work_uncertain
+      work_cancel: bee.threads.service:work_cancel
       operation_lookup: bee.threads.service:operation_lookup
       operation_describe: bee.threads.service:operation_describe
       feed_read: bee.threads.service:feed_read

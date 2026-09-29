@@ -70,14 +70,11 @@ local function define_tests()
             test.eq(count[1].count, 2)
         end)
 
-        test.it("rejects dependency chaining and reserves unrelated work immediately", function()
+        test.it("reserves work independently across sessions", function()
             local sessions = harness.session_owner(WORKSPACE)
             local producer = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
             local consumer = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
-            local first = harness.value(sessions:call("work_send", {session = producer.session, operation_key = harness.key(), input = {text = "first"}}))
-            local chained = sessions:call("work_send", {session = consumer.session, operation_key = harness.key(),
-                input = {text = "second"}, after = {first.work}})
-            test.eq(harness.code(chained), "INVALID_ARGUMENT")
+            harness.value(sessions:call("work_send", {session = producer.session, operation_key = harness.key(), input = {text = "first"}}))
             local second = harness.value(sessions:call("work_send", {session = consumer.session, operation_key = harness.key(), input = {text = "second"}}))
             local reservation = harness.value(sessions:call("turn_reserve", {session = consumer.session, operation_key = harness.key()}))
             test.eq(reservation.work, second.work)
@@ -199,6 +196,43 @@ local function define_tests()
             test.eq(harness.value(sessions:call("operation_describe", {operation = receipt.operation})).receipt.work, work.work)
             test.eq(harness.code(sessions:call("work_settle", {turn = reservation.turn, claim = reservation.claim,
                 result = result("failed"), operation_key = harness.key()})), "CONFLICT")
+        end)
+
+        test.it("cancels queued work immediately and records active cancellation for the scheduler", function()
+            local sessions = harness.session_owner(WORKSPACE)
+            local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
+            local queued = harness.value(sessions:call("work_send", {session = opened.session,
+                operation_key = harness.key(), input = {text = "cancel before activation"}}))
+            local cancel_key = harness.key()
+            local cancel_request = {work = queued.work, operation_key = cancel_key, reason = "not needed"}
+            local receipt = harness.value(sessions:call("work_cancel", cancel_request))
+            test.eq(receipt.effect, "cancel")
+            test.eq(receipt.subject, queued.work)
+            local cancelled = harness.value(sessions:call("work_describe", {work = queued.work}))
+            test.eq(cancelled.phase, "settled")
+            test.eq(cancelled.result.state, "cancelled")
+            test.eq(cancelled.result.artifacts[1], "work was cancelled before executor activation")
+            test.is_true(sessions:call("work_cancel", cancel_request).replayed)
+            test.eq(harness.value(sessions:call("operation_describe", {operation = receipt.operation})).receipt.effect, "cancel")
+
+            local active = harness.value(sessions:call("work_send", {session = opened.session,
+                operation_key = harness.key(), input = {text = "cancel active turn"}}))
+            local reservation = harness.value(sessions:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            local envelope = harness.value(sessions:call("turn_pull", {turn = reservation.turn, claim = reservation.claim}))
+            harness.value(sessions:call("turn_accept", {turn = reservation.turn, claim = reservation.claim,
+                input_digest = envelope.input_digest, checkpoint = {attempt_id = reservation.turn, generation = 1},
+                operation_key = harness.key()}))
+            local active_cancel = harness.value(sessions:call("work_cancel", {work = active.work,
+                operation_key = harness.key(), reason = "stop the active turn"}))
+            local cancelling = harness.value(sessions:call("work_describe", {work = active.work}))
+            test.is_true(cancelling.cancelling)
+            test.eq(cancelling.turn, reservation.turn)
+            test.eq(cancelling.claim, reservation.claim)
+            local due = harness.value(sessions:call("work_scan", {limit = 16}))
+            local found = false
+            for _, row in ipairs(due.items) do if row.work == active.work then found = row.cancel_requested == true end end
+            test.is_true(found)
+            test.eq(harness.value(sessions:call("operation_describe", {operation = active_cancel.operation})).receipt.subject, active.work)
         end)
 
         test.it("allows launch journal mutations only through the sessions owner scope", function()

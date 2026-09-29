@@ -539,6 +539,14 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             local data: unknown = message:payload():data()
             if type(data) == "table" and tostring(message:from()) == recipient and data.generation == generation and type(data.consumed_through) == "number" then
                 acknowledge(math.floor(data.consumed_through :: number))
+                if drain_armed then
+                    -- The carrier acknowledges every message it processes,
+                    -- including a repeated position while it holds a partial
+                    -- frame past the checkpoint carry, so an acknowledgment
+                    -- proves a live consumer and extends the post-exit drain.
+                    -- Silence still truncates on schedule.
+                    drain_timer = time.after(tostring(request.timeouts.drain_ms) .. "ms")
+                end
                 flush()
             end
         elseif selected.channel == events then

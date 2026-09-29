@@ -49,6 +49,7 @@ function M.resume(state: State, admitted: {[string]: clients.Client}, count: int
     state.admitted, state.count = admitted, count
     state.assignment_revision, state.inventory = assignment_revision, current
     state.questions = question_state
+    M.publish_all(state, current)
 end
 function M.assignment_access(
     get: (unknown) -> (AssignmentResult?, string?),

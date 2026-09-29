@@ -26,7 +26,7 @@ local SCHEMA_TYPES: {[string]: boolean} = {object = true, array = true, string =
     number = true, boolean = true}
 local SCHEMA_SCHEMAS = {"if", "then", "else", "not"}
 local SCHEMA_LISTS = {"oneOf", "allOf"}
-local SCHEMA_DEPTH = 6
+local SCHEMA_DEPTH = 4
 local function valid_schema(value: unknown, depth: integer, applicator: boolean): boolean
     if depth > SCHEMA_DEPTH then return false end
     local schema = bounds.object(value)
@@ -122,7 +122,7 @@ function M.decode(raw: unknown): (Catalog?, string?)
     if not value then return nil, "catalog must be an object" end
     local extra = bounds.fields(value, {"tools", "traits"})
     if extra then return nil, extra end
-    local tools, tools_error = list(value.tools, 64)
+    local tools, tools_error = list(value.tools, 40)
     local traits, traits_error = list(value.traits, 16)
     if not tools then return nil, tools_error end
     if not traits then return nil, traits_error end

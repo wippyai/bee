@@ -141,8 +141,8 @@ entries:
   meta: {type: test_support}
   policy:
     expression: 'action != "env.get" || resource == "bee.gov:node_identity_migration_source"'
-    actions: [db.get, env.get]
-    resources: [bee.gov:plan_test_db, bee.gov:destination_test_db, bee.gov:destination_refusal_test_db, bee.gov:destination_replica_test_db, bee.gov:activation_test_db, bee.gov:node_identity_migration_source, bee.sync:sync_test_db]
+    actions: [db.get, env.get, security.actor.create, security.scope.create, security.policy.get]
+    resources: [bee.gov:plan_test_db, bee.gov:destination_test_db, bee.gov:destination_refusal_test_db, bee.gov:destination_replica_test_db, bee.gov:activation_test_db, bee.gov:db, bee.gov:node_identity_migration_source, bee.sync:sync_test_db, security, bee.security.desktop:broker_policy, bee.apps:catalog_revision_probe_call_policy]
     effect: allow
 - name: plan_store_test
   kind: function.lua

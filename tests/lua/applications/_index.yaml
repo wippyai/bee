@@ -5,7 +5,7 @@ entries:
   kind: function.lua
   source: file://catalog_test.lua
   method: run
-  modules: [registry, system, uuid, hash]
+  modules: [registry, system, uuid, hash, security, funcs]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
@@ -14,6 +14,19 @@ entries:
     activation_store: bee.gov.persist:activation_store
     canonical: bee.sync:canonical
     test: wippy.test:test
+- name: catalog_revision_probe
+  kind: function.lua
+  source: file://catalog_revision_probe.lua
+  method: run
+  meta: {type: test_support}
+  imports: {catalog: bee.apps:catalog}
+- name: catalog_revision_probe_call_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.apps:catalog_revision_probe]
+    effect: allow
 - name: command_test
   kind: function.lua
   source: file://command_test.lua

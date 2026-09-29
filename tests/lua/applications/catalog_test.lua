@@ -5,6 +5,8 @@ local registry = require("registry")
 local system = require("system")
 local uuid = require("uuid")
 local hash = require("hash")
+local security = require("security")
+local funcs = require("funcs")
 local catalog = require("catalog")
 local admission = require("admission")
 local activation_store = require("activation_store")
@@ -70,8 +72,8 @@ local function has(snapshot: {bindings: {Object}}, id: string): boolean
 end
 
 local function activate(workspace: string, owner_node: string, source_node: string,
-    source_workspace: string, overlay_owner: string, measurement: Object): ()
-    local state = assert(activation_store.open("bee.gov:activation_test_db", owner_node, workspace))
+    source_workspace: string, overlay_owner: string, measurement: Object, resource: string?): ()
+    local state = assert(activation_store.open(resource or "bee.gov:activation_test_db", owner_node, workspace))
     local nonce = assert(uuid.v7())
     local intent_id = "intent-catalog-" .. nonce
     local plan_digest = string.rep("a", 64)
@@ -105,6 +107,19 @@ local function activate(workspace: string, owner_node: string, source_node: stri
         outcome = "applied", diagnostics = "definitions observed"}))
     test.eq(applied.observed_outcome, "applied")
     assert(activation_store.close(state))
+end
+
+local function broker_revision(workspace_id: string): string
+    local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))
+    local call_policy = assert(security.policy("bee.apps:catalog_revision_probe_call_policy"))
+    local scope = assert(security.new_scope({broker_policy, call_policy}))
+    local actor = assert(security.new_actor("bee.apps:broker"))
+    local executor = assert(funcs.new():with_actor(actor):with_scope(scope))
+    local value, call_error = executor:call("bee.apps:catalog_revision_probe", {workspace_id = workspace_id})
+    if call_error or type(value) ~= "string" then
+        error("read application catalog revision as broker: " .. tostring(call_error or type(value)))
+    end
+    return value
 end
 
 local function define_tests()
@@ -253,11 +268,11 @@ local function define_tests()
             assert(cleanup:apply())
         end)
 
-        test.it("changes the catalog revision when cold recovery restores a process-local admission", function()
+        test.it("changes the catalog revision for a restored admission under the broker policy", function()
             local node = assert(system.node.id())
             local suffix = assert(uuid.v7()):gsub("-", "")
             local source_workspace = "catalog_recover_" .. suffix
-            local overlay_owner = "bee.catalog_test:" .. source_workspace
+            local overlay_owner = "bee.gov.apps:" .. WORKSPACE .. "." .. source_workspace
             local definition_id = "app." .. source_workspace .. ":app"
             local definition = app(definition_id)
             local selected_profile: Object = {workspace_id = WORKSPACE, source_node = node,
@@ -282,21 +297,30 @@ local function define_tests()
             profiles[#profiles + 1] = selected_profile
             assert(changes:update(configured))
             local database_ref = assert(registry.get("bee.gov:database_ref"))
-            database_ref.data = {resource_ref = "bee.gov:activation_test_db"}
+            database_ref.data = {resource_ref = "bee.gov:db"}
             assert(changes:update(database_ref))
             assert(changes:apply())
 
             local setup_ok, setup_error = pcall(function()
-                activate(WORKSPACE, node, node, source_workspace, overlay_owner, measured :: Object)
-                local before = catalog.revision(WORKSPACE)
+                local before = broker_revision(WORKSPACE)
+                if before:match(":unavailable$") or before:match(":unlinked$") then
+                    error("application broker could not read the configured governance activation revision")
+                end
+                activate(WORKSPACE, node, node, source_workspace, overlay_owner, measured :: Object, "bee.gov:db")
                 local overlay = assert(registry.overlay(overlay_owner))
                 local install = overlay:changes()
                 assert(install:create(definition))
                 assert(install:create(derived))
                 assert(install:apply())
-                local after = catalog.revision(WORKSPACE)
+                local after = broker_revision(WORKSPACE)
+                if after:match(":unavailable$") then
+                    error("application broker could not fingerprint the protected admission overlay")
+                end
                 if after == before then
-                    error("process-local recovery did not invalidate the broker catalog revision")
+                    local stored = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
+                    local stored_value = stored.ok and (stored.value :: Object).revision or stored.code
+                    error("process-local recovery did not invalidate the broker catalog revision; before=" .. before
+                        .. "; after=" .. after .. "; stored=" .. tostring(stored_value))
                 end
                 test.is_true(has(catalog.read(WORKSPACE), definition_id),
                     "restored process-local application was not admitted")

@@ -28,7 +28,7 @@ local function valid(name: string): Object
     if name == "session_get" then return {work = WORK} end
     if name == "session_list" then return {filter = {lifecycle = "active"}} end
     if name == "session_cancel" then return {work = WORK, reason = "stop", operation_key = "k1"} end
-    return {session = SESSION, mode = "drain", operation_key = "k1"}
+    return {session = SESSION, operation_key = "k1"}
 end
 
 local function snapshot(): Object
@@ -50,7 +50,7 @@ local function success(name: string): Object
     if name == "session_close" then return {ok = true, value = {operation = OP, subject = SESSION, state = "requested", effect = "close"}} end
     if name == "session_await" then return {ok = true, value = {subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}} end
     if name == "session_get" then return {ok = true, value = {kind = "session", value = snapshot()}} end
-    if name == "session_list" then return {ok = true, value = {items = {snapshot()}, feed = "f1", snapshot = "s1"}} end
+    if name == "session_list" then return {ok = true, value = {items = {snapshot()}}} end
     if name == "session_catalog" then return {ok = true, value = {items = {}, complete = true, unavailable_count = 0, diagnostics = {}}} end
     return {ok = true, value = {subject_kind = "join", subject = "bj:node-a:ws-1:j1", cursor = "c1", tag = "pending", reason = "timeout",
         children = {{subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}}}}
@@ -161,7 +161,7 @@ local function define_tests()
                 end
             end
         end)
-        test.it("enforces reference, time, timeout and exclusivity bounds", function()
+        test.it("enforces reference, timeout and exclusivity bounds", function()
             local function refused(name: string, mutate: (Object) -> ()): string?
                 local arguments = valid(name)
                 mutate(arguments)
@@ -188,11 +188,9 @@ local function define_tests()
             refused("session_close", function(a) a.mode = "kill" end)
             refused("session_open", function(a) a.spec = {} end)
             refused("session_open", function(a) a.spec = {definition = "d", limits = {active_ms = 0}} end)
-            for _, subject in ipairs({WORK, OP}) do
-                test.not_nil(session_tools.decode("session_await", {arguments = {subject = subject, deadline_at = "2026-09-29T10:00:00.5+02:00"}}))
-            end
+            refused("session_await", function(a) a.deadline_at = "2026-09-29T10:00:00.5+02:00" end)
             refused("session_await", function(a) a.subject = "bq:node-a:ws-1:q1" end)
-            test.not_nil(session_tools.decode("session_get", {arguments = {operation_key = "k"}}))
+            test.not_nil(session_tools.decode("session_get", {arguments = {operation = "bo:n:w:o1"}}))
             test.is_nil(session_tools.decode("session_get", {arguments = "text"}))
             test.is_nil(session_tools.decode("session_get", {}))
         end)

@@ -45,12 +45,13 @@ entries:
 - name: owner
   kind: library.lua
   source: file://owner.lua
-  modules: [registry, funcs, security]
+  modules: [registry, funcs, security, hash]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     journal: bee.sessions:threads_journal
     driver_route: bee.sessions:driver_route
+    cancellation: bee.sessions.service:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.sessions.service:catalog
 - name: driver_route

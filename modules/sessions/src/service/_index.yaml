@@ -33,12 +33,18 @@ entries:
     driver_route: bee.sessions:driver_route
     locate: bee.sessions.service:locate
     placement_resources: bee.placement.native:resources
-    executors: bee.sessions:executor_registry
 - name: scheduler
   kind: library.lua
   source: file://scheduler.lua
+  modules: [funcs]
   imports:
     canonical: bee.threads.records:canonical
+    cancellation: bee.sessions.service:cancellation
+- name: cancellation
+  kind: library.lua
+  source: file://cancellation.lua
+  modules: [funcs]
+  imports: {bounds: bee.threads.records:bounds}
 - name: scheduler_worker
   kind: process.lua
   source: file://scheduler_worker.lua

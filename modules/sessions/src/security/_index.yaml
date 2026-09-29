@@ -21,8 +21,12 @@ entries:
     - bee.threads.service:turn_accept
     - bee.threads.service:work_settle
     - bee.threads.service:work_uncertain
+    - bee.threads.service:work_cancel
     - bee.threads.service:operation_lookup
+    - bee.threads.service:operation_describe
     - bee.threads.service:feed_read
+    - bee.placement.native.binding:stop
+    - bee.placement.native.binding:reconcile
     - bee.harness.profiles:contract
     - bee.harness.profiles:call
     - bee.harness.launch:admission
@@ -51,6 +55,10 @@ entries:
     - bee.threads.service:turn_accept
     - bee.threads.service:work_settle
     - bee.threads.service:work_uncertain
+    - bee.threads.service:work_cancel
     - bee.threads.service:operation_lookup
+    - bee.threads.service:operation_describe
     - bee.threads.service:feed_read
+    - bee.placement.native.binding:stop
+    - bee.placement.native.binding:reconcile
     effect: allow

@@ -1,6 +1,7 @@
 -- MIT. Threads owns the work queue and fenced turns. This scheduler keeps no
 -- queue state: boot and periodic scans recover every unsettled turn.
 local canonical = require("canonical")
+local cancellation = require("cancellation")
 local M = {}
 M.MAX_SCAN = 64
 
@@ -9,7 +10,8 @@ type Sender = {kind: "session" | "principal", id: string}
 type WorkReceipt = {work: string, session: string, operation: string, committed_at: string, sequence: integer,
     kind: "request", state: "queued", output_schema: string, sender: Sender}
 type Due = {work: string, session: string, state: "queued" | "reserved" | "accepted",
-    turn: string?, claim: string?, owner_epoch: integer?, checkpoint: unknown?, route: Object?, uncertainty: Object?}
+    turn: string?, claim: string?, owner_epoch: integer?, checkpoint: unknown?, route: Object?, uncertainty: Object?,
+    cancel_requested: boolean?, cancel_reason: string?}
 type Page = {items: {Due}}
 type Turn = {work: string, session: string, turn: string, claim: string, owner_epoch: integer,
     input: unknown, input_digest: string, output_schema: string, sender: Sender, route: Object,
@@ -27,6 +29,8 @@ type Journal = {
     accept_turn: ({turn: string, claim: string, input_digest: string, checkpoint: unknown, operation_key: string}) -> (unknown?, string?),
     settle: (Object) -> (unknown?, string?),
     mark_uncertain: (Object) -> (unknown?, string?),
+    describe_session: ({session: string}) -> (Object?, string?),
+    transition_session: (Object) -> (unknown?, string?),
 }
 type Executor = {run_turn: (Object) -> (Execution?, string?)}
 type Registry = {get: (string) -> (Executor?, string?)}
@@ -54,6 +58,14 @@ end
 
 local function add_issue(pass: Pass, work: string?, stage: string, reason: string)
     pass.issues[#pass.issues + 1] = {work = work, stage = stage, reason = reason}
+end
+
+local function finish_close(journal: Journal, pass: Pass, session: string, work: string)
+    local current, read_error = journal.describe_session({session = session})
+    if read_error or not current then add_issue(pass, work, "session_describe", read_error or "Threads returned no session"); return end
+    if current.state ~= "closing" or current.queued ~= 0 or current.active ~= 0 then return end
+    local _, close_error = journal.transition_session({session = session, state = "closed", operation_key = key("auto-close", session)})
+    if close_error then add_issue(pass, work, "session_close", close_error) end
 end
 
 local function decode_page(value: Page): ({Due}?, string?)
@@ -87,6 +99,59 @@ local function accepted_turn(journal: Journal, turn: Turn): (boolean, string?)
         operation_key = key("accept", turn.turn)})
     if accept_error or not accepted then return false, accept_error or "Threads did not accept the turn" end
     return true, nil
+end
+
+local function run_cancel(journal: Journal, pass: Pass, due: Due, run_id: string)
+    if due.state == "queued" then pass.skipped = pass.skipped + 1; return end
+    local recovered, recover_error = journal.recover_turn({turn = due.turn :: string,
+        operation_key = key("cancel-recover", due.turn :: string, run_id)})
+    if recover_error or not recovered or not recovered.turn or not recovered.claim then
+        add_issue(pass, due.work, "cancel_recover", recover_error or "Threads returned no cancellation claim"); return
+    end
+    local raw_turn, pull_error = journal.pull_turn({turn = recovered.turn, claim = recovered.claim})
+    if pull_error or not raw_turn then add_issue(pass, due.work, "cancel_pull", pull_error or "Threads returned no turn"); return end
+    local turn = raw_turn :: Turn
+    if turn.work ~= due.work or turn.session ~= due.session or turn.turn ~= recovered.turn or turn.claim ~= recovered.claim then
+        add_issue(pass, due.work, "cancel_pull", "Threads returned a different fenced turn"); return
+    end
+    if turn.phase == "reserved" then
+        local accepted, accept_error = accepted_turn(journal, turn)
+        if not accepted then add_issue(pass, due.work, "cancel_accept", accept_error or "turn acceptance failed"); return end
+        local result: Object = {state = "cancelled", error = {code = "CANCELLED", message = due.cancel_reason or "work cancelled before executor activation"},
+            artifacts = {"turn was cancelled before the external executor started"}}
+        local settled, settle_error = journal.settle({turn = turn.turn, claim = turn.claim, result = result,
+            operation_key = key("cancel-settle", turn.turn)})
+        if settle_error or not settled then add_issue(pass, due.work, "cancel_settle", settle_error or "Threads did not settle cancelled work"); return end
+        pass.activated = pass.activated + 1
+        finish_close(journal, pass, turn.session, turn.work)
+        return
+    end
+    local route = object(turn.route)
+    local placement_methods = route and object(route.placement_methods)
+    local checkpoint = object(turn.checkpoint)
+    local attempt_id = checkpoint and checkpoint.attempt_id or turn.turn
+    if not placement_methods or type(attempt_id) ~= "string" then
+        local _, mark_error = journal.mark_uncertain({turn = turn.turn, claim = turn.claim,
+            evidence = {summary = "cancelled turn has no admitted placement attempt", artifacts = {}},
+            operation_key = key("cancel-uncertain", turn.turn)})
+        if mark_error then add_issue(pass, due.work, "cancel_uncertain", mark_error) end
+        return
+    end
+    local stopped = cancellation.stop(placement_methods, attempt_id)
+    if stopped.state == "pending" then pass.running = pass.running + 1; return end
+    if stopped.state == "uncertain" then
+        local _, mark_error = journal.mark_uncertain({turn = turn.turn, claim = turn.claim,
+            evidence = stopped.evidence, operation_key = key("cancel-uncertain", turn.turn)})
+        if mark_error then add_issue(pass, due.work, "cancel_uncertain", mark_error) else pass.uncertain = pass.uncertain + 1 end
+        return
+    end
+    local result: Object = {state = "cancelled", error = {code = "CANCELLED", message = due.cancel_reason or "work cancelled"},
+        artifacts = stopped.evidence.artifacts}
+    local settled, settle_error = journal.settle({turn = turn.turn, claim = turn.claim, result = result,
+        operation_key = key("cancel-settle", turn.turn)})
+    if settle_error or not settled then add_issue(pass, due.work, "cancel_settle", settle_error or "Threads did not settle cancelled work"); return end
+    pass.activated = pass.activated + 1
+    finish_close(journal, pass, turn.session, turn.work)
 end
 
 local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Due, run_id: string)
@@ -175,13 +240,15 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
         operation_key = key("settle", turn.turn), context = outcome.checkpoint})
     if settle_error or not settled then add_issue(pass, due.work, "work_settle", settle_error or "Threads did not settle the work"); return end
     pass.activated = pass.activated + 1
+    finish_close(journal, pass, turn.session, turn.work)
 end
 
 function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: string): (Service?, string?)
     if type(journal) ~= "table" or type(journal.enqueue) ~= "function" or type(journal.scan_due) ~= "function"
         or type(journal.reserve_turn) ~= "function" or type(journal.recover_turn) ~= "function"
         or type(journal.pull_turn) ~= "function" or type(journal.accept_turn) ~= "function"
-        or type(journal.settle) ~= "function" or type(journal.mark_uncertain) ~= "function" then
+        or type(journal.settle) ~= "function" or type(journal.mark_uncertain) ~= "function"
+        or type(journal.describe_session) ~= "function" or type(journal.transition_session) ~= "function" then
         return nil, "Threads journal adapter is incomplete"
     end
     if type(registry) ~= "table" or type(registry.get) ~= "function" then return nil, "executor registry is incomplete" end
@@ -208,7 +275,10 @@ function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: str
             if not work then return nil, page_error end
             local pass: Pass = {scanned = #work, reserved = 0, activated = 0, recovered = 0,
                 running = 0, uncertain = 0, skipped = 0, issues = {}}
-            for _, due in ipairs(work) do run_due(journal, registry, pass, due, run_id) end
+            for _, due in ipairs(work) do
+                if due.cancel_requested then run_cancel(journal, pass, due, run_id)
+                else run_due(journal, registry, pass, due, run_id) end
+            end
             return pass, nil
         end,
     }

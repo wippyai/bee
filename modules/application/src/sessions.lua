@@ -23,20 +23,18 @@ type Addressed = {incarnation: integer, ref: (unknown) -> string}
 type Observable = {ref: (unknown) -> string}
 type WorkArg = string | Addressed
 type SessionArg = string | Addressed
-type CloseMode = "drain" | "cancel"
 type JoinPolicy = "all_success" | "all_settled" | "first_success" | "quorum"
-type Losers = "keep" | "cancel_owned"
-type CatalogKind = "definition" | "profile" | "executor"
+type CatalogKind = "definition" | "profile"
 
 type AwaitOptions = {timeout_ms: integer?}
 type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string?}
-type CloseOptions = {session: SessionArg?, incarnation: integer?, mode: CloseMode?, operation_key: string?}
+type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string?}
 type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string?}
 type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, operation_key: string?}
 type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, input: Input, output: string?,
     timeout_ms: integer?, operation_key: string?}
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
-type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, losers: Losers?, timeout_ms: integer?,
+type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
     operation_key: string?}
 type ListOptions = {filter: {lifecycle: string?, activity: string?}?, cursor: string?}
 type CatalogOptions = {kind: CatalogKind?, include_unavailable: boolean?, cursor: string?}
@@ -272,7 +270,7 @@ local function new_client(): Client
         end
         handle.close = function(_: Session, options: CloseOptions): (Operation?, Fault?)
             local request: CloseOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
-                mode = options.mode, operation_key = options.operation_key}
+                operation_key = options.operation_key}
             return client:close(request)
         end
         handle.get = function(_: Session): (Session?, Fault?)
@@ -369,14 +367,12 @@ local function new_client(): Client
     end
 
     client.close = function(_: Client, options: CloseOptions): (Operation?, Fault?)
+        if (options :: {[string]: unknown}).mode ~= nil then return nil, invalid("close does not accept a mode") end
         local session, session_fault = ref_of(options.session, "session")
         if not session then return nil, session_fault end
-        if options.mode ~= nil and options.mode ~= "drain" and options.mode ~= "cancel" then
-            return nil, invalid("mode must be drain or cancel")
-        end
         local incarnation, incarnation_fault = incarnation_of(options.incarnation, options.session)
         if incarnation_fault then return nil, incarnation_fault end
-        local request: {[string]: unknown} = {session = session, mode = options.mode, expected_incarnation = incarnation}
+        local request: {[string]: unknown} = {session = session, expected_incarnation = incarnation}
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
@@ -408,6 +404,7 @@ local function new_client(): Client
     end
 
     client.join = function(_: Client, options: JoinOptions): (JoinAwait?, Fault?)
+        if (options :: {[string]: unknown}).losers ~= nil then return nil, invalid("join does not accept a losers option") end
         local rows = bounds.array(options.works, protocol.MAX_ITEMS)
         if not rows or #rows < 1 then return nil, invalid("works must hold 1 to 64 work refs") end
         local works: {string} = {}
@@ -429,12 +426,9 @@ local function new_client(): Client
             quorum = protocol.position(options.quorum)
             if not quorum or quorum > #works then return nil, invalid("quorum must be from 1 to the number of works") end
         end
-        if options.losers ~= nil and options.losers ~= "keep" and options.losers ~= "cancel_owned" then
-            return nil, invalid("losers must be keep or cancel_owned")
-        end
         local timeout, timeout_fault = timeout_of(options.timeout_ms)
         if timeout_fault then return nil, timeout_fault end
-        local request: {[string]: unknown} = {works = works, policy = policy, quorum = quorum, losers = options.losers}
+        local request: {[string]: unknown} = {works = works, policy = policy, quorum = quorum}
         local key, key_fault = operation_key(options.operation_key)
         if not key then return nil, key_fault end
         request.operation_key = key
@@ -505,8 +499,8 @@ local function new_client(): Client
     client.catalog = function(_: Client, options: CatalogOptions?): (protocol.CatalogPage?, Fault?)
         local request: {[string]: unknown} = {}
         if options and options.kind ~= nil then
-            if options.kind ~= "definition" and options.kind ~= "profile" and options.kind ~= "executor" then
-                return nil, invalid("kind must be definition, profile or executor")
+            if options.kind ~= "definition" and options.kind ~= "profile" then
+                return nil, invalid("kind must be definition or profile")
             end
             request.kind = options.kind
         end

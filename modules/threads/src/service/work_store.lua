@@ -522,7 +522,7 @@ local function result_value(value: unknown, expected_schema: string?): (string?,
         local schema = text(result.schema, MAX_REF_BYTES)
         if not schema or result.value == nil then return nil, nil, "successful result requires schema and value" end
         if expected_schema and schema ~= expected_schema then return nil, nil, "result schema does not match the admitted output schema" end
-    elseif state == "failed" or state == "cancelled" or state == "expired" or state == "rejected" then
+    elseif state == "failed" or state == "cancelled" or state == "rejected" then
         if not has_only(result, {state = true, error = true, artifacts = true}) then return nil, nil, "unsuccessful result has unknown fields" end
         local fault = object(result.error)
         if not fault or not text(fault.code, 128) or not text(fault.message, 4096) then return nil, nil, "unsuccessful result requires a typed fault" end
@@ -608,6 +608,29 @@ function M.work_describe(db: sql.DB, actor: string, request: unknown): Result
         if not work then return failure("NOT_FOUND", "work does not exist") end
         local value, value_error = work_value(work)
         if not value then return failure("INTERNAL", value_error or "decode work") end
+        local execution, execution_error = query_one(tx, "SELECT t.turn_ref, t.claim_token, t.owner_epoch, t.phase AS turn_phase, " ..
+            "t.checkpoint_json, c.work_ref AS cancellation_work_ref, c.reason AS cancellation_reason " ..
+            "FROM bee_session_work w LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
+            "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref WHERE w.work_ref = ?",
+            {work_ref}, "work execution state")
+        if execution_error then return transaction.storage_failure(execution_error) end
+        if execution then
+            value.cancelling = execution.cancellation_work_ref ~= nil
+            if execution.cancellation_work_ref ~= nil and type(execution.cancellation_reason) == "string" then
+                value.cancel_reason = execution.cancellation_reason
+            end
+            if execution.turn_ref ~= nil then
+                value.turn = execution.turn_ref
+                value.claim = execution.claim_token
+                value.owner_epoch = execution.owner_epoch
+                value.turn_phase = execution.turn_phase
+                if type(execution.checkpoint_json) == "string" then
+                    local checkpoint, checkpoint_error = decode_json(execution.checkpoint_json :: string)
+                    if checkpoint_error then return failure("INTERNAL", checkpoint_error) end
+                    value.checkpoint = checkpoint
+                end
+            end
+        end
         return transaction.success(value, false)
     end)
 end
@@ -621,11 +644,13 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
     return transaction.read(db, function(tx: sql.Transaction): Result
         local rows, query_error = tx:query("SELECT w.work_ref, w.session_ref, w.workspace_id, w.sequence, w.revision, w.phase, w.input_json, w.input_digest, " ..
             "w.output_schema, w.sender_kind, w.sender_id, w.result_json, w.uncertainty_json, w.operation_ref, w.created_at, " ..
-            "t.turn_ref, t.claim_token, t.owner_epoch, t.checkpoint_json, s.route_json, s.context_json " ..
+            "t.turn_ref, t.claim_token, t.owner_epoch, t.checkpoint_json, s.route_json, s.context_json, " ..
+            "c.work_ref AS cancellation_work_ref, c.reason AS cancellation_reason " ..
             "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
             "LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
+            "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref " ..
             "WHERE (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
-            "(w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
+            "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
             "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
             "ORDER BY w.sequence LIMIT ?", {workspace, workspace, limit}, "scan session work")
         if query_error or not rows then return transaction.storage_failure("scan session work") end
@@ -639,6 +664,8 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
             local item: Row = {work = work.work_ref, session = work.session_ref, state = work.phase,
                 sender = {kind = work.sender_kind, id = work.sender_id}, input_digest = work.input_digest,
                 output_schema = work.output_schema, route = route_value}
+            item.cancel_requested = row.cancellation_work_ref ~= nil
+            if type(row.cancellation_reason) == "string" then item.cancel_reason = row.cancellation_reason end
             if work.uncertainty_json then
                 local uncertainty, uncertainty_error = decode_json(work.uncertainty_json)
                 if uncertainty_error then return failure("INTERNAL", uncertainty_error) end
@@ -704,6 +731,62 @@ function M.work_uncertain(db: sql.DB, actor: string, request: unknown): Result
     end)
 end
 
+function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
+    local caller, workspace, denied = authenticated(actor)
+    if denied then return denied end
+    local input = object(request)
+    if not input or not has_only(input, {work = true, reason = true, operation_key = true}) then return missing_request() end
+    local work_ref, operation_key = ref(input.work), key(input.operation_key)
+    local reason = input.reason == nil and nil or text(input.reason, 16384)
+    if not work_ref or not operation_key or (input.reason ~= nil and not reason) then
+        return failure("INVALID_ARGUMENT", "work, reason or operation_key is invalid")
+    end
+    local arguments: Row = {work = work_ref}
+    if reason then arguments.reason = reason end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string,
+            operation_key, "work_cancel", arguments)
+        if context_error then return failure("INTERNAL", context_error) end
+        if replay then return replay end
+        local work, work_error = get_work(tx, work_ref :: string, workspace :: string)
+        if work_error then return transaction.storage_failure(work_error) end
+        if not work then return failure("NOT_FOUND", "work does not exist") end
+        local session, session_error = get_session(tx, work.session_ref, workspace :: string)
+        if session_error then return transaction.storage_failure(session_error) end
+        if not session then return failure("NOT_FOUND", "work session does not exist") end
+        local node, op_ref, reference_error = node_and_operation(nil, session.workspace_id)
+        if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
+        local now = transaction.now()
+        if work.phase == "queued" then
+            local summary = reason or "work cancelled before executor activation"
+            local cancelled = {state = "cancelled", error = {code = "CANCELLED", message = summary},
+                artifacts = {"work was cancelled before executor activation"}}
+            local result_json, checked_result, checked_error = result_value(cancelled, work.output_schema)
+            if not result_json or not checked_result then return failure("INVALID_ARGUMENT", checked_error or "cancellation result is invalid") end
+            local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.cancelled",
+                work.work_ref, work.revision + 1, {before_activation = true, reason = summary})
+            if not record_id or not sequence then return failure("INTERNAL", event_error or "append cancellation event") end
+            local update_error = execute(tx, "UPDATE bee_session_work SET phase = 'settled', revision = revision + 1, result_json = ? " ..
+                "WHERE work_ref = ? AND phase = 'queued'", {result_json, work.work_ref}, "settle queued cancellation")
+            if update_error then return failure("CONFLICT", update_error) end
+        elseif work.phase == "reserved" or work.phase == "accepted" then
+            local insert_error = execute(tx, "INSERT INTO bee_session_work_cancellations " ..
+                "(work_ref, operation_ref, reason, requested_at) VALUES (?, ?, ?, ?) ON CONFLICT(work_ref) DO NOTHING",
+                {work.work_ref, op_ref, reason or sql.NULL, now}, "record work cancellation")
+            if insert_error then return failure("INTERNAL", insert_error) end
+            local _, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.cancel_requested",
+                work.work_ref, work.revision + 1, {reason = reason or ""})
+            if not sequence then return failure("INTERNAL", event_error or "append cancellation request") end
+            local update_error = execute(tx, "UPDATE bee_session_work SET revision = revision + 1 " ..
+                "WHERE work_ref = ? AND phase IN ('reserved','accepted')", {work.work_ref}, "mark work cancelling")
+            if update_error then return failure("CONFLICT", update_error) end
+        end
+        local receipt = {operation = op_ref, subject = work.work_ref, state = "requested", effect = "cancel"}
+        return finish_operation(tx, caller :: string, session.workspace_id, operation_key, op_ref, "work_cancel",
+            request_digest :: string, work.work_ref, receipt, now)
+    end)
+end
+
 function M.operation_lookup(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
@@ -720,6 +803,27 @@ function M.operation_lookup(db: sql.DB, actor: string, request: unknown): Result
         local receipt, decode_error = decode_json(row.receipt_json :: string)
         if decode_error then return failure("INTERNAL", decode_error) end
         return transaction.success({found = true, operation_key = operation_key, operation = row.operation,
+            operation_ref = row.operation_ref, target = row.target_ref, request_digest = row.request_digest,
+            committed_at = row.committed_at, receipt = receipt}, false)
+    end)
+end
+
+function M.operation_describe(db: sql.DB, actor: string, request: unknown): Result
+    local caller, workspace, denied = authenticated(actor)
+    if denied then return denied end
+    local input = object(request)
+    local operation_ref = input and has_only(input, {operation = true}) and ref(input.operation) or nil
+    if not operation_ref then return missing_request() end
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        local row, query_error = query_one(tx, "SELECT operation_key, operation_ref, operation, request_digest, target_ref, receipt_json, committed_at " ..
+            "FROM bee_session_operations WHERE workspace_id = ? AND owner_actor = ? AND operation_ref = ?",
+            {workspace, caller, operation_ref}, "operation")
+        if query_error then return transaction.storage_failure(query_error) end
+        if not row then return failure("NOT_FOUND", "operation does not exist") end
+        if type(row.receipt_json) ~= "string" then return failure("INTERNAL", "operation receipt is corrupt") end
+        local receipt, decode_error = decode_json(row.receipt_json :: string)
+        if decode_error then return failure("INTERNAL", decode_error) end
+        return transaction.success({found = true, operation_key = row.operation_key, operation = row.operation,
             operation_ref = row.operation_ref, target = row.target_ref, request_digest = row.request_digest,
             committed_at = row.committed_at, receipt = receipt}, false)
     end)

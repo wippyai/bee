@@ -58,8 +58,8 @@ entries:
       bee.threads.projection:recap_read, bee.threads.projection:recap_update, bee.threads.projection:recap_rebuild, bee.threads.projection:status_read, bee.threads.projection:status_update, bee.threads.projection:status_rebuild,
       bee.threads:capabilities, bee.threads.carrier:claim, bee.threads.carrier:commit, bee.threads.carrier:checkpoint, bee.threads.approvals:append,
       bee.threads.service:session_create, bee.threads.service:session_describe, bee.threads.service:session_scan, bee.threads.service:session_transition, bee.threads.service:work_send,
-      bee.threads.service:work_describe, bee.threads.service:turn_reserve, bee.threads.service:turn_pull, bee.threads.service:turn_accept,
-      bee.threads.service:work_settle, bee.threads.service:operation_lookup, bee.threads.service:feed_read]
+      bee.threads.service:work_describe, bee.threads.service:work_scan, bee.threads.service:turn_reserve, bee.threads.service:turn_pull, bee.threads.service:turn_accept,
+      bee.threads.service:work_settle, bee.threads.service:work_cancel, bee.threads.service:operation_lookup, bee.threads.service:operation_describe, bee.threads.service:feed_read]
     effect: allow
 - name: session_owner_test_policy
   kind: security.policy

@@ -251,7 +251,7 @@ entries:
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_inbox_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, overlay, delivery, docs, components, install_request, uninstall_request, install_status, session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close]
     prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m, sandbox: true}
 - name: launch_policy_agy_window
   kind: registry.entry
@@ -277,13 +277,7 @@ entries:
     - thread_read
     - thread_wait
     - thread_message
-    - thread_sessions
     - thread_notify
-    - session_directory
-    - session_inbox_send
-    - session_inbox
-    - session_ack
-    - session_reply
     - overlay
     - delivery
     - docs
@@ -291,6 +285,16 @@ entries:
     - install_request
     - uninstall_request
     - install_status
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
     gateway_hooks:
     - PreToolUse
     - PostToolUse

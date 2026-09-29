@@ -96,7 +96,7 @@ end
 
 function M.join(request: unknown): Reply
     local input = object(request)
-    local problem = closed(request, {"works", "policy", "quorum", "losers", "timeout_ms", "operation_key"})
+    local problem = closed(request, {"works", "policy", "quorum", "timeout_ms", "operation_key"})
     if problem then return refuse("INVALID", problem, input.operation_key) end
     local children: {unknown} = {}
     local rank = {ready = 0, pending = 1, blocked = 2, uncertain = 3}
@@ -141,7 +141,7 @@ end
 
 function M.close(request: unknown): Reply
     local input = object(request)
-    local problem = closed(request, {"session", "mode", "expected_revision", "expected_incarnation", "operation_key"})
+    local problem = closed(request, {"session", "expected_incarnation", "operation_key"})
     if problem then return refuse("INVALID", problem, input.operation_key) end
     return ok({operation = "bo:n:w:" .. segment(input.operation_key), subject = input.session, state = "requested", effect = "close"})
 end
@@ -149,7 +149,7 @@ end
 function M.list(request: unknown): Reply
     local problem = closed(request, {"filter", "cursor"})
     if problem then return refuse("INVALID", problem, nil) end
-    return ok({items = {snapshot("bs:n:w:s1")}, feed = "f1", snapshot = "snap1"})
+    return ok({items = {snapshot("bs:n:w:s1")}})
 end
 
 function M.catalog(request: unknown): Reply

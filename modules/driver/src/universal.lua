@@ -293,7 +293,20 @@ function M.render_argv(raw: unknown, request: Request, selected: Descriptor, dep
     return result, nil
 end
 
-local function provider_home(selected: Descriptor, private: boolean): types.ProviderHome
+local function named_profile_file(selected: Descriptor, request: Request): string?
+    local home = bounds.object(selected.provider_home) or {}
+    local required = bounds.object(home.required_profile_file)
+    if not required then return nil end
+    local field = bounds.id(required.field)
+    local value = field and request[field] or nil
+    if type(value) ~= "string" then return nil end
+    local path = interpolate(required.path_template :: string, request)
+    local directory = bounds.text(home.directory, 128)
+    if directory then path = directory .. "/" .. path end
+    return path
+end
+
+local function provider_home(selected: Descriptor, private: boolean, request: Request): types.ProviderHome
     local source = bounds.object(selected.provider_home) or {}
     local files: {types.ProviderHomeFile} = {}
     for _, raw_file in ipairs(as_list(source.files)) do
@@ -302,6 +315,12 @@ local function provider_home(selected: Descriptor, private: boolean): types.Prov
         if type(file.source_path) == "string" then source_path = file.source_path :: string end
         files[#files + 1] = {source_path = source_path, path = file.path :: string, kind = file.kind :: ProviderHomeFileKind,
             optional = file.optional :: boolean, write_back = file.write_back :: boolean}
+    end
+    if private then
+        local path = named_profile_file(selected, request)
+        if path then
+            files[#files + 1] = {source_path = path, path = path, kind = "config", optional = false, write_back = false}
+        end
     end
     local extras: {types.ProviderHomeEnvironment}? = nil
     if #as_list(source.extra_variables) > 0 then
@@ -364,7 +383,7 @@ local function build_launch(selected: Descriptor, request: Request): (types.Laun
     end
     if template.stdin_eof == true then launch.stdin_eof = true end
     if type(template.session_end) == "string" and (template.stdin_json == nil or input_written) then launch.session_end = template.session_end :: string end
-    if template.provider_home_private ~= nil then launch.provider_home = provider_home(selected, template.provider_home_private == true) end
+    if template.provider_home_private ~= nil then launch.provider_home = provider_home(selected, template.provider_home_private == true, request) end
     if template.login == true then
         local evidence = bounds.object(selected.login_evidence) or {}
         local variable = type(evidence.variable) == "string" and evidence.variable or "HOME"
@@ -377,14 +396,12 @@ local function build_launch(selected: Descriptor, request: Request): (types.Laun
             files = {{variable = variable, default_directory = directory, path = path}}}
     end
     local required_profile = bounds.object((bounds.object(selected.provider_home) or {}).required_profile_file)
-    if required_profile then
-        local field = bounds.id(required_profile.field)
-        local value = field and request[field] or nil
-        if type(value) == "string" and (required_profile.window_only ~= true or request.profile_id == "window") then
-            local path = interpolate(required_profile.path_template :: string, request)
-            launch.required_files = {{variable = required_profile.variable :: string, path = path,
-                default_directory = required_profile.default_directory :: string?}}
-        end
+    local profile_field = required_profile and bounds.id(required_profile.field) or nil
+    if required_profile and profile_field and type(request[profile_field]) == "string"
+        and required_profile.window_only == true and request.profile_id == "window" then
+        local path = interpolate(required_profile.path_template :: string, request)
+        launch.required_files = {{variable = required_profile.variable :: string, path = path,
+            default_directory = required_profile.default_directory :: string?}}
     end
     return launch, nil
 end

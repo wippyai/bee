@@ -1,15 +1,14 @@
 """Run every registered Lua test entry in four isolated, balanced processes."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import ExitStack
-from pathlib import Path
-import os
 import re
 import subprocess
 import time
 
 import yaml
 
-from workspace import RUNTIME, ROOT, TEST_CACHE, database_environment, fixture_workspace
+from fixture_lint import environment, fixture_lint
+from workspace import RUNTIME, ROOT, fixture_workspace
 
 
 # Entry seconds measured on a loaded host; new entries get a small default weight.
@@ -52,20 +51,6 @@ def split(entries):
     return groups
 
 
-def environment(folder):
-    # The carrier suite resolves its Claude fixture by name in the native host
-    # PATH; every shard gets the binary, driver streams, and subsystem stores
-    # from its own disposable fixture.
-    fixture_bin = folder / "fixtures/harness/bin"
-    variables = {**database_environment(folder),
-                 "WIPPY_CACHE_DIR": str(Path(os.environ.get("WIPPY_CACHE_DIR") or TEST_CACHE).resolve()),
-                 "BEE_FIXTURE_BIN": str(fixture_bin),
-                 "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
-                 "BEE_AMBIENT_LIVE_PROVIDER": "none",
-                 "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
-    return variables
-
-
 def run_shard(index, folder, entries, timeout=None):
     started = time.monotonic()
     result = subprocess.run([
@@ -102,7 +87,7 @@ def main():
     with ExitStack() as fixtures:
         folders = [fixtures.enter_context(fixture_workspace(managed_gateway=True)) for _ in groups]
         # Retain the unfiltered strict lint before any test process starts.
-        subprocess.run([str(RUNTIME), "lint"], cwd=folders[0], check=True, env=environment(folders[0]))
+        fixture_lint(folders[0])
         results = []
         with ThreadPoolExecutor(max_workers=SHARDS) as executor:
             jobs = [executor.submit(run_shard, index, folders[index], group)

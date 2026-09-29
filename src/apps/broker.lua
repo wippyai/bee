@@ -1636,13 +1636,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     elseif req.op == "open" and shutdown_plan then
                         emit(contract.reply(req.request_id, "open", "busy", "Quit confirmation pending"), true)
                     elseif req.op == "open" then
-                        refresh_admission()
-                        local selected_admission = admission.current
-                        local binding: contract.Binding? = nil
-                        if selected_admission then
-                            for _, candidate in ipairs(selected_admission.bindings) do if candidate.definition_id == req.definition_id then binding = candidate; break end end
-                        end
-                        local descriptor: contract.Descriptor? = selected_admission and binding and selected_admission.descriptors[req.definition_id]
+                        local selected_catalog, binding, descriptor = catalog.resolve_open(req.definition_id, function()
+                            refresh_admission()
+                            return admission.current
+                        end)
+                        local selected_admission: Admission? = selected_catalog :: Admission?
                         local existing: Instance? = nil
                         local count = 0
                         for _, item in pairs(instances) do

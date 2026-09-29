@@ -167,6 +167,32 @@ function M.read(workspace_id: string): Selection
     return {revision = revision, evidence = table.concat(evidence, ":"), bindings = bindings,
         items = items(bindings, pinned)}
 end
+
+local function open_target(selection: Selection?, definition_id: string): (contract.Binding?, contract.Descriptor?)
+    if not selection then return nil, nil end
+    local binding: contract.Binding? = nil
+    for _, candidate in ipairs(selection.bindings) do
+        if candidate.definition_id == definition_id then binding = candidate; break end
+    end
+    if not binding then return nil, nil end
+    for _, item in ipairs(selection.items) do
+        if item.definition_id == definition_id then return binding, item end
+    end
+    return binding, nil
+end
+
+-- An open can arrive while an admission write is still converging across its
+-- registry entries. Refresh once more after a miss so a transient torn read
+-- does not become a user-visible not-admitted refusal.
+function M.resolve_open(definition_id: string, refresh: () -> Selection?): (Selection?, contract.Binding?, contract.Descriptor?)
+    local selected = refresh()
+    local binding, descriptor = open_target(selected, definition_id)
+    if binding and descriptor then return selected, binding, descriptor end
+    selected = refresh()
+    binding, descriptor = open_target(selected, definition_id)
+    return selected, binding, descriptor
+end
+
 -- These are bounded, decoded records, not arbitrary registry data. Compare
 -- values directly: JSON object field order is not a catalog revision.
 function M.same(a: Selection, b: Selection): boolean

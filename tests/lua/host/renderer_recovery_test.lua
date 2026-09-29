@@ -73,14 +73,14 @@ local function define_tests()
                 function() return {}, nil end,
                 function(_: unknown) return nil, nil end)
             local host = connections.new(self, self, identity, assignments)
-            local admitted = {[self] = {recipient = self, connection_id = "restored-connection",
+            host.admitted[self] = {recipient = self, connection_id = "restored-connection",
                 permissions = {open = true, close = true, control = true, appearance = true}, detaching = false,
-                renderer = self, renderer_generation = "generation", rendering = false, display_id = display}}
+                renderer = self, renderer_generation = "generation", rendering = false, display_id = display}
             local opened = contract.reply("restored-open", "open")
             opened.workspace_id, opened.id, opened.instance_id = identity, "restored-view", "restored-instance"
             opened.definition_id, opened.thread_id, opened.title = "test:app", "thread:restored", "Restored"
             local current = assert(inventory.observe(inventory.new(identity), opened))
-            connections.resume(host, admitted, 1, 3, current, questions.new(identity))
+            connections.resume(host, host.admitted, 1, 3, current, questions.new(identity))
 
             local catalog = receive(catalogs)
             local live = receive(views)

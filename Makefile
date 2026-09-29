@@ -5,7 +5,7 @@ LINT_FLAGS ?=
 RUNTIME_CACHE_KEY := $(shell python3 -c 'import json; print(json.load(open("wippy.build.json"))["runtime"]["commit"][:12])')
 WIPPY_CACHE_DIR ?= $(abspath .wippy/test-cache/$(RUNTIME_CACHE_KEY))
 export WIPPY_CACHE_DIR
-.PHONY: setup run lint test fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
+.PHONY: setup run lint test fixture-lint fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
 setup: native-tools
 
 .PHONY: hub-inspect-check
@@ -130,6 +130,8 @@ fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 test: fixture-gateway-client
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
+fixture-lint:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py

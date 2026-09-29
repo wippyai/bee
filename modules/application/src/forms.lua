@@ -207,15 +207,49 @@ function M.number_set(field: NumberField, value: number?)
     local text = value and tostring(value) or ""
     field.value, field.cursor, field.selected = text, #text, false
 end
+local function number_parse(value: string): number?
+    local mantissa, exponent = value:match("^(.+)[eE]([+-]?%d+)$")
+    if not mantissa or not exponent then return tonumber(value) end
+    local base, power = tonumber(mantissa), tonumber(exponent)
+    if base == nil or power == nil or math.abs(power) > 308 then return nil end
+    local parsed = base * (10 ^ power)
+    if parsed == math.huge or parsed == -math.huge then return nil end
+    return parsed
+end
 -- The parsed number, or nil when the buffer is empty or not a number.
 function M.number_value(field: NumberField): number?
     if field.value == "" then return nil end
-    return tonumber(field.value)
+    return number_parse(field.value)
 end
--- True when buffer is a well-formed in-progress number: an optional leading
--- minus, digits, and at most one decimal point.
+-- True when buffer is a well-formed in-progress decimal or exponent number.
 local function number_allowed(buffer: string): boolean
-    return buffer:find("^%-?%d*%.?%d*$") ~= nil
+    local index = 1
+    if buffer:sub(1, 1) == "-" then index = 2 end
+    local digits, decimal = 0, false
+    while index <= #buffer do
+        local char = buffer:sub(index, index)
+        if char == "e" or char == "E" then
+            if digits == 0 then return false end
+            index = index + 1
+            local sign = buffer:sub(index, index)
+            if sign == "+" or sign == "-" then index = index + 1 end
+            while index <= #buffer do
+                local exponent_digit = buffer:sub(index, index)
+                if exponent_digit < "0" or exponent_digit > "9" then return false end
+                index = index + 1
+            end
+            return true
+        elseif char == "." then
+            if decimal then return false end
+            decimal = true
+        elseif char >= "0" and char <= "9" then
+            digits = digits + 1
+        else
+            return false
+        end
+        index = index + 1
+    end
+    return true
 end
 local function number_insert(field: NumberField, text: string): boolean
     local left = field.selected and "" or field.value:sub(1, field.cursor)
@@ -237,7 +271,7 @@ local function number_format(value: number): string
     return tostring(value)
 end
 local function number_step(field: NumberField, delta: number)
-    local current = tonumber(field.value) or 0
+    local current = number_parse(field.value) or 0
     local next_value = current + delta
     if field.min and next_value < field.min then next_value = field.min end
     if field.max and next_value > field.max then next_value = field.max end

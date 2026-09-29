@@ -253,6 +253,67 @@ local function define_tests()
             assert(cleanup:apply())
         end)
 
+        test.it("changes the catalog revision when cold recovery restores a process-local admission", function()
+            local node = assert(system.node.id())
+            local suffix = assert(uuid.v7()):gsub("-", "")
+            local source_workspace = "catalog_recover_" .. suffix
+            local overlay_owner = "bee.catalog_test:" .. source_workspace
+            local definition_id = "app." .. source_workspace .. ":app"
+            local definition = app(definition_id)
+            local selected_profile: Object = {workspace_id = WORKSPACE, source_node = node,
+                source_workspace = source_workspace, component = "vendor/catalog-test", overlay_owner = overlay_owner,
+                approval_policy = "local-install", resolver = "overlay", parameters = {},
+                allow = {packages = {}, namespaces = {}, kinds = {}, databases = {}, grants = {}, modules = {}},
+                applications = {{definition_id = definition_id, policies = {POLICY}, thread_access = "none"}}}
+            local state = assert(registry.snapshot():state())
+            local measured, measure_error = admission.project({workspace_id = WORKSPACE, overlay_owner = overlay_owner,
+                source_node = node, source_workspace = source_workspace, artifact_digest = DIGEST,
+                bindings = selected_profile.applications, artifact_entries = {definition},
+                registry_entries = {find(state.entries :: {Object}, POLICY)}, overlay_ids = {}})
+            if not measured then error("project restored admission: " .. tostring(measure_error)) end
+            local derived: Object = {id = measured.id, kind = "registry.entry", data = measured.record}
+
+            local original_profiles = assert(registry.get("bee.env:gov_activation_profiles"))
+            local original_database_ref = assert(registry.get("bee.gov:database_ref"))
+            local changes = registry.snapshot():changes()
+            local configured = assert(registry.get("bee.env:gov_activation_profiles"))
+            local configuration = configured.data :: Object
+            local profiles = configuration.profiles :: {unknown}
+            profiles[#profiles + 1] = selected_profile
+            assert(changes:update(configured))
+            local database_ref = assert(registry.get("bee.gov:database_ref"))
+            database_ref.data = {resource_ref = "bee.gov:activation_test_db"}
+            assert(changes:update(database_ref))
+            assert(changes:apply())
+
+            local setup_ok, setup_error = pcall(function()
+                activate(WORKSPACE, node, node, source_workspace, overlay_owner, measured :: Object)
+                local before = catalog.revision(WORKSPACE)
+                local overlay = assert(registry.overlay(overlay_owner))
+                local install = overlay:changes()
+                assert(install:create(definition))
+                assert(install:create(derived))
+                assert(install:apply())
+                local after = catalog.revision(WORKSPACE)
+                if after == before then
+                    error("process-local recovery did not invalidate the broker catalog revision")
+                end
+                test.is_true(has(catalog.read(WORKSPACE), definition_id),
+                    "restored process-local application was not admitted")
+            end)
+
+            local overlay = assert(registry.overlay(overlay_owner))
+            local cleanup_overlay = overlay:changes()
+            cleanup_overlay:delete(definition_id)
+            cleanup_overlay:delete(measured.id :: string)
+            assert(cleanup_overlay:apply())
+            local cleanup = registry.snapshot():changes()
+            assert(cleanup:update(original_profiles))
+            assert(cleanup:update(original_database_ref))
+            assert(cleanup:apply())
+            assert(setup_ok, tostring(setup_error))
+        end)
+
         test.it("admits host-composed packages through the measured packages rule", function()
             local selected = catalog.read(WORKSPACE)
             local bindings: {[string]: Object} = {}

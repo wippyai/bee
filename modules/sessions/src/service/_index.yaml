@@ -5,3 +5,6 @@ entries:
   kind: library.lua
   source: file://locate.lua
   modules: [time]
+- name: scheduler
+  kind: library.lua
+  source: file://scheduler.lua

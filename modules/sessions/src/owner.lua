@@ -3,6 +3,7 @@
 local bounds = require("bounds")
 local journal = require("journal")
 local admission = require("admission")
+local catalog_service = require("catalog_service")
 local driver_route = require("driver_route")
 local registry = require("registry")
 local security = require("security")
@@ -253,6 +254,14 @@ local function not_ready(_: Object): Reply
     return fail("UNAVAILABLE", "session operation is not yet available", nil)
 end
 
+local function catalog(request: Object): Reply
+    local _, workspace = identity()
+    if not workspace then return fail("DENIED", "the authenticated caller has no workspace", nil) end
+    local page, catalog_error = catalog_service.list(request, workspace)
+    if not page then return fail("INVALID", catalog_error or "catalog request is invalid", nil) end
+    return succeed(page)
+end
+
 function M.call(method: string, request: unknown): Reply
     local input = object(request)
     if not input then return fail("INVALID", "request must be an object", nil) end
@@ -269,7 +278,8 @@ function M.call(method: string, request: unknown): Reply
     if method == "send" then return send(input) end
     if method == "get" then return session_get(input) end
     if method == "await" then return await(input) end
-    if method == "join" or method == "list" or method == "cancel" or method == "close" or method == "catalog" then
+    if method == "catalog" then return catalog(input) end
+    if method == "join" or method == "list" or method == "cancel" or method == "close" then
         return not_ready(input)
     end
     return fail("UNSUPPORTED", "unknown sessions operation", nil)

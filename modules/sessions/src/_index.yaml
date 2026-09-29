@@ -52,6 +52,7 @@ entries:
     journal: bee.sessions:threads_journal
     driver_route: bee.sessions:driver_route
     admission: bee.harness.launch:admission
+    catalog_service: bee.sessions.service:catalog
 - name: driver_route
   kind: library.lua
   source: file://driver_route.lua

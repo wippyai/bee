@@ -23,6 +23,17 @@ entries:
   kind: library.lua
   source: file://locate.lua
   modules: [time]
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [registry, funcs, fs]
+  imports:
+    admission: bee.harness.launch:admission
+    bounds: bee.threads.records:bounds
+    driver_route: bee.sessions:driver_route
+    locate: bee.sessions.service:locate
+    placement_resources: bee.placement.native:resources
+    executors: bee.sessions:executor_registry
 - name: scheduler
   kind: library.lua
   source: file://scheduler.lua

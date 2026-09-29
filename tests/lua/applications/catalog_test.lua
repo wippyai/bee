@@ -18,6 +18,7 @@ local POLICY = "bee.security:ordinary_app_subsystem_boundary"
 local DIGEST = string.rep("c", 64)
 
 type Object = {[string]: unknown}
+type Selection = catalog.Selection
 
 local function blob(bytes: string): Object
     local digest = assert(hash.sha256(bytes))
@@ -277,6 +278,29 @@ local function define_tests()
             test.is_true(has(selected, "bee.settings:app"))
             test.is_true(selected.evidence ~= "")
             test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline:app"))
+        end)
+
+        test.it("refreshes a missing open selection once before refusing it", function()
+            local visible = catalog.read(WORKSPACE) :: Selection
+            local stale: Selection = {revision = visible.revision, evidence = "", bindings = {}, items = {}}
+            local refreshes = 0
+            local selected, binding, descriptor = catalog.resolve_open("bee.settings:app", function()
+                refreshes = refreshes + 1
+                return refreshes == 1 and stale or visible
+            end)
+            test.eq(refreshes, 2)
+            test.is_true(selected == visible)
+            test.is_true(binding ~= nil)
+            test.is_true(descriptor ~= nil)
+
+            refreshes = 0
+            local _, missing_binding, missing_descriptor = catalog.resolve_open("bee.catalog_test:missing", function()
+                refreshes = refreshes + 1
+                return visible
+            end)
+            test.eq(refreshes, 2)
+            test.is_nil(missing_binding)
+            test.is_nil(missing_descriptor)
         end)
     end)
 end

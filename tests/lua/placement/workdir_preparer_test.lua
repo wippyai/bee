@@ -1,12 +1,14 @@
 -- MIT. Tests for workdir preparers extension point, discovery, setup, and cleanup.
 local test = require("test")
 local registry = require("registry")
+local sql = require("sql")
 local service = require("service")
 local time = require("time")
 local exec = require("exec")
 local json = require("json")
 local workdir_preparers = require("workdir_preparers")
 local store = require("store")
+local migrations = require("migrations")
 local request_codec = require("request_codec")
 local quote = require("quote")
 local types = require("types")
@@ -115,6 +117,15 @@ local function with_preparer(config: {[string]: unknown}, body: () -> ())
     restoration:update(host); restoration:update(fixture)
     assert(restoration:apply())
     if not ok then error(tostring(err)) end
+end
+
+local function apply_legacy_preparer_backfill(db: sql.DB)
+    for _, migration in ipairs(migrations.all()) do
+        if migration.id == 7 then
+            local _, err = db:execute(migration.sql)
+            if err then error("apply legacy preparer backfill: " .. tostring(err)) end
+        end
+    end
 end
 
 local function define_tests()
@@ -268,6 +279,53 @@ local function define_tests()
             test.eq(#cleaned_rows, 1)
 
             cleanup_dir(repo)
+        end)
+
+        test.it("migrates legacy ownership JSON before settling workdir cleanup", function()
+            local repo = temp_dir()
+            init_repo(repo)
+            local db = assert(store.open())
+            local req = make_request(fresh("legacy-state"), {worktree = "dedicated"})
+            claim_attempt(db, req)
+            local work_dir, _, setup_error = workdir_preparers.setup(db, req, req.attempt_id, repo, {repo})
+            if not work_dir then error(tostring(setup_error)) end
+            local plans = assert(store.preparer_plans(db, req.attempt_id))
+            test.eq(#plans, 1)
+            local _, delete_error = db:execute("DELETE FROM bee_placement_preparer_states WHERE attempt_id = ?", {req.attempt_id})
+            local _, update_error = db:execute([[UPDATE bee_placement_evidence SET detail = ?
+                WHERE attempt_id = ? AND kind = 'workdir_preparer.state']], {plans[1].record_json, req.attempt_id})
+            if delete_error or update_error then error("write legacy ownership fixture") end
+            store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                evidence = {kind = "child.not_started", detail = "legacy preparer cleanup fixture"}})
+            apply_legacy_preparer_backfill(db)
+            local attempt = assert(store.attempt(db, req.attempt_id))
+            db:release()
+
+            local cleaned = service.cleanup_attempt(attempt, true)
+            local _, stat = run_cmd({"test", "-d", work_dir})
+            cleanup_dir(repo)
+            test.is_true(cleaned.ok, "legacy workdir ownership did not clean")
+            test.is_true(stat ~= 0, "legacy worktree remained after cleanup was settled")
+        end)
+
+        test.it("keeps truncated legacy ownership unresolved", function()
+            local db = assert(store.open())
+            local req = make_request(fresh("legacy-truncated"))
+            claim_attempt(db, req)
+            store.transition(db, req.attempt_id, {evidence = {kind = "workdir_preparer.state",
+                detail = '{"binding_id":"bee.git_worktree:binding"'}})
+            store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                evidence = {kind = "child.not_started", detail = "truncated legacy state fixture"}})
+            apply_legacy_preparer_backfill(db)
+            local attempt = assert(store.attempt(db, req.attempt_id))
+            db:release()
+
+            local cleaned = service.cleanup_attempt(attempt, true)
+            local check = assert(store.open())
+            local settled = assert(check:query("SELECT sequence FROM bee_placement_evidence WHERE attempt_id = ? AND kind = 'workdir_preparers.settled'", {req.attempt_id}))
+            check:release()
+            test.is_false(cleaned.ok, "truncated legacy state was treated as having no owner")
+            test.eq(#settled, 0, "truncated legacy state was marked settled")
         end)
 
         test.it("keeps long ownership state whole through cleanup", function()

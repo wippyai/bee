@@ -120,7 +120,7 @@ func filteredEnvironment() []string {
 		"BEE_WORKSPACE_DB": true, "BEE_THREADS_DB": true, "BEE_APPROVALS_DB": true,
 		"BEE_RESOURCES_DB": true, "BEE_CREDENTIALS_DB": true, "BEE_PLACEMENT_DB": true,
 		"BEE_GATEWAY_DB": true, "BEE_NODE_DB": true, "BEE_GOVERNANCE_DB": true, "BEE_SYNC_DB": true,
-		"BEE_CLIENT_DB": true, "BEE_PLACEMENT_ROOT": true,
+		"BEE_CLIENT_DB": true, "BEE_PLACEMENT_ROOT": true, "BEE_APP_DATABASE_ROOT": true,
 	}
 	result := make([]string, 0, len(os.Environ())+5)
 	for _, value := range os.Environ() {

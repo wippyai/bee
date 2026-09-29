@@ -89,7 +89,8 @@ def application_database(folder, project):
     workspace_id = classic_workspace(folder / "workspace.db")
     _, database_id = grant_identities(workspace_id)
     suffix = database_id.rsplit(".", 1)[-1]
-    return project / ".wippy" / "app-db" / f"{suffix}.db"
+    root = folder / "native-state" / "app-db" if NATIVE_DESKTOP else project / ".wippy" / "app-db"
+    return root / f"{suffix}.db"
 
 
 def wait_for_agent_run(folder, project, desktop, timeout=60):

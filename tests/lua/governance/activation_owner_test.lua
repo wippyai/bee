@@ -23,7 +23,7 @@ type Object = {[string]: unknown}
 
 type ResolverWorld = {revision: integer, digest: string,
     application_admission: application_admission.Measurement?,
-    capability: preflight.CapabilityEvidence?}
+    capability: preflight.CapabilityEvidence?, blocked: boolean?}
 type MigrationEffects = {
     matches: (string, migration_work.Work) -> (boolean?, string?),
     prepare: (string, migration_work.Work) -> ({[string]: unknown}?, string?),
@@ -130,9 +130,11 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
         local host_evidence: preflight.HostEvidence = {
             application_admission = application_evidence,
             capability = world.capability or {kind = "absent"}}
+        local packages: {[string]: boolean} = { ["demo/app"] = true }
+        if world.blocked == true then packages["demo/app"] = false end
         local context: preflight.Context = {node_id = "node-owner", registry_revision = world.revision,
                 registry_digest = world.digest,
-                policy_digest = SHA, packages = {["demo/app"] = true}, namespaces = {demo = true},
+                policy_digest = SHA, packages = packages, namespaces = {demo = true},
                 kinds = {[entry_kind] = true}, databases = {}, grants = {}, modules = {},
                 entries = {}, installed_entries = nil, applied = {}, exact_expansion = true, protected = KERNEL,
                 migration_barrier = false, auto_start = true, host_evidence = host_evidence}
@@ -879,10 +881,15 @@ local function define_tests()
             test.eq(preserved.outcome, "applied")
             test.eq(apply_count, 1)
             applied = false
-            local refused = owner.recover(config_with(again_plans, again_activations), "composed-restart-v1")
-            test.eq(refused.code, "CONFLICT")
-            test.is_true(tostring(refused.message):find("composed registry base", 1, true) ~= nil)
-            test.eq(apply_count, 1)
+            local restored = ok(owner.recover(config_with(again_plans, again_activations), "composed-restart-v1"))
+            test.eq(restored.outcome, "applied")
+            test.is_true(restored.recovered == true)
+            test.eq(apply_count, 2)
+            applied = false
+            world.blocked = true
+            local blocked = owner.recover(config_with(again_plans, again_activations), "composed-restart-v1")
+            test.eq(blocked.code, "BLOCKED")
+            test.eq(apply_count, 2)
             assert(activation_store.close(again_activations))
             assert(plan_store.close(again_plans))
         end)

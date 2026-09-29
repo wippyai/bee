@@ -1,7 +1,9 @@
 -- MIT. The Agent window's sessions model over a scripted sessions client.
 local test = require("test")
 local agents = require("agents")
+local sessions = require("sessions")
 type Object = {[string]: unknown}
+local function client_of(value: unknown): sessions.Client return value :: sessions.Client end
 local function candidate(ref: string, title: string, status: string, reasons: {string}, kind: string?): Object
     return {ref = ref, kind = kind or "definition", title = title, status = status, checked_at = "t", reasons = reasons,
         features = {}, actions = {}}
@@ -13,13 +15,13 @@ end
 local function work(ref: string, observations: {Object}, phase: string): any
     local index = 0
     return {ref = function(): string return ref end, session = "bs:n:w:s1", incarnation = 1,
-        await = function(_: any, _options: any): (Object, nil)
+        await = function(_: any, _options: any): (unknown, nil)
             index = math.min(index + 1, #observations)
             return observations[index], nil
         end,
-        state = function(): (Object, nil) return {phase = phase}, nil end}
+        state = function(): (unknown, nil) return {phase = phase}, nil end}
 end
-local function session(activity: string, queued: integer, sent: {Object}, refreshed: {any}): any
+local function session(activity: string, queued: integer, sent: {Object}, refreshed: any): any
     local handle: any = {snapshot = snapshot(activity, queued)}
     local reads = 0
     handle.send = function(_: any, options: Object): (any, Object?)
@@ -35,6 +37,21 @@ local function session(activity: string, queued: integer, sent: {Object}, refres
     end
     return handle
 end
+local function must_list(client: sessions.Client, include: boolean): agents.Listing
+    local listing, err = agents.list(client, include)
+    if not listing then error(tostring(err)) end
+    return listing
+end
+local function must_open(client: sessions.Client, definition: string, profile: {id: string, revision: integer}?, key: string): agents.Conversation
+    local conv, err = agents.open(client, definition, profile, key)
+    if not conv then error(tostring(err)) end
+    return conv
+end
+local function at(list: {Object}, index: integer): Object
+    local value = list[index]
+    if not value then error("missing call " .. tostring(index)) end
+    return value
+end
 local function key_source(): () -> string
     local count = 0
     return function(): string count = count + 1; return "key-" .. tostring(count) end
@@ -43,13 +60,13 @@ local function define_tests()
     test.describe("Agent window catalog listing", function()
         test.it("asks for ready candidates only and orders by title", function()
             local asked: {Object} = {}
-            local client: any = {catalog = function(_: any, options: Object): (Object, nil)
+            local client: any = {catalog = function(_: any, options: Object): (unknown, nil)
                 asked[#asked + 1] = options
                 return {items = {candidate("b:two", "Two", "ready", {}), candidate("a:one", "One", "ready", {}),
                     candidate("x:exec", "Exec", "ready", {}, "executor")}, complete = true, unavailable_count = 2, diagnostics = {}}, nil
             end}
-            local listing = agents.list(client, false)
-            test.eq(asked[1].include_unavailable, false)
+            local listing = must_list(client_of(client), false)
+            test.eq(at(asked, 1).include_unavailable, false)
             test.eq(#listing.items, 2)
             test.eq(listing.items[1].ref, "a:one")
             test.eq(listing.unavailable, 2)
@@ -63,13 +80,13 @@ local function define_tests()
             }
             local index = 0
             local cursors: {unknown} = {}
-            local client: any = {catalog = function(_: any, options: Object): (Object, nil)
+            local client: any = {catalog = function(_: any, options: Object): (unknown, nil)
                 index = index + 1
                 cursors[index] = options.cursor
                 test.eq(options.include_unavailable, true)
                 return pages[index], nil
             end}
-            local listing = agents.list(client, true)
+            local listing = must_list(client_of(client), true)
             test.eq(cursors[2], "cursor-1")
             test.eq(listing.items[1].ref, "a:claude")
             test.is_true(listing.items[1].ready)
@@ -79,7 +96,7 @@ local function define_tests()
         end)
         test.it("reports a catalog fault", function()
             local client: any = {catalog = function(): (nil, Object) return nil, {code = "DENIED", message = "no", retry = "never"} end}
-            local listing, err = agents.list(client, false)
+            local listing, err = agents.list(client_of(client), false)
             test.is_nil(listing)
             test.eq(err, "DENIED: no")
         end)
@@ -91,7 +108,7 @@ local function define_tests()
                 seen = options
                 return session("idle", 0, {}, {}), nil
             end}
-            local conv = agents.open(client, "bee.driver.claude:default", {id = "p1", revision = 3}, "open-key")
+            local conv = must_open(client_of(client), "bee.driver.claude:default", {id = "p1", revision = 3}, "open-key")
             test.eq(seen.operation_key, "open-key")
             test.eq(seen.definition, "bee.driver.claude:default")
             test.eq(conv.activity, "idle")
@@ -99,14 +116,14 @@ local function define_tests()
         end)
         test.it("keeps the send key across a failed attempt of the same text", function()
             local sent: {Object} = {}
-            local conv = agents.open({open = function(): (any, nil) return session("idle", 0, sent, {}), nil end} :: any, "d:x", nil, "k")
+            local conv = must_open(client_of({open = function(): (any, nil) return session("idle", 0, sent, {}), nil end}), "d:x", nil, "k")
             local keys = key_source()
             test.is_false(agents.submit(conv, "hello", keys))
             test.is_false(agents.submit(conv, "hello", keys))
-            test.eq(sent[1].operation_key, sent[2].operation_key)
+            test.eq(at(sent, 1).operation_key, at(sent, 2).operation_key)
             test.is_true(conv.notice:find("owner unreachable", 1, true) ~= nil)
             test.is_false(agents.submit(conv, "other", keys))
-            test.is_true(sent[3].operation_key ~= sent[1].operation_key)
+            test.is_true(at(sent, 3).operation_key ~= at(sent, 1).operation_key)
         end)
         test.it("shows queued, then working, then the settled result and activity", function()
             local sent: {Object} = {}
@@ -114,7 +131,7 @@ local function define_tests()
             local ready: Object = {tag = "ready", result = {outcome = "succeeded", value = "done", artifacts = {}, usage = {}}}
             local produced = work("bw:1", {pending, pending, ready}, "reserved")
             local refreshed: any = {works = {produced}, activity = "working"}
-            local conv = agents.open({open = function(): (any, nil) return session("idle", 0, sent, refreshed), nil end} :: any, "d:x", nil, "k")
+            local conv = must_open(client_of({open = function(): (any, nil) return session("idle", 0, sent, refreshed), nil end}), "d:x", nil, "k")
             test.is_true(agents.submit(conv, "hello", key_source()))
             test.eq(conv.turns[1].state, "queued")
             test.is_true(agents.pending(conv))
@@ -136,7 +153,7 @@ local function define_tests()
             local uncertain: Object = {tag = "uncertain", evidence = {summary = "outcome unprovable", artifacts = {}}}
             local refreshed: any = {works = {work("bw:1", {failed}, "accepted"), work("bw:2", {blocked}, "accepted"),
                 work("bw:3", {uncertain}, "accepted")}}
-            local conv = agents.open({open = function(): (any, nil) return session("idle", 0, sent, refreshed), nil end} :: any, "d:x", nil, "k")
+            local conv = must_open(client_of({open = function(): (any, nil) return session("idle", 0, sent, refreshed), nil end}), "d:x", nil, "k")
             local keys = key_source()
             for _, text in ipairs({"a", "b", "c"}) do test.is_true(agents.submit(conv, text, keys)) end
             agents.refresh(conv)

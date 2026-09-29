@@ -100,11 +100,20 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
-    selection: bee.harness.launch:selection
+    agents: bee.harness.window:agents
+- name: session_view
+  kind: library.lua
+  source: file://session_view.lua
+  modules: [tty]
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    text: bee.application:text
+    agents: bee.harness.window:agents
 - name: picker
   kind: library.lua
   source: file://picker.lua
-  modules: [tty, process, channel, uuid, funcs]
+  modules: [tty, process, channel, time, uuid, funcs]
   imports:
     frame: bee.application:frame
     bounds: bee.threads.records:bounds
@@ -112,7 +121,9 @@ entries:
     caller: bee.application:caller
     appearance: bee.application:appearance
     input_event: bee.harness.window:input
-    selection: bee.harness.launch:selection
+    sessions: bee.application:sessions
+    agents: bee.harness.window:agents
+    session_view: bee.harness.window:session_view
     admission: bee.harness.launch:admission
     view: bee.harness.window:picker_view
     forms: bee.harness.window:profile_form

@@ -20,7 +20,8 @@ local function define_tests()
         test.it("creates sessions and immutable queued work with keyed replay and journal events", function()
             local sessions = harness.session_owner(WORKSPACE)
             local open_key = harness.key()
-            local open_request = {operation_key = open_key, title = "review"}
+            local open_request = {operation_key = open_key, title = "review", route = {placement_request = {
+                binding_ref = "driver", profile_id = "batch", workspace_id = WORKSPACE}}}
             local opened_reply = sessions:call("session_create", open_request)
             local opened = harness.value(opened_reply)
             local session_ref = opened.session
@@ -32,6 +33,7 @@ local function define_tests()
             local described = harness.value(sessions:call("session_describe", {session = session_ref}))
             test.eq(described.state, "active")
             test.eq(described.revision, 1)
+            test.eq(described.route.placement_request.session_ref, session_ref)
 
             local key = harness.key()
             local request = {session = session_ref, operation_key = key, input = {text = "inspect"}, output_schema = "bee:Text@1"}
@@ -64,39 +66,26 @@ local function define_tests()
             test.eq(count[1].count, 2)
         end)
 
-        test.it("admits dependent work and waits for successful settlement", function()
+        test.it("rejects dependency chaining and reserves unrelated work immediately", function()
             local sessions = harness.session_owner(WORKSPACE)
             local producer = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
             local consumer = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
             local first = harness.value(sessions:call("work_send", {session = producer.session, operation_key = harness.key(), input = {text = "first"}}))
-            local second = harness.value(sessions:call("work_send", {session = consumer.session, operation_key = harness.key(),
-                input = {text = "second"}, after = {first.work}}))
-            test.eq(second.state, "queued")
-            test.eq(harness.value(sessions:call("work_describe", {work = second.work})).after[1], first.work)
-            local waiting = harness.value(sessions:call("turn_reserve", {session = consumer.session, operation_key = harness.key()}))
-            test.eq(waiting.state, "idle")
-            test.is_nil(waiting.turn)
-
-            local reserved = harness.value(sessions:call("turn_reserve", {session = producer.session, operation_key = harness.key()}))
-            local envelope = harness.value(sessions:call("turn_pull", {turn = reserved.turn, claim = reserved.claim}))
-            local accepted = harness.value(sessions:call("turn_accept", {turn = reserved.turn, claim = reserved.claim,
-                input_digest = envelope.input_digest, checkpoint = {frontier = 1}, operation_key = harness.key()}))
-            test.eq(accepted.state, "accepted")
-            local settled = harness.value(sessions:call("work_settle", {turn = reserved.turn, claim = reserved.claim,
-                result = result("succeeded", {text = "first complete"}), operation_key = harness.key()}))
-            test.eq(settled.result.state, "succeeded")
-            local eligible = harness.value(sessions:call("turn_reserve", {session = consumer.session, operation_key = harness.key()}))
-            test.eq(eligible.work, second.work)
+            local chained = sessions:call("work_send", {session = consumer.session, operation_key = harness.key(),
+                input = {text = "second"}, after = {first.work}})
+            test.eq(harness.code(chained), "INVALID_ARGUMENT")
+            local second = harness.value(sessions:call("work_send", {session = consumer.session, operation_key = harness.key(), input = {text = "second"}}))
+            local reservation = harness.value(sessions:call("turn_reserve", {session = consumer.session, operation_key = harness.key()}))
+            test.eq(reservation.work, second.work)
+            test.eq(reservation.state, "reserved")
         end)
 
-        test.it("settles dependent work as rejected when a prerequisite fails", function()
+        test.it("keeps work independent when another session's work fails", function()
             local sessions = harness.session_owner(WORKSPACE)
             local producer = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
             local consumer = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
             local first = harness.value(sessions:call("work_send", {session = producer.session, operation_key = harness.key(), input = {text = "fails"}}))
-            local second = harness.value(sessions:call("work_send", {session = consumer.session, operation_key = harness.key(),
-                input = {text = "depends on failure"}, after = {first.work}}))
-            test.eq(harness.value(sessions:call("turn_reserve", {session = consumer.session, operation_key = harness.key()})).state, "idle")
+            local second = harness.value(sessions:call("work_send", {session = consumer.session, operation_key = harness.key(), input = {text = "independent"}}))
 
             local reservation = harness.value(sessions:call("turn_reserve", {session = producer.session, operation_key = harness.key()}))
             local envelope = harness.value(sessions:call("turn_pull", {turn = reservation.turn, claim = reservation.claim}))
@@ -105,15 +94,10 @@ local function define_tests()
             harness.value(sessions:call("work_settle", {turn = reservation.turn, claim = reservation.claim,
                 result = result("failed"), operation_key = harness.key()}))
 
-            local reject_request = {session = consumer.session, operation_key = harness.key()}
-            local rejected = sessions:call("turn_reserve", reject_request)
-            test.eq(harness.value(rejected).result.state, "rejected")
-            test.eq(harness.value(sessions:call("work_describe", {work = second.work})).result.error.code, "DEPENDENCY_FAILED")
-            local replay = sessions:call("turn_reserve", reject_request)
-            test.is_true(replay.replayed)
-            test.eq(replay.value.result.state, "rejected")
-            local page = harness.value(sessions:call("feed_read", {session = consumer.session, after_sequence = 0, limit = 16}))
-            test.eq(page.events[#page.events].kind, "work.settled")
+            local independent = harness.value(sessions:call("turn_reserve", {session = consumer.session, operation_key = harness.key()}))
+            test.eq(independent.work, second.work)
+            test.eq(independent.state, "reserved")
+            test.eq(harness.value(sessions:call("work_describe", {work = second.work})).phase, "reserved")
         end)
 
         test.it("seals lifecycle changes only when queued work is settled", function()

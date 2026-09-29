@@ -314,6 +314,13 @@ local function decode_json(value: string): (unknown, string?)
     return decoded :: unknown, nil
 end
 
+local function current_epoch(tx: sql.Transaction): (integer?, string?)
+    local epoch, owner_error = thread_owner.current(tx)
+    if owner_error then return nil, owner_error end
+    if not epoch or epoch < 1 then return nil, "thread owner epoch is not established" end
+    return epoch, nil
+end
+
 function M.session_create(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
@@ -338,6 +345,17 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         local thread_id, thread_id_error = allocate_id()
         if not session_id or not thread_id then return failure("INTERNAL", session_id_error or thread_id_error or "allocate session identity") end
         local session_ref = qualified("bs", node, workspace :: string, session_id)
+        local stored_route: Row = {}
+        for name, value in pairs(object(input.route) or {}) do stored_route[name] = value end
+        local placement_request = object(stored_route.placement_request)
+        if placement_request then
+            local retained_request: Row = {}
+            for name, value in pairs(placement_request) do retained_request[name] = value end
+            retained_request.session_ref = session_ref
+            stored_route.placement_request = retained_request
+        end
+        local stored_route_json, stored_route_error = encode(stored_route)
+        if not stored_route_json then return failure("INVALID_ARGUMENT", stored_route_error or "session route is invalid") end
         local now = transaction.now()
         local head_error = transaction.insert_head(tx, {thread_id = thread_id, owner_actor = caller :: string, title = title :: string,
             created_at = now, workspace_id = workspace})
@@ -345,11 +363,11 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         local member_error = transaction.insert_member(tx, thread_id, caller :: string, "owner", 1)
         if member_error then return failure("INTERNAL", member_error) end
         local session_error = execute(tx, "INSERT INTO bee_sessions (session_ref, thread_id, workspace_id, owner_actor, title, state, revision, created_at, updated_at, route_json) " ..
-            "VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, ?)", {session_ref, thread_id, workspace, caller, title, now, now, route_json}, "create session")
+            "VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, ?)", {session_ref, thread_id, workspace, caller, title, now, now, stored_route_json}, "create session")
         if session_error then return failure("INTERNAL", session_error) end
         local session: Session = {session_ref = session_ref, thread_id = thread_id, workspace_id = workspace :: string,
             owner_actor = caller :: string, title = title :: string, state = "active", revision = 1, created_at = now, updated_at = now,
-            route_json = route_json :: string, context_json = "{}"}
+            route_json = stored_route_json :: string, context_json = "{}"}
         local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "session.created", session_ref, 1,
             {title = title, route_digest = route_digest})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append session creation event") end
@@ -368,13 +386,18 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
         local session, query_error = get_session(tx, session_ref, workspace :: string)
         if query_error then return transaction.storage_failure(query_error) end
         if not session then return failure("NOT_FOUND", "session does not exist") end
-        local rows, count_error = tx:query("SELECT phase, COUNT(*) AS count FROM bee_session_work WHERE session_ref = ? GROUP BY phase", {session_ref})
+        local rows, count_error = tx:query("SELECT phase, COUNT(*) AS count, " ..
+            "SUM(CASE WHEN uncertainty_json IS NOT NULL THEN 1 ELSE 0 END) AS uncertain " ..
+            "FROM bee_session_work WHERE session_ref = ? GROUP BY phase", {session_ref})
         if count_error or not rows then return transaction.storage_failure("count session work") end
-        local queued, reserved, accepted, settled = 0, 0, 0, 0
+        local queued, reserved, accepted, settled, uncertain = 0, 0, 0, 0, 0
         for _, row in ipairs(rows) do
             local phase = text(row.phase, 32)
             local count = integer(row.count)
             if not phase or not count then return failure("INTERNAL", "session work count is corrupt") end
+            local uncertain_count = integer(row.uncertain)
+            if not uncertain_count then return failure("INTERNAL", "session uncertainty count is corrupt") end
+            uncertain = uncertain + uncertain_count
             if phase == "queued" then queued = count
             elseif phase == "reserved" then reserved = count
             elseif phase == "accepted" then accepted = count
@@ -386,11 +409,19 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
         if not head then return failure("INTERNAL", "session journal head is missing") end
         local head_sequence = integer(head.head_sequence)
         if head_sequence == nil then return failure("INTERNAL", "session journal sequence is corrupt") end
+        local epoch, epoch_error = current_epoch(tx)
+        if not epoch then return failure("UNAVAILABLE", epoch_error or "owner epoch is unavailable") end
+        local stalled_row, stalled_error = query_one(tx, "SELECT COUNT(*) AS count FROM bee_session_turns " ..
+            "WHERE session_ref = ? AND phase IN ('reserved','accepted') AND owner_epoch <> ?", {session_ref, epoch}, "stalled session turns")
+        if stalled_error then return transaction.storage_failure(stalled_error) end
+        local stalled = stalled_row and integer(stalled_row.count) or 0
+        if not stalled then return failure("INTERNAL", "stalled turn count is corrupt") end
         local route, route_error = decode_json(session.route_json)
         if route_error then return failure("INTERNAL", route_error) end
         return transaction.success({session = session.session_ref, title = session.title, state = session.state, route = route,
             revision = session.revision, created_at = session.created_at, updated_at = session.updated_at,
-            queued = queued, active = reserved + accepted, settled = settled, head_sequence = head_sequence}, false)
+            queued = queued, active = reserved + accepted, settled = settled, uncertain = uncertain, stalled = stalled,
+            head_sequence = head_sequence}, false)
     end)
 end
 
@@ -720,13 +751,6 @@ end
 
 local TURN_COLUMNS = "turn_ref, session_ref, work_ref, claim_token, owner_epoch, input_digest, phase, checkpoint_json, " ..
     "reserve_record_id, accept_record_id, settle_record_id, created_at"
-
-local function current_epoch(tx: sql.Transaction): (integer?, string?)
-    local epoch, owner_error = thread_owner.current(tx)
-    if owner_error then return nil, owner_error end
-    if not epoch or epoch < 1 then return nil, "thread owner epoch is not established" end
-    return epoch, nil
-end
 
 function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)

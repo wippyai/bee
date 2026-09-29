@@ -192,7 +192,7 @@ local function prove_mcp_contract(token: string)
 end
 local function record(text: string)
     ok(call("bee.threads.service:record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
-        body = {message_id = "m-" .. key(), message_kind = "request", content = {text = text}}}), "record")
+        body = {message_id = "m-" .. key(), message_kind = "request", recipient_ids = {}, content = {text = text}}}), "record")
 end
 local function prove_configuration_scope(address: string)
     local selected, scope_error = security.new_scope({})
@@ -230,7 +230,7 @@ local function prove_endpoint_call_scope()
     local scope = security.new_scope(policies)
     local actor = security.actor()
     assert(actor ~= nil, "probe actor missing")
-    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.delivery:watch", "bee.threads.service:record", "bee.gov.binding:overlay_call", "bee.docs.binding:call"}) do
+    for _, target in ipairs({"bee.gateway:address", "bee.threads.service:read_after", "bee.threads.service:record", "bee.gov.binding:overlay_call", "bee.docs.binding:call"}) do
         assert(scope:evaluate(actor, "funcs.call", target) == "allow", "endpoint cannot invoke its selected operation")
     end
     -- The docs tool reads the one embedded corpus and reaches no other volume.
@@ -363,7 +363,7 @@ local function prove_child_thread()
     local child = "child-thread"
     ok(call("bee.threads.service:create", {thread_id = child, idempotency_key = key(), title = "Child work"}), "create child thread")
     ok(call("bee.threads.service:record", {thread_id = child, idempotency_key = key(), kind = "message",
-        body = {message_id = "child-note", message_kind = "progress", content = {text = "child progress"}}}), "record on child thread")
+        body = {message_id = "child-note", message_kind = "progress", recipient_ids = {}, content = {text = "child progress"}}}), "record on child thread")
     local token, _ = admit("child-launcher", nil, 1, {"thread_read"})
     local member = tool("child-launcher", token, "thread_read", {cursor = 0, member_thread = child})
     assert(member.ok == true, "a launched child thread was not readable as member_thread: " .. tostring(json.encode(member)))
@@ -502,7 +502,7 @@ local function main()
     assert((tonumber(presented.presented_count) or 0) >= 1 and presented.last_presented_at ~= nil, "presentations counted")
     -- One live binding per attempt and carrier epoch: the same admission
     -- replays it, a different one at the same epoch conflicts.
-    local replayed = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, ttl_ms = 60000}), "replay admission")
+    local replayed = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "capabilities"}, ttl_ms = 60000}), "replay admission")
     assert(replayed.replayed == true and (replayed.binding :: Object).binding_id == binding_a, "same admission replays the live binding")
     assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "a different admission at the same epoch conflicts")
     -- A later carrier epoch's admission supersedes the earlier binding of the same attempt.
@@ -519,7 +519,7 @@ local function main()
     assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "stale admission refused")
     ok(call("bee.gateway.binding:revoke", {binding_id = binding_a}), "revoke the epoch 2 binding")
     assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "stale admission refused even with the newer binding revoked")
-    local reopened_a = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 3, tools = {"thread_read", "thread_wait"}, ttl_ms = 60000}), "admit under epoch 3")
+    local reopened_a = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 3, tools = {"thread_read", "capabilities"}, ttl_ms = 60000}), "admit under epoch 3")
     binding_a = tostring((reopened_a.binding :: Object).binding_id)
     token_a = tostring(ok(materialize("act-a-attempt", 3, binding_a), "materialize under epoch 3").token)
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 200, "the epoch 3 binding's token works")

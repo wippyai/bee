@@ -69,6 +69,8 @@ function M.contracts(): {Contract}
         contract("bee.threads:projection", {"recap_read", "recap_update", "recap_rebuild", "status_read", "status_update", "status_rebuild"}),
         contract("bee.threads:carrier", {"claim", "commit", "checkpoint", "cancel_intent", "cancel_status"}),
         contract("bee.threads:approvals", {"append"}),
+        contract("bee.threads:journal", {"session_create", "session_describe", "session_transition", "work_send", "work_describe",
+            "turn_reserve", "turn_pull", "turn_accept", "work_settle", "operation_lookup", "feed_read"}),
     }
 end
 function M.describe(): Report

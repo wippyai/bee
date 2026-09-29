@@ -425,6 +425,191 @@ CREATE INDEX bee_thread_app_alias_instance
 local APP_ALIAS_LIVE_SQL = [[
 ALTER TABLE bee_thread_app_alias ADD COLUMN active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0, 1));
 ]]
+-- Session events use the canonical thread journal for their workspace
+-- lifetime. Lift the old per-thread sequence ceiling without rewriting any
+-- recorded evidence or dropping its indexes.
+local UNBOUNDED_JOURNAL_SQL = [[
+CREATE TABLE bee_thread_heads_rebuilt (
+  thread_id TEXT PRIMARY KEY,
+  owner_actor TEXT NOT NULL,
+  title TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('open','closed')),
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  head_sequence INTEGER NOT NULL DEFAULT 0 CHECK(head_sequence >= 0),
+  created_at TEXT NOT NULL,
+  workspace_id TEXT CHECK(workspace_id IS NULL OR (length(workspace_id)=32 AND workspace_id NOT GLOB '*[^0-9a-f]*'))
+);
+INSERT INTO bee_thread_heads_rebuilt (thread_id, owner_actor, title, state, revision, head_sequence, created_at, workspace_id)
+  SELECT thread_id, owner_actor, title, state, revision, head_sequence, created_at, workspace_id FROM bee_thread_heads;
+DROP TABLE bee_thread_heads;
+ALTER TABLE bee_thread_heads_rebuilt RENAME TO bee_thread_heads;
+CREATE INDEX bee_thread_heads_workspace ON bee_thread_heads(workspace_id, thread_id) WHERE workspace_id IS NOT NULL;
+
+CREATE TABLE bee_thread_records_rebuilt (
+  record_id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  sequence INTEGER NOT NULL CHECK(sequence > 0),
+  schema_revision TEXT NOT NULL CHECK(schema_revision='bee.thread-record@1'),
+  kind TEXT NOT NULL CHECK(kind IN (
+    'observation','message','action.admitted','attempt.prepared','attempt.started',
+    'turn.request','turn.end','receipt','delivery.mark','request.answered',
+    'approval.request','approval.transition')),
+  producer_id TEXT NOT NULL,
+  source TEXT NOT NULL CHECK(source IN ('stream','hook','transcript','mcp','bee')),
+  event_scope TEXT,
+  event_key TEXT,
+  action_id TEXT,
+  attempt_id TEXT,
+  turn_id TEXT,
+  record_json TEXT NOT NULL CHECK(length(CAST(record_json AS BLOB)) <= 16384),
+  committed_at TEXT NOT NULL,
+  CHECK((event_scope IS NULL AND event_key IS NULL) OR (event_scope IS NOT NULL AND event_key IS NOT NULL)),
+  UNIQUE(thread_id, sequence),
+  UNIQUE(thread_id, producer_id, event_scope, event_key)
+);
+INSERT INTO bee_thread_records_rebuilt (record_id, thread_id, sequence, schema_revision, kind, producer_id, source,
+  event_scope, event_key, action_id, attempt_id, turn_id, record_json, committed_at)
+  SELECT record_id, thread_id, sequence, schema_revision, kind, producer_id, source,
+    event_scope, event_key, action_id, attempt_id, turn_id, record_json, committed_at FROM bee_thread_records;
+DROP TABLE bee_thread_records;
+ALTER TABLE bee_thread_records_rebuilt RENAME TO bee_thread_records;
+CREATE INDEX bee_thread_records_kind ON bee_thread_records(thread_id, kind, sequence);
+CREATE INDEX bee_thread_records_action ON bee_thread_records(thread_id, action_id, sequence);
+
+CREATE TABLE bee_thread_obligations_rebuilt (
+  thread_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  recipient_id TEXT NOT NULL,
+  message_record_id TEXT NOT NULL REFERENCES bee_thread_records(record_id),
+  kind TEXT NOT NULL CHECK(kind IN ('request','progress','reply','notification')),
+  state TEXT NOT NULL CHECK(state IN ('pending','claimed','delivered','answered','uncertain','abandoned')),
+  delivery_id TEXT,
+  reply_record_id TEXT REFERENCES bee_thread_records(record_id),
+  answered_mark_record_id TEXT REFERENCES bee_thread_records(record_id),
+  created_sequence INTEGER NOT NULL CHECK(created_sequence > 0),
+  PRIMARY KEY(thread_id, message_id, recipient_id),
+  FOREIGN KEY(thread_id) REFERENCES bee_thread_heads(thread_id)
+);
+INSERT INTO bee_thread_obligations_rebuilt SELECT * FROM bee_thread_obligations;
+DROP TABLE bee_thread_obligations;
+ALTER TABLE bee_thread_obligations_rebuilt RENAME TO bee_thread_obligations;
+CREATE INDEX bee_thread_obligations_recipient ON bee_thread_obligations(thread_id, recipient_id, state, created_sequence);
+
+CREATE TABLE bee_thread_subscriptions_rebuilt (
+  subscription_id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  actor TEXT NOT NULL,
+  consumer_id TEXT NOT NULL,
+  filter_digest TEXT NOT NULL,
+  filter_json TEXT NOT NULL,
+  durability TEXT NOT NULL CHECK(durability IN ('durable','reconstructible')),
+  after_sequence INTEGER NOT NULL CHECK(after_sequence >= 0),
+  lease_generation INTEGER NOT NULL CHECK(lease_generation > 0),
+  owner_incarnation INTEGER NOT NULL CHECK(owner_incarnation > 0),
+  created_at TEXT NOT NULL,
+  closed_at TEXT
+);
+INSERT INTO bee_thread_subscriptions_rebuilt SELECT * FROM bee_thread_subscriptions;
+DROP TABLE bee_thread_subscriptions;
+ALTER TABLE bee_thread_subscriptions_rebuilt RENAME TO bee_thread_subscriptions;
+CREATE UNIQUE INDEX bee_thread_subscription_identity ON bee_thread_subscriptions(thread_id, actor, consumer_id, filter_digest) WHERE closed_at IS NULL;
+
+CREATE TABLE bee_thread_subscription_pages_rebuilt (
+  page_id TEXT PRIMARY KEY,
+  subscription_id TEXT NOT NULL REFERENCES bee_thread_subscriptions(subscription_id),
+  lease_generation INTEGER NOT NULL CHECK(lease_generation > 0),
+  from_sequence INTEGER NOT NULL CHECK(from_sequence >= 0),
+  scanned_through INTEGER NOT NULL CHECK(scanned_through >= 0),
+  filter_digest TEXT NOT NULL,
+  acknowledged INTEGER NOT NULL CHECK(acknowledged IN (0,1)),
+  handed_at TEXT NOT NULL
+);
+INSERT INTO bee_thread_subscription_pages_rebuilt SELECT * FROM bee_thread_subscription_pages;
+DROP TABLE bee_thread_subscription_pages;
+ALTER TABLE bee_thread_subscription_pages_rebuilt RENAME TO bee_thread_subscription_pages;
+CREATE UNIQUE INDEX bee_thread_outstanding_page ON bee_thread_subscription_pages(subscription_id) WHERE acknowledged=0;
+
+CREATE TABLE bee_thread_projections_rebuilt (
+  thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  kind TEXT NOT NULL,
+  through_sequence INTEGER NOT NULL CHECK(through_sequence >= 0),
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  checkpoint_json TEXT NOT NULL,
+  checkpoint_digest TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(thread_id, kind)
+);
+INSERT INTO bee_thread_projections_rebuilt SELECT * FROM bee_thread_projections;
+DROP TABLE bee_thread_projections;
+ALTER TABLE bee_thread_projections_rebuilt RENAME TO bee_thread_projections;
+]]
+local SESSION_WORK_SQL = [[
+CREATE TABLE bee_sessions (
+  session_ref TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL UNIQUE REFERENCES bee_thread_heads(thread_id),
+  workspace_id TEXT NOT NULL CHECK(length(workspace_id)=32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+  owner_actor TEXT NOT NULL,
+  title TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('active','suspended','closing','closed')),
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(session_ref, workspace_id)
+);
+CREATE INDEX bee_sessions_workspace ON bee_sessions(workspace_id, state, created_at);
+CREATE TABLE bee_session_work (
+  work_ref TEXT PRIMARY KEY,
+  session_ref TEXT NOT NULL,
+  workspace_id TEXT NOT NULL CHECK(length(workspace_id)=32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+  sequence INTEGER NOT NULL CHECK(sequence > 0),
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  phase TEXT NOT NULL CHECK(phase IN ('queued','reserved','accepted','settled')),
+  input_json TEXT NOT NULL,
+  input_digest TEXT NOT NULL,
+  output_schema TEXT NOT NULL,
+  after_json TEXT NOT NULL,
+  result_json TEXT,
+  operation_ref TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(session_ref, sequence),
+  UNIQUE(work_ref, session_ref),
+  FOREIGN KEY(session_ref, workspace_id) REFERENCES bee_sessions(session_ref, workspace_id),
+  CHECK((phase='settled') = (result_json IS NOT NULL))
+);
+CREATE INDEX bee_session_work_queue ON bee_session_work(session_ref, phase, sequence);
+CREATE TABLE bee_session_turns (
+  turn_ref TEXT PRIMARY KEY,
+  session_ref TEXT NOT NULL REFERENCES bee_sessions(session_ref),
+  work_ref TEXT NOT NULL UNIQUE,
+  claim_token TEXT NOT NULL UNIQUE,
+  owner_epoch INTEGER NOT NULL CHECK(owner_epoch > 0),
+  input_digest TEXT NOT NULL,
+  phase TEXT NOT NULL CHECK(phase IN ('reserved','accepted','settled')),
+  checkpoint_json TEXT,
+  reserve_record_id TEXT NOT NULL UNIQUE REFERENCES bee_thread_records(record_id),
+  accept_record_id TEXT UNIQUE REFERENCES bee_thread_records(record_id),
+  settle_record_id TEXT UNIQUE REFERENCES bee_thread_records(record_id),
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(work_ref, session_ref) REFERENCES bee_session_work(work_ref, session_ref),
+  CHECK((phase='reserved' AND accept_record_id IS NULL AND settle_record_id IS NULL)
+     OR (phase='accepted' AND accept_record_id IS NOT NULL AND settle_record_id IS NULL)
+     OR (phase='settled' AND accept_record_id IS NOT NULL AND settle_record_id IS NOT NULL))
+);
+CREATE UNIQUE INDEX bee_session_live_turn ON bee_session_turns(session_ref) WHERE phase IN ('reserved','accepted');
+CREATE TABLE bee_session_operations (
+  workspace_id TEXT NOT NULL CHECK(length(workspace_id)=32 AND workspace_id NOT GLOB '*[^0-9a-f]*'),
+  owner_actor TEXT NOT NULL,
+  operation_key TEXT NOT NULL,
+  operation_ref TEXT NOT NULL UNIQUE,
+  operation TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  target_ref TEXT,
+  receipt_json TEXT NOT NULL,
+  committed_at TEXT NOT NULL,
+  PRIMARY KEY(workspace_id, owner_actor, operation_key)
+);
+CREATE INDEX bee_session_operations_ref ON bee_session_operations(operation_ref);
+]]
 -- A notice is owed once to a watcher on its own thread when a target action
 -- ends a turn or an attempt; after_sequence is the scan cursor over that
 -- action's records on the target thread.
@@ -641,6 +826,8 @@ local list: {Migration} = {
     {id = 17, name = "attempt_notices", sql = ATTEMPT_NOTICES_SQL, rebuild = true},
     {id = 18, name = "app_alias", sql = APP_ALIAS_SQL, rebuild = false},
     {id = 19, name = "app_alias_live_authorization", sql = APP_ALIAS_LIVE_SQL, rebuild = false},
+    {id = 20, name = "unbounded_journal", sql = UNBOUNDED_JOURNAL_SQL, rebuild = true},
+    {id = 21, name = "sessions_work_store", sql = SESSION_WORK_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

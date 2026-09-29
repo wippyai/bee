@@ -335,6 +335,47 @@ entries:
       request_turn: bee.threads.service:request_turn
       end_turn: bee.threads.service:end_turn
       receipt: bee.threads.service:receipt
+- name: journal
+  kind: contract.definition
+  methods:
+  - name: session_create
+    description: Create a durable session in the canonical thread journal
+  - name: session_describe
+    description: Read a session and its current work summary
+  - name: session_transition
+    description: Change session lifecycle at a durable revision
+  - name: work_send
+    description: Commit immutable work with same-workspace dependencies gated by successful results
+  - name: work_describe
+    description: Read a work phase and its result when settled
+  - name: turn_reserve
+    description: Reserve the FIFO eligible work under a fenced owner epoch
+  - name: turn_pull
+    description: Pull the exact immutable envelope for a reserved turn
+  - name: turn_accept
+    description: Commit acceptance of the reserved input checkpoint
+  - name: work_settle
+    description: Settle one accepted turn with its per-work result
+  - name: operation_lookup
+    description: Recover a caller-scoped operation receipt by key
+  - name: feed_read
+    description: Read canonical session events after an owner-local sequence
+- name: journal_local
+  kind: contract.binding
+  contracts:
+  - contract: bee.threads:journal
+    methods:
+      session_create: bee.threads.service:session_create
+      session_describe: bee.threads.service:session_describe
+      session_transition: bee.threads.service:session_transition
+      work_send: bee.threads.service:work_send
+      work_describe: bee.threads.service:work_describe
+      turn_reserve: bee.threads.service:turn_reserve
+      turn_pull: bee.threads.service:turn_pull
+      turn_accept: bee.threads.service:turn_accept
+      work_settle: bee.threads.service:work_settle
+      operation_lookup: bee.threads.service:operation_lookup
+      feed_read: bee.threads.service:feed_read
 - name: owner
   kind: process.lua
   source: file://owner.lua

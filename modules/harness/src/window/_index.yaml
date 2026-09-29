@@ -135,7 +135,6 @@ entries:
     definition: bee.harness.launch:definitions
     protocol: bee.harness.profiles:protocol
     editor: bee.harness.window:profile_editor
-    selection: bee.harness.launch:selection
 - name: profile_view
   kind: library.lua
   source: file://profile_view.lua

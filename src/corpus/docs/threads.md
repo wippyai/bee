@@ -211,25 +211,7 @@ the referenced request `replied` in the same local transaction. Its explicit
 verifies the two admitted actions and the request before accepting it. Ordinary
 `record` replies still settle only same-thread recipient obligations.
 
-The owner wakes the thread waiter on an inbox commit. A fixture-enabled
-Claude structured carrier checks the oldest item on wake and at a bounded
-poll interval, then writes its identified stream-json user message between
-turns. Its write journal and transport receipt survive carrier replacement;
-acknowledgment still requires the agent's own `inbox_ack` or reply. Shipped
-production launch policies do not enable this push path. A production policy
-enables it with `push_acceptance`: the carrier admits the push only where the
-pinned binding, profile, adapter and executable measurement still match the
-host's acceptance record, and refuses a swapped executable before any launch.
-
-A fresh attempt on a structured driver without a between-turns controller
-starts carrying its oldest outstanding inbox item in the brief: Codex, agy,
-Grok, Muse and OpenCode launches pass the brief as an argument and never read
-stdin, so the
-brief is the only channel. Claude keeps its controller push and windows keep
-their hook boundary; resumed attempts keep their provider session, since no
-fixture proves inbox-carry combined with those. A fresh sequential attempt on
-an already-admitted action attaches to its own action and chains the latest
-settled attempt; anything else fails closed with the admit refusal. PTY
+The owner wakes the thread waiter on an inbox commit. PTY
 windows currently need an explicit `session_inbox` call. Cross-node sends
 persist to the durable forwarding outbox addressed at their node instead of
 committing locally; the destination admits `inbox_describe` and `inbox_send`

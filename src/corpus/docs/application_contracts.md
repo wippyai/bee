@@ -136,53 +136,31 @@ does not mutate thread obligations or delivery history.
 
 ## Starting managed agents
 
-An application starts a managed agent with `bee.application:agents`, which
-calls `bee.harness.launch:agent_call` as the application's own actor. The host
-decides what it may start: an approved `agents.launch` grant installs one
-generated policy that carries both the facade `funcs.call` and
-`bee.harness.launch` on each named definition, so the installed application
-reaches the facade and the facade then checks the same policy for the exact
-definition. The request is
-`bee.application:agent_protocol`'s launch: `definition_ref`, `brief`,
-`idempotency_key` and optional `workspace_id`, `saved_profile_id` with
-`saved_profile_revision`, `thread`, `workdir` and `placement`. `thread`,
-`workdir` and `placement` take effect only where the definition and its launch
-policy allow the override. A window definition is refused with
-`LAUNCH_MODE_UNSUPPORTED`; launch a batch or session definition.
+An application talks to a managed agent through `bee.application:sessions`,
+which calls the `bee.sessions` owner contracts as the application's own actor.
+The host decides what it may start: an approved `agents.launch` grant installs
+one generated policy that opens the sessions contracts and carries
+`bee.harness.launch` on each named definition.
 
 ```lua
-local agents = require("agents")   -- imports: agents: bee.application:agents
+local sessions = require("sessions")   -- imports: sessions: bee.application:sessions
 
-local run, fault = agents.launch({
-    definition_ref = "bee.driver.codex:research_batch",
-    brief = "Summarize the build scripts in this folder.",
-    idempotency_key = "summarize-build-1",
-    workdir = {root_ref = "bee.env:workspace_root", path = "legacy/app"},
-    thread = {thread_id = launch.thread_id},
+local called, fault = sessions.call({
+    definition = "bee.driver.codex:research_batch",
+    input = "Summarize the build scripts in this folder.",
+    operation_key = "summarize-build-1",
+    timeout_ms = 60000,
 })
-if not run then return fault.code .. ": " .. fault.message end
-local status = agents.wait(run, 300000)       -- blocks in slices of at most 60 s
-if status and status.state ~= "ended" then
-    agents.cancel(run)                          -- NOT_STARTED until the child runs
-end
+if not called then return fault.code .. ": " .. fault.message end
 ```
 
-`launch` returns `{thread_id, action_id, attempt_id, definition_ref, title,
-brief}`; the same `idempotency_key` replays the same run. `status`, `wait` and
-`cancel` each return `status, fault`; on failure status is nil and fault is
-`{code, message}`. The status shape is `{thread_id, attempt_id, state,
-outcome?, answer?}` with `state` equal to `starting`, `running`, `cancelling`
-or `ended`. These calls read the child's thread and need the application to
-belong to it, as its creator or a member. `wait` watches the thread and
-returns at the deadline with the last status. `status`, `wait` and `cancel`
-need only `run.thread_id` and `run.attempt_id`; keep the whole launch result
-for display and later calls. `wait` blocks the calling process in slices of at
-most 60 seconds. A UI event loop can call it from a `coroutine.spawn` worker
-to keep drawing. `thread = {thread_id = id}` selects an existing thread;
-`thread = {title = text}` asks for a new one. `cancel` stops a
-running child through the placement that started it, which accepts only the
-attempt's owner; the attempt then settles `cancelled`. A run whose child has
-not started is refused with `NOT_STARTED`.
+`sessions.call` opens a session, sends one piece of work and awaits its
+result. A reusable session comes from `sessions.open`; `session:send` commits
+work and returns a work handle, `work:await` returns `ready`, `pending`,
+`blocked` or `uncertain`, and `cancel` and `close` stop one work or the
+session. Every mutation carries a caller-owned `operation_key`; the same key
+replays the same operation. A busy session queues later work and nothing is
+injected into a running process.
 
 Launch definitions are registry entries with `meta.type = bee.launch_definition`;
 a definition ID alone does not reveal whether the
@@ -196,20 +174,8 @@ public API to list the definitions it may launch or saved profile IDs and
 revisions. The Agent app manages saved profiles; a caller must obtain an exact
 ID and revision from the person, and the host still decides admission.
 
-The application `agents` helper exposes launch, status, wait and cancel. It
-does not expose child thread records, intermediate output, a steering helper
-or a `thread_read` equivalent. An application with the host-generated
-`threads.message` grant for `scope: children` can steer one of its child
-actions through `bee.threads.service:send`, using a typed `request` message
-addressed to that action. The grant permits `send` and `notify`; it does not
-permit `bee.threads.service:record`. `notify` registers a one-shot notice on
-the caller's own thread, so it does not carry steering text. The `send`
-request includes the child `thread_id`, a unique `idempotency_key`, a stable
-`caller_node_id`, the canonical message, and its SHA-256 `payload_digest`.
-Address the request with the child's `principal_id` in `recipient_ids` and
-its `action_id` in `recipient_action_ids`; obtain the caller node ID with
-`system.node.id()`.
-See [Threads](threads.md#application-child-messages) for the message envelope.
+The `sessions` helper does not expose child thread records or intermediate
+output; transcripts are read through the Threads record surface.
 
 `client.thread_request` routes operations for an authenticated initiating
 thread through the broker when a host grants that thread access; it does not

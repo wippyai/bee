@@ -1,6 +1,6 @@
 -- MIT. Read-only launch discovery behind the gateway's launch_definitions
 -- tool: the caller's own launch policy allow-list names exactly the returned
--- definitions, each with the placements a launch accepts, the overrides its
+-- definitions, their resolved placement and readiness, the overrides its
 -- definition admits and the saved profiles held for it. The tests drive the
 -- same public facade the gateway endpoint calls, under the facade's
 -- host-named policy, with the authenticated binding supplied as call context.
@@ -40,14 +40,20 @@ local function define_tests()
             test.eq(value.workspace_id, WORKSPACE)
             test.eq(value.policy_ref, ALLOWING_POLICY)
             local definitions = value.definitions :: {Object}
-            test.eq(#definitions, 1)
-            local definition = definitions[1]
+            test.eq(#definitions, 0)
+            test.eq(value.unavailable_count, 1)
+            local unavailable = discover(ALLOWING_POLICY, {show_unavailable = true})
+            test.eq(unavailable.ok, true)
+            local listed = (unavailable.value :: Object).definitions :: {Object}
+            test.eq(#listed, 1)
+            local definition = listed[1]
             test.eq(definition.definition_ref, PERMITTED)
             test.eq(definition.title, "Claude protocol fixture")
             test.eq(definition.default_mode, "batch")
             test.eq(definition.profile_id, "batch")
             local placements = definition.placements :: {string}
-            test.eq(#placements, 2)
+            test.eq(#placements, 0)
+            test.eq(definition.status, "unconfigured")
             local overrides = definition.allowed_overrides :: {string}
             local briefed = false
             for _, override in ipairs(overrides) do if override == "brief" then briefed = true end end
@@ -56,6 +62,7 @@ local function define_tests()
             test.not_nil(definition.thread_policy)
             test.eq(type(value.saved_profiles), "table")
             test.eq(type(value.profiles_complete), "boolean")
+            test.eq(value.unavailable_count, 1)
         end)
         test.it("returns no definitions for an empty allow-list and refuses unknown fields", function()
             local reply = discover(DENYING_POLICY, {})
@@ -64,6 +71,9 @@ local function define_tests()
             local refused = discover(ALLOWING_POLICY, {definition_ref = PERMITTED})
             test.eq(refused.ok, false)
             test.eq(tostring((refused.error :: Object).code), "INVALID")
+            local bad_filter = discover(ALLOWING_POLICY, {show_unavailable = "yes"})
+            test.eq(bad_filter.ok, false)
+            test.eq(tostring((bad_filter.error :: Object).code), "INVALID")
         end)
     end)
 end

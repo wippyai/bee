@@ -67,6 +67,37 @@ entries:
     bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     profiles: bee.harness.profiles:protocol
+    readiness: bee.harness.launch:readiness
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  modules: [env, exec, fs, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    descriptor: bee.driver:descriptor
+    driver_resolver: bee.driver:resolver
+    driver_types: bee.driver:types
+    locate: bee.driver:locate
+    quote: bee.driver.kit:quote
+    resources: bee.placement.native:resources
+- name: locate_probe
+  kind: function.lua
+  source: file://locate_probe.lua
+  method: handle
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    locator: bee.harness.launch:locate
+  security:
+    policies: [bee.harness.security:launch_locate_probe_policy]
+- name: readiness
+  kind: library.lua
+  source: file://readiness.lua
+  modules: [funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    driver_locate: bee.driver:locate
+    driver_types: bee.driver:types
 - name: setup_backend
   kind: function.lua
   source: file://setup_backend.lua
@@ -180,9 +211,9 @@ entries:
     type: tool
     title: List admitted launch definitions
     llm_alias: BeeLaunchDefinitions
-    llm_description: Read-only discovery for the caller's own launch allow-list. Returns the launch definitions the caller's host-selected launch policy admits, with each definition's title, default mode, driver profile, policy, admitted overrides, workdir and thread policies and the placements a launch accepts, plus the saved profile IDs and revisions held for those definitions in the workspace. Starts nothing and grants nothing.
+    llm_description: Read-only, fresh readiness discovery for the caller's launch allow-list. Returns ready definitions by default with the one placement each plan resolved to; set show_unavailable to include refused definitions and reasons. Repeating the call probes readiness again. Starts nothing and grants nothing.
     input_schema: |
-      {"type":"object","additionalProperties":false,"properties":{"workspace_id":{"type":"string","minLength":32,"maxLength":32}}}
+      {"type":"object","additionalProperties":false,"properties":{"workspace_id":{"type":"string","minLength":32,"maxLength":32},"show_unavailable":{"type":"boolean"}}}
   security:
     policies: [bee.harness.launch:launch_definitions_facade_policy]
 - name: launch_definitions_backend
@@ -194,6 +225,8 @@ entries:
     bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     definitions: bee.harness.launch:definitions
+    admission: bee.harness.launch:admission
+    readiness: bee.harness.launch:readiness
   meta:
     type: internal
 - name: launch_definitions_facade_policy
@@ -263,7 +296,7 @@ entries:
       bee.threads.service:get, bee.threads.service:create, bee.threads.service:admit_action, bee.threads.service:end_turn, bee.threads.service:receipt, bee.resources.binding:grant, bee.credentials.binding:issue_projection, bee.threads.carrier:checkpoint,
       bee.threads.carrier:cancel_intent, bee.threads.carrier:cancel_status,
       bee.resources.binding:associate, bee.credentials.binding:define, bee.threads.delivery:watch, bee.placement.native.binding:status, bee.placement.native.binding:stop,
-      bee.placement.native.binding:evidence]
+      bee.placement.native.binding:evidence, bee.harness.launch:locate_probe]
     effect: allow
 - name: agent_launch_execution_action_policy
   kind: security.policy.expr

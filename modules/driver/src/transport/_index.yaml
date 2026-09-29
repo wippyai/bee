@@ -1,6 +1,11 @@
 version: '1.0'
 namespace: bee.driver.transport
 entries:
+- name: jsonl
+  kind: library.lua
+  source: file://jsonl.lua
+  imports:
+    stream_json: bee.driver.transport:stream_json
 - name: stream_json
   kind: library.lua
   source: file://stream_json.lua

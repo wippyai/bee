@@ -97,6 +97,12 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
                 if not entry or entry.kind ~= "function.lua" then return nil, "binding " .. binding_ref .. " method " .. name .. " is not a function", nil end
                 if name == "configure" then target = method end
             end
+            if methods.locate ~= nil then
+                local method = bounds.id(methods.locate)
+                if not method then return nil, "binding " .. binding_ref .. " binds no locate", nil end
+                local entry = M.entry(pinned, method)
+                if not entry or entry.kind ~= "function.lua" then return nil, "binding " .. binding_ref .. " method locate is not a function", nil end
+            end
         end
     end
     if not target then return nil, "binding " .. binding_ref .. " binds no configure", nil end

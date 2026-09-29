@@ -56,6 +56,37 @@ entries:
     grok_launch: bee.driver.grok:launch
     muse_launch: bee.driver.muse:launch
     opencode_launch: bee.driver.opencode:launch
+- name: locate_test
+  kind: function.lua
+  source: file://locate_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    locate: bee.driver:locate
+    claude: bee.driver.claude:locate
+    codex: bee.driver.codex:locate
+    opencode: bee.driver.opencode:locate
+    agy: bee.driver.agy:locate
+    grok: bee.driver.grok:locate
+    muse: bee.driver.muse:locate
+- name: descriptor_test
+  kind: function.lua
+  source: file://descriptor_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test
+    descriptor: bee.driver:descriptor
+- name: universal_test
+  kind: function.lua
+  source: file://universal_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    universal: bee.driver:universal
 - name: codex_config_test
   kind: function.lua
   source: file://codex_config_test.lua

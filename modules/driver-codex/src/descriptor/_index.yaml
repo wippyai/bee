@@ -1,0 +1,82 @@
+version: '1.0'
+namespace: bee.driver.codex.descriptor
+entries:
+- name: cli
+  kind: registry.entry
+  meta:
+    type: bee.driver.cli_descriptor
+    comment: Codex CLI command, JSONL codec, login evidence and version probe
+  data:
+    schema_revision: bee.driver.cli-descriptor@1
+    provider: codex
+    executable: codex
+    version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
+    login_evidence: {path: .codex/auth.json, command: codex login, variable: CODEX_HOME, directory: .codex}
+    platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
+    codec: codex-jsonl
+    json_paths:
+      resume_id: [thread, started, thread_id]
+      result_text: [item, text]
+      errors: [turn, failed, error, message]
+      usage: [turn, completed, usage]
+    configure: codex
+    options:
+      profiles: [window, batch]
+      fields:
+        sandbox: {type: enum, values: [read-only, workspace-write], default: read-only, invalid: 'sandbox is not one Bee admits'}
+        resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref is not an identifier'}
+        gateway_tools: {type: ids, default: []}
+        gateway_hooks: {type: ids, transform: presence, default: []}
+        effort: {type: enum, values: [low, medium, high, xhigh, max], invalid: 'effort is not one Bee admits'}
+        config_profile: {type: codex_profile, invalid: 'config_profile must be a plain Codex profile name'}
+      rules: []
+    flags: {}
+    argv_templates:
+      window:
+        argv:
+        - {if: config_profile, then: [--profile, {field: config_profile}]}
+        - {if: effort, then: [--config, {format: 'model_reasoning_effort="{effort}"'}]}
+        - --sandbox
+        - {field: sandbox}
+        - {if: resume_ref, then: [resume, {field: resume_ref}]}
+        - {if: brief, then: [--, {field: brief}]}
+        readiness: terminal:attached
+        provider_home_private: false
+        login: true
+      first_turn:
+        argv:
+        - {if: config_profile, then: [--profile, {field: config_profile}]}
+        - {if: effort, then: [--config, {format: 'model_reasoning_effort="{effort}"'}]}
+        - exec
+        - --json
+        - --skip-git-repo-check
+        - --sandbox
+        - {field: sandbox}
+        - "-"
+        stdin: {field: brief}
+        stdin_eof: true
+        readiness: protocol:thread.started
+        provider_home_private: true
+      resume:
+        argv:
+        - {if: config_profile, then: [--profile, {field: config_profile}]}
+        - {if: effort, then: [--config, {format: 'model_reasoning_effort="{effort}"'}]}
+        - --sandbox
+        - {field: sandbox}
+        - exec
+        - resume
+        - {field: resume_ref}
+        - --json
+        - --skip-git-repo-check
+        - "-"
+        stdin: {field: brief}
+        stdin_eof: true
+        readiness: protocol:thread.started
+        provider_home_private: true
+    provider_home:
+      variable: CODEX_HOME
+      directory: .codex
+      required_profile_file: {field: config_profile, variable: CODEX_HOME, path_template: '{config_profile}.config.toml', default_directory: .codex, window_only: true}
+      files:
+      - {source_path: .codex/auth.json, path: .codex/auth.json, kind: login, optional: true, write_back: true}
+      - {source_path: .codex/config.toml, path: .codex/config.toml, kind: config, optional: true, write_back: false}

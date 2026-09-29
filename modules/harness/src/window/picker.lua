@@ -98,6 +98,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local preferences = appearance.defaults()
     local listed: selection.Choices = {items = {}, unavailable = 0}
     local selected: integer = 0
+    local show_unavailable = false
     local status = "Loading profiles…"
     local loading = false
     local reload_pending = false
@@ -118,7 +119,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         status = "Loading profiles…"
         dirty = true
         coroutine.spawn(function()
-            local choices, load_error = selection.snapshot(launch.workspace_id)
+            local choices, load_error = selection.snapshot(launch.workspace_id, show_unavailable)
             if running and serial == load_serial then
                 loads:send({serial = serial, choices = choices, error = load_error})
             end
@@ -132,7 +133,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 edit_frame = profile_view.draw(width, height, preferences, editing)
                 rows = edit_frame.rows
             else
-                drawn = view.draw(width, height, preferences, listed, selected, status, activating)
+                drawn = view.draw(width, height, preferences, listed, selected, status, activating, show_unavailable)
                 rows = drawn.rows
             end
             assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -242,6 +243,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.key_type == "down" and selected > 0 and not activating then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
                     elseif data.key_type == "enter" and not activating then activate = true
                     elseif data.key == "r" and not data.ctrl and not data.alt and not activating then refresh = true
+                    elseif data.key == "u" and not data.ctrl and not data.alt and not activating then
+                        show_unavailable = not show_unavailable; refresh = true
                     elseif data.key == "e" and not data.ctrl and not data.alt and not activating then edit = true
                     elseif data.key == "n" and not data.ctrl and not data.alt and not activating then edit = true; duplicate = true end
                 elseif data.type == "mouse" then
@@ -276,7 +279,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end
         if activate and not loading and not activating and drawn.capacity > 0 then
             local choice = listed.items[selected]
-            if choice and not choice.unavailable then
+            if choice and choice.status == "ready" then
                 if not request_id or request_definition ~= choice.definition_ref or request_plan ~= choice.plan_digest then
                     request_id = assert(uuid.v7())
                     request_definition, request_plan = choice.definition_ref, choice.plan_digest

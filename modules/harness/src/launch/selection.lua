@@ -9,12 +9,15 @@ local policy = require("policy")
 local profiles = require("profiles")
 local funcs = require("funcs")
 local registry = require("registry")
+local readiness_client = require("readiness")
 local M = {}
 M.MAX_DEFINITIONS = 64
 M.MAX_PROFILE_PAGES = 64
 local PROFILE_CALL = "bee.harness.profiles:call"
+type ChoiceStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
 -- workdir and thread_id are a saved profile's launch choices.
-type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string, unavailable: string?, summary: string?,
+type Choice = {definition_ref: string, title: string, launch_id: string, plan_digest: string,
+    status: "ready" | "missing" | "unconfigured" | "incompatible" | "unknown", unavailable: string?, summary: string?,
     saved_profile_id: string?, saved_profile_revision: integer?, workdir: profiles.Workdir?, thread_id: string?}
 type Choices = {items: {Choice}, unavailable: integer}
 type Command = {definition_ref: string, fullscreen: boolean}
@@ -50,11 +53,40 @@ function M.command(name: string): (Command?, string?)
     return selected, nil
 end
 
-function M.read(pinned: catalog.Pinned): (Choices?, string?)
+local function readiness(refused: unknown): (ChoiceStatus, string)
+    local result = bounds.object(refused)
+    local fault = result and bounds.object(result.error) or nil
+    local code = fault and bounds.id(fault.code) or nil
+    local message = fault and bounds.text(fault.message, 512) or nil
+    local status = "unknown"
+    if code == "UNAVAILABLE" then status = "unconfigured"
+    elseif code == "UNSUPPORTED_CAPABILITY" or code == "INVALID" then status = "incompatible" end
+    return status :: ChoiceStatus, message or "Profile readiness is unknown"
+end
+
+local function route_status(pinned: catalog.Pinned, definition: definitions.Definition, plan: unknown, refused: unknown,
+    cache: readiness_client.Cache): (ChoiceStatus, string?)
+    local route_status: ChoiceStatus = plan and "ready" or readiness(refused)
+    local route_reason: string? = nil
+    if not plan then local _, reason = readiness(refused); route_reason = reason end
+    local probe = readiness_client.probe(definition.binding_ref, definition.profile_id, cache)
+    if probe.error then
+        if plan then return "unknown", probe.error end
+        return route_status, route_reason
+    end
+    local located = probe.result
+    if not probe.located or not located then return route_status, route_reason end
+    if located.status == "ready" then return route_status, route_reason end
+    if located.status == "unknown" and not plan then return route_status, route_reason end
+    return located.status, located.reason or "Driver readiness is unknown"
+end
+
+function M.read(pinned: catalog.Pinned, show_unavailable: boolean?, probe_cache: readiness_client.Cache?): (Choices?, string?)
     local found, find_error = pinned:find({["meta.type"] = definitions.TYPE})
     if find_error or not found then return nil, "Agent profiles could not be read" end
     if #found > M.MAX_DEFINITIONS then return nil, "Too many agent profiles to list" end
     local result: Choices = {items = {}, unavailable = 0}
+    local cache = probe_cache or readiness_client.new_cache()
     for _, raw in ipairs(found) do
         local entry = bounds.object(raw)
         local ref = entry and bounds.id(entry.id) or nil
@@ -64,7 +96,8 @@ function M.read(pinned: catalog.Pinned): (Choices?, string?)
                 result.unavailable = result.unavailable + 1
             elseif definition.presentation.start_menu and definition.default_mode == "window" then
                 local plan, refused = admission.read(pinned, ref, "window")
-                if plan then
+                local status, reason = route_status(pinned, definition, plan, refused, cache)
+                if plan and status == "ready" then
                     local policy_entry = catalog.entry(pinned, definition.policy_ref)
                     if not policy_entry then return nil, "Selected profile policy could not be read" end
                     local selected_policy, policy_error = policy.decode(definition.policy_ref, policy_entry)
@@ -75,13 +108,13 @@ function M.read(pinned: catalog.Pinned): (Choices?, string?)
                     local tools = #selected_policy.gateway_tools
                     local summary = location .. " · " .. guidance .. " · " .. tostring(tools) .. " tools configured"
                     result.items[#result.items + 1] = {definition_ref = ref, title = definition.title,
-                        launch_id = definition.launch_id, plan_digest = plan.plan_digest, summary = summary}
+                        launch_id = definition.launch_id, plan_digest = plan.plan_digest, status = "ready", summary = summary}
                 else
                     result.unavailable = result.unavailable + 1
-                    local fault = refused and refused.error
-                    result.items[#result.items + 1] = {definition_ref = ref, title = definition.title,
-                        launch_id = definition.launch_id, plan_digest = "",
-                        unavailable = fault and fault.message or "Profile is unavailable on this node"}
+                    if show_unavailable == true then
+                        result.items[#result.items + 1] = {definition_ref = ref, title = definition.title,
+                            launch_id = definition.launch_id, plan_digest = "", status = status, unavailable = reason}
+                    end
                 end
             end
         else
@@ -94,11 +127,11 @@ function M.read(pinned: catalog.Pinned): (Choices?, string?)
     end)
     return result, nil
 end
-function M.snapshot(workspace_id: string?): (Choices?, string?)
-    if workspace_id ~= nil then return M.workspace(workspace_id) end
+function M.snapshot(workspace_id: string?, show_unavailable: boolean?): (Choices?, string?)
+    if workspace_id ~= nil then return M.workspace(workspace_id, show_unavailable) end
     local pinned = catalog.pin()
     if not pinned then return nil, "Agent profiles could not be read" end
-    return M.read(pinned)
+    return M.read(pinned, show_unavailable)
 end
 
 type ProfileRow = {workspace_id: string, profile_id: string, revision: integer, tombstone: boolean, profile: profiles.Profile?}
@@ -196,7 +229,8 @@ end
 function M.row_detail(driver_title: string): string
     return "Saved profile · " .. driver_title
 end
-local function saved_choice(pinned: catalog.Pinned, workspace: string, row: ProfileRow): (Choice?, string?)
+local function saved_choice(pinned: catalog.Pinned, workspace: string, row: ProfileRow, show_unavailable: boolean,
+    cache: readiness_client.Cache): (Choice?, string?)
     if row.tombstone or not row.profile then return nil, nil end
     local profile = row.profile
     local definition_ref = profile.definition_ref
@@ -207,37 +241,33 @@ local function saved_choice(pinned: catalog.Pinned, workspace: string, row: Prof
     if definition.default_mode ~= "window" or not definition.presentation.start_menu then return nil, nil end
     local plan, refused = admission.resolve(definition_ref, "window", workspace, row.profile_id, row.revision)
     local digest = plan_digest(plan, definition_ref, row.profile_id, row.revision)
+    local status, reason = route_status(pinned, definition, plan, refused, cache)
     local detail = M.row_detail(definition.title)
     local workdir = profile.workdir
     if workdir then detail = detail .. " · " .. workdir.root_ref .. (workdir.path ~= "" and "/" .. workdir.path or "") end
     local thread = profile.thread
-    if digest then
-        return {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = digest,
+    if digest and status == "ready" then
+        local ready: Choice = {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = digest, status = "ready",
             saved_profile_id = row.profile_id, saved_profile_revision = row.revision, summary = detail,
-            workdir = workdir, thread_id = thread and thread.thread_id or nil}, nil
+            workdir = workdir, thread_id = thread and thread.thread_id or nil}
+        return ready, nil
     end
-    local reason = "Profile is unavailable on this node"
-    if refused then
-        local fault = bounds.object(refused.error)
-        if fault then
-            local message = bounds.text(fault.message, 512)
-            if message then reason = message end
-        end
-    end
-    return {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = "",
-        unavailable = reason, saved_profile_id = row.profile_id, saved_profile_revision = row.revision,
-        summary = detail}, nil
+    if not show_unavailable then return nil, nil end
+    return {definition_ref = definition_ref, title = profile.title, launch_id = definition.launch_id, plan_digest = "", status = status,
+        unavailable = reason, saved_profile_id = row.profile_id, saved_profile_revision = row.revision, summary = detail}, nil
 end
 
 -- Extends the registry defaults with authorized, workspace-scoped saved
 -- profiles. The store cursor pins one snapshot; malformed or changing pages
 -- are refused without exposing partial saved state.
-function M.workspace(workspace_id: string): (Choices?, string?)
+function M.workspace(workspace_id: string, show_unavailable: boolean?): (Choices?, string?)
     local workspace = bounds.id(workspace_id)
     if not workspace then return nil, "workspace_id must be an identifier" end
+    local include = show_unavailable == true
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, "Agent profiles could not be read" end
-    local defaults, defaults_error = M.read(pinned)
+    local cache = readiness_client.new_cache()
+    local defaults, defaults_error = M.read(pinned, include, cache)
     if not defaults then return nil, defaults_error or "Agent profiles could not be read" end
     local rows: {ProfileRow} = {}
     local seen: {[string]: boolean} = {}
@@ -269,11 +299,13 @@ function M.workspace(workspace_id: string): (Choices?, string?)
     local merged: Choices = {items = {}, unavailable = defaults.unavailable}
     for _, item in ipairs(defaults.items) do merged.items[#merged.items + 1] = item end
     for _, row in ipairs(rows) do
-        local choice = saved_choice(pinned, workspace, row)
+        local choice = saved_choice(pinned, workspace, row, true, cache)
         if choice then
-            if #merged.items >= M.MAX_DEFINITIONS then return workspace_failure(defaults, "too many agent profiles to list") end
-            merged.items[#merged.items + 1] = choice
-            if choice.unavailable then merged.unavailable = merged.unavailable + 1 end
+            if choice.status == "ready" or include then
+                if #merged.items >= M.MAX_DEFINITIONS then return workspace_failure(defaults, "too many agent profiles to list") end
+                merged.items[#merged.items + 1] = choice
+            end
+            if choice.status ~= "ready" then merged.unavailable = merged.unavailable + 1 end
         end
     end
     table.sort(merged.items, function(left: Choice, right: Choice): boolean

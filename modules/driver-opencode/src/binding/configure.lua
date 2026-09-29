@@ -4,9 +4,8 @@
 -- request naming one is refused rather than rendered.
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
-local function handle(value: unknown): {[string]: unknown}
-    local request, request_error = configure_protocol.decode_request(value)
-    if not request then return {ok = false, error = request_error or "invalid configuration request"} end
+local universal = require("universal")
+local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref or request.provider then
         return {ok = false, error = "opencode configures no model provider; the user selects models in their own OpenCode home"}
     end
@@ -25,4 +24,4 @@ local function handle(value: unknown): {[string]: unknown}
     if not file then return {ok = false, error = tostring(file_error)} end
     return {ok = true, delivery = {arguments = {}, files = {file}}}
 end
-return {handle = handle}
+return {handle = universal.configure("bee.driver.opencode.descriptor:cli", handle)}

@@ -1047,7 +1047,7 @@ local function define_tests()
             local original = binding.data
             binding.data = {contracts = {{contract = "bee.driver:driver", methods = {
                 prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
-                normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
+                locate = "bee.driver.claude.binding:locate", normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
             }}}}
             local ok, failure = pcall(function()
                 apply(binding)

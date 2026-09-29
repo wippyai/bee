@@ -80,7 +80,8 @@ local function choices(value: Choices?, err: string?): Choices
 end
 
 local function has_only_choice_fields(item: Choice)
-    local fields = {definition_ref = true, title = true, launch_id = true, plan_digest = true, unavailable = true, summary = true}
+    local fields = {definition_ref = true, title = true, launch_id = true, plan_digest = true, status = true,
+        unavailable = true, summary = true, saved_profile_id = true, saved_profile_revision = true, workdir = true, thread_id = true}
     for key, _ in pairs(item :: {[string]: unknown}) do
         if not fields[tostring(key)] then error("selection leaked field " .. tostring(key)) end
     end
@@ -124,7 +125,8 @@ end
 local function define_tests()
     test.describe("Window launch selection", function()
         isolated_it("renders bounded profiles without terminal controls and disables invisible launch", function()
-            local listed: selection.Choices = {items = {{definition_ref = "fixture:profile", title = "Profile\27]52;injected", launch_id = "profile", plan_digest = string.rep("a", 64)}}, unavailable = 0}
+            local profile: selection.Choice = {definition_ref = "fixture:profile", title = "Profile\27]52;injected", launch_id = "profile", plan_digest = string.rep("a", 64), status = "ready"}
+            local listed: selection.Choices = {items = {profile}, unavailable = 0}
             local frame = view.draw(40, 10, appearance.defaults(), listed, 1, "")
             test.eq(#frame.rows, 10)
             test.is_nil(table.concat(frame.rows):find("\27]52", 1, true))
@@ -154,17 +156,18 @@ local function define_tests()
             end
         end)
         isolated_it("keeps picker key hints in the footer and marks the chosen profile without color", function()
-            local listed: selection.Choices = {items = {
-                {definition_ref = "fixture:a", title = "Alpha", launch_id = "a", plan_digest = string.rep("a", 64)},
-                {definition_ref = "fixture:b", title = "Beta", launch_id = "b", plan_digest = string.rep("b", 64)}}, unavailable = 0}
+            local alpha: selection.Choice = {definition_ref = "fixture:a", title = "Alpha", launch_id = "a", plan_digest = string.rep("a", 64), status = "ready"}
+            local beta: selection.Choice = {definition_ref = "fixture:b", title = "Beta", launch_id = "b", plan_digest = string.rep("b", 64), status = "ready"}
+            local listed: selection.Choices = {items = {alpha, beta}, unavailable = 0}
             local drawn = view.draw(80, 24, appearance.defaults(), listed, 2, "")
             local rows: {string} = {}
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
             test.is_true(rows[1]:find("AGENT", 1, true) ~= nil and rows[1]:find("2 profiles", 1, true) ~= nil)
-            test.eq(rows[2], " Choose a profile" .. string.rep(" ", 63))
+            test.is_true(rows[2]:find("Ready profiles", 1, true) ~= nil)
             test.eq(rows[3]:sub(1, 7), " Alpha ")
             test.eq(rows[4]:sub(1, #"›"), "›")
-            test.is_true(rows[24]:find("↑↓ select · Enter open · N new · E edit · R refresh · Esc close", 1, true) ~= nil)
+            test.is_true(rows[24]:find("U all", 1, true) ~= nil)
+            test.is_true(rows[24]:find("R probe", 1, true) ~= nil)
             local chosen = 0
             for _, hit in ipairs(drawn.hits) do if hit.kind == "choice" and hit.y == 4 then chosen = hit.index end end
             test.eq(chosen, 2)
@@ -296,11 +299,15 @@ local function define_tests()
                 activation_changes:update(changed)
                 local applied, apply_error = activation_changes:apply()
                 if not applied then error("deactivate Claude fixture: " .. tostring(apply_error)) end
-                local result = choices(selection.snapshot())
+                local hidden = choices(selection.snapshot())
+                test.eq(#hidden.items, 0)
+                test.eq(hidden.unavailable, 1)
+                local result = choices(selection.snapshot(nil, true))
                 test.eq(#result.items, 1)
                 test.eq(result.unavailable, 1)
                 local item = result.items[1]
                 test.eq(item.title, "Inactive Claude window")
+                test.eq(item.status, "unconfigured")
                 test.eq(item.plan_digest, "")
                 test.is_true(item.unavailable ~= nil)
                 has_only_choice_fields(item)
@@ -351,7 +358,7 @@ local function define_tests()
                 relative_changes:update(relative)
                 local relative_applied, relative_error = relative_changes:apply()
                 if not relative_applied then error("set relative executable binding: " .. tostring(relative_error)) end
-                local unavailable = choices(selection.snapshot())
+                local unavailable = choices(selection.snapshot(nil, true))
                 test.eq(#unavailable.items, 1)
                 test.eq(unavailable.unavailable, 1)
                 test.eq(unavailable.items[1].plan_digest, "")

@@ -49,19 +49,14 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
-    values: bee.threads.records:values
+    universal: bee.driver:universal
 - name: launch
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    types: bee.driver:types
+    universal: bee.driver:universal
+
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -71,6 +66,11 @@ entries:
     canonical: bee.threads.records:canonical
     configure_protocol: bee.driver:configuration
     quote: bee.driver.kit:quote
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -80,6 +80,9 @@ entries:
       dispatch: bee.driver.agy.binding:dispatch
       normalize: bee.driver.agy.binding:normalize
       configure: bee.driver.agy.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.agy.binding:locate
   meta:
     type: harness.driver
     driver_id: agy

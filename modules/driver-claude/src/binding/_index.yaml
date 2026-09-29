@@ -6,15 +6,15 @@ entries:
   source: file://prepare.lua
   method: handle
   imports:
-    launch: bee.driver.claude:launch
-    types: bee.driver:types
+    universal: bee.driver:universal
+
 - name: dispatch
   kind: function.lua
   source: file://dispatch.lua
   method: handle
   imports:
-    launch: bee.driver.claude:launch
-    types: bee.driver:types
+    universal: bee.driver:universal
+
 - name: configure
   kind: function.lua
   source: file://configure.lua
@@ -22,10 +22,16 @@ entries:
   imports:
     configure_protocol: bee.driver:configuration
     canonical: bee.threads.records:canonical
+    universal: bee.driver:universal
+- name: locate
+  kind: function.lua
+  source: file://locate.lua
+  method: handle
+  imports:
+    universal: bee.driver:universal
 - name: normalize
   kind: function.lua
   source: file://normalize.lua
   method: handle
   imports:
-    protocol: bee.driver.claude:protocol
-    normalizer: bee.driver.kit:normalize
+    universal: bee.driver:universal

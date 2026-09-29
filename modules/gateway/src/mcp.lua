@@ -95,12 +95,13 @@ local TOOLS: {Tool} = {
         policies = {TOOL_POLICY_REFS.capabilities},
         schema = {type = "object", additionalProperties = false, properties = table.create(0, 1),
             examples = {{}}}, annotations = READ_ANNOTATIONS},
-    {name = "launch_definitions", description = "Read-only discovery of this caller's admitted launch definitions, placements, overrides and saved profiles: each definition the caller's host-selected launch policy admits, with title, default mode, driver profile, policy, admitted overrides, workdir and thread policies and the placements a launch accepts (native or docker), plus the saved profile IDs and revisions held for those definitions. Starts nothing and grants nothing; launch with thread_launch.",
+    {name = "launch_definitions", description = "Fresh readiness discovery of this caller's admitted launch definitions, overrides and saved profiles. Returns ready definitions by default with the resolved placement; set show_unavailable to include readiness reasons. Repeat the call to re-probe. Starts nothing and grants nothing; launch with thread_launch.",
         operation = "bee.harness.launch:launch_definitions_call",
         policies = {TOOL_POLICY_REFS.launch_definitions},
         schema = {type = "object", additionalProperties = false,
             properties = {workspace_id = {type = "string", minLength = 32, maxLength = 32,
-                description = "This session's own workspace, the default; any other is refused"}},
+                description = "This session's own workspace, the default; any other is refused"},
+                show_unavailable = {type = "boolean", description = "Include definitions that are missing, unconfigured, incompatible, or unknown"}},
             examples = {{}}}, annotations = READ_ANNOTATIONS},
     {name = "session_send", description = "Commit one request into an action's durable inbox by exact node/action address and current grant_epoch. The host must grant bee.sessions.send for that workspace/node/action, and the recipient owner must accept your action's sender. Delivery is committed, not yet offered to a running model.", operation = "bee.threads.service:inbox_send",
         policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.send_grant}, annotations = WRITE_ANNOTATIONS,
@@ -313,7 +314,7 @@ local CAPABILITY_TRAIT_SCHEMA: Object = {type = "object", additionalProperties =
     properties = {id = STRING_SCHEMA, title = STRING_SCHEMA, tools = STRING_ARRAY_SCHEMA}}
 local LAUNCH_DEFINITION_SCHEMA: Object = {type = "object", additionalProperties = false,
     required = {"definition_ref", "title", "digest", "default_mode", "profile_id", "policy_ref",
-        "allowed_overrides", "workdir_policy", "thread_policy", "unconfined", "placements"},
+        "allowed_overrides", "workdir_policy", "thread_policy", "unconfined", "placements", "status"},
     properties = {definition_ref = STRING_SCHEMA, title = STRING_SCHEMA, digest = STRING_SCHEMA,
         default_mode = STRING_SCHEMA, profile_id = STRING_SCHEMA, policy_ref = STRING_SCHEMA,
         allowed_overrides = STRING_ARRAY_SCHEMA,
@@ -321,11 +322,13 @@ local LAUNCH_DEFINITION_SCHEMA: Object = {type = "object", additionalProperties 
             properties = {kind = STRING_SCHEMA, resource_ref = STRING_SCHEMA}},
         thread_policy = {type = "object", additionalProperties = false, required = {"kind"},
             properties = {kind = STRING_SCHEMA, thread_ref = STRING_SCHEMA}},
-        unconfined = BOOLEAN_SCHEMA, placements = STRING_ARRAY_SCHEMA}}
+        unconfined = BOOLEAN_SCHEMA, placements = STRING_ARRAY_SCHEMA,
+        status = {type = "string", enum = {"ready", "missing", "unconfigured", "incompatible", "unknown"}},
+        unavailable = STRING_SCHEMA}}
 local SAVED_PROFILE_SCHEMA: Object = {type = "object", additionalProperties = false,
-    required = {"profile_id", "revision", "title", "definition_ref"},
+    required = {"profile_id", "revision", "title", "definition_ref", "status"},
     properties = {profile_id = STRING_SCHEMA, revision = INTEGER_SCHEMA, title = STRING_SCHEMA,
-        definition_ref = STRING_SCHEMA}}
+        definition_ref = STRING_SCHEMA, status = {type = "string", enum = {"ready", "missing", "unconfigured", "incompatible", "unknown"}}}}
 local DELIVERY_DIAGNOSTIC_SCHEMA: Object = {type = "object", additionalProperties = false,
     required = {"code", "target", "message", "remedy"},
     properties = {code = STRING_SCHEMA, target = STRING_SCHEMA, message = STRING_SCHEMA, remedy = STRING_SCHEMA}}
@@ -377,10 +380,10 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
                 properties = {guide_tool = STRING_SCHEMA, guide_operation = STRING_SCHEMA, preflight_tool = STRING_SCHEMA,
                     preflight_operation = STRING_SCHEMA, note = STRING_SCHEMA}}}}),
     launch_definitions = output_schema({type = "object", additionalProperties = false,
-        required = {"workspace_id", "policy_ref", "definitions", "saved_profiles", "profiles_complete"},
+        required = {"workspace_id", "policy_ref", "definitions", "saved_profiles", "profiles_complete", "unavailable_count"},
         properties = {workspace_id = STRING_SCHEMA, policy_ref = STRING_SCHEMA,
             definitions = array_schema(LAUNCH_DEFINITION_SCHEMA), saved_profiles = array_schema(SAVED_PROFILE_SCHEMA),
-            profiles_complete = BOOLEAN_SCHEMA, profiles_unavailable = STRING_SCHEMA}}),
+            profiles_complete = BOOLEAN_SCHEMA, unavailable_count = INTEGER_SCHEMA, profiles_unavailable = STRING_SCHEMA}}),
     overlay = output_schema({type = "object"}),
     docs = output_schema({type = "object"}),
     components = output_schema({type = "object"}),
@@ -689,14 +692,16 @@ end
 function M.launch_definitions_arguments(params: Object, workspace_id: string?): (Object?, string?)
     local supplied = bounds.object(params.arguments or {})
     if not supplied then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(supplied, {"workspace_id"})
+    local unknown_field = bounds.fields(supplied, {"workspace_id", "show_unavailable"})
     if unknown_field then return nil, unknown_field end
+    if supplied.show_unavailable ~= nil and type(supplied.show_unavailable) ~= "boolean" then return nil, "show_unavailable must be boolean" end
     local arguments: Object = {}
     if supplied.workspace_id == nil then
         if workspace_id then arguments.workspace_id = workspace_id end
     else
         arguments.workspace_id = supplied.workspace_id
     end
+    if supplied.show_unavailable == true then arguments.show_unavailable = true end
     return arguments, nil
 end
 -- A notice names the watched session and a retry key; the endpoint supplies

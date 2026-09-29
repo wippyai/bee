@@ -15,7 +15,7 @@ local function fixture(path: string): string
     if not content then error(path .. ": " .. tostring(read_error)) end
     return content
 end
-local function run(path: string, chunk_size: integer): {observations: {{[string]: unknown}}, state: protocol.State}
+local function run(path: string, chunk_size: integer): {observations: {{[string]: unknown}}, state: unknown}
     local content = fixture(path)
     local decoder = stream_json.new()
     local state = protocol.new(false)
@@ -52,13 +52,14 @@ local function define_tests()
             local result = run("opencode/run-json-1/plain.jsonl", 7)
             test.is_true(has(result.observations, "session.state"))
             test.is_true(has(result.observations, "text"))
-            test.is_nil(result.state.terminal)
+            local state = result.state :: {[string]: unknown}
+            test.is_nil(state.terminal)
             local reply = normalize.handle({state = result.state, index = 100, eof = true})
             if not reply.ok then error(tostring(reply.error)) end
             local terminal = reply.terminal :: {[string]: unknown}
             test.eq(terminal.outcome, "succeeded")
             test.eq(terminal.answer, "pineapple")
-            test.eq(terminal.resume_ref, result.state.session_id)
+            test.eq(terminal.resume_ref, state.session_id)
             test.not_nil(terminal.usage)
             local usage = terminal.usage :: {[string]: unknown}
             test.is_true((usage.input_tokens :: integer) > 0)
@@ -135,7 +136,7 @@ local function define_tests()
             protocol.normalize(state, 0, {type = "step_start", sessionID = "ses_persist"})
             local reply = normalize.handle({state = state, index = 5, envelope = {type = "text", sessionID = "ses_persist", part = {type = "text", text = "hi"}}})
             if not reply.ok then error(tostring(reply.error)) end
-            test.eq((reply.state :: protocol.State).session_id, "ses_persist")
+            test.eq(((reply.state :: {[string]: unknown}).session_id), "ses_persist")
             local bad = normalize.handle({state = {started = "yes"}, index = 0, eof = true})
             test.is_false(bad.ok)
             test.not_nil(bad.error)

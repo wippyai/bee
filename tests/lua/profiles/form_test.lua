@@ -4,6 +4,7 @@ local form = require("form")
 local editor = require("editor")
 local funcs = require("funcs")
 local bounds = require("bounds")
+local selection = require("selection")
 local M = {}
 local function read(workspace: string, id: string): {[string]: unknown}
     local raw, err = funcs.call("bee.harness.profiles:call", {operation = "get", workspace_id = workspace, profile_id = id})
@@ -18,8 +19,9 @@ local function define_tests()
     test.describe("Agent profile form persistence", function()
         test.it("creates a profile and retries the original submission despite later draft edits", function()
             local workspace = "profile-form-workspace"
-            local opened, err = form.load(workspace, {definition_ref = "bee.driver.claude:default_window",
-                title = "Claude Code", launch_id = "claude-window", plan_digest = ""}, true)
+            local initial: selection.Choice = {definition_ref = "bee.driver.claude:default_window",
+                title = "Claude Code", launch_id = "claude-window", plan_digest = string.rep("a", 64), status = "ready"}
+            local opened, err = form.load(workspace, initial, true)
             if not opened then error(tostring(err)) end
             test.is_true(editor.set_title(opened.draft, "My Claude"))
             test.is_true(form.save(opened))
@@ -31,18 +33,17 @@ local function define_tests()
             if not profile then error("profile missing") end
             test.eq(profile.title, "My Claude")
             test.is_false(form.remove(opened))
-            local editing, edit_error = form.load(workspace, {definition_ref = opened.draft.definition_ref,
-                title = "My Claude", launch_id = "claude-window", plan_digest = "",
-                saved_profile_id = opened.profile_id, saved_profile_revision = 1}, false)
+            local saved: selection.Choice = {definition_ref = opened.draft.definition_ref,
+                title = "My Claude", launch_id = "claude-window", plan_digest = string.rep("a", 64), status = "ready",
+                saved_profile_id = opened.profile_id, saved_profile_revision = 1}
+            local editing, edit_error = form.load(workspace, saved, false)
             if not editing then error(tostring(edit_error)) end
             test.eq(editing.draft.title, "My Claude")
             test.is_true(form.remove(editing))
             test.is_true(form.remove(editing))
             test.eq(read(workspace, opened.profile_id).tombstone, true)
             test.is_false(form.save(editing))
-            test.is_nil(form.load(workspace, {definition_ref = opened.draft.definition_ref,
-                title = "My Claude", launch_id = "claude-window", plan_digest = "",
-                saved_profile_id = opened.profile_id, saved_profile_revision = 1}, false))
+            test.is_nil(form.load(workspace, saved, false))
         end)
     end)
 end

@@ -11,8 +11,11 @@ local BINDING_KEY = "bee.gateway.binding"
 local function handle(raw: unknown): {[string]: unknown}
     local value = bounds.object(raw or {})
     if not value then return {ok = false, error = {code = "INVALID", message = "launch discovery takes no arguments"}} end
-    local unknown_field = bounds.fields(value, {"workspace_id"})
+    local unknown_field = bounds.fields(value, {"workspace_id", "show_unavailable"})
     if unknown_field then return {ok = false, error = {code = "INVALID", message = unknown_field}} end
+    if value.show_unavailable ~= nil and type(value.show_unavailable) ~= "boolean" then
+        return {ok = false, error = {code = "INVALID", message = "show_unavailable must be boolean"}}
+    end
     local requested: string? = nil
     if value.workspace_id ~= nil then
         requested = bounds.id(value.workspace_id)
@@ -24,6 +27,7 @@ local function handle(raw: unknown): {[string]: unknown}
     if not scoped then return {ok = false, error = refused} end
     local request: {[string]: unknown} = {}
     if requested ~= nil then request.workspace_id = requested end
+    if value.show_unavailable == true then request.show_unavailable = true end
     local result, call_error = scoped:call(BACKEND, request)
     if call_error then return {ok = false, error = {code = "UNAVAILABLE", message = tostring(call_error)}} end
     local reply = bounds.object(result)

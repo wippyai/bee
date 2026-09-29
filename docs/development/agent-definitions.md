@@ -84,51 +84,31 @@ Admission re-verifies the component revision and spec digest before granting
 any resources or projecting credentials; a concurrent edit or mismatched
 revision returns `CONFLICT`, requiring replanning. Both the saved profile
 revision and the owner component revision are pinned in the attempt plan and
-returned in durable attempt identities. The wire decoder `agent_protocol.decode`
-(`modules/application/src/agent_protocol.lua`) and `agent_launch.decode_launch`
-validate these optional fields at the typed boundary.
+returned in durable attempt identities.
 
-## Implemented: agent run as a function and cancellation contract
+## Implemented: sessions as a function
 
-A managed agent can be executed as an ordinary function through the
-application facade `bee.harness.launch:agent_call`
-(`modules/harness/src/launch/agent_call_method.lua`,
-`modules/harness/src/launch/agent_call_backend.lua`) and the Lua application
-library `agents` (`modules/application/src/agents.lua`).
+A managed agent is driven as an ordinary function through the application
+library `sessions` (`modules/application/src/sessions.lua`), whose calls are
+the `bee.sessions` owner contract methods:
 
-1. **Prompt durable receipts:** `operation = "run"` (`agents.run`) starts an
-   admitted child and returns a durable receipt promptly:
-   `scope = "attempt"`, `thread_id`, `action_id`, `attempt_id`, `state`,
-   `status`, `idempotency_key`, and the nested attempt `receipt`. An idempotent
-   replay with the same key returns the identical attempt receipt.
-2. **Lifecycle operations:** Standard `status`, `wait` and `cancel` operations
-   accept the attempt and thread identifiers. `wait` observes thread records
-   up to a bounded `wait_ms`.
-3. **Idempotent cancellation and carrier settlement:** `operation = "cancel"`
-   (`agents.cancel`) records an idempotent Bee cancel intent through the
-   thread/carrier owner (`bee.threads.carrier:cancel_intent`), keyed by the
-   attempt, so the intent survives restart. The checkpoint
-   (`bee.threads.carrier:checkpoint`) carries the intent and
-   `bee.threads.carrier:cancel_status` reads it back for recovery
-   reconciliation.
-   - An attempt cancelled before start (admitted without a running carrier) is
-     settled directly as cancelled with `state = "ended"` and `outcome = "cancelled"`:
-     with an attempt receipt where its row exists, with the durable intent
-     where admission alone never opened one. A late carrier boot refuses to
-     prepare an attempt with a settled intent (`CONFLICT`).
-   - A running attempt with a recorded intent reads `cancelling` until its
-     terminal carrier record lands.
-   - When `wait_ms` is provided, cancellation requests placement stop and
-     waits up to `wait_ms` for the terminal carrier record before reporting
-     settlement.
-   - When called without `wait_ms` on a child that has not started yet,
-     cancellation returns typed `NOT_STARTED` to allow retry loops until running.
-4. **Dataflow `func` node contract:** A durable Dataflow `func` node invokes
-   `operation = "run"`, checkpoints the durable receipt and deterministic
-   idempotency key before bounded waits, observes terminal status via `wait`,
-   and triggers cancellation with an idempotent intent that awaits terminal
-   carrier records. Recovery reconciles an uncertain stop under the attempt's
-   fenced epoch without requiring an agent-specific node type.
+1. **Prompt durable receipts:** `send` commits one immutable unit of work and
+   returns a work receipt promptly. The receipt proves intake only: the work is
+   queued. Replaying the same operation key returns the same receipt.
+2. **Observation:** `await` returns `ready` with the typed result, `pending`,
+   `blocked` or `uncertain`. Its timeout (at most 60,000 ms) bounds observation
+   and never cancels the work.
+3. **Cancellation and close:** `cancel` requests cancellation of one work and
+   returns an operation whose observation reports `stopped`,
+   `already_terminal` or an uncertain evidence branch; `close` seals intake and
+   drains.
+4. **Recovery:** after an owner restart the scheduler reconciles the last
+   placement attempt before any new invocation. An outcome it cannot prove is
+   `uncertain`; it is never silently re-run.
+5. **Dataflow `func` node contract:** a durable Dataflow `func` node calls the
+   session functions, checkpoints the operation key and work reference before
+   bounded awaits, and observes the result with `await`, without an
+   agent-specific node type.
 
 ## Current state informing the proposal
 
@@ -143,7 +123,7 @@ library `agents` (`modules/application/src/agents.lua`).
 | Bee launch | `bee.launch-definition@1` identifies a binding, profile and policy, with mode, workdir, thread, session, credentials and presentation rules, plus an optional `agent_ref` naming one `agent.gen1` entry. An agent route resolves the framework closure from the same snapshot and pins its digest, exact gateway tools, mapped model and declined hints in the measured plan. (`modules/harness/src/launch/definition.lua`, `modules/harness/src/launch/agent_resolver.lua`, `modules/harness/src/launch/admission.lua`) |
 | Bee profile | Saved profiles select a launch definition and contain driver options, MCP tool names and instructions capped at 4,096 bytes. These are not a framework agent definition; on an agent route `agent_preferences` narrows a saved profile inside the admitted closure and refuses tools outside it or an option claiming `model`. (`modules/harness/src/profiles/protocol.lua`) |
 | Bee gateway | Its catalog uses local tool names, operation ids and policy refs, plus traits of prompt and tool names. `catalog.from_framework` projects an admitted closure's function tools (under their `llm_alias` adapter alias) and traits into the same declarations. Selection checks the host tool ceiling; tool execution uses a scoped subject executor. (`modules/gateway/src/catalog.lua`, `modules/gateway/src/api/mcp_method.lua:48-53`) |
-| Bee child launch | `thread_launch` and the application facade `agent_call` share one request (`bee.application:agent_protocol`: definition or saved profile, brief, retry key, workspace, working directory, thread, placement) and one launch path (`caller_launch`). Workdir, thread and placement choices apply only where the definition and its launch policy both allow the override; a `docker` placement is refused with `PLACEMENT_UNAVAILABLE`. (`modules/application/src/agent_protocol.lua`, `modules/harness/src/launch/caller_launch.lua`, `modules/harness/src/launch/admission.lua`) |
+| Bee sessions | `session_open` (MCP) and `sessions.open` (application SDK) take one spec: a definition, an optional saved profile, a title and a workdir reference. The host admits the definition against the caller's policy, and the session survives turns and restarts. Work enters only through `session_send`, which returns a receipt; `session_await` returns the result. (`modules/sessions/src/`, `modules/gateway/src/session_tools.lua`, `modules/application/src/sessions.lua`) |
 | Bee drivers | Claude and Codex prepare declarative CLI launches; their model/effort and permission/sandbox options differ. Driver bindings also exist for Agy, Grok, Muse and OpenCode, and OpenCode takes no model options because the user selects models in its own home. (`modules/driver-claude/src/launch.lua:13-19`, `modules/driver-claude/src/launch.lua:89-112`, `modules/driver-codex/src/launch.lua:4-17`, `modules/driver-codex/src/launch.lua:65-105`, `modules/driver-agy/src/_index.yaml:71-72`, `modules/driver-grok/src/_index.yaml:62-63`, `modules/driver-muse/src/_index.yaml:74-75`) |
 | Bee driver execution | Current catalog compatibility accepts `stream-json` for batch/session and `pty` for windows; an in-process Wippy profile needs a new execution path. (`modules/harness/src/catalog/classify.lua:46-47`) |
 | Bee placement | The host policy names an optional placement binding and options. The resolver defaults to the native binding, and the native module supplies that binding. A migration admits a `docker` value; the surveyed implementation is native. (`modules/harness/src/carrier/policy.lua:237-251`, `modules/placement/src/resolver.lua:10-17`, `modules/placement-native/src/_index.yaml:271-289`, `modules/placement-native/src/migrations/migrations.lua:92`) |

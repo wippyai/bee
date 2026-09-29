@@ -98,7 +98,7 @@ picker to switch; see [the workspace catalog](../reference/workspace-catalog.md)
 ## Managed agent containment
 
 Managed CLIs run with the operating system user's authority. Every
-orchestrator-launched batch worker uses a private attempt home containing only
+batch worker opened through a session uses a private attempt home containing only
 the login, configuration and state files its driver declares and the host
 credential broker projects; the launch policy admits no host HOME inheritance
 and no prompt-free permission mode. When a person chooses a named Codex profile,
@@ -108,9 +108,8 @@ own permission control where one exists and is proven: Codex
 `--sandbox workspace-write`, Claude Code and Grok default permission
 modes, Muse `on-request` approval, agy `--sandbox`. Grok and OpenCode
 offer no workdir confinement Bee can select, so the host records those
-batch routes as `unconfined`: the orchestrator launches them only where
-its own launch policy names them in `agent_launch_unconfined`, and
-`launch_definitions` reports the mark.
+batch routes as `unconfined`: they open only where the caller's launch policy
+names them in `agent_launch_unconfined`.
 
 For an edit-capable profile with a write-granted workdir, the host-selected
 Git worktree plugin resolves the repository's Git directory and shared common

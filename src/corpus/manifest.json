@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 10045,
+      "bytes": 9989,
       "id": "docs/agent_guide",
-      "sha256": "afd66c44c6f4b7b2ca293ad0e2cba38aab629eb54c091271e5776bdb0b04d9ae",
+      "sha256": "2887ca1dc96c945a6680dfa818f06755f77cd1cbd2db55a1493f06e244f426ff",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -147,9 +147,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 19107,
+      "bytes": 13463,
       "id": "docs/mcp_configuration",
-      "sha256": "9321e8f801db1a3b99b69ed42f9a39d4b834417bb5b5f95e689f2ae4267df627",
+      "sha256": "b7e64521e40e442c1f65d95590fac82ab3bbdd17521af14381eb809906000573",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -171,9 +171,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 9331,
+      "bytes": 9317,
       "id": "docs/hub_inspection",
-      "sha256": "62cc2c8af2c13e05ab601ec2e0e7b088182072eb6a8e8653bbe9bb5e8385535d",
+      "sha256": "63547c8ce4aa0a855de462af95515040803dce23bd1d4e22e0e555a91d0b411a",
       "source": "docs/guides/hub.md",
       "title": "Hub installation and package reads",
       "topic": "registry"
@@ -203,25 +203,25 @@
       "topic": "application"
     },
     {
-      "bytes": 13119,
+      "bytes": 10449,
       "id": "docs/gateway",
-      "sha256": "03df09555e7eb03cc8eac14dc6e623aaf834b355a04cb83637858d8682ec5eec",
+      "sha256": "4cb3d8ad7fcd00d83a0b0e70437ba38bf3a20c9a0a4f32953171ef2659d2c539",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
     },
     {
-      "bytes": 3885,
+      "bytes": 3472,
       "id": "docs/gateway_hooks",
-      "sha256": "ef5a1ebfc5f7aaf50ad75b9552f0470fcfcbf6a060c3efbfd2c9c58433f5979d",
+      "sha256": "00c38170b112bc9b48df8e30b723f33c68b06caa7cffb8586ead3455c4ca35c7",
       "source": "docs/reference/agents/hooks.md",
       "title": "Gateway hooks",
       "topic": "gateway"
     },
     {
-      "bytes": 24199,
+      "bytes": 21998,
       "id": "docs/application_contracts",
-      "sha256": "c89e90c6962d401e59fd8406a85affd4a877b50e5b2df97db2d3e506e7fd20f7",
+      "sha256": "0fda9879be5c2dc977035b162653dffd42c4cfa42cde384d745d636e826098f8",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 27754,
+      "bytes": 27072,
       "id": "docs/threads",
-      "sha256": "343f60899d1d597ee6d064f017b5b320e97a36cf664c870ce52851f2be9c0a40",
+      "sha256": "958c6aefb74a1b9151b339a7bd1e1a5c17b65a3902d16adecdac539e82a2f886",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -275,17 +275,17 @@
       "topic": "storage"
     },
     {
-      "bytes": 655,
+      "bytes": 683,
       "id": "component/agents",
-      "sha256": "b40d5b227f179d18c9b8847e9c7e20b350147749a051916a66a082b99b26a31e",
+      "sha256": "3e945348e427dc3b173dcad88f75b911caa1a9c962f1e4f69158b472e41994fa",
       "source": "modules/agents/src/README.md",
       "title": "Bee agents",
       "topic": "component"
     },
     {
-      "bytes": 4251,
+      "bytes": 8083,
       "id": "component/application",
-      "sha256": "d74118c6c402258cd5d7717743ba4231185d710f45d8cc5536b814b3dfb9b089",
+      "sha256": "cce4ae43eb4960fa155744c8c509a55849c856b508911404191007aac1985452",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -387,9 +387,17 @@
       "topic": "component"
     },
     {
-      "bytes": 8537,
+      "bytes": 862,
+      "id": "component/executor:external",
+      "sha256": "a32cf6b6a3b0874a95d54fb17d5e4ec3dbe6b65d1ece34f853c2712204caa1a8",
+      "source": "modules/executor-external/src/README.md",
+      "title": "Bee external executor",
+      "topic": "component"
+    },
+    {
+      "bytes": 6799,
       "id": "component/gateway",
-      "sha256": "79c68a835242dda36e5c3a7eb3ead3f27df7c8d23a0ccee04cc718afcf8e5bd2",
+      "sha256": "4d7b16e530c7e66d519b16a4e037d2b1d3b5e8ef5c68832488477678c9849360",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -411,9 +419,9 @@
       "topic": "component"
     },
     {
-      "bytes": 22262,
+      "bytes": 22231,
       "id": "component/harness",
-      "sha256": "c9221a5a828163c0f8ef7ffb907bfabd3700a4464497ab0aed62a1ed19ccb479",
+      "sha256": "d55c2e6ad7ebfb13082a7779ad10283e020307b92bdd966a6e536b28a5007810",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -483,6 +491,14 @@
       "topic": "component"
     },
     {
+      "bytes": 340,
+      "id": "component/sessions",
+      "sha256": "987d2a4f98a919f9b613799dfb9e96aab2aa201a19b7c40cad0ceab1692781be",
+      "source": "modules/sessions/src/README.md",
+      "title": "Bee sessions",
+      "topic": "component"
+    },
+    {
       "bytes": 2980,
       "id": "component/sync",
       "sha256": "e6ad71fa22956fc2c6e3f4244089bb9b9d2a7c1a8cafd983be8ae95c8d56d7fe",
@@ -491,9 +507,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9160,
+      "bytes": 9731,
       "id": "component/threads",
-      "sha256": "5b3cb24f371bce20278c72ffdd0df8c3845b4ae2bc370524560abaead9158862",
+      "sha256": "7389d721cc8156518be0a4ce39c1ab7ea54fe87682a3ff88e7f9c9fa5f0e6818",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -590,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 683640,
-    "documents": 73
+    "bytes": 675824,
+    "documents": 75
   }
 }

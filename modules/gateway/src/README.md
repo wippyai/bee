@@ -6,25 +6,20 @@ listener epoch, drain, readiness, and HTTP handlers. The listener itself
 (`http.service`, router, and endpoints) belongs to the host composition. The
 activation binds native loopback port zero and reads the assigned address
 through supervisor state. Agent
-profiles declare `thread_read`, `thread_wait`, `thread_message`,
-`thread_sessions` and `thread_notify` (find and address running sessions, and
-register a notice by a launched attempt before its session binds), the
-`session_directory`, `session_inbox_send`, `session_inbox`, `session_ack` and
-`session_reply` tools for separately owned action inboxes, the
-caller-owned Governance `overlay` tool, and `thread_launch`, which starts one
-host-allow-listed managed launch in the caller's own workspace and returns the
-child's thread, action and attempt. The default session tools `session_catalog`, `session_open`, `session_run`,
-`session_send`, `session_await`, `session_join`, `session_get`, `session_list`,
-`session_cancel` and `session_close` project the `bee.sessions:contract` and
-`bee.sessions:catalog` owner contracts one method each. Arguments are the
-published closed schemas; every mutation requires `operation_key`; caller
-identity travels only in the authenticated call context, never in a payload;
-the owner binding opens under the host-linked `target_tool_session_policy`, and
-each owner reply is held to the published output schema. The gateway keeps no
-session state. `session_inbox_send` is the action-inbox send.
-The host may admit any subset; no default
-launch policy advertises `thread_launch` or names an `agent_launch` definition,
-so an agent starts another only where the owner has opted in. The
+profiles declare `thread_read` and `thread_message` (read the transcript, and
+record a note on it that schedules nothing), the ten `session_*` tools, the
+caller-owned Governance `overlay` tool and the other built-in tools below. The
+`session_catalog`, `session_open`, `session_run`, `session_send`,
+`session_await`, `session_join`, `session_get`, `session_list`,
+`session_cancel` and `session_close` tools project the `bee.sessions:contract`
+and `bee.sessions:catalog` owner contracts one method each; they are the only
+way to start an agent, give it work (`session_send`) and read its result
+(`session_await`). Arguments are the published closed schemas; every mutation
+requires `operation_key`; caller identity travels only in the authenticated
+call context, never in a payload; the owner binding opens under the host-linked
+`target_tool_session_policy`, and each owner reply is held to the published
+output schema. The gateway keeps no session state.
+The host may admit any subset. The
 overlay tool also carries a read-only `guide` operation stating this
 destination's application authoring contract and one minimal example (derived
 from the same rule tables preflight enforces). It can stage and freeze files but
@@ -76,25 +71,6 @@ gateway request. The underlying overlay store keeps its own larger
 limits for non-MCP callers.
 All four default profiles include the `thread_message` write. Claude/Codex also
 declare lifecycle hooks.
-
-The host may assign a workspace-local name at admission; an omitted name is
-the action ID, and another live action cannot reuse it. Directory entries use
-exact `{node_id, action_id}` addresses and show only peers the subject may
-discover, with attempt and latest inbox delivery state. The send tool needs
-the host's `bee.sessions.send` grant on the exact workspace/node/action
-resource and the target owner must accept the sender. The bundled Bee host
-selects a workspace send policy for managed agents; the destination owner
-still requires the authenticated sender to belong to that workspace, the
-current epoch and the recipient's acceptance. An installing host can select
-the deny policy or a narrower address policy instead. Inbox tools commit and
-read durable items. `session_inbox_send` and `session_reply` accept a node-qualified
-remote address: the gateway asks the host-selected remote resolver for the
-thread and workspace it names (the bundled host links
-`bee.hive.service:remote_sessions`, which calls the destination owner's
-`inbox_resolve`), then sends there. Resolution is discovery only — the
-destination owner authenticates the forwarded principal and re-checks
-workspace, send grant, target action and epoch — and a composition that links
-no resolver answers a remote address as not found.
 
 The default remains `127.0.0.1:0`. A host may explicitly select a loopback or
 RFC1918 IPv4 interface for a local container, with its corresponding readiness

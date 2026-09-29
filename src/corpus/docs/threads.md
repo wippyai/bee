@@ -229,8 +229,7 @@ brief is the only channel. Claude keeps its controller push and windows keep
 their hook boundary; resumed attempts keep their provider session, since no
 fixture proves inbox-carry combined with those. A fresh sequential attempt on
 an already-admitted action attaches to its own action and chains the latest
-settled attempt; anything else fails closed with the admit refusal. PTY
-windows currently need an explicit `session_inbox` call. Cross-node sends
+settled attempt; anything else fails closed with the admit refusal. Cross-node sends
 persist to the durable forwarding outbox addressed at their node instead of
 committing locally; the destination admits `inbox_describe` and `inbox_send`
 through the Hive principal mapping with re-authorization, below.
@@ -394,15 +393,7 @@ on the destination's own reply, so an unknown outcome settles nothing and
 the lease lapses. Its transport is host-selected through the `sender`
 requirement: the bundled host links `bee.hive.service:inbox_sender`, and a
 composition that links no sender leaves due rows queued and reports each
-delivery unknown. `session_inbox_send` and `session_reply` also
-accept a node-qualified remote address: the gateway asks a host-selected
-remote resolver (the bundled host links `bee.hive.service:remote_sessions`,
-which performs the destination owner's `inbox_resolve`) for the thread and
-workspace the address names, and sends there with the same body it would send
-locally. Resolution is discovery, not authority: the destination owner
-authenticates the forwarded principal and re-checks workspace, send grant,
-target action and epoch when the send arrives, and a composition that links no
-resolver answers a remote address as not found.
+delivery unknown.
 
 ## Carrier and projections
 

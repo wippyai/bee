@@ -524,13 +524,13 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "settled" and intent.outcome == "applied" then
         local superseded = require_desired(config, intent)
         if superseded then return superseded end
-        local _, measurement_error = remeasure_progress(config, intent)
-        if measurement_error then return measurement_error end
         local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
         if not desired_entries then return desired_error :: Result end
         local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
         if matches then return transaction.success(intent, true) end
+        local _, measurement_error = remeasure_progress(config, intent)
+        if measurement_error then return measurement_error end
         local restored, restore_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
         if restored then
             local result: Object = {}

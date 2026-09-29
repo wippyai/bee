@@ -875,6 +875,10 @@ local function define_tests()
             test.eq(replayed.outcome, "applied")
             test.eq(apply_count, 1)
             world.revision, world.digest = 5, SHA_B
+            local preserved = ok(owner.recover(config_with(again_plans, again_activations), "composed-restart-v1"))
+            test.eq(preserved.outcome, "applied")
+            test.eq(apply_count, 1)
+            applied = false
             local refused = owner.recover(config_with(again_plans, again_activations), "composed-restart-v1")
             test.eq(refused.code, "CONFLICT")
             test.is_true(tostring(refused.message):find("composed registry base", 1, true) ~= nil)

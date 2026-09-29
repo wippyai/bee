@@ -362,6 +362,23 @@ local function define_tests()
             test.eq(attempts, 3)
         end)
 
+        test.it("retries a request-driven refresh failure at the same revision", function()
+            local follower = catalog.follower("r1")
+            local attempts = 0
+            local function request_refresh(): boolean
+                attempts = attempts + 1
+                catalog.invalidate(follower)
+                return false
+            end
+            local function recovered(): boolean attempts = attempts + 1; return true end
+
+            test.is_false(request_refresh())
+            test.eq(follower.observed, nil)
+            test.is_true(catalog.follow(follower, "r1", recovered))
+            test.eq(attempts, 2)
+            test.eq(follower.observed, "r1")
+        end)
+
         -- A malformed admission makes refresh_admission fail closed. Once the
         -- record is repaired, the periodic follower must run again and publish
         -- the catalog left by that repair.

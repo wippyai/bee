@@ -423,6 +423,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if initial then error(tostring(loaded)) end
             -- An invalid or unreadable replacement must not leave stale grants
             -- available for another launch. Existing instances retain their scope.
+            catalog.invalidate(admission_follower)
             admission.current, admission.error = nil, tostring(loaded):sub(1, 2000)
             if previous then assert(process.send(owner, "bee.application.catalog", {version = 1, items = {}})) end
             return false

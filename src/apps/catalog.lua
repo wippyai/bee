@@ -208,6 +208,10 @@ function M.follower(observed: string?): Follower
     return {observed = observed}
 end
 
+function M.invalidate(follower: Follower): ()
+    follower.observed = nil
+end
+
 function M.follow(follower: Follower, current: string, refresh: () -> boolean): boolean
     if current == follower.observed then return false end
     if refresh() then follower.observed = current end

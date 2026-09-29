@@ -50,7 +50,12 @@ entries:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     journal: bee.sessions:threads_journal
+    driver_route: bee.sessions:driver_route
     admission: bee.harness.launch:admission
+- name: driver_route
+  kind: library.lua
+  source: file://driver_route.lua
+  modules: [registry]
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua

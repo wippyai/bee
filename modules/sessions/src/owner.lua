@@ -3,6 +3,7 @@
 local bounds = require("bounds")
 local journal = require("journal")
 local admission = require("admission")
+local driver_route = require("driver_route")
 local security = require("security")
 local M = {}
 
@@ -58,12 +59,16 @@ local function snapshot(value: unknown): (Object?, string?)
     end
     local queued = type(row.queued) == "number" and row.queued or 0
     local active = type(row.active) == "number" and row.active or 0
+    local uncertain = type(row.uncertain) == "number" and row.uncertain or 0
+    local stalled = type(row.stalled) == "number" and row.stalled or 0
     local lifecycle = row.state
     if lifecycle ~= "active" and lifecycle ~= "suspended" and lifecycle ~= "closing" and lifecycle ~= "closed" then
         return nil, "Threads returned an unsupported session lifecycle"
     end
     local activity = "idle"
-    if active > 0 or queued > 0 then activity = "working" end
+    if stalled > 0 then activity = "stalled"
+    elseif uncertain > 0 then activity = "blocked"
+    elseif active > 0 or queued > 0 then activity = "working" end
     local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
     if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
     return {session = row.session, revision = row.revision, incarnation = 1, title = row.title,
@@ -115,10 +120,15 @@ local function open(request: Object): Reply
     if not plan_value or not driver_binding_ref or not profile_ref then
         return unavailable("admission returned an incomplete executor route", operation_key)
     end
+    if plan_value.mode ~= "session" then
+        return fail("UNSUPPORTED", "the selected launch definition does not provide a session profile", operation_key)
+    end
+    local methods, methods_error = driver_route.resolve(driver_binding_ref)
+    if not methods then return unavailable(methods_error or "selected driver methods are unavailable", operation_key) end
     local placement_methods = object(plan_value.placement_methods)
     if not placement_methods then return unavailable("admission omitted placement operations", operation_key) end
     local route: Object = {definition = definition, plan_digest = plan_value.plan_digest,
-        driver_binding_ref = driver_binding_ref, profile_id = profile_ref, driver_methods = {}, driver_options = {},
+        driver_binding_ref = driver_binding_ref, profile_id = profile_ref, driver_methods = methods, driver_options = {},
         placement_methods = placement_methods, placement_request = {binding_ref = driver_binding_ref,
             profile_id = profile_ref, workspace_id = workspace, workdir = workdir}}
     local created, create_error = journal.invoke("session_create", {operation_key = operation_key,

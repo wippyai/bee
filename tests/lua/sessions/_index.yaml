@@ -9,6 +9,14 @@ entries:
   imports:
     test: wippy.test:test
     registry: bee.sessions:executor_registry
+- name: driver_route_test
+  kind: function.lua
+  source: file://driver_route_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    route: bee.sessions:driver_route
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua

@@ -25,6 +25,7 @@ entries:
   modules: [registry]
   imports:
     bounds: bee.threads.records:bounds
+    turn_budget: bee.driver:turn_budget
 - name: locate
   kind: library.lua
   source: file://locate.lua

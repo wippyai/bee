@@ -31,6 +31,24 @@ local function define_tests()
             test.eq(terminal.outcome, "succeeded")
             test.eq(terminal.resume_ref, "ses_universal")
         end)
+
+        test.it("refuses recursive flag rendering and oversized argv expansion", function()
+            local recursive: {[string]: unknown} = {
+                flags = {turn_budget = {field = "turn_budget", emit_default = true, argv = {{option = "turn_budget"}}}},
+                options = {fields = {turn_budget = {type = "budget"}}},
+            }
+            local ok, argv, render_error = pcall(universal.render_argv, {{option = "turn_budget"}},
+                {profile_id = "batch", brief = "work", turn_budget = 1}, recursive)
+            test.is_true(ok)
+            test.is_nil(argv)
+            test.not_nil(render_error)
+
+            local many: {string} = {}
+            for index = 1, 129 do many[index] = "argument" end
+            argv, render_error = universal.render_argv(many, {profile_id = "batch", brief = "work"}, {})
+            test.is_nil(argv)
+            test.not_nil(render_error)
+        end)
     end)
 end
 

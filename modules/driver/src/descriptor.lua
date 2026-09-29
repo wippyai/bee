@@ -1,6 +1,7 @@
 -- MIT. Strict decoder and registry reader for declarative external CLI drivers.
 local bounds = require("bounds")
 local registry = require("registry")
+local turn_budget = require("turn_budget")
 local M = {}
 M.TYPE = "bee.driver.cli_descriptor"
 M.SCHEMA = "bee.driver.cli-descriptor@1"
@@ -52,6 +53,67 @@ local function safe_relative(path: string): boolean
     if path == "" or path:sub(1, 1) == "/" or path:find("[%z\\\\]") then return false end
     for part in path:gmatch("[^/]+") do if part == "." or part == ".." then return false end end
     return true
+end
+
+local function field_error(spec: Object, field: string, fallback: string): string
+    local message = bounds.text(spec.invalid, 256)
+    return message or (field .. " " .. fallback)
+end
+
+function M.decode_option(field: string, spec: Object, value: unknown): (unknown?, string?)
+    if spec.type == "enum" then
+        local values = type(spec.values) == "table" and spec.values :: {string} or {}
+        local selected = bounds.member(value, values)
+        if not selected then return nil, field_error(spec, field, "is not one Bee admits") end
+        return selected, nil
+    elseif spec.type == "boolean" then
+        if type(value) ~= "boolean" then return nil, field_error(spec, field, "must be a boolean") end
+        return value, nil
+    elseif spec.type == "id" then
+        if spec.forbid_option == true and type(value) == "string" and (value :: string):sub(1, 1) == "-" then
+            return nil, field_error(spec, field, "must not be a command-line option")
+        end
+        local selected = bounds.id(value)
+        if not selected then return nil, field_error(spec, field, "is not an identifier") end
+        return selected, nil
+    elseif spec.type == "model" then
+        local selected = bounds.text(value, 128)
+        if not selected or selected == "" or not selected:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then
+            return nil, field_error(spec, field, "is not one bounded model identifier")
+        end
+        return selected, nil
+    elseif spec.type == "budget" then
+        local selected, budget_error = turn_budget.decode(value, field)
+        if not selected then return nil, budget_error or field_error(spec, field, "is invalid") end
+        local maximum = spec.max ~= nil and bounds.count(spec.max) or nil
+        if maximum ~= nil and selected > maximum then return nil, field_error(spec, field, "exceeds its admitted limit") end
+        return selected, nil
+    elseif spec.type == "duration" then
+        local selected = bounds.text(value, 32)
+        if not selected or not selected:match("^[1-9][0-9]*[smh]$") then return nil, field_error(spec, field, "must be a positive duration string") end
+        return selected, nil
+    elseif spec.type == "codex_profile" then
+        local selected = bounds.text(value, 64)
+        if not selected or not selected:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") then return nil, field_error(spec, field, "must be a plain Codex profile name") end
+        return selected, nil
+    elseif spec.type == "ids" then
+        local selected, ids_error = bounds.ids(value, true)
+        if not selected then return nil, field .. ": " .. tostring(ids_error) end
+        if type(spec.pattern) == "string" then
+            for _, entry in ipairs(selected) do
+                if not entry:match(spec.pattern :: string) then return nil, field_error(spec, field, "contains invalid value") end
+            end
+        end
+        if type(spec.values) == "table" then
+            for _, entry in ipairs(selected) do
+                if not bounds.member(entry, spec.values :: {string}) then return nil, field_error(spec, field, "contains unsupported value " .. entry) end
+            end
+        end
+        if spec.transform == "presence" then return #selected > 0, nil end
+        if spec.transform == "sorted" then table.sort(selected) end
+        return selected, nil
+    end
+    return nil, "CLI descriptor has an unsupported " .. field .. " decoder"
 end
 
 local function validate_template(value: unknown, label: string, depth: integer): string?
@@ -154,6 +216,145 @@ local function validate_template_record(value: unknown, label: string): string?
     return nil
 end
 
+local function check_reference(value: unknown, fields: Object, label: string): string?
+    local name = bounds.id(value)
+    if not name then return label .. " is not an identifier" end
+    if fields[name] ~= true then return label .. " names undeclared field " .. name end
+    return nil
+end
+
+local function check_format_references(value: string, fields: Object, label: string): string?
+    for name in value:gmatch("{([^{}]+)}") do
+        local reference_error = check_reference(name, fields, label .. " placeholder")
+        if reference_error then return reference_error end
+    end
+    local unparsed = value:gsub("{[A-Za-z_][A-Za-z0-9_]*}", "")
+    if unparsed:find("[{}]") then return label .. " contains a malformed field placeholder" end
+    return nil
+end
+
+local function validate_template_references(value: unknown, label: string, fields: Object, flags: Object, depth: integer): string?
+    if depth > M.MAX_TEMPLATE_DEPTH then return label .. " exceeds the reference nesting bound" end
+    if type(value) ~= "table" then return nil end
+    local item = bounds.object(value)
+    if not item then
+        local values, values_error = sequence(value, label, M.MAX_TEMPLATE_ITEMS)
+        if not values then return values_error end
+        for index, child in ipairs(values) do
+            local child_error = validate_template_references(child, label .. "[" .. tostring(index) .. "]", fields, flags, depth + 1)
+            if child_error then return child_error end
+        end
+        return nil
+    end
+    if item.field ~= nil then
+        local reference_error = check_reference(item.field, fields, label .. ".field")
+        if reference_error then return reference_error end
+    end
+    if item["if"] ~= nil then
+        local reference_error = check_reference(item["if"], fields, label .. ".if")
+        if reference_error then return reference_error end
+    end
+    for _, name in ipairs({"if_any", "if_none"}) do
+        if item[name] ~= nil then
+            local names, names_error = sequence(item[name], label .. "." .. name, 16)
+            if not names then return names_error end
+            for _, candidate in ipairs(names) do
+                local reference_error = check_reference(candidate, fields, label .. "." .. name)
+                if reference_error then return reference_error end
+            end
+        end
+    end
+    if item.format ~= nil then
+        local format = bounds.text(item.format, 256)
+        if not format then return label .. ".format is invalid" end
+        local format_error = check_format_references(format, fields, label .. ".format")
+        if format_error then return format_error end
+    end
+    if item.option ~= nil then
+        local option = bounds.id(item.option)
+        if not option or flags[option] == nil then return label .. ".option names an undeclared flag" end
+    end
+    if item.join ~= nil then
+        local join = bounds.object(item.join)
+        if not join then return label .. ".join is malformed" end
+        local join_error = check_reference(join.field, fields, label .. ".join.field")
+        if join_error then return join_error end
+    end
+    for _, name in ipairs({"then", "else"}) do
+        if item[name] ~= nil then
+            local branch_error = validate_template_references(item[name], label .. "." .. name, fields, flags, depth + 1)
+            if branch_error then return branch_error end
+        end
+    end
+    return nil
+end
+
+local function validate_json_references(value: unknown, label: string, fields: Object, depth: integer): string?
+    if depth > M.MAX_TEMPLATE_DEPTH then return label .. " exceeds the JSON template nesting bound" end
+    if type(value) ~= "table" then return nil end
+    local item = bounds.object(value)
+    if item and item.field ~= nil then
+        if bounds.fields(item, {"field"}) then return label .. " field template is malformed" end
+        return check_reference(item.field, fields, label .. ".field")
+    end
+    for key, child in pairs(value :: {[unknown]: unknown}) do
+        local child_error = validate_json_references(child, label .. "." .. tostring(key), fields, depth + 1)
+        if child_error then return child_error end
+    end
+    return nil
+end
+
+local function flag_options(value: unknown, output: {[string]: boolean}, depth: integer): string?
+    if depth > M.MAX_TEMPLATE_DEPTH or type(value) ~= "table" then return nil end
+    local item = bounds.object(value)
+    if item then
+        if item.option ~= nil then
+            local option = bounds.id(item.option)
+            if not option then return "CLI descriptor flag option reference is malformed" end
+            output[option] = true
+        end
+        for _, name in ipairs({"then", "else"}) do
+            if item[name] ~= nil then
+                local branch_error = flag_options(item[name], output, depth + 1)
+                if branch_error then return branch_error end
+            end
+        end
+    else
+        for _, child in ipairs(value :: {unknown}) do
+            local child_error = flag_options(child, output, depth + 1)
+            if child_error then return child_error end
+        end
+    end
+    return nil
+end
+
+local function validate_flag_graph(flags: Object): string?
+    local visiting: {[string]: boolean} = {}
+    local visited: {[string]: boolean} = {}
+    local function visit(name: string): string?
+        if visiting[name] then return "CLI descriptor flag dependency cycle includes " .. name end
+        if visited[name] then return nil end
+        visiting[name] = true
+        local flag = bounds.object(flags[name]) or {}
+        local dependencies: {[string]: boolean} = {}
+        local collect_error = flag_options(flag.argv, dependencies, 0)
+        if collect_error then return collect_error end
+        for dependency in pairs(dependencies) do
+            if flags[dependency] == nil then return "CLI descriptor flag " .. name .. " references an undeclared flag " .. dependency end
+            local dependency_error = visit(dependency)
+            if dependency_error then return dependency_error end
+        end
+        visiting[name] = nil
+        visited[name] = true
+        return nil
+    end
+    for name in pairs(flags) do
+        local cycle_error = visit(name)
+        if cycle_error then return cycle_error end
+    end
+    return nil
+end
+
 function M.decode(value: unknown): (Descriptor?, string?)
     local item, object_error = object(value, "CLI descriptor")
     if not item then return nil, object_error end
@@ -226,6 +427,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if not spec then return nil, spec_error end
         if bounds.fields(spec, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option", "constant"}) then return nil, "CLI descriptor.options." .. tostring(name) .. " has unknown fields" end
         if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "budget", "duration", "ids", "codex_profile"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
+        if spec.type == "enum" and spec.values == nil then return nil, "CLI descriptor.options." .. tostring(name) .. ".values is required for an enum" end
         if spec.values ~= nil then
             local values, values_error = sequence(spec.values, "CLI descriptor.options." .. tostring(name) .. ".values", 32)
             if not values or #values == 0 then return nil, values_error or "CLI descriptor option values are empty" end
@@ -235,13 +437,19 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if spec.profiles ~= nil then
             local supported, supported_error = sequence(spec.profiles, "CLI descriptor option profiles", 16)
             if not supported then return nil, supported_error end
-            for _, candidate in ipairs(supported) do if not bounds.id(candidate) then return nil, "CLI descriptor option profile is invalid" end end
+            for _, candidate in ipairs(supported) do
+                if not bounds.id(candidate) or not bounds.member(candidate, profiles) then return nil, "CLI descriptor option profile is invalid" end
+            end
         end
         if spec.transform ~= nil and not bounds.member(spec.transform, {"presence", "sorted"}) then return nil, "CLI descriptor option transform is invalid" end
         if spec.forbid_option ~= nil and type(spec.forbid_option) ~= "boolean" then return nil, "CLI descriptor option forbid_option must be boolean" end
         if spec.constant ~= nil and not bounds.member(spec.constant, {"MAX_TURNS", "MAX_STEPS", "MAX_CONFIG_PROFILE_BYTES"}) then return nil, "CLI descriptor option constant is invalid" end
         for _, name in ipairs({"pattern", "invalid", "unsupported"}) do
             if spec[name] ~= nil and not bounds.text(spec[name], 256) then return nil, "CLI descriptor option " .. name .. " is invalid" end
+        end
+        if spec.default ~= nil then
+            local _, default_error = M.decode_option(tostring(name), spec, spec.default)
+            if default_error then return nil, "CLI descriptor.options." .. tostring(name) .. ".default: " .. default_error end
         end
     end
     local rules, rules_error = sequence(options.rules or {}, "CLI descriptor.options.rules", 32)
@@ -252,6 +460,26 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if bounds.fields(rule, {"kind", "field", "fields", "profile", "values", "message", "other"}) then return nil, "CLI descriptor option rule has unknown fields" end
         if not bounds.member(rule.kind, {"profile_fields", "values", "requires_empty", "forbid_pair", "forbid_nonempty"}) then return nil, "CLI descriptor option rule kind is invalid" end
         if rule.message ~= nil and not bounds.text(rule.message, 256) then return nil, "CLI descriptor option rule message is invalid" end
+        if rule.profile ~= nil and not bounds.member(rule.profile, profiles) then return nil, "CLI descriptor option rule profile is undeclared" end
+        if rule.kind == "profile_fields" then
+            local rule_fields, rule_fields_error = sequence(rule.fields, "CLI descriptor profile_fields.fields", 32)
+            if not rule_fields or #rule_fields == 0 then return nil, rule_fields_error or "CLI descriptor profile_fields.fields is empty" end
+            for _, field in ipairs(rule_fields) do
+                if not bounds.id(field) or fields[field :: string] == nil then return nil, "CLI descriptor profile_fields names an undeclared option" end
+            end
+        elseif rule.kind == "values" then
+            if not bounds.id(rule.field) or fields[rule.field :: string] == nil then return nil, "CLI descriptor values rule names an undeclared option" end
+            local rule_values, rule_values_error = sequence(rule.values, "CLI descriptor values rule.values", 32)
+            if not rule_values or #rule_values == 0 then return nil, rule_values_error or "CLI descriptor values rule is empty" end
+            for _, value in ipairs(rule_values) do if not bounds.text(value, 128) then return nil, "CLI descriptor values rule has an invalid value" end end
+        elseif rule.kind == "requires_empty" or rule.kind == "forbid_pair" then
+            local field = bounds.id(rule.field)
+            if not field or (field ~= "brief" and fields[field] == nil) or not bounds.id(rule.other) or fields[rule.other :: string] == nil then
+                return nil, "CLI descriptor option rule names an undeclared option"
+            end
+        elseif rule.kind == "forbid_nonempty" and (not bounds.id(rule.field) or fields[rule.field :: string] == nil) then
+            return nil, "CLI descriptor option rule names an undeclared option"
+        end
     end
 
     local flags, flags_error = object(item.flags, "CLI descriptor.flags")
@@ -261,7 +489,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
         local flag, flag_error = object(raw_flag, "CLI descriptor.flags." .. tostring(name))
         if not flag then return nil, flag_error end
         if bounds.fields(flag, {"field", "argv", "emit_default"}) then return nil, "CLI descriptor.flags." .. tostring(name) .. " has unknown fields" end
-        if not bounds.id(flag.field) or type(flag.emit_default) ~= "boolean" then return nil, "CLI descriptor.flags." .. tostring(name) .. " is malformed" end
+        if not bounds.id(flag.field) or fields[flag.field :: string] == nil or type(flag.emit_default) ~= "boolean" then return nil, "CLI descriptor.flags." .. tostring(name) .. " is malformed or names an undeclared option" end
         local flag_argv, flag_argv_error = sequence(flag.argv, "CLI descriptor.flags." .. tostring(name) .. ".argv", 8)
         if not flag_argv or #flag_argv == 0 then return nil, flag_argv_error or "CLI descriptor flag argv is empty" end
         for index, token in ipairs(flag_argv) do
@@ -301,6 +529,47 @@ function M.decode(value: unknown): (Descriptor?, string?)
             or not bounds.text(profile_file.path_template, 256) or not safe_relative(profile_file.path_template)
             or (profile_file.default_directory ~= nil and (not bounds.text(profile_file.default_directory, 128) or not safe_relative(profile_file.default_directory)))
             or type(profile_file.window_only) ~= "boolean" then return nil, "CLI descriptor provider-home profile file is invalid" end
+    end
+
+    local declared_fields: Object = {profile_id = true, brief = true}
+    for name in pairs(fields) do declared_fields[name] = true end
+    for _, name in ipairs({"window", "first_turn", "resume"}) do
+        local template = bounds.object(templates[name]) or {}
+        local template_error = validate_template_references(template.argv, "CLI descriptor.argv_templates." .. name .. ".argv", declared_fields, flags, 0)
+        if template_error then return nil, template_error end
+        if template.stdin ~= nil then
+            template_error = validate_template_references(template.stdin, "CLI descriptor.argv_templates." .. name .. ".stdin", declared_fields, flags, 0)
+            if template_error then return nil, template_error end
+        end
+        if template.stdin_json ~= nil then
+            template_error = validate_json_references(template.stdin_json, "CLI descriptor.argv_templates." .. name .. ".stdin_json", declared_fields, 0)
+            if template_error then return nil, template_error end
+        end
+        if template.stdin_when_any ~= nil then
+            local conditions, condition_error = sequence(template.stdin_when_any, "CLI descriptor.argv_templates." .. name .. ".stdin_when_any", 8)
+            if not conditions then return nil, condition_error end
+            for _, field in ipairs(conditions) do
+                local reference_error = check_reference(field, declared_fields, "CLI descriptor.argv_templates." .. name .. ".stdin_when_any")
+                if reference_error then return nil, reference_error end
+            end
+        end
+    end
+    for name, raw_flag in pairs(flags) do
+        local flag = bounds.object(raw_flag) or {}
+        local reference_error = check_reference(flag.field, declared_fields, "CLI descriptor.flags." .. tostring(name) .. ".field")
+        if reference_error then return nil, reference_error end
+        local flag_error = validate_template_references(flag.argv, "CLI descriptor.flags." .. tostring(name) .. ".argv", declared_fields, flags, 0)
+        if flag_error then return nil, flag_error end
+    end
+    local cycle_error = validate_flag_graph(flags)
+    if cycle_error then return nil, cycle_error end
+    if home.required_profile_file ~= nil then
+        local profile_file = bounds.object(home.required_profile_file) or {}
+        local reference_error = check_reference(profile_file.field, declared_fields, "CLI descriptor.provider_home.required_profile_file.field")
+        if reference_error then return nil, reference_error end
+        local path_template = bounds.text(profile_file.path_template, 256) or ""
+        local template_error = check_format_references(path_template, declared_fields, "CLI descriptor.provider_home.required_profile_file.path_template")
+        if template_error then return nil, template_error end
     end
 
     return item :: Descriptor, nil

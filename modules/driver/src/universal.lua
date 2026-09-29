@@ -4,7 +4,6 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local descriptor_reader = require("descriptor")
 local configuration = require("configuration")
-local turn_budget = require("turn_budget")
 local types = require("types")
 local locate = require("locate")
 local codec_registry = require("codec_registry")
@@ -30,75 +29,6 @@ type LaunchAPI = {
     MAX_STEPS: integer?,
     MAX_CONFIG_PROFILE_BYTES: integer?,
 }
-
-local function text(value: unknown, field: string, limit: integer?): (string?, string?)
-    local selected = bounds.text(value, limit)
-    if not selected then return nil, field .. " must be bounded text" end
-    return selected, nil
-end
-
-local function field_error(spec: Object, field: string, fallback: string): string
-    local message = bounds.text(spec.invalid, 256)
-    return message or (field .. " " .. fallback)
-end
-
-local function decode_field(field: string, spec: Object, value: unknown): (unknown?, string?)
-    local kind = spec.type
-    if kind == "enum" then
-        local selected = bounds.member(value, spec.values :: {string})
-        if not selected then return nil, field_error(spec, field, "is not one Bee admits") end
-        return selected, nil
-    elseif kind == "boolean" then
-        if type(value) ~= "boolean" then return nil, field_error(spec, field, "must be a boolean") end
-        return value, nil
-    elseif kind == "id" then
-        if spec.forbid_option == true and type(value) == "string" and (value :: string):sub(1, 1) == "-" then
-            return nil, field_error(spec, field, "must not be a command-line option")
-        end
-        local selected = bounds.id(value)
-        if not selected then return nil, field_error(spec, field, "is not an identifier") end
-        if spec.forbid_option == true and selected:sub(1, 1) == "-" then
-            return nil, field_error(spec, field, "must not be a command-line option")
-        end
-        return selected, nil
-    elseif kind == "model" then
-        local selected = bounds.text(value, 128)
-        if not selected or selected == "" or not selected:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then
-            return nil, field_error(spec, field, "is not one bounded model identifier")
-        end
-        return selected, nil
-    elseif kind == "budget" then
-        local selected, budget_error = turn_budget.decode(value, field)
-        if not selected then return nil, budget_error or field_error(spec, field, "is invalid") end
-        if spec.max ~= nil and selected > (bounds.count(spec.max) or 0) then return nil, field_error(spec, field, "exceeds its admitted limit") end
-        return selected, nil
-    elseif kind == "duration" then
-        local selected = bounds.text(value, 32)
-        if not selected or not selected:match("^[1-9][0-9]*[smh]$") then return nil, field_error(spec, field, "must be a positive duration string") end
-        return selected, nil
-    elseif kind == "codex_profile" then
-        local selected = bounds.text(value, 64)
-        if not selected or not selected:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") then return nil, field_error(spec, field, "must be a plain Codex profile name") end
-        return selected, nil
-    elseif kind == "ids" then
-        local selected, ids_error = bounds.ids(value, true)
-        if not selected then return nil, field .. ": " .. tostring(ids_error) end
-        if type(spec.pattern) == "string" then
-            for _, entry in ipairs(selected) do
-                if not entry:match(spec.pattern :: string) then return nil, field_error(spec, field, "contains invalid value") end
-            end
-        end
-        if spec.values ~= nil then
-            for _, entry in ipairs(selected) do
-                if not bounds.member(entry, spec.values :: {string}) then return nil, field_error(spec, field, "contains unsupported value " .. entry) end
-            end
-        end
-        if spec.transform == "presence" then return #selected > 0, nil end
-        if spec.transform == "sorted" then table.sort(selected) end
-        return selected, nil
-    end
-    return nil, "CLI descriptor has an unsupported " .. field .. " decoder"
-end
 
 local function rule_error(rule: Object, fallback: string): string
     return bounds.text(rule.message, 256) or fallback
@@ -170,11 +100,13 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
         local field = tostring(name)
         local spec = bounds.object(raw_spec) or {}
         if object[field] ~= nil then
-            local decoded, decode_error = decode_field(field, spec, object[field])
+            local decoded, decode_error = descriptor_reader.decode_option(field, spec, object[field])
             if decode_error then return nil, decode_error end
             request[field] = decoded
         elseif spec.default ~= nil then
-            request[field] = spec.default
+            local decoded, decode_error = descriptor_reader.decode_option(field, spec, spec.default)
+            if decode_error then return nil, decode_error end
+            request[field] = decoded
         end
         local value = request[field]
         local supplied = value ~= nil
@@ -201,6 +133,23 @@ end
 local function as_list(value: unknown): {unknown}
     if type(value) ~= "table" then return {} end
     return value :: {unknown}
+end
+
+local function bounded_template_items(value: unknown): ({unknown}?, string?)
+    if type(value) ~= "table" then return nil, "CLI argv template must be an array" end
+    local source = value :: {[unknown]: unknown}
+    local count = 0
+    for key in pairs(source) do
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, "CLI argv template must be a dense array" end
+        count = count + 1
+        if count > descriptor_reader.MAX_TEMPLATE_ITEMS then return nil, "CLI argv template exceeds its item limit" end
+    end
+    local result: {unknown} = {}
+    for index = 1, count do
+        if source[index] == nil then return nil, "CLI argv template must be a dense array" end
+        result[index] = source[index]
+    end
+    return result, nil
 end
 
 local function condition(item: Object, request: Request): boolean
@@ -251,7 +200,7 @@ local function render_json(value: unknown, request: Request, depth: integer): (u
     return result, nil
 end
 
-local function render_option(selected: Descriptor, name: string, request: Request): ({string}?, string?)
+local function render_option(selected: Descriptor, name: string, request: Request, depth: integer): ({string}?, string?)
     local flags = bounds.object(selected.flags) or {}
     local spec = bounds.object(flags[name])
     if not spec then return nil, "CLI descriptor omits the " .. name .. " flag template" end
@@ -264,16 +213,31 @@ local function render_option(selected: Descriptor, name: string, request: Reques
         local option_spec = bounds.object(option_fields[field]) or {}
         if value == option_spec.default then return {}, nil end
     end
-    local rendered, render_error = M.render_argv(spec.argv, request, selected)
+    local rendered, render_error = M.render_argv(spec.argv, request, selected, depth)
     if not rendered then return nil, render_error end
     return rendered, nil
 end
 
-function M.render_argv(raw: unknown, request: Request, selected: Descriptor): ({string}?, string?)
+function M.render_argv(raw: unknown, request: Request, selected: Descriptor, depth: integer?): ({string}?, string?)
+    local nesting = depth or 0
+    if nesting < 0 or nesting > descriptor_reader.MAX_TEMPLATE_DEPTH then return nil, "CLI argv template exceeds its rendering depth bound" end
+    local nodes, nodes_error = bounded_template_items(raw)
+    if not nodes then return nil, nodes_error end
     local result: {string} = {}
-    for _, node in ipairs(as_list(raw)) do
+    local function append(argument: string): string?
+        if #result >= descriptor_reader.MAX_TEMPLATE_ITEMS then return "CLI argv rendering exceeds its item limit" end
+        result[#result + 1] = argument
+        return nil
+    end
+    local function append_many(arguments: {string}): string?
+        if #result + #arguments > descriptor_reader.MAX_TEMPLATE_ITEMS then return "CLI argv rendering exceeds its item limit" end
+        for _, argument in ipairs(arguments) do result[#result + 1] = argument end
+        return nil
+    end
+    for _, node in ipairs(nodes) do
         if type(node) == "string" then
-            result[#result + 1] = node :: string
+            local append_error = append(node :: string)
+            if append_error then return nil, append_error end
         else
             local item = bounds.object(node)
             if not item then return nil, "CLI argv template is malformed" end
@@ -281,13 +245,18 @@ function M.render_argv(raw: unknown, request: Request, selected: Descriptor): ({
                 local field = bounds.id(item.field)
                 local value = field and request[field] or nil
                 if type(value) ~= "string" and type(value) ~= "number" then return nil, "CLI argv template field is absent or not scalar" end
-                result[#result + 1] = tostring(value)
+                local append_error = append(tostring(value))
+                if append_error then return nil, append_error end
             elseif item.format ~= nil then
-                result[#result + 1] = interpolate(item.format :: string, request)
+                local append_error = append(interpolate(item.format :: string, request))
+                if append_error then return nil, append_error end
             elseif item.option ~= nil then
-                local expanded, expand_error = render_option(selected, tostring(item.option), request)
+                local option = bounds.id(item.option)
+                if not option then return nil, "CLI argv template option is malformed" end
+                local expanded, expand_error = render_option(selected, option, request, nesting + 1)
                 if not expanded then return nil, expand_error end
-                for _, arg in ipairs(expanded) do result[#result + 1] = arg end
+                local append_error = append_many(expanded)
+                if append_error then return nil, append_error end
             elseif item.join ~= nil then
                 local join = bounds.object(item.join) or {}
                 local field = bounds.id(join.field)
@@ -308,12 +277,14 @@ function M.render_argv(raw: unknown, request: Request, selected: Descriptor): ({
                         if not seen[mapped] then seen[mapped] = true; parts[#parts + 1] = mapped end
                     end
                 end
-                result[#result + 1] = table.concat(parts, type(join.separator) == "string" and join.separator or "")
+                local append_error = append(table.concat(parts, type(join.separator) == "string" and join.separator or ""))
+                if append_error then return nil, append_error end
             elseif item["if"] ~= nil or item.if_any ~= nil or item.if_none ~= nil then
                 local branch = condition(item, request) and item["then"] or item["else"] or {}
-                local expanded, expand_error = M.render_argv(branch, request, selected)
+                local expanded, expand_error = M.render_argv(branch, request, selected, nesting + 1)
                 if not expanded then return nil, expand_error end
-                for _, arg in ipairs(expanded) do result[#result + 1] = arg end
+                local append_error = append_many(expanded)
+                if append_error then return nil, append_error end
             else
                 return nil, "CLI argv template uses an unknown operation"
             end
@@ -418,6 +389,17 @@ local function build_launch(selected: Descriptor, request: Request): (types.Laun
     return launch, nil
 end
 
+local function launch_reply(ref: string, raw: unknown, dispatch: boolean): Object
+    local descriptor, load_error = descriptor_reader.load(ref)
+    if not descriptor then return {ok = false, error = load_error or "CLI descriptor is unavailable"} end
+    local decoded, decode_error = decode_request(descriptor :: Descriptor, raw)
+    if not decoded then return {ok = false, error = decode_error or "launch request is invalid"} end
+    if dispatch and not bounds.id(decoded.resume_ref) then return {ok = false, error = "a dispatched turn needs resume_ref"} end
+    local launch, launch_error = build_launch(descriptor :: Descriptor, decoded :: Request)
+    if not launch then return {ok = false, error = launch_error or "CLI launch template is invalid"} end
+    return {ok = true, launch = launch}
+end
+
 function M.launch(ref: string): LaunchAPI
     local function selected(): (Descriptor?, string?)
         local loaded, load_error = descriptor_reader.load(ref)
@@ -442,23 +424,11 @@ function M.launch(ref: string): LaunchAPI
 end
 
 function M.prepare(ref: string): (unknown) -> Object
-    local launch = M.launch(ref)
-    return function(raw: unknown): Object
-        local decoded, decode_error = launch.decode(raw)
-        if not decoded then return {ok = false, error = decode_error} end
-        return {ok = true, launch = launch.specification(decoded)}
-    end
+    return function(raw: unknown): Object return launch_reply(ref, raw, false) end
 end
 
 function M.dispatch(ref: string): (unknown) -> Object
-    local launch = M.launch(ref)
-    return function(raw: unknown): Object
-        local decoded, decode_error = launch.decode(raw)
-        if not decoded then return {ok = false, error = decode_error} end
-        local request = decoded :: Request
-        if not bounds.id(request.resume_ref) then return {ok = false, error = "a dispatched turn needs resume_ref"} end
-        return {ok = true, launch = launch.specification(request)}
-    end
+    return function(raw: unknown): Object return launch_reply(ref, raw, true) end
 end
 
 -- The contract's configure boundary is shared. Descriptors select a thin

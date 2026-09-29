@@ -1,6 +1,13 @@
 -- MIT. CLI descriptors are strict, bounded registry data.
 local test = require("test")
 local descriptor = require("descriptor")
+type Object = {[string]: unknown}
+
+local function copy_object(value: Object): Object
+    local result: Object = {}
+    for key, item in pairs(value) do result[key] = item end
+    return result
+end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
@@ -41,6 +48,45 @@ local function define_tests()
                 test.is_nil(decoded)
                 test.not_nil(decode_error)
             end
+        end)
+
+        test.it("rejects invalid defaults, undeclared template fields and cyclic flag dependencies", function()
+            local claude = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
+
+            local bad_default = copy_object(claude)
+            local options = copy_object(claude.options :: Object)
+            local fields = copy_object(options.fields :: Object)
+            local permission = copy_object(fields.permission_mode :: Object)
+            permission.default = "bypassPermissions"
+            fields.permission_mode = permission
+            options.fields = fields
+            bad_default.options = options
+            local decoded, decode_error = descriptor.decode(bad_default)
+            test.is_nil(decoded)
+            test.not_nil(decode_error)
+
+            local undeclared_field = copy_object(claude)
+            local templates = copy_object(claude.argv_templates :: Object)
+            local window = copy_object(templates.window :: Object)
+            local argv: {unknown} = {}
+            for _, item in ipairs(window.argv :: {unknown}) do argv[#argv + 1] = item end
+            argv[#argv + 1] = {field = "not_declared"}
+            window.argv = argv
+            templates.window = window
+            undeclared_field.argv_templates = templates
+            decoded, decode_error = descriptor.decode(undeclared_field)
+            test.is_nil(decoded)
+            test.not_nil(decode_error)
+
+            local cyclic_flag = copy_object(claude)
+            local flags = copy_object(claude.flags :: Object)
+            local turn_budget = copy_object(flags.turn_budget :: Object)
+            turn_budget.argv = {{option = "turn_budget"}}
+            flags.turn_budget = turn_budget
+            cyclic_flag.flags = flags
+            decoded, decode_error = descriptor.decode(cyclic_flag)
+            test.is_nil(decoded)
+            test.not_nil(decode_error)
         end)
     end)
 end

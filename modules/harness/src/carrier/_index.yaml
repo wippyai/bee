@@ -34,9 +34,9 @@ entries:
     stream_json: bee.driver.transport:stream_json
     settle: bee.harness.carrier:settle
     record_types: bee.threads.records:types
-- name: inbox
+- name: hints
   kind: library.lua
-  source: file://inbox.lua
+  source: file://hints.lua
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -123,7 +123,7 @@ entries:
     gateway_protocol: bee.gateway:protocol
     service_reply: bee.protocol:reply
     carrier_types: bee.harness.carrier:types
-    inbox: bee.harness.carrier:inbox
+    hints: bee.harness.carrier:hints
     permission_exchange: bee.harness.carrier:permission_exchange
     hook_records: bee.harness.carrier:hook_records
 - name: lease

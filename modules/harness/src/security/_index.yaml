@@ -62,11 +62,10 @@ entries:
     effect: allow
 - name: carrier_environment_policy
   kind: security.policy
-  groups: [bee.harness.launch:agent_launch_execution_scope]
   meta:
     comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables
-      while resolving host launch policy; the agent-launch execution scope holds the same entries so admission
-      resolves the executable_env and environment_refs of the definitions it admits
+      while resolving host launch policy, so admission resolves the executable_env and environment_refs of the
+      definitions it admits
   policy:
     actions:
     - env.get
@@ -123,12 +122,4 @@ entries:
   policy:
     actions: [bee.workspace.manager.launch]
     resources: '*'
-    effect: allow
-- name: agent_call_policy
-  kind: security.policy
-  meta:
-    comment: Lets an application call the managed-agent facade; which definitions it may launch is a separate host grant of bee.harness.launch on each definition
-  policy:
-    actions: [funcs.call]
-    resources: [bee.harness.launch:agent_call]
     effect: allow

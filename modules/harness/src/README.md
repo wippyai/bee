@@ -17,23 +17,6 @@ execution composes placement with the thread contracts.
 
 ## Rules
 
-A fixture launch policy can enable `inbox_push` for a Claude structured
-stream-json profile. The carrier subscribes to message hints, checks the
-oldest outstanding inbox item at a 500 ms poll interval after lost hints,
-and writes one identified user message after the prior turn ends. The write
-journal is fenced by carrier epoch; accepted runner input is recorded through
-the Threads owner before the journal entry is retired. A replacement checks
-the same write ID and reoffers the same inbox record under its new epoch.
-Only agent acknowledgment or a correlated reply completes delivery. A
-production policy enables `inbox_push` by naming `push_acceptance`: the
-profile-pinned adapter, the acceptance record and the proven fixture digest.
-The carrier verifies the acceptance against the pinned binding, profile,
-adapter and executable measurement, refuses a swapped executable at plan
-time, and never opens a new attempt while the refusal stands. The shipped
-policies leave push disabled. A fresh structured attempt on a driver without
-a between-turns controller starts carrying its oldest outstanding inbox item
-in the brief instead; resumed attempts keep their provider session.
-
 A binding is compatible when it implements `bee.driver:driver` with four
 bound functions, its `profiles_ref` names a `harness.profile` entry that
 points back at it, the declaration decodes under `bee.driver:profile`, and

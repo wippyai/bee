@@ -182,10 +182,7 @@ explicitly authorized host HOME and select no login projection; private batch
 profiles project their declared files into attempt homes. Fixture unit tests
 cover all six driver declarations and placement paths, and the confined Codex
 fixture worker verifies that unrelated machine-home files stay outside its
-attempt home. `thread-launch-check` uses fixture CLIs only. The opt-in
-`thread-launch-live-check` uses an installed Claude or Codex CLI with its local
-login file, passes no provider API key variables, and withholds runtime output.
-Standard gates never run the live smoke.
+attempt home. `managed-launch-fixture-check` uses fixture CLIs only.
 
 ## Capability
 

@@ -9,9 +9,8 @@ future behavior.
 Source citations use paths from the Bee repository root. `../framework` and
 `../dataflow` are sibling Wippy repositories; `../../kickside/main` is the
 Kickside reference tree. Line numbers refer to the surveyed source trees.
-The sections "Implemented: framework closure and CLI admission",
-"Implemented: workspace agent selection", and "Implemented: agent run as a
-function and cancellation contract" describe the implemented Bee contract in
+The sections "Implemented: framework closure and CLI admission" and
+"Implemented: workspace agent selection" describe the implemented Bee contract in
 present tense; every other non-survey section remains a proposal.
 
 ## Implemented: framework closure and CLI admission

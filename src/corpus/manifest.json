@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10449,
+      "bytes": 10420,
       "id": "docs/gateway",
-      "sha256": "4cb3d8ad7fcd00d83a0b0e70437ba38bf3a20c9a0a4f32953171ef2659d2c539",
+      "sha256": "808d25aee2c85ab85ce13f8cefece65c547908cd7f399a6bddf45d56f385e1e3",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 27072,
+      "bytes": 25826,
       "id": "docs/threads",
-      "sha256": "958c6aefb74a1b9151b339a7bd1e1a5c17b65a3902d16adecdac539e82a2f886",
+      "sha256": "2d07c02e23b800948913690b4cad9d6bdb2b076da2f7fae68d71437332fe7322",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -419,9 +419,9 @@
       "topic": "component"
     },
     {
-      "bytes": 22231,
+      "bytes": 21046,
       "id": "component/harness",
-      "sha256": "d55c2e6ad7ebfb13082a7779ad10283e020307b92bdd966a6e536b28a5007810",
+      "sha256": "31a391a5bac353a9979420f148d2c6c2bc2d71cbe8eab2bb58cb0f6a9ff519dd",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -475,9 +475,9 @@
       "topic": "component"
     },
     {
-      "bytes": 22167,
+      "bytes": 21964,
       "id": "component/placement:native",
-      "sha256": "ca5dc6699365808dd53a385121f35ff69449c210978e878ed4db4164f17c24ed",
+      "sha256": "6de1f003aa0a6b0a35b3442fa8f2d7cf5bb5452cdaceef75baf140e3ad3ca31c",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -606,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 675824,
+    "bytes": 673161,
     "documents": 75
   }
 }

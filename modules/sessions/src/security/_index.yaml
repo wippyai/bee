@@ -22,6 +22,7 @@ entries:
     - bee.threads.service:work_settle
     - bee.threads.service:work_uncertain
     - bee.threads.service:operation_lookup
+    - bee.threads.service:operation_describe
     - bee.threads.service:feed_read
     - bee.harness.profiles:contract
     - bee.harness.profiles:call
@@ -52,5 +53,6 @@ entries:
     - bee.threads.service:work_settle
     - bee.threads.service:work_uncertain
     - bee.threads.service:operation_lookup
+    - bee.threads.service:operation_describe
     - bee.threads.service:feed_read
     effect: allow

@@ -46,6 +46,9 @@ end
 function M.operation_lookup(request: unknown): types.Reply
     return boundary.run(work_store.operation_lookup, request, false)
 end
+function M.operation_describe(request: unknown): types.Reply
+    return boundary.run(work_store.operation_describe, request, false)
+end
 function M.feed_read(request: unknown): types.Reply
     return boundary.run(work_store.feed_read, request, false)
 end

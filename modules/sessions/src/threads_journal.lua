@@ -8,7 +8,7 @@ M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.sessions:threads_journal_ref"
 M.METHODS = {"session_create", "session_describe", "session_scan", "session_transition", "work_send", "work_describe",
     "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "work_settle", "work_uncertain",
-    "operation_lookup", "feed_read"}
+    "operation_lookup", "operation_describe", "feed_read"}
 
 type Entry = {[string]: unknown}
 type Targets = {[string]: string}

@@ -725,6 +725,27 @@ function M.operation_lookup(db: sql.DB, actor: string, request: unknown): Result
     end)
 end
 
+function M.operation_describe(db: sql.DB, actor: string, request: unknown): Result
+    local caller, workspace, denied = authenticated(actor)
+    if denied then return denied end
+    local input = object(request)
+    local operation_ref = input and has_only(input, {operation = true}) and ref(input.operation) or nil
+    if not operation_ref then return missing_request() end
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        local row, query_error = query_one(tx, "SELECT operation_key, operation_ref, operation, request_digest, target_ref, receipt_json, committed_at " ..
+            "FROM bee_session_operations WHERE workspace_id = ? AND owner_actor = ? AND operation_ref = ?",
+            {workspace, caller, operation_ref}, "operation")
+        if query_error then return transaction.storage_failure(query_error) end
+        if not row then return failure("NOT_FOUND", "operation does not exist") end
+        if type(row.receipt_json) ~= "string" then return failure("INTERNAL", "operation receipt is corrupt") end
+        local receipt, decode_error = decode_json(row.receipt_json :: string)
+        if decode_error then return failure("INTERNAL", decode_error) end
+        return transaction.success({found = true, operation_key = row.operation_key, operation = row.operation,
+            operation_ref = row.operation_ref, target = row.target_ref, request_digest = row.request_digest,
+            committed_at = row.committed_at, receipt = receipt}, false)
+    end)
+end
+
 local function extension_payload(encoded: string): (Row?, string?, string?)
     local stored, decode_error = record.decode_json(encoded)
     if not stored or stored.kind ~= "observation" then return nil, nil, decode_error or "journal record is not an observation" end

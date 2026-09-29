@@ -366,6 +366,8 @@ entries:
     description: Persist uncertainty without retrying a turn whose outcome cannot be proven
   - name: operation_lookup
     description: Recover a caller-scoped operation receipt by key
+  - name: operation_describe
+    description: Read an exact caller-scoped operation receipt
   - name: feed_read
     description: Read canonical session events after an owner-local sequence
 - name: journal_local
@@ -387,6 +389,7 @@ entries:
       work_settle: bee.threads.service:work_settle
       work_uncertain: bee.threads.service:work_uncertain
       operation_lookup: bee.threads.service:operation_lookup
+      operation_describe: bee.threads.service:operation_describe
       feed_read: bee.threads.service:feed_read
 - name: owner
   kind: process.lua

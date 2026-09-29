@@ -348,13 +348,11 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         local session_ref = qualified("bs", node, workspace :: string, session_id)
         local stored_route: Row = {}
         for name, value in pairs(object(input.route) or {}) do stored_route[name] = value end
-        local placement_request = object(stored_route.placement_request)
-        if placement_request then
-            local retained_request: Row = {}
-            for name, value in pairs(placement_request) do retained_request[name] = value end
-            retained_request.session_ref = session_ref
-            stored_route.placement_request = retained_request
-        end
+        stored_route.session_ref = session_ref
+        stored_route.thread_id = thread_id
+        stored_route.owner_id = caller
+        stored_route.workspace_id = workspace
+        stored_route.action_id = session_ref
         local stored_route_json, stored_route_error = encode(stored_route)
         if not stored_route_json then return failure("INVALID_ARGUMENT", stored_route_error or "session route is invalid") end
         local now = transaction.now()

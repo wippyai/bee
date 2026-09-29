@@ -20,8 +20,8 @@ local function define_tests()
         test.it("creates sessions and immutable queued work with keyed replay and journal events", function()
             local sessions = harness.session_owner(WORKSPACE)
             local open_key = harness.key()
-            local open_request = {operation_key = open_key, title = "review", route = {placement_request = {
-                binding_ref = "driver", profile_id = "batch", workspace_id = WORKSPACE}}}
+            local open_request = {operation_key = open_key, title = "review", route = {
+                definition = "bee.test:definition", profile_id = "batch"}}
             local opened_reply = sessions:call("session_create", open_request)
             local opened = harness.value(opened_reply)
             local session_ref = opened.session
@@ -33,7 +33,11 @@ local function define_tests()
             local described = harness.value(sessions:call("session_describe", {session = session_ref}))
             test.eq(described.state, "active")
             test.eq(described.revision, 1)
-            test.eq(described.route.placement_request.session_ref, session_ref)
+            test.eq(described.route.session_ref, session_ref)
+            test.eq(described.route.action_id, session_ref)
+            test.eq(described.route.workspace_id, WORKSPACE)
+            test.eq(described.route.owner_id, "sessions-owner")
+            test.is_true(type(described.route.thread_id) == "string" and described.route.thread_id ~= "")
 
             local key = harness.key()
             local request = {session = session_ref, operation_key = key, input = {text = "inspect"}, output_schema = "bee:Text@1"}

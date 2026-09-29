@@ -196,22 +196,24 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     if not route or not sender or not input then
         add_issue(pass, due.work, "turn_input", input_error or "Threads returned an incomplete executor input"); return
     end
-    local intent = object(turn.checkpoint) or {attempt_id = turn.turn, generation = 1}
     local context = object(turn.context) or {}
-    local placement_request: Object = {}
-    local stored_placement = object(route.placement_request)
-    if stored_placement then
-        for name, value in pairs(stored_placement) do placement_request[name] = value end
+    local admission: Object = {attempt_id = turn.turn, definition_ref = route.definition,
+        workspace_id = route.workspace_id, owner_id = route.owner_id, thread_id = route.thread_id,
+        session_ref = route.session_ref, action_id = route.action_id, brief = input,
+        expected_plan_digest = route.plan_digest, profile_id = route.profile_id}
+    if route.saved_profile_id ~= nil then admission.saved_profile_id = route.saved_profile_id end
+    if route.saved_profile_revision ~= nil then admission.saved_profile_revision = route.saved_profile_revision end
+    if route.workdir ~= nil then admission.workdir = route.workdir end
+    if not valid_id(admission.definition_ref) or not valid_id(admission.workspace_id) or not valid_id(admission.owner_id)
+        or not valid_id(admission.thread_id) or not valid_id(admission.session_ref) or not valid_id(admission.action_id)
+        or type(admission.expected_plan_digest) ~= "string" then
+        add_issue(pass, due.work, "turn_input", "Threads returned an incomplete retained session admission route"); return
     end
-    placement_request.attempt_id = intent.attempt_id or turn.turn
-    placement_request.binding_ref = route.driver_binding_ref
-    placement_request.profile_id = route.profile_id
-    local invocation: Object = {attempt_id = intent.attempt_id or turn.turn,
-        generation = intent.generation or 1, prompt = input, sender = sender,
+    local invocation: Object = {attempt_id = turn.turn,
+        generation = turn.owner_epoch, prompt = input, sender = sender, admission = admission,
         driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id,
         driver_methods = route.driver_methods, driver_options = route.driver_options or {},
-        placement_methods = route.placement_methods, placement_request = placement_request,
-        checkpoint = context}
+        placement_methods = route.placement_methods, checkpoint = context}
     if context.attempt_id ~= nil then invocation.previous_attempt_id = context.attempt_id end
     local outcome, run_error = executor.run_turn(invocation)
     if run_error or not outcome then add_issue(pass, due.work, "run_turn", run_error or "external executor returned no outcome"); return end

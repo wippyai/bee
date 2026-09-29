@@ -27,3 +27,119 @@ entries:
     scheduler: bee.sessions.service:scheduler
     threads: bee.tests.fixtures.sessions:threads_owner
     executor: bee.tests.fixtures.sessions:fake_executor
+- name: fake_owner
+  kind: contract.binding
+  meta: {type: test_support}
+  contracts:
+  - contract: bee.sessions:contract
+    default: true
+    methods:
+      open: bee.tests.sessions:fake_open
+      run: bee.tests.sessions:fake_run
+      send: bee.tests.sessions:fake_send
+      await: bee.tests.sessions:fake_await
+      join: bee.tests.sessions:fake_join
+      get: bee.tests.sessions:fake_get
+      cancel: bee.tests.sessions:fake_cancel
+      close: bee.tests.sessions:fake_close
+      list: bee.tests.sessions:fake_list
+- name: fake_catalog_owner
+  kind: contract.binding
+  meta: {type: test_support}
+  contracts:
+  - contract: bee.sessions:catalog
+    default: true
+    methods:
+      list: bee.tests.sessions:fake_catalog
+- name: fake_open
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: open
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_run
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: run
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_send
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: send
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_await
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: await
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_join
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: join
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_get
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: get
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_cancel
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: cancel
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_close
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: close
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_list
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: list
+  meta: {type: test_support}
+  modules: [security]
+- name: fake_catalog
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: catalog
+  meta: {type: test_support}
+  modules: [security]
+- name: probe
+  kind: function.lua
+  source: file://probe.lua
+  method: run
+  meta: {type: test_support}
+  imports:
+    sessions: bee.application:sessions
+- name: probe_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: ['*']
+    resources: ['*']
+    effect: allow
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.application:sessions_protocol
+- name: client_test
+  kind: function.lua
+  source: file://client_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    sessions: bee.application:sessions
+    protocol: bee.application:sessions_protocol

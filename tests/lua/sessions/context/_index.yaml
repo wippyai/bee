@@ -1,0 +1,17 @@
+version: '1.0'
+namespace: bee.application
+entries:
+- name: context
+  kind: contract.definition
+  meta: {type: test_support}
+  methods:
+  - name: get_event
+    description: The durable event the calling application handler is processing
+- name: context_fake
+  kind: contract.binding
+  meta: {type: test_support}
+  contracts:
+  - contract: bee.application:context
+    default: true
+    methods:
+      get_event: bee.sessions:fake_get_event

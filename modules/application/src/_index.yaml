@@ -21,6 +21,20 @@ entries:
     interaction: bee.application:interaction
     thread_bounds: bee.threads.records:bounds
     thread_protocol: bee.application:thread_protocol
+- name: sessions_protocol
+  kind: library.lua
+  source: file://sessions_protocol.lua
+  imports:
+    bounds: bee.protocol:bounds
+    canonical: bee.protocol:canonical
+- name: sessions
+  kind: library.lua
+  source: file://sessions.lua
+  modules: [contract, hash]
+  imports:
+    bounds: bee.protocol:bounds
+    canonical: bee.protocol:canonical
+    protocol: bee.application:sessions_protocol
 - name: arguments
   kind: library.lua
   source: file://arguments.lua

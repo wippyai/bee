@@ -582,7 +582,7 @@ local function define_tests()
             local directory = mcp.tool("session_directory")
             test.eq(directory and directory.operation, "bee.threads.service:inbox_describe")
             test.eq(directory and directory.policies[2], mcp.TOOL_POLICY_REFS.discover)
-            local send = mcp.tool("session_send")
+            local send = mcp.tool("session_inbox_send")
             test.eq(send and send.operation, "bee.threads.service:inbox_send")
             test.eq(send and send.policies[2], mcp.TOOL_POLICY_REFS.send_grant)
             local base = {address = {node_id = "node-a", action_id = "action-b"}, grant_epoch = 3,

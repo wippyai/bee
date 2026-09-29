@@ -1251,10 +1251,10 @@ func reportInboxPeer(url, authorization string, report object, role string) {
 	}
 	if role == "inbox_waiter" {
 		args := object{"address": peer["address"], "grant_epoch": peer["grant_epoch"], "idempotency_key": "inbox-hello", "message_id": "inbox-hello", "content": object{"text": "hello"}}
-		first := call("session_send", args)
+		first := call("session_inbox_send", args)
 		report["sent_ok"] = first["ok"]
 		report["sent"] = first["value"]
-		replay := call("session_send", args)
+		replay := call("session_inbox_send", args)
 		report["replayed"] = replay["replayed"]
 		report["replay_record_id"] = mustObject(replay["value"])["record_id"]
 		answer := awaitItem("reply")

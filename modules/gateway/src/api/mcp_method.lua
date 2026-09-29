@@ -15,6 +15,7 @@ local mcp = require("mcp")
 local catalog = require("catalog")
 local context = require("context")
 local sessions = require("sessions")
+local session_tools = require("session_tools")
 local remote = require("remote")
 local bounds = require("bounds")
 local sends = require("sends")
@@ -274,7 +275,7 @@ local function inbox_target(binding: gateway.Binding, address: unknown, local_no
     for _, item in ipairs(candidates) do if item.action_id == action_id then return item, nil end end
     return nil, refused("NOT_FOUND", "action address is not in this workspace")
 end
--- A remote session_send names a node-qualified address: the host-selected
+-- A remote session_inbox_send names a node-qualified address: the host-selected
 -- resolver answers the thread and workspace it names on its own node, and the
 -- gateway sends there with the same body it would send locally. The remote
 -- owner authenticates the forwarded principal and re-checks every grant, so
@@ -367,7 +368,31 @@ local function member_thread(executor: funcs.Executor, request: Object, bound: s
     return thread_id, nil
 end
 
+-- The default session tools are projections of the bee.sessions owner
+-- contracts. The owner binding opens as the bound subject; the request is the
+-- validated payload and identity travels only in the authenticated context. A
+-- reply that violates the published schema is an owner fault, not a result.
+local function session_projection(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
+    local policies, policy_error = policies_for(tool.policies)
+    if not policies then return refused("UNAVAILABLE", policy_error or "tool policy is unavailable") end
+    local contract_id = session_tools.target(tool.name)
+    if not contract_id then return refused("INTERNAL", "session tool has no owner contract") end
+    local instance, failure = subject_call.contract(binding, policies, values, contract_id)
+    if not instance then
+        local fault = failure and failure.error
+        return refused(fault and fault.code or "DENIED", fault and fault.message or "owner binding is unavailable", nil, true)
+    end
+    local remedy = request.operation_key ~= nil and "retry with the same operation_key" or nil
+    local reply, call_error = session_tools.call(instance, tool.name, request)
+    if call_error then return refused("UNAVAILABLE", tostring(call_error), nil, true, remedy) end
+    local checked, check_error = session_tools.result(tool.name, reply)
+    if not checked then return refused("UNAVAILABLE", check_error or "owner returned an invalid reply", nil, true, remedy) end
+    local encoded, encode_error = json.encode(checked)
+    if encode_error or not encoded then return refused("UNAVAILABLE", "owner reply could not be encoded", nil, true, remedy) end
+    return mcp.tool_result(encoded, checked.ok ~= true, checked)
+end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?, page_arguments: mcp.SessionPageArgs?): Object
+    if session_tools.is_session_tool(tool.name) then return session_projection(binding, tool, request, values) end
     if tool.name == "run_status" or tool.name == "run_wait" or tool.name == "run_cancel" then
         return run_tool(binding, tool, request, values)
     end
@@ -379,7 +404,7 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         return list_directory(binding, executor, page_arguments)
     end
     if tool.name == "capabilities" then return capabilities(binding) end
-    if tool.name == "session_send" or tool.name == "session_reply" then
+    if tool.name == "session_inbox_send" or tool.name == "session_reply" then
         local address = bounds.object(request.address)
         local node_id, node_error = local_node()
         if not node_id then return refused("UNAVAILABLE", node_error or "node identity unavailable") end
@@ -601,10 +626,11 @@ local function handle(): nil
         arguments, argument_error = parsed, parse_error
         page_arguments = parsed
     elseif tool.name == "thread_notify" then arguments, argument_error = mcp.notify_arguments(parameters)
-    elseif tool.name == "session_send" then arguments, argument_error = mcp.inbox_message_arguments(parameters, false)
+    elseif tool.name == "session_inbox_send" then arguments, argument_error = mcp.inbox_message_arguments(parameters, false)
     elseif tool.name == "session_reply" then arguments, argument_error = mcp.inbox_message_arguments(parameters, true)
     elseif tool.name == "session_inbox" then arguments, argument_error = mcp.inbox_page_arguments(parameters)
     elseif tool.name == "session_ack" then arguments, argument_error = mcp.inbox_ack_arguments(parameters)
+    elseif session_tools.is_session_tool(tool.name) then arguments, argument_error = session_tools.decode(tool.name, parameters)
     elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
     elseif tool.name == "run_status" then arguments, argument_error = mcp.run_arguments(parameters, false)
     elseif tool.name == "run_wait" then arguments, argument_error = mcp.run_arguments(parameters, false)

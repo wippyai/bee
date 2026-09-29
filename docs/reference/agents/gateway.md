@@ -70,7 +70,7 @@ authority.
 ## Agent tools
 
 The host may admit thread_read, thread_wait, thread_message, thread_sessions,
-thread_notify, session_directory, session_send, session_inbox, session_ack,
+thread_notify, session_directory, session_inbox_send, session_inbox, session_ack,
 session_reply, thread_launch, launch_definitions, capabilities, run_status,
 run_wait, run_cancel, Governance overlay, Hub components, Hub installation
 requests (install_request, uninstall_request, install_status), delivery and
@@ -155,7 +155,7 @@ to its records. A send grant alone does not make a peer discoverable. If
 names collide in historical data, callers use the exact address; new live
 admissions reject a duplicate workspace name.
 
-session_send takes an exact address, current `grant_epoch`, retry key,
+session_inbox_send takes an exact address, current `grant_epoch`, retry key,
 `message_id` and bounded content. The gateway supplies the authenticated
 sender action and thread and computes the payload digest. The destination
 owner requires a host-selected `bee.sessions.send` policy for the exact
@@ -171,7 +171,7 @@ receipts. A fixture-enabled Claude structured carrier can insert an identified
 item between turns through its fenced stdin controller. Shipped production
 policies leave that path disabled pending executable acceptance. The gateway
 does not type into a PTY or forward inbox messages across Hive.
-`session_send` and `session_inbox` expose the persisted `delivery_status`:
+`session_inbox_send` and `session_inbox` expose the persisted `delivery_status`:
 `waiting_for_restart` when the target has no live attempt and `undeliverable`
 when its action has ended. These statuses do not change the item's receipt
 `state` or grant an automatic restart.

@@ -311,7 +311,7 @@ entries:
     environment: {}
     environment_refs: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
+    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_inbox_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
     profile_instructions: true
@@ -348,7 +348,7 @@ entries:
     - thread_sessions
     - thread_notify
     - session_directory
-    - session_send
+    - session_inbox_send
     - session_inbox
     - session_ack
     - session_reply

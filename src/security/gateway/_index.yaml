@@ -189,6 +189,15 @@ entries:
     actions: [funcs.call]
     resources: [bee.apps:open_call]
     effect: allow
+- name: gateway_tool_session_policy
+  kind: security.policy.expr
+  meta:
+    comment: A bound MCP subject opens the bee.sessions owner contracts and calls their methods for the default session tools; owners authorize every operation against the authenticated subject again
+  policy:
+    expression: '(action == "contract.open" && resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$") || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
+    actions: [contract.open, contract.call, funcs.call]
+    resources: ['*']
+    effect: allow
 - name: gateway_tool_install_policy
   kind: security.policy
   meta:

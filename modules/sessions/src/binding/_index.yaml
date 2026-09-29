@@ -1,3 +1,132 @@
 version: '1.0'
 namespace: bee.sessions.binding
-entries: []
+entries:
+- name: worker_binding
+  kind: contract.binding
+  meta:
+    type: bee.sessions.worker_binding
+  contracts:
+  - contract: bee.sessions:worker
+    methods:
+      pull_turn: bee.sessions.binding:pull_turn
+      accept_turn: bee.sessions.binding:accept_turn
+      renew: bee.sessions.binding:renew
+      heartbeat: bee.sessions.binding:heartbeat
+      append_event: bee.sessions.binding:append_event
+      checkpoint: bee.sessions.binding:checkpoint
+      effect_intent: bee.sessions.binding:effect_intent
+      effect_receipt: bee.sessions.binding:effect_receipt
+      effect_status: bee.sessions.binding:effect_status
+      link_execution: bee.sessions.binding:link_execution
+      link_child: bee.sessions.binding:link_child
+      settle: bee.sessions.binding:settle
+      fail: bee.sessions.binding:fail
+- name: target_worker_policies
+  kind: ns.requirement
+  meta:
+    comment: Host-selected scoped allowlist for executor-only worker operations
+  targets:
+  - entry: bee.sessions.binding:pull_turn
+    path: .security.policies
+  - entry: bee.sessions.binding:accept_turn
+    path: .security.policies
+  - entry: bee.sessions.binding:renew
+    path: .security.policies
+  - entry: bee.sessions.binding:heartbeat
+    path: .security.policies
+  - entry: bee.sessions.binding:append_event
+    path: .security.policies
+  - entry: bee.sessions.binding:checkpoint
+    path: .security.policies
+  - entry: bee.sessions.binding:effect_intent
+    path: .security.policies
+  - entry: bee.sessions.binding:effect_receipt
+    path: .security.policies
+  - entry: bee.sessions.binding:effect_status
+    path: .security.policies
+  - entry: bee.sessions.binding:link_execution
+    path: .security.policies
+  - entry: bee.sessions.binding:link_child
+    path: .security.policies
+  - entry: bee.sessions.binding:settle
+    path: .security.policies
+  - entry: bee.sessions.binding:fail
+    path: .security.policies
+- name: pull_turn
+  kind: function.lua
+  source: file://worker.lua
+  method: pull_turn
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: accept_turn
+  kind: function.lua
+  source: file://worker.lua
+  method: accept_turn
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: renew
+  kind: function.lua
+  source: file://worker.lua
+  method: renew
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: heartbeat
+  kind: function.lua
+  source: file://worker.lua
+  method: heartbeat
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: append_event
+  kind: function.lua
+  source: file://worker.lua
+  method: append_event
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: checkpoint
+  kind: function.lua
+  source: file://worker.lua
+  method: checkpoint
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: effect_intent
+  kind: function.lua
+  source: file://worker.lua
+  method: effect_intent
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: effect_receipt
+  kind: function.lua
+  source: file://worker.lua
+  method: effect_receipt
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: effect_status
+  kind: function.lua
+  source: file://worker.lua
+  method: effect_status
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: link_execution
+  kind: function.lua
+  source: file://worker.lua
+  method: link_execution
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: link_child
+  kind: function.lua
+  source: file://worker.lua
+  method: link_child
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: settle
+  kind: function.lua
+  source: file://worker.lua
+  method: settle
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}
+- name: fail
+  kind: function.lua
+  source: file://worker.lua
+  method: fail
+  imports: {journal: bee.sessions:threads_journal}
+  security: {policies: []}

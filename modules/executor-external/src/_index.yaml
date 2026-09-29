@@ -1,0 +1,46 @@
+version: '1.0'
+namespace: bee.executor.external
+entries:
+- name: definition
+  kind: ns.definition
+  module: executor-external
+  readme: file://README.md
+  meta:
+    title: Bee external executor
+    comment: One provider CLI invocation per pulled turn through the shared driver and placement contracts
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+  meta:
+    comment: Shared launch and terminal codecs used by the provider adapters
+- name: dependency_driver_claude
+  kind: ns.dependency
+  component: bee/driver-claude
+  version: '*'
+  meta:
+    comment: Claude CLI launch and stream normalization bindings
+- name: dependency_driver_codex
+  kind: ns.dependency
+  component: bee/driver-codex
+  version: '*'
+  meta:
+    comment: Codex CLI launch and stream normalization bindings
+- name: dependency_placement
+  kind: ns.dependency
+  component: bee/placement
+  version: '*'
+  meta:
+    comment: Placement request and attempt contracts used by the turn adapter
+- name: dependency_placement_native
+  kind: ns.dependency
+  component: bee/placement-native
+  version: '*'
+  meta:
+    comment: Host-selected native process placement implementation
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+  meta:
+    comment: Shared bounded identifier and object decoders

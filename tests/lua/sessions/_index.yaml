@@ -17,3 +17,13 @@ entries:
   imports:
     test: wippy.test:test
     locate: bee.sessions.service:locate
+- name: scheduler_test
+  kind: function.lua
+  source: file://scheduler_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    scheduler: bee.sessions.service:scheduler
+    threads: bee.tests.fixtures.sessions:threads_owner
+    executor: bee.tests.fixtures.sessions:fake_executor

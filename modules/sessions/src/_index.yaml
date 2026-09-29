@@ -12,9 +12,44 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
+- name: target_threads_journal
+  kind: ns.requirement
+  meta:
+    comment: Host-selected binding for the canonical Threads journal contract
+  targets:
+  - entry: bee.sessions:threads_journal_ref
+    path: .data.ref
+- name: target_executor_bindings
+  kind: ns.requirement
+  meta:
+    comment: Host-selected executor contract bindings admitted for this assembly
+  targets:
+  - entry: bee.sessions:executor_selection
+    path: .data.refs
+- name: threads_journal_ref
+  kind: registry.entry
+  meta:
+    type: bee.sessions.threads_journal_ref
+    comment: The host-selected Threads journal contract binding
+- name: executor_selection
+  kind: registry.entry
+  meta:
+    type: bee.sessions.executor_selection
+    comment: The host-selected executor binding refs; empty until an assembly admits an executor
+  data:
+    refs: []
+- name: threads_journal
+  kind: library.lua
+  source: file://threads_journal.lua
+  modules: [registry, funcs]
+  imports:
+    scheduler: bee.sessions.service:scheduler
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua
+  modules: [registry, funcs]
+  imports:
+    scheduler: bee.sessions.service:scheduler
 - name: contract
   kind: contract.definition
   methods:

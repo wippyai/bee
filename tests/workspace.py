@@ -198,6 +198,7 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             # The reference applications are documentation sources; the test
             # composition compiles them against the library and never ships them.
             shutil.copytree(ROOT / "docs/reference/apps", folder / "src/tests/reference_apps/apps")
+            shutil.copytree(ROOT / "tests/fixtures/sessions/src", folder / "src/tests/fixtures/sessions")
             # This test-support copy overrides homes while exercising the
             # component's current materialization source; it never enters a
             # production source tree or assembled pack.

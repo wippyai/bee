@@ -503,7 +503,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply]
+    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, thread_notify, session_directory, session_inbox_send, session_inbox, session_ack, session_reply]
 - name: cross_session_codex_policy
   kind: registry.entry
   meta:
@@ -523,7 +523,7 @@ entries:
     environment: {}
     prepare_options: {sandbox: read-only}
     provider_ref: bee.harness.catalog:codex_fixture_provider
-    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, session_directory, session_send, session_inbox, session_ack, session_reply]
+    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, session_directory, session_inbox_send, session_inbox, session_ack, session_reply]
 - name: cross_session_claude_push_policy
   kind: registry.entry
   meta:

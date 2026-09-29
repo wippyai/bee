@@ -8,7 +8,7 @@ M.METHODS = {"prepare", "dispatch", "normalize", "configure"}
 type Object = {[string]: unknown}
 type Snapshot = {get: (string) -> (unknown?, string?)}
 type Lookup = (string) -> (unknown?, string?)
-type Methods = {prepare: string, dispatch: string, normalize: string}
+type Methods = {prepare: string, dispatch: string, normalize: string, configure: string}
 
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
@@ -50,7 +50,7 @@ function M.decode(binding_ref: string, raw_binding: unknown, lookup: Lookup): (M
         resolved[name] = target
     end
     return {prepare = resolved.prepare :: string, dispatch = resolved.dispatch :: string,
-        normalize = resolved.normalize :: string}, nil
+        normalize = resolved.normalize :: string, configure = resolved.configure :: string}, nil
 end
 
 function M.resolve(binding_ref: string): (Methods?, string?)

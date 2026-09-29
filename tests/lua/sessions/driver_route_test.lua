@@ -26,6 +26,7 @@ local function define_tests()
             test.eq(resolved and resolved.prepare, PREFIX .. "prepare")
             test.eq(resolved and resolved.dispatch, PREFIX .. "dispatch")
             test.eq(resolved and resolved.normalize, PREFIX .. "normalize")
+            test.eq(resolved and resolved.configure, PREFIX .. "configure")
         end)
 
         test.it("refuses methods outside the selected binding", function()

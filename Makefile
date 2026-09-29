@@ -5,6 +5,19 @@ LINT_FLAGS ?=
 RUNTIME_CACHE_KEY := $(shell python3 -c 'import json; print(json.load(open("wippy.build.json"))["runtime"]["commit"][:12])')
 WIPPY_CACHE_DIR ?= $(abspath .wippy/test-cache/$(RUNTIME_CACHE_KEY))
 export WIPPY_CACHE_DIR
+# The toolchain is a derived artifact of wippy.build.json. Gates that run the
+# default binary rebuild it first when its provenance records a different
+# manifest; an explicit caller WIPPY override is used as is.
+ifeq ($(origin WIPPY),file)
+TOOLCHAIN_CURRENT := toolchain-current
+endif
+.PHONY: toolchain-current
+toolchain-current:
+	python3 build/verify_cached_toolchain.py current || $(MAKE) native-tools
+lint: $(TOOLCHAIN_CURRENT)
+test: $(TOOLCHAIN_CURRENT)
+fixture-lint: $(TOOLCHAIN_CURRENT)
+check: $(TOOLCHAIN_CURRENT)
 .PHONY: setup run lint test fixture-lint fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
 setup: native-tools
 

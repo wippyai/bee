@@ -44,8 +44,9 @@ local function define_tests()
             local definitions = value.definitions :: {Object}
             test.eq(#definitions, 0)
             test.eq(value.unavailable_count, 1)
-            local unavailable = discover(ALLOWING_POLICY, {show_unavailable = true})
+            local unavailable = discover(ALLOWING_POLICY, {include_unavailable = true})
             test.eq(unavailable.ok, true)
+            test.eq(discover(ALLOWING_POLICY, {show_unavailable = true}).ok, true)
             local listed = (unavailable.value :: Object).definitions :: {Object}
             test.eq(#listed, 1)
             local definition = listed[1]
@@ -72,7 +73,7 @@ local function define_tests()
             local refused = discover(ALLOWING_POLICY, {definition_ref = PERMITTED})
             test.eq(refused.ok, false)
             test.eq(tostring((refused.error :: Object).code), "INVALID")
-            local bad_filter = discover(ALLOWING_POLICY, {show_unavailable = "yes"})
+            local bad_filter = discover(ALLOWING_POLICY, {include_unavailable = "yes"})
             test.eq(bad_filter.ok, false)
             test.eq(tostring((bad_filter.error :: Object).code), "INVALID")
         end)
@@ -83,7 +84,7 @@ local function define_tests()
             test.eq(#definitions, 0)
             test.eq((reply.value :: Object).unavailable_count, 1)
 
-            local unavailable = discover(MISSING_LOCATE_POLICY, {show_unavailable = true})
+            local unavailable = discover(MISSING_LOCATE_POLICY, {include_unavailable = true})
             test.eq(unavailable.ok, true)
             local listed = (unavailable.value :: Object).definitions :: {Object}
             test.eq(#listed, 1)

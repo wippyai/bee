@@ -222,9 +222,9 @@ entries:
     type: tool
     title: List admitted launch definitions
     llm_alias: BeeLaunchDefinitions
-    llm_description: Read-only, fresh readiness discovery for the caller's launch allow-list. Returns ready definitions by default with the one placement each plan resolved to; set show_unavailable to include refused definitions and reasons. Repeating the call probes readiness again. Starts nothing and grants nothing.
+    llm_description: Read-only, fresh readiness discovery for the caller's launch allow-list. Returns ready definitions by default with the one placement each plan resolved to; set include_unavailable to include refused definitions and reasons. Repeating the call probes readiness again. Starts nothing and grants nothing.
     input_schema: |
-      {"type":"object","additionalProperties":false,"properties":{"workspace_id":{"type":"string","minLength":32,"maxLength":32},"show_unavailable":{"type":"boolean"}}}
+      {"type":"object","additionalProperties":false,"properties":{"workspace_id":{"type":"string","minLength":32,"maxLength":32},"include_unavailable":{"type":"boolean"},"show_unavailable":{"type":"boolean"}}}
   security:
     policies: [bee.harness.launch:launch_definitions_facade_policy]
 - name: launch_definitions_backend

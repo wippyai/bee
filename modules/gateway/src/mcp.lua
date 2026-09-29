@@ -95,13 +95,14 @@ local TOOLS: {Tool} = {
         policies = {TOOL_POLICY_REFS.capabilities},
         schema = {type = "object", additionalProperties = false, properties = table.create(0, 1),
             examples = {{}}}, annotations = READ_ANNOTATIONS},
-    {name = "launch_definitions", description = "Fresh readiness discovery of this caller's admitted launch definitions, overrides and saved profiles. Returns ready definitions by default with the resolved placement; set show_unavailable to include readiness reasons. Repeat the call to re-probe. Starts nothing and grants nothing; launch with thread_launch.",
+    {name = "launch_definitions", description = "Fresh readiness discovery of this caller's admitted launch definitions, overrides and saved profiles. Returns ready definitions by default with the resolved placement; set include_unavailable to include readiness reasons. Repeat the call to re-probe. Starts nothing and grants nothing; launch with thread_launch.",
         operation = "bee.harness.launch:launch_definitions_call",
         policies = {TOOL_POLICY_REFS.launch_definitions},
         schema = {type = "object", additionalProperties = false,
             properties = {workspace_id = {type = "string", minLength = 32, maxLength = 32,
                 description = "This session's own workspace, the default; any other is refused"},
-                show_unavailable = {type = "boolean", description = "Include definitions that are missing, unconfigured, incompatible, or unknown"}},
+                include_unavailable = {type = "boolean", description = "Include definitions that are missing, unconfigured, incompatible, or unknown"},
+                show_unavailable = {type = "boolean", description = "Legacy alias for include_unavailable"}},
             examples = {{}}}, annotations = READ_ANNOTATIONS},
     {name = "session_send", description = "Commit one request into an action's durable inbox by exact node/action address and current grant_epoch. The host must grant bee.sessions.send for that workspace/node/action, and the recipient owner must accept your action's sender. Delivery is committed, not yet offered to a running model.", operation = "bee.threads.service:inbox_send",
         policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.send_grant}, annotations = WRITE_ANNOTATIONS,
@@ -692,16 +693,21 @@ end
 function M.launch_definitions_arguments(params: Object, workspace_id: string?): (Object?, string?)
     local supplied = bounds.object(params.arguments or {})
     if not supplied then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(supplied, {"workspace_id", "show_unavailable"})
+    local unknown_field = bounds.fields(supplied, {"workspace_id", "include_unavailable", "show_unavailable"})
     if unknown_field then return nil, unknown_field end
+    if supplied.include_unavailable ~= nil and type(supplied.include_unavailable) ~= "boolean" then return nil, "include_unavailable must be boolean" end
     if supplied.show_unavailable ~= nil and type(supplied.show_unavailable) ~= "boolean" then return nil, "show_unavailable must be boolean" end
+    if supplied.include_unavailable ~= nil and supplied.show_unavailable ~= nil
+        and supplied.include_unavailable ~= supplied.show_unavailable then
+        return nil, "include_unavailable conflicts with show_unavailable"
+    end
     local arguments: Object = {}
     if supplied.workspace_id == nil then
         if workspace_id then arguments.workspace_id = workspace_id end
     else
         arguments.workspace_id = supplied.workspace_id
     end
-    if supplied.show_unavailable == true then arguments.show_unavailable = true end
+    if supplied.include_unavailable == true or supplied.show_unavailable == true then arguments.show_unavailable = true end
     return arguments, nil
 end
 -- A notice names the watched session and a retry key; the endpoint supplies

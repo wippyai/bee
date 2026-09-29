@@ -240,3 +240,16 @@ entries:
     - bee.apps:broker
     - bee.terminal:main
     effect: allow
+- name: catalog
+  kind: function.lua
+  source: file://catalog.lua
+  method: catalog
+  modules: [registry]
+- name: catalog_owner
+  kind: contract.binding
+  meta: {type: test_support}
+  contracts:
+  - contract: bee.sessions:catalog
+    default: true
+    methods:
+      list: bee.managed.window.fixture:catalog

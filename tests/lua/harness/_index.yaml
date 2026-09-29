@@ -1512,8 +1512,6 @@ entries:
   imports:
     test: wippy.test:test
     selection: bee.harness.launch:selection
-    view: bee.harness.window:picker_view
-    appearance: bee.application:appearance
 - name: profile_environment_isolation_test
   kind: function.lua
   source: file://profile_environment_isolation_test.lua

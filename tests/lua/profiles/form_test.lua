@@ -45,5 +45,26 @@ local function define_tests()
                 saved_profile_id = opened.profile_id, saved_profile_revision = 1}, false))
         end)
     end)
+    test.describe("Agent profile form subject", function()
+        test.it("opens a saved profile under its own definition and refuses a different one", function()
+            local workspace = "profile-form-subject"
+            local created, err = form.load(workspace, {definition_ref = "bee.driver.claude:default_window", title = "Claude Code"}, true)
+            if not created then error(tostring(err)) end
+            test.is_true(form.save(created))
+            local saved, saved_error = form.saved(workspace, created.profile_id, 1)
+            if not saved then error(tostring(saved_error)) end
+            test.eq(saved.definition_ref, "bee.driver.claude:default_window")
+            local reopened, reopen_error = form.load(workspace, {title = "Claude Code", saved_profile_id = created.profile_id,
+                saved_profile_revision = 1}, false)
+            if not reopened then error(tostring(reopen_error)) end
+            test.eq(reopened.draft.definition_ref, "bee.driver.claude:default_window")
+            local mismatched = form.load(workspace, {definition_ref = "bee.driver.codex:default_window", title = "x",
+                saved_profile_id = created.profile_id, saved_profile_revision = 1}, false)
+            test.is_nil(mismatched)
+            local stale, stale_error = form.saved(workspace, created.profile_id, 2)
+            test.is_nil(stale)
+            test.eq(stale_error, "Profile changed. Refresh and select it again.")
+        end)
+    end)
 end
 return test.run_cases(define_tests)

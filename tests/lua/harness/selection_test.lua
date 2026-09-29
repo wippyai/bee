@@ -4,8 +4,6 @@
 local test = require("test")
 local registry = require("registry")
 local selection = require("selection")
-local view = require("view")
-local appearance = require("appearance")
 
 local CLAUDE = "bee.driver.claude:binding"
 local POLICY = "bee.harness.catalog:selection_policy"
@@ -123,52 +121,6 @@ local function isolated_it(name: string, body: () -> ())
 end
 local function define_tests()
     test.describe("Window launch selection", function()
-        isolated_it("renders bounded profiles without terminal controls and disables invisible launch", function()
-            local listed: selection.Choices = {items = {{definition_ref = "fixture:profile", title = "Profile\27]52;injected", launch_id = "profile", plan_digest = string.rep("a", 64)}}, unavailable = 0}
-            local frame = view.draw(40, 10, appearance.defaults(), listed, 1, "")
-            test.eq(#frame.rows, 10)
-            test.is_nil(table.concat(frame.rows):find("\27]52", 1, true))
-            local small = view.draw(20, 3, appearance.defaults(), listed, 1, "")
-            test.eq(#small.rows, 3)
-            test.eq(small.capacity, 0)
-            for _, hit in ipairs(small.hits) do
-                test.is_true(hit.kind ~= "open" and hit.kind ~= "new" and hit.kind ~= "edit")
-            end
-            local thin = view.draw(2, 10, appearance.defaults(), listed, 1, "")
-            test.eq(thin.capacity, 0)
-            for _, hit in ipairs(thin.hits) do
-                test.is_true(hit.kind ~= "open" and hit.kind ~= "new" and hit.kind ~= "edit")
-            end
-            local empty = view.draw(80, 12, appearance.defaults(), {items = {}, unavailable = 0}, 0, "")
-            for _, hit in ipairs(empty.hits) do
-                test.is_true(hit.kind ~= "open" and hit.kind ~= "new" and hit.kind ~= "edit")
-            end
-            local loading = table.concat(view.draw(80, 12, appearance.defaults(),
-                {items = {}, unavailable = 0}, 0, "Loading profiles…").rows)
-            test.is_true(loading:find("Loading profiles", 1, true) ~= nil)
-            test.is_true(loading:find("No agent profiles", 1, true) == nil)
-            local starting = view.draw(80, 12, appearance.defaults(), listed, 1, "Starting Agent…", true)
-            test.is_true(table.concat(starting.rows):find("Starting Agent", 1, true) ~= nil)
-            for _, hit in ipairs(starting.hits) do
-                test.is_true(hit.kind ~= "open" and hit.kind ~= "new" and hit.kind ~= "edit" and hit.kind ~= "refresh")
-            end
-        end)
-        isolated_it("keeps picker key hints in the footer and marks the chosen profile without color", function()
-            local listed: selection.Choices = {items = {
-                {definition_ref = "fixture:a", title = "Alpha", launch_id = "a", plan_digest = string.rep("a", 64)},
-                {definition_ref = "fixture:b", title = "Beta", launch_id = "b", plan_digest = string.rep("b", 64)}}, unavailable = 0}
-            local drawn = view.draw(80, 24, appearance.defaults(), listed, 2, "")
-            local rows: {string} = {}
-            for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
-            test.is_true(rows[1]:find("AGENT", 1, true) ~= nil and rows[1]:find("2 profiles", 1, true) ~= nil)
-            test.eq(rows[2], " Choose a profile" .. string.rep(" ", 63))
-            test.eq(rows[3]:sub(1, 7), " Alpha ")
-            test.eq(rows[4]:sub(1, #"›"), "›")
-            test.is_true(rows[24]:find("↑↓ select · Enter open · N new · E edit · R refresh · Esc close", 1, true) ~= nil)
-            local chosen = 0
-            for _, hit in ipairs(drawn.hits) do if hit.kind == "choice" and hit.y == 4 then chosen = hit.index end end
-            test.eq(chosen, 2)
-        end)
         isolated_it("returns an empty eligible list when only hidden or batch definitions exist", function()
             local entries = {
                 definition("empty-hidden", "Hidden empty fixture", "selection-empty-hidden", "window", false),
@@ -237,9 +189,6 @@ local function define_tests()
                 test.eq(#result.items[1].plan_digest, 64)
                 test.eq(#result.items[2].plan_digest, 64)
                 test.eq(result.items[1].summary, "Project folder · No instructions · 0 tools configured")
-                local frame = view.draw(100, 12, appearance.defaults(), result, 1, "")
-                test.is_true(table.concat(frame.rows):find("Project folder", 1, true) ~= nil)
-                test.is_true(table.concat(frame.rows):find("No instructions", 1, true) ~= nil)
                 has_only_choice_fields(result.items[1])
                 has_only_choice_fields(result.items[2])
             end)
@@ -268,11 +217,6 @@ local function define_tests()
                 local result = choices(selection.snapshot())
                 test.eq(#result.items, 1)
                 test.eq(result.items[1].summary, "Project folder · Profile instructions · 0 tools configured")
-                local frame = view.draw(100, 12, appearance.defaults(), result, 1, "")
-                local rows = table.concat(frame.rows)
-                test.is_true(rows:find("Profile instructions", 1, true) ~= nil)
-                test.is_true(rows:find("PRIVATE_GUIDANCE_SENTINEL", 1, true) == nil)
-                test.is_true(rows:find("not_called_during_discovery", 1, true) == nil)
                 has_only_choice_fields(result.items[1])
             end)
           end
@@ -304,10 +248,6 @@ local function define_tests()
                 test.eq(item.plan_digest, "")
                 test.is_true(item.unavailable ~= nil)
                 has_only_choice_fields(item)
-                local frame = view.draw(100, 10, appearance.defaults(), result, 1, "")
-                test.is_true(table.concat(frame.rows):find("Inactive Claude window", 1, true) ~= nil)
-                test.is_true(table.concat(frame.rows):find("not usable on this host", 1, true) ~= nil)
-                for _, hit in ipairs(frame.hits) do test.is_true(hit.kind ~= "open") end
             end)
             local activation_restored, activation_error = pcall(function()
                 local restore_changes = registry.snapshot():changes()

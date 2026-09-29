@@ -12,6 +12,7 @@ local registry = require("registry")
 local resources = require("resources")
 local driver_types = require("driver_types")
 local probe_capture = require("probe_capture")
+local probe_version = require("probe_version")
 local M = {}
 local LOGIN_SOURCE = "bee.env:machine_login_source"
 
@@ -73,23 +74,7 @@ local function platform_probe(cache: Cache): Platform
 end
 
 local function executable_version(path: string, probe: {[string]: unknown}): (string?, boolean?)
-    local argv: {string} = {path}
-    if type(probe.argv) == "table" then
-        for _, argument in ipairs(probe.argv :: {unknown}) do
-            local text = bounds.text(argument, 128)
-            if not text then return nil end
-            argv[#argv + 1] = text
-        end
-    end
-    local output, code, _, missing = capture(argv)
-    if not output then return nil, missing and false or nil end
-    if code ~= 0 then return nil, true end
-    local pattern = bounds.text(probe.pattern, 128)
-    local version = pattern and output:match(pattern) or (not pattern and output:match("[^\r\n]+"))
-    if type(version) ~= "string" then return nil, true end
-    version = version:gsub("^%s+", ""):gsub("%s+$", "")
-    if version == "" or #version > 128 or version:find("[%c]") then return nil, true end
-    return version, true
+    return probe_version.read(path, probe, capture)
 end
 
 local function login_exists(path: string): boolean?

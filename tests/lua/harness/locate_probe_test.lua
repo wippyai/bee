@@ -3,6 +3,8 @@ local test = require("test")
 local channel = require("channel")
 local time = require("time")
 local probe_capture = require("probe_capture")
+local probe_version = require("probe_version")
+local driver_locate = require("driver_locate")
 
 type Stream = probe_capture.Stream
 type Process = probe_capture.Process
@@ -74,6 +76,20 @@ local function define_tests()
             test.is_true(closed)
             test.eq(streams_closed, 2)
             test.is_true(released)
+        end)
+
+        test.it("classifies a missing executable as unavailable", function()
+            local version, present = probe_version.read("bee-cli-not-installed", {}, function(argv)
+                test.eq(argv[1], "bee-cli-not-installed")
+                return nil, nil, "executable was not found", true
+            end)
+            test.is_nil(version)
+            test.eq(present, false)
+            local result, locate_error = driver_locate.evaluate({provider = "fixture", executable = "fixture-cli"}, {
+                profile_id = "window", configured = true, executable = {present = present},
+                platform = {os = "linux", arch = "x86_64", compatible = true}})
+            if not result then error(tostring(locate_error)) end
+            test.eq(result.status, "missing")
         end)
     end)
 end

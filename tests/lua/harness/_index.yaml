@@ -10,6 +10,8 @@ entries:
   imports:
     test: wippy.test:test
     probe_capture: bee.harness.launch:probe_capture
+    probe_version: bee.harness.launch:probe_version
+    driver_locate: bee.driver:locate
 - name: configuration_probe
   kind: function.lua
   source: file://configuration_probe.lua

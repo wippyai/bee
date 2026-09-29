@@ -81,10 +81,16 @@ entries:
     quote: bee.driver.kit:quote
     resources: bee.placement.native:resources
     probe_capture: bee.harness.launch:probe_capture
+    probe_version: bee.harness.launch:probe_version
 - name: probe_capture
   kind: library.lua
   source: file://probe_capture.lua
   modules: [channel, time]
+- name: probe_version
+  kind: library.lua
+  source: file://probe_version.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: locate_probe
   kind: function.lua
   source: file://locate_probe.lua

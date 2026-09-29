@@ -22,7 +22,7 @@ type ExpectedModule = {component: string, version: string, change: string}
 type Removal = {root_digest: string, before_modules: {ExpectedModule}, published: boolean}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
     baseline_revision: integer, message: string, action: string, expected_modules: {ExpectedModule}?,
-    migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?}
+    migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?, root_id: string?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
 local function digest(raw: unknown): string?
@@ -105,6 +105,8 @@ local function decode_receipt(raw: unknown): Receipt?
     local baseline = bounds.count(value.baseline_revision)
     local message, action = bounds.text(value.message, 4096), bounds.member(value.action, {"install", "update", "uninstall"})
     if not actor or not measured or not component or not state or not baseline or not message or not action then return nil end
+    local root_id = value.root_id ~= nil and bounds.id(value.root_id) or nil
+    if value.root_id ~= nil and not root_id then return nil end
     local request_digest = digest(value.request_digest)
     if value.request_digest ~= nil and not request_digest then return nil end
     local expected = expected_modules(value.expected_modules)
@@ -131,7 +133,8 @@ local function decode_receipt(raw: unknown): Receipt?
         removal = {root_digest = root_digest, before_modules = before, published = supplied.published}
     end
     return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
-        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work, request = request, removal = removal}
+        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work,
+        request = request, removal = removal, root_id = root_id}
 end
 
 function M.status(raw: unknown, options: unknown?): Result
@@ -362,8 +365,12 @@ local function reconcile(receipt: Receipt, request: plan.Request): Result
     if not expected then return transaction.failure("UNCERTAIN", "published operation has no captured recovery evidence") end
     local snapshot, problem = registry.snapshot()
     if not snapshot then return transaction.failure("UNAVAILABLE", tostring(problem)) end
-    local root_id, root_error = plan.root_id(request.component)
-    if not root_id then return transaction.failure("INTERNAL", tostring(root_error)) end
+    local root_id = receipt.root_id
+    if not root_id then
+        local root_error: string? = nil
+        root_id, root_error = plan.root_id(request.component)
+        if not root_id then return transaction.failure("INTERNAL", tostring(root_error)) end
+    end
     local state, state_error = snapshot:state()
     if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
     -- The complete snapshot carries derived dependency ownership; get() only
@@ -496,7 +503,7 @@ function M.apply(raw: unknown, expected: unknown): Result
                 component = request.component, action = request.action, baseline_revision = displayed.base_revision,
                 state = "recovery_required", message = "Rollback prepared; dependency root remains installed",
                 expected_modules = expected, migration_work = captured, request = request_value(request),
-                removal = {root_digest = measured_root, before_modules = before_modules, published = false}}
+                removal = {root_digest = measured_root, before_modules = before_modules, published = false}, root_id = displayed.root_id}
             local recorded = save(receipt)
             if not recorded.ok then return recorded end
             return remove_with_migrations(receipt)
@@ -529,7 +536,8 @@ function M.apply(raw: unknown, expected: unknown): Result
         expected[#expected + 1] = {component = item.component, version = item.version, change = item.change}
     end
     local receipt: Receipt = {actor_id = actor:id(), digest = measured, request_digest = request_digest, component = request.component, action = request.action,
-        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected, migration_work = work, request = request_value(request)}
+        baseline_revision = displayed.base_revision, state = "published", message = "", expected_modules = expected,
+        migration_work = work, request = request_value(request), root_id = displayed.root_id}
     local recorded, record_error = changes:create({id = receipt_id(measured), kind = "registry.entry", data = receipt})
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()

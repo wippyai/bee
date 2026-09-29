@@ -99,9 +99,9 @@ entries:
         thread_access: none
       - component: bee.hub.modules
         definition_id: bee.hub.modules:app
-        capabilities: [hub.manage]
+        capabilities: [hub.manage, hub.self_update]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.hub.modules:client_policy,
-          bee.hub.modules:hub_policy, bee.hub.modules:publication_policy]
+          bee.hub.modules:hub_policy, bee.hub.modules:self_update_policy, bee.hub.modules:publication_policy]
         thread_access: none
       - component: bee.gov.overlays
         definition_id: bee.gov.overlays:app

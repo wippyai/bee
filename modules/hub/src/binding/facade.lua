@@ -18,6 +18,7 @@ local function handle(raw: unknown): Result
     local operation = bounds.member(value.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan", "apply", "status"})
     if not operation then return transaction.failure("INVALID", "unknown Hub operation") end
     local resource = "catalog"
+    local self_update = false
     if operation == "catalog" then
         local request, problem = catalog.decode(value.request or {})
         if not request then return transaction.failure("INVALID", problem or "invalid catalog request") end
@@ -43,6 +44,10 @@ local function handle(raw: unknown): Result
         local request, problem = plan.decode(value.request)
         if not request then return transaction.failure("INVALID", problem or "invalid package request") end
         resource = request.component
+        self_update = request.component == "bee/bee"
+        if self_update and request.action ~= "update" then
+            return transaction.failure("INVALID", "the Bee deployment root can only be updated")
+        end
     elseif operation == "status" then
         if value.expected_digest ~= nil then
             if value.request ~= nil then return transaction.failure("INVALID", "receipt lookup takes no request body") end
@@ -67,7 +72,7 @@ local function handle(raw: unknown): Result
     -- not publish registry state. It can reveal other installed roots, so a
     -- scoped caller also needs inventory/catalog read authority. Only apply
     -- crosses the management boundary.
-    local action = operation == "apply" and "bee.hub.manage" or "bee.hub.read"
+    local action = self_update and "bee.hub.self_update" or (operation == "apply" and "bee.hub.manage" or "bee.hub.read")
     if not security.actor() or not security.can(action, resource) then return transaction.failure("DENIED", "Hub operation is not authorized") end
     if operation == "plan" and not security.can("bee.hub.read", "catalog") then
         return transaction.failure("DENIED", "Hub plan inventory is not authorized")

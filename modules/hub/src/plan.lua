@@ -77,7 +77,12 @@ end
 function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source): (Prepared?, string?)
     local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, inventory_error end
-    local controlled = inventory.dependency_members(installed)
+    local self_update = request.component == "bee/bee"
+    if self_update and request.action ~= "update" then return nil, "the Bee deployment root can only be updated" end
+    if request.component:match("^bee/") and not self_update then
+        return nil, "Bee packs update through the bee/bee deployment root"
+    end
+    local controlled = inventory.dependency_members(installed, self_update)
     local raw_state = bounds.object(state)
     if not raw_state or type(raw_state.entries) ~= "table" then return nil, "invalid captured registry" end
     local root_id, root_error = M.root_id(request.component)
@@ -92,6 +97,19 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             elseif controlled[root.component] then
                 roots[#roots + 1] = {component = root.component, version = root.version, parameters = root.parameters}
             end
+        elseif self_update and root.component == "bee/bee" and root.owner == "" then
+            if existing then return nil, "Bee has multiple deployment roots; host configuration needs review" end
+            existing = root
+        end
+    end
+    if self_update then
+        if not existing then return nil, "Bee deployment root is not installed" end
+        root_id = existing.id
+        if #request.parameters > 0 and canonical.encode(request.parameters) ~= canonical.encode(existing.parameters) then
+            return nil, "self-update must preserve the host deployment parameters"
+        end
+        if #request.parameters == 0 and #existing.parameters > 0 then
+            return nil, "self-update requires the host deployment parameters"
         end
     end
     for _, item in ipairs(installed.modules) do

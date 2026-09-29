@@ -174,6 +174,46 @@ local function define_tests()
             test.eq(problem, "component is managed by the host deployment")
         end)
 
+        test.it("reserves Bee's pack components for deployment-root updates", function()
+            local prepared, problem = plan.prepare(state({}), 1,
+                request({action = "install", component = "bee/application", version = "0.2.0"}), source({}))
+            test.is_nil(prepared)
+            test.eq(problem, "Bee packs update through the bee/bee deployment root")
+        end)
+
+        test.it("updates the existing Bee deployment root and resolves its pack closure", function()
+            local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
+                data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
+            local application = {id = "bee:dependency_application", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                data = {component = "bee/application", version = "0.1.0"}}
+            local installed = state({deployment, application, root("acme/app", "1.0.0")}, {
+                {name = "bee/bee", version = "0.1.0", source = "hub"},
+                {name = "bee/application", version = "0.1.0", source = "hub"},
+                {name = "acme/app", version = "1.0.0", source = "hub"},
+            })
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({
+                    ["bee/bee@0.2.0"] = package("bee/bee", "0.2.0", "a", {
+                        {id = "bee:dependency_application", kind = "ns.dependency", meta = {},
+                            data = {component = "bee/application", version = "0.2.0"}},
+                    }),
+                    ["bee/application@0.2.0"] = package("bee/application", "0.2.0", "b"),
+                    ["acme/app@1.0.0"] = package("acme/app", "1.0.0", "c"),
+                }))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                test.eq(prepared.plan.root_id, "bee:deployment")
+                local bee, application, third_party = module_for(prepared.plan.modules, "bee/bee"),
+                    module_for(prepared.plan.modules, "bee/application"), module_for(prepared.plan.modules, "acme/app")
+                test.not_nil(bee); test.not_nil(application); test.not_nil(third_party)
+                if bee then test.eq(bee.change, "update") end
+                if application then test.eq(application.change, "update") end
+                if third_party then test.eq(third_party.change, "keep") end
+            end
+        end)
+
         test.it("binds digest to the captured base revision and selected artifact", function()
             local req = request({action = "install", component = "acme/app", version = "1.0.0"})
             local first, first_problem = plan.prepare(state({}), 7, req,

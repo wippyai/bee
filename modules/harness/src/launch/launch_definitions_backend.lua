@@ -51,7 +51,7 @@ local function definition_summary(ref: string, show_unavailable: boolean, cache:
             status, reason = located.status, located.reason or "Driver readiness is unknown"
         end
     end
-    if not plan and not show_unavailable then return nil, status, reason end
+    if (not plan or status ~= "ready") and not show_unavailable then return nil, status, reason end
     local placements: {string} = {}
     if plan then placements[1] = plan.placement_kind end
     local summary: {[string]: unknown} = {definition_ref = definition.ref, title = definition.title, digest = definition.digest,

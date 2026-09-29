@@ -716,6 +716,25 @@ entries:
     thread_policy: {kind: new}
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: missing_locate_definition
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    test_support: true
+    comment: A valid Claude batch plan used to prove locate-unready definitions stay hidden by default
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: missing-locate-fixture
+    title: Missing locate fixture
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: batch
+    policy_ref: bee.harness.catalog:selection_policy
+    default_mode: batch
+    allowed_overrides: []
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: new}
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: shipped_shape_definition
   kind: registry.entry
   meta:
@@ -980,6 +999,24 @@ entries:
     executables: {claude: /bin/true}
     environment: {}
     agent_launch: [bee.harness.catalog:fixture_definition]
+- name: agent_launch_missing_locate_policy
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    test_support: true
+    comment: An agent launch allow-list for the admitted definition whose CLI is absent in the focused test environment
+  data:
+    schema_revision: bee.launch-policy@2
+    required_cleanup: direct_process
+    required_exit_observation: eof_gated
+    start_ms: 1000
+    stop_grace_ms: 100
+    drain_ms: 100
+    runner_drain_ms: 100
+    fixture: true
+    executables: {claude: /bin/true}
+    environment: {}
+    agent_launch: [bee.harness.catalog:missing_locate_definition]
 - name: agent_launch_denied_policy
   kind: registry.entry
   meta:

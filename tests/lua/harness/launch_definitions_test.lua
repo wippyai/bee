@@ -13,8 +13,10 @@ local FACADE_POLICY = "bee.harness.launch:launch_definitions_facade_policy"
 local AGENT = "bee.test.agent_launch"
 local WORKSPACE = "agent-launch-workspace"
 local ALLOWING_POLICY = "bee.harness.catalog:agent_launch_policy"
+local MISSING_LOCATE_POLICY = "bee.harness.catalog:agent_launch_missing_locate_policy"
 local DENYING_POLICY = "bee.harness.catalog:agent_launch_denied_policy"
 local PERMITTED = "bee.harness.catalog:fixture_definition"
+local MISSING_LOCATE = "bee.harness.catalog:missing_locate_definition"
 type Object = {[string]: unknown}
 local function facade_scope(): security.Scope
     local policy, err = security.policy(FACADE_POLICY)
@@ -74,6 +76,21 @@ local function define_tests()
             local bad_filter = discover(ALLOWING_POLICY, {show_unavailable = "yes"})
             test.eq(bad_filter.ok, false)
             test.eq(tostring((bad_filter.error :: Object).code), "INVALID")
+        end)
+        test.it("hides an admitted definition when its locate status is not ready", function()
+            local reply = discover(MISSING_LOCATE_POLICY, {})
+            test.eq(reply.ok, true)
+            local definitions = (reply.value :: Object).definitions :: {Object}
+            test.eq(#definitions, 0)
+            test.eq((reply.value :: Object).unavailable_count, 1)
+
+            local unavailable = discover(MISSING_LOCATE_POLICY, {show_unavailable = true})
+            test.eq(unavailable.ok, true)
+            local listed = (unavailable.value :: Object).definitions :: {Object}
+            test.eq(#listed, 1)
+            test.eq(listed[1].definition_ref, MISSING_LOCATE)
+            test.neq(listed[1].status, "ready")
+            test.eq(#(listed[1].placements :: {string}), 1)
         end)
     end)
 end

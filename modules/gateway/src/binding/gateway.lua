@@ -51,7 +51,6 @@ M.MAX_TTL_MS = 86400000
 M.DEFAULT_TTL_MS = 3600000
 M.MAX_DRAIN_MS = 600000
 M.DEFAULT_DRAIN_MS = 30000
-M.WAIT_SLICE_MS = 1000
 M.TOKEN_BYTES = 32
 M.MAX_RETAINED_HOOKS = 256
 M.MAX_RETAINED_HOOK_BYTES = 524288
@@ -458,8 +457,8 @@ function M.admit(value: unknown): Reply
     local unknown_field = bounds.fields(object, {"subject", "action_id", "attempt_id", "thread_id", "owner_incarnation", "carrier_epoch", "tools", "hooks", "ttl_ms", "idempotency_key", "surface", "policy_ref", "workspace_id", "workspace_name", "origin_view"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local subject, action_id, attempt_id, thread_id = bounds.id(object.subject), bounds.id(object.action_id), bounds.id(object.attempt_id), bounds.id(object.thread_id)
-    -- The launch policy the attempt ran under, recorded so a gateway tool can
-    -- read the caller's own agent-launch allow-list. It conveys no authority.
+    -- The launch policy the attempt ran under, recorded as attribution in the
+    -- tool call context. It conveys no authority.
     local policy_ref: string? = nil
     if object.policy_ref ~= nil then
         policy_ref = bounds.id(object.policy_ref)

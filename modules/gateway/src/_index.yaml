@@ -99,59 +99,6 @@ entries:
     path: .security.policies +=
   - entry: bee.gateway.security:tool_policy_read_policy
     path: .policy.resources +=
-- name: target_tool_inbox_policy
-  kind: ns.requirement
-  meta: {comment: Host-selected owner call policy for the action inbox tools}
-  default: bee.gateway.security:inbox_call_policy
-  targets:
-  - entry: bee.gateway:tool_inbox_policy_ref
-    path: .resource_ref
-  - entry: bee.gateway.api:mcp_http
-    path: .security.policies +=
-  - entry: bee.gateway.security:tool_policy_read_policy
-    path: .policy.resources +=
-- name: target_tool_discover_policy
-  kind: ns.requirement
-  meta: {comment: Host-selected scope for peers an action may discover}
-  default: bee.gateway.security:discover_none_policy
-  targets:
-  - entry: bee.gateway:tool_discover_policy_ref
-    path: .resource_ref
-  - entry: bee.gateway.api:mcp_http
-    path: .security.policies +=
-  - entry: bee.gateway.security:tool_policy_read_policy
-    path: .policy.resources +=
-- name: target_tool_send_grant_policy
-  kind: ns.requirement
-  meta: {comment: Host-selected exact workspace/node/action send grant; default denies all addresses}
-  default: bee.gateway.security:send_none_policy
-  targets:
-  - entry: bee.gateway:tool_send_grant_policy_ref
-    path: .resource_ref
-  - entry: bee.gateway.api:mcp_http
-    path: .security.policies +=
-  - entry: bee.gateway.security:tool_policy_read_policy
-    path: .policy.resources +=
-- name: target_tool_launch_policy
-  kind: ns.requirement
-  meta: {comment: Host-selected managed-launch policy for the built-in MCP tool}
-  targets:
-  - entry: bee.gateway:tool_launch_policy_ref
-    path: .resource_ref
-  - entry: bee.gateway.api:mcp_http
-    path: .security.policies +=
-  - entry: bee.gateway.security:tool_policy_read_policy
-    path: .policy.resources +=
-- name: target_tool_run_policy
-  kind: ns.requirement
-  meta: {comment: Host-selected managed-run policy for the built-in MCP status, wait and cancel tools}
-  targets:
-  - entry: bee.gateway:tool_run_policy_ref
-    path: .resource_ref
-  - entry: bee.gateway.api:mcp_http
-    path: .security.policies +=
-  - entry: bee.gateway.security:tool_policy_read_policy
-    path: .policy.resources +=
 - name: target_tool_overlay_policy
   kind: ns.requirement
   meta: {comment: Host-selected governed-overlay policy for the built-in MCP tool}
@@ -240,17 +187,6 @@ entries:
     path: .resource_ref
   - entry: bee.gateway.security:installation_policy
     path: .policy.resources +=
-- name: target_remote_resolver
-  kind: ns.requirement
-  meta: {comment: Host-selected resolver for node-qualified session addresses; the module default resolves nothing, so a composition with no transport answers a remote address as not found}
-  default: bee.gateway:remote
-  targets:
-  - entry: bee.gateway.api:mcp_http
-    path: .imports.remote
-- name: remote
-  kind: library.lua
-  source: file://remote.lua
-  meta: {comment: Fail-closed default remote session resolver; the host replaces the requirement to enable remote addressing}
 - name: database_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: The linked SQL resource; target_db fills resource_ref}
@@ -300,15 +236,6 @@ entries:
     bounds: bee.threads.records:bounds
     service_reply: bee.protocol:reply
     canonical: bee.threads.records:canonical
-- name: hook_inbox
-  kind: library.lua
-  source: file://hook_inbox.lua
-  modules: [funcs, security, registry]
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    gateway: bee.gateway.binding:gateway
-    subject_call: bee.gateway.security:subject_call
 - name: json_schema
   kind: library.lua
   source: file://json_schema.lua
@@ -335,7 +262,6 @@ entries:
     workspace_protocol: bee.gov:workspace_protocol
     delivery_protocol: bee.gov:delivery_protocol
     docs_protocol: bee.docs:protocol
-    sessions: bee.gateway:sessions
 - name: surface
   kind: library.lua
   source: file://surface.lua
@@ -360,21 +286,6 @@ entries:
 - name: tool_message_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host policy for the built-in bound-thread message tool}
-- name: tool_inbox_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for action inbox owner calls}
-- name: tool_discover_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for workspace peer discovery}
-- name: tool_send_grant_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked exact host send grant policy for action addresses}
-- name: tool_launch_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in managed-launch tool}
-- name: tool_run_policy_ref
-  kind: registry.entry
-  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in managed-run status, wait and cancel tools}
 - name: tool_overlay_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host policy for the built-in governed-overlay tool}

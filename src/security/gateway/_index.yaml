@@ -55,13 +55,12 @@ entries:
 - name: gateway_tool_read_policy
   kind: security.policy
   meta:
-    comment: The scope a bound subject runs thread_read, thread_wait, thread_sessions and capability elevation under; membership is still checked by the thread owner and elevation writes only through a thread-bound approval
+    comment: The scope a bound subject runs thread_read and capability elevation under; membership is still checked by the thread owner and elevation writes only through a thread-bound approval
   policy:
     actions:
     - funcs.call
     resources:
     - bee.threads.service:read_after
-    - bee.threads.delivery:watch
     - bee.threads.service:get
     - bee.gateway.binding:request_capability
     - bee.gateway.binding:capability_status
@@ -69,24 +68,12 @@ entries:
 - name: gateway_tool_message_policy
   kind: security.policy
   meta:
-    comment: The bound MCP subject may append only a decoded message through the thread authority and register a one-shot
-      notice on its own thread; the endpoint supplies thread, action/attempt context and the addressed session, and reads
-      membership through get so an unreadable session is never reached
+    comment: The bound MCP subject may record a decoded note on its own thread through the thread authority; the endpoint supplies thread and action/attempt context
   policy:
     actions:
     - funcs.call
     resources:
     - bee.threads.service:record
-    - bee.threads.service:notify
-    - bee.threads.service:get
-    effect: allow
-- name: gateway_tool_inbox_policy
-  kind: security.policy
-  meta: {comment: Bound agents call only action inbox owner methods; each method checks its own action, workspace and acceptance}
-  policy:
-    actions: [funcs.call]
-    resources: [bee.threads.service:inbox_send, bee.threads.service:inbox_reply, bee.threads.service:inbox_list,
-      bee.threads.service:inbox_ack, bee.threads.service:inbox_describe]
     effect: allow
 - name: gateway_session_discover_policy
   kind: security.policy
@@ -108,28 +95,6 @@ entries:
   policy:
     actions: [bee.sessions.send]
     resources: '*'
-    effect: allow
-- name: gateway_tool_launch_policy
-  kind: security.policy
-  meta:
-    comment: The bound MCP subject may start one host-allow-listed managed launch through the launch facade and read its own admitted launch definitions; both run as itself in its own workspace, the facade reads the caller's own launch policy and refuses anything it does not name, and this grants no grant, credential, trait or overlay authority
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.harness.launch:agent_launch_call
-    - bee.harness.launch:launch_definitions_call
-    effect: allow
-- name: gateway_tool_run_policy
-  kind: security.policy
-  meta:
-    comment: The bound MCP subject may read, wait on and cancel managed runs through the launch facade's own run operation, as itself and in its own workspace; the backend answers only for a run the caller launched, and this grants no launch, grant, credential, trait or overlay authority
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.harness.launch:agent_run_call
-    - bee.threads.service:get
     effect: allow
 - name: gateway_tool_overlay_policy
   kind: security.policy.expr

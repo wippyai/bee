@@ -32,15 +32,15 @@ local function valid(name: string): Object
 end
 
 local function snapshot(): Object
-    return {session = SESSION, revision = 1, incarnation = 1, title = "t", lifecycle = "active", mode = "managed",
+    return {session = SESSION, revision = 1, incarnation = 1, title = "t", lifecycle = "active",
         activity = "idle", execution = {state = "absent", evidence_at = NOW, stale = false}, queue_count = 0,
-        questions = {}, effective_limits = {active_ms = 1, model_steps = 1, tool_calls = 1, recovery_attempts = 0, queue_ms = 1, question_ms = 1},
+        effective_limits = {active_ms = 1, model_steps = 1, tool_calls = 1, recovery_attempts = 0, queue_ms = 1},
         continuity = {mode = "fresh"}, actions = {}}
 end
 
 local function receipt(): Object
     return {work = WORK, session = SESSION, operation = OP, committed_at = NOW, sequence = 1, kind = "request",
-        state = "queued", output_schema = "bee:Text@1"}
+        state = "queued", output_schema = "bee:Text@1", sender = {kind = "principal", id = "principal-1"}}
 end
 
 local function success(name: string): Object
@@ -90,8 +90,7 @@ local function define_tests()
             end
             test.eq((seen.session_catalog :: mcp.Tool).operation, "bee.sessions:catalog.list")
             test.eq((seen.session_send :: mcp.Tool).operation, "bee.sessions:contract.send")
-            test.not_nil(seen.session_inbox_send)
-            test.eq((seen.session_inbox_send :: mcp.Tool).operation, "bee.threads.service:inbox_send")
+            test.is_nil(seen.session_inbox_send)
         end)
         test.it("advertises operation_key as required on every mutation and annotations that match", function()
             for _, name in ipairs(MUTATIONS) do

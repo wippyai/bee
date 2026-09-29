@@ -11,9 +11,9 @@ local quote = require("quote")
 local registry = require("registry")
 local resources = require("resources")
 local driver_types = require("driver_types")
+local probe_capture = require("probe_capture")
 local M = {}
 local LOGIN_SOURCE = "bee.env:machine_login_source"
-local MAX_OUTPUT_BYTES = 4096
 
 type Platform = {os: string?, arch: string?, compatible: boolean?}
 type Descriptor = {[string]: unknown}
@@ -38,36 +38,26 @@ local function capture(argv: {string}): (string?, integer?, string?, boolean?)
     local stderr = proc:stderr_stream()
     local started, start_error = proc:start()
     if not started then
-        stdout:close(); stderr:close(); executor:release()
+        proc:close(true); stdout:close(); stderr:close(); executor:release()
         local missing = start_error ~= nil and start_error:kind() == errors.NOT_FOUND
         return nil, nil, tostring(start_error or "host probe could not start"), missing
     end
-    local function read(stream): (string?, string?)
-        local chunks: {string} = {}
-        local size = 0
-        while true do
-            local chunk, read_error = stream:read(1024)
-            if read_error then return nil, tostring(read_error) end
-            if chunk == nil then break end
-            size = size + #chunk
-            if size > MAX_OUTPUT_BYTES then return nil, "host probe output exceeds its bound" end
-            chunks[#chunks + 1] = chunk
-        end
-        return table.concat(chunks), nil
-    end
-    local output, output_error = read(stdout)
-    local error_output, stderr_error = read(stderr)
-    stdout:close(); stderr:close()
-    if output_error or stderr_error then
-        proc:close(true); executor:release()
-        return nil, nil, output_error or stderr_error, false
-    end
-    local code, wait_error = proc:wait()
-    executor:release()
-    if wait_error or type(code) ~= "number" or code ~= math.floor(code) then
-        return nil, nil, "host probe did not return an exit code", false
-    end
-    return (output or "") .. (error_output or ""), math.floor(code), nil, false
+    local capture_process: probe_capture.Process = {
+        wait = function(_self) return proc:wait() end,
+        close = function(_self, force) proc:close(force) end,
+    }
+    local capture_stdout: probe_capture.Stream = {
+        read = function(_self, size) return stdout:read(size) end,
+        close = function(_self) stdout:close() end,
+    }
+    local capture_stderr: probe_capture.Stream = {
+        read = function(_self, size) return stderr:read(size) end,
+        close = function(_self) stderr:close() end,
+    }
+    local output, code, probe_error = probe_capture.capture(capture_process, capture_stdout, capture_stderr,
+        function() executor:release() end)
+    if probe_error then return nil, nil, probe_error, false end
+    return output, code, nil, false
 end
 
 local function platform_probe(cache: Cache): Platform

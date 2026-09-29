@@ -1,6 +1,15 @@
 version: '1.0'
 namespace: bee.harness.catalog
 entries:
+- name: locate_probe_test
+  kind: function.lua
+  source: file://locate_probe_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [channel, time]
+  imports:
+    test: wippy.test:test
+    probe_capture: bee.harness.launch:probe_capture
 - name: configuration_probe
   kind: function.lua
   source: file://configuration_probe.lua

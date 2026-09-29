@@ -80,6 +80,11 @@ entries:
     locate: bee.driver:locate
     quote: bee.driver.kit:quote
     resources: bee.placement.native:resources
+    probe_capture: bee.harness.launch:probe_capture
+- name: probe_capture
+  kind: library.lua
+  source: file://probe_capture.lua
+  modules: [channel, time]
 - name: locate_probe
   kind: function.lua
   source: file://locate_probe.lua

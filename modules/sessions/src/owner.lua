@@ -262,6 +262,39 @@ local function catalog(request: Object): Reply
     return succeed(page)
 end
 
+local function list(request: Object): Reply
+    if bounds.fields(request, {filter = true, cursor = true}) then return fail("INVALID", "list accepts only filter and cursor") end
+    local filter = object(request.filter)
+    if request.filter ~= nil and (not filter or bounds.fields(filter, {lifecycle = true, activity = true})) then
+        return fail("INVALID", "session filter is malformed")
+    end
+    local lifecycle = filter and filter.lifecycle or nil
+    if lifecycle ~= nil and lifecycle ~= "opening" and lifecycle ~= "active" and lifecycle ~= "suspended"
+        and lifecycle ~= "closing" and lifecycle ~= "closed" then return fail("INVALID", "lifecycle filter is invalid") end
+    local activity = filter and filter.activity or nil
+    if activity ~= nil and activity ~= "idle" and activity ~= "working" and activity ~= "blocked" and activity ~= "stalled" then
+        return fail("INVALID", "activity filter is invalid")
+    end
+    local cursor = request.cursor == nil and nil or ref(request.cursor)
+    if request.cursor ~= nil and not cursor then return fail("INVALID", "cursor is invalid") end
+    local page, scan_error = journal.invoke("session_scan", {cursor = cursor, limit = 64})
+    if scan_error or not page then return unavailable(scan_error or "Threads returned no session page", nil) end
+    local scan = object(page)
+    local refs = scan and scan.items
+    if type(refs) ~= "table" then return unavailable("Threads returned a malformed session page", nil) end
+    local items: {Object} = {}
+    for _, raw_ref in ipairs(refs :: {unknown}) do
+        local session = ref(raw_ref)
+        if not session then return unavailable("Threads returned a malformed session ref", nil) end
+        local current, read_error = describe(session)
+        if not current then return unavailable(read_error or "cannot read a listed session", nil) end
+        if (lifecycle == nil or current.lifecycle == lifecycle) and (activity == nil or current.activity == activity) then
+            items[#items + 1] = current
+        end
+    end
+    return succeed({items = items, next = scan and ref(scan.next) or nil})
+end
+
 function M.call(method: string, request: unknown): Reply
     local input = object(request)
     if not input then return fail("INVALID", "request must be an object", nil) end
@@ -278,8 +311,9 @@ function M.call(method: string, request: unknown): Reply
     if method == "send" then return send(input) end
     if method == "get" then return session_get(input) end
     if method == "await" then return await(input) end
+    if method == "list" then return list(input) end
     if method == "catalog" then return catalog(input) end
-    if method == "join" or method == "list" or method == "cancel" or method == "close" then
+    if method == "join" or method == "cancel" or method == "close" then
         return not_ready(input)
     end
     return fail("UNSUPPORTED", "unknown sessions operation", nil)

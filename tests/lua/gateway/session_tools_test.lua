@@ -50,7 +50,7 @@ local function success(name: string): Object
     if name == "session_close" then return {ok = true, value = {operation = OP, subject = SESSION, state = "requested", effect = "close"}} end
     if name == "session_await" then return {ok = true, value = {subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}} end
     if name == "session_get" then return {ok = true, value = {kind = "session", value = snapshot()}} end
-    if name == "session_list" then return {ok = true, value = {items = {snapshot()}, feed = "f1", snapshot = "s1"}} end
+    if name == "session_list" then return {ok = true, value = {items = {snapshot()}}} end
     if name == "session_catalog" then return {ok = true, value = {items = {}, complete = true, unavailable_count = 0, diagnostics = {}}} end
     return {ok = true, value = {subject_kind = "join", subject = "bj:node-a:ws-1:j1", cursor = "c1", tag = "pending", reason = "timeout",
         children = {{subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}}}}

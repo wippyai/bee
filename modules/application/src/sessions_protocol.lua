@@ -66,7 +66,7 @@ type SessionSnapshot = {session: string, revision: integer, incarnation: integer
     activity: Activity, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type GetValue = {kind: "session", value: SessionSnapshot} | {kind: "work", value: WorkState}
-type ListPage = {items: {SessionSnapshot}, next: string?, feed: string, snapshot: string}
+type ListPage = {items: {SessionSnapshot}, next: string?}
 type CandidateKind = "definition" | "profile" | "executor"
 type Candidate = {ref: string, kind: CandidateKind, revision: integer?, title: string,
     status: "ready" | "missing" | "unconfigured" | "incompatible" | "unknown", checked_at: string,
@@ -601,11 +601,10 @@ function M.decode_get(value: unknown): (GetValue?, string?)
 end
 
 function M.decode_list_page(value: unknown): (ListPage?, string?)
-    local object, failure = shape(value, "list page", {"items", "next", "feed", "snapshot"})
+    local object, failure = shape(value, "list page", {"items", "next"})
     if not object then return nil, failure end
     local rows = bounds.array(object.items, M.MAX_ITEMS)
-    local feed, snapshot = M.cursor(object.feed), M.any_ref(object.snapshot)
-    if not rows or not feed or not snapshot then return nil, "list page is malformed" end
+    if not rows then return nil, "list page is malformed" end
     local items: {SessionSnapshot} = {}
     for index, raw in ipairs(rows) do
         local item, item_error = M.decode_snapshot(raw)
@@ -617,7 +616,7 @@ function M.decode_list_page(value: unknown): (ListPage?, string?)
         next_cursor = M.cursor(object.next)
         if not next_cursor then return nil, "list page next is invalid" end
     end
-    return {items = items, next = next_cursor, feed = feed, snapshot = snapshot}, nil
+    return {items = items, next = next_cursor}, nil
 end
 
 local function decode_candidate(value: unknown): (Candidate?, string?)

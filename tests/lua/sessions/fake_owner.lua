@@ -149,7 +149,7 @@ end
 function M.list(request: unknown): Reply
     local problem = closed(request, {"filter", "cursor"})
     if problem then return refuse("INVALID", problem, nil) end
-    return ok({items = {snapshot("bs:n:w:s1")}, feed = "f1", snapshot = "snap1"})
+    return ok({items = {snapshot("bs:n:w:s1")}})
 end
 
 function M.catalog(request: unknown): Reply

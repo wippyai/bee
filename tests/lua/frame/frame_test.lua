@@ -350,6 +350,17 @@ local function define_tests()
             end
             for _, hit in ipairs(painter.hits) do test.is_true(hit.x >= 31 and hit.x + hit.width - 1 <= 51) end
         end)
+        test.it("keeps zero-width log and row areas from painting or capturing input", function()
+            local painter = frame.new(60, 4, appearance.defaults())
+            frame.log(painter, 1, 4, {lines = {{text = "hidden log"}}, selected = 1, offset = 0,
+                area = {x = 3, y = 1, width = 0, height = 4}})
+            frame.tree(painter, 1, 4, {rows = {{label = "hidden row", depth = 0, expandable = false}}, selected = 1, offset = 0,
+                area = {x = 32, y = 1, width = 0, height = 4}})
+            test.eq(text(painter)[1], string.rep(" ", 60))
+            test.eq(#painter.hits, 0)
+            test.is_nil(frame.hit(painter.hits, 2, 1))
+            test.is_nil(frame.hit(painter.hits, 31, 1))
+        end)
         test.it("draws a selectable card as a hit with the selection marker", function()
             local painter = frame.new(30, 8, appearance.defaults())
             local inner = frame.card(painter, {x = 3, y = 2, width = 12, height = 4}, "card", 2, "Load", true)

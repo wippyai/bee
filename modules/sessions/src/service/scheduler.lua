@@ -212,7 +212,7 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     local invocation: Object = {attempt_id = turn.turn,
         generation = turn.owner_epoch, prompt = input, sender = sender, admission = admission,
         driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id,
-        driver_methods = route.driver_methods, driver_options = route.driver_options or {},
+        driver_methods = route.driver_methods,
         placement_methods = route.placement_methods, checkpoint = context}
     if context.attempt_id ~= nil then invocation.previous_attempt_id = context.attempt_id end
     local outcome, run_error = executor.run_turn(invocation)

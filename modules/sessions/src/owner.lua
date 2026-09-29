@@ -6,7 +6,6 @@ local admission = require("admission")
 local catalog_service = require("catalog_service")
 local driver_route = require("driver_route")
 local hash = require("hash")
-local registry = require("registry")
 local security = require("security")
 local M = {}
 
@@ -86,25 +85,6 @@ local function describe(session: string): (Object?, string?)
     return snapshot(value)
 end
 
-local function driver_options(policy_ref: string, selected: unknown): (Object?, string?)
-    local entry, entry_error = registry.get(policy_ref)
-    local data = entry and object(entry.data)
-    local options = data and object(data.prepare_options)
-    if entry_error or not data or not options then return nil, "launch policy omits driver preparation options" end
-    local result: Object = {}
-    for name, value in pairs(options) do result[name] = value end
-    local selected_profile = object(selected)
-    local selected_options = selected_profile and object(selected_profile.options)
-    if selected_options then
-        for name, value in pairs(selected_options) do result[name] = value end
-    end
-    local host_tools = data.gateway_tools
-    if selected_profile and selected_profile.mcp_tools ~= nil then host_tools = selected_profile.mcp_tools end
-    if host_tools ~= nil then result.gateway_tools = host_tools end
-    if data.gateway_hooks ~= nil then result.gateway_hooks = data.gateway_hooks end
-    return result, nil
-end
-
 local function open(request: Object): Reply
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
@@ -129,7 +109,7 @@ local function open(request: Object): Reply
     end
     local owner_id, workspace = identity()
     if not owner_id or not workspace then return fail("DENIED", "the authenticated caller has no workspace identity", operation_key) end
-    local plan, refused, selected = admission.resolve(definition, nil, workspace, profile_id, profile_revision)
+    local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision)
     if not plan then
         local fault = object(refused)
         local details = fault and object(fault.error)
@@ -147,15 +127,11 @@ local function open(request: Object): Reply
     end
     local methods, methods_error = driver_route.resolve(driver_binding_ref)
     if not methods then return unavailable(methods_error or "selected driver methods are unavailable", operation_key) end
-    local policy_ref = ref(plan_value.policy_ref)
-    if not policy_ref then return unavailable("admission omitted the selected launch policy", operation_key) end
-    local options, options_error = driver_options(policy_ref, selected)
-    if not options then return unavailable(options_error or "launch policy is unavailable", operation_key) end
     local placement_methods = object(plan_value.placement_methods)
     if not placement_methods then return unavailable("admission omitted placement operations", operation_key) end
     local route: Object = {definition = definition, plan_digest = plan_value.plan_digest,
         saved_profile_id = profile_id, saved_profile_revision = profile_revision, workdir = workdir,
-        driver_binding_ref = driver_binding_ref, profile_id = profile_ref, driver_methods = methods, driver_options = options,
+        driver_binding_ref = driver_binding_ref, profile_id = profile_ref, driver_methods = methods,
         placement_methods = placement_methods}
     local created, create_error = journal.invoke("session_create", {operation_key = operation_key,
         title = plan_value.title or definition, route = route})

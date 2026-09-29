@@ -423,6 +423,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     request_stop(mode, grace, mode .. " stop requested")
                 elseif data.command == "attach" and type(data.recipient) == "string" and type(data.generation) == "number" then
                     local next_generation = math.floor(data.generation :: number)
+                    local installed = false
+                    local refusal_reason: string? = nil
                     if next_generation > generation then
                         local same_recipient = recipient == data.recipient
                         local monitored, monitor_error = true, nil
@@ -435,17 +437,22 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                             end
                             generation = next_generation
                             recipient = data.recipient :: string
+                            installed = true
                             process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
                             sent_through = consumed_through
                             flush()
                             if exited then process.send(recipient :: string, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
                         else
+                            refusal_reason = "recipient is not monitorable: " .. tostring(monitor_error)
                             evidence(db, attempt_id, "attach.refused", "generation " .. tostring(next_generation) .. " recipient is not monitorable: " .. tostring(monitor_error))
                         end
+                    else
+                        refusal_reason = "generation is not newer than the attached generation"
                     end
                     -- The fence answer goes to the service that asked: from here on
                     -- only the named generation writes or acknowledges.
-                    process.send(tostring(message:from()), protocol.TOPIC_FENCED, {attempt_id = attempt_id, generation = generation, fenced = generation == next_generation})
+                    process.send(tostring(message:from()), protocol.TOPIC_FENCED, {attempt_id = attempt_id, generation = next_generation,
+                        fenced = installed, refused = not installed, reason = refusal_reason})
                 elseif data.command == "write_status" and type(data.write_id) == "string" then
                     local status = remembered_set[data.write_id :: string] and "accepted" or "unknown"
                     process.send(tostring(message:from()), protocol.TOPIC_WRITE_STATUS, {attempt_id = attempt_id, generation = generation, write_id = data.write_id, status = status})

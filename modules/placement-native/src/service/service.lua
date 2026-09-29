@@ -5,6 +5,7 @@ local process = require("process")
 local funcs = require("funcs")
 local channel = require("channel")
 local time = require("time")
+local sql = require("sql")
 local security = require("security")
 local uuid = require("uuid")
 local json = require("json")
@@ -1027,6 +1028,8 @@ function M.attach(value: unknown): Reply
     if generation <= attempt.attachment_generation then return fail("CONFLICT", "generation " .. tostring(generation) .. " is not newer than " .. tostring(attempt.attachment_generation)) end
     local _, _, row = recorded_identity(attempt.attempt_id)
     local runner = row and row.runner_pid or nil
+    local previous_recipient: unknown = sql.NULL
+    if row and type(row.recipient) == "string" then previous_recipient = row.recipient end
     if exited and (type(runner) ~= "string" or runner == "") then return fail("CONFLICT", "the attempt has exited and its runner is gone") end
     local control_token: string? = nil
     if type(runner) == "string" and runner ~= "" then
@@ -1045,6 +1048,8 @@ function M.attach(value: unknown): Reply
         local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
         local fenced = false
         local answered = false
+        local refused = false
+        local refusal_reason: string? = nil
         while not answered do
             local selected = channel.select({fences:case_receive(), timer:case_receive()})
             if not selected.ok or selected.channel == timer then
@@ -1052,13 +1057,21 @@ function M.attach(value: unknown): Reply
             else
                 local message = selected.value
                 local data: unknown = message:payload():data()
-                if tostring(message:from()) == runner and type(data) == "table" and data.generation == generation then
+                if tostring(message:from()) == runner and type(data) == "table" and data.attempt_id == attempt.attempt_id and data.generation == generation then
                     answered = true
                     fenced = data.fenced == true
+                    refused = data.refused == true
+                    if type(data.reason) == "string" then refusal_reason = data.reason end
                 end
             end
         end
         process.unlisten(fences)
+        if refused then
+            local restored = transition(attempt.attempt_id, {fields = {attachment_generation = attempt.attachment_generation, recipient = previous_recipient},
+                evidence = {kind = "attach.refused", detail = "runner refused generation " .. tostring(generation) .. ": " .. (refusal_reason or "recipient is not monitorable")}})
+            if not restored.ok then return restored end
+            return fail("CONFLICT", "runner refused attachment: " .. (refusal_reason or "recipient is not monitorable"))
+        end
         if not fenced then
             if exited then
                 transition(attempt.attempt_id, {evidence = {kind = "attach.unanswered", detail = "runner gone after exit; generation " .. tostring(generation) .. " has nothing to attach to"}})

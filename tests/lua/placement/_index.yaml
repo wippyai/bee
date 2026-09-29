@@ -89,6 +89,7 @@ entries:
     workdir_preparers: bee.placement.native.service:workdir_preparers
     service: bee.placement.native.service:service
     store: bee.placement.native.persist:store
+    migrations: bee.placement.native.migrations:migrations
     request_codec: bee.placement:request
     quote: bee.driver.kit:quote
     types: bee.placement:types

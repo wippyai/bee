@@ -1188,6 +1188,52 @@ local function define_tests()
             test.is_false(forged_status_accepted, "unauthenticated status received runner state")
             test.is_false(forged_stop_accepted, "unauthenticated stop ended the child")
         end)
+        test.it("restores the prior attachment when the runner refuses a replacement recipient", function()
+            local request = launch({"sh", "-c", "sleep 3"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            local attached = attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            test.eq(attached.attachment_generation, 1)
+            local started = call(OWNER, "start", {attempt_id = prepared.attempt_id})
+            local refused = started.ok and call(OWNER, "attach", {attempt_id = prepared.attempt_id,
+                recipient = "00000000-0000-0000-0000-000000000001", generation = 2}) or started
+            local after_refusal = (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt)
+            local db = assert(store.open())
+            local after_row = store.row(db, prepared.attempt_id)
+            db:release()
+            local eof_count = 0
+            local deadline = time.after("5s")
+            while eof_count < 2 do
+                local output = channel.select({outputs:case_receive(), deadline:case_receive()})
+                assert(output.ok and output.channel == outputs, "refusal fixture runner did not close its output streams")
+                local data: unknown = output.value:payload():data()
+                if type(data) == "table" and data.attempt_id == prepared.attempt_id then
+                    local db = assert(store.open())
+                    local row = store.row(db, prepared.attempt_id)
+                    db:release()
+                    if type(data.sequence) == "number" then
+                        process.send(tostring(row and row.runner_pid), protocol.TOPIC_ACK,
+                            {generation = data.generation, consumed_through = data.sequence})
+                    end
+                    if data.eof == true then eof_count = eof_count + 1 end
+                end
+            end
+            local finished = wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 3000)
+            local final = (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt)
+            local cleaned = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
+            process.unlisten(outputs)
+
+            test.is_true(started.ok, "refusal fixture runner did not start")
+            test.eq(refused.error and refused.error.code, "CONFLICT", "runner did not report a definite recipient refusal")
+            test.eq(after_refusal.execution_state, "running", "definite attachment refusal made a live attempt uncertain")
+            test.eq(after_refusal.attachment_generation, 1, "refused recipient replaced the committed generation")
+            test.eq(after_row and after_row.recipient, process.pid(), "refused recipient replaced the committed carrier")
+            test.is_true(finished, "refusal fixture child did not exit")
+            test.eq(final.execution_state, "exited")
+            test.is_true(cleaned.ok, "refusal fixture cleanup did not complete")
+        end)
         test.it("runs a child through the runner with acknowledged streams and a proven exit", function()
             local request = launch({"sh", "-c", "echo start:$PROBE_VALUE; pwd; read line; echo got:$line; echo warn 1>&2"}, "direct_process")
             local prepared = attempt_of(call(OWNER, "prepare", request))

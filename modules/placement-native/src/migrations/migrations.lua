@@ -128,6 +128,26 @@ CREATE TABLE bee_placement_runner_authorities (
     control_token TEXT NOT NULL UNIQUE
 );
 ]], rebuild = false},
+    -- Migration 5 introduced the full-state table after older versions had
+    -- stored ownership JSON in bounded evidence details. Carry valid records
+    -- forward and retain malformed JSON as an unresolved cleanup intent.
+    {id = 7, name = "legacy_workdir_preparer_states", sql = [[
+INSERT OR IGNORE INTO bee_placement_preparer_states
+    (attempt_id, binding_id, position, record_json, created_at)
+SELECT attempt_id,
+    CASE WHEN json_valid(detail) THEN
+        CASE WHEN json_type(detail, '$.binding_id') = 'text'
+                  AND length(json_extract(detail, '$.binding_id')) BETWEEN 1 AND 256
+            THEN json_extract(detail, '$.binding_id')
+            ELSE 'legacy-unresolved-' || CAST(sequence AS TEXT)
+        END
+    ELSE 'legacy-unresolved-' || CAST(sequence AS TEXT)
+    END,
+    sequence, detail, at
+FROM bee_placement_evidence
+WHERE kind = 'workdir_preparer.state'
+  AND substr(ltrim(detail), 1, 1) = '{';
+]], rebuild = false},
 }
 function M.all(): {Migration}
     return list

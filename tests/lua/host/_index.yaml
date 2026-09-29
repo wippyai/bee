@@ -81,3 +81,4 @@ entries:
     connections: bee.host:clients
     contract: bee.protocol:application
     inventory: bee.host:inventory
+    questions: bee.interaction:delivery

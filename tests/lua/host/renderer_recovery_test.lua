@@ -6,6 +6,7 @@ local time = require("time")
 local connections = require("connections")
 local contract = require("contract")
 local inventory = require("inventory")
+local questions = require("questions")
 local identity = "0123456789abcdef0123456789abcdef"
 local display = "fedcba9876543210fedcba9876543210"
 local function spawn_idle(monitored: boolean): string
@@ -60,6 +61,34 @@ local function define_tests()
             local live = receive(views)
             test.eq(live.connection_id, "connection")
             test.eq(live.revision, current.views_revision)
+            process.unlisten(catalogs)
+            process.unlisten(views)
+        end)
+        test.it("publishes the checkpointed inventory when client connections resume", function()
+            local self = tostring(process.pid())
+            local catalogs = assert(process.listen("bee.host.catalog", {message = true}))
+            local views = assert(process.listen("bee.host.views", {message = true}))
+            local assignments = connections.assignment_access(
+                function(_: unknown) return nil, nil end,
+                function() return {}, nil end,
+                function(_: unknown) return nil, nil end)
+            local host = connections.new(self, self, identity, assignments)
+            local admitted = {[self] = {recipient = self, connection_id = "restored-connection",
+                permissions = {open = true, close = true, control = true, appearance = true}, detaching = false,
+                renderer = self, renderer_generation = "generation", rendering = false, display_id = display}}
+            local opened = contract.reply("restored-open", "open")
+            opened.workspace_id, opened.id, opened.instance_id = identity, "restored-view", "restored-instance"
+            opened.definition_id, opened.thread_id, opened.title = "test:app", "thread:restored", "Restored"
+            local current = assert(inventory.observe(inventory.new(identity), opened))
+            connections.resume(host, admitted, 1, 3, current, questions.new(identity))
+
+            local catalog = receive(catalogs)
+            local live = receive(views)
+            test.eq(catalog.connection_id, "restored-connection")
+            test.eq(catalog.revision, current.catalog_revision)
+            test.eq(live.connection_id, "restored-connection")
+            test.eq(live.revision, current.views_revision)
+            test.eq(live.items[1].view_id, "restored-view")
             process.unlisten(catalogs)
             process.unlisten(views)
         end)

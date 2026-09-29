@@ -251,8 +251,13 @@ local function band(painter: Painter, area: Rect, y: integer, value: string, fg:
     M.put(painter, area.x, y, value, area.width, fg, bg)
 end
 
+local function empty_area(area: Rect?): boolean
+    return area ~= nil and (area.width <= 0 or area.height <= 0)
+end
+
 local function draw_row(painter: Painter, area: Rect?, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string,
     fg: string?, focused: boolean?, span: integer?)
+    if empty_area(area) then return end
     local theme = painter.theme
     local has_focus = focused == nil or focused
     local text_fg = fg or theme.text
@@ -635,6 +640,7 @@ function M.log(painter: Painter, first: integer, last: integer, value: LogView):
     local count = #value.lines
     if last < first then return {offset = 0, capacity = 0} end
     local window = M.window(count, last - first + 1, value.selected, value.offset)
+    if empty_area(value.area) then return window end
     local theme = painter.theme
     for slot = 1, window.capacity do
         local index = window.offset + slot

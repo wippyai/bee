@@ -660,7 +660,7 @@ entries:
   source: file://carrier_faulted.lua
   method: main
   meta: {type: test_support}
-  modules: [process]
+  modules: [process, time]
   imports:
     carrier_process: bee.harness.carrier:process
     machine: bee.harness.carrier:machine

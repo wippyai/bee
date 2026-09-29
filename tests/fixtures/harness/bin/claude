@@ -116,6 +116,16 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
         esac ;;
     esac
   done 3< "$stream"
+elif [ -n "${BEE_FIXTURE_FLOOD:-}" ]; then
+  count="$BEE_FIXTURE_FLOOD"
+  pace="${BEE_FIXTURE_FLOOD_PACE:-0.01}"
+  i=0
+  while [ "$i" -lt "$count" ]; do
+    printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}}\n'
+    sleep "$pace"
+    i=$((i + 1))
+  done
+  printf '{"type":"result","subtype":"success","is_error":false,"result":"flood-complete","session_id":"fixture","num_turns":1}\n'
 elif [ -n "${BEE_FIXTURE_PACE:-}" ]; then
   # One frame at a time with a pause, so a carrier can be replaced mid-stream.
   while IFS= read -r frame || [ -n "$frame" ]; do
@@ -135,6 +145,7 @@ elif [ -n "${BEE_FIXTURE_TRUNCATE:-}" ]; then
 else
   cat "$stream"
 fi
+if [ -n "${BEE_FIXTURE_FLOOD_EXIT:-}" ]; then exit 0; fi
 if [ -n "${BEE_FIXTURE_LATE_STDERR:-}" ]; then
   # Stdout ends first; the last stderr line and the exit follow the pause.
   exec 1>&-

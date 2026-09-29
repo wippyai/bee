@@ -2,6 +2,7 @@
 local protocol = require("protocol")
 local M = {}
 M.MAX_BYTES = protocol.MAX_CHUNK_BYTES
+M.COALESCE_WINDOW_MS = 400
 type Stream = "stdout" | "stderr"
 type Buffers = {stdout: string, stderr: string}
 type Chunk = {stream: Stream, data: string}

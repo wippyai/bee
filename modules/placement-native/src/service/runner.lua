@@ -268,7 +268,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             enqueue(item.stream, item.data, false, nil)
         end
         if not coalesce_armed then
-            coalesce_timer = time.after("20ms")
+            coalesce_timer = time.after(tostring(output_buffer.COALESCE_WINDOW_MS) .. "ms")
             coalesce_armed = true
         end
     end

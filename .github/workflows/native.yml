@@ -36,7 +36,7 @@ jobs:
         echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
         echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
     - name: Cache Go builds and modules
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           ${{ steps.go-paths.outputs.build }}
@@ -79,7 +79,7 @@ jobs:
         echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
         echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
     - name: Cache Go builds and modules
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           ${{ steps.go-paths.outputs.build }}
@@ -93,7 +93,7 @@ jobs:
       run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
     - name: Cache pinned toolchain and builder
       id: toolchain-cache
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/bin
         key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
@@ -116,7 +116,7 @@ jobs:
         install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
         python3 build/verify_cached_toolchain.py record
     - name: Cache Lua compilation
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/test-cache
         key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
@@ -150,7 +150,7 @@ jobs:
         echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
         echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
     - name: Cache Go builds and modules
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           ${{ steps.go-paths.outputs.build }}
@@ -164,7 +164,7 @@ jobs:
       run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
     - name: Cache pinned toolchain and builder
       id: toolchain-cache
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/bin
         key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
@@ -187,7 +187,7 @@ jobs:
         install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
         python3 build/verify_cached_toolchain.py record
     - name: Cache Lua compilation
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/test-cache
         key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
@@ -251,7 +251,7 @@ jobs:
         echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
         echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
     - name: Cache Go builds and modules
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           ${{ steps.go-paths.outputs.build }}
@@ -265,7 +265,7 @@ jobs:
       run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
     - name: Cache pinned toolchain and builder
       id: toolchain-cache
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/bin
         key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
@@ -288,7 +288,7 @@ jobs:
         install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
         python3 build/verify_cached_toolchain.py record
     - name: Cache Lua compilation
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/test-cache
         key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}
@@ -336,7 +336,7 @@ jobs:
         echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
         echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
     - name: Cache Go builds and modules
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: |
           ${{ steps.go-paths.outputs.build }}
@@ -350,7 +350,7 @@ jobs:
       run: python3 build/verify_cached_toolchain.py keys >> "$GITHUB_OUTPUT"
     - name: Cache pinned toolchain and builder
       id: toolchain-cache
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/bin
         key: toolchain-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.toolchain }}-${{ hashFiles('build/verify_cached_toolchain.py') }}
@@ -373,7 +373,7 @@ jobs:
         install -m 755 "$BUILDER_BINARY" .wippy/bin/wippy-builder
         python3 build/verify_cached_toolchain.py record
     - name: Cache Lua compilation
-      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: .wippy/test-cache
         key: lua-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.runtime-key.outputs.runtime }}-${{ hashFiles('**/*.lua') }}-${{ github.job }}

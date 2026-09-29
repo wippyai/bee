@@ -102,6 +102,11 @@ exclusive, and the thread owner checks membership again. An unrelated thread
 is refused as `NOT_FOUND`. thread_wait is read-only and does not create an
 obligation.
 
+This gateway tool writes `record` under its own agent tool policy. It does
+not add `record` permission to a workspace application's generated
+`threads.message` grant; applications use `bee.threads.service:send` for a
+typed child request (see [Applications](../applications.md)).
+
 thread_sessions pages the live, unsealed bindings of the caller's workspace
 in stable action order, one per action under its newest carrier epoch, and
 keeps only those whose thread the bound subject can read, as answered by the

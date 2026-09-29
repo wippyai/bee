@@ -114,7 +114,7 @@ entries:
   kind: process.lua
   source: file://runner.lua
   method: main
-  modules: [process, channel, time, exec, funcs]
+  modules: [process, channel, time, sql, exec, funcs]
   imports:
     service: bee.placement.native.service:service
     materialization: bee.placement.native.service:materialization

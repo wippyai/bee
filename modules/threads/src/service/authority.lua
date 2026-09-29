@@ -62,20 +62,21 @@ function M.remember(tx: sql.Transaction, actor: string, operation: string, mutat
     return transaction.success(value, false)
 end
 -- Loads the head and the caller's active membership, or explains why not.
--- An application instance without its own row still belongs through the
--- stable app the broker attested at open, but only on threads the family
--- owns: any current instance of the same admitted app inherits the
--- threads and runs it launched. Guest memberships stay per instance, so
--- an owner's delegation and fence keep viewport scope, and a different
--- app resolves to another stable and stays refused.
+-- An instance without its own row inherits through its live broker
+-- authorization and historical app identity, but only on family-owned
+-- threads. An inactive member row is an explicit refusal. Guest memberships
+-- stay per instance, so delegation and family fencing keep viewport scope.
 function M.membership(tx: sql.Transaction, thread_id: string, actor: string): (reader.Head?, reader.Member?, Result?)
     local head, head_err = reader.head(tx, thread_id)
     if head_err then return nil, nil, storage(head_err) end
     if not head then return nil, nil, failure("NOT_FOUND", "thread does not exist") end
     local member, member_err = reader.member(tx, thread_id, actor)
     if member_err then return nil, nil, storage(member_err) end
-    if member and member.active then return head, member, nil end
-    local stable, stable_err = reader.app_stable(tx, actor)
+    if member then
+        if member.active then return head, member, nil end
+        return head, nil, failure("DENIED", "caller is not an active member of the thread")
+    end
+    local stable, stable_err = reader.app_live_stable(tx, actor)
     if stable_err then return nil, nil, storage(stable_err) end
     if stable then
         local owner_stable, owner_err = reader.app_stable(tx, head.owner_actor)
@@ -151,7 +152,7 @@ function M.list(db: sql.DB, actor: string, request: unknown): Result
         limit = number
     end
     return transaction.read(db, function(tx: sql.Transaction): Result
-        local stable, alias_err = reader.app_stable(tx, actor)
+        local stable, alias_err = reader.app_live_stable(tx, actor)
         if alias_err then return storage(alias_err) end
         local heads, err = reader.accessible_heads(tx, actor, stable, after, limit)
         if not heads then return storage(err or "read accessible threads") end

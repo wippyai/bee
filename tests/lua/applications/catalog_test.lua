@@ -302,11 +302,16 @@ local function define_tests()
             assert(changes:apply())
 
             local setup_ok, setup_error = pcall(function()
+                activate(WORKSPACE, node, node, source_workspace, overlay_owner, measured :: Object, "bee.gov:db")
                 local before = broker_revision(WORKSPACE)
                 if before:match(":unavailable$") or before:match(":unlinked$") then
-                    error("application broker could not read the configured governance activation revision")
+                    error("application broker could not read the governance activation revision after activation")
                 end
-                activate(WORKSPACE, node, node, source_workspace, overlay_owner, measured :: Object, "bee.gov:db")
+                local stored_before_result = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
+                if not stored_before_result.ok then
+                    error("read governance activation revision before overlay restoration: " .. tostring(stored_before_result.code))
+                end
+                local stored_before = (stored_before_result.value :: Object).revision
                 local overlay = assert(registry.overlay(overlay_owner))
                 local install = overlay:changes()
                 assert(install:create(definition))
@@ -316,10 +321,16 @@ local function define_tests()
                 if after:match(":unavailable$") then
                     error("application broker could not fingerprint the protected admission overlay")
                 end
+                local stored_after_result = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
+                if not stored_after_result.ok then
+                    error("read governance activation revision after overlay restoration: " .. tostring(stored_after_result.code))
+                end
+                test.eq((stored_after_result.value :: Object).revision, stored_before,
+                    "overlay restoration does not change the activation-store revision")
                 if after == before then
                     local stored = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
                     local stored_value = stored.ok and (stored.value :: Object).revision or stored.code
-                    error("process-local recovery did not invalidate the broker catalog revision; before=" .. before
+                    error("restored admission did not invalidate the broker catalog revision; before=" .. before
                         .. "; after=" .. after .. "; stored=" .. tostring(stored_value))
                 end
                 test.is_true(has(catalog.read(WORKSPACE), definition_id),

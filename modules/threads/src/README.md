@@ -15,7 +15,7 @@ authenticated actor owns its data and no payload can select another actor.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (18 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
+| `bee.threads.persist` | The owned store: checked migration ledger (19 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
 
 ## Dependency interface
 
@@ -47,6 +47,12 @@ storage access. Rights the host grants on the caller's scope, checked with
 Membership roles are checked inside the commit transaction: `owner`
 administers membership and closes, `participant` reads and submits,
 `observer` reads. Lifecycle authority is separate from ownership.
+
+The application broker activates an instance alias on open or retained-instance
+recovery and retires it when the instance closes. A reopened instance inherits
+its app family's threads only while its own broker-managed authorization is
+live. Historical aliases continue to identify thread owners, and an inactive
+member row remains an explicit denial.
 
 ## Delivery
 
@@ -118,8 +124,10 @@ receipt fields), 13 `action_inbox_delivery_status` (persisted restart blockers),
 `action_inbox_outbox_reply` (cross-node reply correlation on a queued row), 16
 `cancel_intent` (managed-run cancellation state before the carrier settles),
 17 `attempt_notices` (durable attempt-addressed notices before action
-admission), and 18 `app_alias` (the broker-attested stable application
-identity behind reopened-instance membership).
+admission), 18 `app_alias` (the broker-attested stable application identity
+behind reopened-instance membership), and 19 `app_alias_live_authorization`
+(broker-managed live authorization for family inheritance; historical aliases
+continue to identify app-owned threads).
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and

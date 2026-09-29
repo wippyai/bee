@@ -629,6 +629,64 @@ local function define_tests()
             assert(activation_store.close(activations))
             assert(plan_store.close(plans))
         end)
+        test.it("repairs a partial overlay when its installed capability grant matches the activation", function()
+            local workspace = "workspace-partial-grant-recovery"
+            local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))
+            local activations = assert(activation_store.open("bee.gov:activation_test_db", "node-owner", workspace))
+            local entry = {id = "demo:grant-recovery", kind = "function.lua", data = {source = "return 'v1'"}}
+            local exact = assert(artifact.create({entry}))
+            selected_plan(plans, "v1", {bytes = exact.bytes, digest = exact.digest})
+            local vocabulary: capability_model.Vocabulary = {revision = 1, never = {}, capabilities = {}}
+            local proposal, proposal_error = capability_grants.propose(vocabulary, "bee.gov:test-overlay",
+                "demo:grant-recovery", {}, nil)
+            if not proposal then error(tostring(proposal_error)) end
+            local review, review_error = capability_grants.diff(vocabulary, nil, proposal)
+            if not review then error(tostring(review_error)) end
+            local world: ResolverWorld = {revision = 4, digest = SHA,
+                capability = {kind = "new", proposal = proposal, review = review}}
+            local application_entry_present, apply_count = false, 0
+            local installed_evidence: preflight.CapabilityEvidence? = nil
+            local config: owner.Config = {plans = plans, activations = activations,
+                resolver = shifting_resolver(entry, world), approvals = approvals(), actor_id = "host-a",
+                consumer_id = "destination-host", overlay_owner = "bee.gov:test-overlay",
+                approval_policy = "local-install", migrations = migration_effect(),
+                matches = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): (boolean?, string?)
+                    return application_entry_present, nil
+                end,
+                apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent_raw: unknown): ({[string]: unknown}?, string?)
+                    if installed_evidence == nil then
+                        local intent = intent_raw :: Object
+                        local record, record_error = capability_grants.record("bee.gov:test-overlay", workspace,
+                            "demo:grant-recovery", proposal, intent.approval_id, 1, intent.artifact_digest :: string,
+                            intent.version :: string)
+                        if not record then return nil, tostring(record_error) end
+                        local installed, decode_error = capability_grants.decode(record, "bee.gov:test-overlay",
+                            workspace, "demo:grant-recovery", vocabulary)
+                        if not installed then return nil, tostring(decode_error) end
+                        local installed_review, installed_review_error = capability_grants.diff(vocabulary, installed, proposal)
+                        if not installed_review then return nil, tostring(installed_review_error) end
+                        installed_evidence = {kind = "installed", proposal = proposal, installed = installed,
+                            review = installed_review}
+                        world.capability = installed_evidence
+                    end
+                    application_entry_present, apply_count = true, apply_count + 1
+                    return {changed = true}, nil
+                end}
+            ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
+                version = "v1", intent_id = "intent-partial-grant", receipt_key = "partial-grant"}))
+            test.eq(ok(owner.step(config, "intent-partial-grant", "partial-grant")).phase, "consuming")
+            test.eq(ok(owner.step(config, "intent-partial-grant", "partial-grant")).phase, "authorized")
+            test.eq(ok(owner.step(config, "intent-partial-grant", "partial-grant")).phase, "applying")
+            test.eq(ok(owner.step(config, "intent-partial-grant", "partial-grant")).outcome, "applied")
+            test.is_true(installed_evidence ~= nil)
+            application_entry_present = false
+            local restored = ok(owner.recover(config, "partial-grant"))
+            test.is_true(restored.recovered == true)
+            test.is_true(application_entry_present)
+            test.eq(apply_count, 2)
+            assert(activation_store.close(activations))
+            assert(plan_store.close(plans))
+        end)
         test.it("refuses an application admission for another overlay before storing or requesting approval", function()
             local workspace = "workspace-admission-owner"
             local plans = assert(plan_store.open("bee.gov:plan_test_db", "node-owner", workspace))

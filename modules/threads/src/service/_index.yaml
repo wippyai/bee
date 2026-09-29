@@ -173,6 +173,16 @@ entries:
     types: bee.threads.service:types
   security:
     policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
+- name: retire_app_alias
+  kind: function.lua
+  source: file://retire_app_alias_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    app_alias: bee.threads.service:app_alias
+    types: bee.threads.service:types
+  security:
+    policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
 - name: fence_app
   kind: function.lua
   source: file://fence_app_method.lua

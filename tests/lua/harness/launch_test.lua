@@ -46,12 +46,17 @@ end
 local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
     "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
-local function scope(): security.Scope
+local function scope(extra: {string}?): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
         local policy, err = security.policy(name)
         if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
         policies[index] = policy
+    end
+    for _, name in ipairs(extra or {}) do
+        local policy, err = security.policy(name)
+        if err or not policy then error("policy " .. name .. ": " .. tostring(err)) end
+        policies[#policies + 1] = policy
     end
     return security.new_scope(policies)
 end
@@ -61,10 +66,18 @@ local function call(target: string, request: unknown): admission.Reply
     if err then error(target .. ": " .. tostring(err)) end
     return result :: admission.Reply
 end
-local function call_as(actor_id: string, target: string, request: unknown): admission.Reply
-    local result, err = funcs.new():with_actor(principals.actor(actor_id, principals.workspace(request))):with_scope(scope()):call(target, request)
+local function call_as_bound(actor_id: string, target: string, request: unknown, workspace_id: unknown,
+    extra_policies: {string}?): admission.Reply
+    local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace_id))
+        :with_scope(scope(extra_policies)):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
     return result :: admission.Reply
+end
+local function call_as_with_policies(actor_id: string, target: string, request: unknown, extra_policies: {string}): admission.Reply
+    return call_as_bound(actor_id, target, request, principals.workspace(request), extra_policies)
+end
+local function call_as(actor_id: string, target: string, request: unknown): admission.Reply
+    return call_as_with_policies(actor_id, target, request, {})
 end
 local function value(reply: admission.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
@@ -796,6 +809,95 @@ local function define_tests()
                 local credentials_after = value(call("bee.credentials.binding:list", {workspace_id = workspace}))
                 test.eq(#(resources_after.grants :: {unknown}), #(resources_before.grants :: {unknown}))
                 test.eq(#(credentials_after.projections :: {unknown}), #(credentials_before.projections :: {unknown}))
+            end)
+            entry.data = original
+            apply(entry)
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("admits a reopened app through its active stable-family thread membership", function()
+            local entry = assert(registry.get(DEFINITION))
+            local original = entry.data
+            local changed: {[string]: unknown} = {}
+            for key, item in pairs(original :: {[string]: unknown}) do changed[key] = item end
+            changed.allowed_overrides = {"thread"}
+            changed.thread_policy = {kind = "caller"}
+            local ok, failure = pcall(function()
+                entry.data = changed
+                apply(entry)
+                local alias_workspace = string.rep("b", 32)
+                local definition_id = "bee.harness.catalog:stable_family_fixture"
+                local stable = "bee.application:" .. alias_workspace .. ":" .. fresh("stable-family")
+                local old_app = "bee.application:" .. alias_workspace .. ":" .. fresh("old-app")
+                local reopened_app = "bee.application:" .. alias_workspace .. ":" .. fresh("reopened-app")
+                local unattested_app = "bee.application:" .. alias_workspace .. ":" .. fresh("unattested-app")
+                local broker = "bee.test.alias-broker"
+                local alias_policies = {"bee.security.threads:application_thread_alias_call_policy",
+                    "bee.security.threads:application_thread_alias_policy"}
+                local function attest(instance: string)
+                    value(call_as_with_policies(broker, "bee.threads.service:register_app_alias", {
+                        stable = stable, instance = instance, workspace_id = alias_workspace, definition_id = definition_id,
+                    }, alias_policies))
+                end
+                local function retire(instance: string)
+                    value(call_as_with_policies(broker, "bee.threads.service:retire_app_alias", {
+                        stable = stable, instance = instance, workspace_id = alias_workspace, definition_id = definition_id,
+                    }, alias_policies))
+                end
+                local function workspace_call(target: string, request: {[string]: unknown})
+                    request.workspace_id = alias_workspace
+                    value(call(target, request))
+                end
+                workspace_call("bee.resources.binding:associate", {name = "project", root_ref = ROOT,
+                    subpath = "", allowed_access = "write"})
+                workspace_call("bee.resources.binding:associate", {name = "session", root_ref = ROOT,
+                    subpath = "", allowed_access = "write"})
+                workspace_call("bee.credentials.binding:define", {name = "anthropic", provider = "claude",
+                    source = {kind = "env_variable", ref = SOURCE}})
+                with_entry("bee.credentials:credential_sources", function(source_entry)
+                    local sources = source_entry.sources :: {{[string]: unknown}}
+                    local copied: {{[string]: unknown}} = {}
+                    for index, source in ipairs(sources) do
+                        local item: {[string]: unknown} = {}
+                        for key, value in pairs(source) do item[key] = value end
+                        if item.ref == SOURCE then item.audience = "*" end
+                        copied[index] = item
+                    end
+                    source_entry.sources = copied
+                end, function()
+                    attest(old_app)
+                    local shared = fresh("reopened-app-thread")
+                    value(call_as_bound(old_app, "bee.threads.service:create", {thread_id = shared,
+                        idempotency_key = fresh("create"), title = "Research"}, alias_workspace, {}))
+                    attest(reopened_app)
+
+                    local visible = value(call_as_bound(reopened_app, "bee.threads.service:get", {thread_id = shared},
+                        alias_workspace, {}))
+                    local membership = visible.membership :: {[string]: unknown}
+                    test.eq(membership.member_id, old_app)
+                    test.eq(membership.active, true)
+
+                    local admitted = value(call_as(reopened_app, "bee.harness.launch:admit", {
+                        request_id = fresh("reopened-app-launch"), definition_ref = DEFINITION,
+                        workspace_id = alias_workspace, brief = "continue research", thread_id = shared,
+                    }))
+                    test.eq(admitted.thread_id, shared)
+
+                    retire(old_app)
+                    local reopened_thread = fresh("reopened-app-owned-thread")
+                    value(call_as_bound(reopened_app, "bee.threads.service:create", {thread_id = reopened_thread,
+                        idempotency_key = fresh("create"), title = "Reopened app work"}, alias_workspace, {}))
+                    test.eq(code(call_as(old_app, "bee.harness.launch:admit", {
+                        request_id = fresh("retired-app-launch"), definition_ref = DEFINITION,
+                        workspace_id = alias_workspace, brief = "retired callers cannot launch", thread_id = reopened_thread,
+                    })), "DENIED")
+
+                    test.eq(code(call_as_bound(unattested_app, "bee.threads.service:get", {thread_id = shared},
+                        alias_workspace, {})), "DENIED")
+                    test.eq(code(call_as(unattested_app, "bee.harness.launch:admit", {
+                        request_id = fresh("unattested-app-launch"), definition_ref = DEFINITION,
+                        workspace_id = alias_workspace, brief = "must remain denied", thread_id = shared,
+                    })), "DENIED")
+                end)
             end)
             entry.data = original
             apply(entry)
@@ -1621,6 +1723,82 @@ local function define_tests()
                 local failure = settled.error :: {[string]: unknown}?
                 test.not_nil(failure)
                 test.is_true(tostring(failure and failure.message):find("carrier exited during launch preparation", 1, true) ~= nil)
+            end)
+        end)
+        test.it("keeps a lost running attempt live until placement finishes draining, then settles it", function()
+            local request_id = fresh("orphan-running")
+            with_entry(POLICY, function(changed)
+                local environment = changed.environment :: {[string]: unknown}
+                environment.BEE_FIXTURE_LINGER = "12"
+                changed.environment = environment
+            end, function()
+                local admitted = value(call("bee.harness.launch:admit", {request_id = request_id,
+                    definition_ref = DEFINITION, workspace_id = workspace, brief = "prove lost carrier recovery"})) :: admission.Admitted
+                local carrier_request = admitted.request :: {[string]: unknown}
+                local spawner = process.with_context({}):with_actor(principals.actor(REQUESTER, workspace)):with_scope(scope())
+                local lost_pid, spawn_error = spawner:spawn_monitored("bee.harness.catalog:carrier_faulted", "bee:workers",
+                    carrier_request, "open", process.pid(), "attempt_started")
+                if not lost_pid then error("spawn faulted carrier: " .. tostring(spawn_error)) end
+                local events = assert(process.events())
+                local crash_deadline = time.after("30s")
+                local crashed = false
+                while not crashed do
+                    local selected = channel.select({events:case_receive(), crash_deadline:case_receive()})
+                    if not selected.ok or selected.channel == crash_deadline then error("running carrier did not exit") end
+                    local event = selected.value
+                    if event.kind == process.event.EXIT and tostring(event.from) == tostring(lost_pid) then
+                        local result = event.result or {}
+                        test.is_true(tostring(result.error):find("crash after attempt_started", 1, true) ~= nil)
+                        crashed = true
+                    end
+                end
+
+                local thread_id, attempt_id = tostring(admitted.thread_id), tostring(admitted.attempt_id)
+                local current = value(call("bee.harness.launch:agent_call_backend", {operation = "status",
+                    thread_id = thread_id, attempt_id = attempt_id}))
+                test.eq(current.state, "running", "placement still owns a live runner and recovery remains possible")
+                test.eq(count(kinds(thread_id), "receipt"), 0, "a missing carrier alone is not terminal")
+
+                local drain_deadline = math.floor(time.now():unix_nano() / 1000000) + 75000
+                local drained = false
+                while not drained do
+                    local db = assert(placement_store.open())
+                    local evidence = placement_store.evidence(db, attempt_id, 0, 64)
+                    local row = placement_store.row(db, attempt_id)
+                    db:release()
+                    local finished = false
+                    for _, item in ipairs((evidence and evidence.evidence) or {}) do
+                        if item.kind == "runner.finished" then finished = true end
+                    end
+                    if row and row.execution_state == "exited" and finished then
+                        test.is_nil(row.runner_pid, "runner.finished clears its process identity")
+                        local stale_db = assert(placement_store.open())
+                        local _, stale_error = stale_db:execute(
+                            "UPDATE bee_placement_attempts SET runner_pid = ? WHERE attempt_id = ?",
+                            {"999999999", attempt_id})
+                        stale_db:release()
+                        if stale_error then error("simulate legacy stale runner pid: " .. tostring(stale_error)) end
+                        drained = true
+                    else
+                        local remaining = drain_deadline - math.floor(time.now():unix_nano() / 1000000)
+                        if remaining <= 0 then error("placement runner did not finish draining") end
+                        time.sleep("50ms")
+                    end
+                end
+
+                current = value(call("bee.harness.launch:agent_call_backend", {operation = "status",
+                    thread_id = thread_id, attempt_id = attempt_id}))
+                test.eq(current.outcome, "uncertain")
+                local failure = current.error :: {[string]: unknown}?
+                test.eq(failure and failure.code, "carrier_lost")
+                local records = kinds(thread_id)
+                test.eq(count(records, "turn.end"), 1)
+                test.eq(count(records, "receipt"), 1)
+                local db = assert(placement_store.open())
+                local row = placement_store.row(db, attempt_id)
+                db:release()
+                test.not_nil(row)
+                test.eq(row and row.runner_pid, "999999999", "legacy runner identity remains available for inspection")
             end)
         end)
         test.it("launches a shipped executable_env policy from the generated agents.launch grant and the run settles", function()

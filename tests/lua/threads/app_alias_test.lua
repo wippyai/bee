@@ -88,6 +88,24 @@ local function define_tests()
             local foreign = app_principal(foreign_instance, {}, OTHER_WORKSPACE)
             test.eq(harness.code(foreign:call("get", {thread_id = thread_id})), "DENIED")
         end)
+        test.it("does not fall through from an inactive member row to family membership", function()
+            local broker = app_principal("inactive-member-broker", {ALIAS_POLICY})
+            local definition = "bee.alias_inactive_member:app"
+            local first = instance()
+            local owner = app_principal(first, harness.ALL)
+            local thread_id = harness.thread(owner, "App work")
+            attest(broker, definition, first)
+
+            local second = instance()
+            local reopened = app_principal(second, {})
+            attest(broker, definition, second)
+            test.eq(harness.value(reopened:call("get", {thread_id = thread_id})).membership.active, true)
+            harness.value(owner:call("join", {thread_id = thread_id, idempotency_key = harness.key(),
+                member_id = second, role = "participant", expected_revision = 1}))
+            harness.value(reopened:call("leave", {thread_id = thread_id, idempotency_key = harness.key(),
+                member_id = second, expected_revision = 2}))
+            test.eq(harness.code(reopened:call("get", {thread_id = thread_id})), "DENIED")
+        end)
         test.it("keeps guest membership per instance and fences the family", function()
             local broker = app_principal("broker", {ALIAS_POLICY})
             local definition, other_definition = "bee.alias_fence:app", "bee.alias_fence_other:app"

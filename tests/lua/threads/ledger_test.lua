@@ -46,7 +46,7 @@ local function define_tests()
                 end
             end
             local ledger_after = harness.query(upgraded, "SELECT id, name, checksum FROM bee_thread_schema_migrations ORDER BY id")
-            test.eq(#ledger_after, 18)
+            test.eq(#ledger_after, 19)
             test.eq(ledger_after[1].checksum, expected_checksum)
             test.eq(ledger_after[2].name, "thread_authority")
             test.eq(ledger_after[3].name, "work_lifecycle")
@@ -65,6 +65,7 @@ local function define_tests()
             test.eq(ledger_after[16].name, "cancel_intent")
             test.eq(ledger_after[17].name, "attempt_notices")
             test.eq(ledger_after[18].name, "app_alias")
+            test.eq(ledger_after[19].name, "app_alias_live_authorization")
             local events = harness.query(upgraded, "SELECT body_json FROM bee_thread_events WHERE thread_id = 'legacy-thread' ORDER BY sequence")
             test.eq(#events, 3)
             test.eq(events[3].body_json, '{"n":3}')
@@ -74,8 +75,23 @@ local function define_tests()
             local again, again_error = database.open(resource)
             if not again then error(tostring(again_error)) end
             local ledger_again = harness.query(again, "SELECT COUNT(*) AS count FROM bee_thread_schema_migrations")
-            test.eq(ledger_again[1].count, 18)
+            test.eq(ledger_again[1].count, 19)
             again:release()
+        end)
+        test.it("migrates historical app aliases as inactive until the broker reattests them", function()
+            local resource = "bee.threads:alias_live_test_db"
+            local version_18, open_error = database.open_at(resource, 18)
+            if not version_18 then error(tostring(open_error)) end
+            harness.execute(version_18, "INSERT INTO bee_thread_app_alias (stable, instance, workspace_id, definition_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                {"bee.application:" .. string.rep("a", 32) .. ":app", "bee.application:" .. string.rep("a", 32) .. ":instance",
+                    string.rep("a", 32), "bee.legacy:app", "now"})
+            version_18:release()
+            local upgraded, upgrade_error = database.open(resource)
+            if not upgraded then error(tostring(upgrade_error)) end
+            local aliases = harness.query(upgraded, "SELECT active FROM bee_thread_app_alias WHERE definition_id = 'bee.legacy:app'")
+            test.eq(#aliases, 1)
+            test.eq(aliases[1].active, 0)
+            upgraded:release()
         end)
         test.it("rebuilds the record table without touching rows or lifecycle references", function()
             local resource = "bee.threads:rebuild_test_db"

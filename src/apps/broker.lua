@@ -237,8 +237,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local left = funcs.new():with_scope(membership_scope):call("bee.threads.service:leave", request)
         return type(left) == "table" and (left :: {[string]: unknown}).ok == true
     end
-    -- Every opened instance is attested for its app's stable identity, so a
-    -- reopened instance inherits the threads and runs the app launched.
+    -- Every opened instance receives a live authorization for its app's
+    -- stable identity, so a reopened instance inherits family threads only
+    -- while the broker still manages that instance.
     -- Attestation is fail-closed: the open is refused when it cannot land.
     local function attest_instance(instance_id: string, definition_id: string): (boolean, string?, string?)
         local done, ok, code, message = pcall(function(): (boolean, string?, string?)
@@ -267,6 +268,23 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end)
         if not done then return false, "permission_denied", "Application alias attestation raised: " .. tostring(ok):sub(1, 300) end
         return ok, code, message
+    end
+    local function retire_instance(item: Instance): (boolean, string?)
+        local stable = app_identity.stable(workspace_id, item.descriptor.definition_id)
+        local instance_actor = thread_binding.actor(workspace_id, item.instance_id)
+        if not stable or type(stable.id) ~= "string" or not instance_actor then
+            return false, "Application identity is invalid"
+        end
+        local scoped, scope_error = funcs.new():with_scope(alias_scope)
+        if not scoped then return false, tostring(scope_error or "set application alias scope") end
+        local reply, call_error = scoped:call("bee.threads.service:retire_app_alias", {stable = stable.id,
+            instance = instance_actor, workspace_id = workspace_id, definition_id = item.descriptor.definition_id})
+        if call_error then return false, "Application alias retirement call failed: " .. tostring(call_error):sub(1, 300) end
+        if type(reply) ~= "table" or (reply :: {[string]: unknown}).ok ~= true then
+            local fault = type(reply) == "table" and bounds.object((reply :: {[string]: unknown}).error) or nil
+            return false, tostring(fault and fault.message or "the thread owner refused application alias retirement")
+        end
+        return true, nil
     end
     -- A removed admission binding fences its stable family out of every
     -- thread: a revoked or uninstalled app keeps no runs to follow. The
@@ -742,6 +760,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
     end
     local function finish(item: Instance, failed: boolean)
+        local retired, retire_error = retire_instance(item)
+        if not retired then error("Retire closed application instance: " .. tostring(retire_error)) end
         item.replacement = nil
         if shutdown_plan then shutdown.remove(shutdown_plan, item.view_id) end
         if interactions.remove(dialogs, item.view_id) then publish_dialogs() end

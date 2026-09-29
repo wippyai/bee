@@ -1477,6 +1477,26 @@ entries:
     capability_grants: bee.gov:capability_grants
     capability_catalog: bee.capability:model
     sends: bee.threads.service:sends
+- name: steer_permission_probe_test
+  kind: function.lua
+  source: file://steer_permission_probe_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, uuid, process, channel, time]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
+  imports:
+    principals: bee.test.principals:bound
+    test: wippy.test:test
+    capability_grants: bee.gov:capability_grants
+    capability_catalog: bee.capability:model
+    sends: bee.threads.service:sends
+- name: steer_grant_actor_probe
+  kind: process.lua
+  source: file://steer_grant_actor_probe.lua
+  method: main
+  meta: {type: test_support}
+  modules: [funcs]
 - name: codex_profile_test
   kind: function.lua
   source: file://codex_profile_test.lua

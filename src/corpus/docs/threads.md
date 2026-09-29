@@ -337,6 +337,25 @@ proofs for commit-before-reply loss, replacement, duplicate delivery and stale
 acknowledgment are not enabled. A failed owner lookup is an error; it never
 falls back to a local thread with the same name.
 
+## Application child messages
+
+The host-generated `threads.message` grant with `scope: children` permits an
+application actor to call `bee.threads.service:send` and `notify` on threads it
+owns through managed-agent launch. To steer a child action, `send` a typed
+`request` message whose `recipient_ids` names the child's admitted principal
+and whose `recipient_action_ids` names its action. The request carries
+`thread_id`, `idempotency_key`, `caller_node_id`, `payload_digest` and
+`message`; the digest is SHA-256 over the canonical message. Use the same key
+and body after an ambiguous reply, then inspect the thread for the committed
+message before trying another key.
+
+This grant does not permit `bee.threads.service:record`, which also accepts
+observations and has a different authority contract. A direct `record` call
+can fail at the function-call boundary before Threads returns an operation
+reply. `notify` wakes a watcher on the caller's own thread and carries no
+message body. `bee.application:client.thread_request` is scoped to the
+initiating thread and is not a child-thread messaging route.
+
 ## Cross-node inbox forwarding
 
 An inbox address is node-qualified as `{node_id, action_id}`. A send whose

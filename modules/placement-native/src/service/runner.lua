@@ -7,6 +7,7 @@
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
+local sql = require("sql")
 local exec = require("exec")
 local funcs = require("funcs")
 local store = require("store")
@@ -23,8 +24,14 @@ type Stream = "stdout" | "stderr"
 type Chunk = {stream: Stream, data: string?, eof: boolean}
 type Pending = {sequence: integer, stream: Stream, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
 local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
-    local result = store.transition(db, attempt_id, {execution = update and update.execution :: types.ExecutionState? or nil,
-        fields = update and update.fields :: {[string]: unknown}? or nil, evidence = {kind = kind, detail = detail}})
+    local execution: types.ExecutionState? = nil
+    local fields: {[string]: unknown}? = nil
+    if update then
+        execution = update.execution :: types.ExecutionState?
+        fields = update.fields :: {[string]: unknown}?
+    end
+    local result = store.transition(db, attempt_id, {execution = execution, fields = fields,
+        evidence = {kind = kind, detail = detail}})
     if not result.ok then return false, result.message end
     return true, nil
 end
@@ -600,7 +607,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     process.unlisten(controls)
     process.unlisten(inputs)
     process.unlisten(acks)
-    evidence(db, attempt_id, "runner.finished", "pending chunks " .. tostring(#pending) .. ", consumed through " .. tostring(consumed_through), {fields = {runner_pid = nil}})
+    evidence(db, attempt_id, "runner.finished", "pending chunks " .. tostring(#pending) .. ", consumed through " .. tostring(consumed_through), {fields = {runner_pid = sql.NULL}})
     local ended = store.attempt(db, attempt_id)
     if ended and ended.execution_state == "exited" then service.cleanup_attempt(ended, true) end
     db:release()

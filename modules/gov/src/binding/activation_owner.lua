@@ -302,6 +302,21 @@ end
 -- Once migration execution starts, the approved pending set is expected to
 -- shrink.  The exact artifact and composed candidate must remain unchanged;
 -- preflight independently refuses changed/removed applied definitions.
+local function remeasure_migration_policy(intent: Object, current: Object, invalid_label: string,
+    changed_message: string): Result?
+    local current_blob = object(current.migration_work)
+    local prior_work, prior_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
+    local current_work, current_error = migration_work.decode(current_blob and current_blob.bytes,
+        current_blob and current_blob.digest)
+    if not prior_work or not current_work then
+        return failure("INTERNAL", tostring(prior_error or current_error or invalid_label))
+    end
+    if prior_work.policy_digest ~= current_work.policy_digest then
+        return failure("CONFLICT", changed_message)
+    end
+    return nil
+end
+
 local function remeasure_progress(config: Config, intent: Object): (Object?, Result?)
     local current, measurement_error = measured(config, approved_spec(intent))
     if not current then return nil, measurement_error end
@@ -320,16 +335,9 @@ local function remeasure_progress(config: Config, intent: Object): (Object?, Res
     if intent.plan_revision ~= current.plan_revision or intent.selection_revision ~= current.selection_revision then
         return nil, failure("CONFLICT", "selected plan changed during migration")
     end
-    local current_blob = object(current.migration_work)
-    local prior_work, prior_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
-    local current_work, current_error = migration_work.decode(current_blob and current_blob.bytes,
-        current_blob and current_blob.digest)
-    if not prior_work or not current_work then
-        return nil, failure("INTERNAL", tostring(prior_error or current_error or "decode migration policy measurement"))
-    end
-    if prior_work.policy_digest ~= current_work.policy_digest then
-        return nil, failure("CONFLICT", "activation database policy changed during migration")
-    end
+    local migration_error = remeasure_migration_policy(intent, current, "decode migration policy measurement",
+        "activation database policy changed during migration")
+    if migration_error then return nil, migration_error end
     return current, nil
 end
 
@@ -339,22 +347,22 @@ local function remeasure_restoration(config: Config, intent: Object): Result?
     local admission_error = admission_owner(config, current)
     if admission_error then return admission_error end
     for _, field in ipairs({"owner_node", "workspace_id", "source_node", "source_workspace", "version",
-        "plan_digest", "artifact_digest", "application_admission_digest", "grant_predecessor_digest"}) do
+        "plan_digest", "artifact_digest", "application_admission_digest"}) do
         if intent[field] ~= current[field] then
             return failure("CONFLICT", "settled activation identity changed: " .. field)
         end
     end
-    local current_blob = object(current.migration_work)
-    local prior_work, prior_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
-    local current_work, current_error = migration_work.decode(current_blob and current_blob.bytes,
-        current_blob and current_blob.digest)
-    if not prior_work or not current_work then
-        return failure("INTERNAL", tostring(prior_error or current_error or "decode activation restoration policy"))
+    local proposal = object(current.capability_proposal)
+    local installed = object(current.capability_installed)
+    if proposal or installed or intent.grant_predecessor_digest ~= nil then
+        if not proposal or not installed or installed.digest ~= proposal.digest
+            or installed.artifact_digest ~= intent.artifact_digest or installed.version ~= intent.version
+            or installed.approval_id ~= intent.approval_id then
+            return failure("CONFLICT", "settled activation grant no longer matches its artifact, version and approval")
+        end
     end
-    if prior_work.policy_digest ~= current_work.policy_digest then
-        return failure("CONFLICT", "activation database policy changed since apply")
-    end
-    return nil
+    return remeasure_migration_policy(intent, current, "decode activation restoration policy",
+        "activation database policy changed since apply")
 end
 
 -- One step performs at most one durable transition around an external effect.

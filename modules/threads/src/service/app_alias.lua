@@ -1,5 +1,6 @@
 -- MIT. Broker-attested application alias: the stable app an instance was
--- opened for, and the family's active threads for revocation fencing.
+-- opened for, the broker-managed live authorization for family inheritance,
+-- and the family's active threads for revocation fencing.
 -- Only the application broker holds the alias action; instances attest
 -- nothing themselves, so an app cannot claim another's stable identity.
 local sql = require("sql")
@@ -76,15 +77,42 @@ function M.register(db: sql.DB, actor: string, request: unknown): Result
             if row.stable ~= alias.stable or row.workspace_id ~= alias.workspace_id or row.definition_id ~= alias.definition_id then
                 return failure("CONFLICT", "application alias is already attested")
             end
+            local _, activate_err = tx:execute("UPDATE bee_thread_app_alias SET active = 1 WHERE stable = ? AND instance = ?",
+                {alias.stable, alias.instance})
+            if activate_err then return storage("activate application instance authorization") end
             return transaction.success({stable = alias.stable, instance = alias.instance}, true)
         end
         local claimed, claimed_err = reader.app_stable(tx, alias.instance)
         if claimed_err then return storage(claimed_err) end
         if claimed then return failure("CONFLICT", "application instance is attested for another app") end
-        local _, insert_err = tx:execute("INSERT INTO bee_thread_app_alias (stable, instance, workspace_id, definition_id, created_at) VALUES (?, ?, ?, ?, ?)",
+        local _, insert_err = tx:execute("INSERT INTO bee_thread_app_alias (stable, instance, workspace_id, definition_id, created_at, active) VALUES (?, ?, ?, ?, ?, 1)",
             {alias.stable, alias.instance, alias.workspace_id, alias.definition_id, transaction.now()})
         if insert_err then return storage("record application alias") end
         return transaction.success({stable = alias.stable, instance = alias.instance}, false)
+    end)
+end
+function M.retire(db: sql.DB, actor: string, request: unknown): Result
+    local object, invalid = decoded(request, {"stable", "instance", "workspace_id", "definition_id"})
+    if not object then return invalid or failure("INVALID_ARGUMENT", "invalid request") end
+    local alias, refused = alias_of(object)
+    if not alias then return refused or failure("INVALID_ARGUMENT", "invalid request") end
+    if not access.may_alias(alias.stable) then return failure("DENIED", "caller may not retire application instances") end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local rows, query_err = tx:query("SELECT stable, workspace_id, definition_id FROM bee_thread_app_alias WHERE instance = ?",
+            {alias.instance})
+        if query_err or not rows then return storage("read application alias for retirement") end
+        if #rows > 1 then return storage("application instance aliases are corrupt") end
+        if #rows == 0 then
+            return transaction.success({stable = alias.stable, instance = alias.instance, retired = false}, false)
+        end
+        local row = rows[1] :: {[string]: unknown}
+        if row.stable ~= alias.stable or row.workspace_id ~= alias.workspace_id or row.definition_id ~= alias.definition_id then
+            return failure("CONFLICT", "application alias changed before retirement")
+        end
+        local _, retire_err = tx:execute("UPDATE bee_thread_app_alias SET active = 0 WHERE stable = ? AND instance = ?",
+            {alias.stable, alias.instance})
+        if retire_err then return storage("retire application instance authorization") end
+        return transaction.success({stable = alias.stable, instance = alias.instance, retired = true}, false)
     end)
 end
 -- A revoked grant removes access: every active member row of the stable

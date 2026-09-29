@@ -216,7 +216,7 @@ local function main(value: unknown)
         if busy then status = "Sync in progress"; dirty = true; return end
         if dialog then return end
         local row = leases.selected(slice)
-        if not row or row.state ~= "active" then status = "Select an active lease"; dirty = true; return end
+        if not row or not leases.revocable(row) then status = "Select a lease that can be revoked"; dirty = true; return end
         local request_id, err = client.query(launch, {kind = "confirm", title = "Revoke this lease?",
             message = model.text(row.target .. " used " .. tostring(row.applies_used), 512), accept = "Revoke"})
         if not request_id then status = tostring(err); dirty = true; return end

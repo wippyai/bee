@@ -75,12 +75,13 @@ entries:
   kind: security.policy
   meta:
     comment: A runner answers its starter and its bound recipient, watches the recipient so a lost carrier retires the
-      gateway binding, and invokes the plan and setup methods of host-authorized workdir preparers
+      gateway binding, and invokes the plan, setup and cleanup methods of host-authorized workdir preparers
   policy:
     actions:
     - process.send
     - process.monitor
     - process.unmonitor
     - bee.placement.workdir_preparer.setup
+    - bee.placement.workdir_preparer.cleanup
     resources: '*'
     effect: allow

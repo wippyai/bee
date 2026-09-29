@@ -119,6 +119,15 @@ CREATE TABLE bee_placement_preparer_states (
     PRIMARY KEY (attempt_id, binding_id)
 );
 ]], rebuild = false},
+    -- Only the placement service knows the attempt-bound authority carried
+    -- with controls sent to a runner. It is kept outside the public attempt
+    -- projection and is generated when the runner starts.
+    {id = 6, name = "runner_authorities", sql = [[
+CREATE TABLE bee_placement_runner_authorities (
+    attempt_id TEXT PRIMARY KEY REFERENCES bee_placement_attempts (attempt_id),
+    control_token TEXT NOT NULL UNIQUE
+);
+]], rebuild = false},
 }
 function M.all(): {Migration}
     return list

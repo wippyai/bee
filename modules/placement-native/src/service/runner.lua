@@ -28,7 +28,7 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
     if not result.ok then return false, result.message end
     return true, nil
 end
-local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?)
+local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?, control_token: string)
     local events = assert(process.events())
     local controls = assert(process.listen(protocol.TOPIC_CONTROL, {message = true}))
     local db, open_error = store.open()
@@ -412,7 +412,11 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         elseif selected.channel == controls then
             local message = selected.value
             local data: unknown = message:payload():data()
-            if type(data) == "table" then
+            local sender = tostring(message:from())
+            -- The per-attempt token authenticates placement-service controls.
+            -- The bound carrier may ask only whether its pending write was seen.
+            if type(data) == "table" and (data.control_token == control_token
+                or recipient ~= nil and sender == recipient and data.command == "write_status") then
                 if data.command == "stop" and not exited then
                     local mode = data.mode == "forced" and "forced" or "cooperative"
                     local grace = type(data.grace_ms) == "number" and math.floor(data.grace_ms :: number) or request.timeouts.stop_grace_ms

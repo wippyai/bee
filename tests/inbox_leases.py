@@ -86,7 +86,12 @@ def exercise():
             ui.pump(1.5)
             outcome = ui.text()
             # No installed application backs this seeded request: governance refuses it honestly.
-            assert "BLOCKED" in outcome or "Lease request filed" in outcome, outcome
+            # The seeded activation names no installed workspace application, so
+            # governance must refuse the lease request; a filed request here would
+            # mean the refusal was bypassed. The successful grant path is covered
+            # by lease_flow_test against the real approval bindings.
+            assert "BLOCKED: overlay smoke-notes cannot name a workspace application" in outcome, outcome
+            assert "Lease request filed" not in outcome, outcome
             # The leases view lists the seeded lease with usage and revokes it.
             ui.key(b"v")
             ui.wait("LEASES", timeout=20)

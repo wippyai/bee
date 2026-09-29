@@ -674,7 +674,8 @@ function M.permission_lines(value: unknown): {string}
         end
         lines[#lines + 1] = max and max > 0 and ("Max applies: " .. tostring(max)) or "Max applies: unlimited"
     end
-    local limit = view.proposal.ref == "bee.gov:grant-lease" and M.TEXT_LIMIT or M.LINE_LIMIT
+    -- A lease review renders complete text; the proposal itself is bounded to 8 KiB.
+    local limit = view.proposal.ref == "bee.gov:grant-lease" and 8192 or M.LINE_LIMIT
     local function append(raw: unknown, prefix: string)
         if type(raw) ~= "table" then return end
         for _, value in ipairs(raw :: {unknown}) do

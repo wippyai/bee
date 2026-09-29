@@ -17,9 +17,8 @@ end
 
 -- A fake owner: request stores the proposal, the test decides it, consume may
 -- demand revalidation once (an owner restart) before it accepts.
-local function owner(state: Object)
-    local executor = {}
-    function executor:call(method: string, request: unknown): (unknown?, unknown?)
+local function owner(state: Object): lease_grants.Executor
+    local executor: lease_grants.Executor = {call = function(_self: lease_grants.Executor, method: string, request: unknown): (unknown?, unknown?)
         local input = request :: Object
         local calls = state.calls :: {string}
         calls[#calls + 1] = method
@@ -43,8 +42,12 @@ local function owner(state: Object)
         end
         state.consumed = input.owner_incarnation
         return {ok = true, value = {approval_id = "approval-1"}}, nil
-    end
+    end}
     return executor
+end
+
+local function read(state: Object, name: string): unknown
+    return state[name]
 end
 
 local function define_tests()
@@ -53,7 +56,7 @@ local function define_tests()
             local state: Object = {calls = {}}
             local vocab = vocabulary()
             local installed = assert(capability_model.resolve(vocab, "workspace.files.write", {subpath = "alpha"}))
-            local reply = lease_grants.propose(owner(state) :: any, vocab, installed, PROFILE, "ws",
+            local reply = lease_grants.propose(owner(state) , vocab, installed, PROFILE, "ws",
                 {source_node = "node", source_workspace = "notes", ttl_seconds = 2592000, max_applies = 4}, "key-1")
             test.is_true(reply.ok == true)
             local payload = ((state.request :: Object).proposal :: Object).payload :: Object
@@ -70,7 +73,7 @@ local function define_tests()
             local vocab = vocabulary()
             local installed = assert(capability_model.resolve(vocab, "workspace.files.write", {subpath = "alpha"}))
             local state: Object = {calls = {}}
-            local reply = lease_grants.propose(owner(state) :: any, vocab, installed, PROFILE, "ws",
+            local reply = lease_grants.propose(owner(state) , vocab, installed, PROFILE, "ws",
                 {source_node = "node", source_workspace = "notes", max_applies = 2, extras = {
                     {capability = "workspace.catalog.read", parameters = {}},
                     {capability = "contract.call", parameters = {binding = "app:binding", methods = "get"}},
@@ -84,13 +87,13 @@ local function define_tests()
             local installed = assert(capability_model.resolve(vocab, "workspace.files.write", {subpath = "alpha"}))
             local extras: {Object} = {}
             for index = 1, 8 do extras[index] = {capability = "workspace.files.write", parameters = {subpath = "d" .. tostring(index)}} end
-            local reply = lease_grants.propose(owner({calls = {}}) :: any, vocab, installed, PROFILE, "ws",
+            local reply = lease_grants.propose(owner(({calls = {}} :: Object)) , vocab, installed, PROFILE, "ws",
                 {source_node = "node", source_workspace = "notes", max_applies = 2, extras = extras}, "key-1")
             test.is_true(reply.ok == true)
             local more: {Object} = {}
             for index = 1, 8 do more[index] = {capability = "workspace.files.write", parameters = {subpath = "e" .. tostring(index)}} end
             for index = 1, 8 do more[#more + 1] = extras[index] end
-            local refused = lease_grants.propose(owner({calls = {}}) :: any, vocab, installed, PROFILE, "ws",
+            local refused = lease_grants.propose(owner(({calls = {}} :: Object)) , vocab, installed, PROFILE, "ws",
                 {source_node = "node", source_workspace = "notes", max_applies = 2, extras = more}, "key-2")
             test.is_false(refused.ok == true)
         end)
@@ -98,7 +101,7 @@ local function define_tests()
             local vocab = vocabulary()
             local installed = assert(capability_model.resolve(vocab, "workspace.files.write", {subpath = "alpha"}))
             local state: Object = {calls = {}}
-            local executor = owner(state) :: any
+            local executor = owner(state) 
             lease_grants.propose(executor, vocab, installed, PROFILE, "ws", {source_node = "node", source_workspace = "notes", max_applies = 2}, "key-1")
             local handle = assert(lease_store.open("bee.gov:activation_test_db", "node-grants", assert(uuid.v7())))
             local early = lease_grants.grant(executor, handle, vocab, PROFILE, "ws", "actor", {approval_id = "approval-1"}, "grant-1")
@@ -119,14 +122,15 @@ local function define_tests()
         test.it("revalidates the exact proposal after an approval owner restart and consumes under the current incarnation", function()
             local vocab = vocabulary()
             local installed = assert(capability_model.resolve(vocab, "workspace.files.write", {subpath = "alpha"}))
-            local state: Object = {calls = {}, decided = true, restarted = true}
-            local executor = owner(state) :: any
+            local state: Object = {calls = {}}
+            state.decided, state.restarted = true, true
+            local executor = owner(state) 
             lease_grants.propose(executor, vocab, installed, PROFILE, "ws", {source_node = "node", source_workspace = "notes", max_applies = 2}, "key-1")
             local handle = assert(lease_store.open("bee.gov:activation_test_db", "node-restart", assert(uuid.v7())))
             local granted = lease_grants.grant(executor, handle, vocab, PROFILE, "ws", "actor", {approval_id = "approval-1"}, "grant-1")
             test.is_true(granted.ok == true, tostring(granted.message))
-            test.eq(state.validated, 2)
-            test.eq(state.consumed, 2)
+            test.eq(read(state, "validated"), 2)
+            test.eq(read(state, "consumed"), 2)
             test.eq(((granted.value :: Object).source_approval_owner_incarnation), 2)
             assert(lease_store.close(handle))
         end)

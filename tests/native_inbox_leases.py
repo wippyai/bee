@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-inbox-leases-") as temporary
         text = ui.text()
         assert "DENIED" not in text and "BLOCKED" not in text and "INVALID" not in text, text
         ui.key(b"x")
-        ui.wait("Select an active lease", timeout=10)
+        ui.wait("Select a lease that can be revoked", timeout=10)
         ui.key(b"v")
         ui.wait("APPROVALS", timeout=10)
         ui.quit()

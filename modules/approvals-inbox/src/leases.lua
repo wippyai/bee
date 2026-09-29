@@ -269,12 +269,17 @@ function M.move(slice: Slice, delta: integer)
     slice.selected = list[index].source .. "/" .. list[index].lease_id
 end
 
+-- A lease is revocable while it is active, or while a reservation of an
+-- exhausted or expired one still awaits admission.
+function M.revocable(row: Row): boolean
+    if row.state == "active" then return true end
+    return (row.state == "exhausted" or row.state == "expired") and row.reserved > 0
+end
+
 function M.revoke_intent(slice: Slice, key: string): (Intent?, string?)
     local row = M.selected(slice)
     if not row then return nil, "select a lease to revoke" end
-    if row.state ~= "active" and not ((row.state == "exhausted" or row.state == "expired") and row.reserved > 0) then
-        return nil, "the lease is " .. row.state
-    end
+    if not M.revocable(row) then return nil, "the lease is " .. row.state end
     return {target = M.FACADE, source = row.source, request = {operation = "lease_revoke", workspace_id = row.workspace_id,
         lease_id = row.lease_id, expected_revision = row.revision, idempotency_key = key}}, nil
 end

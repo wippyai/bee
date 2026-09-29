@@ -116,6 +116,13 @@ local function recorded_identity(attempt_id: string): (identity.Identity?, strin
     end
     return {pid = pid, pgid = pgid, start_ticks = ticks, boot_id = boot}, nil, row
 end
+local function runner_authority(attempt_id: string): (string?, string?)
+    local db, open_error = store.open()
+    if not db then return nil, open_error or "open placement store" end
+    local token, token_error = store.runner_authority(db, attempt_id, nil)
+    db:release()
+    return token, token_error
+end
 type Resolved = {grant_id: string, root_ref: string, root_digest: string, subpath: string, access: Access, association_revision: integer, expires_at: string}
 -- Resolves one grant through the resource authority for the owner this
 -- placement admitted; the reply's own code is the refusal.
@@ -558,14 +565,18 @@ function M.start(value: unknown): Reply
     if not db then return fail("STORAGE", open_error or "open placement store") end
     local row = store.row(db, attempt.attempt_id)
     local request = row and store.request(row) or nil
+    local issued_authority, authority_error = uuid.v4()
+    if authority_error or not issued_authority then db:release(); return fail("INTERNAL", "runner authority") end
+    local control_token, control_error = store.runner_authority(db, attempt.attempt_id, issued_authority)
     db:release()
     if not request then return fail("STORAGE", "attempt request unreadable") end
+    if not control_token then return fail("STORAGE", control_error or "runner authority unavailable") end
     local materialization_key, authorization_denied = M.authorize_materialization(attempt, row :: store.Row, request, gateway_binding)
     if authorization_denied then return authorization_denied end
     local reply_topic = "bee.placement.start." .. (uuid.v7() or attempt.attempt_id)
     local replies = assert(process.listen(reply_topic, {message = true}))
     local events = assert(process.events())
-    local runner, spawn_error = process.spawn(resources.RUNNER, host, attempt.attempt_id, process.pid(), reply_topic, gateway_binding, materialization_key)
+    local runner, spawn_error = process.spawn(resources.RUNNER, host, attempt.attempt_id, process.pid(), reply_topic, gateway_binding, materialization_key, control_token)
     if not runner then
         process.unlisten(replies)
         return fail("UNAVAILABLE", "spawn runner: " .. tostring(spawn_error))
@@ -661,9 +672,11 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
     local runner = row and row.runner_pid or nil
     local db = store.open()
     local request = row and store.request(row) or nil
+    local control_token: string? = nil
+    if db then control_token = store.runner_authority(db, attempt.attempt_id, nil) end
     if db then db:release() end
     local grace = request and request.timeouts.stop_grace_ms or request_codec.DEFAULT_STOP_GRACE_MS
-    if type(runner) == "string" and runner ~= "" then
+    if type(runner) == "string" and runner ~= "" and control_token then
         -- The intent is recorded before the runner acts on it: a runner that
         -- observes the exit at once records exited next, and stopping is the
         -- only state that exit follows from here.
@@ -673,7 +686,7 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
             if current and not transitions.live(current.execution_state) then return succeed(current) end
             return requested
         end
-        local sent = process.send(runner, protocol.TOPIC_CONTROL, {command = "stop", mode = mode, grace_ms = grace})
+        local sent = process.send(runner, protocol.TOPIC_CONTROL, {command = "stop", control_token = control_token, mode = mode, grace_ms = grace})
         if sent then return requested end
     end
     if recorded then
@@ -713,11 +726,13 @@ function M.close_stdin(value: unknown): Reply
     local _, _, row = recorded_identity(attempt.attempt_id)
     local runner = row and row.runner_pid or nil
     if type(runner) ~= "string" or runner == "" then return fail("CONFLICT", "no runner supervises the attempt") end
+    local control_token, authority_error = runner_authority(attempt.attempt_id)
+    if not control_token then return fail("CONFLICT", authority_error or "runner authority is unavailable") end
     local probe, probe_error = uuid.v4()
     if probe_error or not probe then return fail("INTERNAL", "probe") end
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STDIN, {message = true}))
-    process.send(runner, protocol.TOPIC_CONTROL, {command = "close_stdin", attempt_id = attempt.attempt_id, probe = probe})
+    process.send(runner, protocol.TOPIC_CONTROL, {command = "close_stdin", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
     local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
     local answer: protocol.StdinReply? = nil
     while not answer do
@@ -740,11 +755,13 @@ end
 local function runner_status(row: store.Row?, attempt: types.Attempt): (string?, string?)
     local runner = row and row.runner_pid or nil
     if type(runner) ~= "string" or runner == "" then return nil, nil end
+    local control_token = runner_authority(attempt.attempt_id)
+    if not control_token then return nil, nil end
     local probe, probe_error = uuid.v4()
     if probe_error or not probe then return nil, nil end
     local expected: protocol.StatusProbe = {runner = runner, attempt_id = attempt.attempt_id, generation = attempt.attachment_generation, probe = probe}
     local replies = assert(process.listen(protocol.TOPIC_STATUS, {message = true}))
-    process.send(runner, protocol.TOPIC_CONTROL, {command = "status", attempt_id = attempt.attempt_id, probe = probe})
+    process.send(runner, protocol.TOPIC_CONTROL, {command = "status", control_token = control_token, attempt_id = attempt.attempt_id, probe = probe})
     local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
     local detail: string? = nil
     local execution: string? = nil
@@ -1011,6 +1028,12 @@ function M.attach(value: unknown): Reply
     local _, _, row = recorded_identity(attempt.attempt_id)
     local runner = row and row.runner_pid or nil
     if exited and (type(runner) ~= "string" or runner == "") then return fail("CONFLICT", "the attempt has exited and its runner is gone") end
+    local control_token: string? = nil
+    if type(runner) == "string" and runner ~= "" then
+        local authority_error: string?
+        control_token, authority_error = runner_authority(attempt.attempt_id)
+        if not control_token then return fail("CONFLICT", authority_error or "runner authority is unavailable") end
+    end
     local result = transition(attempt.attempt_id, {fields = {attachment_generation = generation, recipient = recipient}, evidence = {kind = "attach", detail = "generation " .. tostring(generation)}})
     if not result.ok then return result end
     if type(runner) == "string" and runner ~= "" then
@@ -1018,7 +1041,7 @@ function M.attach(value: unknown): Reply
         -- caller holding the reply knows the previous recipient is fenced
         -- at the execution channel, not only at the thread.
         local fences = assert(process.listen(protocol.TOPIC_FENCED, {message = true}))
-        process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", recipient = recipient, generation = generation})
+        process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", control_token = control_token, recipient = recipient, generation = generation})
         local timer = time.after(tostring(protocol.FENCE_TIMEOUT_MS) .. "ms")
         local fenced = false
         local answered = false

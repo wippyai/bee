@@ -1094,6 +1094,100 @@ local function define_tests()
             test.is_false(homes.attempt_exists(home_key))
             db:release()
         end)
+        test.it("rejects runner control messages from an unauthenticated sender", function()
+            local request = launch({"sh", "-c", "sleep 5"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local fences = assert(process.listen(protocol.TOPIC_FENCED, {message = true}))
+            local statuses = assert(process.listen(protocol.TOPIC_STATUS, {message = true}))
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            local db = assert(store.open())
+            local row = store.row(db, prepared.attempt_id)
+            db:release()
+            local runner = tostring(row and row.runner_pid)
+
+            process.send(runner, protocol.TOPIC_CONTROL, {command = "attach", recipient = process.pid(), generation = 2})
+            local attach_deadline = time.after("200ms")
+            local forged_attach_accepted = false
+            while true do
+                local attach_reply = channel.select({fences:case_receive(), attach_deadline:case_receive()})
+                if not attach_reply.ok or attach_reply.channel == attach_deadline then break end
+                local data: unknown = attach_reply.value:payload():data()
+                if tostring(attach_reply.value:from()) == runner and type(data) == "table"
+                    and data.attempt_id == prepared.attempt_id and data.generation == 2 then
+                    forged_attach_accepted = data.fenced == true
+                    break
+                end
+            end
+
+            process.send(runner, protocol.TOPIC_CONTROL, {command = "status", attempt_id = prepared.attempt_id, probe = "forged-probe"})
+            local status_deadline = time.after("200ms")
+            local forged_status_accepted = false
+            while true do
+                local status_reply = channel.select({statuses:case_receive(), status_deadline:case_receive()})
+                if not status_reply.ok or status_reply.channel == status_deadline then break end
+                local data: unknown = status_reply.value:payload():data()
+                if tostring(status_reply.value:from()) == runner and type(data) == "table"
+                    and data.attempt_id == prepared.attempt_id and data.probe == "forged-probe" then
+                    forged_status_accepted = true
+                    break
+                end
+            end
+
+            process.send(runner, protocol.TOPIC_CONTROL, {command = "stop", mode = "forced", grace_ms = 1})
+            local stop_deadline = time.after("200ms")
+            local forged_stop_accepted = false
+            while true do
+                local stop_reply = channel.select({exits:case_receive(), stop_deadline:case_receive()})
+                if not stop_reply.ok or stop_reply.channel == stop_deadline then break end
+                local data: unknown = stop_reply.value:payload():data()
+                if tostring(stop_reply.value:from()) == runner and type(data) == "table"
+                    and data.attempt_id == prepared.attempt_id then
+                    forged_stop_accepted = true
+                    break
+                end
+            end
+
+            attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"}))
+            local exit_seen = forged_stop_accepted
+            if not exit_seen then
+                local exit_deadline = time.after("5s")
+                while true do
+                    local stopped = channel.select({exits:case_receive(), exit_deadline:case_receive()})
+                    if not stopped.ok or stopped.channel == exit_deadline then break end
+                    local data: unknown = stopped.value:payload():data()
+                    if type(data) == "table" and data.attempt_id == prepared.attempt_id then exit_seen = true; break end
+                end
+            end
+            test.is_true(exit_seen, "authorized stop did not deliver the fixture child exit")
+            test.is_true(wait_for(function()
+                return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+            end, 5000), "authorized stop did not finish the fixture child")
+            local eof_count = 0
+            local output_deadline = time.after("5s")
+            while eof_count < 2 do
+                local output = channel.select({outputs:case_receive(), output_deadline:case_receive()})
+                assert(output.ok and output.channel == outputs, "runner did not close both output streams")
+                local data: unknown = output.value:payload():data()
+                if type(data) == "table" and data.attempt_id == prepared.attempt_id then
+                    if type(data.sequence) == "number" then
+                        process.send(runner, protocol.TOPIC_ACK, {generation = data.generation, consumed_through = data.sequence})
+                    end
+                    if data.eof == true then eof_count = eof_count + 1 end
+                end
+            end
+            attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+            process.unlisten(fences)
+            process.unlisten(statuses)
+            process.unlisten(exits)
+            process.unlisten(outputs)
+
+            test.is_false(forged_attach_accepted, "unauthenticated attach received a fence reply")
+            test.is_false(forged_status_accepted, "unauthenticated status received runner state")
+            test.is_false(forged_stop_accepted, "unauthenticated stop ended the child")
+        end)
         test.it("runs a child through the runner with acknowledged streams and a proven exit", function()
             local request = launch({"sh", "-c", "echo start:$PROBE_VALUE; pwd; read line; echo got:$line; echo warn 1>&2"}, "direct_process")
             local prepared = attempt_of(call(OWNER, "prepare", request))
@@ -1147,7 +1241,14 @@ local function define_tests()
             local repeated = acks:receive():payload():data() :: {[string]: unknown}
             if repeated.accepted ~= true then error("repeated write refused: " .. tostring(repeated.reason)) end
             if not collect("got:ping") then error("no echo of the input; received: " .. text) end
-            local exit = exits:receive():payload():data() :: {[string]: unknown}
+            local exit_deadline = time.after("10s")
+            local exit: {[string]: unknown}? = nil
+            while not exit do
+                local selected = channel.select({exits:case_receive(), exit_deadline:case_receive()})
+                assert(selected.ok and selected.channel == exits, "runner did not report this attempt's exit")
+                local data: unknown = selected.value:payload():data()
+                if type(data) == "table" and data.attempt_id == prepared.attempt_id then exit = data :: {[string]: unknown} end
+            end
             test.eq(exit.code, 0)
             if exit.uncertain == true then error("exit reported uncertain") end
             if not collect("warn") then error("no stderr; received: " .. text) end

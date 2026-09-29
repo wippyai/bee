@@ -172,6 +172,8 @@ entries:
     description: Register a one-shot notice on the caller's own thread, delivered once when an action of a thread the caller reads ends a turn or an attempt
   - name: register_app_alias
     description: Attest the stable app an application instance was opened for; only the application broker holds this
+  - name: retire_app_alias
+    description: Retire family inheritance when the broker-managed application instance closes
   - name: fence_app
     description: Deactivate every active member row of a stable app after admission loss; only the application broker holds this
 - name: authority_local
@@ -192,6 +194,7 @@ entries:
       send_status: bee.threads.service:send_status
       notify: bee.threads.service:notify
       register_app_alias: bee.threads.service:register_app_alias
+      retire_app_alias: bee.threads.service:retire_app_alias
       fence_app: bee.threads.service:fence_app
 - name: delivery
   kind: contract.definition

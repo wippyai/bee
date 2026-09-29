@@ -61,7 +61,7 @@ entries:
 - name: application_thread_alias_policy
   kind: security.policy
   meta:
-    comment: Application broker executor for stable alias attestation and family fencing
+    comment: Application broker executor for live instance attestation, retirement and family fencing
   policy:
     actions: [bee.threads.app_alias]
     resources: ['*']
@@ -72,7 +72,7 @@ entries:
     comment: Application broker transport for alias attestation operations
   policy:
     actions: [funcs.call]
-    resources: [bee.threads.service:register_app_alias, bee.threads.service:fence_app]
+    resources: [bee.threads.service:register_app_alias, bee.threads.service:retire_app_alias, bee.threads.service:fence_app]
     effect: allow
 - name: application_thread_facade_policy
   kind: security.policy

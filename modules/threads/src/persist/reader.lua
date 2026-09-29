@@ -71,6 +71,16 @@ function M.app_stable(tx: sql.Transaction, instance: string): (string?, string?)
     if not stable then return nil, "thread app alias row is corrupt" end
     return stable, nil
 end
+-- A caller inherits family membership only while the broker has its instance
+-- authorization live. Historical aliases still identify family-owned threads.
+function M.app_live_stable(tx: sql.Transaction, instance: string): (string?, string?)
+    local row, err = single(tx, "SELECT stable FROM bee_thread_app_alias WHERE instance = ? AND active = 1", {instance}, "live thread app alias")
+    if err then return nil, err end
+    if not row then return nil, nil end
+    local stable = text(row.stable)
+    if not stable then return nil, "live thread app alias row is corrupt" end
+    return stable, nil
+end
 -- One active member of the thread from the caller's stable family: the
 -- stable row itself, else any active row attested for the same stable.
 function M.app_family_member(tx: sql.Transaction, thread_id: string, stable: string): (Member?, string?)

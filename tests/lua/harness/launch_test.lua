@@ -838,6 +838,11 @@ local function define_tests()
                         stable = stable, instance = instance, workspace_id = alias_workspace, definition_id = definition_id,
                     }, alias_policies))
                 end
+                local function retire(instance: string)
+                    value(call_as_with_policies(broker, "bee.threads.service:retire_app_alias", {
+                        stable = stable, instance = instance, workspace_id = alias_workspace, definition_id = definition_id,
+                    }, alias_policies))
+                end
                 local function workspace_call(target: string, request: {[string]: unknown})
                     request.workspace_id = alias_workspace
                     value(call(target, request))
@@ -876,6 +881,15 @@ local function define_tests()
                         workspace_id = alias_workspace, brief = "continue research", thread_id = shared,
                     }))
                     test.eq(admitted.thread_id, shared)
+
+                    retire(old_app)
+                    local reopened_thread = fresh("reopened-app-owned-thread")
+                    value(call_as_bound(reopened_app, "bee.threads.service:create", {thread_id = reopened_thread,
+                        idempotency_key = fresh("create"), title = "Reopened app work"}, alias_workspace, {}))
+                    test.eq(code(call_as(old_app, "bee.harness.launch:admit", {
+                        request_id = fresh("retired-app-launch"), definition_ref = DEFINITION,
+                        workspace_id = alias_workspace, brief = "retired callers cannot launch", thread_id = reopened_thread,
+                    })), "DENIED")
 
                     test.eq(code(call_as_bound(unattested_app, "bee.threads.service:get", {thread_id = shared},
                         alias_workspace, {})), "DENIED")

@@ -133,10 +133,21 @@ local function run_carrier(entry: string, request_value: {[string]: unknown}, mo
     return await_carrier(spawn_carrier(entry, request_value, mode, crash_after, batch, pause_after, slow_commit_ms), nil, timeout_ms)
 end
 local function kinds(thread_id: string): ({string}, {{[string]: unknown}})
-    local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64})
     local list: {string} = {}
-    local records = page.records :: {{[string]: unknown}}
-    for index, item in ipairs(records) do list[index] = tostring(item.kind) end
+    local records: {{[string]: unknown}} = {}
+    local cursor = 0
+    while true do
+        local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
+        local current = page.records :: {{[string]: unknown}}
+        for _, item in ipairs(current) do
+            list[#list + 1] = tostring(item.kind)
+            records[#records + 1] = item
+        end
+        if page.has_more ~= true then break end
+        local scanned = page.scanned_through
+        if type(scanned) ~= "number" or scanned <= cursor then error("thread record page did not advance") end
+        cursor = scanned
+    end
     return list, records
 end
 local function count(list: {string}, wanted: string): integer
@@ -484,15 +495,42 @@ local function define_tests()
             test.eq(reads, 1, "replacement child read evidence")
             test.eq(table.concat(writes(records), ","), "w9:intended,w9:accepted")
         end)
-        test.it("drains short Claude frames through the terminal result after a fast stream", function()
+        test.it("preserves a burst larger than the output spool while the consumer is slow", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = "256", BEE_FIXTURE_FLOOD_PACE = "0.1", BEE_FIXTURE_FLOOD_EXIT = "1"}
-            local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment), "open", nil, nil, nil, 200, 60000)
+            local expected_deltas = 2000
+            local fixture_delta = '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"'
+                .. string.rep("x", 80) .. '"}}}\n'
+            test.is_true(expected_deltas * #fixture_delta > 256 * 1024,
+                "the emitted frames exceed the placement output spool")
+            local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected_deltas),
+                BEE_FIXTURE_FLOOD_PACE = "0.001", BEE_FIXTURE_FLOOD_EXIT = "1"}
+            local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
+                "open", nil, nil, nil, 40, 150000)
             if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end
             local settlement = outcome.value.settlement :: {[string]: unknown}
             test.eq(settlement.outcome, "succeeded")
             test.eq(settlement.answer, "flood-complete")
+            local _, records = kinds(thread_id)
+            local deltas = 0
+            for _, item in ipairs(observations(records, nil)) do
+                local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
+                if data.type == "text" then
+                    test.eq(data.text, string.rep("x", 80), "every burst delta retains its full content")
+                    deltas = deltas + 1
+                end
+            end
+            test.eq(deltas, expected_deltas)
+            local state, truncated = "", 0
+            for _, item in ipairs(observations(records, "bee.carrier.output")) do
+                local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
+                local payload = require("json").decode(tostring(data.payload_json)) :: {[string]: unknown}
+                if payload.state == "truncated" then truncated = truncated + 1 end
+                if payload.stream == nil then state = tostring(payload.state) end
+            end
+            test.is_true(state == "incomplete" or state == "complete",
+                "terminal output is complete or explicitly incomplete while EOF is in flight")
+            test.eq(truncated, 0)
         end)
         test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
             local thread_id = thread()

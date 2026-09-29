@@ -67,6 +67,9 @@ if [ -n "${BEE_FIXTURE_GATEWAY:-}" ]; then
   trap - TERM
   if [ -n "$gateway_stopping" ] || [ "$gateway_status" -eq 143 ]; then exit 143; fi
 fi
+if [ -n "${BEE_FIXTURE_RESULT_DELAY:-}" ]; then
+  sleep "$BEE_FIXTURE_RESULT_DELAY"
+fi
 if [ -n "${BEE_FIXTURE_HUGE:-}" ]; then
   # One frame of BEE_FIXTURE_HUGE times 32 bytes of padding; 1 means 700.
   repeat=700

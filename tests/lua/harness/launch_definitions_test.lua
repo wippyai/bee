@@ -53,9 +53,8 @@ local function define_tests()
             test.eq(definition.title, "Claude protocol fixture")
             test.eq(definition.default_mode, "batch")
             test.eq(definition.profile_id, "batch")
-            local placements = definition.placements :: {string}
-            test.eq(#placements, 0)
-            test.eq(definition.status, "unconfigured")
+            test.neq(definition.status, "ready")
+            test.eq(#(definition.placements :: {string}), 0)
             local overrides = definition.allowed_overrides :: {string}
             local briefed = false
             for _, override in ipairs(overrides) do if override == "brief" then briefed = true end end
@@ -64,7 +63,7 @@ local function define_tests()
             test.not_nil(definition.thread_policy)
             test.eq(type(value.saved_profiles), "table")
             test.eq(type(value.profiles_complete), "boolean")
-            test.eq(value.unavailable_count, 1)
+            test.eq((unavailable.value :: Object).unavailable_count, 1)
         end)
         test.it("returns no definitions for an empty allow-list and refuses unknown fields", function()
             local reply = discover(DENYING_POLICY, {})

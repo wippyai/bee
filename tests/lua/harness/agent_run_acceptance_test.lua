@@ -301,7 +301,7 @@ local function define_tests()
             -- launch tool is offered; discovery must be admitted by the same
             -- host-selected launch policy, not advertised and then refused.
             test.eq(seen.definitions_call_ok, true, "launch_definitions was offered but refused")
-            test.eq(seen.definitions_count, 1, "launch_definitions did not report the allow-listed definition")
+            test.eq(seen.definitions_count, 0, "launch_definitions exposed an unready Codex definition by default")
             -- The child ran on a thread of its own, was reached by member_thread,
             -- answered, settled, and was notified and waited on.
             test.not_nil(seen.first_thread)

@@ -69,7 +69,7 @@ function M.contracts(): {Contract}
         contract("bee.threads:projection", {"recap_read", "recap_update", "recap_rebuild", "status_read", "status_update", "status_rebuild"}),
         contract("bee.threads:carrier", {"claim", "commit", "checkpoint", "cancel_intent", "cancel_status"}),
         contract("bee.threads:approvals", {"append"}),
-        contract("bee.threads:journal", {"session_create", "session_describe", "session_transition", "work_send", "work_describe",
+        contract("bee.threads:journal", {"session_create", "session_describe", "session_scan", "session_transition", "work_send", "work_describe",
             "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "work_settle", "work_uncertain", "operation_lookup", "feed_read"}),
     }
 end

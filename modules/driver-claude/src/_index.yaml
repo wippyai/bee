@@ -37,10 +37,12 @@ entries:
 - name: batch_policy
   kind: ns.requirement
   meta:
-    comment: Host policy for the component-owned Claude batch route
+    comment: Host policy for component-owned Claude batch and session routes
   default: bee.driver.claude:launch_policy_claude_batch
   targets:
   - entry: bee.driver.claude:research_batch
+    path: .data.policy_ref
+  - entry: bee.driver.claude:managed_session
     path: .data.policy_ref
 - name: executable
   kind: env.variable
@@ -263,6 +265,26 @@ entries:
     allowed_overrides: [thread, workdir]
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
+    session_resource: session
+    credentials: [claude_api_key, claude_login]
+    presentation: {start_menu: false, fullscreen: false, reuse: never}
+- name: managed_session
+  kind: registry.entry
+  meta:
+    type: bee.launch_definition
+    comment: Claude Code session route for durable external turns
+  data:
+    schema_revision: bee.launch-definition@1
+    launch_id: claude-managed-session
+    title: Claude Code session
+    command_names: []
+    binding_ref: bee.driver.claude:binding
+    profile_id: session
+    policy_ref: ''
+    default_mode: session
+    allowed_overrides: [workdir]
+    workdir_policy: {kind: caller_workspace}
+    thread_policy: {kind: new}
     session_resource: session
     credentials: [claude_api_key, claude_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}

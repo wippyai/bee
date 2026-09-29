@@ -32,15 +32,15 @@ local function valid(name: string): Object
 end
 
 local function snapshot(): Object
-    return {session = SESSION, revision = 1, incarnation = 1, title = "t", lifecycle = "active", mode = "managed",
+    return {session = SESSION, revision = 1, incarnation = 1, title = "t", lifecycle = "active",
         activity = "idle", execution = {state = "absent", evidence_at = NOW, stale = false}, queue_count = 0,
-        questions = {}, effective_limits = {active_ms = 1, model_steps = 1, tool_calls = 1, recovery_attempts = 0, queue_ms = 1, question_ms = 1},
+        effective_limits = {},
         continuity = {mode = "fresh"}, actions = {}}
 end
 
 local function receipt(): Object
     return {work = WORK, session = SESSION, operation = OP, committed_at = NOW, sequence = 1, kind = "request",
-        state = "queued", output_schema = "bee:Text@1"}
+        state = "queued", output_schema = "bee:Text@1", sender = {kind = "principal", id = "principal:test"}}
 end
 
 local function success(name: string): Object
@@ -241,7 +241,8 @@ local function define_tests()
         test.it("exposes the owner-set sender on work and stage-1 activity on sessions", function()
             local work = {work = WORK, session = SESSION, sender = {kind = "session", id = SESSION}, revision = 1,
                 phase = "queued", cancelling = false}
-            test.not_nil(session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}}))
+            local checked, failure = session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}})
+            if not checked then error(tostring(failure)) end
             work.sender = nil
             test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}}))
             local stalled = snapshot()

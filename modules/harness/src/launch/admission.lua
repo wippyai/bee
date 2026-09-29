@@ -52,6 +52,7 @@ type Plan = {
     placement_binding_ref: string,
     placement_binding_digest: string,
     placement_methods: {[string]: string},
+    executables: {[string]: string},
     placement_kind: string,
     -- The overrides a request may make: the definition's own, with workdir,
     -- thread and placement kept only where the launch policy admits them too.
@@ -335,7 +336,8 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,
-        placement_methods = placement.methods, placement_kind = placement.placement_kind, overrides = overrides,
+        placement_methods = placement.methods, executables = launch_policy.executables,
+        placement_kind = placement.placement_kind, overrides = overrides,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
         saved_profile_id = selected and selected.profile_id or nil, saved_profile_revision = selected and selected.revision or nil,
         owner_component_revision = effective_owner_rev,

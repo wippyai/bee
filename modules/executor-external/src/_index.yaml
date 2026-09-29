@@ -7,13 +7,13 @@ entries:
   readme: file://README.md
   meta:
     title: Bee external executor
-    comment: One provider CLI invocation per pulled turn through the shared driver and placement contracts
+    comment: One selected external CLI invocation per pulled turn through the driver and placement contracts
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
   version: '*'
   meta:
-    comment: Shared launch and terminal codecs used by the provider adapters
+    comment: Shared driver launch and terminal normalization contracts
 - name: dependency_sessions
   kind: ns.dependency
   component: bee/sessions

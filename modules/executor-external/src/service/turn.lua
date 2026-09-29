@@ -82,7 +82,7 @@ local function decode(value: unknown): (Request?, string?)
     if not driver_options then return nil, "driver_options must be an object" end
     if driver_options.control_enabled ~= nil or driver_options.permission_exchange ~= nil
         or driver_options.gateway_tools ~= nil or driver_options.gateway_hooks ~= nil then
-        return nil, "turn execution does not accept injected controls or provider frames"
+        return nil, "turn execution does not accept injected controls or driver frames"
     end
     local placement_methods = object(request.placement_methods)
     if not placement_methods then return nil, "placement_methods must be an object" end
@@ -189,7 +189,7 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     local request, decode_error = decode(value)
     if not request then return nil, decode_error end
 
-    -- Recovery is a precondition for every new provider invocation.
+    -- Recovery is a precondition for every new driver invocation.
     if request.previous_attempt_id then
         local recovery, recovery_error, attempt = call_previous(io, request.previous_attempt_id)
         if recovery == "pending" then return pending(request, recovery_error or "previous attempt is still active", attempt) end
@@ -255,22 +255,22 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     if not final_attempt or final_attempt.execution_state ~= "exited" or final_attempt.exit_source == nil then
         return uncertain(request, "placement exit cannot be proven: " .. tostring(final_decode_error or "attempt is not proven exited"), final_attempt)
     end
-    if observe_error then return uncertain(request, "provider stream ended without a durable terminal report: " .. observe_error, final_attempt) end
+    if observe_error then return uncertain(request, "driver stream ended without a durable terminal report: " .. observe_error, final_attempt) end
     local observation = object(observed)
     local terminal = observation and object(observation.terminal) or nil
     if not terminal or terminal.outcome == "uncertain" then
-        return uncertain(request, "provider stream ended without a terminal result", final_attempt)
+        return uncertain(request, "driver stream ended without a terminal result", final_attempt)
     end
     if terminal.outcome ~= "succeeded" and terminal.outcome ~= "failed" and terminal.outcome ~= "cancelled" then
-        return uncertain(request, "provider reported an unsupported terminal outcome", final_attempt)
+        return uncertain(request, "driver reported an unsupported terminal outcome", final_attempt)
     end
     local resume_ref: string? = nil
     if terminal.resume_ref ~= nil then
         resume_ref = id(terminal.resume_ref)
-        if not resume_ref then return uncertain(request, "provider resume identity is malformed", final_attempt) end
+        if not resume_ref then return uncertain(request, "driver resume identity is malformed", final_attempt) end
     end
     if terminal.outcome == "succeeded" and not resume_ref then
-        return uncertain(request, "provider terminal report has no resume identity", final_attempt)
+        return uncertain(request, "driver terminal report has no resume identity", final_attempt)
     end
     local checkpoint = {resume_ref = resume_ref, attempt_id = request.attempt_id, terminal = terminal}
     return {state = "settled", outcome = terminal.outcome, answer = terminal.answer, usage = terminal.usage,

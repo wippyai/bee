@@ -42,3 +42,4 @@ workspace:
     bee/driver-wippy: ./modules/driver-wippy
     bee/git-worktree: ./modules/git-worktree
     bee/agents: ./modules/agents
+    bee/sessions: ./modules/sessions

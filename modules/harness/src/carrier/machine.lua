@@ -33,6 +33,7 @@ local record_values = require("record_values")
 local observation_decode = require("observation_decode")
 local launch_request = require("launch_request")
 local configuration_protocol = require("configuration")
+local driver_resolver = require("driver_resolver")
 local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
 local hook_records = require("hook_records")
@@ -315,13 +316,16 @@ local function measure(request: Request): (Measured?, string?)
     end
     local configure_target = binding.methods.configure
     if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
+    local configure_renderer, configure_renderer_error = driver_resolver.configure_renderer(pinned, request.binding_ref, configure_target)
+    if configure_renderer_error then return nil, configure_renderer_error end
     local provider_entry: Object? = nil
     if launch_policy.provider_ref then
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
-        provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
+        provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        gateway = gateway_input, fixture = launch_policy.fixture}, configure_target, configure_renderer)
     if not configuration_digest then return nil, configuration_error end
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange, push = push,
         configuration_digest = configuration_digest, gateway = gateway}

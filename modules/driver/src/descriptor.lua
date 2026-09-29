@@ -575,11 +575,9 @@ function M.decode(value: unknown): (Descriptor?, string?)
     return item :: Descriptor, nil
 end
 
-function M.load(ref: string): (Descriptor?, string?)
+function M.load_from(pinned: registry.Snapshot, ref: string): (Descriptor?, string?)
     local id = bounds.id(ref)
     if not id then return nil, "CLI descriptor reference is invalid" end
-    local pinned, pin_error = registry.snapshot()
-    if pin_error or not pinned then return nil, "CLI descriptor registry is unavailable" end
     local raw, get_error = pinned:get(id)
     if get_error or not raw then return nil, "CLI descriptor " .. id .. " is unavailable" end
     local entry = bounds.object(raw)
@@ -589,6 +587,12 @@ function M.load(ref: string): (Descriptor?, string?)
     local decoded, decode_error = M.decode(entry.data)
     if not decoded then return nil, id .. ": " .. tostring(decode_error) end
     return decoded, nil
+end
+
+function M.load(ref: string): (Descriptor?, string?)
+    local pinned, pin_error = registry.snapshot()
+    if pin_error or not pinned then return nil, "CLI descriptor registry is unavailable" end
+    return M.load_from(pinned, ref)
 end
 
 return M

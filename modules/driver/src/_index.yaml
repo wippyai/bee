@@ -73,14 +73,16 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     profile: bee.driver:profile
+    descriptor: bee.driver:descriptor
     types: bee.driver:types
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash, funcs, security]
+  modules: [hash, funcs, security, registry]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    driver_resolver: bee.driver:resolver
     types: bee.driver:types
     instructions: bee.driver:instructions
 - name: preferences

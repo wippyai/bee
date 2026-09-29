@@ -71,6 +71,7 @@ entries:
     canonical: bee.threads.records:canonical
     placement_types: bee.placement:types
     configuration: bee.driver:configuration
+    driver_resolver: bee.driver:resolver
     mcp: bee.gateway:mcp
     surface: bee.gateway:surface
     preferences: bee.driver:preferences
@@ -109,6 +110,7 @@ entries:
     settle: bee.harness.carrier:settle
     stream_json: bee.driver.transport:stream_json
     configuration: bee.driver:configuration
+    driver_resolver: bee.driver:resolver
     driver_types: bee.driver:types
     placement_types: bee.placement:types
     prestart: bee.harness.carrier:prestart

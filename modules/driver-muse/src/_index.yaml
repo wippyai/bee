@@ -90,6 +90,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: muse
+    descriptor_ref: bee.driver.muse.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.muse:profiles
 - name: profiles

@@ -24,4 +24,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     if not file then return {ok = false, error = tostring(file_error)} end
     return {ok = true, delivery = {arguments = {}, files = {file}}}
 end
-return {handle = universal.configure("bee.driver.opencode.descriptor:cli", {opencode = handle})}
+return {handle = universal.configure("opencode", {opencode = handle})}

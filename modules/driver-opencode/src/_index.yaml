@@ -88,6 +88,7 @@ entries:
   meta:
     type: harness.driver
     driver_id: opencode
+    descriptor_ref: bee.driver.opencode.descriptor:cli
     accepts_model: false
     profiles_ref: bee.driver.opencode:profiles
 - name: profiles

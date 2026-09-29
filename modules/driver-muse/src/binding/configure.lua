@@ -26,4 +26,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
     return {ok = true, delivery = {arguments = {}, files = files}}
 end
-return {handle = universal.configure("bee.driver.muse.descriptor:cli", {muse = handle})}
+return {handle = universal.configure("muse", {muse = handle})}

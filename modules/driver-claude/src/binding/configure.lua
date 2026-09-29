@@ -32,4 +32,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
     return {ok = true, delivery = delivery}
 end
-return {handle = universal.configure("bee.driver.claude.descriptor:cli", {claude = handle})}
+return {handle = universal.configure("claude", {claude = handle})}

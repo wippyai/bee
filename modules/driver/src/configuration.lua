@@ -4,6 +4,8 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local funcs = require("funcs")
 local security = require("security")
+local registry = require("registry")
+local driver_resolver = require("driver_resolver")
 local driver_types = require("types")
 local instructions = require("instructions")
 local M = {}
@@ -353,20 +355,40 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
     end
     return delivery, nil
 end
-function M.digest(request_value: unknown, target: string): (string?, string?)
+function M.digest(request_value: unknown, target: string, configure_renderer: string?): (string?, string?)
     local request, request_error = M.decode_request(request_value)
     if not request then return nil, request_error end
     local selected = bounds.id(target)
     if not selected then return nil, "configuration target is not an identifier" end
-    local encoded, encode_error = canonical.encode({target = selected, instructions = request.instructions, instruction_builder = request.instruction_builder, provider_ref = request.provider_ref, provider = request.provider, gateway = request.gateway, fixture = request.fixture})
+    if configure_renderer ~= nil and not bounds.id(configure_renderer) then return nil, "configuration renderer is not an identifier" end
+    if configure_renderer == nil then
+        local pinned, pin_error = registry.snapshot()
+        if pinned and not pin_error then
+            local resolved, resolve_error = driver_resolver.configure_renderer_for_target(pinned, selected)
+            if resolve_error then return nil, resolve_error end
+            configure_renderer = resolved
+        end
+    end
+    local encoded, encode_error = canonical.encode({target = selected, configure_renderer = configure_renderer,
+        instructions = request.instructions, instruction_builder = request.instruction_builder, provider_ref = request.provider_ref,
+        provider = request.provider, gateway = request.gateway, fixture = request.fixture})
     if not encoded then return nil, "configuration digest: " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, "configuration digest failed" end
     return digest, nil
 end
-function M.call(target: string, request_value: unknown): (Delivery?, string?)
+function M.call(target: string, request_value: unknown, configure_renderer: string?): (Delivery?, string?)
     local request, request_error = M.decode_request(request_value)
     if not request then return nil, request_error end
+    if configure_renderer ~= nil and not bounds.id(configure_renderer) then return nil, "configuration renderer is not an identifier" end
+    if configure_renderer == nil then
+        local pinned, pin_error = registry.snapshot()
+        if pinned and not pin_error then
+            local resolved, resolve_error = driver_resolver.configure_renderer_for_target(pinned, target)
+            if resolve_error then return nil, resolve_error end
+            configure_renderer = resolved
+        end
+    end
     local scoped, scope_error = funcs.new():with_scope(security.new_scope({}))
     if not scoped then return nil, "configuration scope: " .. tostring(scope_error) end
     local final_instructions = request.instructions
@@ -391,6 +413,7 @@ function M.call(target: string, request_value: unknown): (Delivery?, string?)
         end
     end
     local driver_request = {
+        configure_renderer = configure_renderer,
         instructions = final_instructions,
         provider_ref = request.provider_ref,
         provider = request.provider,

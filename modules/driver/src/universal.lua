@@ -452,15 +452,18 @@ end
 -- The contract's configure boundary decodes once and dispatches through the
 -- descriptor's renderer id. Renderers contain only the CLI-specific format
 -- operation; decoding, bounds, and refusal shape stay in bee.driver.
-function M.configure(ref: string, renderers: {[string]: ConfigureRenderer}): (unknown) -> Object
-    if not bounds.id(ref) then error("CLI descriptor reference is invalid") end
+function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}): (unknown) -> Object
+    if not bounds.id(default_renderer) or renderers[default_renderer] == nil then error("default configure renderer is unsupported") end
     return function(raw: unknown): Object
-        local descriptor, descriptor_error = descriptor_reader.load(ref)
-        if not descriptor then return {ok = false, error = descriptor_error or "CLI descriptor is unavailable"} end
-        local selected = bounds.id(descriptor.configure)
+        local object = bounds.object(raw)
+        local selected = object and bounds.id(object.configure_renderer) or default_renderer
         local renderer = selected and renderers[selected] or nil
         if not renderer then return {ok = false, error = "CLI descriptor selects an unsupported configure renderer"} end
-        local request, decode_error = configuration.decode_request(raw)
+        local config_request: {[string]: unknown} = {}
+        for key, value in pairs(object :: Object) do
+            if key ~= "configure_renderer" then config_request[key] = value end
+        end
+        local request, decode_error = configuration.decode_request(config_request)
         if not request then return {ok = false, error = decode_error or "invalid configuration request"} end
         return renderer(request)
     end

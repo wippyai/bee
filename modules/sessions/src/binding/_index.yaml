@@ -1,132 +1,127 @@
 version: '1.0'
 namespace: bee.sessions.binding
 entries:
-- name: worker_binding
+- name: external_executor_binding
   kind: contract.binding
-  meta:
-    type: bee.sessions.worker_binding
+  meta: {type: bee.sessions.executor_binding, executor_id: external, version: stage1}
   contracts:
-  - contract: bee.sessions:worker
+  - contract: bee.sessions:executor
     methods:
-      pull_turn: bee.sessions.binding:pull_turn
-      accept_turn: bee.sessions.binding:accept_turn
-      renew: bee.sessions.binding:renew
-      heartbeat: bee.sessions.binding:heartbeat
-      append_event: bee.sessions.binding:append_event
-      checkpoint: bee.sessions.binding:checkpoint
-      effect_intent: bee.sessions.binding:effect_intent
-      effect_receipt: bee.sessions.binding:effect_receipt
-      effect_status: bee.sessions.binding:effect_status
-      link_execution: bee.sessions.binding:link_execution
-      link_child: bee.sessions.binding:link_child
-      settle: bee.sessions.binding:settle
-      fail: bee.sessions.binding:fail
-- name: target_worker_policies
+      run_turn: bee.executor.external.binding:run_turn
+- name: owner_binding
+  kind: contract.binding
+  meta: {type: bee.sessions.owner_binding}
+  contracts:
+  - contract: bee.sessions:contract
+    methods:
+      open: bee.sessions.binding:open
+      run: bee.sessions.binding:run
+      send: bee.sessions.binding:send
+      await: bee.sessions.binding:await
+      join: bee.sessions.binding:join
+      get: bee.sessions.binding:get
+      list: bee.sessions.binding:list
+      cancel: bee.sessions.binding:cancel
+      close: bee.sessions.binding:close
+- name: catalog_binding
+  kind: contract.binding
+  meta: {type: bee.sessions.catalog_binding}
+  contracts:
+  - contract: bee.sessions:catalog
+    methods: {list: bee.sessions.binding:catalog}
+- name: target_owner_policies
   kind: ns.requirement
+  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_admission_policy]
   meta:
-    comment: Host-selected scoped allowlist for executor-only worker operations
+    comment: Host-selected authority for the Sessions admission and journal boundary
   targets:
-  - entry: bee.sessions.binding:pull_turn
+  - entry: bee.sessions.binding:open
     path: .security.policies
-  - entry: bee.sessions.binding:accept_turn
+  - entry: bee.sessions.binding:run
     path: .security.policies
-  - entry: bee.sessions.binding:renew
+  - entry: bee.sessions.binding:send
     path: .security.policies
-  - entry: bee.sessions.binding:heartbeat
+  - entry: bee.sessions.binding:await
     path: .security.policies
-  - entry: bee.sessions.binding:append_event
+  - entry: bee.sessions.binding:join
     path: .security.policies
-  - entry: bee.sessions.binding:checkpoint
+  - entry: bee.sessions.binding:get
     path: .security.policies
-  - entry: bee.sessions.binding:effect_intent
+  - entry: bee.sessions.binding:list
     path: .security.policies
-  - entry: bee.sessions.binding:effect_receipt
+  - entry: bee.sessions.binding:cancel
     path: .security.policies
-  - entry: bee.sessions.binding:effect_status
+  - entry: bee.sessions.binding:close
     path: .security.policies
-  - entry: bee.sessions.binding:link_execution
+  - entry: bee.sessions.binding:catalog
     path: .security.policies
-  - entry: bee.sessions.binding:link_child
-    path: .security.policies
-  - entry: bee.sessions.binding:settle
-    path: .security.policies
-  - entry: bee.sessions.binding:fail
-    path: .security.policies
-- name: pull_turn
+- name: open
   kind: function.lua
-  source: file://worker.lua
-  method: pull_turn
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: open
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: accept_turn
+- name: run
   kind: function.lua
-  source: file://worker.lua
-  method: accept_turn
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: run
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: renew
+- name: send
   kind: function.lua
-  source: file://worker.lua
-  method: renew
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: send
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: heartbeat
+- name: await
   kind: function.lua
-  source: file://worker.lua
-  method: heartbeat
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: await
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: append_event
+- name: join
   kind: function.lua
-  source: file://worker.lua
-  method: append_event
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: join
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: checkpoint
+- name: get
   kind: function.lua
-  source: file://worker.lua
-  method: checkpoint
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: get
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: effect_intent
+- name: list
   kind: function.lua
-  source: file://worker.lua
-  method: effect_intent
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: list
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: effect_receipt
+- name: cancel
   kind: function.lua
-  source: file://worker.lua
-  method: effect_receipt
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: cancel
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: effect_status
+- name: close
   kind: function.lua
-  source: file://worker.lua
-  method: effect_status
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: close
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}
-- name: link_execution
+- name: catalog
   kind: function.lua
-  source: file://worker.lua
-  method: link_execution
-  imports: {journal: bee.sessions:threads_journal}
-  security: {policies: []}
-- name: link_child
-  kind: function.lua
-  source: file://worker.lua
-  method: link_child
-  imports: {journal: bee.sessions:threads_journal}
-  security: {policies: []}
-- name: settle
-  kind: function.lua
-  source: file://worker.lua
-  method: settle
-  imports: {journal: bee.sessions:threads_journal}
-  security: {policies: []}
-- name: fail
-  kind: function.lua
-  source: file://worker.lua
-  method: fail
-  imports: {journal: bee.sessions:threads_journal}
+  source: file://owner_method.lua
+  method: catalog
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
   security: {policies: []}

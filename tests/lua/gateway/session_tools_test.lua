@@ -22,7 +22,7 @@ local function valid(name: string): Object
     if name == "session_catalog" then return {kind = "definition", include_unavailable = true} end
     if name == "session_open" then return {spec = spec, operation_key = "k1"} end
     if name == "session_run" then return {spec = spec, input = "do it", operation_key = "k1"} end
-    if name == "session_send" then return {session = SESSION, input = {schema = "bee:Text@1", value = {text = "go"}}, after = {WORK}, operation_key = "k1"} end
+    if name == "session_send" then return {session = SESSION, input = {schema = "bee:Text@1", value = {text = "go"}}, operation_key = "k1"} end
     if name == "session_await" then return {subject = WORK, timeout_ms = 1000} end
     if name == "session_join" then return {works = {WORK, WORK2}, policy = "quorum", quorum = 2, operation_key = "k1"} end
     if name == "session_get" then return {work = WORK} end
@@ -115,7 +115,7 @@ local function define_tests()
             test.is_true((mcp.tool("session_open") :: mcp.Tool).description:find("session_send", 1, true) ~= nil)
             test.is_true((mcp.tool("session_run") :: mcp.Tool).description:find("not the answer", 1, true) ~= nil)
             local await = (mcp.tool("session_await") :: mcp.Tool).description
-            test.is_true(await:find("work, operation or question", 1, true) ~= nil)
+            test.is_true(await:find("work or operation", 1, true) ~= nil)
             test.is_true(await:find("timeout never cancels", 1, true) ~= nil)
         end)
         test.it("admits every tool through the strict catalog and keeps the no-shadow rule", function()
@@ -171,9 +171,9 @@ local function define_tests()
             end
             refused("session_send", function(a) a.session = "session-1" end)
             refused("session_send", function(a) a.session = WORK end)
-            refused("session_send", function(a) a.after = {WORK, WORK} end)
-            refused("session_send", function(a) a.after = {} end)
-            refused("session_send", function(a) a.expires_at = "tomorrow" end)
+            for _, field in ipairs({"after", "after_guidance", "expires_at", "expected_incarnation"}) do
+                refused("session_send", function(a) a[field] = "x" end)
+            end
             refused("session_send", function(a) a.input = 5 end)
             refused("session_send", function(a) a.operation_key = string.rep("k", 129) end)
             refused("session_send", function(a) a.input = string.rep("x", 16385) end)
@@ -188,9 +188,10 @@ local function define_tests()
             refused("session_close", function(a) a.mode = "kill" end)
             refused("session_open", function(a) a.spec = {} end)
             refused("session_open", function(a) a.spec = {definition = "d", limits = {active_ms = 0}} end)
-            for _, subject in ipairs({WORK, OP, "bq:node-a:ws-1:q1"}) do
+            for _, subject in ipairs({WORK, OP}) do
                 test.not_nil(session_tools.decode("session_await", {arguments = {subject = subject, deadline_at = "2026-09-29T10:00:00.5+02:00"}}))
             end
+            refused("session_await", function(a) a.subject = "bq:node-a:ws-1:q1" end)
             test.not_nil(session_tools.decode("session_get", {arguments = {operation_key = "k"}}))
             test.is_nil(session_tools.decode("session_get", {arguments = "text"}))
             test.is_nil(session_tools.decode("session_get", {}))
@@ -236,6 +237,20 @@ local function define_tests()
             for _, name in ipairs(MUTATIONS) do test.not_nil(session_tools.result(name, fault)) end
             local read_fault = {ok = false, error = {code = "NOT_FOUND", message = "gone", retry = "never"}}
             for _, name in ipairs(READS) do test.not_nil(session_tools.result(name, read_fault)) end
+        end)
+        test.it("exposes the owner-set sender on work and stage-1 activity on sessions", function()
+            local work = {work = WORK, session = SESSION, sender = {kind = "session", id = SESSION}, revision = 1,
+                phase = "queued", cancelling = false}
+            test.not_nil(session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}}))
+            work.sender = nil
+            test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}}))
+            local stalled = snapshot()
+            stalled.activity = "stalled"
+            test.not_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = stalled}}))
+            stalled.activity = "queued"
+            test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = stalled}}))
+            test.not_nil(session_tools.decode("session_list", {arguments = {filter = {activity = "blocked"}}}))
+            test.is_nil(session_tools.decode("session_list", {arguments = {filter = {activity = "queued"}}}))
         end)
         test.it("refuses owner replies that break the published schema", function()
             local no_key = {ok = false, error = {code = "CONFLICT", message = "key reused", retry = "never"}}

@@ -806,6 +806,30 @@ CREATE TABLE bee_thread_cancel_intents (
 CREATE INDEX bee_thread_cancel_intent_attempt
   ON bee_thread_cancel_intents(thread_id, attempt_id);
 ]]
+-- Stage 1 work has no dependency graph. Sender identity is derived by the
+-- Sessions owner from the authenticated caller before each immutable Work is
+-- committed.
+local SESSION_WORK_SENDER_SQL = [[
+ALTER TABLE bee_session_work DROP COLUMN after_json;
+ALTER TABLE bee_session_work ADD COLUMN sender_kind TEXT NOT NULL DEFAULT 'principal'
+  CHECK(sender_kind IN ('session','principal'));
+ALTER TABLE bee_session_work ADD COLUMN sender_id TEXT NOT NULL DEFAULT '';
+UPDATE bee_session_work SET sender_id = (
+  SELECT owner_actor FROM bee_session_operations
+  WHERE bee_session_operations.operation_ref = bee_session_work.operation_ref
+) WHERE sender_id = '';
+ALTER TABLE bee_sessions ADD COLUMN route_json TEXT NOT NULL DEFAULT '{}';
+]]
+-- Provider resume identity is session state shared by successive turns. It is
+-- committed with work settlement and is never supplied by the work caller.
+local SESSION_CONTEXT_SQL = [[
+ALTER TABLE bee_sessions ADD COLUMN context_json TEXT NOT NULL DEFAULT '{}';
+]]
+-- An unresolved placement result is visible to await and stops later
+-- scheduler passes from invoking the same turn again.
+local SESSION_WORK_UNCERTAINTY_SQL = [[
+ALTER TABLE bee_session_work ADD COLUMN uncertainty_json TEXT;
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -828,6 +852,9 @@ local list: {Migration} = {
     {id = 19, name = "app_alias_live_authorization", sql = APP_ALIAS_LIVE_SQL, rebuild = false},
     {id = 20, name = "unbounded_journal", sql = UNBOUNDED_JOURNAL_SQL, rebuild = true},
     {id = 21, name = "sessions_work_store", sql = SESSION_WORK_SQL, rebuild = false},
+    {id = 22, name = "sessions_work_sender", sql = SESSION_WORK_SENDER_SQL, rebuild = false},
+    {id = 23, name = "sessions_turn_context", sql = SESSION_CONTEXT_SQL, rebuild = false},
+    {id = 24, name = "sessions_work_uncertainty", sql = SESSION_WORK_UNCERTAINTY_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

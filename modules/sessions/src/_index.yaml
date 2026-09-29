@@ -12,20 +12,18 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
+- name: dependency_harness
+  kind: ns.dependency
+  component: bee/harness
+  version: '*'
 - name: target_threads_journal
   kind: ns.requirement
+  default: bee.threads:journal_local
   meta:
     comment: Host-selected binding for the canonical Threads journal contract
   targets:
   - entry: bee.sessions:threads_journal_ref
     path: .data.ref
-- name: target_executor_bindings
-  kind: ns.requirement
-  meta:
-    comment: Host-selected executor contract bindings admitted for this assembly
-  targets:
-  - entry: bee.sessions:executor_selection
-    path: .data.refs
 - name: threads_journal_ref
   kind: registry.entry
   meta:
@@ -35,15 +33,24 @@ entries:
   kind: registry.entry
   meta:
     type: bee.sessions.executor_selection
-    comment: The host-selected executor binding refs; empty until an assembly admits an executor
+    comment: The host-selected executor binding refs
   data:
-    refs: []
+    refs: [bee.sessions.binding:external_executor_binding]
 - name: threads_journal
   kind: library.lua
   source: file://threads_journal.lua
   modules: [registry, funcs]
   imports:
     scheduler: bee.sessions.service:scheduler
+- name: owner
+  kind: library.lua
+  source: file://owner.lua
+  modules: [registry, funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    journal: bee.sessions:threads_journal
+    admission: bee.harness.launch:admission
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua
@@ -54,9 +61,9 @@ entries:
   kind: contract.definition
   methods:
   - {name: open, description: Open a reusable managed session}
-  - {name: run, description: Atomically open a session and queue its first work item}
+  - {name: run, description: Open a session and queue its first work item}
   - {name: send, description: Durably queue work for a session}
-  - {name: await, description: Observe work, operation or question state}
+  - {name: await, description: Observe work or operation state}
   - {name: join, description: Join an exact ordered set of work items}
   - {name: get, description: Read an exact session, work or operation}
   - {name: list, description: List durable sessions independently of executor readiness}
@@ -65,41 +72,8 @@ entries:
 - name: catalog
   kind: contract.definition
   methods:
-  - {name: list, description: List visible definitions, profiles or executors}
-  - {name: locate, description: Locate one exact candidate on this host}
-  - {name: reprobe, description: Invalidate cached readiness and locate again}
-- name: guidance
-  kind: contract.definition
-  methods:
-  - {name: set_guidance, description: Persist scoped guidance at an evidenced work frontier}
+  - {name: list, description: List admitted definitions and profiles with executor readiness}
 - name: executor
   kind: contract.definition
   methods:
-  - {name: describe, description: Describe executor identity and supported features}
-  - {name: locate, description: Report readiness for an exact target}
-  - {name: negotiate, description: Select a compatible plan before execution effects}
-  - {name: prepare, description: Persist an execution intent for a fenced turn claim}
-  - {name: activate, description: Activate one prepared executor worker}
-  - {name: pull_turn, description: Pull the turn envelope for an authenticated claim}
-  - {name: accept_turn, description: Commit turn acceptance before effects}
-  - {name: observe, description: Read bounded execution observations}
-  - {name: reconcile, description: Reconcile execution intent after interruption}
-  - {name: cancel, description: Stop the whole executor unit and report evidence}
-- name: worker
-  kind: contract.definition
-  meta:
-    comment: Executor-only fenced access to the canonical Threads session journal
-  methods:
-  - {name: pull_turn, description: Pull the turn envelope for a fenced claim}
-  - {name: accept_turn, description: Commit acceptance before effects}
-  - {name: renew, description: Renew a live fenced claim}
-  - {name: heartbeat, description: Record executor liveness and progress frontier}
-  - {name: append_event, description: Append typed session evidence}
-  - {name: checkpoint, description: Commit monotonic execution and context progress}
-  - {name: effect_intent, description: Journal an idempotent effect intent before invocation}
-  - {name: effect_receipt, description: Journal effect outcome evidence}
-  - {name: effect_status, description: Reconcile an effect by its stable identity}
-  - {name: link_execution, description: Link the physical execution address to the turn}
-  - {name: link_child, description: Link an owned child session or work item}
-  - {name: settle, description: Settle work with a validated result}
-  - {name: fail, description: Record a typed work failure}
+  - {name: run_turn, description: Execute one accepted work turn through the selected driver and placement}

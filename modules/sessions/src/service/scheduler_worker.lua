@@ -15,7 +15,7 @@ M.SCAN_INTERVAL = "5s"
 local function pass(): string?
     local runtime, runtime_error = executors.runtime()
     if not runtime then return runtime_error or "executor registry is unavailable" end
-    local service, service_error = scheduler.create(threads_journal.adapter(), runtime)
+    local service, service_error = scheduler.create(threads_journal.adapter(), runtime, nil, tostring(process.pid()))
     if not service then return service_error or "scheduler could not be initialized" end
     local report, pass_error = service.run_pass()
     if not report then return pass_error or "scheduler scan failed" end

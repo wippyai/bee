@@ -6,11 +6,9 @@ local scheduler = require("scheduler")
 local M = {}
 M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.sessions:threads_journal_ref"
-M.METHODS = {"open", "enqueue", "lookup_operation", "claim_owner", "renew_owner", "reserve_turn", "pull_turn",
-    "accept_turn", "checkpoint", "append_event", "record_effect_intent", "record_effect_receipt",
-    "record_effect_resolution", "link_execution", "link_child", "settle_turn", "request_control",
-    "commit_control", "apply_guidance", "register_wait", "consume_wait", "decide_join", "transfer",
-    "snapshot", "scan_due"}
+M.METHODS = {"session_create", "session_describe", "session_transition", "work_send", "work_describe",
+    "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "work_settle", "work_uncertain",
+    "operation_lookup", "feed_read"}
 
 type Entry = {[string]: unknown}
 type Targets = {[string]: string}
@@ -86,23 +84,34 @@ end
 
 function M.adapter(): scheduler.Journal
     return {
-        enqueue = function(request: scheduler.SendRequest): (scheduler.WorkReceipt?, string?)
-            local value, err = M.invoke("enqueue", request)
+        enqueue = function(request: {[string]: unknown}): (scheduler.WorkReceipt?, string?)
+            local value, err = M.invoke("work_send", request)
             return value :: scheduler.WorkReceipt?, err
         end,
-        scan_due = function(request: {limit: integer}): (scheduler.DuePage?, string?)
-            local value, err = M.invoke("scan_due", request)
-            return value :: scheduler.DuePage?, err
+        scan_due = function(request: {limit: integer}): (scheduler.Page?, string?)
+            local value, err = M.invoke("work_scan", request)
+            return value :: scheduler.Page?, err
         end,
-        reserve_turn = function(request: {work: string, session: string}): (scheduler.Claim?, string?)
-            local value, err = M.invoke("reserve_turn", request)
-            return value :: scheduler.Claim?, err
+        reserve_turn = function(request: {session: string, operation_key: string}): (scheduler.Reservation?, string?)
+            local value, err = M.invoke("turn_reserve", request)
+            return value :: scheduler.Reservation?, err
         end,
-        link_execution = function(claim: scheduler.Claim, intent: scheduler.ExecutionIntent): (boolean, string?)
-            local value, err = M.invoke("link_execution", {claim = claim, intent = intent})
-            if err then return false, err end
-            if value ~= true then return false, "Threads did not confirm execution intent" end
-            return true, nil
+        recover_turn = function(request: {turn: string, operation_key: string}): (scheduler.Reservation?, string?)
+            local value, err = M.invoke("turn_recover", request)
+            return value :: scheduler.Reservation?, err
+        end,
+        pull_turn = function(request: {turn: string, claim: string}): (scheduler.Turn?, string?)
+            local value, err = M.invoke("turn_pull", request)
+            return value :: scheduler.Turn?, err
+        end,
+        accept_turn = function(request: {[string]: unknown}): (unknown?, string?)
+            return M.invoke("turn_accept", request)
+        end,
+        settle = function(request: {[string]: unknown}): (unknown?, string?)
+            return M.invoke("work_settle", request)
+        end,
+        mark_uncertain = function(request: {[string]: unknown}): (unknown?, string?)
+            return M.invoke("work_uncertain", request)
         end,
     }
 end

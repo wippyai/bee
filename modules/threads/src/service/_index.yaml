@@ -469,6 +469,12 @@ entries:
   method: work_settle
   imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_uncertain
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_uncertain
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: operation_lookup
   kind: function.lua
   source: file://work_store_method.lua

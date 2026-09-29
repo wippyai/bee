@@ -1,163 +1,199 @@
--- MIT. Threads commits queued work and fenced reservations. This scheduler
--- holds no queue state: every pass re-reads the owner journal so boot and
--- periodic scans recover dropped wake hints.
+-- MIT. Threads owns the work queue and fenced turns. This scheduler keeps no
+-- queue state: boot and periodic scans recover every unsettled turn.
+local canonical = require("canonical")
 local M = {}
 M.MAX_SCAN = 64
 
-type SendRequest = {session: string, operation_key: string, executor_id: string, input: unknown,
-    input_digest: string, output_schema: string}
-type WorkReceipt = {work: string, session: string, operation: string, sequence: integer,
-    committed_at: string, kind: "request", state: "queued", output_schema: string}
-type Claim = {work: string, session: string, claim_ref: string, executor_id: string, epoch: integer}
-type ExecutionIntent = {execution_ref: string, claim_ref: string?, binding_ref: string?, plan_digest: string?}
-type DueWork = {work: string, session: string, executor_id: string, state: "queued" | "reserved" | "accepted",
-    claim: Claim?, execution: ExecutionIntent?}
-type DuePage = {items: {DueWork}}
-type Plan = {executor_id: string, definition_digest: string?, binding_ref: string?, features: {string}?}
-type Prepared = {intent: ExecutionIntent, checkpoint: unknown?}
-type Evidence = {state: "not_started" | "running" | "recoverable" | "quiescent" | "unknown", execution: ExecutionIntent?, checkpoint: unknown?}
+type Object = {[string]: unknown}
+type Sender = {kind: "session" | "principal", id: string}
+type WorkReceipt = {work: string, session: string, operation: string, committed_at: string, sequence: integer,
+    kind: "request", state: "queued", output_schema: string, sender: Sender}
+type Due = {work: string, session: string, state: "queued" | "reserved" | "accepted",
+    turn: string?, claim: string?, owner_epoch: integer?, checkpoint: unknown?, route: Object?, uncertainty: Object?}
+type Page = {items: {Due}}
+type Turn = {work: string, session: string, turn: string, claim: string, owner_epoch: integer,
+    input: unknown, input_digest: string, output_schema: string, sender: Sender, route: Object,
+    checkpoint: unknown?, context: Object?, phase: "reserved" | "accepted"}
+type Execution = {state: "settled", outcome: "succeeded" | "failed" | "cancelled", answer: string?,
+    error: {code: string, message: string}?, usage: unknown?, checkpoint: Object?, evidence: unknown?}
+    | {state: "pending" | "uncertain", outcome: string?, evidence: unknown?}
+type Reservation = {work: string?, session: string, turn: string?, claim: string?, owner_epoch: integer?, state: string}
 type Journal = {
-    enqueue: (SendRequest) -> (WorkReceipt?, string?),
-    scan_due: ({limit: integer}) -> (DuePage?, string?),
-    reserve_turn: ({work: string, session: string}) -> (Claim?, string?),
-    link_execution: (Claim, ExecutionIntent) -> (boolean, string?),
+    enqueue: (Object) -> (WorkReceipt?, string?),
+    scan_due: ({limit: integer}) -> (Page?, string?),
+    reserve_turn: ({session: string, operation_key: string}) -> (Reservation?, string?),
+    recover_turn: ({turn: string, operation_key: string}) -> (Reservation?, string?),
+    pull_turn: ({turn: string, claim: string}) -> (Turn?, string?),
+    accept_turn: ({turn: string, claim: string, input_digest: string, checkpoint: unknown, operation_key: string}) -> (unknown?, string?),
+    settle: (Object) -> (unknown?, string?),
+    mark_uncertain: (Object) -> (unknown?, string?),
 }
-type Executor = {
-    negotiate: (Claim) -> (Plan?, string?),
-    prepare: (Claim, Plan, Evidence) -> (Prepared?, string?),
-    activate: (Claim, Prepared) -> (unknown?, string?),
-    reconcile: ({claim: Claim, execution: ExecutionIntent?}) -> (Evidence?, string?),
-}
+type Executor = {run_turn: (Object) -> (Execution?, string?)}
 type Registry = {get: (string) -> (Executor?, string?)}
 type Issue = {work: string?, stage: string, reason: string}
-type Pass = {scanned: integer, reserved: integer, activated: integer, resumed: integer,
-    running: integer, quiescent: integer, uncertain: integer, skipped: integer, issues: {Issue}}
+type Pass = {scanned: integer, reserved: integer, activated: integer, recovered: integer,
+    running: integer, uncertain: integer, skipped: integer, issues: {Issue}}
 type Wake = () -> (boolean, string?)
-type Service = {send: (SendRequest) -> (WorkReceipt?, string?), run_pass: () -> (Pass?, string?)}
+type Service = {send: (Object) -> (WorkReceipt?, string?), run_pass: () -> (Pass?, string?)}
 
 local function valid_id(value: unknown): boolean
-    return type(value) == "string" and #value > 0 and #value <= 256 and value:match("^[A-Za-z0-9][A-Za-z0-9_.:@-]*$") ~= nil
+    return type(value) == "string" and #value > 0 and #value <= 256
+        and value:match("^[A-Za-z0-9][A-Za-z0-9_.:@-]*$") ~= nil
 end
 
-local function valid_session_ref(value: unknown): boolean
-    if type(value) ~= "string" or #value > 256 then return false end
-    local node, workspace, ref = value:match("^bs:([^:]+):([^:]+):([^:]+)$")
-    return node ~= nil and #node > 0 and #workspace > 0 and #ref > 0
+local function object(value: unknown): Object?
+    if type(value) ~= "table" then return nil end
+    return value :: Object
 end
 
-local function valid_send(request: SendRequest): string?
-    if type(request) ~= "table" then return "request must be an object" end
-    if not valid_session_ref(request.session) then return "session ref is malformed" end
-    if type(request.operation_key) ~= "string" or #request.operation_key == 0 or #request.operation_key > 128 then return "operation_key is malformed" end
-    if not valid_id(request.executor_id) then return "executor_id is malformed" end
-    if type(request.input) == "string" then
-        if #request.input > 16384 then return "input exceeds 16384 bytes" end
-    elseif type(request.input) ~= "table" then
-        return "input must be text or a typed value"
-    end
-    if not valid_id(request.input_digest) then return "input_digest is malformed" end
-    if not valid_id(request.output_schema) then return "output_schema is malformed" end
-    return nil
-end
-
-local function valid_claim(claim: unknown): boolean
-    if type(claim) ~= "table" then return false end
-    local value = claim :: {[string]: unknown}
-    return valid_id(value.work) and valid_session_ref(value.session) and valid_id(value.claim_ref)
-        and valid_id(value.executor_id) and type(value.epoch) == "number" and value.epoch >= 1 and value.epoch == math.floor(value.epoch)
+local function key(prefix: string, ref: string, run_id: string?): string
+    local suffix = ref:sub(-72)
+    if run_id then suffix = run_id:sub(-24) .. ":" .. suffix end
+    return prefix .. ":" .. suffix
 end
 
 local function add_issue(pass: Pass, work: string?, stage: string, reason: string)
     pass.issues[#pass.issues + 1] = {work = work, stage = stage, reason = reason}
 end
 
-local function due_items(page: DuePage): ({DueWork}?, string?)
-    if type(page) ~= "table" or type(page.items) ~= "table" then return nil, "scan_due returned a malformed page" end
-    local items = page.items :: {unknown}
+local function decode_page(value: Page): ({Due}?, string?)
+    if type(value) ~= "table" or type(value.items) ~= "table" then return nil, "work_scan returned a malformed page" end
+    local items = value.items :: {unknown}
     local count = 0
-    for key in pairs(items) do
-        if type(key) ~= "number" or key < 1 or math.floor(key) ~= key then return nil, "scan_due items are not a list" end
+    for item_key in pairs(items) do
+        if type(item_key) ~= "number" or item_key < 1 or math.floor(item_key) ~= item_key then return nil, "work_scan items are not a list" end
         count = count + 1
-        if count > M.MAX_SCAN then return nil, "scan_due exceeded the scheduler scan bound" end
+        if count > M.MAX_SCAN then return nil, "work_scan exceeded the scheduler scan bound" end
     end
-    local checked: {DueWork} = {}
+    local checked: {Due} = {}
     for index = 1, count do
-        local item = items[index]
-        if type(item) ~= "table" then return nil, "scan_due returned an invalid work row" end
-        local row = item :: {[string]: unknown}
-        if not valid_id(row.work) or not valid_session_ref(row.session) or not valid_id(row.executor_id)
+        local row = object(items[index])
+        if not row or not valid_id(row.work) or not valid_id(row.session)
             or (row.state ~= "queued" and row.state ~= "reserved" and row.state ~= "accepted") then
-            return nil, "scan_due returned an invalid work row"
+            return nil, "work_scan returned an invalid work row"
         end
-        if row.state ~= "queued" and not valid_claim(row.claim) then return nil, "scan_due omitted its fenced claim" end
-        checked[#checked + 1] = row :: DueWork
+        if row.state ~= "queued" and (not valid_id(row.turn) or not valid_id(row.claim) or type(row.owner_epoch) ~= "number") then
+            return nil, "work_scan omitted the fenced turn identity"
+        end
+        checked[#checked + 1] = row :: Due
     end
     return checked, nil
 end
 
-local function process_due(journal: Journal, registry: Registry, pass: Pass, due: DueWork)
-    local claim = due.claim
-    if due.state == "queued" then
-        local reserved, reserve_error = journal.reserve_turn({work = due.work, session = due.session})
-        if reserve_error then add_issue(pass, due.work, "reserve_turn", tostring(reserve_error)); return end
-        if not reserved then pass.skipped = pass.skipped + 1; return end
-        claim = reserved
-        pass.reserved = pass.reserved + 1
-    end
-    if not valid_claim(claim) or not claim then add_issue(pass, due.work, "reserve_turn", "Threads returned a malformed claim"); return end
-    if claim.work ~= due.work or claim.session ~= due.session or claim.executor_id ~= due.executor_id then
-        add_issue(pass, due.work, "reserve_turn", "Threads claim does not match the queued work"); return
-    end
-    local executor, executor_error = registry.get(claim.executor_id)
-    if executor_error or not executor then add_issue(pass, due.work, "executor", tostring(executor_error or "selected executor is unavailable")); return end
-    local evidence, reconcile_error = executor.reconcile({claim = claim, execution = due.execution})
-    if reconcile_error or type(evidence) ~= "table" then
-        add_issue(pass, due.work, "reconcile", tostring(reconcile_error or "executor returned malformed evidence")); return
-    end
-    if evidence.state == "running" then pass.running = pass.running + 1; return end
-    if evidence.state == "quiescent" then pass.quiescent = pass.quiescent + 1; return end
-    if evidence.state == "unknown" then pass.uncertain = pass.uncertain + 1; return end
-    if evidence.state ~= "not_started" and evidence.state ~= "recoverable" then
-        add_issue(pass, due.work, "reconcile", "executor returned an unsupported reconciliation state"); return
-    end
-    if evidence.state == "recoverable" and not due.execution then
-        add_issue(pass, due.work, "reconcile", "recoverable execution has no journaled execution intent"); return
-    end
-    local plan, negotiate_error = executor.negotiate(claim)
-    if negotiate_error or type(plan) ~= "table" then
-        add_issue(pass, due.work, "negotiate", tostring(negotiate_error or "executor returned a malformed plan")); return
-    end
-    if plan.executor_id ~= claim.executor_id then add_issue(pass, due.work, "negotiate", "executor plan identity changed"); return end
-    local prepared, prepare_error = executor.prepare(claim, plan, evidence)
-    if prepare_error or type(prepared) ~= "table" or type(prepared.intent) ~= "table" then
-        add_issue(pass, due.work, "prepare", tostring(prepare_error or "executor returned a malformed intent")); return
-    end
-    local intent = prepared.intent
-    if not valid_id(intent.execution_ref) then add_issue(pass, due.work, "prepare", "executor returned an invalid execution ref"); return end
-    if due.execution and due.execution.execution_ref ~= intent.execution_ref then
-        add_issue(pass, due.work, "prepare", "recovery changed the execution identity"); return
-    end
-    if not due.execution then
-        local linked, link_error = journal.link_execution(claim, intent)
-        if link_error or linked ~= true then add_issue(pass, due.work, "link_execution", tostring(link_error or "Threads did not confirm execution intent")); return end
-    end
-    local _, activate_error = executor.activate(claim, prepared)
-    if activate_error then add_issue(pass, due.work, "activate", tostring(activate_error)); return end
-    if evidence.state == "recoverable" then pass.resumed = pass.resumed + 1 else pass.activated = pass.activated + 1 end
+local function accepted_turn(journal: Journal, turn: Turn): (boolean, string?)
+    if turn.phase == "accepted" then return true, nil end
+    local accepted, accept_error = journal.accept_turn({turn = turn.turn, claim = turn.claim,
+        input_digest = turn.input_digest, checkpoint = turn.checkpoint or {attempt_id = turn.turn, generation = 1},
+        operation_key = key("accept", turn.turn)})
+    if accept_error or not accepted then return false, accept_error or "Threads did not accept the turn" end
+    return true, nil
 end
 
-function M.create(journal: Journal, registry: Registry, wake: Wake?): (Service?, string?)
+local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Due, run_id: string)
+    if due.uncertainty then pass.uncertain = pass.uncertain + 1; return end
+    local reservation: Reservation? = nil
+    if due.state == "queued" then
+        local reserved, reserve_error = journal.reserve_turn({session = due.session,
+            operation_key = key("reserve", due.work)})
+        if reserve_error then add_issue(pass, due.work, "turn_reserve", reserve_error); return end
+        if not reserved or not reserved.turn then pass.skipped = pass.skipped + 1; return end
+        reservation = reserved
+        pass.reserved = pass.reserved + 1
+    else
+        local recovered, recover_error = journal.recover_turn({turn = due.turn :: string,
+            operation_key = key("recover", due.turn :: string, run_id)})
+        if recover_error then add_issue(pass, due.work, "turn_recover", recover_error); return end
+        if not recovered or not recovered.turn or not recovered.claim then pass.skipped = pass.skipped + 1; return end
+        reservation = recovered
+        pass.recovered = pass.recovered + 1
+    end
+    local claim = reservation and reservation.claim
+    local turn_ref = reservation and reservation.turn
+    if not reservation or not valid_id(claim) or not valid_id(turn_ref) then
+        add_issue(pass, due.work, "turn_reserve", "Threads returned a malformed reservation"); return
+    end
+    if reservation.work and reservation.work ~= due.work then
+        add_issue(pass, due.work, "turn_reserve", "Threads reserved another work item"); return
+    end
+    local raw_turn, pull_error = journal.pull_turn({turn = turn_ref :: string, claim = claim :: string})
+    if pull_error or not raw_turn then add_issue(pass, due.work, "turn_pull", pull_error or "Threads returned no turn"); return end
+    local turn = raw_turn :: Turn
+    if turn.work ~= due.work or turn.session ~= due.session or turn.turn ~= turn_ref or turn.claim ~= claim then
+        add_issue(pass, due.work, "turn_pull", "Threads returned a different fenced turn"); return
+    end
+    local accepted, accept_error = accepted_turn(journal, turn)
+    if not accepted then add_issue(pass, due.work, "turn_accept", accept_error or "turn acceptance failed"); return end
+    local executor, executor_error = registry.get("external")
+    if executor_error or not executor then add_issue(pass, due.work, "executor", executor_error or "external executor is unavailable"); return end
+    local route = object(turn.route)
+    local sender = object(turn.sender)
+    local input, input_error = M.prompt(turn.input)
+    if not route or not sender or not input then
+        add_issue(pass, due.work, "turn_input", input_error or "Threads returned an incomplete executor input"); return
+    end
+    local intent = object(turn.checkpoint) or {attempt_id = turn.turn, generation = 1}
+    local context = object(turn.context) or {}
+    local placement_request: Object = {}
+    local stored_placement = object(route.placement_request)
+    if stored_placement then
+        for name, value in pairs(stored_placement) do placement_request[name] = value end
+    end
+    placement_request.attempt_id = intent.attempt_id or turn.turn
+    placement_request.binding_ref = route.driver_binding_ref
+    placement_request.profile_id = route.profile_id
+    local invocation: Object = {attempt_id = intent.attempt_id or turn.turn,
+        generation = intent.generation or 1, prompt = input, sender = sender,
+        driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id,
+        driver_methods = route.driver_methods, driver_options = route.driver_options or {},
+        placement_methods = route.placement_methods, placement_request = placement_request,
+        checkpoint = context}
+    if context.attempt_id ~= nil then invocation.previous_attempt_id = context.attempt_id end
+    local outcome, run_error = executor.run_turn(invocation)
+    if run_error or not outcome then add_issue(pass, due.work, "run_turn", run_error or "external executor returned no outcome"); return end
+    if outcome.state == "pending" or outcome.state == "uncertain" then
+        if outcome.state == "pending" then pass.running = pass.running + 1 else pass.uncertain = pass.uncertain + 1 end
+        if outcome.state == "uncertain" then
+            local evidence = object(outcome.evidence) or {}
+            local summary = type(evidence.message) == "string" and evidence.message
+                or type(evidence.code) == "string" and evidence.code or "executor could not prove the turn outcome"
+            local _, mark_error = journal.mark_uncertain({turn = turn.turn, claim = turn.claim,
+                evidence = {summary = summary, artifacts = {}}, operation_key = key("uncertain", turn.turn)})
+            if mark_error then add_issue(pass, due.work, "work_uncertain", mark_error) end
+        end
+        return
+    end
+    local result: Object
+    if outcome.outcome == "succeeded" then
+        result = {state = "succeeded", schema = turn.output_schema, value = {text = outcome.answer or ""},
+            artifacts = {}, usage = outcome.usage or {}}
+    else
+        local error_value = outcome.error or {code = "EXECUTOR_FAILED", message = "the external turn failed"}
+        result = {state = outcome.outcome, error = {code = error_value.code or "EXECUTOR_FAILED",
+            message = error_value.message or "the external turn failed", retry = "never"}, artifacts = {}}
+    end
+    local settled, settle_error = journal.settle({turn = turn.turn, claim = turn.claim, result = result,
+        operation_key = key("settle", turn.turn), context = outcome.checkpoint})
+    if settle_error or not settled then add_issue(pass, due.work, "work_settle", settle_error or "Threads did not settle the work"); return end
+    pass.activated = pass.activated + 1
+end
+
+function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: string): (Service?, string?)
     if type(journal) ~= "table" or type(journal.enqueue) ~= "function" or type(journal.scan_due) ~= "function"
-        or type(journal.reserve_turn) ~= "function" or type(journal.link_execution) ~= "function" then
+        or type(journal.reserve_turn) ~= "function" or type(journal.recover_turn) ~= "function"
+        or type(journal.pull_turn) ~= "function" or type(journal.accept_turn) ~= "function"
+        or type(journal.settle) ~= "function" or type(journal.mark_uncertain) ~= "function" then
         return nil, "Threads journal adapter is incomplete"
     end
     if type(registry) ~= "table" or type(registry.get) ~= "function" then return nil, "executor registry is incomplete" end
+    if not valid_id(run_id) then return nil, "scheduler run identity is malformed" end
     if wake ~= nil and type(wake) ~= "function" then return nil, "wake hint is malformed" end
     local service: Service = {
-        send = function(request: SendRequest): (WorkReceipt?, string?)
-            local request_error = valid_send(request)
-            if request_error then return nil, "INVALID: " .. request_error end
-            local receipt, enqueue_error = journal.enqueue(request)
+        send = function(request: Object): (WorkReceipt?, string?)
+            if not valid_id(request.session) or type(request.operation_key) ~= "string" or #request.operation_key == 0
+                or #request.operation_key > 128 or request.input == nil then return nil, "INVALID: session, operation_key and input are required" end
+            local enqueue = {session = request.session, operation_key = request.operation_key, input = request.input,
+                output_schema = request.output_schema or "bee:Text@1"}
+            local receipt, enqueue_error = journal.enqueue(enqueue)
             if enqueue_error or not receipt then return nil, enqueue_error or "Threads did not return a work receipt" end
             if wake then
                 local delivered, wake_error = wake()
@@ -167,16 +203,21 @@ function M.create(journal: Journal, registry: Registry, wake: Wake?): (Service?,
         end,
         run_pass = function(): (Pass?, string?)
             local page, scan_error = journal.scan_due({limit = M.MAX_SCAN})
-            if scan_error or not page then return nil, scan_error or "Threads returned no scan page" end
-            local work, page_error = due_items(page)
+            if scan_error or not page then return nil, scan_error or "Threads returned no work page" end
+            local work, page_error = decode_page(page)
             if not work then return nil, page_error end
-            local pass: Pass = {scanned = #work, reserved = 0, activated = 0, resumed = 0,
-                running = 0, quiescent = 0, uncertain = 0, skipped = 0, issues = {}}
-            for _, due in ipairs(work) do process_due(journal, registry, pass, due) end
+            local pass: Pass = {scanned = #work, reserved = 0, activated = 0, recovered = 0,
+                running = 0, uncertain = 0, skipped = 0, issues = {}}
+            for _, due in ipairs(work) do run_due(journal, registry, pass, due, run_id) end
             return pass, nil
         end,
     }
     return service, nil
+end
+
+function M.prompt(value: unknown): (string?, string?)
+    if type(value) == "string" then return value, nil end
+    return canonical.encode(value, 16384, 16)
 end
 
 return M

@@ -17,7 +17,8 @@ type Request = {
     attempt_id: string,
     generation: integer,
     prompt: string,
-    provider: string,
+    sender: {kind: "session" | "principal", id: string},
+    driver_binding_ref: string,
     profile_id: string,
     driver_methods: {[string]: string},
     driver_options: {[string]: unknown},
@@ -27,11 +28,6 @@ type Request = {
     checkpoint: {[string]: unknown}?,
 }
 
-local DRIVER_METHODS = {
-    claude = {prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch", normalize = "bee.driver.claude.binding:normalize"},
-    codex = {prepare = "bee.driver.codex.binding:prepare", dispatch = "bee.driver.codex.binding:dispatch", normalize = "bee.driver.codex.binding:normalize"},
-}
-local DRIVER_BINDINGS = {claude = "bee.driver.claude:binding", codex = "bee.driver.codex:binding"}
 local PLACEMENT_METHODS = {
     prepare = "bee.placement.native.binding:prepare", attach = "bee.placement.native.binding:attach",
     start = "bee.placement.native.binding:start", reconcile = "bee.placement.native.binding:reconcile",
@@ -51,7 +47,7 @@ end
 local function decode(value: unknown): (Request?, string?)
     local request = object(value)
     if not request then return nil, "turn request must be an object" end
-    local allowed = {"attempt_id", "generation", "prompt", "provider", "profile_id", "driver_methods", "driver_options",
+    local allowed = {"attempt_id", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods", "driver_options",
         "placement_methods", "placement_request", "previous_attempt_id", "checkpoint"}
     local fields: {[string]: boolean} = {}
     for _, field in ipairs(allowed) do fields[field] = true end
@@ -64,15 +60,22 @@ local function decode(value: unknown): (Request?, string?)
         return nil, "generation must be a positive integer"
     end
     if type(request.prompt) ~= "string" or #request.prompt == 0 or #request.prompt > 16384 then return nil, "prompt must be nonempty bounded text" end
-    local provider = request.provider
-    if provider ~= "claude" and provider ~= "codex" then return nil, "provider must be claude or codex" end
+    local sender = object(request.sender)
+    if not sender or (sender.kind ~= "session" and sender.kind ~= "principal") or not id(sender.id) then
+        return nil, "sender must be an authenticated session or principal identity"
+    end
+    local driver_binding_ref = id(request.driver_binding_ref)
+    if not driver_binding_ref then return nil, "driver_binding_ref is invalid" end
     local profile_id = id(request.profile_id)
-    if not profile_id or profile_id ~= "session" and profile_id ~= "batch" then return nil, "profile_id must select a structured CLI profile" end
+    if not profile_id then return nil, "profile_id is invalid" end
     local driver_methods = object(request.driver_methods)
     if not driver_methods then return nil, "driver_methods must be an object" end
+    local binding_prefix = driver_binding_ref:gsub(":", ".") .. ":"
     for _, method in ipairs({"prepare", "dispatch", "normalize"}) do
-        if driver_methods[method] ~= DRIVER_METHODS[provider :: string][method] then
-            return nil, "driver_methods." .. method .. " is not the admitted " .. tostring(provider) .. " codec"
+        local target = id(driver_methods[method])
+        if not target or target:sub(1, #binding_prefix) ~= binding_prefix
+            or not target:match("^bee[.]driver[.][A-Za-z0-9_.-]+[.]binding:" .. method .. "$") then
+            return nil, "driver_methods." .. method .. " is not an operation of the selected bee.driver binding"
         end
     end
     local driver_options = object(request.driver_options or {})
@@ -91,8 +94,8 @@ local function decode(value: unknown): (Request?, string?)
     local placement_request = object(request.placement_request)
     if not placement_request then return nil, "placement_request must be an object" end
     if placement_request.attempt_id ~= attempt_id then return nil, "placement request attempt_id differs from the turn" end
-    if placement_request.binding_ref ~= DRIVER_BINDINGS[provider :: string] then
-        return nil, "placement request binding_ref differs from the selected provider"
+    if placement_request.binding_ref ~= driver_binding_ref then
+        return nil, "placement request binding_ref differs from the selected driver"
     end
     if placement_request.profile_id ~= profile_id then return nil, "placement request profile_id differs from the selected profile" end
     local previous_attempt_id: string? = nil
@@ -102,12 +105,14 @@ local function decode(value: unknown): (Request?, string?)
     end
     local checkpoint = object(request.checkpoint)
     if request.checkpoint ~= nil and not checkpoint then return nil, "checkpoint must be an object" end
-    if checkpoint and checkpoint.provider ~= nil and checkpoint.provider ~= provider then return nil, "provider changed across session continuity" end
     local resume_ref = checkpoint and checkpoint.resume_ref or nil
     if resume_ref ~= nil and not id(resume_ref) then return nil, "checkpoint.resume_ref is invalid" end
+    local sender_label = "[Bee sender " .. tostring(sender.kind) .. " " .. tostring(sender.id) .. "]\n"
+    if #sender_label + #request.prompt > 16384 then return nil, "prompt and sender identity exceed 16384 bytes" end
     return {
-        attempt_id = attempt_id, generation = request.generation :: integer, prompt = request.prompt :: string,
-        provider = provider :: string, profile_id = profile_id, driver_methods = driver_methods :: {[string]: string},
+        attempt_id = attempt_id, generation = request.generation :: integer, prompt = sender_label .. (request.prompt :: string),
+        sender = sender :: {kind: "session" | "principal", id: string},
+        driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = driver_methods :: {[string]: string},
         driver_options = driver_options, placement_methods = placement_methods :: {[string]: string},
         placement_request = placement_request, previous_attempt_id = previous_attempt_id, checkpoint = checkpoint,
     }, nil
@@ -129,7 +134,7 @@ end
 type Recovery = "ready" | "pending" | "uncertain"
 
 local function pending(request: Request, reason: string, attempt: unknown?): {[string]: unknown}
-    return {state = "pending", outcome = "pending", attempt_id = request.attempt_id, provider = request.provider,
+    return {state = "pending", outcome = "pending", attempt_id = request.attempt_id,
         evidence = {code = "placement_active", message = reason, placement = attempt}}
 end
 
@@ -176,7 +181,7 @@ local function driver_call(io: IO, request: Request): (string?, unknown?, string
 end
 
 local function uncertain(request: Request, reason: string, attempt: unknown?): {[string]: unknown}
-    return {state = "uncertain", outcome = "uncertain", attempt_id = request.attempt_id, provider = request.provider,
+    return {state = "uncertain", outcome = "uncertain", attempt_id = request.attempt_id,
         evidence = {code = "external_interruption", message = reason, placement = attempt}}
 end
 
@@ -267,7 +272,7 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     if terminal.outcome == "succeeded" and not resume_ref then
         return uncertain(request, "provider terminal report has no resume identity", final_attempt)
     end
-    local checkpoint = {provider = request.provider, resume_ref = resume_ref, attempt_id = request.attempt_id, terminal = terminal}
+    local checkpoint = {resume_ref = resume_ref, attempt_id = request.attempt_id, terminal = terminal}
     return {state = "settled", outcome = terminal.outcome, answer = terminal.answer, usage = terminal.usage,
         attempt_id = request.attempt_id, checkpoint = checkpoint, observations = observation.observations or {}, evidence = final_attempt}, nil
 end

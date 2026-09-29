@@ -44,7 +44,7 @@ local function define_tests()
                 test.eq(result.status, status)
                 test.eq(result.title, "Claude review")
                 test.eq(result.checked_at, "2026-09-29T00:00:00.000Z")
-                test.eq(result.expires_at, "2026-09-29T00:00:00.000Z")
+                test.is_nil((result :: {[string]: unknown}).expires_at)
                 test.eq(#result.reasons, status == "ready" and 0 or 1)
                 test.eq(#result.features, 0)
                 test.eq(#result.actions, 0)
@@ -114,8 +114,8 @@ local function define_tests()
 
         test.it("preserves partial discovery and counts unavailable candidates", function()
             local page = assert(locate.page({
-                {ref = "one", kind = "definition", title = "One", status = "ready", checked_at = "now", expires_at = "later", reasons = {}, features = {}, actions = {}},
-                {ref = "two", kind = "definition", title = "Two", status = "unknown", checked_at = "now", expires_at = "later", reasons = {"probe unavailable"}, features = {}, actions = {}},
+                {ref = "one", kind = "definition", title = "One", status = "ready", checked_at = "now", reasons = {}, features = {}, actions = {}},
+                {ref = "two", kind = "definition", title = "Two", status = "unknown", checked_at = "now", reasons = {"probe unavailable"}, features = {}, actions = {}},
             }, false, {{code = "UNAVAILABLE", message = "partial registry snapshot", retry = "reconcile"}}))
             test.is_false(page.complete)
             test.eq(page.unavailable_count, 1)

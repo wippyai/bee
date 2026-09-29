@@ -10,6 +10,9 @@ end
 function M.session_describe(request: unknown): types.Reply
     return boundary.run(work_store.session_describe, request, false)
 end
+function M.session_scan(request: unknown): types.Reply
+    return boundary.run(work_store.session_scan, request, false)
+end
 function M.session_transition(request: unknown): types.Reply
     return boundary.run(work_store.session_transition, request, true)
 end

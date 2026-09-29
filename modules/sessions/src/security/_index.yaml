@@ -8,6 +8,21 @@ entries:
   policy:
     actions: [registry.get, registry.snapshot, funcs.call]
     resources:
+    - bee.threads.service:session_create
+    - bee.threads.service:session_describe
+    - bee.threads.service:session_scan
+    - bee.threads.service:session_transition
+    - bee.threads.service:work_send
+    - bee.threads.service:work_describe
+    - bee.threads.service:work_scan
+    - bee.threads.service:turn_reserve
+    - bee.threads.service:turn_recover
+    - bee.threads.service:turn_pull
+    - bee.threads.service:turn_accept
+    - bee.threads.service:work_settle
+    - bee.threads.service:work_uncertain
+    - bee.threads.service:operation_lookup
+    - bee.threads.service:feed_read
     - bee.harness.profiles:contract
     - bee.harness.profiles:call
     - bee.harness.launch:admission

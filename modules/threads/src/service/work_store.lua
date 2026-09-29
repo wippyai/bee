@@ -28,6 +28,7 @@ local MAX_KEY_BYTES = 128
 local MAX_REF_BYTES = 256
 local MAX_VALUE_BYTES = 65536
 local MAX_FEED_PAGE = 64
+local MAX_SESSION_SCAN = 64
 
 local function failure(code: string, message: string): Result
     return transaction.failure(code, message)
@@ -422,6 +423,36 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
             revision = session.revision, created_at = session.created_at, updated_at = session.updated_at,
             queued = queued, active = reserved + accepted, settled = settled, uncertain = uncertain, stalled = stalled,
             head_sequence = head_sequence}, false)
+    end)
+end
+
+function M.session_scan(db: sql.DB, actor: string, request: unknown): Result
+    local _, workspace, denied = authenticated(actor)
+    if denied then return denied end
+    local input = object(request)
+    if not input or not has_only(input, {cursor = true, limit = true}) then return missing_request() end
+    local cursor = input.cursor == nil and nil or ref(input.cursor)
+    local limit = input.limit == nil and MAX_SESSION_SCAN or integer(input.limit)
+    if (input.cursor ~= nil and not cursor) or not limit or limit < 1 or limit > MAX_SESSION_SCAN then
+        return failure("INVALID_ARGUMENT", "session cursor or scan limit is invalid")
+    end
+    local page_limit = limit :: integer
+    local cursor_parameter = cursor or sql.NULL
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        local rows, query_error = tx:query("SELECT session_ref FROM bee_sessions " ..
+            "WHERE workspace_id = ? AND (? IS NULL OR session_ref > ?) ORDER BY session_ref LIMIT ?",
+            {workspace, cursor_parameter, cursor_parameter, page_limit + 1})
+        if query_error or not rows then return transaction.storage_failure("scan sessions") end
+        local items: {string} = {}
+        local count = #rows
+        local has_more = count > page_limit
+        if has_more then count = page_limit end
+        for index = 1, count do
+            local session_ref = ref(rows[index].session_ref)
+            if not session_ref then return failure("INTERNAL", "session reference is corrupt") end
+            items[index] = session_ref
+        end
+        return transaction.success({items = items, next = has_more and items[#items] or nil}, false)
     end)
 end
 

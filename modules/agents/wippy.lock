@@ -28,3 +28,5 @@ modules:
     version: 0.1.0-dev
   - name: bee/driver-wippy
     version: 0.1.0-dev
+  - name: bee/executor-external
+    version: 0.1.0-dev

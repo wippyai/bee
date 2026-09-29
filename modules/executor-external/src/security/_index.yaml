@@ -1,0 +1,34 @@
+version: '1.0'
+namespace: bee.executor.external.security
+entries:
+- name: driver_placement_calls
+  kind: security.policy
+  meta:
+    comment: External turn worker calls only the admitted Claude/Codex codecs and native placement operations
+  policy:
+    actions: [funcs.call]
+    resources:
+    - bee.driver.claude.binding:prepare
+    - bee.driver.claude.binding:dispatch
+    - bee.driver.claude.binding:normalize
+    - bee.driver.codex.binding:prepare
+    - bee.driver.codex.binding:dispatch
+    - bee.driver.codex.binding:normalize
+    - bee.placement.native.binding:prepare
+    - bee.placement.native.binding:attach
+    - bee.placement.native.binding:start
+    - bee.placement.native.binding:reconcile
+    - bee.placement.native.binding:cleanup
+    effect: allow
+- name: placement_stream
+  kind: security.policy
+  policy:
+    actions: [process.listen, process.send]
+    resources: [bee.placement.output, bee.placement.exit, bee.placement.ack]
+    effect: allow
+- name: runner_observation
+  kind: security.policy
+  policy:
+    actions: [process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow

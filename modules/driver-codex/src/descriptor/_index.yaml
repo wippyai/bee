@@ -21,7 +21,7 @@ entries:
       usage: [turn, completed, usage]
     configure: codex
     options:
-      profiles: [window, batch]
+      profiles: [window, batch, named_batch]
       fields:
         sandbox: {type: enum, values: [read-only, workspace-write], default: read-only, invalid: 'sandbox is not one Bee admits'}
         resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref is not an identifier'}

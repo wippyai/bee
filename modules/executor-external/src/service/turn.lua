@@ -80,9 +80,17 @@ local function decode(value: unknown): (Request?, string?)
     end
     local driver_options = object(request.driver_options or {})
     if not driver_options then return nil, "driver_options must be an object" end
-    if driver_options.control_enabled ~= nil or driver_options.permission_exchange ~= nil
-        or driver_options.gateway_tools ~= nil or driver_options.gateway_hooks ~= nil then
+    if driver_options.control_enabled ~= nil or driver_options.permission_exchange ~= nil then
         return nil, "turn execution does not accept injected controls or driver frames"
+    end
+    for _, field in ipairs({"gateway_tools", "gateway_hooks"}) do
+        if driver_options[field] ~= nil then
+            local values, values_error = bounds.ids(driver_options[field], true)
+            if not values then return nil, field .. " must be an identifier list: " .. tostring(values_error) end
+            if #values > 32 then return nil, field .. " exceeds 32 items" end
+            table.sort(values)
+            driver_options[field] = values
+        end
     end
     local placement_methods = object(request.placement_methods)
     if not placement_methods then return nil, "placement_methods must be an object" end

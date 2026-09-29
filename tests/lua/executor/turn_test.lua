@@ -83,6 +83,25 @@ local function define_tests()
             test.eq(table.concat(calls, ","), "driver:prepare,prepare,listen,attach,start,observe,close,reconcile:attempt-current")
         end)
 
+        test.it("passes the host-selected gateway surface to the driver", function()
+            local request = base_request()
+            request.driver_options = {gateway_tools = {"session_send", "thread_read"}, gateway_hooks = {"SessionStart"}}
+            local io = success_io()
+            local driver = io.driver
+            io.driver = function(method: string, target: string, arguments: unknown)
+                local options = arguments :: {[string]: unknown}
+                local tools = options.gateway_tools :: {string}
+                local hooks = options.gateway_hooks :: {string}
+                test.eq(tools[1], "session_send")
+                test.eq(tools[2], "thread_read")
+                test.eq(hooks[1], "SessionStart")
+                return driver(method, target, arguments)
+            end
+            local result, err = turn.execute(io, request)
+            if not result then error(tostring(err)) end
+            test.eq(result.state, "settled")
+        end)
+
         test.it("reconciles and cleans the previous placement before dispatching a resumed turn", function()
             local request = base_request()
             request.previous_attempt_id = "attempt-previous"

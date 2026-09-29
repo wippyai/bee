@@ -86,12 +86,23 @@ local function describe(session: string): (Object?, string?)
     return snapshot(value)
 end
 
-local function driver_options(policy_ref: string): (Object?, string?)
+local function driver_options(policy_ref: string, selected: unknown): (Object?, string?)
     local entry, entry_error = registry.get(policy_ref)
     local data = entry and object(entry.data)
     local options = data and object(data.prepare_options)
-    if entry_error or not options then return nil, "launch policy omits driver preparation options" end
-    return options, nil
+    if entry_error or not data or not options then return nil, "launch policy omits driver preparation options" end
+    local result: Object = {}
+    for name, value in pairs(options) do result[name] = value end
+    local selected_profile = object(selected)
+    local selected_options = selected_profile and object(selected_profile.options)
+    if selected_options then
+        for name, value in pairs(selected_options) do result[name] = value end
+    end
+    local host_tools = data.gateway_tools
+    if selected_profile and selected_profile.mcp_tools ~= nil then host_tools = selected_profile.mcp_tools end
+    if host_tools ~= nil then result.gateway_tools = host_tools end
+    if data.gateway_hooks ~= nil then result.gateway_hooks = data.gateway_hooks end
+    return result, nil
 end
 
 local function open(request: Object): Reply
@@ -118,7 +129,7 @@ local function open(request: Object): Reply
     end
     local _, workspace = identity()
     if not workspace then return fail("DENIED", "the authenticated caller has no workspace", operation_key) end
-    local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision)
+    local plan, refused, selected = admission.resolve(definition, nil, workspace, profile_id, profile_revision)
     if not plan then
         local fault = object(refused)
         local details = fault and object(fault.error)
@@ -135,7 +146,7 @@ local function open(request: Object): Reply
     if not methods then return unavailable(methods_error or "selected driver methods are unavailable", operation_key) end
     local policy_ref = ref(plan_value.policy_ref)
     if not policy_ref then return unavailable("admission omitted the selected launch policy", operation_key) end
-    local options, options_error = driver_options(policy_ref)
+    local options, options_error = driver_options(policy_ref, selected)
     if not options then return unavailable(options_error or "launch policy is unavailable", operation_key) end
     local placement_methods = object(plan_value.placement_methods)
     if not placement_methods then return unavailable("admission omitted placement operations", operation_key) end

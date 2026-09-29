@@ -4,6 +4,8 @@ entries:
 - name: turn
   kind: library.lua
   source: file://turn.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: stream
   kind: library.lua
   source: file://stream.lua

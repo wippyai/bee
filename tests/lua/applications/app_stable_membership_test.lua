@@ -471,6 +471,113 @@ local function define_tests()
             process.unlisten(catalogs)
             assert(ok, tostring(scenario_error))
         end)
+
+        test.it("converges after an observed refusal without accepting stale catalog messages", function()
+            local owner = tostring(process.pid())
+            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local events = assert(process.events())
+            local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
+                ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
+                assert(security.policy("bee.security:core_spawn_boundary"))}))
+                :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
+            if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
+            local broker = tostring(broker_pid)
+            local function wait_exit(target: string)
+                local deadline = time.after("30s")
+                while true do
+                    local received = channel.select({events:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == events, target .. " did not exit")
+                    local event = received.value
+                    if event.kind == process.event.EXIT and tostring(event.from) == target then return end
+                end
+            end
+            local function has_definition(data: {[string]: unknown}, definition_id: string): boolean
+                for _, raw in ipairs((data.items :: {unknown}?) or {}) do
+                    if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id == definition_id then return true end
+                end
+                return false
+            end
+            local function open(request_id: string)
+                assert(process.send(broker, "bee.app.request", {version = 1, request_id = request_id, op = "open",
+                    workspace_id = WORKSPACE, thread_id = "catalog-convergence-thread", definition_id = OTHER_DEFINITION, arguments = {}}))
+            end
+            local ok, scenario_error = pcall(function()
+                local initial_deadline = time.after("10s")
+                local initial: {[string]: unknown}? = nil
+                while not initial do
+                    local received = channel.select({catalogs:case_receive(), initial_deadline:case_receive()})
+                    assert(received.ok and received.channel == catalogs, "broker did not publish its initial catalog")
+                    if tostring(received.value:from()) == broker then
+                        local data: unknown = received.value:payload():data()
+                        if type(data) == "table" then initial = data :: {[string]: unknown} end
+                    end
+                end
+                test.is_true(has_definition(initial, OTHER_DEFINITION), "initial catalog lacks the definition under test")
+                local retained_definition: string? = nil
+                for _, raw in ipairs((initial.items :: {unknown}?) or {}) do
+                    if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id ~= OTHER_DEFINITION then
+                        retained_definition = tostring((raw :: {[string]: unknown}).definition_id)
+                        break
+                    end
+                end
+                if not retained_definition then error("initial catalog has no other definition to distinguish the final state") end
+
+                set_duplicate_admission()
+                open("catalog-refused-open")
+                local refusal_catalog, refusal_reply = false, false
+                local refusal_deadline = time.after("10s")
+                while not refusal_catalog or not refusal_reply do
+                    local received = channel.select({catalogs:case_receive(), replies:case_receive(), refusal_deadline:case_receive()})
+                    assert(received.ok and received.channel ~= refusal_deadline, "broker did not report the admission refusal")
+                    if received.channel == catalogs and tostring(received.value:from()) == broker then
+                        local data: unknown = received.value:payload():data()
+                        if type(data) == "table" then
+                            local catalog_data = data :: {[string]: unknown}
+                            test.is_false(has_definition(catalog_data, OTHER_DEFINITION))
+                            test.is_false(has_definition(catalog_data, retained_definition))
+                            refusal_catalog = true
+                        end
+                    elseif received.channel == replies and tostring(received.value:from()) == broker then
+                        local data: unknown = received.value:payload():data()
+                        if type(data) == "table" and (data :: {[string]: unknown}).request_id == "catalog-refused-open" then
+                            test.eq((data :: {[string]: unknown}).error_code, "not_admitted")
+                            refusal_reply = true
+                        end
+                    end
+                end
+
+                set_admission_for(OTHER_DEFINITION, false)
+                open("catalog-final-open")
+                local final_catalog, final_reply = false, false
+                local final_deadline = time.after("10s")
+                while not final_catalog or not final_reply do
+                    local received = channel.select({catalogs:case_receive(), replies:case_receive(), final_deadline:case_receive()})
+                    assert(received.ok and received.channel ~= final_deadline, "broker never published the final catalog")
+                    if received.channel == catalogs and tostring(received.value:from()) == broker then
+                        local data: unknown = received.value:payload():data()
+                        if type(data) == "table" then
+                            local catalog_data = data :: {[string]: unknown}
+                            if has_definition(catalog_data, retained_definition) and not has_definition(catalog_data, OTHER_DEFINITION) then
+                                final_catalog = true
+                            end
+                        end
+                    elseif received.channel == replies and tostring(received.value:from()) == broker then
+                        local data: unknown = received.value:payload():data()
+                        if type(data) == "table" and (data :: {[string]: unknown}).request_id == "catalog-final-open" then
+                            test.eq((data :: {[string]: unknown}).error_code, "not_admitted")
+                            final_reply = true
+                        end
+                    end
+                end
+            end)
+            set_admission_for(OTHER_DEFINITION, true)
+            pcall(process.cancel, broker, "finish admission convergence probe")
+            wait_exit(broker)
+            process.unlisten(catalogs)
+            process.unlisten(replies)
+            assert(ok, tostring(scenario_error))
+        end)
     end)
 end
 

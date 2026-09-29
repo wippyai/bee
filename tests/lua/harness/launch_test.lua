@@ -1711,6 +1711,82 @@ local function define_tests()
                 test.is_true(tostring(failure and failure.message):find("carrier exited during launch preparation", 1, true) ~= nil)
             end)
         end)
+        test.it("keeps a lost running attempt live until placement finishes draining, then settles it", function()
+            local request_id = fresh("orphan-running")
+            with_entry(POLICY, function(changed)
+                local environment = changed.environment :: {[string]: unknown}
+                environment.BEE_FIXTURE_LINGER = "12"
+                changed.environment = environment
+            end, function()
+                local admitted = value(call("bee.harness.launch:admit", {request_id = request_id,
+                    definition_ref = DEFINITION, workspace_id = workspace, brief = "prove lost carrier recovery"})) :: admission.Admitted
+                local carrier_request = admitted.request :: {[string]: unknown}
+                local spawner = process.with_context({}):with_actor(principals.actor(REQUESTER, workspace)):with_scope(scope())
+                local lost_pid, spawn_error = spawner:spawn_monitored("bee.harness.catalog:carrier_faulted", "bee:workers",
+                    carrier_request, "open", process.pid(), "attempt_started")
+                if not lost_pid then error("spawn faulted carrier: " .. tostring(spawn_error)) end
+                local events = assert(process.events())
+                local crash_deadline = time.after("30s")
+                local crashed = false
+                while not crashed do
+                    local selected = channel.select({events:case_receive(), crash_deadline:case_receive()})
+                    if not selected.ok or selected.channel == crash_deadline then error("running carrier did not exit") end
+                    local event = selected.value
+                    if event.kind == process.event.EXIT and tostring(event.from) == tostring(lost_pid) then
+                        local result = event.result or {}
+                        test.is_true(tostring(result.error):find("crash after attempt_started", 1, true) ~= nil)
+                        crashed = true
+                    end
+                end
+
+                local thread_id, attempt_id = tostring(admitted.thread_id), tostring(admitted.attempt_id)
+                local current = value(call("bee.harness.launch:agent_call_backend", {operation = "status",
+                    thread_id = thread_id, attempt_id = attempt_id}))
+                test.eq(current.state, "running", "placement still owns a live runner and recovery remains possible")
+                test.eq(count(kinds(thread_id), "receipt"), 0, "a missing carrier alone is not terminal")
+
+                local drain_deadline = math.floor(time.now():unix_nano() / 1000000) + 75000
+                local drained = false
+                while not drained do
+                    local db = assert(placement_store.open())
+                    local evidence = placement_store.evidence(db, attempt_id, 0, 64)
+                    local row = placement_store.row(db, attempt_id)
+                    db:release()
+                    local finished = false
+                    for _, item in ipairs((evidence and evidence.evidence) or {}) do
+                        if item.kind == "runner.finished" then finished = true end
+                    end
+                    if row and row.execution_state == "exited" and finished then
+                        test.is_nil(row.runner_pid, "runner.finished clears its process identity")
+                        local stale_db = assert(placement_store.open())
+                        local _, stale_error = stale_db:execute(
+                            "UPDATE bee_placement_attempts SET runner_pid = ? WHERE attempt_id = ?",
+                            {"999999999", attempt_id})
+                        stale_db:release()
+                        if stale_error then error("simulate legacy stale runner pid: " .. tostring(stale_error)) end
+                        drained = true
+                    else
+                        local remaining = drain_deadline - math.floor(time.now():unix_nano() / 1000000)
+                        if remaining <= 0 then error("placement runner did not finish draining") end
+                        time.sleep("50ms")
+                    end
+                end
+
+                current = value(call("bee.harness.launch:agent_call_backend", {operation = "status",
+                    thread_id = thread_id, attempt_id = attempt_id}))
+                test.eq(current.outcome, "uncertain")
+                local failure = current.error :: {[string]: unknown}?
+                test.eq(failure and failure.code, "carrier_lost")
+                local records = kinds(thread_id)
+                test.eq(count(records, "turn.end"), 1)
+                test.eq(count(records, "receipt"), 1)
+                local db = assert(placement_store.open())
+                local row = placement_store.row(db, attempt_id)
+                db:release()
+                test.not_nil(row)
+                test.eq(row and row.runner_pid, "999999999", "legacy runner identity remains available for inspection")
+            end)
+        end)
         test.it("launches a shipped executable_env policy from the generated agents.launch grant and the run settles", function()
             -- The shipped batch policies resolve their driver executable
             -- through executable_env, so only a run against the shipped

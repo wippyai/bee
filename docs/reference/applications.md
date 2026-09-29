@@ -197,13 +197,25 @@ revisions. The Agent app manages saved profiles; a caller must obtain an exact
 ID and revision from the person, and the host still decides admission.
 
 The application `agents` helper exposes launch, status, wait and cancel. It
-does not expose child thread records, intermediate output, a live steering
-channel or an app-side equivalent of gateway `thread_message` or
-`thread_read`. `client.thread_request` routes operations for an authenticated
-initiating thread through the broker when a host grants that thread access;
-the shipped workspace-application rule sets `thread_access: none`. A UI may
-show its own run statuses and final `status.answer`, but cannot claim a live
-child transcript through this API.
+does not expose child thread records, intermediate output, a steering helper
+or a `thread_read` equivalent. An application with the host-generated
+`threads.message` grant for `scope: children` can steer one of its child
+actions through `bee.threads.service:send`, using a typed `request` message
+addressed to that action. The grant permits `send` and `notify`; it does not
+permit `bee.threads.service:record`. `notify` registers a one-shot notice on
+the caller's own thread, so it does not carry steering text. The `send`
+request includes the child `thread_id`, a unique `idempotency_key`, a stable
+`caller_node_id`, the canonical message, and its SHA-256 `payload_digest`.
+Address the request with the child's `principal_id` in `recipient_ids` and
+its `action_id` in `recipient_action_ids`; obtain the caller node ID with
+`system.node.id()`.
+See [Threads](threads.md#application-child-messages) for the message envelope.
+
+`client.thread_request` routes operations for an authenticated initiating
+thread through the broker when a host grants that thread access; it does not
+route operations for a launched child. The shipped workspace-application rule
+sets `thread_access: none`. A UI may show its own run statuses and final
+`status.answer`, but cannot claim a live child transcript through this API.
 
 ## Launch and lifecycle
 

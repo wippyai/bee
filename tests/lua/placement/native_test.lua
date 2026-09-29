@@ -2090,6 +2090,10 @@ local function define_tests()
             test.is_true(has(recorded, "child.exited"))
             test.is_true(has(recorded, "output.lost"))
             test.is_true(has(recorded, "runner.finished"))
+            local after_finish = assert(store.open())
+            local final_row = store.row(after_finish, prepared.attempt_id)
+            after_finish:release()
+            test.is_nil(final_row and final_row.runner_pid, "runner.finished clears its process identity")
             local page = value(call(OWNER, "evidence", {attempt_id = prepared.attempt_id, limit = 64}))
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                 if item.kind == "output.lost" then test.is_true(tostring(item.detail):find("unacknowledged chunks", 1, true) ~= nil) end

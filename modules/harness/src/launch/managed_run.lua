@@ -6,6 +6,7 @@ local registry = require("registry")
 local bounds = require("bounds")
 local agent_launch = require("agent_launch")
 local placement_resolver = require("placement_resolver")
+local placement_decode = require("placement_decode")
 local prestart = require("prestart")
 
 local M = {}
@@ -123,6 +124,75 @@ local function reconcile_orphan_prestart(run: Run, stored: {[string]: unknown}):
     return receipt_refused
 end
 
+local function reconcile_orphan_running(run: Run, stored: {[string]: unknown}): Reply?
+    if stored.attempt_state ~= "running" or (bounds.count(stored.carrier_epoch) or 0) < 1 then return nil end
+    local active, active_error = carrier_active(run.attempt_id)
+    if active_error then return fail("UNAVAILABLE", "carrier liveness could not be checked: " .. active_error) end
+    if active then return nil end
+
+    local placement_binding = bounds.id(stored.placement_binding)
+    local placement_attempt = bounds.id(stored.placement_attempt_id)
+    if not placement_binding or not placement_attempt then return nil end
+    local pinned, pin_error = registry.snapshot()
+    if not pinned then return fail("UNAVAILABLE", "placement status could not be inspected: " .. tostring(pin_error or "registry snapshot")) end
+    local placement, placement_error = placement_resolver.resolve(pinned, placement_binding)
+    if not placement then return fail("UNAVAILABLE", placement_error or "placement binding") end
+    local status_target = placement.methods.status
+    if not status_target then return fail("UNAVAILABLE", "placement binds no status operation") end
+    local raw, call_error = raw_call(status_target, {attempt_id = placement_attempt})
+    if call_error then return fail("UNAVAILABLE", "placement status failed: " .. tostring(call_error)) end
+    local reply = bounds.object(raw)
+    if not reply then return fail("INTERNAL", "placement returned a malformed status reply") end
+    if reply.ok ~= true then
+        local fault = bounds.object(reply.error)
+        local code = bounds.member(fault and fault.code, {"NOT_FOUND", "DENIED", "INVALID_ARGUMENT", "UNAVAILABLE", "INTERNAL"})
+        if code == "NOT_FOUND" then return nil end
+        return fail(code or "REFUSED", tostring(fault and fault.message or "placement status refused"))
+    end
+    local observed, decode_error = placement_decode.status(reply.value)
+    if not observed then return fail("INTERNAL", "placement status is malformed: " .. tostring(decode_error)) end
+    if observed.attempt.execution_state ~= "exited"
+        or observed.liveness.observed ~= true or observed.liveness.alive ~= false then
+        return nil
+    end
+    if observed.attempt.runner ~= nil then
+        local evidence_target = placement.methods.evidence
+        if not evidence_target then return fail("UNAVAILABLE", "placement binds no evidence operation") end
+        local after = math.max(0, observed.attempt.evidence_count - 64)
+        local page, evidence_refused = call(evidence_target,
+            {attempt_id = placement_attempt, after = after, limit = 64})
+        if not page then return evidence_refused or fail("UNAVAILABLE", "placement evidence did not answer") end
+        local evidence = bounds.array(page.evidence, 64)
+        if not evidence then return fail("INTERNAL", "placement evidence is malformed") end
+        local latest_runner_start, latest_runner_finish = 0, 0
+        for _, raw_evidence in ipairs(evidence) do
+            local item = bounds.object(raw_evidence)
+            local sequence = item and bounds.count(item.sequence)
+            local kind = item and bounds.text(item.kind, 128)
+            if sequence and kind == "runner.started" then latest_runner_start = math.max(latest_runner_start, sequence)
+            elseif sequence and kind == "runner.finished" then latest_runner_finish = math.max(latest_runner_finish, sequence) end
+        end
+        if latest_runner_finish == 0 or latest_runner_finish < latest_runner_start then return nil end
+    end
+
+    local epoch = bounds.count(stored.carrier_epoch)
+    local action_id = bounds.id(stored.action_id)
+    if not epoch or not action_id then return fail("INTERNAL", "the running attempt has no carrier epoch or action") end
+    local failure = {code = "carrier_lost", message = "the carrier exited before recording a terminal receipt; placement confirmed the child process exited", retryable = false}
+    local turn_id = bounds.id(stored.open_turn_id)
+    if turn_id then
+        local _, end_refused = call(THREADS .. ":end_turn", {thread_id = run.thread_id, action_id = action_id,
+            attempt_id = run.attempt_id, turn_id = turn_id, carrier_epoch = epoch,
+            idempotency_key = "reconcile:" .. run.attempt_id .. ":end_turn",
+            turn_end = {outcome = "uncertain", answer_message_ids = {}, evidence_refs = {}, error = failure}})
+        if end_refused then return end_refused end
+    end
+    local _, receipt_refused = call(RECEIPT, {thread_id = run.thread_id, action_id = action_id, attempt_id = run.attempt_id,
+        carrier_epoch = epoch, idempotency_key = "reconcile:" .. run.attempt_id .. ":receipt",
+        receipt = {scope = "attempt", outcome = "uncertain", evidence_refs = {}, error = failure}})
+    return receipt_refused
+end
+
 function M.status(run: Run, options: StatusOptions?): (Status?, Reply?, {[string]: unknown}?)
     local opts = options or {}
     if opts.cancel_status_first then
@@ -162,6 +232,12 @@ function M.status(run: Run, options: StatusOptions?): (Status?, Reply?, {[string
         local reconcile_refused = reconcile_orphan_prestart(run, stored)
         if reconcile_refused then return nil, reconcile_refused, stored end
         if stored.attempt_state == "prepared" then
+            local refreshed, refresh_refused = call(CHECKPOINT, {thread_id = run.thread_id, attempt_id = run.attempt_id})
+            if refreshed then stored = refreshed
+            elseif refresh_refused then return nil, refresh_refused, stored end
+        elseif stored.attempt_state == "running" then
+            local orphan_refused = reconcile_orphan_running(run, stored)
+            if orphan_refused then return nil, orphan_refused, stored end
             local refreshed, refresh_refused = call(CHECKPOINT, {thread_id = run.thread_id, attempt_id = run.attempt_id})
             if refreshed then stored = refreshed
             elseif refresh_refused then return nil, refresh_refused, stored end

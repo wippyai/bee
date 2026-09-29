@@ -1045,10 +1045,13 @@ local function define_tests()
         test.it("defers driver configuration until placement supplies the actual HOME", function()
             local binding = assert(registry.get("bee.driver.claude:binding"))
             local original = binding.data
-            binding.data = {contracts = {{contract = "bee.driver:driver", methods = {
-                prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
-                locate = "bee.driver.claude.binding:locate", normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
-            }}}}
+            binding.data = {contracts = {
+                {contract = "bee.driver:driver", methods = {
+                    prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
+                    normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
+                }},
+                {contract = "bee.driver:locate_facet", methods = {locate = "bee.driver.claude.binding:locate"}},
+            }}
             local ok, failure = pcall(function()
                 apply(binding)
                 local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
@@ -1087,28 +1090,27 @@ local function define_tests()
             local driver_copy: {[string]: unknown} = {}
             for key, item in pairs(driver) do driver_copy[key] = item end
             local profiles: {{[string]: unknown}} = {}
-            local host_profile_added = false
+            local batch_profile_found = false
             for _, raw in ipairs(driver.profiles :: {{[string]: unknown}}) do
                 local profile: {[string]: unknown} = {}
                 for key, item in pairs(raw) do profile[key] = item end
                 if raw.id == "batch" then
+                    batch_profile_found = true
                     local isolation = raw.isolation_env :: {[string]: unknown}
                     local isolation_copy: {[string]: unknown} = {}
                     for key, item in pairs(isolation) do isolation_copy[key] = item end
                     isolation_copy.private_home = false
-                    profile.id = "batch_host_home"
                     profile.isolation_env = isolation_copy
-                    host_profile_added = true
                 end
                 profiles[#profiles + 1] = profile
             end
-            if not host_profile_added then error("Claude batch profile is missing") end
+            if not batch_profile_found then error("Claude batch profile is missing") end
             driver_copy.profiles = profiles
             profile_data.driver = driver_copy
 
             local definition_data: {[string]: unknown} = {}
             for key, item in pairs(original_definition :: {[string]: unknown}) do definition_data[key] = item end
-            definition_data.profile_id = "batch_host_home"
+            definition_data.profile_id = "batch"
             definition_data.credentials = {}
 
             local policy_data: {[string]: unknown} = {}

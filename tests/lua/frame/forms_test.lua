@@ -155,7 +155,8 @@ local function define_tests()
             test.is_true(forms.number_key(field, rune("2")))
             test.eq(field.value, "12e-08")
             local inserted = forms.number_value(field)
-            test.is_true(inserted ~= nil and math.abs(inserted - 1.2e-7) < 1e-20)
+            if inserted == nil then error("inserted scientific value is missing") end
+            test.is_true(math.abs(inserted - 1.2e-7) < 1e-20)
 
             forms.number_set(field, 1e-8)
             test.is_true(field.value:find("[eE]") ~= nil)
@@ -164,7 +165,8 @@ local function define_tests()
             field.cursor = 1
             test.is_true(forms.number_key(field, rune("3")))
             local stepped = forms.number_value(field)
-            test.is_true(stepped ~= nil and math.abs(stepped - 2.3e-7) < 1e-20)
+            if stepped == nil then error("stepped scientific value is missing") end
+            test.is_true(math.abs(stepped - 2.3e-7) < 1e-20)
         end)
     end)
 

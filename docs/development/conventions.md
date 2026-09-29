@@ -145,6 +145,7 @@ Use the Makefile:
 ```sh
 make setup
 make lint
+make fixture-lint
 make test
 make check
 make pack
@@ -181,3 +182,5 @@ a clean pinned build. `make -C native patched-check` validates the native source
 against the manifest without modifying repository module files. Documentation
 edits need link/source consistency checks and an update to the relevant current
 contract; avoid machine-specific paths, credentials and local stores.
+
+Run `make fixture-lint` to type-check the disposable test composition without running tests.

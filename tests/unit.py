@@ -8,7 +8,7 @@ import time
 import yaml
 
 from fixture_lint import environment, fixture_lint
-from workspace import ROOT, fixture_workspace
+from workspace import RUNTIME, ROOT, fixture_workspace
 
 
 # Entry seconds measured on a loaded host; new entries get a small default weight.

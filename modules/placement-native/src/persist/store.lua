@@ -96,6 +96,22 @@ function M.row(db: sql.DB, attempt_id: string): (Row?, string?)
     if #rows == 0 then return nil, nil end
     return rows[1] :: Row, nil
 end
+-- Runner controls carry a private per-attempt token. The caller can create it
+-- once at start; later owner operations only read the recorded value.
+function M.runner_authority(db: sql.DB, attempt_id: string, issued: string?): (string?, string?)
+    if issued ~= nil then
+        if not bounds.id(issued) then return nil, "runner authority token is invalid" end
+        local _, insert_error = db:execute([[INSERT OR IGNORE INTO bee_placement_runner_authorities
+            (attempt_id, control_token) VALUES (?, ?)]], {attempt_id, issued})
+        if insert_error then return nil, "record runner authority" end
+    end
+    local rows, query_error = db:query("SELECT control_token FROM bee_placement_runner_authorities WHERE attempt_id = ?", {attempt_id})
+    if query_error or not rows then return nil, "read runner authority" end
+    if #rows == 0 then return nil, "runner authority is unavailable" end
+    local token = bounds.id((rows[1] :: Row).control_token)
+    if not token then return nil, "runner authority is corrupt" end
+    return token, nil
+end
 function M.attempt(db: sql.DB, attempt_id: string): (types.Attempt?, string?)
     local row, err = M.row(db, attempt_id)
     if err then return nil, err end

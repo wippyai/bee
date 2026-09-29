@@ -23,7 +23,7 @@ M.MAX_WRITE_BYTES = 65536
 M.MAX_OUTSTANDING_CHUNKS = 16
 M.MAX_SPOOL_BYTES = 262144
 M.MAX_REMEMBERED_WRITES = 256
-type Control = {command: "stop", mode: "cooperative" | "forced", grace_ms: integer} | {command: "attach", recipient: string, generation: integer} | {command: "detach", generation: integer} | {command: "write_status", write_id: string} | {command: "status", attempt_id: string, probe: string} | {command: "close_stdin", attempt_id: string, probe: string}
+type Control = {control_token: string, command: "stop", mode: "cooperative" | "forced", grace_ms: integer} | {control_token: string, command: "attach", recipient: string, generation: integer} | {control_token: string, command: "detach", generation: integer} | {control_token: string, command: "write_status", write_id: string} | {control_token: string, command: "status", attempt_id: string, probe: string} | {control_token: string, command: "close_stdin", attempt_id: string, probe: string}
 -- What the runner itself observes: supervision evidence, never exit or
 -- cleanup proof. The reply echoes the probe that asked.
 type Execution = "starting" | "running" | "stopping" | "exited"

@@ -17,7 +17,7 @@ local M = {}
 local LOGIN_SOURCE = "bee.env:machine_login_source"
 
 type Platform = {os: string?, arch: string?, compatible: boolean?}
-type Descriptor = {[string]: unknown}
+type Descriptor = descriptor_codec.Descriptor
 type Cache = {drivers: {[string]: driver_types.LocateResult}, platform: Platform?, platform_checked: boolean}
 
 function M.new_cache(): Cache
@@ -105,29 +105,14 @@ local function has_locate_facet(pinned: registry.Snapshot, binding: {[string]: u
 end
 
 local function selected_descriptor(pinned: registry.Snapshot, provider: string): (Descriptor?, string?)
-    local found, find_error = pinned:find({["meta.type"] = descriptor_codec.TYPE})
-    if find_error or not found then return nil, "CLI descriptors are unavailable" end
-    local match: Descriptor? = nil
-    for _, raw in ipairs(found) do
-        local entry = bounds.object(raw)
-        local meta = entry and bounds.object(entry.meta) or nil
-        if entry and entry.kind == "registry.entry" and meta and meta.type == descriptor_codec.TYPE then
-            local decoded, decode_error = descriptor_codec.decode(entry.data)
-            if not decoded then return nil, tostring(decode_error or "CLI descriptor is invalid") end
-            if decoded.provider == provider then
-                if match then return nil, "multiple CLI descriptors name driver " .. provider end
-                match = decoded :: Descriptor
-            end
-        end
-    end
-    return match, nil
+    return descriptor_codec.find_provider(pinned, provider)
 end
 
 local function unsupported(selected: Descriptor, reason: string, platform: Platform?): driver_types.LocateResult
     local login = bounds.object(selected.login_evidence) or {}
     local login_path = bounds.text(login.path, 512)
-    local result: driver_types.LocateResult = {provider = selected.provider :: string, status = "incompatible",
-        executable = {name = selected.executable :: string},
+    local result: driver_types.LocateResult = {provider = selected.provider, status = "incompatible",
+        executable = {name = selected.executable},
         login = {evidence = "file_exists", path = login_path},
         platform = platform or {}, reason = reason}
     return result
@@ -183,11 +168,12 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     if platform.os and platform.arch then
         compatible = bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
     end
-    local executable_name = selected.executable :: string
+    local executable_name = selected.executable
     local executable_ref = "bee.driver." .. provider .. ":executable"
     local configured_path, executable_error = env.get(executable_ref)
     local configured = type(configured_path) == "string" and configured_path ~= ""
-    local executable_path = configured and configured_path or executable_name
+    local executable_path = executable_name
+    if configured then executable_path = configured_path :: string end
     local executable_present: boolean? = nil
     local version: string? = nil
     if not executable_error or executable_error:kind() == errors.NOT_FOUND then

@@ -2,6 +2,7 @@
 local test = require("test")
 local universal = require("universal")
 local codec_registry = require("codec_registry")
+local descriptor = require("descriptor")
 
 local function define_tests()
     test.describe("Universal external driver", function()
@@ -28,6 +29,18 @@ local function define_tests()
             local unsupported = handle({configure_renderer = "unknown", fixture = false})
             test.eq(unsupported.ok, false)
         end)
+        test.it("refuses malformed configuration objects and renderer selectors", function()
+            local called = false
+            local handle = universal.configure("claude", {
+                claude = function(_request: configuration.Request): {[string]: unknown}
+                    called = true
+                    return {ok = true, delivery = {arguments = {}, files = {}}}
+                end,
+            })
+            test.eq(handle("invalid").ok, false)
+            test.eq(handle({configure_renderer = "not a renderer"}).ok, false)
+            test.is_false(called)
+        end)
         test.it("selects the shared normalizer from the registry descriptor codec", function()
             local protocol = universal.protocol("bee.driver.opencode.descriptor:cli")
             test.eq(protocol.PROTOCOL_REVISION, "opencode-run-json-1")
@@ -40,6 +53,17 @@ local function define_tests()
             local terminal = ended.terminal :: {[string]: unknown}
             test.eq(terminal.outcome, "succeeded")
             test.eq(terminal.resume_ref, "ses_universal")
+        end)
+
+        test.it("returns decoded common fields with typed descriptor option values", function()
+            local api = universal.launch("bee.driver.claude.descriptor:cli")
+            local request, decode_error = api.decode({profile_id = "batch", brief = "summarize", permission_mode = "acceptEdits", turn_budget = 3})
+            if not request then error(tostring(decode_error)) end
+            test.eq(request.profile_id, "batch")
+            test.eq(request.brief, "summarize")
+            test.eq(request.permission_mode, "acceptEdits")
+            test.eq(request.turn_budget, 3)
+            test.eq(request.permission_exchange, false)
         end)
 
         test.it("uses descriptor JSON paths to extract protocol fields", function()
@@ -74,7 +98,8 @@ local function define_tests()
 
             local many: {string} = {}
             for index = 1, 129 do many[index] = "argument" end
-            argv, render_error = universal.render_argv(many, {profile_id = "batch", brief = "work"}, {})
+            local selected = assert(descriptor.load("bee.driver.claude.descriptor:cli"))
+            argv, render_error = universal.render_argv(many, {profile_id = "batch", brief = "work"}, selected)
             test.is_nil(argv)
             test.not_nil(render_error)
         end)

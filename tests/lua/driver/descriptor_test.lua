@@ -88,6 +88,31 @@ local function define_tests()
             test.is_nil(decoded)
             test.not_nil(decode_error)
         end)
+
+        test.it("rejects inert option metadata and reserved request fields", function()
+            local claude = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
+            local inert_metadata = copy_object(claude)
+            local options = copy_object(claude.options :: Object)
+            local fields = copy_object(options.fields :: Object)
+            local permission = copy_object(fields.permission_mode :: Object)
+            permission.constant = "MAX_TURNS"
+            fields.permission_mode = permission
+            options.fields = fields
+            inert_metadata.options = options
+            local decoded, decode_error = descriptor.decode(inert_metadata)
+            test.is_nil(decoded)
+            test.not_nil(decode_error)
+
+            local reserved_field = copy_object(claude)
+            options = copy_object(claude.options :: Object)
+            fields = copy_object(options.fields :: Object)
+            fields.profile_id = {type = "id"}
+            options.fields = fields
+            reserved_field.options = options
+            decoded, decode_error = descriptor.decode(reserved_field)
+            test.is_nil(decoded)
+            test.not_nil(decode_error)
+        end)
     end)
 end
 

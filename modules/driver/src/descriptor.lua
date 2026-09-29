@@ -10,6 +10,7 @@ M.MAX_TEMPLATE_DEPTH = 8
 M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}
 
 type Object = {[string]: unknown}
+type OptionValue = string | integer | boolean | {string}
 type Descriptor = {
     schema_revision: string,
     provider: string,
@@ -60,12 +61,12 @@ local function field_error(spec: Object, field: string, fallback: string): strin
     return message or (field .. " " .. fallback)
 end
 
-function M.decode_option(field: string, spec: Object, value: unknown): (unknown?, string?)
+function M.decode_option(field: string, spec: Object, value: unknown): (OptionValue?, string?)
     if spec.type == "enum" then
         local values = type(spec.values) == "table" and spec.values :: {string} or {}
         local selected = bounds.member(value, values)
         if not selected then return nil, field_error(spec, field, "is not one Bee admits") end
-        return selected, nil
+        return selected :: string, nil
     elseif spec.type == "boolean" then
         if type(value) ~= "boolean" then return nil, field_error(spec, field, "must be a boolean") end
         return value, nil
@@ -75,13 +76,13 @@ function M.decode_option(field: string, spec: Object, value: unknown): (unknown?
         end
         local selected = bounds.id(value)
         if not selected then return nil, field_error(spec, field, "is not an identifier") end
-        return selected, nil
+        return selected :: string, nil
     elseif spec.type == "model" then
         local selected = bounds.text(value, 128)
         if not selected or selected == "" or not selected:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then
             return nil, field_error(spec, field, "is not one bounded model identifier")
         end
-        return selected, nil
+        return selected :: string, nil
     elseif spec.type == "budget" then
         local selected, budget_error = turn_budget.decode(value, field)
         if not selected then return nil, budget_error or field_error(spec, field, "is invalid") end
@@ -91,11 +92,11 @@ function M.decode_option(field: string, spec: Object, value: unknown): (unknown?
     elseif spec.type == "duration" then
         local selected = bounds.text(value, 32)
         if not selected or not selected:match("^[1-9][0-9]*[smh]$") then return nil, field_error(spec, field, "must be a positive duration string") end
-        return selected, nil
+        return selected :: string, nil
     elseif spec.type == "codex_profile" then
         local selected = bounds.text(value, 64)
         if not selected or not selected:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") then return nil, field_error(spec, field, "must be a plain Codex profile name") end
-        return selected, nil
+        return selected :: string, nil
     elseif spec.type == "ids" then
         local selected, ids_error = bounds.ids(value, true)
         if not selected then return nil, field .. ": " .. tostring(ids_error) end
@@ -111,17 +112,14 @@ function M.decode_option(field: string, spec: Object, value: unknown): (unknown?
         end
         if spec.transform == "presence" then return #selected > 0, nil end
         if spec.transform == "sorted" then table.sort(selected) end
-        return selected, nil
+        return selected :: {string}, nil
     end
     return nil, "CLI descriptor has an unsupported " .. field .. " decoder"
 end
 
 local function validate_template(value: unknown, label: string, depth: integer): string?
     if depth > M.MAX_TEMPLATE_DEPTH then return label .. " exceeds the template nesting bound" end
-    if type(value) == "string" then
-        if value:find("%$%{[^}]+%}") or value:find("%$[A-Za-z_][A-Za-z0-9_]*") then return nil end
-        return nil
-    end
+    if type(value) == "string" then return nil end
     if type(value) ~= "table" then return label .. " contains an invalid template node" end
     local item = value :: Object
     local fields = bounds.fields(item, {"field", "format", "if", "if_any", "if_none", "equals", "not_equals", "starts_with", "then", "else", "option", "join"})
@@ -423,9 +421,10 @@ function M.decode(value: unknown): (Descriptor?, string?)
     if not fields then return nil, fields_error end
     for name, raw_spec in pairs(fields) do
         if not bounds.id(name) then return nil, "CLI descriptor.options has an invalid field name" end
+        if name == "profile_id" or name == "brief" then return nil, "CLI descriptor.options has a reserved field name" end
         local spec, spec_error = object(raw_spec, "CLI descriptor.options." .. tostring(name))
         if not spec then return nil, spec_error end
-        if bounds.fields(spec, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option", "constant"}) then return nil, "CLI descriptor.options." .. tostring(name) .. " has unknown fields" end
+        if bounds.fields(spec, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "CLI descriptor.options." .. tostring(name) .. " has unknown fields" end
         if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "budget", "duration", "ids", "codex_profile"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
         if spec.type == "enum" and spec.values == nil then return nil, "CLI descriptor.options." .. tostring(name) .. ".values is required for an enum" end
         if spec.values ~= nil then
@@ -443,7 +442,6 @@ function M.decode(value: unknown): (Descriptor?, string?)
         end
         if spec.transform ~= nil and not bounds.member(spec.transform, {"presence", "sorted"}) then return nil, "CLI descriptor option transform is invalid" end
         if spec.forbid_option ~= nil and type(spec.forbid_option) ~= "boolean" then return nil, "CLI descriptor option forbid_option must be boolean" end
-        if spec.constant ~= nil and not bounds.member(spec.constant, {"MAX_TURNS", "MAX_STEPS", "MAX_CONFIG_PROFILE_BYTES"}) then return nil, "CLI descriptor option constant is invalid" end
         for _, name in ipairs({"pattern", "invalid", "unsupported"}) do
             if spec[name] ~= nil and not bounds.text(spec[name], 256) then return nil, "CLI descriptor option " .. name .. " is invalid" end
         end
@@ -573,6 +571,25 @@ function M.decode(value: unknown): (Descriptor?, string?)
     end
 
     return item :: Descriptor, nil
+end
+
+function M.find_provider(pinned: registry.Snapshot, provider: string): (Descriptor?, string?)
+    local found, find_error = pinned:find({["meta.type"] = M.TYPE})
+    if find_error or not found then return nil, "CLI descriptors are unavailable" end
+    local match: Descriptor? = nil
+    for _, raw in ipairs(found) do
+        local entry = bounds.object(raw)
+        local meta = entry and bounds.object(entry.meta) or nil
+        if entry and entry.kind == "registry.entry" and meta and meta.type == M.TYPE then
+            local decoded, decode_error = M.decode(entry.data)
+            if not decoded then return nil, tostring(decode_error or "CLI descriptor is invalid") end
+            if decoded.provider == provider then
+                if match then return nil, "multiple CLI descriptors name driver " .. provider end
+                match = decoded
+            end
+        end
+    end
+    return match, nil
 end
 
 function M.load_from(pinned: registry.Snapshot, ref: string): (Descriptor?, string?)

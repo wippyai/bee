@@ -88,6 +88,7 @@ entries:
     test: wippy.test:test
     universal: bee.driver:universal
     codec_registry: bee.driver:codec_registry
+    descriptor: bee.driver:descriptor
     configuration: bee.driver:configuration
 - name: codex_config_test
   kind: function.lua

@@ -12,24 +12,19 @@ local M = {}
 
 type Object = {[string]: unknown}
 type ProtocolStep = {observations: {Object}, terminal: unknown?}
-type Descriptor = {[string]: unknown}
-type Request = {[string]: unknown}
+type Descriptor = descriptor_reader.Descriptor
+type Request = {[string]: descriptor_reader.OptionValue?} & {profile_id: string, brief: string}
 type ConfigureRequest = configuration.Request
 type ConfigureRenderer = (ConfigureRequest) -> Object
 type ProviderHomeFileKind = "login" | "config" | "state"
 type LaunchAPI = {
     decode: (unknown) -> (Request?, string?),
     specification: (Request) -> types.Launch,
-    descriptor: Descriptor?,
-    PERMISSION_MODES: {string}?,
-    APPROVAL_MODES: {string}?,
-    MODES: {string}?,
-    EFFORTS: {string}?,
-    SANDBOXES: {string}?,
-    MAX_TURNS: integer?,
-    MAX_STEPS: integer?,
-    MAX_CONFIG_PROFILE_BYTES: integer?,
 }
+
+local function request_value(request: Request, field: string): descriptor_reader.OptionValue?
+    return request[field]
+end
 
 local function rule_error(rule: Object, fallback: string): string
     return bounds.text(rule.message, 256) or fallback
@@ -43,20 +38,22 @@ local function apply_rules(options: Object, request: Request): string?
         if rule.kind == "profile_fields" and request.profile_id == rule.profile and type(rule.fields) == "table" then
             for _, raw_field in ipairs(rule.fields :: {unknown}) do
                 local field = bounds.id(raw_field)
-                local value = field and request[field] or nil
+                local value: descriptor_reader.OptionValue? = nil
+                if field then value = request_value(request, field) end
                 local supplied = value ~= nil
                 if type(value) == "boolean" then supplied = value end
                 if type(value) == "string" then supplied = value ~= "" end
-                if type(value) == "table" then supplied = #(value :: {unknown}) > 0 end
+                if type(value) == "table" then supplied = #(value :: {string}) > 0 end
                 if field and supplied then return rule_error(rule, field .. " is not supported for " .. tostring(request.profile_id)) end
             end
         elseif rule.kind == "values" then
             local field = bounds.id(rule.field)
             local allowed = rule.values :: {string}
-            local actual = field and request[field] or nil
+            local actual: descriptor_reader.OptionValue? = nil
+            if field then actual = request_value(request, field) end
             if field and actual ~= nil and type(allowed) == "table" then
                 if type(actual) == "table" then
-                    for _, value in ipairs(actual :: {unknown}) do
+                    for _, value in ipairs(actual :: {string}) do
                         if not bounds.member(value, allowed) then return rule_error(rule, field .. " contains an unsupported value") end
                     end
                 elseif not bounds.member(actual, allowed) then
@@ -66,18 +63,23 @@ local function apply_rules(options: Object, request: Request): string?
         elseif rule.kind == "requires_empty" then
             local field, other = bounds.id(rule.field), bounds.id(rule.other)
             local applies = rule.profile == nil or rule.profile == request.profile_id
-            if applies and field and other and request[other] ~= nil and request[field] ~= nil and request[field] ~= "" then
+            local value: descriptor_reader.OptionValue? = nil
+            local other_value: descriptor_reader.OptionValue? = nil
+            if field then value = request_value(request, field) end
+            if other then other_value = request_value(request, other) end
+            if applies and field and other and other_value ~= nil and value ~= nil and value ~= "" then
                 return rule_error(rule, field .. " must be empty when " .. other .. " is selected")
             end
         elseif rule.kind == "forbid_pair" then
             local field, other = bounds.id(rule.field), bounds.id(rule.other)
-            if field and other and request[field] ~= nil and request[other] ~= nil then
+            if field and other and request_value(request, field) ~= nil and request_value(request, other) ~= nil then
                 return rule_error(rule, field .. " cannot be combined with " .. other)
             end
         elseif rule.kind == "forbid_nonempty" then
             local field = bounds.id(rule.field)
-            local value = field and request[field] or nil
-            if type(value) == "table" and #(value :: {unknown}) > 0 then return rule_error(rule, field .. " is unsupported") end
+            local value: descriptor_reader.OptionValue? = nil
+            if field then value = request_value(request, field) end
+            if type(value) == "table" and #(value :: {string}) > 0 then return rule_error(rule, field .. " is unsupported") end
         end
     end
     return nil
@@ -113,7 +115,7 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
         local supplied = value ~= nil
         if type(value) == "boolean" then supplied = value end
         if type(value) == "string" then supplied = value ~= "" end
-        if type(value) == "table" then supplied = #(value :: {unknown}) > 0 end
+        if type(value) == "table" then supplied = #(value :: {string}) > 0 end
         if supplied and type(spec.profiles) == "table" and not bounds.member(profile_id, spec.profiles) then
             return nil, bounds.text(spec.unsupported, 256) or (field .. " is not supported for this profile")
         end
@@ -125,7 +127,7 @@ end
 
 local function interpolate(template: string, request: Request): string
     return (template:gsub("{([A-Za-z_][A-Za-z0-9_]*)}", function(field: string): string
-        local value = request[field]
+        local value = request_value(request, field)
         if type(value) == "string" or type(value) == "number" then return tostring(value) end
         return ""
     end))
@@ -155,8 +157,8 @@ end
 
 local function condition(item: Object, request: Request): boolean
     local function present(field: string): boolean
-        local value = request[field]
-        if type(value) == "table" then return #(value :: {unknown}) > 0 end
+        local value = request_value(request, field)
+        if type(value) == "table" then return #(value :: {string}) > 0 end
         if type(value) == "string" then return value ~= "" end
         return value == true
     end
@@ -175,7 +177,7 @@ local function condition(item: Object, request: Request): boolean
     end
     local field = bounds.id(item["if"])
     if not field then return false end
-    local value = request[field]
+    local value = request_value(request, field)
     if item.equals ~= nil then return value == item.equals end
     if item.not_equals ~= nil then return value ~= item.not_equals end
     if item.starts_with ~= nil then return type(value) == "string" and (value :: string):sub(1, #(item.starts_with :: string)) == item.starts_with end
@@ -189,8 +191,10 @@ local function render_json(value: unknown, request: Request, depth: integer): (u
     if object and object.field ~= nil then
         if bounds.fields(object, {"field"}) then return nil, "stdin JSON field template is malformed" end
         local field = bounds.id(object.field)
-        if not field or request[field] == nil then return nil, "stdin JSON template names a missing request field" end
-        return request[field] :: unknown?, nil
+        local selected: descriptor_reader.OptionValue? = nil
+        if field then selected = request_value(request, field) end
+        if not field or selected == nil then return nil, "stdin JSON template names a missing request field" end
+        return selected, nil
     end
     local result: {[unknown]: unknown} = {}
     for key, item in pairs(value :: {[unknown]: unknown}) do
@@ -207,7 +211,7 @@ local function render_option(selected: Descriptor, name: string, request: Reques
     if not spec then return nil, "CLI descriptor omits the " .. name .. " flag template" end
     local field = bounds.id(spec.field)
     if not field then return nil, "CLI descriptor " .. name .. " flag field is invalid" end
-    local value = request[field]
+    local value = request_value(request, field)
     if value == nil then return {}, nil end
     if name == "permission" and spec.emit_default == false then
         local option_fields = bounds.object((bounds.object(selected.options) or {}).fields) or {}
@@ -244,7 +248,7 @@ function M.render_argv(raw: unknown, request: Request, selected: Descriptor, dep
             if not item then return nil, "CLI argv template is malformed" end
             if item.field ~= nil then
                 local field = bounds.id(item.field)
-                local value = field and request[field] or nil
+                local value = field and request_value(request, field) or nil
                 if type(value) ~= "string" and type(value) ~= "number" then return nil, "CLI argv template field is absent or not scalar" end
                 local append_error = append(tostring(value))
                 if append_error then return nil, append_error end
@@ -272,7 +276,7 @@ function M.render_argv(raw: unknown, request: Request, selected: Descriptor, dep
                         parts[#parts + 1] = (type(join.prefix) == "string" and join.prefix or "") .. (entry :: string) .. (type(join.suffix) == "string" and join.suffix or "")
                     end
                 end
-                for _, entry in ipairs(as_list(request[field])) do
+                for _, entry in ipairs(as_list(request_value(request, field))) do
                     if type(entry) == "string" and not exclude[entry :: string] then
                         local mapped = (type(join.prefix) == "string" and join.prefix or "") .. (entry :: string) .. (type(join.suffix) == "string" and join.suffix or "")
                         if not seen[mapped] then seen[mapped] = true; parts[#parts + 1] = mapped end
@@ -299,7 +303,8 @@ local function named_profile_file(selected: Descriptor, request: Request): strin
     local required = bounds.object(home.required_profile_file)
     if not required then return nil end
     local field = bounds.id(required.field)
-    local value = field and request[field] or nil
+    local value = nil
+    if field then value = request_value(request, field) end
     if type(value) ~= "string" then return nil end
     local path = interpolate(required.path_template :: string, request)
     local directory = bounds.text(home.directory, 128)
@@ -331,7 +336,7 @@ local function provider_home(selected: Descriptor, private: boolean, request: Re
             extras[#extras + 1] = {variable = item.variable :: string, directory = item.directory :: string}
         end
     end
-    local provider = selected.provider :: string
+    local provider = selected.provider
     local variable = bounds.text(source.variable, 128)
     local directory = bounds.text(source.directory, 128)
     if variable and directory then
@@ -342,18 +347,18 @@ end
 
 local function build_launch(selected: Descriptor, request: Request): (types.Launch?, string?)
     local templates = bounds.object(selected.argv_templates) or {}
-    local template_name = request.profile_id == "window" and "window" or (request.resume_ref ~= nil and "resume" or "first_turn")
+    local template_name = request.profile_id == "window" and "window" or (request_value(request, "resume_ref") ~= nil and "resume" or "first_turn")
     local template = bounds.object(templates[template_name])
     if not template then return nil, "CLI descriptor has no " .. template_name .. " launch template" end
     local argv, argv_error = M.render_argv(template.argv, request, selected)
     if not argv then return nil, argv_error end
-    local launch: types.Launch = {executable = selected.executable :: string, argv = argv, environment = {}, readiness = template.readiness :: string}
+    local launch: types.Launch = {executable = selected.executable, argv = argv, environment = {}, readiness = template.readiness :: string}
     local input_written = false
     if template.stdin ~= nil then
         local stdin_node = bounds.object(template.stdin)
         local field = stdin_node and bounds.id(stdin_node.field) or nil
         if field then
-            local content = request[field]
+            local content = request_value(request, field)
             if type(content) ~= "string" then return nil, "CLI stdin template field is not text" end
             launch.stdin = content
             input_written = true
@@ -369,7 +374,8 @@ local function build_launch(selected: Descriptor, request: Request): (types.Laun
             should_write = false
             for _, raw_field in ipairs(template.stdin_when_any :: {unknown}) do
                 local field = bounds.id(raw_field)
-                local value = field and request[field] or nil
+                local value: descriptor_reader.OptionValue? = nil
+                if field then value = request_value(request, field) end
                 if value == true then should_write = true end
             end
         end
@@ -398,7 +404,7 @@ local function build_launch(selected: Descriptor, request: Request): (types.Laun
     end
     local required_profile = bounds.object((bounds.object(selected.provider_home) or {}).required_profile_file)
     local profile_field = required_profile and bounds.id(required_profile.field) or nil
-    if required_profile and profile_field and type(request[profile_field]) == "string"
+    if required_profile and profile_field and type(request_value(request, profile_field)) == "string"
         and required_profile.window_only == true and request.profile_id == "window" then
         local path = interpolate(required_profile.path_template :: string, request)
         launch.required_files = {{variable = required_profile.variable :: string, path = path,
@@ -410,10 +416,10 @@ end
 local function launch_reply(ref: string, raw: unknown, dispatch: boolean): Object
     local descriptor, load_error = descriptor_reader.load(ref)
     if not descriptor then return {ok = false, error = load_error or "CLI descriptor is unavailable"} end
-    local decoded, decode_error = decode_request(descriptor :: Descriptor, raw)
+    local decoded, decode_error = decode_request(descriptor, raw)
     if not decoded then return {ok = false, error = decode_error or "launch request is invalid"} end
-    if dispatch and not bounds.id(decoded.resume_ref) then return {ok = false, error = "a dispatched turn needs resume_ref"} end
-    local launch, launch_error = build_launch(descriptor :: Descriptor, decoded :: Request)
+    if dispatch and not bounds.id(request_value(decoded, "resume_ref")) then return {ok = false, error = "a dispatched turn needs resume_ref"} end
+    local launch, launch_error = build_launch(descriptor, decoded)
     if not launch then return {ok = false, error = launch_error or "CLI launch template is invalid"} end
     return {ok = true, launch = launch}
 end
@@ -422,7 +428,7 @@ function M.launch(ref: string): LaunchAPI
     local function selected(): (Descriptor?, string?)
         local loaded, load_error = descriptor_reader.load(ref)
         if not loaded then return nil, load_error end
-        return loaded :: Descriptor, nil
+        return loaded, nil
     end
     return {
         decode = function(value: unknown): (Request?, string?)
@@ -437,7 +443,6 @@ function M.launch(ref: string): LaunchAPI
             if not launch then error(tostring(launch_error)) end
             return launch
         end,
-        descriptor = nil,
     }
 end
 
@@ -456,11 +461,16 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
     if not bounds.id(default_renderer) or renderers[default_renderer] == nil then error("default configure renderer is unsupported") end
     return function(raw: unknown): Object
         local object = bounds.object(raw)
-        local selected = object and bounds.id(object.configure_renderer) or default_renderer
-        local renderer = selected and renderers[selected] or nil
+        if not object then return {ok = false, error = "configuration request must be an object"} end
+        local selected: string? = default_renderer
+        if object.configure_renderer ~= nil then
+            selected = bounds.id(object.configure_renderer)
+        end
+        local renderer: ConfigureRenderer? = nil
+        if selected then renderer = renderers[selected] end
         if not renderer then return {ok = false, error = "CLI descriptor selects an unsupported configure renderer"} end
         local config_request: {[string]: unknown} = {}
-        for key, value in pairs(object :: Object) do
+        for key, value in pairs(object) do
             if key ~= "configure_renderer" then config_request[key] = value end
         end
         local request, decode_error = configuration.decode_request(config_request)
@@ -473,9 +483,9 @@ function M.locate(ref: string): (unknown) -> (types.LocateResult?, string?)
     return function(raw: unknown): (types.LocateResult?, string?)
         local loaded, load_error = descriptor_reader.load(ref)
         if not loaded then return nil, load_error end
-        local selected = loaded :: Descriptor
+        local selected = loaded
         local evidence = bounds.object(selected.login_evidence) or {}
-        local result, result_error = locate.evaluate({provider = selected.provider :: string, executable = selected.executable :: string,
+        local result, result_error = locate.evaluate({provider = selected.provider, executable = selected.executable,
             login_path = evidence.path :: string}, raw)
         return result :: types.LocateResult?, result_error
     end
@@ -486,7 +496,7 @@ function M.protocol(ref: string): codec_registry.Protocol
         local descriptor, load_error = descriptor_reader.load(ref)
         if not descriptor then error(tostring(load_error or "CLI descriptor is unavailable")) end
         local json_paths = bounds.object(descriptor.json_paths) or {}
-        local protocol = codec_registry.resolve(descriptor.codec :: string, json_paths)
+        local protocol = codec_registry.resolve(descriptor.codec, json_paths)
         if not protocol then error("CLI descriptor selects an unsupported codec") end
         return protocol
     end

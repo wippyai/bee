@@ -61,6 +61,7 @@ end
 -- Other catalog entries remain review vocabulary until their resource and
 -- owner boundaries arrive in later slices.
 local VIEWER_EXPRESSION = '((action == "process.spawn" || action == "process.spawn.monitored") && resource == "bee.hive.desktop:viewer") || (action == "process.host" && resource == "bee.hive.desktop:display_host") || (action == "process.registry.lookup" && resource matches "^bee[.]hive[.]supervisor(/.+)?$") || action == "process.monitor" || action == "tty.attach" || action == "tty.read" || action == "tty.write" || action == "tty.resize" || action == "tty.viewport"'
+local SESSIONS_EXPRESSION = '(action == "contract.open" && resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$") || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
 local LEASE_EXPRESSION = '((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]workspace[.]lease/[A-Za-z0-9-]+$") || (action == "process.registry.lookup" && resource == "bee.workspace.hosts") || action == "process.send"'
 
 local function plain(actions: {string}, resources: unknown, comment: string, id: string): Object
@@ -164,18 +165,17 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
         and grant.resource == "managed_agents" then
         local definitions = capability_model.strings(scope.definitions)
         if not definitions then return nil, nil, nil, "resolved agent definition list is malformed" end
-        -- The application reaches the launch facade through its own call, then
-        -- the facade checks bee.harness.launch against the exact definition.
-        -- The policy names the facade call and the exact approved definitions;
-        -- the resolver separately proves every name is a launch definition, so
-        -- the funcs.call grant reaches no callable other than the facade.
-        local resources: {string} = {"bee.harness.launch:agent_call"}
-        for _, ref in ipairs(definitions) do resources[#resources + 1] = ref end
-        table.sort(resources)
-        return {id = id, kind = "security.policy",
-            meta = {comment = "Host-generated managed agent launch grant"},
-            data = {policy = {actions = {"bee.harness.launch", "funcs.call"}, resources = resources,
-                effect = "allow"}}}, nil, nil, nil
+        local names: {string} = {}
+        for _, ref in ipairs(definitions) do
+            if not ref:match("^[A-Za-z0-9_.:-]+$") then return nil, nil, nil, "resolved agent definition name is malformed" end
+            names[#names + 1] = '"' .. ref .. '"'
+        end
+        table.sort(names)
+        local expression = SESSIONS_EXPRESSION .. ' || (action == "bee.harness.launch" && resource in [' .. table.concat(names, ", ") .. '])'
+        return {id = id, kind = "security.policy.expr",
+            meta = {comment = "Host-generated managed agent session grant"},
+            data = {policy = {actions = {"contract.open", "contract.call", "funcs.call", "bee.harness.launch"},
+                resources = "*", expression = expression, effect = "allow"}}}, nil, nil, nil
     end
     -- The runtime cannot pair a contract binding with its method or an HTTP
     -- method with its origin, so these grants let the application call the

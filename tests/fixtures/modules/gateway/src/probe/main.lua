@@ -455,15 +455,15 @@ local function prove_remote_send()
     running(thread_id, action)
     local admitted = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action, attempt_id = attempt,
         thread_id = thread_id, owner_incarnation = 1, carrier_epoch = 1, workspace_id = source_workspace,
-        tools = {"session_send"}, ttl_ms = 60000}), "admit remote sender")
+        tools = {"session_inbox_send"}, ttl_ms = 60000}), "admit remote sender")
     local binding_id = tostring((admitted.binding :: Object).binding_id)
     local minted = ok(materialize(attempt, 1, binding_id), "materialize remote sender")
     local token = tostring(minted.token)
-    local denied = tool(action, token, "session_send", {address = {node_id = "remote-test-node", action_id = "remote-denied-target"},
+    local denied = tool(action, token, "session_inbox_send", {address = {node_id = "remote-test-node", action_id = "remote-denied-target"},
         grant_epoch = 1, idempotency_key = "remote-denied", message_id = "remote-denied", content = {text = "no grant"}})
     assert(denied.ok == false and (denied.error :: Object).code == "DENIED", "remote send without a host grant was accepted")
     local idempotency_key = "remote-send"
-    local sent = tool(action, token, "session_send", {address = {node_id = "remote-test-node", action_id = "remote-send-target"},
+    local sent = tool(action, token, "session_inbox_send", {address = {node_id = "remote-test-node", action_id = "remote-send-target"},
         grant_epoch = 1, idempotency_key = idempotency_key, message_id = "remote-send", content = {text = "send under destination grant"}})
     assert(sent.ok == true and (sent.value :: Object).queued == true, "host-resolved remote send was not queued: " .. tostring(json.encode(sent)))
     local database, database_error = sql.get("bee.threads:db")

@@ -9,11 +9,20 @@ through supervisor state. Agent
 profiles declare `thread_read`, `thread_wait`, `thread_message`,
 `thread_sessions` and `thread_notify` (find and address running sessions, and
 register a notice by a launched attempt before its session binds), the
-`session_directory`, `session_send`, `session_inbox`, `session_ack` and
+`session_directory`, `session_inbox_send`, `session_inbox`, `session_ack` and
 `session_reply` tools for separately owned action inboxes, the
 caller-owned Governance `overlay` tool, and `thread_launch`, which starts one
 host-allow-listed managed launch in the caller's own workspace and returns the
-child's thread, action and attempt. The host may admit any subset; no default
+child's thread, action and attempt. The default session tools `session_catalog`, `session_open`, `session_run`,
+`session_send`, `session_await`, `session_join`, `session_get`, `session_list`,
+`session_cancel` and `session_close` project the `bee.sessions:contract` and
+`bee.sessions:catalog` owner contracts one method each. Arguments are the
+published closed schemas; every mutation requires `operation_key`; caller
+identity travels only in the authenticated call context, never in a payload;
+the owner binding opens under the host-linked `target_tool_session_policy`, and
+each owner reply is held to the published output schema. The gateway keeps no
+session state. `session_inbox_send` is the action-inbox send.
+The host may admit any subset; no default
 launch policy advertises `thread_launch` or names an `agent_launch` definition,
 so an agent starts another only where the owner has opted in. The
 overlay tool also carries a read-only `guide` operation stating this
@@ -78,7 +87,7 @@ selects a workspace send policy for managed agents; the destination owner
 still requires the authenticated sender to belong to that workspace, the
 current epoch and the recipient's acceptance. An installing host can select
 the deny policy or a narrower address policy instead. Inbox tools commit and
-read durable items. `session_send` and `session_reply` accept a node-qualified
+read durable items. `session_inbox_send` and `session_reply` accept a node-qualified
 remote address: the gateway asks the host-selected remote resolver for the
 thread and workspace it names (the bundled host links
 `bee.hive.service:remote_sessions`, which calls the destination owner's

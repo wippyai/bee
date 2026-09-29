@@ -52,7 +52,7 @@ entries:
   kind: function.lua
   source: file://mcp_method.lua
   method: handle
-  modules: [http, json, funcs, security, registry, system]
+  modules: [http, json, funcs, security, registry, system, contract]
   imports:
     gateway: bee.gateway.binding:gateway
     mcp: bee.gateway:mcp
@@ -60,8 +60,9 @@ entries:
     catalog: bee.gateway:catalog
     context: bee.gateway:context
     sessions: bee.gateway:sessions
+    session_tools: bee.gateway:session_tools
     bounds: bee.threads.records:bounds
     sends: bee.threads.service:sends
     subject_call: bee.gateway.security:subject_call
   security:
-    policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:node_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy]
+    policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:node_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy, bee.gateway.security:session_contract_policy]

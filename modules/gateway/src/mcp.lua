@@ -10,6 +10,7 @@ local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local agent_protocol = require("agent_protocol")
 local sessions = require("sessions")
+local session_tools = require("session_tools")
 local M = {}
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
@@ -29,8 +30,9 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, run: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string, capability: string, install: string}
+type ToolPolicyRefs = {session: string, read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, run: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string, capability: string, install: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
+    session = "bee.gateway:tool_session_policy_ref",
     read = "bee.gateway:tool_read_policy_ref",
     message = "bee.gateway:tool_message_policy_ref",
     inbox = "bee.gateway:tool_inbox_policy_ref",
@@ -102,7 +104,7 @@ local TOOLS: {Tool} = {
             properties = {workspace_id = {type = "string", minLength = 32, maxLength = 32,
                 description = "This session's own workspace, the default; any other is refused"}},
             examples = {{}}}, annotations = READ_ANNOTATIONS},
-    {name = "session_send", description = "Commit one request into an action's durable inbox by exact node/action address and current grant_epoch. The host must grant bee.sessions.send for that workspace/node/action, and the recipient owner must accept your action's sender. Delivery is committed, not yet offered to a running model.", operation = "bee.threads.service:inbox_send",
+    {name = "session_inbox_send", description = "Commit one request into an action's durable inbox by exact node/action address and current grant_epoch. The host must grant bee.sessions.send for that workspace/node/action, and the recipient owner must accept your action's sender. Delivery is committed, not yet offered to a running model.", operation = "bee.threads.service:inbox_send",
         policies = {TOOL_POLICY_REFS.inbox, TOOL_POLICY_REFS.send_grant}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"address", "grant_epoch", "idempotency_key", "message_id", "content"}, properties = {
             address = {type = "object", additionalProperties = false, required = {"node_id", "action_id"}, properties = {node_id = {type = "string"}, action_id = {type = "string"}}},
@@ -269,6 +271,10 @@ local TOOLS: {Tool} = {
             idempotency_key = {type = "string", minLength = 1, maxLength = 64},
         }}},
 }
+-- The ten default session tools project the bee.sessions owner contracts.
+for _, tool in ipairs(session_tools.tools(TOOL_POLICY_REFS.session, READ_ANNOTATIONS, WRITE_ANNOTATIONS)) do
+    TOOLS[#TOOLS + 1] = tool
+end
 M.TOOLS = TOOLS
 -- The typed output contract every tool result shares: ok names success, value
 -- carries the operation's ids, cursors, statuses or diagnostics, and error is
@@ -344,7 +350,7 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
         required = {"peers", "eof", "truncated"},
         properties = {peers = array_schema(DIRECTORY_VIEW_SCHEMA), next_cursor = INTEGER_SCHEMA,
             eof = BOOLEAN_SCHEMA, truncated = BOOLEAN_SCHEMA}}),
-    session_send = output_schema({type = "object"}),
+    session_inbox_send = output_schema({type = "object"}),
     session_inbox = output_schema({type = "object"}),
     session_ack = output_schema({type = "object"}),
     session_reply = output_schema({type = "object"}),
@@ -402,6 +408,7 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
     uninstall_request = output_schema({type = "object"}),
     install_status = output_schema({type = "object"}),
 }
+for name, schema in pairs(session_tools.OUTPUT_SCHEMAS) do OUTPUT_SCHEMAS[name] = schema end
 M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
 -- Opening a reviewed application is deliberately not a base capability.  The
 -- surface installs this one built-in trait when the binding admits the tool;

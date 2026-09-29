@@ -203,3 +203,14 @@ entries:
   imports:
     test: wippy.test:test
     remote: bee.gateway:remote
+- name: session_tools_test
+  kind: function.lua
+  source: file://session_tools_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    mcp: bee.gateway:mcp
+    catalog: bee.gateway:catalog
+    surface: bee.gateway:surface
+    session_tools: bee.gateway:session_tools

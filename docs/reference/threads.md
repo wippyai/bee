@@ -394,7 +394,7 @@ on the destination's own reply, so an unknown outcome settles nothing and
 the lease lapses. Its transport is host-selected through the `sender`
 requirement: the bundled host links `bee.hive.service:inbox_sender`, and a
 composition that links no sender leaves due rows queued and reports each
-delivery unknown. `session_send` and `session_reply` also
+delivery unknown. `session_inbox_send` and `session_reply` also
 accept a node-qualified remote address: the gateway asks a host-selected
 remote resolver (the bundled host links `bee.hive.service:remote_sessions`,
 which performs the destination owner's `inbox_resolve`) for the thread and

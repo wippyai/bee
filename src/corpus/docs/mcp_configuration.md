@@ -234,7 +234,7 @@ state and latest inbox delivery state.
 The directory does not grant reading or sending. The names of newly admitted
 live actions are unique within a workspace; use the exact address for a send.
 
-`session_send` takes `{address, grant_epoch, idempotency_key, message_id,
+`session_inbox_send` takes `{address, grant_epoch, idempotency_key, message_id,
 content}`. The host must grant `bee.sessions.send` on the exact
 `<workspace_id>/<node_id>/<action_id>` address, and the recipient's thread
 owner must accept the sender actor or class. The bundled host selects a

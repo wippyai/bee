@@ -333,6 +333,30 @@ local function remeasure_progress(config: Config, intent: Object): (Object?, Res
     return current, nil
 end
 
+local function remeasure_restoration(config: Config, intent: Object): Result?
+    local current, measurement_error = measured(config, approved_spec(intent))
+    if not current then return measurement_error :: Result end
+    local admission_error = admission_owner(config, current)
+    if admission_error then return admission_error end
+    for _, field in ipairs({"owner_node", "workspace_id", "source_node", "source_workspace", "version",
+        "plan_digest", "artifact_digest", "application_admission_digest", "grant_predecessor_digest"}) do
+        if intent[field] ~= current[field] then
+            return failure("CONFLICT", "settled activation identity changed: " .. field)
+        end
+    end
+    local current_blob = object(current.migration_work)
+    local prior_work, prior_error = migration_work.decode(intent.migration_work_bytes, intent.migration_work_digest)
+    local current_work, current_error = migration_work.decode(current_blob and current_blob.bytes,
+        current_blob and current_blob.digest)
+    if not prior_work or not current_work then
+        return failure("INTERNAL", tostring(prior_error or current_error or "decode activation restoration policy"))
+    end
+    if prior_work.policy_digest ~= current_work.policy_digest then
+        return failure("CONFLICT", "activation database policy changed since apply")
+    end
+    return nil
+end
+
 -- One step performs at most one durable transition around an external effect.
 -- Calling it again after interruption resumes from the stored phase.
 function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): Result
@@ -524,13 +548,13 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "settled" and intent.outcome == "applied" then
         local superseded = require_desired(config, intent)
         if superseded then return superseded end
-        local _, measurement_error = remeasure_progress(config, intent)
-        if measurement_error then return measurement_error end
         local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
         if not desired_entries then return desired_error :: Result end
         local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
         if matches then return transaction.success(intent, true) end
+        local restoration_error = remeasure_restoration(config, intent)
+        if restoration_error then return restoration_error end
         local restored, restore_error = config.apply(config.overlay_owner, desired_entries, desired_admission, intent)
         if restored then
             local result: Object = {}

@@ -170,8 +170,11 @@ local function packaged(revision: string, configuration: activation_profiles.Dec
 end
 
 -- Admission overlays are process-local registry state, so registry history
--- alone cannot invalidate the broker's cached catalog. Read their small SQL
--- revision token without decoding profiles or scanning registry entries.
+-- alone cannot invalidate the broker's cached catalog. Read each slot's small
+-- SQL revision and fingerprint only its protected admission entry. A cold
+-- recovery can restore an already-settled overlay without changing that SQL
+-- revision, so its absent-to-present admission transition must also invalidate
+-- the broker's catalog follower.
 function M.revision(workspace_id: string, node_id: string): string
     local resource = resources.database()
     if not resource then return "unlinked" end
@@ -179,7 +182,29 @@ function M.revision(workspace_id: string, node_id: string): string
     if not result.ok then return "unavailable" end
     local value = bounds.object(result.value)
     if not value or type(value.revision) ~= "string" then return "unavailable" end
-    return value.revision
+    if type(value.overlay_owners) ~= "table" then return "unavailable" end
+    local overlays: {string} = {}
+    for _, raw_owner in ipairs(value.overlay_owners :: {unknown}) do
+        local owner = bounds.id(raw_owner)
+        local admission_id = owner and governed_admission.id(owner) or nil
+        if not owner or not admission_id then return "unavailable" end
+        local overlay, overlay_error = registry.overlay(owner)
+        if not overlay or overlay_error then return "unavailable" end
+        local entry, entry_error = overlay:get(admission_id)
+        if entry_error and entry_error:kind() ~= errors.NOT_FOUND then return "unavailable" end
+        if not entry then
+            local prior_id = governed_admission.prior_id(owner)
+            if prior_id then entry, entry_error = overlay:get(prior_id) end
+            if entry_error and entry_error:kind() ~= errors.NOT_FOUND then return "unavailable" end
+        end
+        local fingerprint = "absent"
+        if entry then
+            local measured = governed_admission.measure((entry :: Entry).data)
+            fingerprint = measured and measured.digest or "invalid"
+        end
+        overlays[#overlays + 1] = owner .. "=" .. fingerprint
+    end
+    return value.revision .. ":" .. table.concat(overlays, ";")
 end
 
 -- Package projection is memoized by the same registry revision, workspace and

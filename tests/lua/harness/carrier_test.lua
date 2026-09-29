@@ -93,18 +93,18 @@ local function request(thread_id: string, attempt_id: string, environment: {[str
         placement_binding_digest = placement.binding_digest}
 end
 type Outcome = {value: {[string]: unknown}?, error: string?}
-local function spawn_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?, pause_after: string?): string
+local function spawn_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?, pause_after: string?, slow_commit_ms: number?): string
     local spawner = process.with_context({}):with_actor(actor):with_scope(scope())
-    local pid, err = spawner:spawn_monitored(entry, "bee:workers", request_value, mode, process.pid(), crash_after, batch, pause_after)
+    local pid, err = spawner:spawn_monitored(entry, "bee:workers", request_value, mode, process.pid(), crash_after, batch, pause_after, slow_commit_ms)
     if not pid then error("spawn carrier: " .. tostring(err)) end
     return tostring(pid)
 end
 -- Exits arrive on one events channel, so several carriers are awaited
 -- together and every exit is kept.
 local exited: {[string]: Outcome} = {}
-local function await_carriers(pids: {string}, label: string?): {[string]: Outcome}
+local function await_carriers(pids: {string}, label: string?, timeout_ms: integer?): {[string]: Outcome}
     local events = assert(process.events())
-    local deadline = time.after("30s")
+    local deadline = time.after(tostring(timeout_ms or 30000) .. "ms")
     local function all_done(): boolean
         for _, pid in ipairs(pids) do
             if not exited[pid] then return false end
@@ -126,11 +126,11 @@ local function await_carriers(pids: {string}, label: string?): {[string]: Outcom
     for _, pid in ipairs(pids) do outcomes[pid] = exited[pid] end
     return outcomes
 end
-local function await_carrier(pid: string, label: string?): Outcome
-    return await_carriers({pid}, label)[pid] :: Outcome
+local function await_carrier(pid: string, label: string?, timeout_ms: integer?): Outcome
+    return await_carriers({pid}, label, timeout_ms)[pid] :: Outcome
 end
-local function run_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?): Outcome
-    return await_carrier(spawn_carrier(entry, request_value, mode, crash_after, batch))
+local function run_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?, pause_after: string?, slow_commit_ms: number?, timeout_ms: integer?): Outcome
+    return await_carrier(spawn_carrier(entry, request_value, mode, crash_after, batch, pause_after, slow_commit_ms), nil, timeout_ms)
 end
 local function kinds(thread_id: string): ({string}, {{[string]: unknown}})
     local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64})
@@ -483,6 +483,16 @@ local function define_tests()
             local _, _, reads = stream_counts(records)
             test.eq(reads, 1, "replacement child read evidence")
             test.eq(table.concat(writes(records), ","), "w9:intended,w9:accepted")
+        end)
+        test.it("drains short Claude frames through the terminal result after a fast stream", function()
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = "256", BEE_FIXTURE_FLOOD_PACE = "0.1", BEE_FIXTURE_FLOOD_EXIT = "1"}
+            local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment), "open", nil, nil, nil, 200, 60000)
+            if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end
+            local settlement = outcome.value.settlement :: {[string]: unknown}
+            test.eq(settlement.outcome, "succeeded")
+            test.eq(settlement.answer, "flood-complete")
         end)
         test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
             local thread_id = thread()

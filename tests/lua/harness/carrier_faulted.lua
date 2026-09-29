@@ -2,6 +2,7 @@
 -- stops the process after a named step, so recovery is proven from real
 -- crash points. Excluded from packs.
 local process = require("process")
+local time = require("time")
 local carrier = require("carrier_process")
 local machine = require("machine")
 -- crash_after ends the process at a step; pause_after holds it there until
@@ -9,7 +10,7 @@ local machine = require("machine")
 -- in between. The controller hears bee.carrier.paused with the step name
 -- once the process holds there. A comma-separated pause_after holds at each
 -- named step in turn.
-local function main(request: unknown, mode: string, controller: string?, crash_after: string?, batch: number?, pause_after: string?): {[string]: unknown}
+local function main(request: unknown, mode: string, controller: string?, crash_after: string?, batch: number?, pause_after: string?, slow_commit_ms: number?): {[string]: unknown}
     local chosen: "open" | "resume" = "open"
     if mode == "resume" then chosen = "resume" end
     if batch and batch >= 1 then machine.MAX_RECORDS_PER_COMMIT = math.floor(batch) end
@@ -18,6 +19,7 @@ local function main(request: unknown, mode: string, controller: string?, crash_a
     for name in string.gmatch(pause_after or "", "[^,]+") do pauses[#pauses + 1] = name end
     local function after(step: string)
         if crash_after and step == crash_after then error("crash after " .. step) end
+        if step == "committed" and slow_commit_ms and slow_commit_ms > 0 then time.sleep(tostring(math.floor(slow_commit_ms)) .. "ms") end
         if pauses[1] == step then
             table.remove(pauses, 1)
             if controller then process.send(controller, "bee.carrier.paused", step) end

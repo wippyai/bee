@@ -804,6 +804,7 @@ function M.catalog_revision(resource: string, node_raw: unknown, workspace_raw: 
         return failure(code, message)
     end
     local revisions: {string} = {}
+    local overlay_owners: {string} = {}
     local rows, query_error = db:query("SELECT overlay_owner, revision FROM bee_governance_activation_slots WHERE owner_node = ? AND workspace_id = ? ORDER BY overlay_owner LIMIT ?",
         {node, workspace, MAX_DESIRED_SLOTS + 1})
     if query_error or not rows then return close_failure("INTERNAL", "read governance activation revisions") end
@@ -812,10 +813,11 @@ function M.catalog_revision(resource: string, node_raw: unknown, workspace_raw: 
         local overlay_owner, revision = id(row.overlay_owner), count(row.revision, false)
         if not overlay_owner or revision == nil then return close_failure("INTERNAL", "governance activation revision is malformed") end
         revisions[#revisions + 1] = overlay_owner .. "=" .. tostring(revision)
+        overlay_owners[#overlay_owners + 1] = overlay_owner
     end
     local released, release_error = db:release()
     if released ~= true or release_error then return failure("UNAVAILABLE", "close governance activation database") end
-    return transaction.success({revision = table.concat(revisions, ";")}, false)
+    return transaction.success({revision = table.concat(revisions, ";"), overlay_owners = overlay_owners}, false)
 end
 
 -- Every workspace slot on this node that holds an authorized desired intent,

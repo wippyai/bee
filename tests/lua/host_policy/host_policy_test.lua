@@ -83,6 +83,17 @@ local function define_tests()
             evaluate_host_policy("bee.security.desktop:broker_policy", "process.spawn", "bee.apps:welcome")
         end)
 
+        test.it("limits broker catalog reads to governance and admission state", function()
+            local scope = {"bee.security.desktop:broker_policy"}
+            test.is_true(call_can(scope, "db.get", "bee.gov:db"))
+            test.is_false(call_can(scope, "db.get", "bee.gov:activation_test_db"))
+            test.is_true(call_can(scope, "registry.overlay.get", "bee.gov.apps:workspace.application"))
+            test.is_true(call_can(scope, "registry.overlay.get", "bee.packages:workspace.component"))
+            test.is_true(call_can(scope, "registry.overlay.get", "bee.governance.workspace_applications:workspace.application"))
+            test.is_false(call_can(scope, "registry.overlay.get", "bee.apps:overlay"))
+            test.is_false(call_can(scope, "registry.overlay.get", "foreign:overlay"))
+        end)
+
         test.it("constrains desktop_policy to worker host while retaining nonhost actions", function()
             evaluate_host_policy("bee.security.desktop:desktop_policy", "tty.mount", "screen")
             test.is_true(call_can({"bee.security.desktop:desktop_policy"}, "registry.find", "bee.launch_definition"))

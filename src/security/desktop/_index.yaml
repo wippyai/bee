@@ -4,9 +4,9 @@ entries:
 - name: broker_policy
   kind: security.policy.expr
   meta:
-    comment: The broker reads only this node's identity, to select the host profile of a governed application this node authored
+    comment: The broker reads this node's identity and its governed application activation catalog
   policy:
-    expression: (action != "process.host" || resource == "bee:workers") && (action != "system.read" || resource == "node")
+    expression: '(action != "process.host" || resource == "bee:workers") && (action != "system.read" || resource == "node") && (action != "db.get" || resource == "bee.gov:db") && (action != "registry.overlay.get" || resource matches "^bee[.](gov[.]apps|packages|governance[.]workspace_applications):.+$")'
     actions:
     - system.read
     - tty.mount
@@ -31,6 +31,8 @@ entries:
     - funcs.security
     - registry.snapshot
     - registry.history
+    - db.get
+    - registry.overlay.get
     resources: '*'
     effect: allow
 - name: processes_policy

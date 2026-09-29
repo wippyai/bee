@@ -1,0 +1,148 @@
+-- MIT. The Agent window's view of the sessions contract: the launchable
+-- catalog, one open session and the work given to it. Every call goes through
+-- the sessions client, so admission, executors and placement stay behind the
+-- contract. Calls are synchronous; the window runs them off its event loop.
+local sessions = require("sessions")
+local json = require("json")
+local M = {}
+
+M.MAX_PAGES = 16
+M.MAX_TURNS = 64
+
+type Fault = {code: string, message: string, retry: string, operation_key: string?}
+type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, title: string,
+    status: string, ready: boolean, reason: string}
+type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
+type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain"
+type Turn = {work: sessions.Work, input: string, state: TurnState, text: string}
+type Unsent = {text: string, key: string}
+type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
+    turns: {Turn}, unsent: Unsent?, notice: string}
+
+local function describe(fault: Fault?): string
+    if not fault then return "sessions contract returned no reason" end
+    return fault.code .. ": " .. fault.message
+end
+M.describe = describe
+
+-- Ready entries first, then title order. include_unavailable adds the
+-- candidates the catalog could not confirm, each with its reason.
+function M.list(client: sessions.Client, include_unavailable: boolean): (Listing?, string?)
+    local listing: Listing = {items = {}, unavailable = 0, notes = {}}
+    local cursor: string? = nil
+    for _ = 1, M.MAX_PAGES do
+        local page, fault = client:catalog({include_unavailable = include_unavailable, cursor = cursor})
+        if not page then return nil, describe(fault) end
+        for _, candidate in ipairs(page.items) do
+            if candidate.kind ~= "executor" then
+                local ready = candidate.status == "ready"
+                local reason = candidate.reasons[1] or (ready and "" or candidate.status)
+                listing.items[#listing.items + 1] = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,
+                    title = candidate.title, status = candidate.status, ready = ready, reason = reason}
+            end
+        end
+        listing.unavailable = page.unavailable_count
+        for _, diagnostic in ipairs(page.diagnostics) do listing.notes[#listing.notes + 1] = describe(diagnostic) end
+        if not page.next then break end
+        cursor = page.next
+    end
+    table.sort(listing.items, function(left: Entry, right: Entry): boolean
+        if left.ready ~= right.ready then return left.ready end
+        if left.title ~= right.title then return left.title < right.title end
+        return left.ref < right.ref
+    end)
+    return listing, nil
+end
+
+local function conversation(session: sessions.Session): Conversation
+    local snapshot = session.snapshot
+    return {session = session, title = snapshot.title, lifecycle = snapshot.lifecycle, activity = snapshot.activity,
+        queued = snapshot.queue_count, turns = {}, unsent = nil, notice = ""}
+end
+
+-- The key identifies one open operation: retrying the same key returns the
+-- same session, never a second one.
+function M.open(client: sessions.Client, definition: string, profile: {id: string, revision: integer}?,
+    key: string): (Conversation?, string?)
+    local session, fault = client:open({definition = definition, profile = profile, operation_key = key})
+    if not session then return nil, describe(fault) end
+    return conversation(session), nil
+end
+
+-- Sends text as one unit of work. A failed send keeps its key, so submitting
+-- the same text again resolves the earlier attempt instead of duplicating it.
+function M.submit(conv: Conversation, text: string, new_key: () -> string): boolean
+    local unsent = conv.unsent
+    if not unsent or unsent.text ~= text then unsent = {text = text, key = new_key()} end
+    conv.unsent = unsent
+    local work, fault = conv.session:send({input = text, operation_key = unsent.key})
+    if not work then
+        conv.notice = describe(fault)
+        return false
+    end
+    conv.unsent, conv.notice = nil, ""
+    conv.turns[#conv.turns + 1] = {work = work, input = text, state = "queued", text = ""}
+    if #conv.turns > M.MAX_TURNS then table.remove(conv.turns, 1) end
+    return true
+end
+
+local function render(value: unknown): string
+    if type(value) == "string" then return value end
+    local encoded = json.encode(value)
+    return encoded or "(unreadable result)"
+end
+
+local function settle(turn: Turn, observed: unknown)
+    local await = observed :: {[string]: unknown}
+    if await.tag == "ready" then
+        local result = await.result :: {[string]: unknown}
+        if result.outcome == "succeeded" then
+            turn.state, turn.text = "ready", render(result.value)
+        else
+            local fault = result.error :: Fault
+            turn.state, turn.text = "failed", tostring(result.outcome) .. ": " .. describe(fault)
+        end
+    elseif await.tag == "blocked" then
+        local blocker = await.blocker :: {[string]: unknown}
+        turn.state, turn.text = "blocked", tostring(blocker.message)
+    elseif await.tag == "uncertain" then
+        local evidence = await.evidence :: {[string]: unknown}
+        turn.state, turn.text = "uncertain", tostring(evidence.summary)
+    end
+end
+
+-- Reads the session snapshot and observes each unsettled turn without waiting.
+function M.refresh(conv: Conversation): boolean
+    local current, fault = conv.session:get()
+    if not current then
+        conv.notice = describe(fault)
+        return false
+    end
+    local snapshot = current.snapshot
+    conv.session = current
+    conv.title, conv.lifecycle, conv.activity, conv.queued = snapshot.title, snapshot.lifecycle, snapshot.activity, snapshot.queue_count
+    conv.notice = ""
+    for _, turn in ipairs(conv.turns) do
+        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" then
+            local observed, await_fault = turn.work:await({timeout_ms = 0})
+            if not observed then
+                conv.notice = describe(await_fault)
+            elseif observed.tag == "pending" then
+                local state = turn.work:state()
+                turn.state = state and state.phase == "queued" and "queued" or "working"
+            else
+                settle(turn, observed)
+            end
+        end
+    end
+    return true
+end
+
+function M.pending(conv: Conversation): boolean
+    for _, turn in ipairs(conv.turns) do
+        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" then return true end
+    end
+    return false
+end
+
+return M

@@ -87,6 +87,12 @@ entries:
       restart_policy: automatic
       commands:
       - {name: agent, fullscreen: false}
+- name: agents
+  kind: library.lua
+  source: file://agents.lua
+  modules: [json]
+  imports:
+    sessions: bee.application:sessions
 - name: picker_view
   kind: library.lua
   source: file://picker_view.lua

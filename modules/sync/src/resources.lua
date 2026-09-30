@@ -9,7 +9,7 @@ M.EXPORTS_REF = "bee.sync:exports_ref"
 local function reference(id: string, label: string): (string?, string?)
     local entry = registry.get(id)
     if not entry or type(entry.data) ~= "table" then return nil, label .. " reference unavailable" end
-    local target: unknown = (entry.data :: {[string]: unknown}).resource_ref
+    local target: unknown = (entry.data).resource_ref
     if type(target) ~= "string" or target == "" then return nil, label .. " reference is not linked" end
     return target, nil
 end

@@ -17,7 +17,7 @@ type Descriptor = {schema: string, owner_id: string, feed: string, key: string,
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
     for key in pairs(value) do if type(key) ~= "string" then return nil end end
-    return value :: Object
+    return value
 end
 local function fields(value: Object, allowed: {string}): string?
     local known: {[string]: boolean} = {}

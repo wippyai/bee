@@ -34,3 +34,18 @@ The generated provenance records the selected runtime commit and any patch diges
 A runtime change is ready only when the manifest, patch checks and Bee's
 relevant acceptance gates agree. Experimental upstream work remains outside the
 published integration until its own acceptance contract exists.
+
+## Standalone live-update gap
+
+The pinned runtime records a standalone lock root in
+`DependencyResolution.Deployment.Root`. Its Lua `snapshot:state()` adapter
+omits the deployment record, so Bee cannot inventory that implicit root.
+The standalone Modules app therefore does not offer **Update Bee**, even when
+About shows a newer Hub pack. The explicit registry-root topology remains
+covered by the planner tests; it does not prove standalone self-update.
+
+`make hub-self-update-runtime-check` includes a regression using
+`cmd/app.Bundle.Seed`, with no synthetic application dependency. It fails on
+the current pin at the missing Lua deployment record. An upstream adapter fix
+and subsequent Bee integration are required before standalone live-update
+proof can pass. No local runtime patch or fabricated registry root is applied.

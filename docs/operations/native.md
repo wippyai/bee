@@ -170,7 +170,13 @@ then switches the activation record. Failure retains the previous selection.
 This offline deployment command requires Bee to stop because the state directory
 has an exclusive process-lifetime lock.
 
-The Modules app also offers **Update Bee** while Bee is running. It updates the
+For a host with an explicit `bee/bee` dependency entry, Modules offers
+**Update Bee** while Bee is running. The current standalone lock topology lacks
+that entry and the pinned runtime does not expose its implicit application root
+to Lua inventory, so standalone Modules does not offer this action. See the
+[runtime gap](../development/runtime.md#standalone-live-update-gap).
+
+The explicit-root action updates the
 host `bee/bee` dependency root through the Hub plan, approval, publication,
 receipt and migration path, resolving the Bee-owned `bee/*` pack closure while
 preserving third-party roots. It does not stop the current owner; new registry

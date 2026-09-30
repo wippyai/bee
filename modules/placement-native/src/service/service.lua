@@ -873,6 +873,17 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
             if enforcement then return enforcement end
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; no execution identity recorded"}})
         end
+        -- A runner answers status only once its child exists; while it
+        -- prepares the child, its presence is the supervision.
+        if attempt.execution_state == "starting" and row then
+            local present, presence_error = M.runner_present(row)
+            if present == nil then return fail("UNAVAILABLE", presence_error or "runner presence is unknown") end
+            if present then
+                local enforcement = M.enforce_grants(attempt)
+                if enforcement then return enforcement end
+                return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "runner present while preparing the child; no execution identity recorded"}})
+            end
+        end
         M.retire_gateway(attempt, "attempt uncertain: no execution identity")
         return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unidentified", detail = "no execution identity to prove presence or absence"}})
     end

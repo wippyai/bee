@@ -491,9 +491,9 @@
       "topic": "component"
     },
     {
-      "bytes": 24279,
+      "bytes": 24536,
       "id": "component/placement:native",
-      "sha256": "af85c953e72c39a39b86ad31b61f5687617157757bd3de27092289868668f96e",
+      "sha256": "fc579e6f4b97d1627279e1059e6ebf5068ebf32fc6d8aad2cbd85dec973aa2d1",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 691697,
+    "bytes": 691954,
     "documents": 77
   }
 }

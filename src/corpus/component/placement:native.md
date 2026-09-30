@@ -315,6 +315,11 @@ from the process table and `kern.bootsessionuuid`. Both read the process
 group with `ps`. A group signal succeeds only when the OS command
 exits with status zero. Command refusal leaves stop unproven and records
 `stop.unproven`, rather than claiming `signal.group` evidence.
+
+Reconciliation treats a starting attempt without an execution identity as
+supervised while its runner process is present on a host: the runner answers
+status probes only once its child exists. A starting attempt whose runner is
+absent becomes `uncertain`.
 `reconcile` proves absence the same way and
 keeps uncertainty where identity is missing. `cleanup` removes the home
 only from `exited`; a cleanup whose scope is not proven gone records

@@ -2207,6 +2207,28 @@ local function define_tests()
             local blocked = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
             test.eq(blocked.error and blocked.error.code, "CONFLICT")
         end)
+        test.it("keeps a starting attempt whose runner is present while it prepares the child", function()
+            local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local db = store.open()
+            if not db then error("store") end
+            -- A runner materializing configuration is a live host process
+            -- that does not answer status probes until its child exists.
+            local runner = tostring(assert(process.spawn("bee.host:idle_process", "bee:workers")))
+            local _, claim_error = db:execute("UPDATE bee_placement_attempts SET execution_state = 'starting', runner_pid = ?, pid = NULL, pgid = NULL, start_ticks = NULL, boot_id = NULL WHERE attempt_id = ?", {runner, prepared.attempt_id})
+            db:release()
+            if claim_error then error("claim attempt: " .. tostring(claim_error)) end
+            local reconciled = attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
+            test.eq(reconciled.execution_state, "starting")
+            test.is_true(has(kinds(prepared.attempt_id), "reconcile.supervised"))
+            assert(process.cancel(runner, "runner stand-in released"))
+            local released = store.open()
+            if not released then error("store") end
+            local _, release_error = released:execute("UPDATE bee_placement_attempts SET runner_pid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+            released:release()
+            if release_error then error("release attempt: " .. tostring(release_error)) end
+            test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "uncertain")
+        end)
         test.it("resolves grants through the resource authority when the host selects granted mode", function()
             local workspace = fresh("ws")
             resource_call("associate", {workspace_id = workspace, name = "project", root_ref = ROOT, subpath = "", allowed_access = "write"})

@@ -268,11 +268,17 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     local reconciled, reconcile_error = io.reconcile(request.attempt_id)
     if reconcile_error then return uncertain(request, "placement exit cannot be proven: " .. reconcile_error, observed) end
     local final_attempt, final_decode_error = placement_attempt(reconciled)
-    if not final_attempt or final_attempt.execution_state ~= "exited" or final_attempt.exit_source == nil then
+    if not final_attempt or final_attempt.attempt_id ~= request.attempt_id or final_attempt.execution_state ~= "exited" or final_attempt.exit_source == nil then
         return uncertain(request, "placement exit cannot be proven: " .. tostring(final_decode_error or "attempt is not proven exited"), final_attempt)
     end
-    if observe_error then return uncertain(request, "driver stream ended without a durable terminal report: " .. observe_error, final_attempt) end
     local observation = object(observed)
+    if observation and observation.stopped == true then
+        return {state = "settled", outcome = "cancelled", error = {code = "CANCELLED", message = "placement stopped the process"},
+            attempt_id = request.attempt_id, checkpoint = {attempt_id = request.attempt_id,
+                resume_ref = request.checkpoint and request.checkpoint.resume_ref},
+            observations = observation.observations or {}, evidence = final_attempt}, nil
+    end
+    if observe_error then return uncertain(request, "driver stream ended without a durable terminal report: " .. observe_error, final_attempt) end
     local terminal = observation and object(observation.terminal) or nil
     if not terminal or terminal.outcome == "uncertain" then
         return uncertain(request, "driver stream ended without a terminal result", final_attempt)

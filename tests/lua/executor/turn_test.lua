@@ -100,6 +100,16 @@ end
 
 local function define_tests()
     test.describe("External executor turn", function()
+        test.it("settles an authenticated placement stop without requiring a provider terminal frame", function()
+            local request = base_request()
+            local io = success_io()
+            io.observe = function(): (unknown, string) return {stopped = true, observations = {}}, "interrupted frame" end
+            local result = assert(turn.execute(io, request))
+            test.eq(result.state, "settled")
+            test.eq(result.outcome, "cancelled")
+            io.reconcile = function(): (unknown, nil) return {attempt_id = "attempt-current", execution_state = "running"}, nil end
+            test.eq(assert(turn.execute(io, request)).state, "uncertain")
+        end)
         test.it("reconciles a recovered current attempt before any plan or invocation", function()
             local calls: {string} = {}
             local io = success_io(calls)

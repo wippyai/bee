@@ -240,6 +240,100 @@ local function define_tests()
             test.not_nil(receipt_at)
             test.is_true(status_at < reason_at and reason_at < receipt_at)
         end)
+        test.it("renders usable apps first with installed indicators and developer package filter at 120x36 and 80x24", function()
+            local state = model.new()
+            model.apply_installed(state, {ok = true, replayed = false, value = {modules = {
+                {component = "bee/terminal", version = "0.4.6", source = "builtin", direct = true, used_by = {}},
+                {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+            }, roots = {}}})
+            model.apply_catalog(state, {ok = true, replayed = false, value = {total = 5, items = {
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19"},
+                {component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6"},
+                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
+                {component = "bee/terminal", title = "Terminal", description = "Workspace terminal console", latest_version = "0.4.6"},
+                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
+            }}})
+
+            for _, dims in ipairs({{120, 36}, {80, 24}}) do
+                local w, h = dims[1], dims[2]
+                local drawn = view.draw(w, h, appearance.defaults(), state, 0, "")
+                test.eq(#drawn.rows, h)
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), w) end
+                local text = table.concat(drawn.rows, "\n")
+
+                -- Usable apps are shown on landing
+                test.is_true(text:find("bee/terminal", 1, true) ~= nil, "missing bee/terminal in " .. tostring(w))
+                test.is_true(text:find("userspace/calc", 1, true) ~= nil, "missing userspace/calc in " .. tostring(w))
+                test.is_true(text:find("userspace/editor", 1, true) ~= nil, "missing userspace/editor in " .. tostring(w))
+
+                -- Developer packages / libraries are hidden by default
+                test.is_true(text:find("wippy/test", 1, true) == nil, "wippy/test should be hidden in " .. tostring(w))
+                test.is_true(text:find("wippy/terminal", 1, true) == nil, "wippy/terminal should be hidden in " .. tostring(w))
+
+                -- Indicators and actions: Built-in and Installed show Open, uninstalled shows Install
+                test.is_true(text:find("Built-in · Open", 1, true) ~= nil, "missing Built-in · Open in " .. tostring(w))
+                test.is_true(text:find("Installed · Open", 1, true) ~= nil, "missing Installed · Open in " .. tostring(w))
+                test.is_true(text:find("Install 2.0.0", 1, true) ~= nil, "missing Install 2.0.0 in " .. tostring(w))
+
+                -- Header has Developer packages filter button
+                test.is_true(text:find("Developer packages", 1, true) ~= nil, "missing Developer packages button in " .. tostring(w))
+                local has_dev_filter_hit = false
+                for _, hit in ipairs(drawn.hits) do
+                    if hit.kind == "developer_packages" then has_dev_filter_hit = true end
+                    test.is_true(hit.x >= 1 and hit.y >= 1 and hit.x + hit.width - 1 <= w and hit.y + hit.height - 1 <= h, "hit bounds")
+                end
+                test.is_true(has_dev_filter_hit, "missing dev filter hit in " .. tostring(w))
+
+                -- Bottom action bar has Open button for selected built-in app
+                test.eq(state.selected, "bee/terminal")
+                local has_open_hit = false
+                for _, hit in ipairs(drawn.hits) do
+                    if hit.kind == "details" and hit.y == h - 1 then has_open_hit = true end
+                end
+                test.is_true(has_open_hit, "missing details Open hit in " .. tostring(w))
+                test.is_true(drawn.rows[h]:find("Enter open", 1, true) ~= nil, "missing Enter open hint in " .. tostring(w))
+
+                -- When an uninstalled package is selected, action shows Install and footer shows Enter install
+                model.select(state, "userspace/editor")
+                model.show(state, "catalog")
+                local drawn_uninstalled = view.draw(w, h, appearance.defaults(), state, 0, "")
+                test.is_true(drawn_uninstalled.rows[h]:find("Enter install", 1, true) ~= nil, "missing Enter install hint in " .. tostring(w))
+                model.select(state, "bee/terminal")
+                model.show(state, "catalog")
+            end
+
+            -- Enable developer packages filter and assert rendered frames
+            model.set_developer_packages(state, true)
+            for _, dims in ipairs({{120, 36}, {80, 24}}) do
+                local w, h = dims[1], dims[2]
+                local drawn = view.draw(w, h, appearance.defaults(), state, 0, "")
+                test.eq(#drawn.rows, h)
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), w) end
+                local text = table.concat(drawn.rows, "\n")
+
+                -- Filter button is marked active [x]
+                test.is_true(text:find("Developer packages [x]", 1, true) ~= nil, "missing active filter in " .. tostring(w))
+
+                -- Libraries are now visible
+                test.is_true(text:find("wippy/test", 1, true) ~= nil, "missing wippy/test after filter on in " .. tostring(w))
+                test.is_true(text:find("wippy/terminal", 1, true) ~= nil, "missing wippy/terminal after filter on in " .. tostring(w))
+            end
+
+            -- When only developer packages are in the catalog and filter is off, empty state explains
+            local empty_state = model.new()
+            model.apply_catalog(empty_state, {ok = true, replayed = false, value = {total = 1, items = {
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19"},
+            }}})
+            for _, dims in ipairs({{120, 36}, {80, 24}}) do
+                local w, h = dims[1], dims[2]
+                local drawn = view.draw(w, h, appearance.defaults(), empty_state, 0, "")
+                test.eq(#drawn.rows, h)
+                for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), w) end
+                local text = table.concat(drawn.rows, "\n")
+                test.is_true(text:find("No applications on this page", 1, true) ~= nil, "missing empty state line 1 in " .. tostring(w))
+                test.is_true(text:find("Developer packages are hidden", 1, true) ~= nil, "missing empty state line 2 in " .. tostring(w))
+            end
+        end)
     end)
 end
 return test.run_cases(define_tests)

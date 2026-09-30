@@ -199,6 +199,14 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             # composition compiles them against the library and never ships them.
             shutil.copytree(ROOT / "docs/reference/apps", folder / "src/tests/reference_apps/apps")
             shutil.copytree(ROOT / "tests/fixtures/sessions/src", folder / "src/tests/fixtures/sessions")
+            # SDK unit tests explicitly select their synthetic contract owners.
+            sessions_index = folder / "modules/sessions/src/binding/_index.yaml"
+            sessions_document = yaml.safe_load(sessions_index.read_text())
+            for binding in sessions_document["entries"]:
+                if binding["name"] in {"owner_binding", "catalog_binding"}:
+                    for contract in binding["contracts"]:
+                        contract["default"] = False
+            sessions_index.write_text(yaml.safe_dump(sessions_document, sort_keys=False))
             # This test-support copy overrides homes while exercising the
             # component's current materialization source; it never enters a
             # production source tree or assembled pack.

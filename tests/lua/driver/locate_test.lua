@@ -21,6 +21,7 @@ local function define_tests()
         test.it("decodes all readiness states and retains safe evidence", function()
             local cases = {
                 {input = probe(true), status = "ready"},
+                {input = probe(false), status = "unconfigured"},
                 {input = {profile_id = "window", configured = false, platform = {os = "linux", arch = "x86_64", compatible = true}}, status = "unconfigured"},
                 {input = {profile_id = "window", configured = true, executable = {present = false}, platform = {os = "linux", arch = "x86_64", compatible = true}}, status = "missing"},
                 {input = {profile_id = "window", configured = true, executable = {present = true, version = "1.2.3"}, login_file_exists = true, platform = {os = "windows", arch = "x86_64", compatible = false}}, status = "incompatible"},
@@ -67,6 +68,9 @@ local function define_tests()
                 test.eq(result.login.evidence, "file_exists")
                 test.eq(result.login.path, case.path)
                 test.eq(result.status, "ready")
+                local missing = assert(case.driver.handle(probe(false)))
+                test.eq(missing.status, "unconfigured")
+                test.eq(missing.reason, "the provider login file is absent")
             end
         end)
 

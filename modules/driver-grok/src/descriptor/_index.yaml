@@ -49,7 +49,7 @@ entries:
         - {if: gateway_tools, then: [--allow, 'MCPTool(bee__*)']}
         - {if: brief, then: [--, {field: brief}]}
         readiness: terminal:attached
-        provider_home_private: false
+        provider_home_private: true
         login: true
       first_turn:
         argv:

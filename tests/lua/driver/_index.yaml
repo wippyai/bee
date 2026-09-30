@@ -47,6 +47,7 @@ entries:
   kind: function.lua
   source: file://login_evidence_test.lua
   method: run
+  modules: [registry]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -56,6 +57,9 @@ entries:
     grok_launch: bee.driver.grok:launch
     muse_launch: bee.driver.muse:launch
     opencode_launch: bee.driver.opencode:launch
+    universal: bee.driver:universal
+    materialization: bee.placement.native.service:materialization
+    placement_types: bee.placement:types
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua

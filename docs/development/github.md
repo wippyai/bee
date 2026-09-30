@@ -72,7 +72,10 @@ restore prefix: a changed build input rebuilds it. On an exact hit,
 version, mode and every artifact digest before any cached binary runs. A
 failed verification stops the job. On a miss, the pinned builder action builds
 the toolchain and the same check runs before the result is cached. The builder
-executable's digest is recorded and checked with the toolchain.
+executable's digest is recorded and checked with the toolchain. Local `make
+lint`, `make test`, `make fixture-lint` and `make check` reuse the same input
+comparison through `toolchain-current` and rebuild when the cached provenance
+is stale.
 
 Go caches use a matching-input prefix and then an OS/architecture prefix, so
 jobs can reuse downloaded modules and compiled packages as dependencies

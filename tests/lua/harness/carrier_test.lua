@@ -532,6 +532,110 @@ local function define_tests()
                 "terminal output is complete or explicitly incomplete while EOF is in flight")
             test.eq(truncated, 0)
         end)
+        test.it("keeps the post-exit drain budget while a slow carrier holds the spool full", function()
+            local policy = registry.get(POLICY)
+            if not policy then error("fixture policy entry") end
+            local data = policy.data :: {[string]: unknown}
+            local saved_drain = data.runner_drain_ms
+            local saved_carrier_drain = data.drain_ms
+            data.runner_drain_ms = 2000
+            -- The carrier settles past runner_drain_ms + drain_ms without
+            -- the terminal envelope; a wide carrier drain isolates the
+            -- runner's post-exit deadline under test.
+            data.drain_ms = 300000
+            local narrowed = registry.snapshot():changes()
+            narrowed:update(policy)
+            local shrunk, shrink_error = narrowed:apply()
+            if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            local expected = 280
+            -- 280 deltas of 2000 bytes are some 590 KB, far past the 256 KB
+            -- spool: the spool pins full while the child writes, so the pipe
+            -- tail holding the result is still unread at the exit and the
+            -- drain arms. Each commit waits 800 ms, so the carrier drains at
+            -- most 20 KB/s: a 2 s wall-clock window past the exit would let
+            -- at most 40 KB of the full pipes leave, while the full drain
+            -- takes some seventeen times it. Reads paused at the spool limit
+            -- do not consume the drain budget, so the terminal envelope
+            -- arrives.
+            local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected),
+                BEE_FIXTURE_FLOOD_TEXT = "2000", BEE_FIXTURE_FLOOD_PACE = "0"}
+            local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
+                "open", nil, nil, nil, 800, 300000)
+            data.runner_drain_ms = saved_drain
+            data.drain_ms = saved_carrier_drain
+            local widened = registry.snapshot():changes()
+            widened:update(policy)
+            local restored, restore_error = widened:apply()
+            if not restored then error("restore runner drain: " .. tostring(restore_error)) end
+            if not outcome.value then error("slow drain run failed: " .. tostring(outcome.error)) end
+            local settlement = outcome.value.settlement :: {[string]: unknown}
+            test.eq(settlement.outcome, "succeeded")
+            test.eq(settlement.answer, "flood-complete")
+            local _, records = kinds(thread_id)
+            local deltas = 0
+            for _, item in ipairs(observations(records, nil)) do
+                local body = item.body :: {[string]: unknown}
+                local data = body.data :: {[string]: unknown}
+                if data.type == "text" then
+                    test.eq(data.text, string.rep("x", 2000), "every burst delta retains its full content")
+                    deltas = deltas + 1
+                end
+            end
+            test.eq(deltas, expected)
+            local truncated = 0
+            for _, item in ipairs(observations(records, "bee.carrier.output")) do
+                local body = item.body :: {[string]: unknown}
+                local payload = require("json").decode(tostring((body.data :: {[string]: unknown}).payload_json)) :: {[string]: unknown}
+                if payload.stream ~= nil and payload.state == "truncated" then truncated = truncated + 1 end
+            end
+            test.eq(truncated, 0)
+        end)
+        test.it("still truncates a silent consumer at the drain deadline", function()
+            local policy = registry.get(POLICY)
+            if not policy then error("fixture policy entry") end
+            local data = policy.data :: {[string]: unknown}
+            local saved_drain = data.runner_drain_ms
+            local saved_retain = data.retain_ms
+            data.runner_drain_ms = 1000
+            data.retain_ms = 2000
+            local narrowed = registry.snapshot():changes()
+            narrowed:update(policy)
+            local shrunk, shrink_error = narrowed:apply()
+            if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            -- A small stream with a descendant holding the pipes: the drain
+            -- arms while the carrier is already dead after its first commit,
+            -- so later acknowledgments never come and the drain fires on
+            -- schedule. A pause cannot hold the silence instead: an
+            -- unacknowledged spool fills and the child never reaches exit.
+            -- FLOOD_EXIT would skip the orphan, so the stream stays small.
+            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
+                BEE_FIXTURE_ORPHAN = "5"})
+            local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed")
+            test.is_nil(crashed.value)
+            test.is_true(tostring(crashed.error):find("crash after committed", 1, true) ~= nil)
+            local drained, finished = false, false
+            for _ = 1, 300 do
+                local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
+                for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                    if item.kind == "output.drain_elapsed" then drained = true end
+                    if item.kind == "runner.finished" then finished = true end
+                end
+                if drained and finished then break end
+                time.sleep("100ms")
+            end
+            data.runner_drain_ms = saved_drain
+            data.retain_ms = saved_retain
+            local widened = registry.snapshot():changes()
+            widened:update(policy)
+            local restored, restore_error = widened:apply()
+            if not restored then error("restore runner drain: " .. tostring(restore_error)) end
+            test.is_true(drained)
+            test.is_true(finished)
+        end)
         test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")

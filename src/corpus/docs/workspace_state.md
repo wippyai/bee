@@ -45,7 +45,8 @@ PID strings may repeat across runtime boots.
 
 `meta.application.resume_schema` and `restart_policy` declare support. The policies
 are `never` (default), `automatic` and `manual`. Automatic instances reopen at
-boot in saved order; manual instances resume when opened. Restored launches carry
+boot in saved order; independent restores proceed together and complete as each
+application answers. Manual instances resume when opened. Restored launches carry
 `resume_schema` and `resume_state`, stable logical IDs and fresh capabilities.
 
 `client.checkpoint(launch, json_string)` returns a queued request ID. Only a

@@ -69,6 +69,13 @@ entries:
     actions: [bee.threads.sessions_owner]
     resources: '*'
     effect: allow
+- name: sessions_other_workspace_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.sessions.workspace.send, bee.sessions.workspace.cancel, bee.sessions.workspace.close]
+    resources: ['cccccccccccccccccccccccccccccccc']
+    effect: allow
 - name: inbox_send_test_policy
   kind: security.policy
   meta: {type: test_support}

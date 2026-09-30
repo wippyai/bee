@@ -59,7 +59,7 @@ local closing = s:close{operation_key = "close/worker"}
 - `join{works, operation_key, policy?, quorum?, timeout_ms?}` takes 1 to 64 distinct works, returns one `JoinAwait` with every child's observation in input order, and validates `quorum` against the set.
 - `get(session_ref)` and `work(work_ref)` rehydrate a Session or Work from a ref; `work:state()` reads the `WorkState`, which carries `sender`, the owner-set authenticated sender of the work (a SessionRef when the caller is a session, else the principal). Callers never supply a sender. Refs (`bs:`, `bw:`, `bo:`, `bj:` qualified strings) are the only addresses; `:ref()` returns one.
 - Handles capture the session incarnation and send it as `expected_incarnation`; a session reset makes them fail with `STALE` rather than act on the new incarnation.
-- `list{filter?, cursor?}` filters by `lifecycle` and `activity` (`idle`, `working`, `blocked`, `stalled`); session snapshots carry both. `catalog{kind?, include_unavailable?, cursor?}` returns the owner's candidates.
+- `list{filter?, cursor?}` filters by `workspace`, `definition`, `lifecycle` and `activity` (`idle`, `working`, `blocked`, `stalled`); session snapshots carry both. `catalog{kind?, include_unavailable?, cursor?}` returns the owner's candidates.
 
 Requests are validated before dispatch (`INVALID`): bounded text and refs, JSON inputs of at most 64 KiB and depth 16.
 

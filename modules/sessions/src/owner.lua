@@ -545,7 +545,7 @@ end
 local function list(request: Object): Reply
     if bounds.fields(request, {filter = true, cursor = true}) then return fail("INVALID", "list accepts only filter and cursor") end
     local filter = object(request.filter)
-    if request.filter ~= nil and (not filter or bounds.fields(filter, {lifecycle = true, activity = true})) then
+    if request.filter ~= nil and (not filter or bounds.fields(filter, {lifecycle = true, activity = true, workspace = true, definition = true})) then
         return fail("INVALID", "session filter is malformed")
     end
     local lifecycle = filter and filter.lifecycle or nil
@@ -555,9 +555,12 @@ local function list(request: Object): Reply
     if activity ~= nil and activity ~= "idle" and activity ~= "working" and activity ~= "blocked" and activity ~= "stalled" then
         return fail("INVALID", "activity filter is invalid")
     end
+    local workspace = filter and filter.workspace or nil
+    local definition = filter and filter.definition or nil
+    if (workspace ~= nil and not bounds.id(workspace)) or (definition ~= nil and not ref(definition)) then return fail("INVALID", "workspace or definition filter is invalid") end
     local cursor = request.cursor == nil and nil or ref(request.cursor)
     if request.cursor ~= nil and not cursor then return fail("INVALID", "cursor is invalid") end
-    local page, scan_error = journal.invoke("session_scan", {cursor = cursor, limit = 64})
+    local page, scan_error = journal.invoke("session_scan", {cursor = cursor, limit = 64, workspace = workspace})
     if scan_error or not page then return unavailable(scan_error or "Threads returned no session page", nil) end
     local scan = object(page)
     local refs = scan and scan.items
@@ -568,7 +571,8 @@ local function list(request: Object): Reply
         if not session then return unavailable("Threads returned a malformed session ref", nil) end
         local current, read_error = describe(session)
         if not current then return unavailable(read_error or "cannot read a listed session", nil) end
-        if (lifecycle == nil or current.lifecycle == lifecycle) and (activity == nil or current.activity == activity) then
+        if (lifecycle == nil or current.lifecycle == lifecycle) and (activity == nil or current.activity == activity)
+            and (definition == nil or current.definition == definition) then
             items[#items + 1] = current
         end
     end

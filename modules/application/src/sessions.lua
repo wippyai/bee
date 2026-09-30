@@ -36,7 +36,7 @@ type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, 
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
     operation_key: string}
-type ListOptions = {filter: {lifecycle: string?, activity: string?}?, cursor: string?}
+type ListOptions = {filter: {lifecycle: string?, activity: string?, workspace: string?, definition: string?}?, cursor: string?}
 type HistoryOptions = {session: string, cursor: integer?, limit: integer?}
 type CatalogOptions = {kind: CatalogKind?, include_unavailable: boolean?, cursor: string?}
 
@@ -492,11 +492,11 @@ local function new_client(): Client
         local request: {[string]: unknown} = {}
         if options and options.filter ~= nil then
             local filter = bounds.object(options.filter)
-            if not filter or bounds.fields(filter, {"lifecycle", "activity"}) then return nil, invalid("filter is malformed") end
+            if not filter or bounds.fields(filter, {"lifecycle", "activity", "workspace", "definition"}) then return nil, invalid("filter is malformed") end
             local allowed: {[string]: {string}} = {lifecycle = {"opening", "active", "suspended", "closing", "closed"},
                 activity = {"idle", "working", "blocked", "stalled"}}
             for name, raw in pairs(filter) do
-                local matched = false
+                local matched = (name == "workspace" or name == "definition") and bounds.id(raw) ~= nil
                 for _, item in ipairs(allowed[name] or {}) do if item == raw then matched = true end end
                 if not matched then return nil, invalid("filter " .. name .. " is invalid") end
             end

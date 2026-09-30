@@ -48,6 +48,7 @@ entries:
     - bee.sessions.binding:external_executor_binding
     - bee.threads:journal_local
     - bee.executor.external.binding:run_turn
+    - bee.threads.service:session_scan
     - bee.threads.service:session_create
     - bee.threads.service:session_describe
     - bee.threads.service:session_transition

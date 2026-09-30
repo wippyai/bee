@@ -18,11 +18,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local home = agents.home(item.session)
         local workspace = home and names[home]
         local location = workspace and (workspace.label .. " · " .. workspace.folder) or "Workspace unavailable"
-        cells[#cells + 1] = {text.bound(item.title, 512), item.activity, text.bound(location, 512), item.lifecycle}
+        cells[#cells + 1] = {text.bound(item.title, 512), item.provider or "—", item.activity, text.bound(location, 512), item.lifecycle}
     end
     local last = layout.work.y + layout.work.height - 2
     local window = frame.table(painter, layout.work.y, last, {columns = {
-        {title = "Session", width = 0}, {title = "Activity", width = 10}, {title = "Workspace · folder", width = 28},
+        {title = "Session", width = 0}, {title = "Provider", width = 12}, {title = "Activity", width = 10}, {title = "Workspace · folder", width = 28},
         {title = "State", width = 10}}, cells = cells, kind = "session", selected = selected, offset = 0, focused = true})
     if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N new session · choose an agent, then send work") end
     if height >= 6 then frame.line(painter, height - 2, text.bound(status, 512), painter.theme.text) end

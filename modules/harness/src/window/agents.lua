@@ -4,6 +4,8 @@
 -- contract. Calls are synchronous; the window runs them off its event loop.
 local sessions = require("sessions")
 local json = require("json")
+local funcs = require("funcs")
+local thread_record = require("thread_record")
 local sessions_protocol = require("sessions_protocol")
 local bounds = require("bounds")
 local caller = require("caller")
@@ -20,10 +22,10 @@ type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, t
     status: string, ready: boolean, reason: string}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain"
-type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?}
+type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
-    turns: {Turn}, unsent: Unsent?, notice: string}
+    turns: {Turn}, unsent: Unsent?, notice: string, thread_cursor: integer?}
 
 local function describe(fault: Fault?): string
     if not fault then return "sessions contract returned no reason" end
@@ -62,8 +64,9 @@ end
 
 local function conversation(session: sessions.Session): Conversation
     local snapshot = session.snapshot
+    local turns: {Turn} = {}
     return {session = session, title = snapshot.title, lifecycle = snapshot.lifecycle, activity = snapshot.activity,
-        queued = snapshot.queue_count, turns = {}, unsent = nil, notice = ""}
+        queued = snapshot.queue_count, turns = turns, unsent = nil, notice = "", thread_cursor = 0}
 end
 
 -- The key identifies one open operation: retrying the same key returns the
@@ -129,6 +132,50 @@ local function settle(turn: Turn, observed: unknown)
     end
 end
 
+local function observe_thread(conv: Conversation)
+    local thread = conv.session.snapshot.thread_ref
+    if not thread then return end
+    local reply = caller.new(funcs.call):invoke("bee.threads.service:read_after", {thread_id = thread,
+        cursor = conv.thread_cursor or 0, limit = 64})
+    if not reply or not reply.ok then return end
+    local page = bounds.object(reply.value)
+    local rows = page and bounds.array(page.records, 64)
+    local cursor = page and bounds.count(page.scanned_through)
+    if not rows or not cursor then return end
+    for _, raw in ipairs(rows) do
+        local envelope = thread_record.decode(raw)
+        if envelope and envelope.type == "extension" then
+            local extension = envelope.data
+            if extension.event_name == "bee.sessions.event" then
+                local decoded = json.decode(extension.payload_json)
+                local event = bounds.object(decoded)
+                local detail = event and bounds.object(event.data)
+                local observation = detail and bounds.object(detail.observation)
+                local data = observation and bounds.object(observation.data)
+                if event and event.kind == "turn.observation" and observation and data then
+                    for _, turn in ipairs(conv.turns) do
+                        if detail and detail.work == turn.work:ref() and (turn.state == "queued" or turn.state == "working") then
+                            if observation.type == "text" and type(data.text) == "string" and #data.text <= 65536 then
+                                local segment = bounds.id(data.segment_id) or "answer"
+                                turn.segments = turn.segments or {}
+                                local pieces = turn.segments :: {[string]: string}
+                                pieces[segment] = data.operation == "append" and ((pieces[segment] or "") .. data.text) or data.text
+                                local keys: {string} = {}
+                                for key in pairs(pieces) do keys[#keys + 1] = key end
+                                table.sort(keys)
+                                local values: {string} = {}
+                                for _, key in ipairs(keys) do values[#values + 1] = pieces[key] end
+                                turn.text = table.concat(values, "\n"):sub(-65536)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    conv.thread_cursor = cursor
+end
+
 -- Reads the session snapshot and observes each unsettled turn without waiting.
 function M.refresh(conv: Conversation): boolean
     local current, fault = conv.session:get()
@@ -153,12 +200,13 @@ function M.refresh(conv: Conversation): boolean
             end
         end
     end
+    observe_thread(conv)
     return true
 end
 
 function M.remember(current: Conversation, saved: Conversation): Conversation
     return {session = current.session, title = current.title, lifecycle = current.lifecycle, activity = current.activity,
-        queued = current.queued, turns = saved.turns, unsent = saved.unsent, notice = current.notice}
+        queued = current.queued, turns = saved.turns, unsent = saved.unsent, notice = current.notice, thread_cursor = saved.thread_cursor}
 end
 
 function M.resume(client: sessions.Client, ref: string): (Conversation?, string?)

@@ -14,3 +14,5 @@ defaults; the kit starts the pull scheduler against the Threads journal.
 
 Provider login checks use the home selected by each profile; file existence
 is an observation and the provider owns authentication.
+
+Session reads and list pagination include home-workspace sessions plus workspaces explicitly admitted by `bee.threads.workspace`. Cross-workspace mutations require separate exact host grants: `bee.sessions.workspace.send`, `bee.sessions.workspace.cancel`, and `bee.sessions.workspace.close`. Visibility alone grants no mutation authority. List filters accept workspace, definition, lifecycle and activity.

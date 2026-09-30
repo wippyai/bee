@@ -191,18 +191,36 @@ local function turn_row(row: Row): (Turn?, string?)
         settle_record_id = settle_record_id, created_at = created_at}, nil
 end
 
+local function target_workspace(address: string, home: string?): string?
+    if not home then return nil end
+    local target = address:match("^[a-z]+:[^:]+:([^:]+):[^:]+$")
+    if target and target ~= home and access.may_list_workspace(target) then return target end
+    return home
+end
+
+local function mutation_workspace(address: string, home: string?, operation: string): string?
+    local target = address:match("^[a-z]+:[^:]+:([^:]+):[^:]+$")
+    if target and target ~= home then
+        if access.may_use_sessions_workspace(target, operation) then return target end
+        return nil
+    end
+    return home
+end
+
 local function get_session(tx: sql.Transaction, session_ref: string, workspace: string?): (Session?, string?)
+    workspace = target_workspace(session_ref, workspace)
     local row, query_error = query_one(tx, "SELECT session_ref, thread_id, workspace_id, owner_actor, title, state, revision, created_at, updated_at, route_json, context_json " ..
-        "FROM bee_sessions WHERE session_ref = ? AND (? IS NULL OR workspace_id = ?)", {session_ref, workspace, workspace}, "session")
+        "FROM bee_sessions WHERE session_ref = ? AND (? IS NULL OR workspace_id = ?)", {session_ref, workspace or sql.NULL, workspace or sql.NULL}, "session")
     if query_error then return nil, query_error end
     if not row then return nil, nil end
     return session_row(row)
 end
 
 local function get_work(tx: sql.Transaction, work_ref: string, workspace: string?): (Work?, string?)
+    workspace = target_workspace(work_ref, workspace)
     local row, query_error = query_one(tx, "SELECT work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
         "output_schema, sender_kind, sender_id, result_json, uncertainty_json, operation_ref, created_at FROM bee_session_work WHERE work_ref = ? AND (? IS NULL OR workspace_id = ?)",
-        {work_ref, workspace, workspace}, "work")
+        {work_ref, workspace or sql.NULL, workspace or sql.NULL}, "work")
     if query_error then return nil, query_error end
     if not row then return nil, nil end
     return work_row(row)
@@ -444,18 +462,35 @@ function M.session_scan(db: sql.DB, actor: string, request: unknown): Result
     local _, workspace, denied = authenticated(actor)
     if denied then return denied end
     local input = object(request)
-    if not input or not has_only(input, {cursor = true, limit = true}) then return missing_request() end
+    if not input or not has_only(input, {cursor = true, limit = true, workspace = true}) then return missing_request() end
     local cursor = input.cursor == nil and nil or ref(input.cursor)
     local limit = input.limit == nil and MAX_SESSION_SCAN or integer(input.limit)
     if (input.cursor ~= nil and not cursor) or not limit or limit < 1 or limit > MAX_SESSION_SCAN then
         return failure("INVALID_ARGUMENT", "session cursor or scan limit is invalid")
     end
+    local selected_workspace = input.workspace == nil and nil or text(input.workspace, 32)
+    if input.workspace ~= nil and (not selected_workspace or (selected_workspace ~= workspace and not access.may_list_workspace(selected_workspace))) then return failure("DENIED", "workspace visibility requires a host grant") end
     local page_limit = limit :: integer
     local cursor_parameter = cursor or sql.NULL
     return transaction.read(db, function(tx: sql.Transaction): Result
-        local rows, query_error = tx:query("SELECT session_ref FROM bee_sessions " ..
-            "WHERE workspace_id = ? AND (? IS NULL OR session_ref > ?) ORDER BY session_ref LIMIT ?",
-            {workspace, cursor_parameter, cursor_parameter, page_limit + 1})
+        local homes, homes_error = tx:query("SELECT DISTINCT workspace_id FROM bee_sessions", {})
+        if homes_error or not homes then return transaction.storage_failure("read session workspaces") end
+        local parameters: {unknown} = {}
+        local placeholders: {string} = {}
+        for _, row in ipairs(homes) do
+            local home = text(row.workspace_id, 32)
+            if home and (selected_workspace == nil or home == selected_workspace)
+                and (home == workspace or access.may_list_workspace(home)) then
+                parameters[#parameters + 1] = home
+                placeholders[#placeholders + 1] = "?"
+            end
+        end
+        if #parameters == 0 then return transaction.success({items = {}}, false) end
+        parameters[#parameters + 1] = cursor_parameter
+        parameters[#parameters + 1] = cursor_parameter
+        parameters[#parameters + 1] = page_limit + 1
+        local rows, query_error = tx:query("SELECT session_ref, workspace_id FROM bee_sessions WHERE workspace_id IN (" ..
+            table.concat(placeholders, ",") .. ") AND (? IS NULL OR session_ref > ?) ORDER BY session_ref LIMIT ?", parameters)
         if query_error or not rows then return transaction.storage_failure("scan sessions") end
         local items: {string} = {}
         local count = #rows
@@ -464,9 +499,11 @@ function M.session_scan(db: sql.DB, actor: string, request: unknown): Result
         for index = 1, count do
             local session_ref = ref(rows[index].session_ref)
             if not session_ref then return failure("INTERNAL", "session reference is corrupt") end
-            items[index] = session_ref
+            local home = text(rows[index].workspace_id, 32)
+            if home == workspace or (home and access.may_list_workspace(home)) then items[#items + 1] = session_ref end
         end
-        return transaction.success({items = items, next = has_more and items[#items] or nil}, false)
+        local last_scanned = count > 0 and ref(rows[count].session_ref) or nil
+        return transaction.success({items = items, next = has_more and last_scanned or nil}, false)
     end)
 end
 
@@ -484,6 +521,8 @@ function M.session_transition(db: sql.DB, actor: string, request: unknown): Resu
     end
     local arguments = {session = session_ref, state = target}
     if expected_revision then arguments.expected_revision = expected_revision end
+    workspace = mutation_workspace(session_ref :: string, workspace, "close")
+    if not workspace then return failure("DENIED", "session control requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result
         local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string, operation_key, "session_transition", arguments)
         if context_error then return failure("INTERNAL", context_error) end
@@ -562,6 +601,8 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
     local input_digest = digest(input_json :: string)
     if not input_digest then return failure("INTERNAL", "measure immutable work input") end
     local arguments = {session = session_ref, input = input_json, output_schema = output_schema}
+    workspace = mutation_workspace(session_ref :: string, workspace, "send")
+    if not workspace then return failure("DENIED", "sending requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result
         local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string, operation_key, "work_send", arguments)
         if context_error then return failure("INTERNAL", context_error) end
@@ -693,7 +734,7 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
             "WHERE (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
             "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
             "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
-            "ORDER BY w.sequence LIMIT ?", {workspace, workspace, limit}, "scan session work")
+            "ORDER BY w.sequence LIMIT ?", {workspace or sql.NULL, workspace or sql.NULL, limit}, "scan session work")
         if query_error or not rows then return transaction.storage_failure("scan session work") end
         local items: {Row} = {}
         for _, row_value in ipairs(rows) do
@@ -784,6 +825,8 @@ function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
     end
     local arguments: Row = {work = work_ref}
     if reason then arguments.reason = reason end
+    workspace = mutation_workspace(work_ref :: string, workspace, "cancel")
+    if not workspace then return failure("DENIED", "cancellation requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result
         local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string,
             operation_key, "work_cancel", arguments)
@@ -976,7 +1019,7 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
         local turn_id, turn_id_error = allocate_id()
         local claim, claim_error = allocate_id()
         if not turn_id or not claim then return failure("INTERNAL", turn_id_error or claim_error or "allocate turn claim") end
-        local turn_ref = qualified("bturn", node :: string, workspace :: string, turn_id)
+        local turn_ref = qualified("bturn", node :: string, scope_workspace, turn_id)
         local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "turn.reserved", work.work_ref,
             work.revision + 1, {turn = turn_ref, input_digest = work.input_digest, owner_epoch = epoch})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn reservation") end

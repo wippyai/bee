@@ -4,6 +4,21 @@ local contract = require("contract")
 local catalog = require("catalog")
 local function define_tests()
     test.describe("Application ownership boundaries", function()
+        test.it("admits app navigation only from its current execution without restore authority", function()
+            local workspace = string.rep("a", 32)
+            local request: {[string]: unknown} = {version = 1, op = "open", request_id = "n1", definition_id = "bee.test:app",
+                workspace_id = workspace, source_instance_id = "instance", source_view_id = "view", launch_token = "token",
+                arguments = {"--session", "bs:n:w:peer"}}
+            test.not_nil(contract.navigation(request, "instance", "view", "token", workspace))
+            test.is_nil(contract.navigation(request, "instance", "view", "stale", workspace))
+            test.is_nil(contract.navigation(request, "other", "view", "token", workspace))
+            request.runtime_provenance = {}
+            test.is_nil(contract.navigation(request, "instance", "view", "token", workspace))
+            request.runtime_provenance = nil
+            request.restore_instance_id = "retained"
+            test.is_nil(contract.navigation(request, "instance", "view", "token", workspace))
+        end)
+
         test.it("does not publish open before ready or close before EXIT", function()
             local state = lifecycle.start(10)
             local next_state, effect = lifecycle.reduce(state, "tick", 12)

@@ -90,10 +90,11 @@ entries:
 - name: agents
   kind: library.lua
   source: file://agents.lua
-  modules: [json]
+  modules: [json, funcs]
   imports:
     sessions: bee.application:sessions
     sessions_protocol: bee.application:sessions_protocol
+    thread_record: bee.threads.records:record
     bounds: bee.threads.records:bounds
     caller: bee.application:caller
 - name: picker_view

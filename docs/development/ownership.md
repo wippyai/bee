@@ -38,7 +38,7 @@ and caches are projections that owners can rebuild.
 | Approvals | Owner-scoped requests, decisions, policy, inbox feed, consumption and delivery outbox | Local owner and Inbox projection implemented; federation is a proposal |
 | Threads and delivery | Durable records, memberships, actions, attempts, subscriptions, obligations, waits, projections and carriers | Local owner implemented; cross-node forwarding remains a proposal |
 | Resources and credentials | Named roots, containment, audience-bound grants and credential materialization | Owner contracts implemented; portable authority transfer remains a proposal |
-| Placement and harnesses | Launch plans, attempts, native placement, carrier, hooks, permissions and cleanup | Local managed launch path implemented; managed Docker/headless launch is a proposal |
+| Placement and harnesses | Launch plans, attempts, native placement, carrier, hooks, permissions and cleanup | Native launch and host-admitted Docker PTY/streamed placement implemented; end-to-end Docker Sessions scheduling and headless launch remain unfinished |
 | Managed-agent package | Agent application, gateway hook endpoints, host-selected launch policies, credential sources, placement/resource roots and built-in driver composition | Implemented in installable components composed by `bee/agents`; the default Bee lock includes the bundle, while a bare kernel can omit it |
 | Hive | Authenticated operation contracts, configured policy routing and invite-based joining | Generic policy route and invite joins between nodes of one host implemented; cross-host addressing, discovery and remote workspace composition are proposals |
 | Operation/interface catalog | Filtered descriptions shared by contracts, tools, traits, UI and remote adapters | Visibility is descriptive; each invocation is authorized at its owner |
@@ -106,7 +106,8 @@ acceptance contracts are implemented:
   publication;
 - independent package releases and alternate overlay lifecycles;
 - cross-node approval/inbox federation and remote view/state sharing;
-- managed Docker launch, portable harness execution and generic durable
+- end-to-end Docker Sessions launch, automatic local runtime-image provisioning,
+  portable harness execution and generic durable
   continuation/wakeup workflows.
 
 Each proposal must preserve destination-owned permissions, explicit identities,

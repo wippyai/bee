@@ -111,6 +111,7 @@ entries:
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     protocol: bee.placement.native:protocol
+    placement_store: bee.placement.native.persist:store
   security:
     policies: &id001
     - bee.security.desktop:desktop_policy

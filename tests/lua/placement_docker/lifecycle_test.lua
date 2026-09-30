@@ -92,15 +92,18 @@ local function run()
                 test.not_nil(stopped.exit and stopped.exit.code)
                 local cleaned = value(call("cleanup", {attempt_id = id}))
                 test.eq(cleaned.cleanup_state, "complete")
+                test.eq(cleaned.exit_source, "reconcile")
+                test.eq(cleaned.exit and cleaned.exit.code, stopped.exit and stopped.exit.code)
                 local raw = call("evidence", {attempt_id = id, limit = 64})
                 test.is_true(raw.ok)
                 local page = raw.value :: {evidence: {{kind: string}}}
-                local stopped_at, removed_at = 0, 0
+                local stopped_at, verified_at, removed_at = 0, 0, 0
                 for i, item in ipairs(page.evidence) do
                     if item.kind == "docker.stopped" then stopped_at = i end
+                    if item.kind == "docker.exit_verified" then verified_at = i end
                     if item.kind == "docker.removed" then removed_at = i end
                 end
-                test.is_true(stopped_at > 0 and removed_at > stopped_at)
+                test.is_true(stopped_at > 0 and verified_at > stopped_at and removed_at > verified_at)
             end)
             call("stop", {attempt_id = id, mode = "forced"})
             call("cleanup", {attempt_id = id})

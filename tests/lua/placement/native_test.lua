@@ -498,6 +498,7 @@ local function define_tests()
             test.eq(provider_home.directory, ".claude")
             local provider_files = provider_home.files :: {{[string]: unknown}}
             local login_path = ""
+            local state_paths: {[string]: boolean} = {}
             for _, file in ipairs(provider_files) do
                 if file.kind == "login" then
                     test.eq(file.path, ".claude/.credentials.json")
@@ -509,10 +510,16 @@ local function define_tests()
                     test.eq(file.path, ".claude/settings.json")
                     test.eq(file.source_path, ".claude/settings.json")
                 elseif file.kind == "state" then
-                    test.eq(file.path, ".claude.json")
+                    local path = file.path :: string
+                    if path ~= ".claude.json" and path ~= ".claude/.claude.json" then
+                        error("unexpected Claude state path: " .. tostring(path))
+                    end
+                    state_paths[path] = true
                 end
             end
             test.eq(login_path, ".claude/.credentials.json")
+            test.eq(state_paths[".claude.json"], true, "root Claude state declared: " .. assert(json.encode(state_paths)))
+            test.eq(state_paths[".claude/.claude.json"], true, "config-directory Claude state declared: " .. assert(json.encode(state_paths)))
             local script = 'set -eu'
                 .. ' && case "$HOME" in */attempts/*/home) ;; *) exit 41 ;; esac'
                 .. ' && test "$CLAUDE_CONFIG_DIR" = "$HOME/.claude"'
@@ -520,8 +527,9 @@ local function define_tests()
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/.credentials.json"'
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/settings.json"'
                 .. ' && test -s "$HOME/.claude.json"'
+                .. ' && test -s "$CLAUDE_CONFIG_DIR/.claude.json"'
                 .. ' && actual="$(find "$HOME" -type f | sed "s|^$HOME/||" | sort)"'
-                .. ' && expected="$(printf "%s\\n" .claude.json .claude/.credentials.json .claude/settings.json | sort)"'
+                .. ' && expected="$(printf "%s\\n" .claude.json .claude/.claude.json .claude/.credentials.json .claude/settings.json | sort)"'
                 .. ' && test "$actual" = "$expected"'
                 .. ' && ! env | cut -d= -f1 | grep -q "^XDG_"'
                 .. ' && ! env | cut -d= -f1 | grep -q "^ANTHROPIC_"'

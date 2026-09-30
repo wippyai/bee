@@ -276,6 +276,9 @@ function M.cleanup_loaded(loaded: Loaded): Reply
     if find_error then return fail("UNAVAILABLE", find_error) end
     if found then
         if found.state ~= "stopped" and found.state ~= "exited" then return fail("CONFLICT", "owned container is still live") end
+        local verified = M.change(loaded.attempt.attempt_id, {fields = {exit_source = "reconcile", exit_code = found.exit_code},
+            evidence = {kind = "docker.exit_verified", detail = "exact container " .. found.backend_ref .. " is stopped before removal"}})
+        if not verified.ok then return verified end
         local client = docker_client.new("/var/run/docker.sock")
         if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
         local removed, remove_error = client:remove_container(found.backend_ref, false)

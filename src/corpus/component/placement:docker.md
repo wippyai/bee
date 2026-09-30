@@ -24,6 +24,9 @@ disabled so a lost owner can still observe the outcome.
 The Agent application lives in `bee.harness.app`; its placement constructor
 uses the existing terminal lifecycle and hook processing. The Docker sweeper
 reconciles live attempts and enforces revoked resource projections.
+Window close stops the recorded container through the Docker API. Terminal
+finalization verifies daemon exit before removing that container and the private
+attempt home. A close acceptance alone does not prove cleanup has completed.
 
 `capabilities` optionally accepts `placement_profile_ref` and `runtime_name`
 and returns `image_readiness`: image presence, runtime artifact presence and
@@ -36,6 +39,8 @@ ID is refused with a build instruction. `make docker-runtime-image` builds a
 digest-recorded image from explicit Linux CLI executable artifacts without
 mounting login sources. Automatic local artifact discovery/build and live
 per-layer download progress remain proposals.
+The built-in `bee.placement.docker:coding` profile is not published; hosts must
+admit an explicit image profile and its interactive executor route.
 
 Validation covers real start/replay, foreign-owner denial, quoted stdin and EOF,
 owner SIGKILL/restart, exact-ID cancellation and evidence-before-removal. Live

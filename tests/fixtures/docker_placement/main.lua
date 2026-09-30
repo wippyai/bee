@@ -13,6 +13,7 @@ local admission = require("admission")
 local machine = require("machine")
 local protocol = require("protocol")
 local bounds = require("bounds")
+local placement_store = require("placement_store")
 local WORKSPACE = string.rep("a", 32)
 local M = {}
 type Object = {[string]: unknown}
@@ -115,7 +116,8 @@ local function window(provider: string, definition: string, profile_id: string, 
                 theme_sent = true
             elseif (provider == "claude" and not frame:find("Welcome to", 1, true) and not frame:find("Enter to confirm", 1, true)
                 and not frame:find("Accessing workspace", 1, true) and frame:find("Claude Code", 1, true) and (frame:find("❯", 1, true) or frame:find("Try", 1, true)))
-                or (provider == "codex" and not frame:lower():find("trust", 1, true) and frame:find("OpenAI Codex", 1, true) and frame:find("›", 1, true)) then
+                or (provider == "codex" and not frame:lower():find("trust", 1, true) and not frame:find("Loading", 1, true)
+                    and frame:find("OpenAI Codex", 1, true) and frame:find("›", 1, true)) then
                 save(provider .. "-ready.txt", frame); ready = true; break
             end
             time.sleep("25ms")
@@ -149,7 +151,32 @@ local function window(provider: string, definition: string, profile_id: string, 
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
     local closed = receive(replies, "close", "close")
     assert(closed.error_code == "", tostring(closed.error))
-    view:close(); process.terminate(broker)
+    view:close()
+    local db = assert(placement_store.open())
+    local rows = assert(db:query("SELECT attempt_id FROM bee_placement_attempts WHERE placement_kind = 'docker'", {}))
+    assert(#rows == 1, "window proof must own exactly one attempt")
+    local attempt_id = assert(bounds.id(rows[1].attempt_id))
+    local cleanup_deadline = time.after("30s")
+    while true do
+        local attempt = assert(placement_store.attempt(db, attempt_id))
+        if attempt.cleanup_state == "complete" then
+            local evidence = assert(placement_store.evidence(db, attempt_id, 0, 128))
+            local verified_at, removed_at = 0, 0
+            for index, item in ipairs(evidence.evidence) do
+                if item.kind == "docker.exit_verified" then verified_at = index end
+                if item.kind == "docker.removed" then removed_at = index end
+            end
+            assert(verified_at > 0 and removed_at > verified_at, "window removal must follow daemon exit evidence")
+            save("closed-attempt.json", assert(json.encode(attempt)))
+            save("close-evidence.json", assert(json.encode(evidence)))
+            break
+        end
+        local poll = time.after("50ms")
+        local selected = channel.select({poll:case_receive(), cleanup_deadline:case_receive()})
+        assert(selected.ok and selected.channel == poll, "window cleanup did not complete before owner shutdown")
+    end
+    db:release()
+    process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies)
     if not ok then error(tostring(failure)) end
 end

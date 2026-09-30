@@ -371,7 +371,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
         local cleanup_error: string? = nil
         if attempt then
             if backend then
-                local cleaned, backend_error = backend.cleanup(attempt, true)
+                local cleaned, backend_error = backend.cleanup(attempt, false)
                 if not cleaned then cleanup_error = backend_error or "cleanup failed" end
             else
                 local cleaned = service.cleanup_attempt(attempt, true)
@@ -395,6 +395,12 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
         end,
         close = function(_): (boolean, string?)
             if closed then return true, nil end
+            if backend and backend.stop then
+                local attempt = store.attempt(db, attempt_id)
+                if not attempt then return false, "terminal attempt is unavailable" end
+                local stopped, stop_error = backend.stop(attempt)
+                if not stopped then return false, stop_error end
+            end
             local ok, close_error = started:close()
             if ok then closed = true end
             return ok, error_text(close_error)

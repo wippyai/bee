@@ -81,8 +81,10 @@ attachments carry recipient-bound observation, input and resize authority.
 Detaching a client does not stop admitted applications. A stale attachment
 loses its authority. The public client, local host and explicit Hive invite
 join are implemented; remote workspace composition, automatic Hive enrollment
-and discovery, destination Hub transfer/install, and managed headless or Docker
-launch remain unfinished.
+and discovery, destination Hub transfer/install, managed headless launch and
+end-to-end Docker Sessions scheduling remain unfinished. Host-admitted Docker
+PTY and streamed placement are implemented; see
+[Docker placement](../../modules/placement-docker/src/README.md).
 Keep those operations labeled as proposals until their acceptance contracts
 exist.
 

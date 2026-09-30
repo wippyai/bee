@@ -12,5 +12,6 @@ type Backend = {
     identity: (types.LaunchRequest) -> ({[string]: unknown}?, string?),
     cleanup: (types.Attempt, boolean?) -> (boolean, string?),
     absent: (types.LaunchRequest) -> (boolean, string?),
+    stop: ((types.Attempt) -> (boolean, string?))?,
 }
 return {}

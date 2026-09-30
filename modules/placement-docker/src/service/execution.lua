@@ -116,6 +116,10 @@ function M.absent(request: types.LaunchRequest): (boolean, string?)
 end
 function M.backend(): process_backend.Backend
     return {guest_home = spec_codec.HOME, binding = spec_codec.BINDING, prepare = M.prepare, identity = M.identity, absent = M.absent,
+        stop = function(attempt: types.Attempt): (boolean, string?)
+            local reply = service.stop({attempt_id = attempt.attempt_id, mode = "forced"})
+            return reply.ok, reply.error and reply.error.message or nil
+        end,
         cleanup = function(attempt: types.Attempt, preparers_only: boolean?): (boolean, string?)
             if preparers_only then
                 local reply = service.cleanup_preparers({attempt_id = attempt.attempt_id})

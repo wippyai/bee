@@ -123,17 +123,17 @@
       "topic": "platform"
     },
     {
-      "bytes": 10440,
+      "bytes": 10603,
       "id": "docs/agent_guide",
-      "sha256": "47a6ed62bbb597b969c7e485b2466feaf77ccd902eface276d88670668882095",
+      "sha256": "495d560f840785a5c1392bd7edb6948154079900ac5ae6b5b1776866da059ca0",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
     },
     {
-      "bytes": 8222,
+      "bytes": 8347,
       "id": "docs/system_map",
-      "sha256": "e84ae26e600d54a3e7f362469467417ce9896493d691b76c44d1ce3137524577",
+      "sha256": "ef223da4960ca35097be9aeac5a3a001059862e8b2b6b1f64392b7ea5ed9f1ab",
       "source": "docs/development/ownership.md",
       "title": "Bee ownership and boundaries",
       "topic": "platform"
@@ -475,9 +475,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2751,
+      "bytes": 3132,
       "id": "component/placement:docker",
-      "sha256": "394e71e2519dddefd0926d73b186ca59451cf2f857e8968eb10efd98964a90a3",
+      "sha256": "ca75890aa59f073d8aa1f9f0cb7712e309d5e1103ae745ccfac59359e8404c56",
       "source": "modules/placement-docker/src/README.md",
       "title": "bee.placement.docker",
       "topic": "component"
@@ -614,7 +614,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 666060,
+    "bytes": 666729,
     "documents": 76
   }
 }

@@ -154,6 +154,7 @@ def main():
                 assert not subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split(), 'cancel/cleanup left a container'
             if result.returncode:
                 raise RuntimeError('Docker provider acceptance failed; see ' + str(args.evidence / 'runtime.log'))
+            assert not subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split(), 'provider acceptance left a container before fixture cleanup'
             print(args.provider + ' Docker ' + args.mode + ' passed', flush=True)
     finally:
         ids = subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split()

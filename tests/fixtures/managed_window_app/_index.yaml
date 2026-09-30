@@ -63,6 +63,7 @@ entries:
     allowed_overrides: [brief, thread]
     workdir_policy: {kind: caller_workspace}
     thread_policy: {kind: caller}
+    session_resource: session
     credentials: []
     presentation: {start_menu: false, fullscreen: false, reuse: never}
 - name: prepare
@@ -91,7 +92,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
-    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.managed.window.fixture:actor_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 
 - name: natural_completion_test
@@ -104,7 +105,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
-    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.managed.window.fixture:actor_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: checkpoint_ack_test
   kind: function.lua
@@ -116,7 +117,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
-    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.managed.window.fixture:checkpoint_admission_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.managed.window.fixture:actor_policy, bee.managed.window.fixture:checkpoint_admission_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: checkpoint_admission_policy
   kind: security.policy
@@ -157,6 +158,7 @@ entries:
     allowed_overrides: [brief]
     workdir_policy: {kind: caller_workspace}
     thread_policy: {kind: named, thread_ref: managed_window_selector}
+    session_resource: session
     credentials: []
     presentation: {start_menu: true, fullscreen: false, reuse: never}
 - name: selector_test
@@ -169,7 +171,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
-    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.managed.window.fixture:selection_policy, bee.managed.window.fixture:resource_inspection_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.managed.window.fixture:actor_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.managed.window.fixture:selection_policy, bee.managed.window.fixture:resource_inspection_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: selection_policy
   kind: security.policy
@@ -218,7 +220,7 @@ entries:
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
-    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.resources.security:resource_manage_policy, bee.managed.window.fixture:selection_policy, bee.managed.window.fixture:retained_read_policy]
+    policies: [bee.security.desktop:desktop_policy, bee.managed.window.fixture:core_spawn_policy, bee.managed.window.fixture:actor_policy, bee.security.threads:thread_authority_client_policy, bee.security.threads:thread_lifecycle_client_policy, bee.security.threads:thread_create_policy, bee.resources.security:resource_manage_policy, bee.managed.window.fixture:selection_policy, bee.managed.window.fixture:retained_read_policy]
   meta: {type: test, suite: bee, timeout: '30s'}
 - name: retained_read_policy
   kind: security.policy
@@ -235,11 +237,16 @@ entries:
     - process.spawn
     - process.spawn.monitored
     resources:
+    - bee.test.gateway
     - bee.host:main
     - bee.session:main
     - bee.apps:broker
     - bee.terminal:main
     effect: allow
+- name: actor_policy
+  kind: security.policy
+  policy: {actions: [security.actor.create], resources: '*', effect: allow}
+  meta: {type: test_support}
 - name: catalog
   kind: function.lua
   source: file://catalog.lua

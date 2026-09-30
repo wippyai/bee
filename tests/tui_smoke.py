@@ -276,12 +276,19 @@ class Desktop:
 
     def open_start(self):
         self.key(b"\x1bOP")
-        self.wait("Tools")
+        self.wait("Apps")
 
     def choose(self, label):
-        if label in {"Settings", "Process Manager"} and not any(label in line and "│" in line for line in self.screen.display[1:]):
-            self.choose("Tools")
-        line = next(i for i, text in enumerate(self.screen.display) if i > 0 and label in text and "│" in text and text.index("│") < text.index(label))
+        visible = lambda target: any((target + " ") in line and "│" in line for line in self.screen.display[1:])
+        if not visible(label):
+            if label == "Settings":
+                self.choose("Settings/Help")
+            elif label == "Process Manager":
+                self.choose("Apps")
+                self.choose("Advanced")
+            elif label == "Terminal":
+                self.choose("Apps")
+        line = next(i for i, text in enumerate(self.screen.display) if i > 0 and (label + " ") in text and "│" in text and text.index("│") < text.index(label))
         x = self.screen.display[line].index(label) + 1
         self.mouse(0, x, line + 1)
         self.mouse(0, x, line + 1, True)
@@ -443,7 +450,7 @@ def core_boot(packed):
             assert "Starting…".encode() in ui.raw, "Boot frame was never presented"
             ui.mouse(0, 3, 1)
             ui.mouse(0, 3, 1, True)
-            ui.wait("Tools")
+            ui.wait("Apps")
             assert ui.screen.display[1][0] == "╭" and ui.screen.display[1][34] == "╮"
             ui.choose("Settings")
             ui.wait("BEE SETTINGS")
@@ -544,7 +551,7 @@ def process_manager(packed):
             ui.open_start()
             assert "Minimize" not in ui.text() and "Reload desktop" not in ui.text()
             assert "Enter Choose" not in ui.text() and "Applications" not in ui.text()
-            ui.choose("Tools")
+            ui.choose("Apps"); ui.choose("Advanced")
             line = next(y for y, text in enumerate(ui.screen.display, 1) if "Process Manager" in text)
             ui.mouse(35, 5, line)  # SGR motion with no button: hover only.
             hover_bg = ui.screen.buffer[line - 1][4].bg

@@ -63,14 +63,19 @@ def menu_and_terminal(directory):
     try:
         ui.wait("No applications open", timeout=30)
         ui.open_start()
-        ui.choose("Tools")
-        ui.wait("Approvals", timeout=10)
+        ui.wait("Needs you", timeout=10)
+        assert "Sessions" in ui.text(), ui.text()
+        ui.choose("Apps")
+        ui.choose("Advanced")
         text = ui.text()
-        for title in ("Approvals", "Timeline", "Hive Manager", "Process Manager", "Settings"):
+        for title in ("Timeline", "Hive Manager", "Process Manager"):
             assert title in text, (title, text)
         assert "Test Status" not in text, text
-        ui.key(b"\x1b")
-        ui.key(b"\x1b")
+        ui.key(b"\x1b" * 3)
+        ui.open_start()
+        ui.choose("Settings/Help")
+        assert "Settings" in ui.text(), ui.text()
+        ui.key(b"\x1b" * 2)
         ui.open_start()
         ui.choose("Terminal")
         ui.wait("$ ", timeout=10)

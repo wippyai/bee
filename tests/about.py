@@ -9,7 +9,7 @@ def exercise(packed):
         ui = Desktop(directory, packed=packed, apps=("bee.settings:app",))
         try:
             ui.wait("BEE SETTINGS", timeout=10)
-            ui.key(b"\t\t\t")
+            ui.key(b"\t" * 4)
             ui.wait("BEE SETTINGS · ABOUT", timeout=10)
             text = ui.text()
             for label in ("Version", "Build", "Source", "Runtime", "Native", "Website"):

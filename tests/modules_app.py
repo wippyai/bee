@@ -164,10 +164,9 @@ def exercise_agent_install(project, packed, pack):
         try:
             ui.wait("No applications open", timeout=30)
             ui.open_start()
-            ui.choose("Tools")
-            ui.choose("Approvals")
-            ui.wait("APPROVALS", timeout=30)
-            ui.wait("bee.hub:apply", timeout=30)
+            ui.choose("Needs you")
+            ui.wait("NEEDS YOU", timeout=30)
+            ui.wait("Install bee/agent-tool 1.0.0 from the Hub?", timeout=30)
             ui.key(b"j")
             ui.key(b"o")
             ui.wait("Asked: Install bee/agent-tool 1.0.0 from the Hub?", timeout=20)

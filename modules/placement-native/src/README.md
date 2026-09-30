@@ -345,7 +345,8 @@ periodic sweep therefore rechecks grants without marking a live Agent uncertain
 merely because a PTY exposes no host execution identity. This reply proves live
 supervision, not post-crash execution absence or cleanup.
 
-Stop notifications are acted on only after the placement store records `stopping`
+The window registers the same private per-attempt control token as the streamed runner.
+Stop notifications require that token and are acted on only after the placement store records `stopping`
 for the exact attempt, owner and runner. An arbitrary process message cannot
 stop the window. The listener is installed before publishing `running`; publication compares the
 recorded state with `starting`, so a concurrent stop cannot be overwritten. The

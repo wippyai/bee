@@ -131,7 +131,7 @@ entries:
 - name: window
   kind: library.lua
   source: file://window.lua
-  modules: [process, exec, tty, security, funcs]
+  modules: [process, exec, tty, security, funcs, uuid]
   imports:
     protocol: bee.placement.native:protocol
     store: bee.placement.native.persist:store

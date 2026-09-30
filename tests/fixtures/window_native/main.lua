@@ -158,8 +158,9 @@ local function run()
     local cleanup_object = type(cleanup_reply) == "table" and cleanup_reply :: {[string]: unknown} or nil
     local cleanup_error = cleanup_object and type(cleanup_object.error) == "table" and cleanup_object.error :: {[string]: unknown} or nil
     test.is_nil(cleanup_call_error)
-    test.eq(cleanup_object and cleanup_object.ok, false)
-    test.is_true(tostring(cleanup_error and cleanup_error.message):find("not proven gone", 1, true) ~= nil)
+    test.eq(cleanup_object and cleanup_object.ok, true)
+    local cleaned = cleanup_object and type(cleanup_object.value) == "table" and cleanup_object.value :: {[string]: unknown} or nil
+    test.eq(cleaned and cleaned.cleanup_state, "complete")
 
     -- A process-group attempt retains its home while live and can be cleaned
     -- only after terminal completion plus an independent group-absence probe.

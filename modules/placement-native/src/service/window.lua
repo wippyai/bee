@@ -5,6 +5,7 @@
 -- consumes the current actor's grant and cannot be performed through a
 -- funcs.call boundary. The caller keeps the application lifecycle loop and
 -- uses this value only as a process-local facade.
+local uuid = require("uuid")
 local exec = require("exec")
 local tty = require("tty")
 local process = require("process")
@@ -139,6 +140,11 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     end
     if row.execution_state ~= "intended" then return fail(db, "attempt is already in use or has settled", nil) end
 
+    local issued_authority, authority_error = uuid.v4()
+    if not issued_authority then return fail(db, tostring(authority_error or "runner authority"), nil) end
+    local control_token, control_error = store.runner_authority(db, attempt_id, issued_authority)
+    if not control_token then return fail(db, control_error or "runner authority unavailable", nil) end
+
     local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "window.started", detail = "managed window owner " .. process.pid()}})
     if not starting.ok then return fail(db, starting.message or "attempt is no longer intended", nil) end
 
@@ -201,6 +207,9 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
             local raw: unknown = message:payload():data()
             if type(raw) == "table" then
                 local data = raw :: {[string]: unknown}
+                local authorized = data.control_token == control_token
+                    or (tostring(message:from()) == tostring(process.pid()) and data.command == "status")
+                if not authorized then goto next_control end
                 local current_terminal = terminal
                 if data.command == "status" and data.attempt_id == attempt_id and bounds.id(data.probe) then
                     local current = store.row(db, attempt_id)
@@ -217,15 +226,16 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
                         execution = execution,
                         eof_seen = 0, pending_outputs = 0, remembered_writes = 0, truncated = false,
                     })
-                elseif data.command == "stop" and current_terminal then
+                elseif data.command == "stop" then
                     local current = store.row(db, attempt_id)
                     if current and current.owner_id == owner and current.runner_pid == process.pid()
                         and current.execution_state == "stopping" then
-                        local stopped = current_terminal:close()
-                        if stopped then closed = true end
+                        closed = true
+                        if current_terminal then current_terminal:close() end
                     end
                 end
             end
+            ::next_control::
         end
     end)
 
@@ -236,7 +246,10 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     if not creating.ok then
         process.unlisten(controls)
         executor:release()
-        return fail(db, creating.message or "attempt stopped before terminal start", gateway_binding, attempt_id)
+        local current = store.row(db, attempt_id)
+        local reason = current and current.execution_state == "stopping" and "window stopped during startup"
+            or creating.message or "attempt stopped before terminal start"
+        return fail(db, reason, gateway_binding, attempt_id)
     end
     local started, start_error = executor:terminal(quote.line(argv), {work_dir = prepared.working_directory, env = prepared.environment,
         pty = {width = chosen.width, height = chosen.height, term = chosen.term}, process_group = row.capability == "process_group"})
@@ -248,6 +261,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         return fail(db, "start terminal: " .. tostring(start_error), gateway_binding, attempt_id)
     end
     terminal = started
+    if closed then started:close() end
 
     local fields: {[string]: unknown} = {}
     local identity_detail = "execution identity unavailable"

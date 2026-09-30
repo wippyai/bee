@@ -25,7 +25,7 @@ def exercise(packed=False):
                 assert label in ui.text(), ui.text()
             assert 'Not reported' in ui.text(), ui.text()
             assert not re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text()), ui.text()
-            Path('/tmp/bee-connection-compact-frame.txt').write_text(ui.text())
+            Path(directory, 'bee-connection-compact-frame.txt').write_text(ui.text())
             # Clicking inside the card keeps it open; Details is a real hit target.
             ui.mouse(0, 60, 3)
             ui.mouse(0, 60, 3, True)

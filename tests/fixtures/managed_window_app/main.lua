@@ -22,7 +22,8 @@ local function reply(value: unknown): {[string]: unknown}
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
-    local raw, call_error = funcs.call(target, value)
+    local actor = assert(security.new_actor(assert(security.actor()):id(), {workspace_id = WORKSPACE}))
+    local raw, call_error = funcs.new():with_actor(actor):call(target, value)
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
@@ -104,6 +105,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     end
     local plan, refused = admission.resolve(definition_ref, "window")
     if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
+    if not selected and not retained_id then
+        call("bee.harness.launch:setup", {workspace_id = WORKSPACE, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
+    end
     local request = assert(json.encode({request_id = request_id, definition_ref = definition_ref, brief = retained_id or "managed window",
         thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
     local picker_started = time.now():unix_nano()
@@ -163,6 +167,8 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             end
             error("Agent did not clear " .. label)
         end
+        wait_for("SESSIONS")
+        assert(view:send({type = "key", key = "n", key_type = "rune", action = "press"}))
         wait_for("No agents are ready")
         -- An empty picker remains interactive and owns no attempt.
         apply(original_definition)
@@ -185,14 +191,14 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             local closing = time.now():unix_nano()
             local escaped = channel.new(1)
             coroutine.spawn(function()
-                escaped:send(view:send({type = "key", key = "", key_type = "escape", action = "press"}))
+                escaped:send(view:send({type = "close"}))
             end)
             local close_deadline = closing + 1500000000
             while time.now():unix_nano() < close_deadline do
                 if not view:snapshot() then break end
                 time.sleep("25ms")
             end
-            assert(not view:snapshot(), "Escape did not close the activating picker")
+            assert(not view:snapshot(), "Close did not stop the activating picker")
             assert(time.now():unix_nano() - closing < 1500000000, "activating picker did not close within bounded admission cleanup")
             local escaped_result = channel.select({escaped:case_receive(), time.after("2s"):case_receive()})
             assert(escaped_result.ok and escaped_result.channel == escaped and escaped_result.value == true,
@@ -231,6 +237,8 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             end
             view = assert(tty.attach(mounted))
             assert(view:send({type = "resize", width = 30, height = 10}))
+            wait_for("SESSIONS")
+            assert(view:send({type = "key", key = "n", key_type = "rune", action = "press"}))
             wait_for("Selected agent fixture")
         end
         local before = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)

@@ -135,6 +135,14 @@ provider's own sign-in flow, and the title keeps a login hint. This is a
 helpful observation, not an authentication decision: Bee checks existence
 only and leaves sign-in to the provider.
 
+The built-in window profiles select the machine home under their existing
+host-selected `allow_host_home` policies, including Muse. Grok keeps its private
+window home and declares `grok_login` for the host's first-use setup and broker
+projection. These selections keep catalog login evidence and the CLI's launch
+home aligned: a saved machine login needs no second sign-in. A driver's window
+descriptor and profile agree on the home selection. Batch profiles keep their
+declared private homes and receive only broker-admitted login files.
+
 Confined batch workers receive only their driver's declared files from the
 machine home:
 

@@ -1,6 +1,10 @@
 -- MIT. The Sessions catalog delegates route availability to host driver locate.
 local test = require("test")
 local catalog = require("catalog")
+local registry = require("registry")
+local funcs = require("funcs")
+local machine = require("machine")
+local materialization = require("materialization")
 
 type Object = {[string]: unknown}
 type Candidate = {ref: string, kind: string, status: string, reasons: {string}}
@@ -15,6 +19,46 @@ end
 
 local function define_tests()
     test.describe("Sessions catalog route readiness", function()
+        test.it("registers every operation of the host-selected Threads journal", function()
+            local binding = assert(registry.get("bee.threads:journal_local"))
+            local data = binding.data :: {contracts: {{contract: string, methods: {[string]: string}}}}
+            for _, contract in ipairs(data.contracts) do
+                if contract.contract == "bee.threads:journal" then
+                    for name, target in pairs(contract.methods) do
+                        local entry = registry.get(target)
+                        if not entry then error("journal operation is missing: " .. name) end
+                        test.eq(entry.kind, "function.lua")
+                    end
+                end
+            end
+        end)
+        test.it("keeps an existing machine login ready in the default launch home", function()
+            local found: Candidate? = nil
+            for _, candidate in ipairs(listed(true).items) do
+                if candidate.ref == "bee.driver.claude:default_window" then found = candidate end
+            end
+            test.not_nil(found)
+            test.eq(found and found.status, "ready")
+            local entry = assert(registry.get("bee.driver.claude:default_window"))
+            local definition = entry.data :: {binding_ref: string, profile_id: string, policy_ref: string}
+            local request: machine.Request = {thread_id = "catalog-login-thread", action_id = "catalog-login-action",
+                attempt_id = "catalog-login-attempt", owner_id = "bee.test.catalog-login", owner_incarnation = 1,
+                binding_ref = definition.binding_ref, profile_id = definition.profile_id, policy_ref = definition.policy_ref,
+                brief = "", resources = {}, environment = {}}
+            local plan, plan_error = machine.plan({
+                call = function(target: string, input: unknown): (unknown, string?)
+                    local reply, err = funcs.call(target, input)
+                    return reply, err and tostring(err) or nil
+                end,
+                send = function(_target: string, _topic: string, _input: unknown) end,
+                self_pid = function(): string return "catalog-login-test" end,
+                now_ms = function(): integer return 0 end,
+                key = function(): string return "catalog-login-key" end,
+            }, request)
+            if not plan then error(tostring(plan_error)) end
+            test.eq(plan.placement_request.environment_refs.HOME, "bee.env:machine_home")
+            test.is_nil(materialization.prepare_login_notice(plan.placement_request, "/unused-private-home"))
+        end)
         test.it("hides unavailable definitions by default and explains them when requested", function()
             local ready = listed(nil)
             local explicitly_ready = listed(false)

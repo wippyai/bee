@@ -6,6 +6,10 @@ local agy = require("agy_launch")
 local grok = require("grok_launch")
 local muse = require("muse_launch")
 local opencode = require("opencode_launch")
+local registry = require("registry")
+local universal = require("universal")
+local materialization = require("materialization")
+local placement_types = require("placement_types")
 
 local function define_tests()
     test.describe("Provider window login declarations", function()
@@ -21,12 +25,58 @@ local function define_tests()
             test.it(case.provider .. " declares its window login evidence", function()
                 local login = case.launch.login
                 if not login then error("missing login declaration") end
+                local entry = assert(registry.get("bee.driver." .. case.provider .. ":default_window"))
+                local definition = entry.data :: {[string]: unknown}
+                local policy = assert(registry.get(tostring(definition.policy_ref)))
+                local policy_data = policy.data :: {allow_host_home: boolean}
+                local private = case.provider == "grok"
+                if private then
+                    local credentials = definition.credentials :: {string}
+                    test.eq(credentials[1], "grok_login")
+                    test.is_true(policy_data.allow_host_home ~= true)
+                else test.eq(policy_data.allow_host_home, true) end
+                local home = assert(case.launch.provider_home)
+                test.eq(home.private, private)
+                local profiles = assert(registry.get("bee.driver." .. case.provider .. ":profiles"))
+                local profile_data = profiles.data :: {driver: {profiles: {{id: string, isolation_env: {private_home: boolean}}}}}
+                for _, profile in ipairs(profile_data.driver.profiles) do
+                    if profile.id == "window" then test.eq(profile.isolation_env.private_home, private) end
+                end
                 test.eq(login.provider, case.provider)
                 test.eq(login.command, case.command)
                 test.eq(#login.files, 1)
                 test.eq(login.files[1].variable, case.variable)
                 test.eq(login.files[1].default_directory, case.directory)
                 test.eq(login.files[1].path, case.path)
+                local found = assert(universal.locate("bee.driver." .. case.provider .. ".descriptor:cli")({
+                    profile_id = "window", configured = true, executable = {present = true, version = "1.2.3"},
+                    login_file_exists = true, platform = {os = "linux", arch = "x86_64", compatible = true}}))
+                test.eq(found.status, "ready")
+                local request: placement_types.LaunchRequest = {
+                    idempotency_key = "default-login", attempt_id = "default-login", action_id = "default-login",
+                    owner_id = "bee.test.default-login", owner_incarnation = 1,
+                    binding_ref = tostring(definition.binding_ref), policy_ref = tostring(definition.policy_ref),
+                    profile_id = "window", binding_digest = string.rep("b", 64), profile_digest = string.rep("c", 64),
+                    launch = case.launch, resources = {}, environment = {}, projections = {},
+                    environment_refs = private and {} or {HOME = "bee.env:machine_home"}, required_cleanup = "process_group",
+                    required_exit_observation = "independent",
+                    timeouts = {start_ms = 1000, stop_grace_ms = 100, drain_ms = 1000, retain_ms = 1000}}
+                local selected_home = private and "/fixture-attempt-home" or "/fixture-machine-home"
+                local expected = selected_home .. "/" .. (case.directory and (case.directory .. "/") or "") .. case.path
+                local notice = materialization.login_notice(request, selected_home, function(path: string): boolean
+                    test.eq(path, expected)
+                    return true
+                end)
+                test.is_nil(notice)
+                if private then
+                    test.is_nil(materialization.login_notice(request, selected_home, function(_path: string): boolean
+                        error("projected login must not require another host read")
+                    end, expected))
+                end
+                local missing = materialization.login_notice(request, selected_home, function(_path: string): boolean
+                    return false
+                end)
+                test.eq(missing and missing.code, "LOGIN_REQUIRED")
             end)
         end
     end)

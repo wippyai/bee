@@ -11,3 +11,6 @@ turns. Sessions admission pins that driver profile while native manual windows
 retain the definition's window profile. Catalog readiness measures the same
 structured route that `open` admits. The real owner and catalog bindings are
 defaults; the kit starts the pull scheduler against the Threads journal.
+
+Provider login checks use the home selected by each profile; file existence
+is an observation and the provider owns authentication.

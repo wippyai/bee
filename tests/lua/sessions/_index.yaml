@@ -28,13 +28,15 @@ entries:
   kind: function.lua
   source: file://catalog_service_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta: {type: test, suite: bee, timeout: '120s'}
   modules: [funcs, registry]
   security:
     policies: [bee.tests.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy]
   imports:
     test: wippy.test:test
     catalog: bee.sessions.service:catalog
+    machine: bee.harness.carrier:machine
+    materialization: bee.placement.native.service:materialization
 - name: scheduler_test
   kind: function.lua
   source: file://scheduler_test.lua

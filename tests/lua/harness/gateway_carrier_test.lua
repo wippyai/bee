@@ -354,7 +354,7 @@ local function define_tests()
             test.eq(seen.initialize, 200)
             test.eq(seen.protocol, "2025-06-18")
             test.eq(seen.list, 200)
-            test.eq(json.encode(seen.tools), json.encode({"call_tool", "session", "thread_read", "thread_wait"}))
+            test.eq(json.encode(seen.tools), json.encode({"call_tool", "capabilities", "session", "thread_read"}))
             test.eq(seen.read, 200)
             test.eq(seen.read_ok, true)
             local names, details = evidence_kinds(attempt_id)
@@ -381,7 +381,7 @@ local function define_tests()
             test.eq((seen.surface_selected :: Object).ok, true)
             local current = (seen.surface_after :: Object).value :: Object
             test.eq(current.revision, 2)
-            test.eq(json.encode(current.active_traits), json.encode({"research:read", "research:wait"}))
+            test.eq(json.encode(current.active_traits), json.encode({"research:read", "research:inspect"}))
             test.eq((current.context :: Object).experiment, "managed-one")
             test.eq((seen.surface_dispatch :: Object).ok, true)
             test.eq((seen.surface_overwrite :: Object).ok, false)
@@ -815,30 +815,22 @@ local function define_tests()
             local steps = seen.delivery_human_steps :: {string}
             test.eq(#steps, 6)
         end)
-        test.it("releases a waiting child when the gateway drains", function()
+        test.it("drains without admitting a new child while a bound child finishes", function()
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            -- The carrier holds before it records the attempt start, so the
-            -- child reads the thread and waits on a cursor the start record
-            -- then moves past: its first wait is ready, and the wait it
-            -- starts from the new head is the one the drain releases.
-            local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_WAIT = "6000"}), "open", nil, "placement_started")
-            await_presented(attempt_id, 1, 4)
-            continue_carrier(pid)
-            await_presented(attempt_id, 1, 5)
+            local pid = spawn_carrier(request(thread_id, attempt_id, {BEE_FIXTURE_GATEWAY_HOLD = "1"}), "open", nil, "placement_started")
+            await_presented(attempt_id, 1, 3)
             call("bee.gateway.binding:drain", {deadline_ms = 8000})
+            local refused = raw_call("bee.gateway.binding:admit", {subject = "carrier-fixture", action_id = fresh("action"),
+                attempt_id = fresh("drained"), thread_id = thread_id, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}})
+            test.eq(refused.ok, false)
+            test.eq((refused.error :: Object).code, "UNAVAILABLE")
+            continue_carrier(pid)
             local outcome = await_carrier(pid, "draining carrier")
             open_gateway()
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
-            local seen = report(thread_id)
-            if type(seen.wait) ~= "table" then error("no wait in report: " .. tostring(json.encode(seen))) end
-            local waited = seen.wait :: Object
-            if type(waited.outcome) ~= "table" then error("wait without outcome: " .. tostring(json.encode(seen))) end
-            test.eq(waited.status, 200)
-            local released = waited.outcome :: Object
-            test.eq(released.status, "released")
-            test.eq(released.reason, "draining")
-            test.is_true((tonumber(waited.elapsed_ms) or 0) < 4000)
+            test.eq((outcome.value.settlement :: Object).outcome, "succeeded")
+            test.eq(report(thread_id).after_hold, 200)
         end)
         test.it("refuses a token revoked while the child uses it", function()
             local thread_id = thread()

@@ -289,3 +289,8 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.hive.desktop:protocol
+
+- name: inbox_discover_test_policy
+  kind: security.policy
+  policy: {actions: [bee.sessions.discover], resources: '*', effect: allow}
+  meta: {type: test_support}

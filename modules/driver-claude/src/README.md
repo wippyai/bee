@@ -30,3 +30,5 @@ with stream-json input and keeps stdin open after the initial brief. The
 carrier may then send an identified inbox item as a new user turn. The shipped
 production host policy does not enable this route; a host enables it with a
 `push_acceptance` naming the measured executable's acceptance record.
+
+Structured session and batch profiles declare the same command, HTTP and MCP hook transports and supported events. The host-selected hook allowlist is intersected with those capabilities before gateway admission.

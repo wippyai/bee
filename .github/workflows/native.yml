@@ -103,7 +103,7 @@ jobs:
     - name: Build pinned native development runtime
       id: toolchain
       if: steps.toolchain-cache.outputs.cache-hit != 'true'
-      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      uses: wippyai/builder@07497e4f809cef260d2a9add0e0c79d149bd5e5d
       with:
         mode: toolchain
         manifest: wippy.build.json
@@ -174,7 +174,7 @@ jobs:
     - name: Build pinned native development runtime
       id: toolchain
       if: steps.toolchain-cache.outputs.cache-hit != 'true'
-      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      uses: wippyai/builder@07497e4f809cef260d2a9add0e0c79d149bd5e5d
       with:
         mode: toolchain
         manifest: wippy.build.json
@@ -275,7 +275,7 @@ jobs:
     - name: Build pinned native development runtime
       id: toolchain
       if: steps.toolchain-cache.outputs.cache-hit != 'true'
-      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      uses: wippyai/builder@07497e4f809cef260d2a9add0e0c79d149bd5e5d
       with:
         mode: toolchain
         manifest: wippy.build.json
@@ -360,7 +360,7 @@ jobs:
     - name: Build pinned native development runtime
       id: toolchain
       if: steps.toolchain-cache.outputs.cache-hit != 'true'
-      uses: wippyai/builder@114eb0252a121dd89eca084af5db01833ffff50b
+      uses: wippyai/builder@07497e4f809cef260d2a9add0e0c79d149bd5e5d
       with:
         mode: toolchain
         manifest: wippy.build.json

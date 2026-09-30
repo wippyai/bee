@@ -12,6 +12,23 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("admits explicit session retention only as a boolean provider-home declaration", function()
+            local loaded = assert(descriptor.load("bee.driver.grok.descriptor:cli")) :: Object
+            local changed = copy_object(loaded)
+            local home = copy_object(loaded.provider_home :: Object)
+            test.eq(home.retain_session, true)
+            changed.provider_home = home
+            for _, value in ipairs({"true", 1, {}}) do
+                home.retain_session = value
+                local decoded, err = descriptor.decode(changed)
+                test.is_nil(decoded)
+                test.eq(err, "CLI descriptor.provider_home.retain_session must be boolean")
+            end
+            home.retain_session = false
+            test.not_nil(descriptor.decode(changed))
+            home.retain_session = nil
+            test.not_nil(descriptor.decode(changed))
+        end)
         test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()
             local loaded = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
             local changed = copy_object(loaded)

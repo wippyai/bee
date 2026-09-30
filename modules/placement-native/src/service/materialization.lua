@@ -343,7 +343,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local selected_home_path = home_path
     local retained_home = false
     local provider_home = request.launch.provider_home
-    if request.session_ref and (not provider_home or provider_home.private ~= true) then
+    if request.session_ref and (not provider_home or provider_home.private ~= true or provider_home.retain_session == true) then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
         if not session_path then

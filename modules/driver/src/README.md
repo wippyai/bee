@@ -40,6 +40,13 @@ option and flag templates, JSON paths, and a codec ID. The host validates the
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
 
+`provider_home.retain_session` is an optional boolean, absent by default. When
+true, a private provider uses the retained home of an admitted launch naming a
+session and its writable home resource. Grok selects it so projected login,
+configuration and conversation state survive subsequent turns. Other private
+providers keep fresh attempt homes. The declaration grants no session resource
+or credential authority.
+
 `login_evidence` declares a display-only `command` and one to eight `any_of`
 alternatives. One positive observation makes the login ready. If all checks
 are negative it is unconfigured; if none is positive and a check cannot run,

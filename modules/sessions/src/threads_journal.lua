@@ -7,7 +7,7 @@ local M = {}
 M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.sessions:threads_journal_ref"
 M.METHODS = {"session_create", "session_describe", "session_scan", "session_transition", "work_send", "work_describe",
-    "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "work_settle", "work_uncertain", "work_cancel",
+    "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "turn_observation", "work_settle", "work_uncertain", "work_cancel",
     "operation_lookup", "operation_describe", "feed_read"}
 
 type Entry = {[string]: unknown}
@@ -82,6 +82,15 @@ function M.invoke(method: string, request: unknown): (unknown?, string?)
     return nil, "Threads journal returned a malformed Reply"
 end
 
+function M.target(method: string): (string?, string?)
+    local allowed = false
+    for _, name in ipairs(M.METHODS) do if name == method then allowed = true; break end end
+    if not allowed then return nil, "UNSUPPORTED: unknown Threads journal operation" end
+    local targets, resolve_error = resolve()
+    if not targets then return nil, resolve_error end
+    return (targets :: Targets)[method], nil
+end
+
 function M.adapter(): scheduler.Journal
     return {
         enqueue = function(request: {[string]: unknown}): (scheduler.WorkReceipt?, string?)
@@ -120,6 +129,7 @@ function M.adapter(): scheduler.Journal
         transition_session = function(request: {[string]: unknown}): (unknown?, string?)
             return M.invoke("session_transition", request)
         end,
+        target = M.target,
     }
 end
 

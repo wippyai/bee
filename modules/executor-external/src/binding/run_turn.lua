@@ -1,5 +1,6 @@
 -- MIT. Runtime ports for one fenced executor turn.
 local bounds = require("bounds")
+local hash = require("hash")
 local channel = require("channel")
 local funcs = require("funcs")
 local process = require("process")
@@ -57,7 +58,8 @@ local function normalizer_call(target: string, state: unknown, index: integer, e
     return reply, nil
 end
 
-local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean): (unknown, string?)
+local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean,
+    request: {[string]: unknown}): (unknown, string?)
     local listener = bounds.object(listener_value) :: Listener?
     local attempt, attempt_error = unwrap_attempt(attempt_value)
     if not listener or not attempt then return nil, attempt_error or "output listener or attempt is malformed" end
@@ -83,6 +85,14 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         for _, raw in ipairs(raw_events) do
             local event = bounds.object(raw)
             if not event then return "driver normalizer emitted a non-object observation" end
+            local event_key = bounds.id(event.event_key)
+            if not event_key then return "driver normalizer emitted an observation without a valid event key" end
+            local event_identity, hash_error = hash.sha256(tostring(request.attempt_id) .. "\n" .. event_key)
+            if hash_error or not event_identity then return "measure normalized event identity: " .. tostring(hash_error or "no digest") end
+            local _, append_error = service_call(tostring(request.observation_target), {
+                turn = request.attempt_id, claim = request.claim, operation_key = "turnobs:" .. event_identity, observation = event,
+            })
+            if append_error then return "append live turn observation: " .. append_error end
             observations[#observations + 1] = event
         end
         if reply.terminal ~= nil then
@@ -222,8 +232,9 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             if gateway_binding then request_value.gateway_binding = gateway_binding end
             return service_call(placement_target(request, "start"), request_value)
         end,
-        observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean, _checkpoint: unknown?)
-            return observe(listener, attempt, normalizer_target, resumed)
+        observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean,
+            _checkpoint: unknown?, turn_request: turn.Request)
+            return observe(listener, attempt, normalizer_target, resumed, turn_request :: {[string]: unknown})
         end,
         close = function(value: unknown)
             local listener = bounds.object(value)

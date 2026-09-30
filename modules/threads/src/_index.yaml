@@ -360,6 +360,8 @@ entries:
     description: Pull the exact immutable envelope for a reserved turn
   - name: turn_accept
     description: Commit acceptance of the reserved input checkpoint
+  - name: turn_observation
+    description: Append one normalized event from the current fenced turn
   - name: work_settle
     description: Settle one accepted turn with its per-work result
   - name: work_uncertain
@@ -388,6 +390,7 @@ entries:
       turn_recover: bee.threads.service:turn_recover
       turn_pull: bee.threads.service:turn_pull
       turn_accept: bee.threads.service:turn_accept
+      turn_observation: bee.threads.service:turn_observation
       work_settle: bee.threads.service:work_settle
       work_uncertain: bee.threads.service:work_uncertain
       work_cancel: bee.threads.service:work_cancel

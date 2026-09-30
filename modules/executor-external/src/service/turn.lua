@@ -1,6 +1,22 @@
 -- MIT. One external CLI process belongs to one immutable pulled turn.
 local M = {}
 
+type Request = {
+    attempt_id: string,
+    claim: string,
+    observation_target: string,
+    generation: integer,
+    prompt: string,
+    sender: {kind: "session" | "principal", id: string},
+    driver_binding_ref: string,
+    profile_id: string,
+    driver_methods: {[string]: string},
+    placement_methods: {[string]: string},
+    admission: {[string]: unknown},
+    previous_attempt_id: string?,
+    checkpoint: {[string]: unknown}?,
+}
+
 type IO = {
     reconcile: (string) -> (unknown, string?),
     cleanup: (string) -> (unknown, string?),
@@ -12,22 +28,8 @@ type IO = {
     gateway_ready: (string) -> string?,
     revoke_gateway: (string) -> (),
     start: (string, string?) -> (unknown, string?),
-    observe: (unknown, unknown, string, boolean, unknown) -> (unknown, string?),
+    observe: (unknown, unknown, string, boolean, unknown, Request) -> (unknown, string?),
     close: (unknown) -> (),
-}
-
-type Request = {
-    attempt_id: string,
-    generation: integer,
-    prompt: string,
-    sender: {kind: "session" | "principal", id: string},
-    driver_binding_ref: string,
-    profile_id: string,
-    driver_methods: {[string]: string},
-    placement_methods: {[string]: string},
-    admission: {[string]: unknown},
-    previous_attempt_id: string?,
-    checkpoint: {[string]: unknown}?,
 }
 
 local PLACEMENT_METHODS = {
@@ -49,7 +51,7 @@ end
 local function decode(value: unknown): (Request?, string?)
     local request = object(value)
     if not request then return nil, "turn request must be an object" end
-    local allowed = {"attempt_id", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods",
+    local allowed = {"attempt_id", "claim", "observation_target", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods",
         "placement_methods", "admission", "previous_attempt_id", "checkpoint"}
     local fields: {[string]: boolean} = {}
     for _, field in ipairs(allowed) do fields[field] = true end
@@ -58,6 +60,11 @@ local function decode(value: unknown): (Request?, string?)
     end
     local attempt_id = id(request.attempt_id)
     if not attempt_id then return nil, "attempt_id is invalid" end
+    local claim = id(request.claim)
+    if not claim then return nil, "claim is invalid" end
+    if request.observation_target ~= "bee.threads.service:turn_observation" then
+        return nil, "observation_target is not the Threads turn observation operation"
+    end
     if type(request.generation) ~= "number" or math.floor(request.generation) ~= request.generation or request.generation < 1 then
         return nil, "generation must be a positive integer"
     end
@@ -102,7 +109,8 @@ local function decode(value: unknown): (Request?, string?)
     local sender_label = "[Bee sender " .. tostring(sender.kind) .. " " .. tostring(sender.id) .. "]\n"
     if #sender_label + #request.prompt > 16384 then return nil, "prompt and sender identity exceed 16384 bytes" end
     return {
-        attempt_id = attempt_id, generation = request.generation :: integer, prompt = sender_label .. (request.prompt :: string),
+        attempt_id = attempt_id, claim = claim, observation_target = request.observation_target :: string,
+        generation = request.generation :: integer, prompt = sender_label .. (request.prompt :: string),
         sender = sender :: {kind: "session" | "principal", id: string},
         driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = driver_methods :: {[string]: string},
         placement_methods = placement_methods :: {[string]: string}, admission = admission,
@@ -242,7 +250,7 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     end
 
     local observed, observe_error = io.observe(listener, started_attempt, normalize_target,
-        request.checkpoint ~= nil and request.checkpoint.resume_ref ~= nil, request.checkpoint)
+        request.checkpoint ~= nil and request.checkpoint.resume_ref ~= nil, request.checkpoint, request)
     io.close(listener)
     local reconciled, reconcile_error = io.reconcile(request.attempt_id)
     if reconcile_error then return uncertain(request, "placement exit cannot be proven: " .. reconcile_error, observed) end

@@ -6,7 +6,8 @@ local stream = require("stream")
 
 local function base_request(): {[string]: unknown}
     return {
-        attempt_id = "attempt-current", generation = 2, prompt = "continue the task",
+        attempt_id = "attempt-current", claim = "claim-current", observation_target = "bee.threads.service:turn_observation",
+        generation = 2, prompt = "continue the task",
         sender = {kind = "principal", id = "owner"}, driver_binding_ref = "bee.driver.fixture:binding", profile_id = "session",
         driver_methods = {prepare = "bee.driver.fixture.binding:prepare", dispatch = "bee.driver.fixture.binding:dispatch", normalize = "bee.driver.fixture.binding:normalize"},
         placement_methods = {prepare = "bee.placement.native.binding:prepare", attach = "bee.placement.native.binding:attach",
@@ -85,7 +86,7 @@ local function success_io(calls: {string}?, expect_resume: boolean?, resume_iden
             test.eq(gateway_binding, with_gateway and "gateway-binding-1" or nil)
             return {attempt_id = id, execution_state = "running", cleanup_state = "pending"}, nil
         end,
-        observe = function(_listener: unknown, _attempt: unknown, normalizer: string, resumed: boolean, _checkpoint: unknown)
+        observe = function(_listener: unknown, _attempt: unknown, normalizer: string, resumed: boolean, _checkpoint: unknown, _request: turn.Request)
             seen[#seen + 1] = "observe"
             test.eq(normalizer, "bee.driver.fixture.binding:normalize")
             test.eq(resumed, expect_resume == true)
@@ -209,7 +210,7 @@ local function define_tests()
 
         test.it("keeps an interrupted driver stream uncertain even after placement proves exit", function()
             local io = success_io()
-            io.observe = function(_listener: unknown, _attempt: unknown, _normalizer: string, _resumed: boolean, _checkpoint: unknown)
+            io.observe = function(_listener: unknown, _attempt: unknown, _normalizer: string, _resumed: boolean, _checkpoint: unknown, _request: turn.Request)
                 return nil, "stream ended without a result"
             end
             local result, err = turn.execute(io, base_request())
@@ -220,7 +221,7 @@ local function define_tests()
 
         test.it("keeps a successful turn uncertain when the driver supplied no resume identity", function()
             local io = success_io()
-            io.observe = function(_listener: unknown, _attempt: unknown, _normalizer: string, _resumed: boolean, _checkpoint: unknown)
+            io.observe = function(_listener: unknown, _attempt: unknown, _normalizer: string, _resumed: boolean, _checkpoint: unknown, _request: turn.Request)
                 return {terminal = {outcome = "succeeded", answer = "done"}}, nil
             end
             local result, err = turn.execute(io, base_request())

@@ -11,6 +11,7 @@ entries:
     - bee.driver.*.binding:prepare
     - bee.driver.*.binding:dispatch
     - bee.driver.*.binding:normalize
+    - bee.threads.service:turn_observation
     - bee.harness.profiles:call
     - bee.resources.binding:grant
     - bee.credentials.binding:issue_projection

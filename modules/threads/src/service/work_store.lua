@@ -1097,6 +1097,49 @@ function M.turn_accept(db: sql.DB, actor: string, request: unknown): Result
     end)
 end
 
+function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
+    local caller, workspace, denied = authenticated(actor, true)
+    if denied then return denied end
+    local input = object(request)
+    if not input or not has_only(input, {turn = true, claim = true, operation_key = true, observation = true}) then
+        return missing_request()
+    end
+    local turn_ref, claim_token, operation_key = ref(input.turn), text(input.claim, 128), key(input.operation_key)
+    local decoded_observation, observation_error = observation.decode(input.observation)
+    local observation_json = decoded_observation and encode(decoded_observation) or nil
+    if not turn_ref or not claim_token or not operation_key or not decoded_observation or not observation_json then
+        return failure("INVALID_ARGUMENT", observation_error or "turn observation fields are invalid")
+    end
+    local arguments = {turn = turn_ref, claim = claim_token, observation = observation_json}
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local turn_identity, turn_error = get_turn(tx, turn_ref :: string)
+        if turn_error then return transaction.storage_failure(turn_error) end
+        if not turn_identity then return failure("NOT_FOUND", "turn does not exist") end
+        local session_identity, session_error = get_session(tx, turn_identity.session_ref, workspace)
+        if session_error then return transaction.storage_failure(session_error) end
+        if not session_identity then return failure("NOT_FOUND", "turn session does not exist") end
+        local scope_workspace = session_identity.workspace_id
+        local request_digest, replay, context_error = operation_context(tx, caller :: string, scope_workspace,
+            operation_key :: string, "turn_observation", arguments)
+        if context_error then return failure("INTERNAL", context_error) end
+        if replay then return replay end
+        local turn, work, session, claim_error = claimed_turn(tx, turn_ref :: string, claim_token :: string, scope_workspace)
+        if claim_error then return claim_error end
+        if not turn or not work or not session then return failure("INTERNAL", "turn observation context is incomplete") end
+        if turn.phase ~= "accepted" or work.phase ~= "accepted" then return failure("CONFLICT", "only an accepted turn may append observations") end
+        local node, op_ref, reference_error = node_and_operation(nil, scope_workspace)
+        if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
+        local now = transaction.now()
+        local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "turn.observation",
+            work.work_ref, work.revision, {turn = turn.turn_ref, observation = decoded_observation})
+        if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn observation") end
+        local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
+            event_key = decoded_observation.event_key, operation = op_ref, committed_at = now, sequence = sequence}
+        return finish_operation(tx, caller :: string, scope_workspace, operation_key :: string, op_ref,
+            "turn_observation", request_digest :: string, work.work_ref, receipt, now)
+    end)
+end
+
 function M.work_settle(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end

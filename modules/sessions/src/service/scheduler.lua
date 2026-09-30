@@ -31,6 +31,7 @@ type Journal = {
     mark_uncertain: (Object) -> (unknown?, string?),
     describe_session: ({session: string}) -> (Object?, string?),
     transition_session: (Object) -> (unknown?, string?),
+    target: ((string) -> (string?, string?))?,
 }
 type Executor = {run_turn: (Object) -> (Execution?, string?)}
 type Registry = {get: (string) -> (Executor?, string?)}
@@ -214,6 +215,17 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
         driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id,
         driver_methods = route.driver_methods,
         placement_methods = route.placement_methods, checkpoint = context}
+    local observation_target: string? = "bee.threads.service:turn_observation"
+    if journal.target then
+        local selected_target, target_error = journal.target("turn_observation")
+        if target_error or not selected_target then
+            add_issue(pass, due.work, "turn_observation", target_error or "Threads has no observation target")
+            return
+        end
+        observation_target = selected_target
+    end
+    invocation.claim = turn.claim
+    invocation.observation_target = observation_target
     if context.attempt_id ~= nil then invocation.previous_attempt_id = context.attempt_id end
     local outcome, run_error = executor.run_turn(invocation)
     if run_error or not outcome then add_issue(pass, due.work, "run_turn", run_error or "external executor returned no outcome"); return end

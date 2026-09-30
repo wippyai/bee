@@ -157,7 +157,7 @@ local function main(value: unknown)
             elseif key == "up" then creation.field(current, -1)
             elseif key == "down" or key == "tab" then creation.field(current, 1)
             elseif key == "backspace" then creation.erase(current)
-            elseif type(data.key) == "string" and data.key ~= "" then creation.type_text(current, data.key :: string) end
+            elseif type(data.key) == "string" and data.key ~= "" then creation.type_text(current, data.key) end
             return
         end
         if key == "up" or key == "down" then

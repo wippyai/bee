@@ -242,7 +242,7 @@ function M.apply_inspect(state: State, workspace_id: string, reply: caller.Reply
                 detail.sections[#detail.sections + 1] = {title = bounded(extension.title, 80),
                     items = items(extension.items, function(item: Object): string return tostring(item.label) end,
                         function(item: Object): string return item.detail == nil and "" or tostring(item.detail) end, 50),
-                    total = type(extension.total) == "number" and math.floor(extension.total :: number) or 0,
+                    total = type(extension.total) == "number" and math.floor(extension.total) or 0,
                     error = fault ~= nil and bounded(fault, 200) or nil}
             end
         end

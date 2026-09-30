@@ -8,6 +8,15 @@ local configure = require("configure")
 
 local function define_tests()
     test.describe("Grok configuration", function()
+        test.it("publishes admitted private login config without gateway tools", function()
+            local reply = configure.handle({fixture = false, private_home = true})
+            test.is_true(reply.ok)
+            local files = (reply.delivery :: {files: {{composition: {kind: string, base_path: string}, path: string}}}).files
+            test.eq(#files, 1)
+            test.eq(files[1].composition.kind, "copy")
+            test.eq(files[1].path, configuration.PATH)
+            test.eq(files[1].composition.base_path, configuration.BASE_PATH)
+        end)
         test.it("renders only the scoped MCP subtree", function()
             local gateway: configuration.Gateway = {
                 endpoint = "127.0.0.1:4321",

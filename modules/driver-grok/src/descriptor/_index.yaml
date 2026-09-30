@@ -14,7 +14,7 @@ entries:
     login_evidence:
       command: grok login
       any_of:
-      - {kind: file_exists, paths: [.grok/auth.json, .grok/config.toml], variable: GROK_HOME, directory: .grok}
+      - {kind: file_exists, paths: [.grok/auth.json], variable: GROK_HOME, directory: .grok}
       - {kind: env_present, names: [XAI_API_KEY, GROK_CODE_XAI_API_KEY]}
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: grok-streaming-json
@@ -87,4 +87,4 @@ entries:
       directory: .grok
       files:
       - {source_path: .grok/auth.json, path: .grok/auth.json, kind: login, optional: true, write_back: true}
-      - {source_path: .grok/config.toml, path: .grok/.bee-global-config.toml, kind: config, optional: true, write_back: false}
+      - {source_path: .grok/config.toml, path: .grok/.bee-global-config.toml, kind: config, optional: true, write_back: false, container_omit: [hooks, mcp_servers]}

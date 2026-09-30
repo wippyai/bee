@@ -345,7 +345,8 @@ periodic sweep therefore rechecks grants without marking a live Agent uncertain
 merely because a PTY exposes no host execution identity. This reply proves live
 supervision, not post-crash execution absence or cleanup.
 
-Stop notifications are acted on only after the placement store records `stopping`
+The window registers the same private per-attempt control token as the streamed runner.
+Stop notifications require that token and are acted on only after the placement store records `stopping`
 for the exact attempt, owner and runner. An arbitrary process message cannot
 stop the window. The listener is installed before publishing `running`; publication compares the
 recorded state with `starting`, so a concurrent stop cannot be overwritten. The
@@ -357,3 +358,12 @@ fixture also keeps its MCP binding live across the real 30-second sweep.
 Structured turns with a SessionRef and an admitted writable session home retain
 the driver-selected provider state across attempt cleanup. Ephemeral turns keep
 their attempt-local private home.
+
+Private provider configuration uses the shared provider projection scanner from
+the Docker placement lane. It bounds nesting and resolves `{file:...}` references
+only to driver-declared files materialized by the credential broker. Both
+absolute host-home paths and `~/` references become paths under the private
+home. Undeclared, absent, traversing or unresolved dependencies refuse before
+child creation; refusal evidence contains no configuration values. Native
+descriptive text containing a home path remains text. Docker projection retains
+its stricter host-command and path checks and declared portable configuration.

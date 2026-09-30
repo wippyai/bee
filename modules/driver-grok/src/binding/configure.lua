@@ -22,6 +22,11 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
             composition = projected.composition,
         }
     end
+    if request.private_home == true and (not request.gateway or #request.gateway.tools == 0) then
+        local projected, projection_error = configuration.login_configuration()
+        if not projected then return {ok = false, error = tostring(projection_error)} end
+        files[#files + 1] = projected
+    end
     if request.gateway and #request.gateway.hooks > 0 then
         local projected, projection_error = configuration.hooks_file(request.gateway)
         if not projected then return {ok = false, error = tostring(projection_error)} end

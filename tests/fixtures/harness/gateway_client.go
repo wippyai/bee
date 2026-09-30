@@ -329,9 +329,6 @@ func runGatewayAt(url, authorization string) int {
 	if os.Getenv("BEE_FIXTURE_GATEWAY_SURFACE") == "1" {
 		reportSurface(client, url, authorization, report)
 	}
-	if waitMS, err := strconv.Atoi(os.Getenv("BEE_FIXTURE_GATEWAY_WAIT")); err == nil && waitMS > 0 {
-		reportWait(client, url, authorization, report, readValue, waitMS)
-	}
 	// BEE_FIXTURE_GATEWAY_HOLD holds the child for that many seconds, or with
 	// "stop" until it is stopped, then presents its token once more.
 	holdSetting := os.Getenv("BEE_FIXTURE_GATEWAY_HOLD")
@@ -659,44 +656,14 @@ func reportSurface(client *httpClient, url, authorization string, report object)
 		return outcome(rpc(client, url, authorization, "tools/call", object{"name": name, "arguments": args}, id))
 	}
 	report["surface_before"] = call("session", object{"operation": "read"}, 20)
-	inactive := rpc(client, url, authorization, "tools/call", object{"name": "thread_wait", "arguments": object{"after_sequence": 0, "wait_ms": 1}}, 21)
+	inactive := rpc(client, url, authorization, "tools/call", object{"name": "capabilities", "arguments": object{}}, 21)
 	report["surface_inactive"] = inactive.body["error"]
 	report["surface_selected"] = call("session", object{"operation": "select", "expected_revision": 1,
-		"active_traits": []string{"research:read", "research:wait"}, "context": object{"experiment": "managed-one"}}, 22)
+		"active_traits": []string{"research:read", "research:inspect"}, "context": object{"experiment": "managed-one"}}, 22)
 	report["surface_after"] = call("session", object{"operation": "read"}, 23)
-	report["surface_dispatch"] = call("call_tool", object{"name": "thread_wait", "arguments": object{"after_sequence": 0, "wait_ms": 1}}, 24)
+	report["surface_dispatch"] = call("call_tool", object{"name": "capabilities", "arguments": object{}}, 24)
 	report["surface_overwrite"] = call("session", object{"operation": "select", "expected_revision": 2,
 		"active_traits": []string{"research:read"}, "context": object{"project": "foreign"}}, 25)
-}
-
-func reportWait(client *httpClient, url string, authorization string, report object, readValue object, waitMS int) {
-	started := time.Now()
-	head := 0
-	if value := mustObject(readValue["value"]); value != nil {
-		if scanned, ok := value["scanned_through"].(float64); ok {
-			head = int(scanned)
-		}
-	}
-	var status int
-	var result object
-	for attempt := 0; attempt < 12; attempt++ {
-		reply := rpcWithTimeout(client, url, authorization, "tools/call", object{
-			"name":      "thread_wait",
-			"arguments": object{"after_sequence": head, "wait_ms": waitMS},
-		}, 4+attempt, time.Duration(waitMS)*time.Millisecond+10*time.Second)
-		status = reply.status
-		value := outcome(reply)
-		result = mustObject(value["value"])
-		if status != http.StatusOK || result == nil || result["status"] != "ready" {
-			break
-		}
-		// A ready watch reports the thread's head and leaves scanned_through
-		// at the cursor it was given; the next wait starts from the head.
-		if moved, ok := result["head_sequence"].(float64); ok {
-			head = int(moved)
-		}
-	}
-	report["wait"] = object{"status": status, "elapsed_ms": time.Since(started).Milliseconds(), "outcome": result}
 }
 
 func rpcWithTimeout(_ *httpClient, url string, authorization string, method string, params object, ident int, timeout time.Duration) rpcReply {

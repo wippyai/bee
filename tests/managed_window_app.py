@@ -12,6 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 with workspace.fixture_workspace(unit_tests=False) as folder:
     shutil.copytree(ROOT / "tests/fixtures/managed_window_app", folder / "src/tests/managed_window_app")
+    sessions_index = folder / "modules/sessions/src/binding/_index.yaml"
+    sessions_document = yaml.safe_load(sessions_index.read_text())
+    for entry in sessions_document["entries"]:
+        if entry["name"] == "catalog_binding":
+            entry["contracts"][0]["default"] = False
+    sessions_index.write_text(yaml.safe_dump(sessions_document, sort_keys=False))
     host = folder / "modules/harness/src/_index.yaml"
     document = yaml.safe_load(host.read_text())
     activation = next(entry for entry in document["entries"] if entry["name"] == "harness_activation")

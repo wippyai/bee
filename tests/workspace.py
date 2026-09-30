@@ -41,6 +41,23 @@ def registry_entries(folder, names):
     return found, documents
 
 
+def stage_protocol_values(folder):
+    """Stage the shared scalar/canonical values without the desktop protocol closure."""
+    source = ROOT / "src/protocol"
+    target = folder / "src/protocol"
+    target.mkdir(parents=True, exist_ok=True)
+    document = yaml.safe_load((source / "_index.yaml").read_text())
+    document["entries"] = [entry for entry in document["entries"] if entry["name"] in {"bounds", "canonical"}]
+    (target / "_index.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
+    for name in ("bounds.lua", "canonical.lua"):
+        shutil.copy2(source / name, target / name)
+    shutil.copy2(ROOT / "src/clock.lua", folder / "src/clock.lua")
+    index = folder / "src/_index.yaml"
+    root = yaml.safe_load(index.read_text()) if index.exists() else {"version": "1.0", "namespace": "bee", "entries": []}
+    root["entries"].append({"name": "clock", "kind": "library.lua", "source": "file://clock.lua", "modules": ["time"]})
+    index.write_text(yaml.safe_dump(root, sort_keys=False))
+
+
 def managed_gateway_address():
     """Select an available ephemeral loopback address for one composition."""
     # http.service accepts an address rather than a pre-bound socket, so the
@@ -179,13 +196,6 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         folder = Path(temporary)
         shutil.copytree(ROOT / "src", folder / "src")
         shutil.copytree(ROOT / "modules", folder / "modules")
-        session_bindings = folder / "modules/sessions/src/binding/_index.yaml"
-        session_entries = yaml.safe_load(session_bindings.read_text())
-        for entry in session_entries["entries"]:
-            if entry.get("name") in {"owner_binding", "catalog_binding"}:
-                for contract_binding in entry.get("contracts", []):
-                    contract_binding.pop("default", None)
-        session_bindings.write_text(yaml.safe_dump(session_entries, sort_keys=False))
         if presenter_probe:
             # Test-only incarnation marker proves an identical screen was drawn
             # by a fresh process. No diagnostics or test flags enter the core pack.

@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 10605,
+      "bytes": 10656,
       "id": "docs/agent_guide",
-      "sha256": "b7e9e9646f4d90206942c2e664b6944840e34b4d1001049c874e107796acd0d3",
+      "sha256": "f68cc0fe7018bfb6acd2f4607d57229cc34fb306ed2f27b41cff6b08cdc79562",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -307,9 +307,9 @@
       "topic": "component"
     },
     {
-      "bytes": 14718,
+      "bytes": 15102,
       "id": "component/credentials",
-      "sha256": "68580d2eb86d3523758ad8da304ab66db0da4e4f8ffc81fb8bb1d38ceeff2d16",
+      "sha256": "68f0d1e3a4887080490ea43046734102ee343e986710f2090b3e9fbf07d33478",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
@@ -339,9 +339,9 @@
       "topic": "component"
     },
     {
-      "bytes": 1875,
+      "bytes": 2089,
       "id": "component/driver:claude",
-      "sha256": "08018936523cabf1bfe81e3941bf8c849a42385f627354c06834ce61f134406d",
+      "sha256": "740f34fb95e3a96d332b702e5b6a5aa4072a55eec97daaa31b5225ebdbd61116",
       "source": "modules/driver-claude/src/README.md",
       "title": "Bee Claude driver",
       "topic": "component"
@@ -355,9 +355,9 @@
       "topic": "component"
     },
     {
-      "bytes": 1404,
+      "bytes": 1491,
       "id": "component/driver:grok",
-      "sha256": "cf2267ead9eca7e629296a3a9785b5076825d87823194d03e4c89beedec13510",
+      "sha256": "b2a3e19f0de30b4c818f7a3c89ba9395a5e96a21aef5587c0ea3eac714c89ef6",
       "source": "modules/driver-grok/src/README.md",
       "title": "Bee Grok driver",
       "topic": "component"
@@ -475,9 +475,9 @@
       "topic": "component"
     },
     {
-      "bytes": 22565,
+      "bytes": 23300,
       "id": "component/placement:native",
-      "sha256": "a56da96cc6beb5faed13350c4be6940c942c7337370410186412bbd2c100964b",
+      "sha256": "ad70bb2cc4703fedd4e7e49e2c576ed6d3215a42f6ed0bf9b6cf2448c51cd8a1",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -606,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 669431,
+    "bytes": 670902,
     "documents": 75
   }
 }

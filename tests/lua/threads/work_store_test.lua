@@ -97,7 +97,7 @@ local function define_tests()
             test.eq(harness.value(sessions:call("work_describe", {work = sent.work})).phase, "settled")
         end)
         test.it("keeps cross-workspace visibility separate from mutation authority", function()
-            local other_workspace = "acacacacacacacacacacacacacacacac"
+            local other_workspace = "cccccccccccccccccccccccccccccccc"
             local other = harness.session_owner(other_workspace)
             local opened = harness.value(other:call("session_create", {operation_key = harness.key(), title = "peer"}))
             local local_owner = harness.session_owner(WORKSPACE)

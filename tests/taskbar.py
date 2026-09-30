@@ -17,7 +17,7 @@ def exercise(packed):
             assert " S " in ui.screen.display[0], ui.text()
             ui.window_control("−")
             ui.pump(.2)
-            x = ui.screen.display[0].index("S") + 1
+            x = ui.screen.display[0].index(" S ") + 2
             ui.mouse(0, x, 1)
             ui.mouse(0, x, 1, True)
             ui.wait("BEE SETTINGS")

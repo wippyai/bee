@@ -198,6 +198,31 @@ entries:
           - signal_group
       - id: batch
         mode: batch
+        hooks:
+          transports:
+          - command
+          - http
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PostToolUseFailure
+          - PermissionRequest
+          - PermissionDenied
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.claude:protocol
+        inbound:
+        - next_turn
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          - sse
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
         protocol: stream-json
         protocol_revision: stream-json-2
         answer_path: *id001

@@ -38,7 +38,7 @@ end
 local ALPHA, BETA = subject("a1"), subject("a2")
 local MEMBER_POLICIES = {"bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy",
     "bee.security.hive:hive_thread_invoke_policy", "bee.threads:inbox_send_test_policy",
-    "bee.security.gateway:gateway_session_discover_policy"}
+    "bee.hive:inbox_discover_test_policy"}
 local function install(mappings: {Object})
     local entry = registry.get(principals.ENTRY)
     if not entry then error("mappings entry") end

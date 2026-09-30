@@ -58,7 +58,7 @@ async function rpc({token=input.token, host, origin, action='container-action', 
  }
  check((await rpc()).body.result?.protocolVersion,'initialize failed');
  const tools = (await rpc({method:'tools/list'})).body.result?.tools?.map(t=>t.name).sort();
- check(JSON.stringify(tools)===JSON.stringify(['thread_read','thread_wait']),'scope changed');
+ check(JSON.stringify(tools)===JSON.stringify(['call_tool','capabilities','session','thread_read']),'scope changed');
  const page = await rpc({method:'tools/call',params:{name:'thread_read',arguments:{cursor:0}}});
  check(page.status===200 && JSON.parse(page.body.result.content[0].text).ok===true,'thread read refused');
  check((await rpc({token:''})).status===401,'missing token accepted');

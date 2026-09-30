@@ -14,6 +14,15 @@ local function gateway(tools: {string}, hooks: {string}): configuration.Gateway
 end
 local function define_tests()
     test.describe("OpenCode configuration", function()
+        test.it("publishes admitted private login config without gateway tools", function()
+            local reply = configure.handle({fixture = false, private_home = true})
+            test.is_true(reply.ok)
+            local files = (reply.delivery :: {files: {{composition: {kind: string, base_path: string}, path: string}}}).files
+            test.eq(#files, 1)
+            test.eq(files[1].composition.kind, "copy")
+            test.eq(files[1].path, configuration.PATH)
+            test.eq(files[1].composition.base_path, configuration.BASE_PATH)
+        end)
         test.it("declares no hook transport on either shipped route", function()
             for _, ref in ipairs({"bee.driver.opencode:launch_policy_opencode_window", "bee.driver.opencode:launch_policy_opencode_batch"}) do
                 local entry, entry_error = registry.get(ref)

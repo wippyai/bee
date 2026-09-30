@@ -155,6 +155,7 @@ entries:
   data:
     schema_revision: bee.launch-definition@1
     launch_id: window-ready-fixture
+    session_resource: session
     title: Window readiness fixture
     command_names: []
     binding_ref: bee.driver.claude:binding
@@ -274,7 +275,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: gateway_surface_policy
   kind: registry.entry
@@ -294,13 +295,13 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     gateway_surface:
       tools: []
       traits:
       - {id: 'research:read', title: Read research, prompt: Read the current research thread., tools: [thread_read]}
-      - {id: 'research:wait', title: Wait for research, prompt: Wait for research changes., tools: [thread_wait]}
+      - {id: 'research:inspect', title: Inspect capabilities, prompt: Inspect the admitted research capabilities., tools: [capabilities]}
       base_tools: [thread_read]
       active_traits: []
       fixed_context: {project: managed-project}
@@ -342,7 +343,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_ttl_ms: 2500
 - name: claude_gateway_policy
   kind: registry.entry
@@ -362,7 +363,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 3}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: codex_gateway_policy
   kind: registry.entry
@@ -383,7 +384,7 @@ entries:
     environment: {}
     prepare_options: {sandbox: read-only}
     provider_ref: bee.harness.catalog:codex_fixture_provider
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: gateway_harness_test
   kind: function.lua

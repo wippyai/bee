@@ -53,6 +53,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             or (kind == "requirements" and state.requirements_open) or kind == state.action
             or kind == "policy_" .. state.policy or kind == "confirm" or kind == "review" or kind == "plan"
             or kind == "recover"
+            or (kind == "developer_packages" and state.developer_packages)
         return frame.button(painter, x, y, {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active})
     end
     frame.header(painter, "MODULES  " .. string.upper(state.phase), state.selected or "Browse the Hub")
@@ -71,38 +72,70 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local roomy = width >= 48 and height >= 16
         local first = roomy and 6 or 4
         local stride = roomy and 3 or 1
+        local catalog_items = model.visible_catalog(state)
         local capacity = maximum(0, (height - 2 - first) // stride)
-        local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.catalog - capacity), offset)))
+        local next_offset = math.floor(math.max(0, math.min(maximum(0, #catalog_items - capacity), offset)))
         if roomy then
             local search_x = button(2, 4, "search", " Search packages… ", true)
             search_x = button(search_x, 4, "keyword", " Change keyword ", true)
-            frame.put(painter, search_x + 1, 4, tostring(state.total) .. " packages", maximum(0, width - search_x - 2), theme.muted)
+            local dev_label = state.developer_packages and " Developer packages [x] " or " Developer packages "
+            if width < 76 then
+                dev_label = state.developer_packages and " Dev pkgs [x] " or " Dev pkgs "
+            end
+            search_x = button(search_x, 4, "developer_packages", dev_label, true)
+            local count_str = tostring(#catalog_items) .. (state.all_catalog and #state.all_catalog > #catalog_items and ("/" .. tostring(state.total)) or "") .. " packages"
+            frame.put(painter, search_x + 1, 4, count_str, maximum(0, width - search_x - 2), theme.muted)
         end
-        if #state.catalog == 0 then
-            frame.line(painter, first, "No packages on this page", theme.text)
-            if roomy then frame.line(painter, first + 1, "Try another search or clear the keyword filter.", theme.muted) end
+        if #catalog_items == 0 then
+            if state.all_catalog and #state.all_catalog > 0 then
+                frame.line(painter, first, "No applications on this page", theme.text)
+                if roomy then frame.line(painter, first + 1, "Developer packages are hidden · enable Developer packages to show libraries.", theme.muted) end
+            else
+                frame.line(painter, first, "No packages on this page", theme.text)
+                if roomy then frame.line(painter, first + 1, "Try another search or clear the keyword filter.", theme.muted) end
+            end
         end
         for slot = 1, capacity do
-            local item = state.catalog[next_offset + slot]
+            local item = catalog_items[next_offset + slot]
             if not item then break end
             local y, selected = first + (slot - 1) * stride, item.component == state.selected
             local label = item.title ~= "" and item.title or item.component
+            local status = model.component_status(state, item.component)
             local foreground = selected and appearance.selection_text(theme) or theme.text
             local background = selected and theme.accent or theme.surface
-            frame.row(painter, y, roomy and (" " .. label) or label, selected, "component", 0, item.component, nil, nil, stride)
+            local row_label = roomy and (" " .. label) or label
+            if not roomy then
+                if status == "built-in" then row_label = label .. " [built-in]"
+                elseif status == "installed" then row_label = label .. " [installed]"
+                else row_label = label .. " [install]" end
+            end
+            frame.row(painter, y, row_label, selected, "component", 0, item.component, nil, nil, stride)
             if roomy then
-                local version_width = tty.text.width(item.latest_version)
-                if version_width > 0 and tty.text.width(label) + version_width + 6 < width then
-                    frame.put(painter, width - version_width - 2, y, item.latest_version, version_width, foreground, background)
+                local action_tag = ""
+                if status == "built-in" then
+                    action_tag = item.latest_version ~= "" and ("Built-in · Open " .. item.latest_version) or "Built-in · Open"
+                elseif status == "installed" then
+                    action_tag = item.latest_version ~= "" and ("Installed · Open " .. item.latest_version) or "Installed · Open"
+                else
+                    action_tag = item.latest_version ~= "" and ("Install " .. item.latest_version) or "Install"
+                end
+                local tag_width = tty.text.width(action_tag)
+                if tag_width > 0 and tty.text.width(label) + tag_width + 6 < width then
+                    frame.put(painter, width - tag_width - 2, y, action_tag, tag_width, foreground, background)
+                elseif tty.text.width(item.latest_version) > 0 and tty.text.width(label) + tty.text.width(item.latest_version) + 6 < width then
+                    frame.put(painter, width - tty.text.width(item.latest_version) - 2, y, item.latest_version, tty.text.width(item.latest_version), foreground, background)
                 end
                 frame.line(painter, y + 1, " " .. item.component .. "  ·  " .. (item.description ~= "" and item.description or "No description provided"), theme.muted)
                 frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             end
         end
+        local sel_status = state.selected and model.component_status(state, state.selected)
         local actions = 2
         actions = button(actions, height - 1, "previous", " ‹ Previous ", state.page > 1)
         actions = button(actions, height - 1, "next", " Next › ", #state.catalog > 0 and state.total > state.page * #state.catalog)
-        frame.footer(painter, status, "/ search · K keyword · Enter open · ←/→ page")
+        actions = button(actions, height - 1, "details", (sel_status == "built-in" or sel_status == "installed") and " Open " or " Install ", state.selected ~= nil)
+        local action_hint = (sel_status == "built-in" or sel_status == "installed") and "Enter open" or "Enter install"
+        frame.footer(painter, status, "/ search · K keyword · " .. action_hint .. " · ←/→ page")
         return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "installed" then
@@ -214,7 +247,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
     end
     local detail = state.detail
     if state.phase == "details" then
-        frame.line(painter, 3, detail and (detail.title .. "  " .. detail.component) or "Select a package to read its details", theme.muted)
+        local detail_status = detail and model.component_status(state, detail.component)
+        local status_suffix = detail_status and ("  ·  " .. (detail_status == "built-in" and "Built-in" or "Installed")) or ""
+        frame.line(painter, 3, detail and (detail.title .. "  " .. detail.component .. status_suffix) or "Select a package to read its details", theme.muted)
         if detail then
             frame.line(painter, 4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
             local tab_x = 2

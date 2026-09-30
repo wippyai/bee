@@ -76,17 +76,26 @@ entries:
     type: bee.application
     application:
       api_version: 1
-      title: Agent
+      title: Sessions
       icon: A
       lifetime: view
       revision: '1'
       instance_policy: multiple
       group: ''
-      role: terminal
+      role: sessions
       resume_schema: bee.agent.window@1
       restart_policy: automatic
       commands:
       - {name: agent, fullscreen: false}
+- name: agents
+  kind: library.lua
+  source: file://agents.lua
+  modules: [json]
+  imports:
+    sessions: bee.application:sessions
+    sessions_protocol: bee.application:sessions_protocol
+    bounds: bee.threads.records:bounds
+    caller: bee.application:caller
 - name: picker_view
   kind: library.lua
   source: file://picker_view.lua
@@ -94,11 +103,21 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
-    selection: bee.harness.launch:selection
+    agents: bee.harness.window:agents
+- name: session_view
+  kind: library.lua
+  source: file://session_view.lua
+  modules: [tty]
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    text: bee.application:text
+    agents: bee.harness.window:agents
+    protocol: bee.application:sessions_protocol
 - name: picker
   kind: library.lua
   source: file://picker.lua
-  modules: [tty, process, channel, uuid, funcs]
+  modules: [tty, process, channel, time, uuid, funcs]
   imports:
     frame: bee.application:frame
     bounds: bee.threads.records:bounds
@@ -106,7 +125,11 @@ entries:
     caller: bee.application:caller
     appearance: bee.application:appearance
     input_event: bee.harness.window:input
-    selection: bee.harness.launch:selection
+    sessions: bee.application:sessions
+    agents: bee.harness.window:agents
+    session_view: bee.harness.window:session_view
+    directory_view: bee.harness.window:directory_view
+    sessions_protocol: bee.application:sessions_protocol
     admission: bee.harness.launch:admission
     view: bee.harness.window:picker_view
     forms: bee.harness.window:profile_form
@@ -129,7 +152,6 @@ entries:
     definition: bee.harness.launch:definitions
     protocol: bee.harness.profiles:protocol
     editor: bee.harness.window:profile_editor
-    selection: bee.harness.launch:selection
 - name: profile_view
   kind: library.lua
   source: file://profile_view.lua
@@ -142,3 +164,13 @@ entries:
     folder_picker: bee.application:folder_picker
     editor: bee.harness.window:profile_editor
     forms: bee.harness.window:profile_form
+
+- name: directory_view
+  kind: library.lua
+  source: file://directory_view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    text: bee.application:text
+    protocol: bee.application:sessions_protocol
+    agents: bee.harness.window:agents

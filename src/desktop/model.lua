@@ -234,6 +234,16 @@ function M.add(scene: Scene, id: string, instance_id: string, title: string, ico
     return commit(scene, scene.width, scene.height, id, windows)
 end
 
+function M.add_fullpane(scene: Scene, id: string, instance_id: string, title: string, icon: string?, workspace_id: string?): Scene
+    local added = M.add(scene, id, instance_id, title, icon, workspace_id)
+    if added == scene then return scene end
+    local windows = copy_windows(added.windows)
+    local current = windows[#windows]
+    current.mode, current.restore_mode = "fullscreen", "fullscreen"
+    current.bounds = workspace(scene.width, scene.height)
+    return {width = added.width, height = added.height, revision = added.revision, focus = added.focus, windows = windows}
+end
+
 function M.display_title(window: Window): string
     if window.user_title ~= nil and window.user_title ~= "" then return window.user_title end
     return window.title

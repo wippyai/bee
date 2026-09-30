@@ -31,6 +31,7 @@ entries:
     - bee.harness.profiles:contract
     - bee.harness.profiles:call
     - bee.harness.launch:admission
+    - bee.harness.launch:locate_probe
     effect: allow
 - name: scheduler_policy
   kind: security.policy

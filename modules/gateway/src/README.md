@@ -5,20 +5,22 @@ reaches over HTTP. It owns bindings, opaque tokens stored only as hashes, the
 listener epoch, drain, readiness, and HTTP handlers. The listener itself
 (`http.service`, router, and endpoints) belongs to the host composition. The
 activation binds native loopback port zero and reads the assigned address
-through supervisor state. Agent profiles can admit the `session_catalog`,
-`session_open`, `session_run`,
-`session_send`, `session_await`, `session_join`, `session_get`, `session_list`,
-`session_cancel` and `session_close` tools. They project the `bee.sessions:contract` and
-`bee.sessions:catalog` owner contracts one method each. Arguments are the
-published closed schemas; every mutation requires `operation_key`; caller
-identity travels only in the authenticated call context, never in a payload;
-the owner binding opens under the host-linked `target_tool_session_policy`, and
-each owner reply is held to the published output schema. The gateway keeps no
-session state. The host may admit any subset. `thread_read` and `thread_wait`
-read committed transcript records; `thread_message` appends a transcript note
-and does not give a session work. Use `session_send` to submit durable Work.
-`thread_notify` registers a one-shot transcript notice. The caller-owned
-Governance `overlay` tool also carries a read-only `guide` operation stating this
+through supervisor state. Agent
+profiles declare `thread_read` and `thread_message` (read the transcript, and
+record a note on it that schedules nothing), the ten `session_*` tools, the
+caller-owned Governance `overlay` tool and the other built-in tools below. The
+`session_catalog`, `session_open`, `session_run`, `session_send`,
+`session_await`, `session_join`, `session_get`, `session_list`,
+`session_cancel` and `session_close` tools project the `bee.sessions:contract`
+and `bee.sessions:catalog` owner contracts one method each; they are the only
+way to start an agent, give it work (`session_send`) and read its result
+(`session_await`). Arguments are the published closed schemas; every mutation
+requires `operation_key`; caller identity travels only in the authenticated
+call context, never in a payload; the owner binding opens under the host-linked
+`target_tool_session_policy`, and each owner reply is held to the published
+output schema. The gateway keeps no session state.
+The host may admit any subset. The
+overlay tool also carries a read-only `guide` operation stating this
 destination's application authoring contract and one minimal example (derived
 from the same rule tables preflight enforces). It can stage and freeze files but
 cannot publish or activate them.

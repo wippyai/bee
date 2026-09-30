@@ -2,8 +2,7 @@
 -- token against the action, decodes one JSON-RPC request, and maps a tool
 -- call to one owner operation run as the bound subject under host-named
 -- policies. It writes no record itself; the thread owner authorizes again.
--- A wait runs in bounded slices so drain releases it with an explicit
--- outcome, and past the host's drain deadline nothing is served.
+-- Past the host's drain deadline nothing is served.
 local http = require("http")
 local json = require("json")
 local funcs = require("funcs")
@@ -13,7 +12,6 @@ local gateway = require("gateway")
 local mcp = require("mcp")
 local catalog = require("catalog")
 local context = require("context")
-local sessions = require("sessions")
 local session_tools = require("session_tools")
 local bounds = require("bounds")
 local transport_admission = require("admission")
@@ -140,44 +138,6 @@ local function reply_result(reply: unknown, call_error: unknown): Object
     return mcp.tool_result(encoded, true, mcp.tool_error(decoded.error.code,
         decoded.error.message, decoded.error.field, decoded.error.retryable == true, remedy or decoded.error.remedy))
 end
--- The running sessions of the caller's workspace that the bound subject may
--- read, with each thread's title. The thread owner answers get as the
--- subject, so a session on a thread the caller is not a member of is never
--- listed or reachable; an owner failure other than a refusal stops the call.
-type Reachable = {sessions: {sessions.Candidate}, titles: {[string]: string}}
-local function reachable(binding: gateway.Binding, executor: funcs.Executor): (Reachable?, Object?)
-    local candidates, refusal = gateway.workspace_sessions(binding)
-    if not candidates then return nil, reply_result(refusal, nil) end
-    local titles: {[string]: string} = {}
-    local hidden: {[string]: boolean} = {}
-    local visible: {sessions.Candidate} = {}
-    for _, item in ipairs(candidates) do
-        if titles[item.thread_id] == nil and not hidden[item.thread_id] then
-            local reply, call_error = executor:call("bee.threads.service:get", {thread_id = item.thread_id})
-            if call_error then return nil, refused("UNAVAILABLE", tostring(call_error)) end
-            local answer = bounds.object(reply)
-            if answer and answer.ok == true then
-                local value = bounds.object(answer.value)
-                local summary = value and bounds.object(value.summary)
-                titles[item.thread_id] = summary and tostring(summary.title) or ""
-            else
-                local fault = answer and bounds.object(answer.error)
-                local code = fault and tostring(fault.code) or ""
-                if code ~= "DENIED" and code ~= "NOT_FOUND" then return nil, reply_result(reply, nil) end
-                hidden[item.thread_id] = true
-            end
-        end
-        if titles[item.thread_id] ~= nil then visible[#visible + 1] = item end
-    end
-    return {sessions = visible, titles = titles}, nil
-end
-local function resolve(binding: gateway.Binding, executor: funcs.Executor, address: string): (sessions.Candidate?, Object?)
-    local found, failure = reachable(binding, executor)
-    if not found then return nil, failure end
-    local target, code, message = sessions.resolve(found.sessions, address)
-    if not target then return nil, refused(code or "NOT_FOUND", message or "no such session") end
-    return target, nil
-end
 local function capabilities(binding: gateway.Binding): Object
     local bound, surface_error = gateway.surface(binding)
     if not bound then return reply_result(surface_error, nil) end
@@ -196,17 +156,15 @@ local function capabilities(binding: gateway.Binding): Object
         action_id = binding.action_id, revision = bound.revision, digest = bound.digest,
         tools = tools, traits = traits, allowed_traits = config.allowed_traits, active_traits = bound.selection.active,
         requestable_access = config.access,
-        session_tools = session_tools.NAMES,
         thread_access = {thread_id = binding.thread_id,
-            note = "thread_read, thread_wait and thread_message reach the bound thread; session_list lists durable sessions"},
+            note = "thread_read reads the bound thread and thread_message records a note on it; sessions are addressed through the session_* tools"},
         authoring = {guide_tool = "overlay", guide_operation = "guide",
             preflight_tool = "delivery", preflight_operation = "preflight",
             note = "read the capabilities report, then the overlay guide index, then preflight a frozen digest before delivery request"}}}, nil)
 end
-
--- A caller may name a member_thread it is an active member of, such as a child
--- it launched on a new thread. The thread owner checks membership again on the
--- read or watch, but the endpoint refuses early so an unrelated thread is never
+-- A caller may name a member_thread it is an active member of, such as the
+-- thread of a session it opened. The thread owner checks membership again on the
+-- read, but the endpoint refuses early so an unrelated thread is never
 -- offered as if it were this binding's own, and strips the field before the
 -- owner call so the owner's field allow-list stays exact.
 local function member_thread(executor: funcs.Executor, request: Object, bound: string): (string?, Object?)
@@ -254,28 +212,6 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
     local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
     if tool.name == "capabilities" then return capabilities(binding) end
-    if tool.name == "thread_notify" then
-        local target_thread_id: string
-        local target_action_id: string? = nil
-        local target_attempt_id: string? = nil
-        if request.thread_id ~= nil then
-            local selected, missing = member_thread(executor, {member_thread = request.thread_id}, binding.thread_id)
-            if not selected then return missing :: Object end
-            target_thread_id = selected
-            target_attempt_id = tostring(request.attempt_id)
-        else
-            local target, unreachable = resolve(binding, executor, tostring(request.session))
-            if not target then return unreachable :: Object end
-            target_thread_id = target.thread_id
-            target_action_id = target.action_id
-        end
-        local body: Object = {thread_id = binding.thread_id, idempotency_key = request.idempotency_key,
-            target_thread_id = target_thread_id, watcher_action_id = binding.action_id}
-        if target_action_id then body.target_action_id = target_action_id end
-        if target_attempt_id then body.target_attempt_id = target_attempt_id end
-        local reply, call_error = executor:call(tool.operation, body)
-        return reply_result(reply, call_error)
-    end
     if tool.name == "thread_read" then
         local selected, missing = member_thread(executor, request, binding.thread_id)
         if not selected then return missing :: Object end
@@ -289,60 +225,9 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         request.kind = "message"
         request.thread_id = binding.thread_id
         request.context = {action_id = binding.action_id, attempt_id = binding.attempt_id}
-        local member, missing = member_thread(executor, request, binding.thread_id)
-        if not member then return missing :: Object end
-        request.thread_id = member
-        if member ~= binding.thread_id then request.context = nil end
-        local address = request.session
-        request.session = nil
-        if type(address) == "string" and member == binding.thread_id then
-            local target, unreachable = resolve(binding, executor, address)
-            if not target then return unreachable :: Object end
-            -- The session is the recipient; the caller's own action names the
-            -- sending session so the recipient can answer it by address.
-            local body = request.body :: Object
-            body.recipient_ids = {target.subject}
-            body.recipient_action_ids = {target.action_id}
-            body.sender_action_id = binding.action_id
-            request.thread_id = target.thread_id
-            if target.thread_id ~= binding.thread_id then request.context = nil end
-        end
     end
     local reply, call_error = executor:call(tool.operation, request)
     return reply_result(reply, call_error)
-end
-local function wait(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
-    local executor, failure = subject_executor(binding, tool, values, nil)
-    if not executor then return failure :: Object end
-    local selected, missing = member_thread(executor, request, binding.thread_id)
-    if not selected then return missing :: Object end
-    request.thread_id = selected
-    local remaining = tonumber(request.wait_ms) or 0
-    local budget = tonumber(request.transport_budget_ms) or mcp.TRANSPORT_BUDGET_MS
-    if remaining > budget then remaining = budget end
-    local outcome: Object? = nil
-    while not outcome do
-        local drain, drain_error = gateway.draining()
-        if not drain then
-            local message = drain_error and drain_error.error and drain_error.error.message or "gateway drain state is unavailable"
-            outcome = refused("UNAVAILABLE", message, nil, true)
-        elseif drain.draining then
-            outcome = mcp.tool_result(json.encode({ok = true, value = {status = "released", reason = "draining", scanned_through = request.after_sequence}}) or "{}", false)
-        else
-            local slice = math.floor(math.min(remaining, gateway.WAIT_SLICE_MS))
-            local sliced: Object = {thread_id = request.thread_id, after_sequence = request.after_sequence, wait_ms = slice, transport_budget_ms = budget}
-            local reply, call_error = executor:call(tool.operation, sliced)
-            if call_error then
-                outcome = refused("UNAVAILABLE", tostring(call_error))
-            else
-                local value = type(reply) == "table" and (reply :: Object).value or nil
-                local status = type(value) == "table" and tostring((value :: Object).status) or ""
-                remaining = remaining - slice
-                if status ~= "timeout" or remaining <= 0 then outcome = reply_result(reply, nil) end
-            end
-        end
-    end
-    return outcome
 end
 local function handle(): nil
     local request, request_error = http.request({max_body = mcp.MAX_BODY_BYTES})
@@ -446,9 +331,7 @@ local function handle(): nil
     local arguments: Object? = nil
     local argument_error: string? = nil
     if tool.name == "thread_read" then arguments, argument_error = mcp.read_arguments(parameters)
-    elseif tool.name == "thread_wait" then arguments, argument_error = mcp.wait_arguments(parameters)
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
-    elseif tool.name == "thread_notify" then arguments, argument_error = mcp.notify_arguments(parameters)
     elseif session_tools.is_session_tool(tool.name) then arguments, argument_error = session_tools.decode(tool.name, parameters)
     elseif tool.name == "capabilities" then arguments, argument_error = mcp.capabilities_arguments(parameters)
     elseif tool.name == "request_capability" then arguments, argument_error = mcp.capability_arguments(parameters)
@@ -477,8 +360,7 @@ local function handle(): nil
         end
         runtime = granted
     end
-    if tool.name == "thread_wait" then answer(response, http.STATUS.OK, mcp.result(call.id, wait(binding, tool, arguments, values)))
-    else answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime))) end
+    answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime)))
     return nil
 end
 return {handle = handle}

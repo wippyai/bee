@@ -49,19 +49,14 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
-    values: bee.threads.records:values
+    universal: bee.driver:universal
 - name: launch
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    types: bee.driver:types
+    universal: bee.driver:universal
+
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -71,6 +66,11 @@ entries:
     canonical: bee.threads.records:canonical
     configure_protocol: bee.driver:configuration
     quote: bee.driver.kit:quote
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -80,9 +80,13 @@ entries:
       dispatch: bee.driver.agy.binding:dispatch
       normalize: bee.driver.agy.binding:normalize
       configure: bee.driver.agy.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.agy.binding:locate
   meta:
     type: harness.driver
     driver_id: agy
+    descriptor_ref: bee.driver.agy.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.agy:profiles
 - name: profiles
@@ -251,7 +255,7 @@ entries:
     executable_env: {agy: bee.driver.agy:executable}
     environment: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, overlay, delivery, docs, components, install_request, uninstall_request, install_status, session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close]
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m, sandbox: true}
 - name: launch_policy_agy_window
   kind: registry.entry
@@ -273,28 +277,7 @@ entries:
       agy: bee.driver.agy:executable
     environment: {}
     allow_host_home: true
-    gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_notify
-    - overlay
-    - delivery
-    - docs
-    - components
-    - install_request
-    - uninstall_request
-    - install_status
-    - session_catalog
-    - session_open
-    - session_run
-    - session_send
-    - session_await
-    - session_join
-    - session_get
-    - session_list
-    - session_cancel
-    - session_close
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks:
     - PreToolUse
     - PostToolUse

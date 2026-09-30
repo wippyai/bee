@@ -19,17 +19,11 @@ credential. A tool credential cannot use a hook endpoint, and a hook credential
 cannot call an MCP tool. The endpoints check the binding, action, Host, bearer,
 payload bounds and selected event before accepting an observation.
 
-An accepted HTTP submission returns an event ID, and at a supported boundary
-(UserPromptSubmit or Stop) the bound action's outstanding inbox as
-additionalContext: up to three identified items with bounded excerpts, so the
-agent learns its mail without polling and without anything typed into its PTY.
-Other events return an empty success response. An accepted MCP submission
-names its status and event ID as structured content and carries the same
-inbox text at UserPromptSubmit; Stop keeps empty content because Codex
-requires JSON there. A binding without the session_inbox grant, or an action
-with nothing outstanding, answers exactly as before. Refusals are status
-responses or JSON-RPC errors. No response carries a decision, continuation
-flag, prompt content or control instruction.
+An accepted HTTP submission returns an event ID with an empty success body. An
+accepted MCP submission names its status and event ID as structured content and
+carries empty text content, because Codex requires JSON at Stop. Refusals are
+status responses or JSON-RPC errors. No response carries a decision,
+continuation flag, prompt content, transcript or control instruction.
 
 ## Durable intake
 

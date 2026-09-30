@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 10045,
+      "bytes": 9900,
       "id": "docs/agent_guide",
-      "sha256": "afd66c44c6f4b7b2ca293ad0e2cba38aab629eb54c091271e5776bdb0b04d9ae",
+      "sha256": "a5dc707a21a5b98783429e07e281f00ba2eda013e7cbdf33bf6b943fccd91516",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -147,9 +147,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 19107,
+      "bytes": 13407,
       "id": "docs/mcp_configuration",
-      "sha256": "9321e8f801db1a3b99b69ed42f9a39d4b834417bb5b5f95e689f2ae4267df627",
+      "sha256": "01f60bb13aeae75bcaa6edbd11ed67b2fac1d2389e4afb84fd60c924b5dbae66",
       "source": "docs/guides/agents/mcp.md",
       "title": "Configurable managed MCP",
       "topic": "gateway"
@@ -163,17 +163,17 @@
       "topic": "ui"
     },
     {
-      "bytes": 9130,
+      "bytes": 10012,
       "id": "docs/desktop",
-      "sha256": "ac1119daf9fb346d6bee23c05f0d4f04544c682b241fc846b8815c8bfc1619fd",
+      "sha256": "4297f71605ebe3a1bb05f1dc38b850878141a795d9867a3fe9c5046caa280b56",
       "source": "docs/guides/desktop.md",
       "title": "Desktop",
       "topic": "ui"
     },
     {
-      "bytes": 9331,
+      "bytes": 9317,
       "id": "docs/hub_inspection",
-      "sha256": "62cc2c8af2c13e05ab601ec2e0e7b088182072eb6a8e8653bbe9bb5e8385535d",
+      "sha256": "63547c8ce4aa0a855de462af95515040803dce23bd1d4e22e0e555a91d0b411a",
       "source": "docs/guides/hub.md",
       "title": "Hub installation and package reads",
       "topic": "registry"
@@ -203,25 +203,25 @@
       "topic": "application"
     },
     {
-      "bytes": 13119,
+      "bytes": 10420,
       "id": "docs/gateway",
-      "sha256": "03df09555e7eb03cc8eac14dc6e623aaf834b355a04cb83637858d8682ec5eec",
+      "sha256": "808d25aee2c85ab85ce13f8cefece65c547908cd7f399a6bddf45d56f385e1e3",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
     },
     {
-      "bytes": 3885,
+      "bytes": 3472,
       "id": "docs/gateway_hooks",
-      "sha256": "ef5a1ebfc5f7aaf50ad75b9552f0470fcfcbf6a060c3efbfd2c9c58433f5979d",
+      "sha256": "00c38170b112bc9b48df8e30b723f33c68b06caa7cffb8586ead3455c4ca35c7",
       "source": "docs/reference/agents/hooks.md",
       "title": "Gateway hooks",
       "topic": "gateway"
     },
     {
-      "bytes": 24199,
+      "bytes": 21998,
       "id": "docs/application_contracts",
-      "sha256": "c89e90c6962d401e59fd8406a85affd4a877b50e5b2df97db2d3e506e7fd20f7",
+      "sha256": "0fda9879be5c2dc977035b162653dffd42c4cfa42cde384d745d636e826098f8",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -251,9 +251,9 @@
       "topic": "cluster"
     },
     {
-      "bytes": 27754,
+      "bytes": 25826,
       "id": "docs/threads",
-      "sha256": "343f60899d1d597ee6d064f017b5b320e97a36cf664c870ce52851f2be9c0a40",
+      "sha256": "2d07c02e23b800948913690b4cad9d6bdb2b076da2f7fae68d71437332fe7322",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
@@ -275,17 +275,17 @@
       "topic": "storage"
     },
     {
-      "bytes": 655,
+      "bytes": 683,
       "id": "component/agents",
-      "sha256": "b40d5b227f179d18c9b8847e9c7e20b350147749a051916a66a082b99b26a31e",
+      "sha256": "3e945348e427dc3b173dcad88f75b911caa1a9c962f1e4f69158b472e41994fa",
       "source": "modules/agents/src/README.md",
       "title": "Bee agents",
       "topic": "component"
     },
     {
-      "bytes": 4251,
+      "bytes": 7432,
       "id": "component/application",
-      "sha256": "d74118c6c402258cd5d7717743ba4231185d710f45d8cc5536b814b3dfb9b089",
+      "sha256": "e37afadc34ea3cae4e930ad0b90fc53d2b59227882478622d903e6c7002c92ea",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -323,57 +323,57 @@
       "topic": "component"
     },
     {
-      "bytes": 3377,
+      "bytes": 4771,
       "id": "component/driver",
-      "sha256": "84e69b06ea053999d198a118096920917328cf563aba08b5e0afcc26769afaa6",
+      "sha256": "7204166c80fc998fb5f9624c0ade194afe4d3c94a2fee87604a55b1725c4c783",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
     },
     {
-      "bytes": 958,
+      "bytes": 983,
       "id": "component/driver:agy",
-      "sha256": "76e644e96718aed785e6cd8afd37f7fc29ab5e1976e2d7e52e281ba6cc242761",
+      "sha256": "4323dfecc6afcf0f73052bead80121ffde2463bd0db5947a7c37aa723eca0d9f",
       "source": "modules/driver-agy/src/README.md",
       "title": "Bee Agy driver",
       "topic": "component"
     },
     {
-      "bytes": 1847,
+      "bytes": 1875,
       "id": "component/driver:claude",
-      "sha256": "8643a352f84a895f6b9e3764aee3d309fc9e8e31d73bd487b11eb9c948899d23",
+      "sha256": "08018936523cabf1bfe81e3941bf8c849a42385f627354c06834ce61f134406d",
       "source": "modules/driver-claude/src/README.md",
       "title": "Bee Claude driver",
       "topic": "component"
     },
     {
-      "bytes": 1966,
+      "bytes": 1987,
       "id": "component/driver:codex",
-      "sha256": "4f2574bc85965b31dbaac9e02271f16cf60781eb13e729167149e55ae1b3ab71",
+      "sha256": "634b22c4979b7950550d12192d1083aa5f1a45e12709982e435faa9f432f0e96",
       "source": "modules/driver-codex/src/README.md",
       "title": "Bee Codex driver",
       "topic": "component"
     },
     {
-      "bytes": 747,
+      "bytes": 776,
       "id": "component/driver:grok",
-      "sha256": "492c2c11c37b0671457ea9904d046511771817c22b9b74f7841c9113c24effd9",
+      "sha256": "246a96c7e92eae3f05a4c9c17a0f2d7fd26a5c82814039c140a781834b78b055",
       "source": "modules/driver-grok/src/README.md",
       "title": "Bee Grok driver",
       "topic": "component"
     },
     {
-      "bytes": 698,
+      "bytes": 725,
       "id": "component/driver:muse",
-      "sha256": "02bd92f739b3f2438ab5876953f78820129a4209b92ce5860525f2de88008ca0",
+      "sha256": "28ec43f6e9cb0c294ab4f4eec1798d18dfa86fc31ea537e9dbb93825daef52e9",
       "source": "modules/driver-muse/src/README.md",
       "title": "Bee Muse driver",
       "topic": "component"
     },
     {
-      "bytes": 2499,
+      "bytes": 2528,
       "id": "component/driver:opencode",
-      "sha256": "f7a23309b2543dfb3ea4996d99f73abdfecf7d18f11d05159488cffa2b49bdb8",
+      "sha256": "be5a1a0f9143f94c8acc6ed178057cd931d0d931ed28b7b7a122a14c6f94cb07",
       "source": "modules/driver-opencode/src/README.md",
       "title": "Bee OpenCode driver",
       "topic": "component"
@@ -387,9 +387,17 @@
       "topic": "component"
     },
     {
-      "bytes": 8537,
+      "bytes": 822,
+      "id": "component/executor:external",
+      "sha256": "ebfe32fd981e047c98632cb11c76f428520d5c1d20419eb3438cac96e556beec",
+      "source": "modules/executor-external/src/README.md",
+      "title": "Bee external executor",
+      "topic": "component"
+    },
+    {
+      "bytes": 6799,
       "id": "component/gateway",
-      "sha256": "79c68a835242dda36e5c3a7eb3ead3f27df7c8d23a0ccee04cc718afcf8e5bd2",
+      "sha256": "4d7b16e530c7e66d519b16a4e037d2b1d3b5e8ef5c68832488477678c9849360",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -411,9 +419,9 @@
       "topic": "component"
     },
     {
-      "bytes": 22262,
+      "bytes": 4947,
       "id": "component/harness",
-      "sha256": "c9221a5a828163c0f8ef7ffb907bfabd3700a4464497ab0aed62a1ed19ccb479",
+      "sha256": "d91d52b0ae3bdcb0c90cae84813cbffb2b4b21ca205e476797fd67e7498e3897",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -467,9 +475,9 @@
       "topic": "component"
     },
     {
-      "bytes": 22167,
+      "bytes": 21964,
       "id": "component/placement:native",
-      "sha256": "ca5dc6699365808dd53a385121f35ff69449c210978e878ed4db4164f17c24ed",
+      "sha256": "6de1f003aa0a6b0a35b3442fa8f2d7cf5bb5452cdaceef75baf140e3ad3ca31c",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -483,6 +491,14 @@
       "topic": "component"
     },
     {
+      "bytes": 340,
+      "id": "component/sessions",
+      "sha256": "987d2a4f98a919f9b613799dfb9e96aab2aa201a19b7c40cad0ceab1692781be",
+      "source": "modules/sessions/src/README.md",
+      "title": "Bee sessions",
+      "topic": "component"
+    },
+    {
       "bytes": 2980,
       "id": "component/sync",
       "sha256": "e6ad71fa22956fc2c6e3f4244089bb9b9d2a7c1a8cafd983be8ae95c8d56d7fe",
@@ -491,9 +507,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9160,
+      "bytes": 9974,
       "id": "component/threads",
-      "sha256": "5b3cb24f371bce20278c72ffdd0df8c3845b4ae2bc370524560abaead9158862",
+      "sha256": "df62cde29373cd6b3a7d29fb3876df4bf2eef627d143bb036ce776649828faa8",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -590,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 683640,
-    "documents": 73
+    "bytes": 658904,
+    "documents": 75
   }
 }

@@ -1,10 +1,8 @@
--- MIT. Session discovery and addressing values, pure: one live session per
--- action under its newest carrier epoch, addresses resolved by action,
--- attempt or a thread holding exactly one session, and the listed view.
+-- MIT. Live carrier bindings, pure: one per action under its newest carrier epoch.
 local test = require("test")
 local sessions = require("sessions")
-local mcp = require("mcp")
 type Candidate = sessions.Candidate
+type Object = {[string]: unknown}
 local function candidate(action_id: string, attempt_id: string, thread_id: string, epoch: integer): Candidate
     return {binding_id = "binding-" .. attempt_id .. "-" .. tostring(epoch), subject = "subject", action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, carrier_epoch = epoch}
 end
@@ -18,33 +16,7 @@ local function define_tests()
             test.eq(latest[2].action_id, "b")
             test.eq(latest[3].action_id, "c")
         end)
-        test.it("resolves an action, an attempt or a thread that holds one session", function()
-            local live = sessions.latest({candidate("a", "a-1", "t1", 1), candidate("c", "c-1", "t1", 1), candidate("b", "b-1", "t2", 1)})
-            local by_action = sessions.resolve(live, "b")
-            test.eq(by_action and by_action.attempt_id, "b-1")
-            local by_attempt = sessions.resolve(live, "c-1")
-            test.eq(by_attempt and by_attempt.action_id, "c")
-            local by_thread = sessions.resolve(live, "t2")
-            test.eq(by_thread and by_thread.action_id, "b")
-            local ambiguous, code, message = sessions.resolve(live, "t1")
-            test.is_nil(ambiguous)
-            test.eq(code, "AMBIGUOUS")
-            test.eq(message, "thread t1 holds 2 running sessions; name one by action: a, c")
-            local missing, missing_code = sessions.resolve(live, "gone")
-            test.is_nil(missing)
-            test.eq(missing_code, "NOT_FOUND")
-        end)
-        test.it("uses the durable catalog and list tools for session discovery", function()
-            test.is_nil(mcp.tool("thread_sessions"))
-            test.is_nil(mcp.tool("session_directory"))
-            test.is_nil(sessions.directory)
-            test.is_nil(sessions.page)
-            local listed = mcp.list({"session_catalog", "session_list"})
-            test.eq(#listed.tools, 2)
-            test.eq(mcp.tool("session_catalog") and mcp.tool("session_catalog").operation, "bee.sessions:catalog.list")
-            test.eq(mcp.tool("session_list") and mcp.tool("session_list").operation, "bee.sessions:contract.list")
-        end)
-        test.it("uses the newest carrier binding while preserving the owner's grant epoch", function()
+        test.it("keeps the newest carrier binding of an action", function()
             local old = candidate("b", "attempt-old", "thread-b", 2)
             local current = candidate("b", "attempt-current", "thread-b", 3)
             local latest = sessions.latest({old, current})

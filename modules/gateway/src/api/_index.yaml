@@ -18,51 +18,46 @@ entries:
   kind: function.lua
   source: file://hook_http_method.lua
   method: submit
-  modules: [http, json, logger]
+  modules: [http, json]
   imports:
     gateway: bee.gateway.binding:gateway
     hooks: bee.gateway:hooks
-    hook_inbox: bee.gateway:hook_inbox
     admission: bee.gateway.api:admission
-  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:hook_inbox_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
+  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: hook_status_http
   kind: function.lua
   source: file://hook_http_method.lua
   method: status
-  modules: [http, json, logger]
+  modules: [http, json]
   imports:
     gateway: bee.gateway.binding:gateway
     hooks: bee.gateway:hooks
-    hook_inbox: bee.gateway:hook_inbox
     admission: bee.gateway.api:admission
   security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: hook_mcp_http
   kind: function.lua
   source: file://hook_mcp_method.lua
   method: handle
-  modules: [http, json, logger]
+  modules: [http, json]
   imports:
     gateway: bee.gateway.binding:gateway
     mcp: bee.gateway:mcp
     hooks: bee.gateway:hooks
-    hook_inbox: bee.gateway:hook_inbox
     admission: bee.gateway.api:admission
-  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:hook_inbox_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
+  security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: mcp_http
   kind: function.lua
   source: file://mcp_method.lua
   method: handle
-  modules: [http, json, funcs, security, registry, system, contract]
+  modules: [http, json, funcs, security, registry, contract]
   imports:
     gateway: bee.gateway.binding:gateway
     mcp: bee.gateway:mcp
     admission: bee.gateway.api:admission
     catalog: bee.gateway:catalog
     context: bee.gateway:context
-    sessions: bee.gateway:sessions
     session_tools: bee.gateway:session_tools
     bounds: bee.threads.records:bounds
-    sends: bee.threads.service:sends
     subject_call: bee.gateway.security:subject_call
   security:
-    policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:node_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy, bee.gateway.security:session_contract_policy]
+    policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy, bee.gateway.security:session_contract_policy]

@@ -1,9 +1,9 @@
 # Bee driver
 
-bee/driver is the shared Lua contract for managed harness components. It
-defines declarative launches, protocol normalization, saved preferences, and
-configuration delivery. It does not execute a process, read credentials, or
-write thread records.
+bee/driver is the shared Lua contract and implementation for external CLI
+drivers. It defines declarative launches, protocol normalization, saved
+preferences, configuration delivery, and host-evidence-based location. It does
+not execute a process, read credentials, or write thread records.
 
 ## Install
 
@@ -26,6 +26,27 @@ A provider binding implements four Lua methods:
 Placement validates the returned launch, measures the selected executable, and
 runs it. The carrier writes accepted observations through Threads. A process
 exit alone never establishes a successful turn.
+
+External CLI bindings also implement `bee.driver:locate_facet`. Its `locate`
+method evaluates host-probed executable presence and version, platform support,
+and provider login-file existence. Results are `ready`, `missing`,
+`unconfigured`, `incompatible`, or `unknown`. Login contents are never read;
+file existence is evidence of setup only, not proof that a login is valid.
+
+The six external CLI packages use the shared `bee.driver:universal`
+implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
+entry with executable and version probe, login evidence path, launch templates,
+option and flag templates, JSON paths, and a codec ID. The host validates the
+descriptor before using it. CLI-specific configuration rendering remains in
+the provider package where formats and hook protocols differ.
+
+Each observed wire protocol has one shared codec: Claude stream-json, Codex
+JSONL, OpenCode JSON events, Agy stream-json, Grok streaming-json, and Muse
+record JSONL. Claude and Agy both use newline-delimited JSON but have different
+event schemas and terminal reports; OpenCode has no terminal event and uses
+process EOF; Grok and Muse also use distinct event envelopes. The codec
+registry selects these implementations by descriptor ID. `driver-wippy` is a
+separate non-CLI driver and does not use this external-driver registry.
 
 A window launch may declare `login`: a provider identifier, a display-only
 sign-in command and bounded alternative file paths relative to its selected

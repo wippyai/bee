@@ -20,12 +20,12 @@ local function inspect()
         workspace, identity.definition_id, host_catalog))
     assert(grants.live(installed, function(id: string): unknown return registry.get(id) end))
     local capabilities = installed.capabilities :: {{[string]: unknown}}
-    assert(#capabilities == 5)
+    assert(#capabilities == 4)
     local seen: {[string]: boolean} = {}
     for _, grant in ipairs(capabilities) do seen[grant.capability :: string] = true end
-    assert(seen["threads.read"] and seen["threads.message"] and seen["workspace.files.read"] and seen["app.database"] and seen["agents.launch"])
+    assert(seen["threads.read"] and seen["workspace.files.read"] and seen["app.database"] and seen["agents.launch"])
     local generated_policies = installed.policies :: {{[string]: unknown}}
-    assert(#generated_policies == 5)
+    assert(#generated_policies == 4)
     local policy_ids: {[string]: boolean} = {}
     for _, generated_policy in ipairs(generated_policies) do
         policy_ids[generated_policy.id :: string] = true
@@ -43,7 +43,6 @@ local function inspect()
     assert(#databases == 1)
     assert(databases[1].kind == "db.sql.sqlite")
     local expected: {[string]: string} = {["app.tally:threads_read"] = "threads.read",
-        ["app.tally:child_message"] = "threads.message",
         ["app.tally:shared_files"] = "workspace.files.read", ["app.tally:tally_db"] = "app.database",
         ["app.tally:agent_launch"] = "agents.launch"}
     for requirement_id in pairs(expected) do

@@ -26,13 +26,15 @@ entries:
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
-  modules: [registry, funcs, fs]
+  modules: [funcs, time]
   imports:
-    admission: bee.harness.launch:admission
     bounds: bee.threads.records:bounds
-    driver_route: bee.sessions:driver_route
+    harness_catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    admission: bee.harness.launch:admission
+    profile_protocol: bee.harness.profiles:protocol
     locate: bee.sessions.service:locate
-    placement_resources: bee.placement.native:resources
+    readiness: bee.harness.launch:readiness
 - name: scheduler
   kind: library.lua
   source: file://scheduler.lua

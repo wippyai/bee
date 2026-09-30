@@ -2,20 +2,23 @@
 
 Durable threads in a SQLite store owned by this module. The `authority`,
 `lifecycle`, `delivery`, `projection` and `carrier` contracts commit typed
-records, membership and work lifecycle for rich threads. The caller's
-authenticated actor owns its data and no payload can select another actor.
+records, membership and work lifecycle for rich threads. The private `journal`
+contract stores Sessions state, immutable work, fenced turns, receipts and feed
+events in the same record stream and transaction boundary. Its caller must
+hold `bee.threads.sessions_owner`; the Threads inbox remains a separate legacy
+delivery contract and does not schedule work.
 
 ## Slices
 
 | Slice | Responsibility |
 |---|---|
-| `bee.threads` | Contracts (`authority`, `lifecycle`, `delivery`, `projection`, `carrier`, `approvals`), local bindings, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
+| `bee.threads` | Contracts (`authority`, `lifecycle`, `delivery`, `projection`, `carrier`, `approvals`, `journal`), local bindings, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
 | `bee.threads.records` | Pure typed decoders for the seven record families, bounds, the canonical record encoder and canonical JSON for request identity; no I/O |
-| `bee.threads.service` | The authority: access facade, authority, action inbox and lifecycle operations, one-shot notices, and owner methods |
+| `bee.threads.service` | The authority: access facade, authority, action inbox and lifecycle operations, canonical session/work store, one-shot notices, and owner methods |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (19 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
+| `bee.threads.persist` | The owned store: checked migration ledger (25 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
 
 ## Dependency interface
 
@@ -43,6 +46,7 @@ storage access. Rights the host grants on the caller's scope, checked with
 | `bee.threads.lifecycle` | admitting actions, starting attempts, turns and receipts |
 | `bee.sessions.send` | sending to one exact workspace/node/action inbox address accepted by that action's thread owner |
 | `bee.sessions.discover` | describing one exact action address without reading its thread |
+| `bee.threads.sessions_owner` | calling the canonical Sessions journal contract; the host grants this only to its Sessions owner |
 
 Membership roles are checked inside the commit transaction: `owner`
 administers membership and closes, `participant` reads and submits,
@@ -127,7 +131,12 @@ receipt fields), 13 `action_inbox_delivery_status` (persisted restart blockers),
 admission), 18 `app_alias` (the broker-attested stable application identity
 behind reopened-instance membership), and 19 `app_alias_live_authorization`
 (broker-managed live authorization for family inheritance; historical aliases
-continue to identify app-owned threads).
+continue to identify app-owned threads), 20 `unbounded_journal` (rebuild the
+sequence-bearing indexes without changing retained records), and 21
+`sessions_work_store` (canonical sessions, work, turns and operation receipts), 22
+`sessions_work_sender` (owner-stamped sender identity), 23 `sessions_turn_context`
+(resumable executor context), 24 `sessions_work_uncertainty` (uncertain work evidence),
+and 25 `sessions_work_cancellation` (durable cancellation requests).
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and

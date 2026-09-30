@@ -88,11 +88,21 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     if status ~= "" and width >= 36 then right = " " .. status .. " "
     elseif width >= 60 then right = " " .. label .. " ▾ "
     elseif width >= 24 then right = " Status ▾ " end
-    right = tty.text.truncate(right, math.floor(math.max(0, width // 2)))
-    local room = math.floor(math.max(0, width - 7 - tty.text.width(right) - tty.text.width(restore)))
+    right = tty.text.truncate(right, math.floor(math.max(0, width >= 80 and 18 or width // 2)))
+    local places = width >= 80 and " Sessions  Needs you —  Apps  Help " or ""
+    local origin = 7 + tty.text.width(places)
+    local room = math.floor(math.max(0, width - origin - tty.text.width(right) - tty.text.width(restore)))
     local strip = tabstrip(scene, order, room, preferences.taskbar == "icons", badges)
     local text = active .. (opened and " BEE ▴ " or " BEE ▾ ") .. normal
+    text = text .. muted .. places
     local hits: {TabHit} = {}
+    if places ~= "" then
+        hits[#hits + 1] = {id = "", x = 8, width = 10, action = "sessions"}
+        hits[#hits + 1] = {id = "", x = 18, width = 13, action = "attention"}
+        local tail = 18 + 13
+        hits[#hits + 1] = {id = "", x = tail, width = 6, action = "apps"}
+        hits[#hits + 1] = {id = "", x = tail + 6, width = 5, action = "help"}
+    end
     -- Style each application independently without changing its hit geometry.
     local position = 1
     for _, hit in ipairs(strip.hits) do
@@ -122,17 +132,17 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
             text = text .. style .. raw
         end
         position = hit.x + hit.width
-        hits[#hits + 1] = {id = hit.id, x = hit.x + 7, width = hit.width}
+        hits[#hits + 1] = {id = hit.id, x = hit.x + origin, width = hit.width}
     end
     if #strip.hits == 0 then
-        local empty = tty.text.truncate(" No applications open · F1 opens Start", room)
+        local empty = tty.text.truncate(" F1 Start", room)
         text = text .. muted .. empty
         position = tty.text.width(empty) + 1
     end
     text = text .. normal .. string.rep(" ", math.max(0, room - position + 1))
     if restore ~= "" then
         for index, action in ipairs({"minimize", "fullscreen", "close"}) do
-            hits[#hits + 1] = {id = restore_id, x = 8 + room + (index - 1) * 3, width = 3, action = action}
+            hits[#hits + 1] = {id = restore_id, x = origin + 1 + room + (index - 1) * 3, width = 3, action = action}
         end
         text = text .. appearance.style(theme.accent, theme.surface) .. restore
     end

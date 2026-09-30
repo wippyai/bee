@@ -85,10 +85,6 @@ local function define_tests()
                 test.not_nil(properties[name])
             end
         end)
-        test.it("retires the legacy launch parser and tool from the gateway surface", function()
-            test.is_true(mcp.is_retired_tool("thread_launch"))
-            test.is_nil(mcp.tool("thread_launch"))
-        end)
         test.it("decodes capability elevation requests with a bounded TTL", function()
             local tool = mcp.tool("request_capability")
             if not tool then error("request_capability tool") end
@@ -131,7 +127,7 @@ local function define_tests()
                 test.eq(tool.operation, "bee.gateway.binding:" .. name)
                 test.eq(tool.policies[1], mcp.TOOL_POLICY_REFS.install)
                 test.is_true(mcp.is_tool_policy_reference(tool.policies[1]))
-                test.not_nil((mcp.OUTPUT_SCHEMAS :: {[string]: Object})[name])
+                test.not_nil(mcp.OUTPUT_SCHEMAS[name])
             end
             local install = mcp.install_arguments({arguments = {component = "acme/tool", version = "1.2.0"}}, false)
             test.eq(install and install.version, "1.2.0")
@@ -255,7 +251,7 @@ local function define_tests()
             local annotations = advertised[1].annotations :: {[string]: unknown}
             test.eq(annotations.readOnlyHint, true)
             test.eq(annotations.destructiveHint, false)
-            test.eq(#mcp.list({"thread_read", "thread_wait", "thread_post"}).tools, 2)
+            test.eq(#mcp.list({"thread_read", "thread_post"}).tools, 1)
             local message_tools = mcp.list({"thread_message"}).tools :: {{[string]: unknown}}
             test.eq(#message_tools, 1)
             local message_annotations = message_tools[1].annotations :: {[string]: unknown}
@@ -352,9 +348,11 @@ local function define_tests()
             test.contains(tostring(mcp.bound_workspace({workspace_id = string.rep("b", 32)}, bound_workspace)), "this binding's workspace")
             test.contains(tostring(mcp.bound_workspace({}, bound_workspace)), "this binding's workspace")
             test.eq(mcp.bound_workspace({workspace_id = bound_workspace}, nil), "this binding names no workspace")
-            local wait_only = mcp.list({"thread_wait"}).tools :: {{[string]: unknown}}
-            test.eq(#wait_only, 1)
-            test.eq(wait_only[1].name, "thread_wait")
+            for _, removed in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "session_directory", "session_inbox",
+                "session_ack", "session_reply", "session_inbox_send", "thread_sessions", "launch_definitions", "thread_notify", "thread_wait"}) do
+                test.is_nil(mcp.tool(removed))
+                test.eq(#mcp.list({removed}).tools, 0)
+            end
             test.is_nil(mcp.tool("thread_post"))
             test.is_nil(mcp.tool("unknown_tool"))
             test.eq(mcp.tool("thread_read") and mcp.tool("thread_read").operation, "bee.threads.service:read_after")
@@ -368,8 +366,6 @@ local function define_tests()
             test.is_true(tostring(big):find("limit must be", 1, true) ~= nil)
             local _, non_object_read = mcp.read_arguments({arguments = "cursor=5"})
             test.eq(non_object_read, "arguments must be an object")
-            local _, non_object_wait = mcp.wait_arguments({arguments = 12345})
-            test.eq(non_object_wait, "arguments must be an object")
             local _, array_read = mcp.read_arguments({arguments = {"cursor", 5}})
             test.eq(array_read, "arguments must be an object")
             -- Attempt and context scope isolation: callers cannot supply cross-attempt
@@ -378,30 +374,27 @@ local function define_tests()
             test.eq(thread_override, "unknown field thread_id")
             local _, attempt_override = mcp.read_arguments({arguments = {cursor = 0, attempt_id = "other-attempt"}})
             test.eq(attempt_override, "unknown field attempt_id")
-            local _, wait_thread_override = mcp.wait_arguments({arguments = {after_sequence = 0, thread_id = "other-thread"}})
-            test.eq(wait_thread_override, "unknown field thread_id")
-            local _, context_override = mcp.wait_arguments({arguments = {after_sequence = 0, context = {}}})
-            test.eq(context_override, "unknown field context")
-            local wait = mcp.wait_arguments({arguments = {after_sequence = 3, wait_ms = 90000}})
-            test.eq(wait and wait.after_sequence, 3)
-            test.eq(wait and wait.wait_ms, 90000)
-            test.eq(wait and wait.transport_budget_ms, mcp.TRANSPORT_BUDGET_MS)
-            local defaults = mcp.wait_arguments({})
-            test.eq(defaults and defaults.after_sequence, 0)
-            test.eq(defaults and defaults.wait_ms, mcp.TRANSPORT_BUDGET_MS)
-            local _, negative = mcp.wait_arguments({arguments = {wait_ms = -1}})
-            test.eq(negative, "wait_ms must be a nonnegative integer")
-            local message = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", recipient_ids = {}, content = {text = "hello"}}})
+            local message = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", content = {text = "hello"}}})
             test.eq(message and message.idempotency_key, "key")
             test.eq(message and (message.body :: {[string]: unknown}).message_kind, "notification")
-            local _, missing_key = mcp.message_arguments({arguments = {message_id = "m1", message_kind = "notification", recipient_ids = {}, content = {text = "hello"}}})
+            local _, missing_key = mcp.message_arguments({arguments = {message_id = "m1", message_kind = "notification", content = {text = "hello"}}})
             test.is_true(tostring(missing_key):find("idempotency_key", 1, true) ~= nil)
-            local _, sender_override = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", recipient_ids = {}, content = {text = "hello"}, sender_id = "foreign"}})
+            local _, sender_override = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", content = {text = "hello"}, sender_id = "foreign"}})
             test.eq(sender_override, "unknown field sender_id")
-            local _, context_override = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", recipient_ids = {}, content = {text = "hello"}, context = {}}})
+            local _, context_override = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", content = {text = "hello"}, context = {}}})
             test.eq(context_override, "unknown field context")
-            local _, kind_override = mcp.message_arguments({arguments = {idempotency_key = "key", kind = "receipt", message_id = "m1", message_kind = "notification", recipient_ids = {}, content = {text = "hello"}}})
+            local _, kind_override = mcp.message_arguments({arguments = {idempotency_key = "key", kind = "receipt", message_id = "m1", message_kind = "notification", content = {text = "hello"}}})
             test.eq(kind_override, "unknown field kind")
+            for _, field in ipairs({"recipient_ids", "session", "member_thread", "in_reply_to", "outcome"}) do
+                local candidate: {[string]: unknown} = {idempotency_key = "key", message_id = "m1", message_kind = "notification", content = {text = "hello"}}
+                candidate[field] = "x"
+                local _, refused = mcp.message_arguments({arguments = candidate})
+                test.eq(refused, "unknown field " .. field)
+            end
+            local _, request_kind = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "request", content = {text = "hello"}}})
+            test.eq(request_kind, "message_kind is not progress or notification")
+            local note_schema = (mcp.tool("thread_message") :: mcp.Tool)
+            test.contains(note_schema.description, "does not schedule execution")
             local workspace = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "finding-1", path = "findings/one.md", content = "evidence"}})
             test.eq(workspace and workspace.operation, "put")
@@ -451,20 +444,13 @@ local function define_tests()
             if not capabilities then error("capabilities tool") end
             test.eq(capabilities.annotations.readOnlyHint, true)
             test.eq(capabilities.operation, "bee.gateway.binding:surface")
-            test.is_nil(mcp.tool("launch_definitions"))
         end)
-        test.it("matches capability results to their advertised output schema and retires old session tools", function()
-            for _, name in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "thread_sessions",
-                "session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply", "launch_definitions"}) do
-                test.is_nil(mcp.tool(name), name)
-                test.is_nil((mcp.OUTPUT_SCHEMAS :: {[string]: Object})[name], name)
-            end
+        test.it("matches typed capability results to their advertised output schemas", function()
             local capabilities = {ok = true, value = {workspace_id = "workspace-a", thread_id = "thread-a", action_id = "agent-a",
                 revision = 1, digest = string.rep("a", 64), tools = {{name = "thread_read", description = "Read",
                     policies = {"bee.gateway:tool_read_policy_ref"}, annotations = {readOnlyHint = true}}},
                 traits = {{id = "bee.traits:read", title = "Read", tools = {"thread_read"}}},
-                allowed_traits = {"bee.traits:read"}, active_traits = {}, session_tools = {"session_catalog", "session_open", "session_run", "session_send",
-                    "session_await", "session_join", "session_get", "session_list", "session_cancel", "session_close"},
+                allowed_traits = {"bee.traits:read"}, active_traits = {},
                 thread_access = {thread_id = "thread-a", note = "read"},
                 authoring = {guide_tool = "overlay", guide_operation = "guide", preflight_tool = "delivery",
                     preflight_operation = "preflight", note = "read first"}}}
@@ -476,67 +462,11 @@ local function define_tests()
             test.eq(traits.type, "array")
             test.not_nil(((traits.items :: Object).properties :: Object).id)
         end)
-        test.it("publishes the canonical session catalog and list projections", function()
-            local catalog = mcp.tool("session_catalog")
-            local list = mcp.tool("session_list")
-            if not catalog or not list then error("session catalog/list tools are missing") end
-            local catalog_properties = catalog.schema.properties :: Object
-            test.not_nil(catalog_properties.kind)
-            test.not_nil(catalog_properties.include_unavailable)
-            test.not_nil(catalog_properties.cursor)
-            test.is_nil(catalog_properties.after)
-            local list_properties = list.schema.properties :: Object
-            test.not_nil(list_properties.filter)
-            test.not_nil(list_properties.cursor)
-            test.is_nil(list_properties.after)
+        test.it("refuses workspace identity in capability arguments", function()
             local empty = mcp.capabilities_arguments({arguments = {}})
             test.not_nil(empty)
             local _, capability_field = mcp.capabilities_arguments({arguments = {workspace_id = "other"}})
             test.eq(capability_field, "unknown field workspace_id")
-        end)
-        test.it("advertises durable session discovery and transcript addressing over the bound subject", function()
-            test.is_nil(mcp.tool("thread_sessions"))
-            local notify = mcp.tool("thread_notify")
-            if not notify then error("thread_notify is not in the catalog") end
-            test.eq(notify.operation, "bee.threads.service:notify")
-            test.eq(notify.annotations.readOnlyHint, false)
-            test.eq(notify.policies[1], mcp.TOOL_POLICY_REFS.message)
-            test.eq(#((notify.schema.required :: {string})), 1)
-            test.eq(mcp.tool("session_catalog") and mcp.tool("session_catalog").operation, "bee.sessions:catalog.list")
-            test.eq(mcp.tool("session_list") and mcp.tool("session_list").operation, "bee.sessions:contract.list")
-            local notice = mcp.notify_arguments({arguments = {session = "action-b", idempotency_key = "wait-for-b"}})
-            test.eq(notice and notice.session, "action-b")
-            test.eq(notice and notice.idempotency_key, "wait-for-b")
-            local _, notice_thread = mcp.notify_arguments({arguments = {session = "action-b", idempotency_key = "k", thread_id = "other"}})
-            test.eq(notice_thread, "session cannot be combined with thread_id or attempt_id")
-            local _, notice_session = mcp.notify_arguments({arguments = {idempotency_key = "k"}})
-            test.eq(notice_session, "thread_id and attempt_id are required identifiers when session is omitted")
-            local attempt_notice = mcp.notify_arguments({arguments = {thread_id = "child-thread", attempt_id = "child-attempt", idempotency_key = "wait-for-child"}})
-            test.eq(attempt_notice and attempt_notice.thread_id, "child-thread")
-            test.eq(attempt_notice and attempt_notice.attempt_id, "child-attempt")
-            local _, incomplete_attempt = mcp.notify_arguments({arguments = {thread_id = "child-thread", idempotency_key = "wait-for-child"}})
-            test.eq(incomplete_attempt, "thread_id and attempt_id are required identifiers when session is omitted")
-            local addressed = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "go", message_kind = "notification", session = "action-a", content = {text = "go ahead"}}})
-            test.eq(addressed and addressed.session, "action-a")
-            test.eq(#(((addressed :: {[string]: unknown}).body :: {[string]: unknown}).recipient_ids :: {string}), 0)
-            local _, named_recipients = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "go", message_kind = "notification", session = "action-a",
-                recipient_ids = {"someone"}, content = {text = "go ahead"}}})
-            test.eq(named_recipients, "a message to a session names no recipient_ids; the session is the recipient")
-            local _, missing_recipients = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "go", message_kind = "notification", content = {text = "go ahead"}}})
-            test.is_true(tostring(missing_recipients):find("recipient_ids", 1, true) ~= nil)
-            for _, field in ipairs({"recipient_action_ids", "sender_action_id"}) do
-                local arguments: {[string]: unknown} = {idempotency_key = "key", message_id = "go", message_kind = "notification", session = "action-a", content = {text = "go ahead"}}
-                arguments[field] = field == "sender_action_id" and "forged" or {"forged"}
-                local _, refused = mcp.message_arguments({arguments = arguments})
-                test.eq(refused, "unknown field " .. field)
-            end
-            local message_schema = (mcp.tool("thread_message") :: mcp.Tool).schema
-            test.not_nil((message_schema.properties :: {[string]: unknown}).session)
-        end)
-        test.it("does not expose action inbox tools after the session cutover", function()
-            for _, name in ipairs({"session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply"}) do
-                test.is_nil(mcp.tool(name), name)
-            end
         end)
         test.it("holds a binding valid only under its epoch, before expiry and until revoked", function()
             local binding: gateway.Binding = {binding_id = "b", subject = "s", action_id = "a", attempt_id = "t", thread_id = "th", owner_incarnation = 1, carrier_epoch = 1, credential_generation = 1,

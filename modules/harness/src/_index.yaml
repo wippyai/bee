@@ -190,6 +190,7 @@ entries:
     - bee.security.gateway:gateway_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
     - bee.security.storage:workspace_folder_browse_policy
+    - bee.security.storage:workspace_catalog_read_policy
   targets:
   - entry: bee.security:application_admission
     path: .bindings +=

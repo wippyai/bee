@@ -7,8 +7,10 @@ local catalog = require("catalog")
 local definition = require("definition")
 local protocol = require("protocol")
 local editor = require("editor")
-local selection = require("selection")
 local M = {}
+-- What a profile form opens: a definition for a new profile, or a saved
+-- profile, whose own definition applies.
+type Subject = {definition_ref: string?, title: string, saved_profile_id: string?, saved_profile_revision: integer?}
 type Form = {workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?}
 
@@ -26,32 +28,41 @@ local function call(request: unknown): ({[string]: unknown}?, string?)
     return value, nil
 end
 
-function M.load(workspace: string, choice: selection.Choice, duplicate: boolean): (Form?, string?)
+-- The saved profile at the selected revision, or the reason it cannot be used.
+function M.saved(workspace: string, id: string, revision: integer): (protocol.Profile?, string?)
+    local saved, read_error = call({operation = "get", workspace_id = workspace, profile_id = id})
+    if not saved then return nil, read_error end
+    if saved.workspace_id ~= workspace or saved.profile_id ~= id or saved.revision ~= revision or saved.tombstone ~= false then
+        return nil, "Profile changed. Refresh and select it again."
+    end
+    return protocol.profile(saved.profile)
+end
+
+function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?, string?)
+    local id, revision = choice.saved_profile_id or "", choice.saved_profile_revision or 0
+    local profile: protocol.Profile? = nil
+    if choice.saved_profile_id then
+        local value, value_error = M.saved(workspace, id, revision)
+        if not value then return nil, value_error end
+        if choice.definition_ref and value.definition_ref ~= choice.definition_ref then return nil, "Profile definition changed" end
+        profile = value
+    end
+    local definition_ref = profile and profile.definition_ref or choice.definition_ref
+    if not definition_ref then return nil, "Agent definition is missing" end
     local pinned = catalog.pin()
     if not pinned then return nil, "Agent definitions could not be read" end
-    local entry = catalog.entry(pinned, choice.definition_ref)
+    local entry = catalog.entry(pinned, definition_ref)
     if not entry then return nil, "Agent definition is no longer available" end
-    local decoded, decode_error = definition.decode(choice.definition_ref, entry)
+    local decoded, decode_error = definition.decode(definition_ref, entry)
     if not decoded then return nil, decode_error end
     local policy_entry = catalog.entry(pinned, decoded.policy_ref)
     local policy_data = policy_entry and bounds.object(policy_entry.data) or nil
     if not policy_data then return nil, "Agent policy could not be read" end
     local tools, tools_error = bounds.ids(policy_data.gateway_tools or {}, true)
     if not tools then return nil, tools_error end
-    local profile: protocol.Profile = {title = choice.title, definition_ref = choice.definition_ref,
+    local base: protocol.Profile = {title = choice.title, definition_ref = definition_ref,
         options = {}, mcp_tools = tools, instructions = ""}
-    local id, revision = choice.saved_profile_id or "", choice.saved_profile_revision or 0
-    if choice.saved_profile_id then
-        local saved, read_error = call({operation = "get", workspace_id = workspace, profile_id = id})
-        if not saved then return nil, read_error end
-        if saved.workspace_id ~= workspace or saved.profile_id ~= id or saved.revision ~= revision or saved.tombstone ~= false then
-            return nil, "Profile changed. Refresh and select it again."
-        end
-        local value, value_error = protocol.profile(saved.profile)
-        if not value then return nil, value_error end
-        if value.definition_ref ~= choice.definition_ref then return nil, "Profile definition changed" end
-        profile = value
-    end
+    if profile then base = profile end
     if duplicate or id == "" then
         local fresh, fresh_error = uuid.v7()
         if not fresh then return nil, tostring(fresh_error) end
@@ -63,7 +74,7 @@ function M.load(workspace: string, choice: selection.Choice, duplicate: boolean)
     local function allows(name: string): boolean
         return definition.allows(decoded, name) and bounds.member(name, admitted) ~= nil
     end
-    local draft, draft_error = editor.new(profile, {options = policy_data.profile_options or {},
+    local draft, draft_error = editor.new(base, {options = policy_data.profile_options or {},
         mcp_tools = tools, instructions = policy_data.profile_instructions == true, workdir = allows("workdir"), thread = allows("thread")})
     if not draft then return nil, draft_error end
     local save_key, save_error = uuid.v7()

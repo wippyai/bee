@@ -1,9 +1,3 @@
--- MIT. Driver method prepare for claude: a declarative launch specification.
-local launch = require("launch")
-local types = require("types")
-local function handle(request: unknown): {ok: boolean, error: string?, launch: types.Launch?}
-    local decoded, err = launch.decode(request)
-    if not decoded then return {ok = false, error = err} end
-    return {ok = true, launch = launch.specification(decoded)}
-end
-return {handle = handle}
+-- MIT. The universal driver implements this contract method.
+local universal = require("universal")
+return {handle = universal.prepare("bee.driver.claude.descriptor:cli")}

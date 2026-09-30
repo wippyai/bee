@@ -340,7 +340,7 @@ local function catalog(request: Object): Reply
     local _, workspace = identity()
     if not workspace then return fail("DENIED", "the authenticated caller has no workspace", nil) end
     local page, catalog_error = catalog_service.list(request, workspace)
-    if not page then return fail("INVALID", catalog_error or "catalog request is invalid", nil) end
+    if not page then return fail(catalog_error and catalog_error.code or "INVALID", catalog_error and catalog_error.message or "catalog request is invalid", nil) end
     return succeed(page)
 end
 

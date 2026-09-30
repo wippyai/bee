@@ -11,6 +11,21 @@ local function command(op: string, value: table?): commands.Command
 end
 
 local function define_tests()
+    test.describe("Default full-pane applications", function()
+        test.it("opens full-pane, resizes with the display and retains floating as an advanced option", function()
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local current = state.new(size[1], size[2])
+                current = state.reduce(current, command("add", {id = "session", instance_id = "a", title = "Sessions"}))
+                local win = current.scene.windows[1]
+                test.eq(win.mode, "fullscreen")
+                test.eq(win.bounds.width, size[1])
+                test.eq(win.bounds.height, size[2] - 1)
+                current = state.reduce(current, command("fullscreen", {id = "session"}))
+                test.eq(current.scene.windows[1].mode, "floating")
+            end
+        end)
+    end)
+
     test.describe("Authoritative desktop state", function()
         test.it("maximizes idempotently and restores minimized applications", function()
             local current = state.reduce(state.new(80, 24), command("add",

@@ -9,14 +9,6 @@ entries:
   imports:
     test: wippy.test:test
     registry: bee.sessions:executor_registry
-- name: driver_route_test
-  kind: function.lua
-  source: file://driver_route_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    route: bee.sessions:driver_route
 - name: locate_test
   kind: function.lua
   source: file://locate_test.lua
@@ -25,11 +17,21 @@ entries:
   imports:
     test: wippy.test:test
     locate: bee.sessions.service:locate
-- name: catalog_test
+- name: catalog_service_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, registry.get, registry.snapshot]
+    resources: '*'
+    effect: allow
+- name: catalog_service_test
   kind: function.lua
-  source: file://catalog_test.lua
+  source: file://catalog_service_test.lua
   method: run
   meta: {type: test, suite: bee}
+  modules: [funcs, registry]
+  security:
+    policies: [bee.tests.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy]
   imports:
     test: wippy.test:test
     catalog: bee.sessions.service:catalog

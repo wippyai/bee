@@ -78,6 +78,7 @@ local function main(value: unknown)
     local form_frame: {rows: {string}, hits: {frame.Hit}} = {rows = {}, hits = {}}
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid inbox checkpoint") end
     local rows: {model.Row} = {}
+    local workspace_names: {[string]: model.Workspace} = {}
     local offset = 0
     local hits: {frame.Hit} = {}
     local status = ""
@@ -104,6 +105,10 @@ local function main(value: unknown)
     local ticker = assert(time.ticker(POLL))
     local ticks = ticker:channel()
     local function refresh()
+        for _, workspace in ipairs(local_workspaces) do
+            local raw = funcs.call("bee.workspace.catalog:read", {workspace_id = workspace})
+            workspace_names[workspace] = model.workspace(raw, workspace)
+        end
         for _, workspace in ipairs(state.workspaces) do
             if not running then return end
             local pages = 0
@@ -253,7 +258,7 @@ local function main(value: unknown)
                 form_frame = lease_form.draw(width, height, preferences, open_form)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             else
-                local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice)
+                local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice, workspace_names)
                 hits = drawn.hits
                 offset = drawn.offset
                 assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))

@@ -292,9 +292,12 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local retain_armed = false
     -- An independently observed exit while descendants hold the pipes open
     -- drains for a bounded time, then the streams are closed and the drain
-    -- is recorded; retention then applies to what was read.
+    -- is recorded. Time spent with pipe reads paused by spool backpressure
+    -- does not consume this drain budget; retention still bounds that wait.
     local drain_timer = time.after("1ms")
     local drain_armed = false
+    local drain_remaining = request.timeouts.drain_ms
+    local drain_started = time.now()
     -- A lost carrier's binding outlives it only for the takeover grace: a
     -- replacement that attaches under a newer generation inherits it, and
     -- nothing else keeps it alive.
@@ -357,6 +360,16 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         end
     end
     while true do
+        local reads_paused = spooled >= protocol.MAX_SPOOL_BYTES
+        if retain_armed and eof_seen < 2 and not reads_paused then retain_armed = false end
+        if drain_armed and reads_paused then
+            drain_remaining = math.floor(math.max(0, drain_remaining - time.now():sub(drain_started):milliseconds()))
+            drain_armed = false
+        elseif exited and eof_seen < 2 and not reads_paused and not drain_armed and not streams_closed then
+            drain_started = time.now()
+            drain_timer = time.after(tostring(math.max(1, drain_remaining)) .. "ms")
+            drain_armed = true
+        end
         local cases = {controls:case_receive(), inputs:case_receive(), acks:case_receive(), events:case_receive(), exits:case_receive()}
         if spooled < protocol.MAX_SPOOL_BYTES and eof_seen < 2 then cases[#cases + 1] = chunks:case_receive() end
         if coalesce_armed then cases[#cases + 1] = coalesce_timer:case_receive() end
@@ -374,9 +387,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 close_streams()
             end
         elseif retain_armed and selected.channel == retain_timer then
-            local bytes = 0
-            for _, item in ipairs(pending) do bytes = bytes + item.bytes end
-            evidence(db, attempt_id, "output.lost", "retention of " .. tostring(request.timeouts.retain_ms) .. " ms elapsed with " .. tostring(#pending) .. " unacknowledged chunks (" .. tostring(bytes) .. " bytes); consumed through " .. tostring(consumed_through) .. ", sent through " .. tostring(sent_through), {})
+            flush_buffers()
+            local bytes = spooled
+            evidence(db, attempt_id, "output.lost", "retention of " .. tostring(request.timeouts.retain_ms) .. " ms elapsed with " .. tostring(#pending) .. " unacknowledged chunks (" .. tostring(bytes) .. " bytes); consumed through " .. tostring(consumed_through) .. ", sent through " .. tostring(sent_through) .. (eof_seen < 2 and "; unread pipe output is also lost" or ""), {})
             pending = {}
             break
         end
@@ -406,10 +419,6 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             -- accepted and revokes when it closes.
             seal_gateway("child exited")
             kill_armed = false
-            if eof_seen < 2 and not drain_armed then
-                drain_timer = time.after(tostring(request.timeouts.drain_ms) .. "ms")
-                drain_armed = true
-            end
             if recipient then
                 process.send(recipient, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested})
             end
@@ -575,7 +584,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             retire_gateway("carrier lost under generation " .. tostring(lost_generation) .. "; no takeover within " .. tostring(protocol.TAKEOVER_GRACE_MS) .. " ms")
         end
         if exited and eof_seen >= 2 and #pending == 0 then break end
-        if exited and eof_seen >= 2 and not retain_armed then
+        if exited and (eof_seen >= 2 or spooled >= protocol.MAX_SPOOL_BYTES) and not retain_armed then
             retain_timer = time.after(tostring(request.timeouts.retain_ms) .. "ms")
             retain_armed = true
         end

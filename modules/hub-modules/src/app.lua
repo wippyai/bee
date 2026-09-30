@@ -198,7 +198,7 @@ local function main(value: unknown)
     local function plan()
         local intent, problem = model.plan_intent(state)
         if not intent then status = problem or "Cannot prepare a plan"; changed(); return end
-        model.show(state, "plan")
+        model.begin_plan(state)
         offset = 0
         begin(intent)
         changed()

@@ -326,28 +326,42 @@ local function binding_by_id(db: sql.DB, binding_id: string): (Binding?, Reply?)
     if not binding then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
     return binding, nil
 end
--- Resolve the durable gateway context for an approved installation effect.
--- The stored attempt identity, rather than proposal fields, supplies the
--- binding that the installation worker verifies.
-function M.installation_binding(value: unknown): Reply
+-- Resolve the durable gateway context for an approved effect. The stored
+-- attempt identity, rather than proposal fields, supplies the binding that
+-- the effect worker verifies. The caller names the tools the binding must
+-- grant; an omitted list keeps the installation tools.
+function M.effect_binding(value: unknown): Reply
     if not security.can(M.INSTALLATION_WORK, "resolve_binding") then
-        return fail("DENIED", "caller may not resolve installation bindings")
+        return fail("DENIED", "caller may not resolve effect bindings")
     end
     local object = bounds.object(value)
-    if not object or bounds.fields(object, {"binding_id"}) then return fail("INVALID", "binding_id is required") end
+    if not object or bounds.fields(object, {"binding_id", "tools"}) then
+        return fail("INVALID", "binding_id is required with optional tools")
+    end
     local binding_id = bounds.id(object.binding_id)
     if not binding_id then return fail("INVALID", "binding_id is not an identifier") end
+    local required: {string} = {"install_request", "uninstall_request"}
+    if object.tools ~= nil then
+        local named = bounds.ids(object.tools)
+        if named and #named >= 1 and #named <= M.MAX_TOOLS then
+            required = named
+        else
+            return fail("INVALID", "tools must name one or more tools")
+        end
+    end
     local db, open_failure = open()
     if not db then return open_failure or fail("STORAGE", "open binding store") end
     local binding, missing = binding_by_id(db, binding_id)
     db:release()
     if not binding then return missing or fail("NOT_FOUND", "binding does not exist") end
-    local installation_tool = false
+    local granted = false
     for _, tool in ipairs(binding.tools) do
-        if tool == "install_request" or tool == "uninstall_request" then installation_tool = true end
+        for _, need in ipairs(required) do
+            if tool == need then granted = true end
+        end
     end
-    if not installation_tool or not binding.workspace_id then
-        return fail("DENIED", "binding has no installation authority or workspace")
+    if not granted or not binding.workspace_id then
+        return fail("DENIED", "binding has no effect authority or workspace")
     end
     return succeed({binding_id = binding.binding_id, subject = binding.subject, action_id = binding.action_id,
         attempt_id = binding.attempt_id, thread_id = binding.thread_id, workspace_id = binding.workspace_id})
@@ -1307,6 +1321,12 @@ function M.install_status(value: unknown): Reply
     if not binding or not policy_name then return refusal :: Reply end
     return installation.status(installation.port(binding), binding, policy_name, request)
 end
+-- The bound-subject door for the sibling publication tool surface: those
+-- tools live in their own module (this one is at the checker's inference
+-- budget) and resolve their caller through this shared door.
+function M.own_binding(value: unknown): (Binding?, Reply?)
+    return own_binding(value)
+end
 -- A credential is valid only for its action, kind, current generation and expiry.
 function M.authenticate(token: string, action_id: string, kind: string): (Binding?, Reply?)
     if #token == 0 or #token > 128 then return nil, fail("UNAUTHENTICATED", "token is not presentable") end
@@ -1716,4 +1736,6 @@ function M.hook_reject(value: unknown): Reply
     if commit_error then return fail("STORAGE", "commit hook rejection") end
     return succeed({binding_id = binding.binding_id, rejected = rejected})
 end
+
+
 return M

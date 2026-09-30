@@ -20,6 +20,16 @@ local function define_tests()
             test.eq(spec.stdin_eof, true)
             test.is_nil(spec.login)
         end)
+        test.it("closes empty batch stdin on first and resumed turns while keeping the TUI interactive", function()
+            for _, resume in ipairs({"", "ses_eof"}) do
+                local request = {profile_id = "batch", brief = "reply", resume_ref = resume ~= "" and resume or nil}
+                local spec = launch.specification(assert(launch.decode(request)))
+                test.eq(spec.stdin, "")
+                test.is_true(spec.stdin_eof)
+            end
+            local window = launch.specification(assert(launch.decode({profile_id = "window", brief = ""})))
+            test.is_nil(window.stdin_eof)
+        end)
         test.it("resumes a batch turn through --session", function()
             local decoded = assert(launch.decode({profile_id = "batch", brief = "continue", resume_ref = "ses_abc123"}))
             local spec = launch.specification(decoded)

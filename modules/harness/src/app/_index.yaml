@@ -53,6 +53,7 @@ entries:
   imports:
     client: bee.application:client
     text: bee.application:text
+    bounds: bee.threads.records:bounds
     window_request: bee.harness.app:request
     input_event: bee.harness.app:input
     admission: bee.harness.launch:admission
@@ -73,6 +74,7 @@ entries:
   imports:
     runtime: bee.harness.app:runtime
     window: bee.placement.native.service:window
+    docker_window: bee.placement.docker.service:window
   meta:
     type: bee.application
     application:

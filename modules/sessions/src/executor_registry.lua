@@ -89,7 +89,9 @@ local function invoke(target: string, request: unknown): (unknown?, string?)
     if not owner or not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, "turn admission omitted its workspace-bound owner" end
     local actor, actor_error = security.new_actor(owner :: string, {workspace_id = workspace})
     if not actor then return nil, tostring(actor_error) end
-    local raw, call_error = funcs.new():with_actor(actor):call(target, request)
+    local contextual, context_error = funcs.new():with_actor(actor):with_context({["bee.workspace_id"] = workspace})
+    if not contextual then return nil, tostring(context_error) end
+    local raw, call_error = contextual:call(target, request)
     if call_error then return nil, tostring(call_error) end
     local reply = object(raw)
     if not reply then return nil, "executor returned a malformed Reply" end

@@ -221,6 +221,10 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             local session_request: {[string]: unknown} = {}
             for name, field in pairs(source) do session_request[name] = field end
             session_request.brief = turn_request.prompt
+            if request.placement_methods.prepare == "bee.placement.docker.binding:prepare" then
+                local issue = progress("environment", "Preparing Docker network and gateway; review any pending approval in the inbox")
+                if issue then return nil, issue end
+            end
             local admitted, refused = admission.admit_session_turn(session_request)
             if not admitted then
                 local fault = refused and bounds.object(refused.error)

@@ -60,6 +60,14 @@ outcome is recorded, without reading the approvals table from the gateway store.
 Hub retains the complete receipt, including migration details; the approval
 owner stores only the bounded state and message needed for status.
 
+The host-authorized Hub publication worker reads its bounded queue through
+`bee.approvals.binding:publication_effects`, which returns approved publication
+requests whose effect result is not complete, and records its bounded outcome
+through `bee.approvals.binding:complete_publication_effect` under the same
+requester, digest and effect-key checks. A committed decision wakes the
+publication worker, so an approved publication uploads without any status
+poll.
+
 Approver policies are host-owned under `bee:approver_policies`:
 each names its approvers and the longest lifetime a request may ask for. An
 approver needs both the `bee.approvals.decide` action on the workspace and a

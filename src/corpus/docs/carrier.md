@@ -195,6 +195,16 @@ its supported customization root. Host policy, including any inherited home or
 `CODEX_HOME`/`CLAUDE_CONFIG_DIR` reference, is required separately; callers
 cannot choose `HOME` or copy credential files into a private home.
 
+Docker uses the driver's declared container projection before adding Bee's own
+configuration. Claude, Codex and OpenCode start with clean settings and their
+broker-admitted login file or environment names; Grok omits host hooks/MCP
+settings. Other copied JSON/TOML config is refused before child creation when
+it refers to host-only execution, includes or paths outside the admitted mounts.
+Private Grok/OpenCode turns publish their admitted base config even without
+gateway tools. OpenCode batch turns declare empty stdin with EOF; its TUI
+keeps stdin open. See [Docker placement](../../../modules/placement-docker/src/README.md)
+for image preparation and host network prerequisites.
+
 ## Conditional permission and hook records
 
 When host policy enables a permission adapter, the carrier records a permission

@@ -331,6 +331,13 @@ execution transports use the same materialization component. Drivers own their
 formats, including Claude's inline settings and Codex's files; placement owns
 credential delivery, protected writes and session-home exclusion.
 
+The shared `process_backend` value lets Docker reuse this materialization,
+runner and window lifecycle while supplying its executor, physical mounts,
+container identity and cleanup proof. Native stream handles are acquired before
+start; Docker stream handles are acquired after start. EOF-based Docker turns
+read initial input from a protected file in the admitted private home, so a
+container's attached stdin lifetime cannot keep a one-turn provider waiting.
+
 Reading an intent decodes the stored request and its private delivery again,
 including file digests, paths and argument bounds, before creating a home or
 starting a child. Malformed stored content is a storage failure. Its retry

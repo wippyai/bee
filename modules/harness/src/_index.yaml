@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee harness
-    comment: Execution contracts and the pinned discovery of admitted driver bindings; carriers arrive with launch admission
+    comment: Execution contracts and the pinned discovery of admitted driver bindings;
+      carriers arrive with launch admission
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
@@ -59,7 +60,8 @@ entries:
 - name: process_host
   kind: ns.requirement
   meta:
-    comment: Host-selected process host for structured carriers; an assembly may override the Bee default
+    comment: Host-selected process host for structured carriers; an assembly may override
+      the Bee default
   default: bee:workers
   targets:
   - entry: bee.harness:carrier_host_ref
@@ -159,6 +161,12 @@ entries:
           kind: fs_directory
           ref: bee.env:machine_login_source
         optional: true
+      opencode_api_key:
+        provider: opencode
+        source:
+          kind: env_variable
+          ref: bee.driver.opencode:api_key
+        optional: true
       opencode_login:
         provider: opencode
         source:
@@ -168,7 +176,8 @@ entries:
 - name: target_agent_application_admission
   kind: ns.requirement
   meta:
-    comment: The installed harness contributes the Agent application's reviewed host-selected policies
+    comment: The installed harness contributes the Agent application's reviewed host-selected
+      policies
   default:
     definition_id: bee.harness.app:app
     scope_management: true
@@ -191,11 +200,19 @@ entries:
     - bee.security.gateway:gateway_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
     - bee.security.storage:workspace_folder_browse_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
     - bee.security.storage:workspace_catalog_read_policy
+    - bee.placement.docker.security:environment_revoke_policy
   targets:
   - entry: bee.security:application_admission
     path: .bindings +=
 - name: dependency_node
   kind: ns.dependency
   component: bee/node
+  version: '*'
+- name: dependency_placement_docker
+  kind: ns.dependency
+  component: bee/placement-docker
   version: '*'

@@ -63,6 +63,17 @@ recorded state and message even if the asking session ended. Elevation, MCP
 access and installation share `subject_call` for subject-bound owner calls and
 approval consumption.
 
+`publish_request` files Hub publication requests and the read-only
+`publish_status` reports them. The gateway seals the admitted source tree into
+one worker-owned pack file with Hub management authority, then files one
+thread-bound approval showing module, version, pack digest, visibility,
+organization and source under the approval policy the host's
+`target_publish_configuration` entry names. Once the person approves, the
+approval commit wakes the publication effect worker, which consumes the
+decision and uploads exactly the sealed file; the file is re-measured first
+and the Hub-reported digest must equal the approved pack digest. Hub retains
+the receipt with the pack digest beside the Hub digest.
+
 The HTTP MCP route bounds each JSON request at 512 KiB. Overlay calls through MCP
 accept at most 64 KiB of text or 87,384 bytes of canonical base64 per put
 (at most 64 KiB decoded);

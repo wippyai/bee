@@ -15,6 +15,9 @@ local driver_types = require("driver_types")
 local probe_capture = require("probe_capture")
 local probe_version = require("probe_version")
 local login_evidence = require("login_evidence")
+local funcs = require("funcs")
+local placement_profiles = require("placement_profiles")
+local placement_resolver = require("placement_resolver")
 local M = {}
 local LOGIN_SOURCE = "bee.env:machine_login_source"
 
@@ -142,8 +145,8 @@ local function unknown(provider: string, reason: string): driver_types.LocateRes
     return result
 end
 
-function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: string, cache: Cache): driver_types.LocateResult?
-    local cache_key = binding_ref .. "\n" .. profile_id
+function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: string, cache: Cache, placement_profile_ref: string?): driver_types.LocateResult?
+    local cache_key = binding_ref .. "\n" .. profile_id .. "\n" .. (placement_profile_ref or "")
     if cache.drivers[cache_key] then return cache.drivers[cache_key] end
     local binding_raw, binding_error = pinned:get(binding_ref)
     local binding = not binding_error and bounds.object(binding_raw) or nil
@@ -194,7 +197,40 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     if configured then executable_path = configured_path :: string end
     local executable_present: boolean? = nil
     local version: string? = nil
-    if not executable_error or executable_error:kind() == errors.NOT_FOUND then
+    local docker = false
+    if placement_profile_ref then
+        local placement_profile = placement_profiles.resolve(pinned, placement_profile_ref)
+        local placement = placement_profile and placement_resolver.resolve(pinned, placement_profile.profile.placement_binding) or nil
+        if placement and placement.placement_kind == "docker" then
+            docker = true
+            local target = placement.methods.capabilities
+            if not target then return unknown(provider, "Docker capabilities route is unavailable") end
+            local raw, capability_error = funcs.call(target, {placement_profile_ref = placement_profile_ref, runtime_name = executable_name})
+            local reply = not capability_error and bounds.object(raw) or nil
+            local value = reply and reply.ok == true and bounds.object(reply.value) or nil
+            local image = value and bounds.object(value.image_readiness) or nil
+            local network = value and bounds.object(value.network_readiness) or nil
+            if network and network.present ~= true and network.provisionable ~= true then
+                local result = unknown(provider, bounds.line(network.reason, 1024) or "Docker network readiness is unavailable")
+                return result
+            end
+            if not image or type(image.present) ~= "boolean" or type(image.runtime_present) ~= "boolean" then
+                local result = unknown(provider, "Docker runtime readiness is unavailable")
+                cache.drivers[cache_key] = result; return result
+            end
+            if (image.present ~= true and image.buildable ~= true) or image.runtime_present ~= true then
+                local result = unknown(provider, bounds.line(image.reason, 1024) or (image.present == true and "Docker image does not declare this runtime artifact" or "Docker runtime image is missing; a registry digest is fetched on first launch"))
+                cache.drivers[cache_key] = result; return result
+            end
+            executable_present = true
+            if placement_profile and placement_profile.profile.image_recipe_ref then
+                version = executable_version(executable_path, bounds.object(selected.version_probe) or {})
+            end
+            platform = {os = bounds.line(image.os, 32), arch = bounds.line(image.arch, 32)}
+            compatible = platform.os ~= nil and platform.arch ~= nil and bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
+        end
+    end
+    if not docker and (not executable_error or executable_error:kind() == errors.NOT_FOUND) then
         version, executable_present = executable_version(executable_path, bounds.object(selected.version_probe) or {})
     end
     local names = environment_names()
@@ -205,7 +241,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             return names[name] == true
         end,
         status = function(args: {string}, timeout: integer): integer?
-            if executable_present ~= true then return nil end
+            if docker or executable_present ~= true then return nil end
             local argv: {string} = {executable_path}
             for _, arg in ipairs(args) do argv[#argv + 1] = arg end
             local _, code = capture(argv, timeout, true)

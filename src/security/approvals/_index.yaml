@@ -68,6 +68,14 @@ entries:
     actions: [bee.approvals.own]
     resources: [installation_effects]
     effect: allow
+- name: approval_publication_effects_policy
+  kind: security.policy
+  meta:
+    comment: Host-authorized publication worker lists approved Hub effects; the effect owner verifies each binding and approval before uploading
+  policy:
+    actions: [bee.approvals.own]
+    resources: [publication_effects]
+    effect: allow
 - name: approval_manage_policy
   kind: security.policy
   meta:

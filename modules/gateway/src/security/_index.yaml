@@ -99,7 +99,8 @@ entries:
   policy:
     actions: [security.policy.get]
     resources: [bee.gateway.security:access_call_policy, bee.gateway.security:elevation_policy, bee.resources.security:resource_grant_thread_policy,
-      bee.gateway.security:installation_policy, bee.gateway.security:installation_read_policy, bee.gateway.security:installation_apply_policy]
+      bee.gateway.security:installation_policy, bee.gateway.security:installation_read_policy, bee.gateway.security:installation_apply_policy,
+      bee.gateway.security:publication_policy, bee.gateway.security:publication_read_policy, bee.gateway.security:publication_apply_policy]
     effect: allow
 - name: subject_call
   kind: library.lua
@@ -156,10 +157,10 @@ entries:
 - name: installation_resolver_policy
   kind: security.policy
   meta:
-    comment: The installation owner worker resolves an approved request through the gateway binding owner
+    comment: An effect owner worker resolves an approved installation or publication request through the gateway binding owner
   policy:
     actions: [funcs.call]
-    resources: [bee.gateway.binding:installation_binding]
+    resources: [bee.gateway.binding:effect_binding]
     effect: allow
 - name: installation_worker_policy
   kind: security.policy
@@ -216,3 +217,46 @@ entries:
     resources: '*'
     expression: '(action == "contract.get" && resource == "bee.sessions:contract") || (action == "contract.security" && resource == "security") || action == "contract.open" || (action == "contract.call" && resource == "list") || (action == "security.actor.create" && resource == actor.id) || action == "funcs.security"'
     effect: allow
+
+- name: publication_policy
+  kind: security.policy
+  meta:
+    comment: Private per-binding publication requests call the approval operations and the Hub facade and read the host publication link; the thread-bound approval is the authority for the upload
+  policy:
+    actions: [funcs.call, registry.get]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate,
+      bee.approvals.binding:complete_publication_effect, bee.hub.binding:call, bee.gateway:publish_configuration_ref,
+      bee.threads.service:get, bee.threads.service:read_after]
+    effect: allow
+- name: publication_queue_policy
+  kind: security.policy
+  meta:
+    comment: The publication owner worker reads only the approvals owner's bounded publication effect queue
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:publication_effects]
+    effect: allow
+- name: publication_read_policy
+  kind: security.policy
+  meta:
+    comment: Publication requests pack, measure and read the exact upload plan through the Hub facade
+  policy:
+    actions: [bee.hub.read]
+    resources: '*'
+    effect: allow
+- name: publication_apply_policy
+  kind: security.policy
+  meta:
+    comment: Joins the Hub read policy only after the person's thread-bound approval is consumed; the facade still uploads only the approved plan digest
+  policy:
+    actions: [bee.hub.manage]
+    resources: '*'
+    effect: allow
+- name: publish
+  kind: library.lua
+  source: file://publish.lua
+  modules: [registry, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    publishing: bee.hub:publishing
+    subject_call: bee.gateway.security:subject_call

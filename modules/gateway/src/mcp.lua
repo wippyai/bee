@@ -32,7 +32,7 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, capability: string, install: string}
+type ToolPolicyRefs = {session: string, read: string, message: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, capability: string, install: string, hub_publish: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     session = "bee.gateway:tool_session_policy_ref",
     read = "bee.gateway:tool_read_policy_ref",
@@ -46,6 +46,7 @@ local TOOL_POLICY_REFS: ToolPolicyRefs = {
     capabilities = "bee.gateway:tool_read_policy_ref",
     capability = "bee.gateway:tool_read_policy_ref",
     install = "bee.gateway:tool_install_policy_ref",
+    hub_publish = "bee.gateway:tool_hub_publish_policy_ref",
 }
 local BUILTIN_POLICY_REFS: {[string]: boolean} = {}
 for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = true end
@@ -132,6 +133,21 @@ local TOOLS: {Tool} = {
     {name = "install_status", description = "Poll one installation request by request_id: pending, refused (the person denied it or it expired), approved (applying), applied, or failed with the Hub code and message. On the first poll after approval the host consumes the decision once and applies exactly the approved plan; a replayed poll replays the recorded result.",
         operation = "bee.gateway.binding:install_status",
         policies = {TOOL_POLICY_REFS.install}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
+            request_id = {type = "string", minLength = 1, maxLength = 160},
+        }}},
+    {name = "publish_request", description = "Ask the person to publish one package to the Wippy Hub from this agent's workspace. The worker seals the source tree into one .wapp file without uploading and files one approval showing the module, version, pack digest, visibility, organization and source tree. Filing changes nothing on the Hub; poll publish_status with the returned request_id. The publishing credential never reaches the agent; only the host uploader uses it after approval.",
+        operation = "bee.gateway.binding:publish_request",
+        policies = {TOOL_POLICY_REFS.hub_publish}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"component", "version", "visibility", "source"}, properties = {
+            component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name under the host publishing organization"},
+            version = {type = "string", minLength = 1, maxLength = 128, description = "Exact version to publish"},
+            visibility = {type = "string", enum = {"public", "private"}, description = "Module visibility for a newly created module"},
+            source = {type = "string", minLength = 1, maxLength = 8192, description = "Absolute locked source tree the host admits"},
+        }}},
+    {name = "publish_status", description = "Read one publication request by request_id: pending, refused (the person denied it or it expired), approved (the owner worker is uploading), applied, or failed with the Hub code and message. Polling only reports state; after approval the owner worker uploads the sealed pack without any poll.",
+        operation = "bee.gateway.binding:publish_status",
+        policies = {TOOL_POLICY_REFS.hub_publish}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
             request_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
@@ -249,6 +265,8 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
     install_request = output_schema({type = "object"}),
     uninstall_request = output_schema({type = "object"}),
     install_status = output_schema({type = "object"}),
+    publish_request = output_schema({type = "object"}),
+    publish_status = output_schema({type = "object"}),
 }
 for name, schema in pairs(session_tools.OUTPUT_SCHEMAS) do OUTPUT_SCHEMAS[name] = schema end
 M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
@@ -435,6 +453,32 @@ function M.install_arguments(params: Object, uninstall: boolean): (Object?, stri
     return request, nil
 end
 function M.install_status_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"request_id"})
+    if unknown_field then return nil, unknown_field end
+    local request_id = bounds.id(arguments.request_id)
+    if not request_id then return nil, "request_id is required and must be an identifier" end
+    return {request_id = request_id}, nil
+end
+-- Publication requests name the exact package version, its visibility and
+-- the admitted locked source tree; the worker seals the tree into one pack.
+function M.hub_publish_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"component", "version", "visibility", "source"})
+    if unknown_field then return nil, unknown_field end
+    local component = bounds.line(arguments.component, 160)
+    if not component then return nil, "component is required as owner/name" end
+    local version = bounds.line(arguments.version, 128)
+    if not version then return nil, "version is required as an exact package version" end
+    local visibility = bounds.member(arguments.visibility, {"public", "private"})
+    if not visibility then return nil, "visibility is required as public or private" end
+    local source = bounds.text(arguments.source, 8192)
+    if not source then return nil, "source is required as an absolute locked source tree" end
+    return {component = component, version = version, visibility = visibility, source = source}, nil
+end
+function M.hub_publish_status_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"request_id"})

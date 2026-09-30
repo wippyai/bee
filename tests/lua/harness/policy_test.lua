@@ -29,6 +29,14 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("preserves explicit empty environment values for isolated children", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = raw.data :: Entry
+            data.environment = {CLAUDECODE = "", ANTHROPIC_API_KEY = ""}
+            local decoded = assert(policy.decode("test:policy", raw))
+            test.eq(decoded.environment.CLAUDECODE, "")
+            test.eq(decoded.environment.ANTHROPIC_API_KEY, "")
+        end)
         test.it("measures MCP context and traits without retaining mutable host tables", function()
             local raw = entry({sh = "/bin/sh"})
             local data = raw.data :: Entry

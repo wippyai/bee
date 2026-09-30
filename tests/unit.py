@@ -56,8 +56,9 @@ def run_shard(index, folder, entries, timeout=None):
     result = subprocess.run([
         str(RUNTIME), "test", "--host", "bee:terminal", "--override",
         "bee.hive.service:supervisor_service:lifecycle.auto_start=false",
-        # Installation tests drain the queue synchronously; avoid racing the worker.
+        # Effect worker tests drain the queues synchronously; avoid racing the workers.
         "--override", "bee:gateway_installation_service:lifecycle.auto_start=false",
+        "--override", "bee:gateway_publication_service:lifecycle.auto_start=false",
         "--override", "bee:thread_outbox_pump_service:lifecycle.auto_start=false",
         "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
         "test", *entries,

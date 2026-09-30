@@ -35,6 +35,30 @@ local function define_tests()
             stale.execution_generation = 1
             test.is_nil(client.thread_result(opened, "broker-1", "subscribe", stale))
         end)
+
+        test.it("accepts navigation only from the current authenticated broker execution", function()
+            local opened = launch()
+            local raw = {version = 1, instance_id = "instance-1", view_id = "view-1",
+                execution_generation = 2, launch_token = "token-1", arguments = {"src/main.lua:4-6"}}
+            local args = client.navigation(opened, "broker-1", raw)
+            test.not_nil(args)
+            test.eq(args[1], "src/main.lua:4-6")
+            test.is_nil(client.navigation(opened, "other-broker", raw))
+            raw.instance_id = "other-instance"
+            test.is_nil(client.navigation(opened, "broker-1", raw))
+            raw.instance_id = "instance-1"
+            raw.view_id = "other-view"
+            test.is_nil(client.navigation(opened, "broker-1", raw))
+            raw.view_id = "view-1"
+            raw.execution_generation = 1
+            test.is_nil(client.navigation(opened, "broker-1", raw))
+            raw.execution_generation = 2
+            raw.launch_token = "stale-token"
+            test.is_nil(client.navigation(opened, "broker-1", raw))
+            raw.launch_token = "token-1"
+            raw.arguments = "src/main.lua:4-6"
+            test.is_nil(client.navigation(opened, "broker-1", raw))
+        end)
     end)
 end
 

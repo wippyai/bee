@@ -75,7 +75,7 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?,
         return definition.allows(decoded, name) and bounds.member(name, admitted) ~= nil
     end
     local draft, draft_error = editor.new(base, {options = policy_data.profile_options or {},
-        mcp_tools = tools, instructions = policy_data.profile_instructions == true, workdir = allows("workdir"), thread = allows("thread")})
+        placements = policy_data.placement_profiles or {"bee.placement:native"}, mcp_tools = tools, instructions = policy_data.profile_instructions == true, workdir = allows("workdir"), thread = allows("thread")})
     if not draft then return nil, draft_error end
     local save_key, save_error = uuid.v7()
     local remove_key, remove_error = uuid.v7()

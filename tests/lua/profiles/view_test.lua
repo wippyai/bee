@@ -48,6 +48,27 @@ local function key(name: string, rune: string?)
 end
 local function define_tests()
     test.describe("Agent profile form input", function()
+        test.it("requires confirmation before the person revokes Docker access", function()
+            local s = state()
+            s.form.draft.placement_profile_ref = "bee.placement.docker:coding"
+            local revoked = false
+            s.ask = function(target: string, request: Object): caller.Reply
+                test.eq(target, "bee.placement.docker.binding:prepare_environment")
+                test.eq(request.revoke, true)
+                test.eq(request.workspace_id, "workspace")
+                revoked = true; return ok({address = "revoked"})
+            end
+            view.action(s, "revoke_docker")
+            test.is_true(s.confirming_revoke == true)
+            test.is_false(revoked)
+            view.action(s, "cancel")
+            test.is_false(s.confirming_revoke == true)
+            view.action(s, "revoke_docker")
+            local drawn = view.draw(90, 20, appearance.defaults(), s)
+            view.input(s, key("enter"), drawn)
+            test.is_true(revoked)
+            test.is_true(s.status:find("revoked", 1, true) ~= nil)
+        end)
         test.it("decodes owner replies only when their exact result shape is consistent", function()
             local success = caller.decode({ok = true, value = false, replayed = false})
             test.not_nil(success)

@@ -32,6 +32,12 @@ entries:
   variable: BEE_APP_DATABASE_ROOT
   default: .wippy/app-db
   readonly: true
+- name: files_root
+  kind: fs.directory
+  directory: .
+  base: project
+  auto_init: false
+  readonly: true
 - name: app_databases
   kind: fs.directory
   meta:
@@ -123,3 +129,8 @@ entries:
           bee.security.gov:governance_delivery_read_policy, bee.security.gov:governance_delivery_manage_policy,
           bee.security.gov:governance_delivery_activate_policy]
         thread_access: none
+      - component: bee.files.app
+        definition_id: bee.files.app:app
+        capabilities: [workspace.files.read]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.files:read_policy]
+        thread_access: observe_post

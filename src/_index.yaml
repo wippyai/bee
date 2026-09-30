@@ -251,6 +251,30 @@ entries:
       - bee.security.approvals:approval_request_policy
       - bee.security.approvals:approval_consume_policy
       - bee.security.desktop:host_policy
+- name: gateway_publication_service
+  kind: process.service
+  process: bee.gateway.service:publication_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.gateway.worker}
+      policies:
+      - bee.gateway.security:store_policy
+      - bee.gateway.security:database_ref_policy
+      - bee.gateway.security:execute_policy
+      - bee.gateway.security:publication_policy
+      - bee.gateway.security:publication_queue_policy
+      - bee.gateway.security:installation_resolver_policy
+      - bee.gateway.security:installation_worker_policy
+      - bee.gateway.security:publication_read_policy
+      - bee.gateway.security:publication_apply_policy
+      - bee.gateway.security:access_reference_policy
+      - bee.gateway.security:access_policy_read_policy
+      - bee.security.approvals:approval_publication_effects_policy
+      - bee.security.approvals:approval_request_policy
+      - bee.security.approvals:approval_consume_policy
+      - bee.security.desktop:host_policy
 - name: terminal
   kind: terminal.host
   hide_logs: true
@@ -275,7 +299,7 @@ entries:
     type: bee.protected_kernel
     comment: Host trust map no overlay profile can open; preflight refuses edits to these definitions, their transitive code dependencies and requirement selectors aimed at them
   data:
-    revision: 2
+    revision: 3
     namespaces: [bee.application, bee.approvals, bee.apps, bee.capability, bee.client, bee.console, bee.deps,
       bee.desktop, bee.docs, bee.env, bee.gateway, bee.governance, bee.gov, bee.hive,
       bee.host, bee.hub, bee.interaction, bee.launch, bee.node, bee.persist, bee.protocol,
@@ -283,7 +307,8 @@ entries:
       bee.workspace]
     super_edit: []
     entries: ['bee:protected_kernel', 'bee:approver_policies', 'bee:capability_catalog', 'bee.env:gov_activation_profiles',
-      'bee.env:gov_publication_profiles', 'bee.deps:gov', 'bee.deps:approvals', 'bee:module_installation']
+      'bee.env:gov_publication_profiles', 'bee.deps:gov', 'bee.deps:approvals', 'bee:module_installation',
+      'bee:module_publication', 'bee:hub_publication']
 - name: approver_policies
   kind: registry.entry
   meta:
@@ -298,7 +323,16 @@ entries:
     approvers:
     - definition_id: bee.approvals.inbox.app:app
     max_ttl_ms: 600000
+  - name: module-publication
+    approvers:
+    - definition_id: bee.approvals.inbox:app
+    max_ttl_ms: 600000
   - name: super-edit-person
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    max_ttl_ms: 600000
+  - name: docker-environment
     approvers:
     - definition_id: bee.approvals.inbox.app:app
     confirm: explicit
@@ -310,6 +344,23 @@ entries:
     comment: Host-selected approval policy for agent Hub installation requests; a request files one approval and only an approved one applies
   data:
     approval_policy: module-installation
+- name: module_publication
+  kind: registry.entry
+  meta:
+    type: bee.module_publication
+    comment: Host-selected approval policy for agent Hub publication requests; a request files one approval and only an approved one uploads
+  data:
+    approval_policy: module-publication
+- name: hub_publication
+  kind: registry.entry
+  meta:
+    type: bee.hub_publication
+    comment: Host-selected Hub publication uploader; the person fills the publishing organization, uploader executable and admitted source roots once, and every publication must belong to that organization
+  data:
+    organization: ""
+    cli: ""
+    source_roots: []
+    staging_root: ""
 - name: docs_corpus
   kind: fs.directory
   directory: ./src/corpus

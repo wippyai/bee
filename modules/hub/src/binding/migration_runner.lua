@@ -14,6 +14,7 @@ local HUB_PRIVATE_POLICIES: {string} = {
     "bee.hub.security:execution_policy", "bee.hub.security:publisher_policy", "bee.hub.security:dependency_policy",
     "bee.hub.security:receipt_policy", "bee.hub.security:worker_policy", "bee.hub.security:worker_host_policy",
     "bee.hub.security:worker_name_policy", "bee.hub.security:worker_reply_policy", "bee.hub.security:migration_context_policy",
+    "bee.hub.security:publish_exec_policy",
 }
 
 local function registry_id(value: unknown): string?

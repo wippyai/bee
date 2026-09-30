@@ -19,6 +19,22 @@ end
 
 local function define_tests()
     test.describe("Sessions catalog route readiness", function()
+        test.it("retains a saved profile's identity and title beside its definition", function()
+            local saved = assert(funcs.call("bee.harness.profiles:call", {operation = "put", workspace_id = "saved-profile-workspace",
+                profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
+                profile = {title = "Selected container profile", definition_ref = "bee.driver.claude:default_window"}}))
+            test.is_true((saved :: Object).ok == true)
+            local page = assert(catalog.list({include_unavailable = true}, "saved-profile-workspace"))
+            local found = false
+            for _, candidate in ipairs(page.items) do
+                if candidate.kind == "profile" and candidate.title == "Selected container profile" then
+                    test.eq(candidate.ref, "catalog-saved-selection")
+                    test.eq(candidate.title, "Selected container profile")
+                    found = true
+                end
+            end
+            test.is_true(found)
+        end)
         test.it("registers every operation of the host-selected Threads journal", function()
             local binding = assert(registry.get("bee.threads:journal_local"))
             local data = binding.data :: {contracts: {{contract: string, methods: {[string]: string}}}}

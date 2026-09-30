@@ -61,18 +61,19 @@ type Policy = {
     gateway_hooks: {string},
     hook_command_ref: string?,
     fixture: boolean,
+    placement_profiles: {string},
     placement_binding: string?,
     placement_options: {[string]: unknown}?,
     allowed_overrides: {string},
 }
-local function decode_map(value: unknown, name: string): ({[string]: string}?, string?)
+local function decode_map(value: unknown, name: string, empty: boolean?): ({[string]: string}?, string?)
     local result: {[string]: string} = {}
     if value == nil then return result, nil end
     local object = bounds.object(value)
     if not object then return nil, name .. " must be an object" end
     for key, item in pairs(object) do
         local text = bounds.text(item, 4096)
-        if not text or text == "" then return nil, name .. "." .. key .. " must be nonempty text" end
+        if not text or text:find("%z") or (text == "" and not empty) then return nil, name .. "." .. key .. " must be bounded text" end
         result[key] = text
     end
     return result, nil
@@ -141,7 +142,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -163,7 +164,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     local resolve = resolver or function(variable_ref: string): (string?, string?) return env.get(variable_ref) end
     local executable_env_error = decode_executable_env(data.executable_env, executables, resolve)
     if executable_env_error then return nil, ref .. ": " .. executable_env_error end
-    local environment, environment_error = decode_map(data.environment, "environment")
+    local environment, environment_error = decode_map(data.environment, "environment", true)
     if not environment then return nil, ref .. ": " .. tostring(environment_error) end
     local host_environment: {[string]: string} = {}
     local refs_error = decode_environment_refs(data.environment_refs, environment, host_environment, resolver or optional_environment)
@@ -229,6 +230,8 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         provider_ref = bounds.id(data.provider_ref)
         if not provider_ref then return nil, ref .. ": provider_ref is not an identifier" end
     end
+    local placement_profiles, placement_profiles_error = bounds.ids(data.placement_profiles or {"bee.placement:native"}, true)
+    if not placement_profiles then return nil, ref .. ": placement_profiles: " .. tostring(placement_profiles_error) end
     local placement_binding: string? = nil
     if data.placement_binding ~= nil then
         placement_binding = bounds.id(data.placement_binding)
@@ -321,7 +324,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
+        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_profiles = placement_profiles, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end
 type SurfaceValue = {[string]: unknown}

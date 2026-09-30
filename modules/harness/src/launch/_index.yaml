@@ -4,7 +4,9 @@ entries:
 - name: definitions
   kind: library.lua
   source: file://definition.lua
-  modules: [hash, registry]
+  modules:
+  - hash
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -13,7 +15,13 @@ entries:
 - name: admission
   kind: library.lua
   source: file://admission.lua
-  modules: [hash, registry, funcs, process, security, time]
+  modules:
+  - hash
+  - registry
+  - funcs
+  - process
+  - security
+  - time
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -27,10 +35,14 @@ entries:
     continuation: bee.harness.carrier:continuation
     interrupted: bee.harness.app:interrupted
     profiles: bee.harness.profiles:protocol
+    placement_profiles: bee.placement:profiles
 - name: agent_resolver
   kind: library.lua
   source: file://agent_resolver.lua
-  modules: [hash, json, registry]
+  modules:
+  - hash
+  - json
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -55,18 +67,26 @@ entries:
   imports:
     admission: bee.harness.launch:admission
   security:
-    policies: [bee.harness.security:launch_spawn_policy]
+    policies:
+    - bee.harness.security:launch_spawn_policy
 - name: selection
   kind: library.lua
   source: file://selection.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     definitions: bee.harness.launch:definitions
     bounds: bee.threads.records:bounds
 - name: locate
   kind: library.lua
   source: file://locate.lua
-  modules: [env, exec, fs, registry, json]
+  modules:
+  - env
+  - exec
+  - fs
+  - registry
+  - json
+  - funcs
   imports:
     bounds: bee.threads.records:bounds
     descriptor: bee.driver:descriptor
@@ -75,13 +95,17 @@ entries:
     locate: bee.driver:locate
     quote: bee.driver.kit:quote
     resources: bee.placement.native:resources
+    placement_profiles: bee.placement:profiles
+    placement_resolver: bee.placement:resolver
     probe_capture: bee.harness.launch:probe_capture
     probe_version: bee.harness.launch:probe_version
     login_evidence: bee.driver:login_evidence
 - name: probe_capture
   kind: library.lua
   source: file://probe_capture.lua
-  modules: [channel, time]
+  modules:
+  - channel
+  - time
 - name: probe_version
   kind: library.lua
   source: file://probe_version.lua
@@ -91,16 +115,20 @@ entries:
   kind: function.lua
   source: file://locate_probe.lua
   method: handle
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     locator: bee.harness.launch:locate
   security:
-    policies: [bee.harness.security:launch_locate_probe_policy]
+    policies:
+    - bee.harness.security:launch_locate_probe_policy
+    - bee.harness.security:launch_docker_readiness_policy
 - name: readiness
   kind: library.lua
   source: file://readiness.lua
-  modules: [funcs]
+  modules:
+  - funcs
   imports:
     bounds: bee.threads.records:bounds
     driver_locate: bee.driver:locate
@@ -109,7 +137,11 @@ entries:
   kind: function.lua
   source: file://setup_backend.lua
   method: handle
-  modules: [hash, funcs, registry, security]
+  modules:
+  - hash
+  - funcs
+  - registry
+  - security
   imports:
     bounds: bee.threads.records:bounds
     definition: bee.harness.launch:definitions
@@ -117,16 +149,23 @@ entries:
   kind: function.lua
   source: file://setup_method.lua
   method: handle
-  modules: [funcs, security]
+  modules:
+  - funcs
+  - security
   imports:
     bounds: bee.threads.records:bounds
     admission: bee.harness.launch:admission
   security:
-    policies: [bee.harness.launch:setup_facade_policy]
+    policies:
+    - bee.harness.launch:setup_facade_policy
 - name: managed_run
   kind: library.lua
   source: file://managed_run.lua
-  modules: [funcs, time, process, registry]
+  modules:
+  - funcs
+  - time
+  - process
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     placement_resolver: bee.placement:resolver
@@ -134,20 +173,31 @@ entries:
     prestart: bee.harness.carrier:prestart
 - name: setup_execution_policy
   kind: security.policy.expr
-  groups: [harness_setup_execution_scope]
+  groups:
+  - harness_setup_execution_scope
   policy:
-    expression: '(action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource == "bee.credentials.binding:define" || resource == "bee.credentials.binding:list")) || ((action == "bee.resources.manage" || action == "bee.credentials.manage") && resource != "" && resource == actor.meta.workspace_id) || action == "registry.get"'
-    actions: [funcs.call, bee.resources.manage, bee.credentials.manage, registry.get]
+    expression: (action == "funcs.call" && (resource == "bee.resources.binding:associate" || resource == "bee.resources.binding:list" || resource
+      == "bee.credentials.binding:define" || resource == "bee.credentials.binding:list")) || ((action == "bee.resources.manage" || action == "bee.credentials.manage")
+      && resource != "" && resource == actor.meta.workspace_id) || action == "registry.get"
+    actions:
+    - funcs.call
+    - bee.resources.manage
+    - bee.credentials.manage
+    - registry.get
     resources: '*'
     effect: allow
 - name: setup_facade_policy
   kind: security.policy.expr
   policy:
-    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope") || (action == "funcs.call" && resource == "bee.harness.launch:setup_backend") || action == "registry.snapshot"'
-    actions: [funcs.security, security.policy_group.get, funcs.call, registry.snapshot]
+    expression: (action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.harness.launch:harness_setup_execution_scope")
+      || (action == "funcs.call" && resource == "bee.harness.launch:setup_backend") || action == "registry.snapshot"
+    actions:
+    - funcs.security
+    - security.policy_group.get
+    - funcs.call
+    - registry.snapshot
     resources: '*'
     effect: allow
-
 - name: host_environment_names
   kind: env.variable
   storage: bee.harness.host:environment

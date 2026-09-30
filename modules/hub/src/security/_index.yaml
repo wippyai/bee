@@ -11,7 +11,7 @@ entries:
 - name: execution_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [bee.hub.execute], resources: [bee.hub.binding:backend, bee.hub.service:worker], effect: allow}
+  policy: {actions: [bee.hub.execute], resources: [bee.hub.binding:backend, bee.hub.service:worker, bee.hub.service:publish_worker], effect: allow}
 - name: read_policy
   kind: security.policy
   groups: [execution_scope]
@@ -27,11 +27,11 @@ entries:
 - name: receipt_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [registry.create.registry.entry, registry.update.registry.entry], resources: 'bee.hub.operations:*', effect: allow}
+  policy: {actions: [registry.create.registry.entry, registry.update.registry.entry], resources: ['bee.hub.operations:*', 'bee.hub.publish_operations:*', 'bee.hub.publish_staging:*'], effect: allow}
 - name: worker_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [process.spawn], resources: [bee.hub.service:worker], effect: allow}
+  policy: {actions: [process.spawn], resources: [bee.hub.service:worker, bee.hub.service:publish_worker], effect: allow}
 - name: worker_host_policy
   kind: security.policy
   groups: [execution_scope]
@@ -39,7 +39,11 @@ entries:
 - name: worker_name_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [process.registry.register, process.registry.register.local, process.registry.unregister], resources: [bee.hub.publisher], effect: allow}
+  policy: {actions: [process.registry.register, process.registry.register.local, process.registry.unregister], resources: [bee.hub.publisher, bee.hub.publish_worker], effect: allow}
+- name: publish_exec_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [exec.get, exec.run, registry.get], resources: '*', effect: allow}
 - name: worker_reply_policy
   kind: security.policy
   groups: [execution_scope]

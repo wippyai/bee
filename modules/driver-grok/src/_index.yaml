@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Grok driver
-    comment: Declarative Grok CLI driver; placement owns process, credentials, and private-home materialization
+    comment: Declarative Grok CLI driver; placement owns process, credentials, and
+      private-home materialization
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -54,7 +55,8 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     canonical: bee.threads.records:canonical
     quote: bee.driver.kit:quote
@@ -65,7 +67,6 @@ entries:
   source: file://launch.lua
   imports:
     universal: bee.driver:universal
-
 - name: locate
   kind: library.lua
   source: file://locate.lua
@@ -162,7 +163,15 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
-        hooks: {transports: [command], events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]}
+        hooks:
+          transports:
+          - command
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - Stop
         answer_path:
           strategy: none
         resume:
@@ -178,29 +187,43 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Grok window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Grok window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: grok-window
     title: Grok CLI
-    command_names: [grok]
+    command_names:
+    - grok
     binding_ref: bee.driver.grok:binding
     profile_id: window
     session_profile_id: session
-    session_credentials: [grok_login]
+    session_credentials:
+    - grok_login
     policy_ref: ''
     default_mode: window
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: new}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
     session_resource: session
-    credentials: [grok_login]
-    presentation: {start_menu: true, fullscreen: true, reuse: never}
+    credentials:
+    - grok_login
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Grok batch route for a host-selected coordinator and caller-owned shared thread; the CLI offers no provable workdir confinement, so the host records it as unconfined
+    comment: Component-owned bounded Grok batch route for a host-selected coordinator
+      and caller-owned shared thread; the CLI offers no provable workdir confinement,
+      so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: grok-research-batch
@@ -210,12 +233,21 @@ entries:
     profile_id: batch
     policy_ref: ''
     default_mode: batch
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
     session_resource: session
-    credentials: [grok_login]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
+    credentials:
+    - grok_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
     unconfined: true
 - name: credential_format
   kind: registry.entry
@@ -238,38 +270,17 @@ entries:
     arguments:
     - bee.driver.grok:default_window
     fullscreen: true
-
 - name: launch_policy_grok_batch
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Grok turn budget for agentic research actions on a caller-owned thread
+    comment: Host-selected Grok turn budget for agentic research actions on a caller-owned
+      thread
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
-    required_cleanup: process_group
-    required_exit_observation: independent
-    start_ms: 15000
-    stop_grace_ms: 5000
-    drain_ms: 5000
-    fixture: false
-    executables: {}
-    executable_env: {grok: bee.driver.grok:executable}
-    environment: {}
-    allow_host_home: false
-    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
-    profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
-    profile_instructions: true
-    prepare_options: {permission_mode: default, turn_budget: 128}
-- name: launch_policy_grok_window
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Grok window; missing host executable leaves
-      the declaration unavailable
-  data:
-    schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -280,7 +291,71 @@ entries:
     executable_env:
       grok: bee.driver.grok:executable
     environment: {}
-    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
+    allow_host_home: false
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+      turn_budget:
+      - 16
+      - 32
+      - 64
+      - 128
+    profile_instructions: true
+    prepare_options:
+      permission_mode: default
+      turn_budget: 128
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding
+- name: launch_policy_grok_window
+  kind: registry.entry
+  meta:
+    type: bee.launch_policy
+    comment: Host-selected executable binding for the component-owned Grok window;
+      missing host executable leaves the declaration unavailable
+  data:
+    schema_revision: bee.launch-policy@2
+    allowed_overrides:
+    - thread
+    - workdir
+    required_cleanup: process_group
+    required_exit_observation: independent
+    start_ms: 15000
+    stop_grace_ms: 5000
+    drain_ms: 5000
+    fixture: false
+    executables: {}
+    executable_env:
+      grok: bee.driver.grok:executable
+    environment: {}
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -295,3 +370,6 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding

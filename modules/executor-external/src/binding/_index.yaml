@@ -3,7 +3,9 @@ namespace: bee.executor.external.binding
 entries:
 - name: executor_policies
   kind: ns.requirement
-  meta: {comment: Host-selected admission and native execution authority for workspace-bound turns}
+  meta:
+    comment: Host-selected admission and native execution authority for workspace-bound
+      turns
   default:
   - bee.executor.external.security:driver_placement_calls
   - bee.executor.external.security:placement_stream
@@ -21,6 +23,9 @@ entries:
   - bee.security.gateway:gateway_materialize_policy
   - bee.security.gateway:gateway_supervision_policy
   - bee.security.storage:workspace_folder_browse_policy
+  - bee.placement.docker.security:docker_policy
+  - bee.placement.docker.security:docker_socket_policy
+  - bee.placement.docker.security:image_client_policy
   targets:
   - entry: bee.executor.external.binding:run_turn
     path: .security.policies
@@ -28,7 +33,11 @@ entries:
   kind: function.lua
   source: file://run_turn.lua
   method: handle
-  modules: [funcs, process, channel, hash]
+  modules:
+  - funcs
+  - process
+  - channel
+  - hash
   security:
     policies: []
   imports:

@@ -1,10 +1,21 @@
 -- SPDX-License-Identifier: MIT
+local registry = require("registry")
+local profiles = require("profiles")
 local json = require("json")
 local toml = require("toml")
 local formats = require("formats")
 local bounds = require("bounds")
 local types = require("types")
 local M = {}
+function M.roots(ref: string): ({string}?, string?)
+    local pinned, pin_error = registry.snapshot()
+    if not pinned then return nil, tostring(pin_error) end
+    local profile, profile_error = profiles.resolve(pinned, ref)
+    if not profile then return nil, profile_error end
+    local roots: {string} = {}
+    for _, mount in ipairs(profile.profile.mounts) do roots[#roots + 1] = mount.target end
+    return roots, nil
+end
 type Context = {roots: {string}, files: {[string]: string}, strict: boolean, changed: boolean}
 local function safe_path(path: string): boolean
     for segment in path:gmatch("[^/]+") do

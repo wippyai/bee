@@ -69,6 +69,8 @@ type LaunchRequest = {
     required_cleanup: Capability,
     required_exit_observation: ExitObservation,
     timeouts: Timeouts,
+    placement_profile_ref: string?,
+    placement_profile_digest: string?,
     placement_binding_ref: string?,
     placement_binding_digest: string?,
     options: WorkdirOptions?,

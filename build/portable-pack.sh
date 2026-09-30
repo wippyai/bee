@@ -69,11 +69,18 @@ awk '
 ' "$stage/source/wippy.lock" > "$stage/modules.tsv"
 
 while read -r module module_version; do
-    name=${module#bee/}
-    pack=$stage/artifacts/packs/bee/$name-$module_version.wapp
-    staged_pack=.portable-packs/bee/$name-$module_version.wapp
-    (cd "$stage/source" && "$runtime" pack --module "$module" "$staged_pack" --silent)
-    mv "$stage/source/$staged_pack" "$pack"
+    organization=${module%/*}
+    name=${module#*/}
+    mkdir -p "$stage/artifacts/packs/$organization" "$stage/source/.portable-packs/$organization"
+    pack=$stage/artifacts/packs/$organization/$name-$module_version.wapp
+    case "$organization" in
+        bee)
+            staged_pack=.portable-packs/$organization/$name-$module_version.wapp
+            (cd "$stage/source" && "$runtime" pack --module "$module" "$staged_pack" --silent)
+            mv "$stage/source/$staged_pack" "$pack"
+            ;;
+        *) cp "$root/.wippy/vendor/$organization/$name-$module_version.wapp" "$pack" ;;
+    esac
 done < "$stage/modules.tsv"
 
 # Runtime patches remain byte-for-byte inputs to the pinned builder and travel
@@ -95,10 +102,12 @@ fi
 mkdir -p "$stage/deployment/empty" "$stage/deployment/.wippy/vendor/bee"
 printf '%s\n' 'directories:' '  modules: .wippy' '  src: ./empty' 'modules:' > "$stage/deployment/wippy.lock"
 while read -r module module_version; do
-    name=${module#bee/}
-    pack=$generation_dir/packs/bee/$name-$module_version.wapp
+    organization=${module%/*}
+    name=${module#*/}
+    pack=$generation_dir/packs/$organization/$name-$module_version.wapp
     hash=$(sha256sum "$pack" | awk '{print $1}')
-    cp "$pack" "$stage/deployment/.wippy/vendor/bee/$name-$module_version.wapp"
+    mkdir -p "$stage/deployment/.wippy/vendor/$organization"
+    cp "$pack" "$stage/deployment/.wippy/vendor/$organization/$name-$module_version.wapp"
     printf '  - name: %s\n    version: %s\n    hash: sha256:%s\n' "$module" "$module_version" "$hash" >> "$stage/deployment/wippy.lock"
     [ "$module" != bee/bee ] || printf '%s\n' '    root: true' >> "$stage/deployment/wippy.lock"
 done < "$stage/modules.tsv"
@@ -115,8 +124,9 @@ fi
 
 packs=$stage/packs.json
 while read -r module module_version; do
-    name=${module#bee/}
-    path=native-packs/$generation/packs/bee/$name-$module_version.wapp
+    organization=${module%/*}
+    name=${module#*/}
+    path=native-packs/$generation/packs/$organization/$name-$module_version.wapp
     printf '%s\n' '      {' "        \"module\": \"$module\"," "        \"version\": \"$module_version\"," \
         "        \"path\": \"$path\"," '        "sha256": "0000000000000000000000000000000000000000000000000000000000000000"' '      },' >> "$packs"
 done < "$stage/modules.tsv"

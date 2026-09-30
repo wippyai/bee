@@ -33,7 +33,10 @@ configuration, other owners or package resources. This covers local development
 versions that have no matching Hub artifact.
 See [the API and acceptance status](../../docs/guides/hub.md) for request examples.
 
-Management operations are `plan`, `apply` and `status`. Planning preserves other
+Management operations are `plan`, `apply` and `status`, plus publication
+operations `publish_request` and `publish_apply` for person-approved Hub
+uploads (see the publication section of the Hub guide).
+Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. Exact dependency pins do not list release history; ranges page lazily.
 Apply replans in a private worker before publishing the dependency-root change

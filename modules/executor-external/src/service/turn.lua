@@ -33,11 +33,6 @@ type IO = {
     close: (unknown) -> (),
 }
 
-local PLACEMENT_METHODS = {
-    prepare = "bee.placement.native.binding:prepare", attach = "bee.placement.native.binding:attach",
-    start = "bee.placement.native.binding:start", reconcile = "bee.placement.native.binding:reconcile",
-    cleanup = "bee.placement.native.binding:cleanup",
-}
 
 local function object(value: unknown): {[string]: unknown}?
     if type(value) == "table" then return value :: {[string]: unknown} end
@@ -91,9 +86,12 @@ local function decode(value: unknown): (Request?, string?)
     end
     local placement_methods = object(request.placement_methods)
     if not placement_methods then return nil, "placement_methods must be an object" end
+    local prepare_target = id(placement_methods.prepare)
+    local placement_prefix = prepare_target and prepare_target:match("^(bee[.]placement[.][A-Za-z0-9_.-]+[.]binding:)prepare$")
+    if not placement_prefix then return nil, "placement prepare is not a Bee placement operation" end
     for _, method in ipairs({"prepare", "attach", "start", "reconcile", "cleanup"}) do
-        if placement_methods[method] ~= PLACEMENT_METHODS[method] then
-            return nil, "placement_methods." .. method .. " is not the host-selected native binding"
+        if placement_methods[method] ~= placement_prefix .. method then
+            return nil, "placement_methods." .. method .. " differs from the selected placement binding"
         end
     end
     local admission = object(request.admission)
@@ -200,6 +198,9 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     if placement_request.attempt_id ~= request.attempt_id then return nil, "placement plan names another attempt" end
     if placement_request.binding_ref ~= request.driver_binding_ref or placement_request.profile_id ~= request.profile_id then
         return nil, "placement plan differs from the selected driver route"
+    end
+    if placement_request.placement_binding_ref ~= request.placement_methods.prepare:gsub("prepare$", "binding") then
+        return nil, "placement plan differs from the selected placement route"
     end
     local intent_value, intent_error = io.prepare(placement_request)
     if intent_error then return nil, "persist placement intent: " .. intent_error end

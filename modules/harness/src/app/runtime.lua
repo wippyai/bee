@@ -25,6 +25,7 @@ local records = require("records")
 local appearance = require("appearance")
 local restore_view = require("restore_view")
 local frame_ui = require("frame")
+local bounds = require("bounds")
 
 local THREADS = "bee.threads.service"
 type Fault = {code: string, message: string}
@@ -35,6 +36,12 @@ end
 local function io(): machine.IO
     return {
         call = function(target: string, value: unknown): (unknown, string?)
+            if target == "bee.placement.docker.binding:prepare" and type(value) == "table" then
+                local request: {[string]: unknown} = {}
+                for key, item in pairs(value) do request[key] = item end
+                request.progress_recipient = tostring(process.pid())
+                value = request
+            end
             local reply, call_error = funcs.call(target, value)
             if call_error then return nil, tostring(call_error) end
             return reply, nil
@@ -357,6 +364,23 @@ local function main(value: unknown, constructors: {[string]: Open})
         output:close()
         return false
     end
+    if not selected and not restoring then
+        -- Resolution, setup, admission, preparation and the native open are
+        -- durable work of unbounded length. Keep the broker's readiness
+        -- deadline independent of it, as the restore path does: the surface
+        -- is ready as soon as it says what it is doing.
+        local output = assert(tty.surface())
+        local width, height = tty.screen_size()
+        local frame = restore_view.draw(width, height, appearance.defaults(), "Preparing the Agent launch…", "Starting Agent", "")
+        assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+        client.ready(launch, {negotiate_close = true})
+        ready_announced = true
+        local output_closed, output_error = output:close()
+        if not output_closed then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Managed window launch surface: " .. tostring(output_error))
+        end
+    end
     if selected then
         local choice, choice_error, picker_cancelled, pending_activation = picker.run(launch, input, lifecycle, closes)
         if picker_cancelled then
@@ -602,21 +626,6 @@ local function main(value: unknown, constructors: {[string]: Open})
             error("Managed window recovery surface: " .. tostring(output_error))
         end
     elseif direct then
-        -- Resolution, setup, admission, preparation and the native open are
-        -- durable work of unbounded length. Keep the broker's readiness
-        -- deadline independent of it, as the restore path does: the surface
-        -- is ready as soon as it says what it is doing.
-        local output = assert(tty.surface())
-        local width, height = tty.screen_size()
-        local frame = restore_view.draw(width, height, appearance.defaults(), "Preparing the Agent launch…", "Starting Agent", "")
-        assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
-        client.ready(launch, {negotiate_close = true})
-        ready_announced = true
-        local output_closed, output_error = output:close()
-        if not output_closed then
-            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-            error("Managed window launch surface: " .. tostring(output_error))
-        end
         local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], launch.thread_id,
             {view_id = launch.view_id, instance_id = launch.instance_id})
         if not choice then
@@ -670,7 +679,34 @@ local function main(value: unknown, constructors: {[string]: Open})
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
     end
-    local prepared, preparation_error, failed_preparation = machine.prepare_attempt(transport, plan)
+    local progress_events = assert(process.listen("bee.placement.image_progress", {message = true}))
+    local completed = channel.new(1)
+    type Preparation = {prepared: machine.PreparedAttempt?, error: string?, failed: machine.FailedPreparation?}
+    coroutine.spawn(function()
+        local result, reason, failed = machine.prepare_attempt(transport, plan)
+        completed:send({prepared = result, error = reason, failed = failed})
+    end)
+    local preparation: Preparation? = nil
+    while preparation == nil do
+        local selected_event = channel.select({progress_events:case_receive(), completed:case_receive()})
+        if selected_event.channel == completed then
+            preparation = selected_event.value :: Preparation
+        elseif selected_event.channel == progress_events then
+            local message = selected_event.value
+            local data = bounds.object(message:payload():data())
+            if tostring(message:from()) == tostring(process.registry.lookup("bee.placement.docker/image")) and data
+                and data.version == 1 and not bounds.fields(data, {"version", "profile_ref", "detail"})
+                and data.profile_ref == plan.request.placement_profile_ref and type(data.detail) == "string" and #data.detail <= 4096 then
+                local surface = assert(tty.surface())
+                local width, height = tty.screen_size()
+                local frame = restore_view.draw(width, height, appearance.defaults(), data.detail, "Preparing Docker image", "")
+                assert(surface:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+                surface:close()
+            end
+        end
+    end
+    process.unlisten(progress_events)
+    local prepared, preparation_error, failed_preparation = preparation.prepared, preparation.error, preparation.failed
     if not prepared then
         local reason = "Managed window preparation: " .. tostring(preparation_error)
         local epoch = failed_preparation and failed_preparation.epoch

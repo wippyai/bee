@@ -1,0 +1,131 @@
+version: '1.0'
+namespace: bee.docker.proof
+entries:
+- name: expectation
+  kind: registry.entry
+  data:
+    provider: claude
+    mode: window
+    state: ''
+- name: profile
+  kind: registry.entry
+  meta:
+    type: bee.placement_profile
+    test_support: true
+  data:
+    schema_revision: bee.placement-profile@1
+    placement_binding: bee.placement.docker.binding:binding
+    image_ref: ''
+    user: 1000:1000
+    network: none
+    limits:
+      memory: 2147483648
+      cpu: 200000
+      pids: 256
+    mounts:
+    - resource: project
+      target: /workspace
+      access: write
+    interactive_route_ref: bee.docker.proof:interactive
+- name: interactive
+  kind: registry.entry
+  meta:
+    type: docker.interactive_executor
+    test_support: true
+  data:
+    image_ref: ''
+    executor_ref: bee.docker.proof:executor
+- name: executor
+  kind: exec.docker
+  host: unix:///var/run/docker.sock
+  image: ''
+  user: 1000:1000
+  network_mode: none
+  memory_limit: 2147483648
+  cpu_quota: 200000
+  pids_limit: 256
+  auto_remove: false
+  read_only_rootfs: true
+  no_new_privileges: true
+  cap_drop:
+  - ALL
+  tmpfs:
+    /tmp: rw,nosuid,nodev,size=128m
+- name: authority
+  kind: security.policy
+  policy:
+    actions:
+    - funcs.call
+    - bee.harness.profiles.read
+    - bee.harness.profiles.write
+    - bee.harness.setup
+    - bee.resources.manage
+    - bee.resources.use
+    - bee.credentials.manage
+    - bee.credentials.use
+    - registry.get
+    - registry.snapshot
+    - registry.apply
+    - process.terminate
+    - fs.get
+    - fs.write
+    - funcs.security
+    - process.spawn
+    - process.spawn.monitored
+    - bee.gateway.manage
+    - bee.resources.grant
+    - bee.credentials.issue
+    - bee.harness.launch
+    - bee.threads.create
+    - bee.threads.lifecycle
+    - bee.threads.carrier
+    resources: '*'
+    effect: allow
+- name: evidence_path
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_DOCKER_EVIDENCE
+  default: ''
+  readonly: true
+- name: evidence
+  kind: fs.directory
+  directory: ${env:bee.docker.proof:evidence_path}
+  auto_init: false
+- name: proof
+  kind: process.lua
+  source: file://main.lua
+  method: proof
+  modules:
+  - process
+  - channel
+  - time
+  - security
+  - tty
+  - funcs
+  - json
+  - registry
+  - fs
+  imports:
+    bounds: bee.threads.records:bounds
+    appearance: bee.application:appearance
+    admission: bee.harness.launch:admission
+    machine: bee.harness.carrier:machine
+    protocol: bee.placement.native:protocol
+    placement_store: bee.placement.native.persist:store
+  security:
+    policies: &id001
+    - bee.security.desktop:desktop_policy
+    - bee.docker.proof:authority
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
+    - bee.placement.native.security:placement_store_policy
+  meta:
+    command:
+      name: docker-proof
+      security:
+        actor:
+          id: bee.application:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bee.docker.proof
+          meta:
+            workspace_id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        policies: *id001

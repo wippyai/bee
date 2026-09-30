@@ -25,6 +25,7 @@ local function plan_for(request: unknown, with_gateway: boolean?): {[string]: un
     test.eq(admission.brief, "continue the task")
     local placement_request: {[string]: unknown} = {
         attempt_id = "attempt-current", binding_ref = "bee.driver.fixture:binding", profile_id = "session",
+        placement_binding_ref = ((value.placement_methods :: {[string]: string}).prepare):gsub("prepare$", "binding"),
         launch = {executable = "fixture-cli", argv = {"--prompt"}, environment = {}, readiness = "protocol:ready"},
     }
     if with_gateway then placement_request.gateway = {tools = {"session_send"}, hooks = {"SessionStart"}} end
@@ -100,6 +101,23 @@ end
 
 local function define_tests()
     test.describe("External executor turn", function()
+        test.it("executes the admitted Docker placement through the shared turn lifecycle", function()
+            local request = base_request()
+            local methods = request.placement_methods :: {[string]: string}
+            for name in pairs(methods) do methods[name] = "bee.placement.docker.binding:" .. name end
+            local calls: {string} = {}
+            local result, reason = turn.execute(success_io(calls), request)
+            test.is_nil(reason); test.eq(result and result.outcome, "succeeded")
+            test.eq(table.concat(calls, ","), "plan,prepare,listen,attach,start,observe,close,reconcile:attempt-current")
+        end)
+        test.it("refuses mixed placement operations before invoking the host", function()
+            local request = base_request()
+            local methods = request.placement_methods :: {[string]: string}
+            methods.prepare = "bee.placement.docker.binding:prepare"
+            local calls: {string} = {}
+            local result, reason = turn.execute(success_io(calls), request)
+            test.is_nil(result); test.not_nil(reason); test.eq(#calls, 0)
+        end)
         test.it("settles an authenticated placement stop without requiring a provider terminal frame", function()
             local request = base_request()
             local io = success_io()

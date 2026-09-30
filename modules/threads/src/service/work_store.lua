@@ -789,7 +789,7 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
             "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
             "LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
             "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref " ..
-            "WHERE COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull' AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
+            "WHERE w.phase IN ('queued','reserved','accepted') AND COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull' AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
             "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
             "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
             "ORDER BY w.sequence LIMIT ?", {workspace or sql.NULL, workspace or sql.NULL, limit}, "scan session work")

@@ -507,9 +507,9 @@
       "topic": "component"
     },
     {
-      "bytes": 10252,
+      "bytes": 10382,
       "id": "component/threads",
-      "sha256": "d14a9147ee74e60f7c4819130c68c9b8ec607996d2c00d177f3f2c02136584e8",
+      "sha256": "222caab8e4584be0259e2e829da15a1357b7a22c2b86576776674e9c0515e7fe",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -606,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 668982,
+    "bytes": 669112,
     "documents": 75
   }
 }

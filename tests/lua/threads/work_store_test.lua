@@ -368,6 +368,21 @@ local function define_tests()
             for _, row in ipairs(due.items) do if row.work == active.work then found = row.cancel_requested == true end end
             test.is_true(found)
             test.eq(harness.value(sessions:call("operation_describe", {operation = active_cancel.operation})).receipt.subject, active.work)
+            harness.value(sessions:call("work_settle", {turn = reservation.turn, claim = reservation.claim,
+                result = result("cancelled"), operation_key = harness.key()}))
+            local redirected = harness.value(sessions:call("work_send", {session = opened.session,
+                operation_key = harness.key(), input = "redirect after cancellation"}))
+            local next_due = harness.value(sessions:call("work_scan", {limit = 16}))
+            local next_found = false
+            for _, row in ipairs(next_due.items) do
+                test.is_true(row.work ~= active.work, "settled cancellation is absent from pull scans")
+                if row.work == redirected.work then
+                    next_found = true
+                    test.eq(row.state, "queued")
+                end
+            end
+            test.is_true(next_found)
+
         end)
 
         test.it("allows launch journal mutations only through the sessions owner scope", function()

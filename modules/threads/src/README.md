@@ -145,3 +145,5 @@ changed requests conflict. Capacity for the terminal records still owed is
 reserved before new work is admitted.
 
 An interactive Session may use an existing workspace thread only when its authenticated application has active owner or participant membership, including a live broker-attested application family. Observer membership and workspace visibility alone do not authorize attachment.
+
+Pull scans exclude settled Work, including Work with retained cancellation records, so cancellation does not block later intake.

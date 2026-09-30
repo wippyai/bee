@@ -128,7 +128,7 @@ end
 -- optional page size. Nothing else selects state.
 function M.holdings_request(value: unknown): ({request_id: string, after: string?, limit: integer?}?, string?)
     if type(value) ~= "table" then return nil, "request must be an object" end
-    local object = value :: {[string]: unknown}
+    local object = value
     for key in pairs(object) do
         if key ~= "version" and key ~= "request_id" and key ~= "after" and key ~= "limit" then
             return nil, "holdings request takes request_id, after and limit only"

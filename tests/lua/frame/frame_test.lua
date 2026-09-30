@@ -118,9 +118,9 @@ local function define_tests()
                     sized(painter)
                     for _, row in ipairs(frame.rows(painter)) do
                         local rendered = plain(row)
-                        test.is_nil(rendered:find("\27", 1, true))
-                        test.is_nil(rendered:find("\r", 1, true))
-                        test.is_nil(rendered:find("\7", 1, true))
+                        test.is_nil((rendered:find("\27", 1, true)))
+                        test.is_nil((rendered:find("\r", 1, true)))
+                        test.is_nil((rendered:find("\7", 1, true)))
                     end
                 end
             end

@@ -82,7 +82,7 @@ type Candidate = {ref: string, kind: CandidateKind, revision: integer?, title: s
 type CatalogPage = {items: {Candidate}, next: string?, complete: boolean, unavailable_count: integer, diagnostics: {Fault}}
 
 local fault_metatable = {__tostring = function(value: unknown): string
-    local fault = value :: {[string]: unknown}
+    local fault = value
     return tostring(fault.code or "FAULT") .. ": " .. tostring(fault.message or "session operation failed")
 end}
 
@@ -94,7 +94,7 @@ function M.fault(code: string, message: string, retry: Retry, operation_key: str
         value.evidence = extra.evidence
         value.retry_after_ms = extra.retry_after_ms
     end
-    return setmetatable(value, fault_metatable) :: Fault
+    return setmetatable(value, fault_metatable)
 end
 
 M.PREFIX = {session = "bs", work = "bw", operation = "bo", join = "bj"}

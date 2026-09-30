@@ -179,6 +179,13 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         folder = Path(temporary)
         shutil.copytree(ROOT / "src", folder / "src")
         shutil.copytree(ROOT / "modules", folder / "modules")
+        session_bindings = folder / "modules/sessions/src/binding/_index.yaml"
+        session_entries = yaml.safe_load(session_bindings.read_text())
+        for entry in session_entries["entries"]:
+            if entry.get("name") in {"owner_binding", "catalog_binding"}:
+                for contract_binding in entry.get("contracts", []):
+                    contract_binding.pop("default", None)
+        session_bindings.write_text(yaml.safe_dump(session_entries, sort_keys=False))
         if presenter_probe:
             # Test-only incarnation marker proves an identical screen was drawn
             # by a fresh process. No diagnostics or test flags enter the core pack.

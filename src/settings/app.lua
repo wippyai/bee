@@ -108,39 +108,42 @@ local function main(value: unknown)
         pane = next_pane; offset = 0; reveal(); dirty = true
     end
     local function query_edit_mode(kind: "text" | "confirm", operation: string, initial: string?)
+        if kind == "confirm" and initial then edit_input = initial end
         if edit_query ~= "" then status = "Finish the current edit-mode prompt first"; dirty = true; return end
         local title = kind == "text" and "Enable edit mode" or (operation == "enable_confirm" and "Confirm edit mode" or "Disable edit mode")
         local message = kind == "text"
             and "Enter exact namespaces followed by --for DURATION (maximum 24h)."
-            or (operation == "enable_confirm" and ("Enable these exact namespaces and duration?\n" .. (initial or ""))
+            or (operation == "enable_confirm" and view.confirm_message(edit_input)
                 or "Remove this workspace's super-edit profiles and active overlays?")
         local accept = kind == "text" and "Review" or (operation == "enable_confirm" and "Enable" or "Disable")
         local request_id, query_error = client.query(launch, {kind = kind, title = title, message = message,
-            accept = accept, initial = kind == "text" and "" or ""})
+            accept = accept, initial = kind == "text" and (initial or "") or ""})
         if not request_id then status = tostring(query_error or "Could not ask the person"); dirty = true; return end
         edit_query = request_id
         edit_query_op = operation
-        edit_input = initial or ""
+        if kind == "text" then edit_input = "" end
         status = kind == "text" and "Waiting for namespace list" or "Waiting for confirmation"
         dirty = true
     end
-    local function apply_edit_mode(operation: "enable" | "disable", input: string?)
+    local function apply_edit_mode(operation: "enable" | "disable", input: string?): boolean
         local request: {[string]: unknown} = {operation = operation, workspace_id = launch.workspace_id}
         if input then request.input = input end
         local ok, result, call_error = pcall(function()
             local value, failure = funcs.new():call("bee.gov.binding:super_edit_call", request)
             return value, failure
         end)
-        if not ok then status = "Edit mode failed: " .. tostring(result); dirty = true; return end
-        if call_error then status = "Edit mode failed: " .. tostring(call_error); dirty = true; return end
+        if not ok then status = "Edit mode failed: " .. tostring(result); dirty = true; return false end
+        if call_error then status = "Edit mode failed: " .. tostring(call_error); dirty = true; return false end
         local reply = type(result) == "table" and result :: {[string]: unknown} or nil
         if not reply or reply.ok ~= true then
             status = "Edit mode refused: " .. tostring(reply and (reply.message or reply.code) or "invalid reply")
-        else
-            local value = type(reply.value) == "table" and reply.value :: {[string]: unknown} or nil
-            status = value and type(value.message) == "string" and value.message or "Edit mode updated"
+            dirty = true
+            return false
         end
+        local value = type(reply.value) == "table" and reply.value :: {[string]: unknown} or nil
+        status = value and type(value.message) == "string" and value.message or "Edit mode updated"
         dirty = true
+        return true
     end
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
@@ -191,7 +194,7 @@ local function main(value: unknown)
                     local operation = edit_query_op
                     local submitted = answer.value
                     edit_query, edit_query_op = "", ""
-                    if answer.error ~= "" then status = "Edit mode prompt is busy"; edit_input = ""
+                    if answer.error ~= "" then status = "Edit mode prompt is busy, retry to continue"
                     elseif answer.action ~= "accept" then status = "Edit mode cancelled"; edit_input = ""
                     elseif operation == "enable_input" then
                         if submitted == "" then
@@ -199,9 +202,7 @@ local function main(value: unknown)
                             edit_input = ""
                         else query_edit_mode("confirm", "enable_confirm", submitted) end
                     elseif operation == "enable_confirm" then
-                        local namespaces = edit_input
-                        edit_input = ""
-                        apply_edit_mode("enable", namespaces)
+                        if apply_edit_mode("enable", edit_input) then edit_input = "" end
                     elseif operation == "disable_confirm" then
                         edit_input = ""
                         apply_edit_mode("disable", nil)
@@ -219,7 +220,7 @@ local function main(value: unknown)
                 local key = data.key_type
                 local grid = view.grid(width, height)
                 if pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
-                    and (data.key == "e" or data.key == "E") then query_edit_mode("text", "enable_input", nil)
+                    and (data.key == "e" or data.key == "E") then query_edit_mode("text", "enable_input", edit_input ~= "" and edit_input or nil)
                 elseif pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
                     and (data.key == "d" or data.key == "D") then query_edit_mode("confirm", "disable_confirm", nil)
                 elseif pane ~= "edit_mode" and key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()

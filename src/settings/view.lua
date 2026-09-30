@@ -54,6 +54,11 @@ local EDIT_HINTS = frame.hints({{key = "E", verb = "enable"}, {key = "D", verb =
 local TABS: {frame.Tab} = {{kind = "theme", label = "Themes", short = "Theme"}, {kind = "background", label = "Backgrounds", short = "BG"},
     {kind = "taskbar", label = "Tabs", short = "Tabs"}, {kind = "edit_mode", label = "Edit mode", short = "Edit"},
     {kind = "about", label = "About", short = "About"}}
+-- The edit-mode confirmation the interaction decoder accepts: one line naming
+-- the exact namespaces and duration, so the question dispatches.
+function M.confirm_message(input: string): string
+    return "Enable these exact namespaces and duration: " .. input:gsub("%c", " ")
+end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, pane: Pane, offset: integer, message: string?): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme

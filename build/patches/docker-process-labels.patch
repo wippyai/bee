@@ -1,0 +1,148 @@
+--- a/api/service/exec/api.go
++++ b/api/service/exec/api.go
+@@ -4,6 +4,7 @@
+ package exec
+ 
+ import (
++	"fmt"
+ 	"io"
+ 	"path"
+ 	"path/filepath"
+@@ -31,6 +32,7 @@
+ 	ProcessGroup *bool
+ 	WorkDir      string
+ 	Mounts       []Mount
++	Labels       map[string]string
+ }
+ 
+ // Mount is a host path exposed at a path in a process. Mounts are bind mounts
+@@ -103,6 +105,12 @@
+ 			clone.Env[name] = value
+ 		}
+ 	}
++	if o.Labels != nil {
++		clone.Labels = make(map[string]string, len(o.Labels))
++		for key, value := range o.Labels {
++			clone.Labels[key] = value
++		}
++	}
+ 	if o.PTY != nil {
+ 		pty := *o.PTY
+ 		clone.PTY = &pty
+@@ -119,6 +127,14 @@
+ 
+ // Validate checks process options without retaining or mutating them.
+ func (o ProcessOptions) Validate() error {
++	if len(o.Labels) > 64 {
++		return fmt.Errorf("process labels exceed 64 entries")
++	}
++	for key, value := range o.Labels {
++		if key == "" || len(key) > 256 || len(value) > 4096 || strings.ContainsRune(key, 0) || strings.ContainsRune(value, 0) {
++			return fmt.Errorf("invalid process label")
++		}
++	}
+ 	if err := ValidateMounts(o.Mounts); err != nil {
+ 		return err
+ 	}
+--- /dev/null
++++ b/api/service/exec/labels_test.go
+@@ -0,0 +1,21 @@
++// SPDX-License-Identifier: MPL-2.0
++package exec
++
++import "testing"
++
++func TestProcessLabelsAreValidatedAndCopied(t *testing.T) {
++	options := ProcessOptions{Labels: map[string]string{"bee.attempt_id": "attempt-1"}}
++	clone, err := options.Clone()
++	if err != nil {
++		t.Fatal(err)
++	}
++	options.Labels["bee.attempt_id"] = "changed"
++	if clone.Labels["bee.attempt_id"] != "attempt-1" {
++		t.Fatal("retained mutable labels")
++	}
++	for _, labels := range []map[string]string{{"": "bad"}, {"bad\x00": "value"}, {"key": "bad\x00"}} {
++		if _, err := (ProcessOptions{Labels: labels}).Clone(); err == nil {
++			t.Fatal("accepted malformed labels")
++		}
++	}
++}
+--- a/runtime/lua/modules/exec/options.go
++++ b/runtime/lua/modules/exec/options.go
+@@ -47,6 +47,29 @@
+ 		})
+ 		if envErr != nil {
+ 			return apiexec.ProcessOptions{}, envErr
++		}
++	}
++	if value := table.RawGetString("labels"); value != lua.LNil {
++		labels, ok := value.(*lua.LTable)
++		if !ok {
++			return options, fmt.Errorf("labels must be a table")
++		}
++		options.Labels = make(map[string]string)
++		var labelErr error
++		labels.ForEach(func(key, value lua.LValue) {
++			name, nameOK := key.(lua.LString)
++			entry, entryOK := value.(lua.LString)
++			if !nameOK || !entryOK {
++				labelErr = fmt.Errorf("labels keys and values must be strings")
++				return
++			}
++			options.Labels[string(name)] = string(entry)
++		})
++		if labelErr != nil {
++			return apiexec.ProcessOptions{}, labelErr
++		}
++		if err := options.Validate(); err != nil {
++			return apiexec.ProcessOptions{}, err
+ 		}
+ 	}
+ 	if value := table.RawGetString("process_group"); value != lua.LNil {
+--- a/runtime/lua/modules/exec/types.go
++++ b/runtime/lua/modules/exec/types.go
+@@ -37,6 +37,7 @@
+ 		OptField("pty", ptyOptionsType).
+ 		OptField("process_group", typ.Boolean).
+ 		OptField("mounts", typ.NewArray(mountType)).
++		OptField("labels", typ.NewMap(typ.String, typ.String)).
+ 		Build()
+ 	processExitType = typ.NewRecord().
+ 		Field("code", typ.Integer).
+--- a/runtime/lua/modules/exec/executor.go
++++ b/runtime/lua/modules/exec/executor.go
+@@ -201,6 +201,7 @@
+ 	return attrs.Bag{
+ 		"work_dir":      options.WorkDir,
+ 		"env_names":     envNames,
++		"labels":        options.Labels,
+ 		"pty":           terminal,
+ 		"process_group": processGroup,
+ 	}
+--- a/service/exec/docker/docker.go
++++ b/service/exec/docker/docker.go
+@@ -148,6 +148,7 @@
+ 		networkMode:     e.networkMode,
+ 		volumes:         e.volumes,
+ 		mounts:          options.Mounts,
++		labels:          options.Labels,
+ 		user:            e.user,
+ 		memoryLimit:     e.memoryLimit,
+ 		cpuQuota:        e.cpuQuota,
+@@ -197,6 +198,7 @@
+ 	user            string
+ 	capDrop         []string
+ 	volumes         []string
++	labels          map[string]string
+ 	mounts          []execapi.Mount
+ 	cmd             []string
+ 	capAdd          []string
+@@ -266,6 +268,7 @@
+ 
+ 	config := &container.Config{
+ 		Image:        p.image,
++		Labels:       p.labels,
+ 		Cmd:          p.cmd,
+ 		Env:          p.env,
+ 		WorkingDir:   p.workDir,

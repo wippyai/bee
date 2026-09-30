@@ -12,6 +12,12 @@
       "sqlite_preupdate_hook",
       "meshclient",
       "physicalclient"
+    ],
+    "patches": [
+      {
+        "path": "build/patches/docker-process-labels.patch",
+        "sha256": "7a85e199ac3e14927f2b6e8adb603574265636b03515abd8890ae08f29579ace"
+      }
     ]
   },
   "application": {

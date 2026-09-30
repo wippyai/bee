@@ -128,7 +128,7 @@ local function open(request: Object): Reply
             if call_error then return unavailable(tostring(call_error), operation_key) end
             local reply = object(raw)
             if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
-            return reply :: Reply
+            return {ok = reply.ok, value = reply.value, error = object(reply.error)}
         end
     end
     local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision, nil, nil, nil, true)
@@ -287,9 +287,9 @@ local function hook_boundary(request: Object): Reply
     if err or not route then return unavailable(err or "interactive route unavailable", event_key) end
     if route.delivery ~= "hook" then return succeed({}) end
     if route.native_attempt_id ~= attempt then return fail("STALE", "hook belongs to an earlier native attachment", event_key) end
-    local event_digest, digest_error = hash.sha256(event_key :: string)
+    local event_digest, digest_error = hash.sha256(event_key)
     if not event_digest then return unavailable(tostring(digest_error), event_key) end
-    local boundary_key = event_digest :: string
+    local boundary_key = event_digest
     if event ~= "UserPromptSubmit" then
         local active = stored and object(stored.active_turn)
         if not active then return succeed({}) end
@@ -341,7 +341,7 @@ local function send(request: Object): Reply
     local output_schema = request.output == nil and "bee:Text@1" or ref(request.output)
     if not output_schema then return fail("INVALID", "output must be a schema ref", operation_key) end
     local stored = journal.invoke("session_describe", {session = session})
-    local route = object(stored) and object((object(stored) :: Object).route)
+    local route = object(stored) and object((object(stored)).route)
     if route and route.delivery == "hook" and output_schema ~= "bee:Text@1" then
         return fail("INVALID", "interactive delivery supports Text acknowledgments", operation_key)
     end
@@ -415,12 +415,12 @@ local function work_observation(subject: string): (Object?, string?)
     local row = object(value)
     local state = row and work_value(row)
     if not state then return nil, "Threads returned a malformed work state" end
-    local result = object((state :: Object).result)
-    local cursor = tostring((state :: Object).revision)
+    local result = object((state).result)
+    local cursor = tostring((state).revision)
     if result then
         return {subject_kind = "work", subject = subject, cursor = cursor, tag = "ready", result = result}, nil
     end
-    local uncertainty = object((state :: Object).uncertainty)
+    local uncertainty = object((state).uncertainty)
     if uncertainty then
         return {subject_kind = "work", subject = subject, cursor = cursor, tag = "uncertain", evidence = uncertainty}, nil
     end
@@ -459,9 +459,9 @@ end
 operation_state = function(subject: string): (Object?, string?)
     local description, describe_error = op_descriptor(subject)
     if not description then return nil, describe_error end
-    local receipt, receipt_error = operation_receipt(description :: Object)
+    local receipt, receipt_error = operation_receipt(description)
     if not receipt then return nil, receipt_error end
-    local target = ref((description :: Object).target)
+    local target = ref((description).target)
     if not target then return nil, "operation target is malformed" end
     local observation: Object
     if receipt.effect == "cancel" then
@@ -469,8 +469,8 @@ operation_state = function(subject: string): (Object?, string?)
         if work_error or not value then return nil, work_error or "cancelled work is unavailable" end
         local state, state_error = work_value(value)
         if not state then return nil, state_error end
-        local work_result = object((state :: Object).result)
-        local uncertainty = object((state :: Object).uncertainty)
+        local work_result = object((state).result)
+        local uncertainty = object((state).uncertainty)
         local cursor = "1"
         if work_result then
             local cancelled = work_result.outcome == "cancelled"
@@ -502,7 +502,7 @@ operation_state = function(subject: string): (Object?, string?)
         observation = {subject_kind = "operation", subject = subject, cursor = "1", tag = "ready",
             result = {kind = "receipt", value = receipt}}
     end
-    return {operation = subject, operation_key = (description :: Object).operation_key,
+    return {operation = subject, operation_key = (description).operation_key,
         revision = 1, receipt = receipt, observation = observation}, nil
 end
 
@@ -516,7 +516,7 @@ local function await(request: Object): Reply
     elseif subject:sub(1, 3) == "bo:" then
         local state, state_error = operation_state(subject)
         if not state then return unavailable(state_error or "operation is unavailable", nil) end
-        return succeed((state :: Object).observation)
+        return succeed((state).observation)
     end
     return fail("INVALID", "await needs a work or operation ref")
 end
@@ -541,7 +541,7 @@ end
 
 local function finish_closing(session: string, current: Object, operation_key: string): string?
     if current.lifecycle ~= "closing" or current.queue_count > 0
-        or (object(current.execution) and (object(current.execution) :: Object).state == "running") then return nil end
+        or (object(current.execution) and (object(current.execution)).state == "running") then return nil end
     local close_key, key_error = internal_key("close-final", operation_key)
     if not close_key then return key_error or "cannot derive final close operation key" end
     local _, close_error = journal.invoke("session_transition", {session = session, state = "closed",
@@ -588,7 +588,7 @@ local function cancel(request: Object): Reply
         or bounds.fields(request, {"work", "reason", "expected_incarnation", "operation_key"}) then
         return fail("INVALID", "cancel requires a work ref, optional reason, and operation_key", operation_key)
     end
-    local cancel_operation_key = operation_key :: string
+    local cancel_operation_key = operation_key
     if request.expected_incarnation ~= nil and request.expected_incarnation ~= 1 then
         return fail("STALE", "session incarnation changed", operation_key)
     end
@@ -686,8 +686,8 @@ local function join(request: Object): Reply
         works[index] = work
         local observation, observe_error = work_observation(work)
         if not observation then return unavailable(observe_error or "cannot observe joined work", operation_key) end
-        children[index] = observation :: Object
-        local tagged = observation :: Object
+        children[index] = observation
+        local tagged = observation
         if tagged.tag == "pending" then pending = true
         elseif tagged.tag == "blocked" then blocked = object(tagged.blocker)
         elseif tagged.tag == "uncertain" then uncertain = object(tagged.evidence)
@@ -707,14 +707,14 @@ local function join(request: Object): Reply
     elseif blocked then base.tag = "blocked"; base.blocker = blocked
     elseif policy == "first_success" and #successful > 0 then
         base.tag = "ready"; base.result = {succeeded = true, winners = successful, values = values}
-    elseif policy == "quorum" and #successful >= (quorum :: integer) then
+    elseif policy == "quorum" and #successful >= (quorum) then
         base.tag = "ready"; base.result = {succeeded = true, winners = successful, values = values}
     elseif pending then
         base.tag = "pending"; base.reason = "timeout"
     else
         local all_success = #successful == #works
         local succeeded = policy == "all_settled" or policy == "all_success" and all_success
-            or policy == "first_success" and #successful > 0 or policy == "quorum" and #successful >= (quorum :: integer)
+            or policy == "first_success" and #successful > 0 or policy == "quorum" and #successful >= (quorum)
         base.tag = "ready"
         local result: Object = {succeeded = succeeded, winners = successful}
         if succeeded then result.values = values end
@@ -747,7 +747,7 @@ local function list(request: Object): Reply
     local refs = scan and scan.items
     if type(refs) ~= "table" then return unavailable("Threads returned a malformed session page", nil) end
     local items: {Object} = {}
-    for _, raw_ref in ipairs(refs :: {unknown}) do
+    for _, raw_ref in ipairs(refs) do
         local session = ref(raw_ref)
         if not session then return unavailable("Threads returned a malformed session ref", nil) end
         local current, read_error = describe(session)

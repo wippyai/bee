@@ -22,7 +22,7 @@ end
 
 local function call(target: unknown, request: Object, actor: security.Actor): (Object?, string?, string?)
     if type(target) ~= "string" or target == "" then return nil, "INVALID", "placement binding omits the required operation" end
-    local raw, call_error = funcs.new():with_actor(actor):call(target :: string, request)
+    local raw, call_error = funcs.new():with_actor(actor):call(target, request)
     if call_error then return nil, "UNAVAILABLE", tostring(call_error) end
     local reply = object(raw)
     if not reply then return nil, "INTERNAL", target .. " returned a malformed reply" end
@@ -55,7 +55,7 @@ function M.stop(methods: unknown, attempt_id: string, stored_route: unknown): Re
     if not owner or not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then
         return {state = "uncertain", evidence = evidence("session route has no workspace-bound placement owner", attempt_id, nil, nil)}
     end
-    local actor, actor_error = security.new_actor(owner :: string, {workspace_id = workspace})
+    local actor, actor_error = security.new_actor(owner, {workspace_id = workspace})
     if not actor then return {state = "uncertain", evidence = evidence("placement owner cannot be restored: " .. tostring(actor_error), attempt_id, nil, nil)} end
     local before, before_code, before_error = call(placement.reconcile, {attempt_id = attempt_id}, actor)
     if not before then

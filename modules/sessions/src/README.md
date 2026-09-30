@@ -25,7 +25,10 @@ the exact host open grant. Setup associates the definition's retained resources
 and credentials before creating the Session.
 
 The scheduler runs independent Sessions concurrently through asynchronous turn
-workers, with at most one worker per Session. Executor errors become durable
+workers, with at most one worker per Session. Its journal adapter decodes Work
+receipts, reservations, fenced turns and scan pages into scheduler records;
+the executor registry decodes execution results before returning them to the
+scheduler. Executor errors become durable
 uncertainty and do not trigger a blind retry.
 
 Native interactive admission attaches a Session to its workspace thread when

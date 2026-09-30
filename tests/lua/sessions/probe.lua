@@ -18,12 +18,18 @@ function M.run(input: {scenario: string}): {[string]: unknown}
         return {code = code(fault), session = session and session:ref() or ""}
     end
     if input.scenario == "keys" then
-        local session = assert(sessions.get("bs:n:w:s1"))
-        local first = assert(session:send({input = "one", operation_key = "send/one"}))
-        local again = assert(session:send({input = "one", operation_key = "send/one"}))
-        local labelled = assert(session:send({input = "two", operation_key = "send/two"}))
-        local opened = assert(sessions.open({definition = "research:worker", operation_key = "open/one"}))
-        local other = assert(sessions.open({definition = "research:worker", operation_key = "open/two"}))
+        local session, session_error = sessions.get("bs:n:w:s1")
+        assert(session, tostring(session_error and session_error.message))
+        local first, first_error = session:send({input = "one", operation_key = "send/one"})
+        assert(first, tostring(first_error and first_error.message))
+        local again, again_error = session:send({input = "one", operation_key = "send/one"})
+        assert(again, tostring(again_error and again_error.message))
+        local labelled, labelled_error = session:send({input = "two", operation_key = "send/two"})
+        assert(labelled, tostring(labelled_error and labelled_error.message))
+        local opened, opened_error = sessions.open({definition = "research:worker", operation_key = "open/one"})
+        assert(opened, tostring(opened_error and opened_error.message))
+        local other, other_error = sessions.open({definition = "research:worker", operation_key = "open/two"})
+        assert(other, tostring(other_error and other_error.message))
         return {first = first.receipt and first.receipt.operation or "", again = again.receipt and again.receipt.operation or "",
             labelled = labelled.receipt and labelled.receipt.operation or "",
             opened = opened.receipt and opened.receipt.operation or "", other = other.receipt and other.receipt.operation or ""}

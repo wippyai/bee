@@ -54,7 +54,7 @@ end
 
 local function array(value: unknown, max: integer, validate: (unknown) -> boolean): (boolean, string?)
     if type(value) ~= "table" then return false, "must be a list" end
-    local list = value :: {unknown}
+    local list = value
     local count = 0
     for key in pairs(list) do
         if type(key) ~= "number" or key < 1 or math.floor(key) ~= key then return false, "must be a list" end
@@ -92,21 +92,21 @@ local function decode_reasons(value: unknown): ({string}?, string?)
     if value == nil then return {}, nil end
     local ok, err = array(value, 64, function(item): boolean return bounded_text(item, 16384) ~= nil end)
     if not ok then return nil, "reasons " .. tostring(err) end
-    return value :: {string}, nil
+    return value, nil
 end
 
 local function decode_features(value: unknown): ({string}?, string?)
     if value == nil then return {}, nil end
     local ok, err = array(value, 64, function(item): boolean return bounded_id(item) ~= nil end)
     if not ok then return nil, "features " .. tostring(err) end
-    return value :: {string}, nil
+    return value, nil
 end
 
 local function decode_actions(value: unknown): ({Action}?, string?)
     if value == nil then return {}, nil end
     if type(value) ~= "table" then return nil, "actions must be a list" end
     local actions: {Action} = {}
-    local list = value :: {unknown}
+    local list = value
     local seen: {[string]: boolean} = {}
     for key_index in pairs(list) do
         if type(key_index) ~= "number" or key_index < 1 or math.floor(key_index) ~= key_index then return nil, "actions must be a list" end
@@ -114,7 +114,7 @@ local function decode_actions(value: unknown): ({Action}?, string?)
     for index, raw in ipairs(list) do
         if index > 64 then return nil, "actions exceeds 64 items" end
         if type(raw) ~= "table" then return nil, "actions contains an invalid item" end
-        local action = raw :: {[string]: unknown}
+        local action = raw
         local operation = bounded_id(action.operation)
         local label = bounded_text(action.label, 16384)
         if not operation or not label or label == "" then return nil, "actions contains an invalid item" end
@@ -208,7 +208,7 @@ end
 
 local function valid_candidate_value(raw: unknown): boolean
     if type(raw) ~= "table" then return false end
-    local item = raw :: {[string]: unknown}
+    local item = raw
     if not bounded_id(item.ref) or not member(item.kind, {"definition", "profile", "executor"}) then return false end
     if item.revision ~= nil and not is_integer(item.revision, 1) then return false end
     if not bounded_text(item.title, 512) or item.title == "" or not member(item.status, M.STATUSES) then return false end
@@ -220,7 +220,7 @@ end
 
 local function valid_fault(raw: unknown): boolean
     if type(raw) ~= "table" then return false end
-    local fault = raw :: {[string]: unknown}
+    local fault = raw
     return bounded_id(fault.code) ~= nil and bounded_text(fault.message, 16384) ~= nil
         and member(fault.retry, {"never", "same_key", "refresh", "reconcile"})
 end

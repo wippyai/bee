@@ -71,6 +71,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local connection_info: connection.Info = connection.new(owner, workspace_id, ctx.get("bee.display_id"), ctx.get("bee.hive_supervisor"))
     -- The workspace menu of a display the desktop bridge serves.
     local workspaces: workspace_menu.Menu? = nil
+    -- The shown workspace's saved label once a catalog page names it; the
+    -- header and the connection panel fall back to the identity name.
+    local workspace_label: string? = nil
     local function ask_workspaces(query: {label: string?, after: string?})
         local current = workspaces
         if not current then return end
@@ -397,7 +400,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
             end
         end
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
-        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. names.label(workspace_id),
+        local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. (workspace_label or names.label(workspace_id)),
             preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated,
             transfers, display_id, workspaces)
         tab_hits = frame.tabs
@@ -477,7 +480,11 @@ local function main(owner: string, initial_application: string?, secondary_appli
         elseif selected.channel == workspace_pages then
             local message = selected.value
             local current = workspaces
-            if current and tostring(message:from()) == owner and workspace_menu.apply(current, message:payload():data()) then dirty = true end
+            if current and tostring(message:from()) == owner and workspace_menu.apply(current, message:payload():data()) then
+                workspace_label = workspace_menu.current_label(current, workspace_id) or workspace_label
+                connection.set_workspace_label(connection_info, workspace_label or "")
+                dirty = true
+            end
         elseif selected.channel == switch_results then
             local message = selected.value
             local current = workspaces

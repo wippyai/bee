@@ -83,9 +83,10 @@ local function define_tests()
             local selected = find(rows, "›Legacy billing")
             test.not_nil(selected)
             test.contains(rows[23], "Enter Open")
+            test.contains(rows[23], "I Inspect")
             test.contains(rows[23], "A Archive")
             test.contains(rows[23], "N New")
-            test.contains(rows[24], "↑↓ move · Enter open · N new · / search · S serve · A archive · Esc close")
+            test.contains(rows[24], "↑↓ move · Enter open · I inspect · N new · / search · A archive · Esc close")
             test.is_nil(find(rows, "APPLICATIONS"))
             model.show(state, true)
             local detail = check(80, 24, state)
@@ -200,7 +201,7 @@ local function define_tests()
             local drawn = view.draw(120, 36, appearance.defaults(), state, 0)
             local kinds: {[string]: boolean} = {}
             for _, hit in ipairs(drawn.hits) do kinds[hit.kind] = true end
-            for _, kind in ipairs({"workspace", "active", "archived", "field", "open", "new", "search", "refresh", "serve", "change"}) do
+            for _, kind in ipairs({"workspace", "active", "archived", "field", "open", "inspect", "new", "search", "refresh", "change"}) do
                 test.is_true(kinds[kind] == true)
             end
             local row = frame.hit(drawn.hits, 10, 8)

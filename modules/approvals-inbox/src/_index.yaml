@@ -50,12 +50,12 @@ entries:
     type: bee.application
     application:
       api_version: 1
-      title: Approvals
+      title: Needs you
       icon: '!'
       lifetime: view
       revision: '1'
       instance_policy: singleton
-      group: Tools
+      group: ''
       role: approvals
       resume_schema: inbox.v1
       restart_policy: manual
@@ -132,5 +132,5 @@ entries:
     comment: The inbox reads the owner's inbox and requests and submits explicit decisions and withdrawals under the process actor; the owner authorizes each call
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, bee.approvals.binding:decide_batch, bee.approvals.binding:withdraw, bee.gov.binding:destination_call, bee.approvals.inbox:workspaces, bee.approvals.inbox:sources]
+    resources: [bee.workspace.catalog:read, bee.approvals.binding:inbox, bee.approvals.binding:feed_snapshot, bee.approvals.binding:feed_read_after, bee.approvals.binding:read, bee.approvals.binding:decide, bee.approvals.binding:decide_batch, bee.approvals.binding:withdraw, bee.gov.binding:destination_call, bee.approvals.inbox:workspaces, bee.approvals.inbox:sources]
     effect: allow

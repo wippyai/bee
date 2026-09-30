@@ -1,0 +1,6 @@
+organization: bee
+module: files
+type: library
+version: 0.1.0-dev
+description: File tree and highlighted syntax preview application
+license: MIT

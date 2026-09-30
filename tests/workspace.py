@@ -341,7 +341,7 @@ AGENT_PACKAGES = (
 )
 BUNDLE_PACKAGES = (
     "bee/hive-manager", "bee/threads-timeline", "bee/workspace-manager",
-    "bee/host-processes", "bee/hub-modules", "bee/gov-overlays", *AGENT_PACKAGES,
+    "bee/host-processes", "bee/hub-modules", "bee/gov-overlays", "bee/files", *AGENT_PACKAGES,
 )
 
 

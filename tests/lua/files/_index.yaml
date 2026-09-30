@@ -1,0 +1,38 @@
+version: '1.0'
+namespace: bee.files.test
+entries:
+- name: syntax_test
+  kind: function.lua
+  source: file://syntax_test.lua
+  method: run
+  modules: [treesitter]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    syntax: bee.files:syntax
+    appearance: bee.application:appearance
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.files:protocol
+- name: gitignore_test
+  kind: function.lua
+  source: file://gitignore_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    gitignore: bee.files:gitignore
+- name: tree_test
+  kind: function.lua
+  source: file://tree_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    tree: bee.files:tree
+    gitignore: bee.files:gitignore

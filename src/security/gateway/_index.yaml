@@ -149,10 +149,10 @@ entries:
 - name: gateway_tool_session_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject supplies its authenticated context and opens the bee.sessions owner contracts for the default session tools; owners authorize every operation against that subject again
+    comment: A bound MCP subject supplies its authenticated context and scope to the bee.sessions owner contracts for the default session tools; owners authorize every operation against that subject again
   policy:
-    expression: '(action == "contract.context" && resource == "context") || (action == "contract.open" && resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$") || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
-    actions: [contract.context, contract.open, contract.call, funcs.call]
+    expression: '(action == "contract.context" && resource == "context") || (action == "contract.security" && resource == "security") || (action == "contract.open" && resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$") || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
+    actions: [contract.context, contract.security, contract.open, contract.call, funcs.call]
     resources: ['*']
     effect: allow
 - name: gateway_tool_install_policy

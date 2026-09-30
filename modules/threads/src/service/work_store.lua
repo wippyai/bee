@@ -8,6 +8,7 @@ local system = require("system")
 local access = require("access")
 local transaction = require("transaction")
 local thread_owner = require("thread_owner")
+local reader = require("reader")
 local record = require("record")
 local observation = require("observation")
 local record_types = require("record_types")
@@ -380,7 +381,18 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         if existing_thread then
             local head, head_error = query_one(tx, "SELECT owner_actor, workspace_id FROM bee_thread_heads WHERE thread_id = ?", {existing_thread}, "interactive thread")
             if head_error then return transaction.storage_failure(head_error) end
-            if not head or head.owner_actor ~= caller or head.workspace_id ~= workspace then return failure("DENIED", "interactive session requires its caller-owned workspace thread") end
+            if not head or head.workspace_id ~= workspace then return failure("DENIED", "interactive session requires its workspace thread") end
+            local member, member_error = reader.member(tx, existing_thread, caller :: string)
+            if member_error then return transaction.storage_failure(member_error) end
+            if not member or not member.active then
+                local stable, alias_error = reader.app_live_stable(tx, caller :: string)
+                if alias_error then return transaction.storage_failure(alias_error) end
+                if stable then member, member_error = reader.app_family_member(tx, existing_thread, stable) end
+                if member_error then return transaction.storage_failure(member_error) end
+            end
+            if not member or not member.active or (member.role ~= "owner" and member.role ~= "participant") then
+                return failure("DENIED", "interactive session requires active participant membership in its workspace thread")
+            end
         else
             local head_error = transaction.insert_head(tx, {thread_id = thread_id, owner_actor = caller :: string, title = title :: string,
                 created_at = now, workspace_id = workspace})

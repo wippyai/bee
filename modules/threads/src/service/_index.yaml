@@ -410,6 +410,7 @@ entries:
     access: bee.threads.service:access
     transaction: bee.threads.persist:transaction
     thread_owner: bee.threads.persist:owner
+    reader: bee.threads.persist:reader
     record: bee.threads.records:record
     observation: bee.threads.records:observation
     record_types: bee.threads.records:types

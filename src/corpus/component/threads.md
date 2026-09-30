@@ -143,3 +143,5 @@ commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and
 changed requests conflict. Capacity for the terminal records still owed is
 reserved before new work is admitted.
+
+An interactive Session may use an existing workspace thread only when its authenticated application has active owner or participant membership, including a live broker-attested application family. Observer membership and workspace visibility alone do not authorize attachment.

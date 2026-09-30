@@ -439,18 +439,23 @@ decode_row = function(raw: unknown): (Row?, string?)
     if not proposal or not proposal_json or proposal_json ~= value.proposal_json or proposal_digest_check ~= proposal_digest then
         return nil, "approval proposal is corrupt: " .. tostring(proposal_error or "digest or canonical form differs")
     end
+    local stored_proposal_json: string = proposal_json
     local prompt_value, prompt_error = stored_json(value, "prompt_json", false, true)
     if prompt_error then return nil, prompt_error end
     local prompt, content_error = values.content(prompt_value)
     if not prompt then return nil, "approval prompt is corrupt: " .. tostring(content_error) end
     local prompt_json = canonical.encode(prompt)
-    if prompt_json ~= value.prompt_json then return nil, "approval prompt is not canonical" end
+    if not prompt_json or prompt_json ~= value.prompt_json then return nil, "approval prompt is not canonical" end
     local schema_value, schema_error = stored_json(value, "response_schema_json", false, true)
     if schema_error then return nil, schema_error end
+    local response_schema_json = value.response_schema_json
+    if type(response_schema_json) ~= "string" then return nil, "approval response schema is corrupt" end
     local response_schema = bounds.object(schema_value)
     if not response_schema then return nil, "approval response schema is corrupt" end
     local thread_id, thread_valid = optional_text(value, "thread_id")
     if thread_id and not bounds.id(thread_id) then thread_valid = false end
+    local binding_json, binding_text_valid = optional_text(value, "binding_json")
+    if not binding_text_valid then return nil, "approval binding is corrupt" end
     local binding_value: unknown = nil
     local binding: Object? = nil
     if value.binding_json ~= nil then
@@ -511,16 +516,16 @@ decode_row = function(raw: unknown): (Row?, string?)
         or ((effect_completed_at ~= nil) ~= (effect_result ~= nil)) then
         return nil, "approval effect metadata is corrupt"
     end
-    local row: Row = {approval_id = approval_id :: string, owner_node = owner_node :: string, owner_incarnation = owner_incarnation :: integer,
-        workspace_id = workspace_id :: string, requester_id = requester_id :: string, requester_key = requester_key :: string, request_digest = request_digest :: string,
-        request_kind = request_kind :: RequestKind, policy = policy :: string, proposal_json = value.proposal_json :: string, proposal = proposal,
-        proposal_digest = proposal_digest :: string, prompt_json = value.prompt_json :: string, prompt = prompt,
-        response_schema_json = value.response_schema_json :: string, response_schema = response_schema,
-        thread_id = thread_id, binding_json = value.binding_json :: string?, binding = binding, revision = revision, state = state,
+    local row: Row = {approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation,
+        workspace_id = workspace_id, requester_id = requester_id, requester_key = requester_key, request_digest = request_digest,
+        request_kind = request_kind, policy = policy, proposal_json = stored_proposal_json, proposal = proposal,
+        proposal_digest = proposal_digest, prompt_json = prompt_json, prompt = prompt,
+        response_schema_json = response_schema_json, response_schema = response_schema,
+        thread_id = thread_id, binding_json = binding_json, binding = binding, revision = revision, state = state,
         decision = decision, decider_id = decider_id, decided_at = decided_at,
         response_json = response_json, response = response, validated_incarnation = validated_incarnation,
         validated_by = validated_by, validated_at = validated_at, consumer_id = consumer_id, consumed_effect = consumed_effect,
-        consumed_at = consumed_at, expires_ms = expires_ms, expires_at = expires_at, created_at = created_at :: string,
+        consumed_at = consumed_at, expires_ms = expires_ms, expires_at = expires_at, created_at = created_at,
         updated_at = updated_at, effect_completed_at = effect_completed_at, effect_result_json = effect_result_json,
         effect_result = effect_result}
     return row, nil
@@ -574,7 +579,7 @@ local function prepare_request(executor: funcs.Executor, actor: string, object: 
         for _ = 1, M.BINDING_PAGES do
             local page, refused = thread_reply(executor, M.THREAD_READ, {thread_id = thread_id, cursor = cursor, filter = {kinds = {"attempt.prepared", "attempt.started"}, action_id = action_id}})
             if not page then return nil, refused end
-            local records = type(page.records) == "table" and (page.records :: {unknown}) or nil
+            local records = type(page.records) == "table" and (page.records) or nil
             if not records then return nil, failure("INTERNAL", "thread authority returned malformed records") end
             for _, raw in ipairs(records) do
                 local record = bounds.object(raw)
@@ -743,7 +748,9 @@ local function op_decide_batch(tx: sql.Transaction, actor: string, object: Objec
     end
     local views: {unknown} = {}
     for _, raw in ipairs(items) do
-        local settled = op_decide(tx, actor, raw :: Object, now, prepared)
+        local decision = bounds.object(raw)
+        if not decision then return failure("INVALID_ARGUMENT", "decision must be an object") end
+        local settled = op_decide(tx, actor, decision, now, prepared)
         if not settled.ok then
             local fault = bounds.object(raw)
             return failure(settled.code or "INTERNAL", tostring(fault and fault.approval_id) .. ": " .. tostring(settled.message), bounds.object(settled.value))
@@ -942,7 +949,7 @@ local function op_inbox(tx: sql.Transaction, actor: string, object: Object, now:
             return storage("approval inbox entry is corrupt")
         end
         next_seq = sequence
-        local row, load_error = load(tx, approval_id :: string)
+        local row, load_error = load(tx, approval_id)
         if load_error then return storage(load_error) end
         if row then
             local visible, policy_error = eligible(actor, row)
@@ -1051,7 +1058,7 @@ local function op_feed_read_after(tx: sql.Transaction, actor: string, object: Ob
     if not page.ok then return page end
     local value = bounds.object(page.value)
     if not value then return storage("read approval page") end
-    local changes = value.changes :: {Object}
+    local changes = value.changes
     local events: {Object} = {}
     local page_bytes, truncated = 0, false
     local next_cursor = value.next_seq

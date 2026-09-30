@@ -37,6 +37,9 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     local selected_snapshot: selection.Snapshot? = active_selection and selection.snapshot(active_selection) or nil
     local selected_span = active_selection and selection.range(active_selection) or nil
     local selected_style = appearance.style(appearance.selection_text(theme), theme.accent)
+    -- Without color the selection stays visible through reverse video, which
+    -- is emphasis rather than color.
+    local selected_plain = appearance.no_color() and "\27[7m" or nil
     chrome.background(canvas, width, height, prefs)
     if #model.visible(scene) == 0 then
         chrome.welcome(canvas, width, height, prefs, false)
@@ -65,7 +68,8 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
                         -- A selected ANSI slice must not reset its highlight.
                         -- Native cut retains cell boundaries; plain drops controls.
                         local slice = text.plain(text.cut(rows[y] or "", first, last))
-                        canvas:put(body.x + first, body.y + y - 1, selected_style .. slice .. "\27[0m", last - first)
+                        local mark = selected_plain or selected_style
+                        canvas:put(body.x + first, body.y + y - 1, mark .. slice .. "\27[0m", last - first)
                     end
                 end
                 local caret = content and content.cursor

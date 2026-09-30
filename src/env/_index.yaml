@@ -39,6 +39,12 @@ entries:
   storage: bee.env:workspace_environment
   variable: HOME
   readonly: true
+- name: no_color
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: NO_COLOR
+  default: ""
+  readonly: true
 - name: machine_login_source
   kind: fs.directory
   directory: ${env:bee.env:machine_home}

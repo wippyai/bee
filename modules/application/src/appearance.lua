@@ -127,7 +127,30 @@ end
 local function rgb(hex: string): string
     return tostring(tonumber(hex:sub(2, 3), 16)) .. ";" .. tostring(tonumber(hex:sub(4, 5), 16)) .. ";" .. tostring(tonumber(hex:sub(6, 7), 16))
 end
+-- Plain output for NO_COLOR terminals: style emits no color escapes while
+-- selection and status stay readable text with non-color emphasis. The host
+-- grants NO_COLOR visibility per process through the env module; without
+-- that grant the desktop keeps its themed colors.
+local forced: boolean? = nil
+local granted: boolean? = nil
+function M.set_no_color(value: boolean?) forced = value end
+function M.no_color(): boolean
+    if forced ~= nil then return forced end
+    if granted == nil then
+        granted = false
+        local ok, library = pcall(require, "env")
+        if ok and type(library) == "table" then
+            local get = (library :: {[string]: unknown}).get
+            if type(get) == "function" then
+                local value: unknown = (get :: (string) -> (unknown, unknown))("bee.env:no_color")
+                granted = type(value) == "string" and value ~= ""
+            end
+        end
+    end
+    return granted == true
+end
 function M.style(foreground: string, background: string): string
+    if M.no_color() then return "" end
     return "\27[38;2;" .. rgb(foreground) .. "m\27[48;2;" .. rgb(background) .. "m"
 end
 return M

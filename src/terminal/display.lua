@@ -1,6 +1,7 @@
 -- MIT. Physical output belongs to the stable owner; presenters receive a viewport.
 local tty = require("tty")
 local chrome = require("chrome")
+local appearance = require("appearance")
 type Display = {output: tty.Surface, view: tty.Viewport, width: integer, height: integer, last_rows: {string}}
 local M = {}
 local function viewport(width: integer, height: integer): tty.Viewport
@@ -59,7 +60,8 @@ function M.paused(value: Display, emergency: boolean?): ()
     local canvas = tty.canvas(value.width, value.height)
     canvas:clear(" ")
     for y = 1, value.height do canvas:put(1, y, value.last_rows[y] or "", value.width) end
-    canvas:put(1, value.height, "\27[38;2;255;201;99;48;2;23;32;44m"
+    local theme = appearance.theme(appearance.defaults().theme)
+    canvas:put(1, value.height, appearance.style(theme.accent, theme.surface)
         .. (emergency and " Desktop paused. F12 Retry / Ctrl+Q Emergency exit" or " Desktop paused. F12 Retry / Ctrl+Q Exit")
         .. string.rep(" ", value.width) .. "\27[0m", value.width)
     value.output:present(canvas:rows(), {cursor = {x = 1, y = 1, visible = false}})

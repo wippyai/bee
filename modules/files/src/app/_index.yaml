@@ -38,7 +38,8 @@ entries:
       title: Files
       icon: F
       lifetime: view
-      revision: '1'
+      revision: '2'
       instance_policy: singleton
+      navigation_topic: bee.files.navigate
       group: Tools
       role: inspection

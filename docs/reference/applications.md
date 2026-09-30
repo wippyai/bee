@@ -19,8 +19,9 @@ memory; it is not durable exactly-once execution.
 An application definition uses `meta.type = bee.application` and
 `meta.application` with `api_version: 1`, `lifetime: view`, a nonempty
 `revision` and `title`, and `instance_policy: singleton|multiple`. It may
-declare an icon, slash-separated menu group, role and bounded
-`application.commands`. Roles and metadata affect discovery and presentation;
+declare an icon, slash-separated menu group, role, `navigation_topic` and bounded
+`application.commands`. Navigation topics are at most 160 characters, use
+letters, digits, underscores, dots or hyphens, and end in `.navigate`. Roles and metadata affect discovery and presentation;
 they never grant authority. Executable or configuration changes require a new
 revision, and one revision identifies one exact runnable definition.
 
@@ -244,9 +245,15 @@ checkpoints. A singleton opened with a different live association returns
 
 An open may carry up to 16 dense string arguments, each at most 1 KiB and 8 KiB
 combined, without control characters. The broker and client validate them.
-Arguments participate in open deduplication, are launch-only, are not accepted
-on close/bind/shutdown, and are not automatically persisted. Focusing a live
-singleton does not deliver new arguments. `bee run definition-id [arguments...]`
+Arguments participate in open deduplication, are not accepted on
+close/bind/shutdown, and are not automatically persisted. A ready singleton
+reopen with nonempty arguments queues `{version = 1, arguments = [...]}` from
+the authenticated broker to the retained producer before returning focus.
+The topic is the running definition's `navigation_topic`, defaulting to
+`bee.application.navigate`. The application authenticates its broker and
+decodes the argument semantics; queued delivery does not acknowledge successful
+navigation. Empty arguments only focus, and a duplicate completed open does
+not redeliver. Admission and thread-owner checks precede delivery. `bee run definition-id [arguments...]`
 uses this boundary; explicit initial arguments take precedence over a selected
 checkpoint.
 

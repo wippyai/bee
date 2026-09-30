@@ -1,6 +1,7 @@
 -- MIT. Protocol and argument parsing for Files application.
 -- Validates file targets, line ranges, and safe workspace paths.
 -- Never admits private paths such as .wippy or traversal escapes.
+local arguments = require("arguments")
 local M = {}
 
 local PRIVATE_PREFIX = ".wippy"
@@ -156,9 +157,11 @@ function M.decode_target(args: {string}?): (Target?, string?)
 
     if line_str then
         start_line, end_line = M.decode_range(line_str)
+        if not start_line then return nil, "invalid line range" end
     end
     if end_line_str and not end_line then
         end_line = parse_line_num(end_line_str)
+        if not end_line or not start_line or end_line < start_line then return nil, "invalid end line" end
     end
 
     return {
@@ -181,6 +184,17 @@ end
 
 function M.decode_navigation(raw: unknown): Target?
     if type(raw) ~= "table" then return nil end
+    if raw.arguments ~= nil then
+        for key in pairs(raw) do
+            if key ~= "version" and key ~= "arguments" then return nil end
+        end
+        if raw.version ~= 1 then return nil end
+        local args = arguments.decode(raw.arguments)
+        if not args then return nil end
+        local target = M.decode_target(args)
+        if not target or target.path == "" then return nil end
+        return M.decode_navigation({path = target.path, line = target.line, end_line = target.end_line})
+    end
     for key in pairs(raw) do
         if key ~= "path" and key ~= "line" and key ~= "end_line" then return nil end
     end

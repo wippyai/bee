@@ -22,7 +22,10 @@ absolute paths are rejected. Directory loads and search results are bounded.
 An agent with approved `bee.application:runtime` access opens Files through
 `application_open`, with `definition_id: bee.files.app:app` and literal
 `arguments: ["src/clock.lua:2-4"]`. The preview marks the requested range.
-Files uses singleton admission; opening an existing instance focuses it under
-the shared application contract. The owning workspace or broker may send a
-bounded `bee.files.navigate` message with `path`, `line` and `end_line`; other
-senders are ignored. This message is not an agent tool.
+Files uses singleton admission; opening an existing instance with new arguments
+moves its retained preview to the requested file and range. Its declared
+`navigation_topic` is `bee.files.navigate`: the broker sends bounded
+`{version = 1, arguments = [...]}` through this same handler after admission
+and thread-owner checks. The owning workspace or broker may also send a
+bounded message with `path`, `line` and `end_line`; other senders, malformed
+ranges and unsafe paths are ignored. This message is not an agent tool.

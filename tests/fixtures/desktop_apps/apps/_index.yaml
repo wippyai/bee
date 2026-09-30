@@ -45,3 +45,19 @@ entries:
       role: ''
   imports:
     client: bee.application:client
+- name: singleton_probe
+  kind: process.lua
+  source: file://singleton.lua
+  method: main
+  modules: [tty, process, channel]
+  imports:
+    client: bee.application:client
+    arguments: bee.application:arguments
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Singleton probe
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton

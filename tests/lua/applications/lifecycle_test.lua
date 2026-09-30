@@ -65,6 +65,17 @@ local function define_tests()
             test.is_false(catalog.replaces(running, descriptor("2", "state.v1", "manual")))
             test.is_false(catalog.replaces(running, nil))
         end)
+        test.it("validates singleton navigation topics without granting authority", function()
+            local value = {api_version = 1, lifetime = "view", title = "Files",
+                revision = "1", instance_policy = "singleton"}
+            test.eq(assert(contract.descriptor("test:app", value)).navigation_topic, "bee.application.navigate")
+            value.navigation_topic = "bee.files.navigate"
+            test.eq(assert(contract.descriptor("test:app", value)).navigation_topic, "bee.files.navigate")
+            for _, topic in ipairs({"", "bee.application.close", "bee.files.navigate\n", string.rep("x", 161) .. ".navigate"}) do
+                value.navigation_topic = topic
+                test.is_nil(contract.descriptor("test:app", value))
+            end
+        end)
         test.it("keeps negotiated close alive until an explicit decision", function()
             local state = lifecycle.start(0)
             state = lifecycle.reduce(state, "ready", 0)

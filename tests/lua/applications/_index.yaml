@@ -166,3 +166,12 @@ entries:
   imports:
     test: wippy.test:test
     appearance: bee.application:appearance
+- name: broker_reopen_test
+  kind: function.lua
+  source: file://broker_reopen_test.lua
+  method: run
+  modules: [process, channel, time, security, tty]
+  meta: {type: test, suite: bee, timeout: "60s"}
+  imports:
+    test: wippy.test:test
+    appearance: bee.application:appearance

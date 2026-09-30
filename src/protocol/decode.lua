@@ -148,8 +148,10 @@ function M.catalog(value: unknown): {CatalogItem}?
         local title, icon = contract.text(item.title, 80), contract.text(item.icon, 8)
         local group, role = contract.text(item.group, 160), contract.text(item.role, 32)
         if not id or id == "" or seen[id] or not revision or not title or not icon or not group or not role then return nil end
+        local topic = contract.navigation_topic(item.navigation_topic)
+        if not topic then return nil end
         seen[id] = true
-        result[#result + 1] = {definition_id = id, definition_revision = revision, title = title, icon = icon, group = group, role = role, singleton = item.singleton, resume_schema = contract.text(item.resume_schema, 80) or "", restart_policy = contract.text(item.restart_policy, 16) or "never"}
+        result[#result + 1] = {definition_id = id, definition_revision = revision, title = title, icon = icon, group = group, role = role, singleton = item.singleton, navigation_topic = topic, resume_schema = contract.text(item.resume_schema, 80) or "", restart_policy = contract.text(item.restart_policy, 16) or "never"}
     end
     return result
 end

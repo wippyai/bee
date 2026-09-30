@@ -26,6 +26,8 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
+  imports:
+    arguments: bee.application:arguments
 - name: gitignore
   kind: library.lua
   source: file://gitignore.lua

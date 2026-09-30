@@ -67,6 +67,21 @@ local function define_tests()
             end
         end)
 
+        test.it("decodes bounded reopen arguments on the existing navigation boundary", function()
+            local target = assert(protocol.decode_navigation({version = 1, arguments = {"src/main.lua:5-8"}}))
+            test.eq(target.path, "src/main.lua")
+            test.eq(target.line, 5)
+            test.eq(target.end_line, 8)
+            for _, raw in ipairs({{version = 2, arguments = {"src/main.lua:5-8"}},
+                {version = 1, arguments = "src/main.lua"}, {version = 1, arguments = {[2] = "src/main.lua"}},
+                {version = 1, arguments = {"../outside.lua:5-8"}}, {version = 1, arguments = {"/outside.lua:5-8"}},
+                {version = 1, arguments = {".wippy/private.db:5-8"}}, {version = 1, arguments = {"src/main.lua"}, path = "other.lua"},
+                {version = 1, arguments = {string.rep("x", 1025)}}, {version = 1, arguments = {"src/main.lua:0"}},
+                {version = 1, arguments = {"src/main.lua", "bad-range"}}}) do
+                test.is_nil(protocol.decode_navigation(raw))
+            end
+        end)
+
         test.it("refuses unsafe or private paths", function()
             local _, err1 = protocol.decode_target({".wippy"})
             test.not_nil(err1)

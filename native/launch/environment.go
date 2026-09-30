@@ -19,6 +19,7 @@ type hostResolver struct {
 	homeDir    func() (string, error)
 	getwd      func() (string, error)
 	executable func() (string, error)
+	binary     func() binaryIdentityFacts
 }
 
 func systemHostResolver() hostResolver {
@@ -27,6 +28,7 @@ func systemHostResolver() hostResolver {
 		homeDir:    os.UserHomeDir,
 		getwd:      os.Getwd,
 		executable: os.Executable,
+		binary:     readBinaryIdentityFacts,
 	}
 }
 
@@ -60,11 +62,27 @@ func newHostEnvironment(resolver hostResolver) (*hostEnvironment, error) {
 			return nil, errors.New("host " + name + " must be an absolute path")
 		}
 	}
-	return &hostEnvironment{resolver: resolver, facts: map[string]string{
+	facts := map[string]string{
 		"home": home,
 		"cwd":  cwd,
 		"self": self,
-	}}, nil
+	}
+	binary := resolver.binary
+	if binary == nil {
+		binary = readBinaryIdentityFacts
+	}
+	identity := binary()
+	for name, value := range map[string]string{
+		"binary_native_module":  identity.NativeModule,
+		"binary_native_version": identity.NativeVersion,
+		"binary_native_modules": identity.NativeModules,
+		"binary_runtime_commit": identity.RuntimeCommit,
+	} {
+		if value != "" {
+			facts[name] = value
+		}
+	}
+	return &hostEnvironment{resolver: resolver, facts: facts}, nil
 }
 
 func safeExecutableName(name string) bool {

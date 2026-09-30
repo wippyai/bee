@@ -89,7 +89,7 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
             if target then return nil, "binding " .. binding_ref .. " declares the driver contract twice", nil end
             local methods = bounds.object(contract.methods)
             if not methods then return nil, "binding " .. binding_ref .. " driver methods must be an object", nil end
-            local method_extra = bounds.fields(methods, {"prepare", "dispatch", "normalize", "configure"})
+            local method_extra = bounds.fields(methods, {"prepare", "dispatch", "normalize", "configure", "locate"})
             if method_extra then return nil, "binding " .. binding_ref .. " driver methods: " .. method_extra, nil end
             for _, name in ipairs({"prepare", "dispatch", "normalize", "configure"}) do
                 local method = bounds.id(methods[name])

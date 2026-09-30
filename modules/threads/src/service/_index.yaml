@@ -463,6 +463,12 @@ entries:
   method: turn_reserve
   imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: turn_recover
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_recover
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: turn_pull
   kind: function.lua
   source: file://work_store_method.lua

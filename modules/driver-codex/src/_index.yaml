@@ -238,6 +238,7 @@ entries:
     command_names: [codex]
     binding_ref: bee.driver.codex:binding
     profile_id: window
+    session_profile_id: session
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]

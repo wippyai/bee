@@ -5,3 +5,9 @@ location and work scheduling. Threads owns the durable session journal and
 transactional work, claim, turn and result records; Sessions never writes its
 tables. Executors are selected by the host and operate through the fenced
 worker contract.
+
+A launch definition may select `session_profile_id` for structured executor
+turns. Sessions admission pins that driver profile while native manual windows
+retain the definition's window profile. Catalog readiness measures the same
+structured route that `open` admits. The real owner and catalog bindings are
+defaults; the kit starts the pull scheduler against the Threads journal.

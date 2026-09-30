@@ -224,9 +224,9 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
     local plan: unknown = nil
     local refused: unknown = nil
     if kind == "profile" and profile_id and revision then
-        plan, refused = admission.resolve(ref, nil, workspace, profile_id, revision)
+        plan, refused = admission.resolve(ref, nil, workspace, profile_id, revision, nil, nil, nil, true)
     else
-        plan, refused = admission.read(pinned, ref, nil)
+        plan, refused = admission.read(pinned, ref, nil, true)
     end
     return measured_candidate(cache, readiness_cache, kind, ref, title, revision, decoded, plan, refused, generation)
 end

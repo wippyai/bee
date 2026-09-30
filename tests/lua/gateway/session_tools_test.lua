@@ -28,19 +28,19 @@ local function valid(name: string): Object
     if name == "session_get" then return {work = WORK} end
     if name == "session_list" then return {filter = {lifecycle = "active"}} end
     if name == "session_cancel" then return {work = WORK, reason = "stop", operation_key = "k1"} end
-    return {session = SESSION, mode = "drain", operation_key = "k1"}
+    return {session = SESSION, operation_key = "k1"}
 end
 
 local function snapshot(): Object
     return {session = SESSION, revision = 1, incarnation = 1, title = "t", lifecycle = "active",
         activity = "idle", execution = {state = "absent", evidence_at = NOW, stale = false}, queue_count = 0,
-        effective_limits = {active_ms = 1, model_steps = 1, tool_calls = 1, recovery_attempts = 0, queue_ms = 1},
+        effective_limits = {},
         continuity = {mode = "fresh"}, actions = {}}
 end
 
 local function receipt(): Object
     return {work = WORK, session = SESSION, operation = OP, committed_at = NOW, sequence = 1, kind = "request",
-        state = "queued", output_schema = "bee:Text@1", sender = {kind = "principal", id = "principal-1"}}
+        state = "queued", output_schema = "bee:Text@1", sender = {kind = "principal", id = "principal:test"}}
 end
 
 local function success(name: string): Object
@@ -50,7 +50,7 @@ local function success(name: string): Object
     if name == "session_close" then return {ok = true, value = {operation = OP, subject = SESSION, state = "requested", effect = "close"}} end
     if name == "session_await" then return {ok = true, value = {subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}} end
     if name == "session_get" then return {ok = true, value = {kind = "session", value = snapshot()}} end
-    if name == "session_list" then return {ok = true, value = {items = {snapshot()}, feed = "f1", snapshot = "s1"}} end
+    if name == "session_list" then return {ok = true, value = {items = {snapshot()}}} end
     if name == "session_catalog" then return {ok = true, value = {items = {}, complete = true, unavailable_count = 0, diagnostics = {}}} end
     return {ok = true, value = {subject_kind = "join", subject = "bj:node-a:ws-1:j1", cursor = "c1", tag = "pending", reason = "timeout",
         children = {{subject_kind = "work", subject = WORK, cursor = "c1", tag = "pending", reason = "timeout"}}}}
@@ -90,7 +90,12 @@ local function define_tests()
             end
             test.eq((seen.session_catalog :: mcp.Tool).operation, "bee.sessions:catalog.list")
             test.eq((seen.session_send :: mcp.Tool).operation, "bee.sessions:contract.send")
-            test.is_nil(seen.session_inbox_send)
+            for _, name in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "thread_sessions",
+                "session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply",
+                "launch_definitions"}) do
+                test.is_nil(seen[name], name .. " must not be part of the session tool catalog")
+                test.is_nil(mcp.tool(name), name .. " must not have an MCP route")
+            end
         end)
         test.it("advertises operation_key as required on every mutation and annotations that match", function()
             for _, name in ipairs(MUTATIONS) do
@@ -127,6 +132,10 @@ local function define_tests()
             local raw = {tools = {}, traits = {}, base_tools = {"session_send"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
             test.not_nil(surface.prepare(raw, mcp.TOOLS, {"session_send"}))
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"session_missing"}))
+            local retired = {tools = {{name = "thread_launch", operation = "bee.test:legacy", description = "legacy",
+                policies = {"bee.gateway:tool_session_policy_ref"}, schema = {type = "object", additionalProperties = false},
+                annotations = {readOnlyHint = false}}}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+            test.is_nil(surface.prepare(retired, mcp.TOOLS, {"thread_launch"}))
             raw.tools = {{name = "session_send", operation = "research:send", description = "Shadow", policies = {"research:policy"},
                 schema = {type = "object"}, annotations = {readOnlyHint = true}}}
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"session_send"}))
@@ -160,7 +169,7 @@ local function define_tests()
                 end
             end
         end)
-        test.it("enforces reference, time, timeout and exclusivity bounds", function()
+        test.it("enforces reference, timeout and exclusivity bounds", function()
             local function refused(name: string, mutate: (Object) -> ()): string?
                 local arguments = valid(name)
                 mutate(arguments)
@@ -187,11 +196,9 @@ local function define_tests()
             refused("session_close", function(a) a.mode = "kill" end)
             refused("session_open", function(a) a.spec = {} end)
             refused("session_open", function(a) a.spec = {definition = "d", limits = {active_ms = 0}} end)
-            for _, subject in ipairs({WORK, OP}) do
-                test.not_nil(session_tools.decode("session_await", {arguments = {subject = subject, deadline_at = "2026-09-29T10:00:00.5+02:00"}}))
-            end
+            refused("session_await", function(a) a.deadline_at = "2026-09-29T10:00:00.5+02:00" end)
             refused("session_await", function(a) a.subject = "bq:node-a:ws-1:q1" end)
-            test.not_nil(session_tools.decode("session_get", {arguments = {operation_key = "k"}}))
+            test.not_nil(session_tools.decode("session_get", {arguments = {operation = "bo:n:w:o1"}}))
             test.is_nil(session_tools.decode("session_get", {arguments = "text"}))
             test.is_nil(session_tools.decode("session_get", {}))
         end)
@@ -240,7 +247,8 @@ local function define_tests()
         test.it("exposes the owner-set sender on work and stage-1 activity on sessions", function()
             local work = {work = WORK, session = SESSION, sender = {kind = "session", id = SESSION}, revision = 1,
                 phase = "queued", cancelling = false}
-            test.not_nil(session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}}))
+            local checked, failure = session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}})
+            if not checked then error(tostring(failure)) end
             work.sender = nil
             test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}}))
             local stalled = snapshot()

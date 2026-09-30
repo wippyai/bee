@@ -9,16 +9,13 @@ local json = require("json")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
-local system = require("system")
 local gateway = require("gateway")
 local mcp = require("mcp")
 local catalog = require("catalog")
 local context = require("context")
 local sessions = require("sessions")
 local session_tools = require("session_tools")
-local remote = require("remote")
 local bounds = require("bounds")
-local sends = require("sends")
 local transport_admission = require("admission")
 local subject_call = require("subject_call")
 type Object = {[string]: unknown}
@@ -181,22 +178,6 @@ local function resolve(binding: gateway.Binding, executor: funcs.Executor, addre
     if not target then return nil, refused(code or "NOT_FOUND", message or "no such session") end
     return target, nil
 end
-local function list_sessions(binding: gateway.Binding, executor: funcs.Executor, request: mcp.SessionPageArgs): Object
-    local found, failure = reachable(binding, executor)
-    if not found then return failure :: Object end
-    local views: {sessions.View} = {}
-    for _, item in ipairs(found.sessions) do
-        views[#views + 1] = sessions.view(item, found.titles[item.thread_id] or "", binding.action_id)
-    end
-    local page = sessions.page(views, request.cursor, request.limit)
-    return reply_result({ok = true, value = {sessions = page.items, next_cursor = page.next_cursor,
-        eof = page.eof, truncated = not page.eof}}, nil)
-end
-local function local_node(): (string?, string?)
-    local native, err = system.node.id()
-    if err or not native or native == "" then return nil, tostring(err or "node identity unavailable") end
-    return native, nil
-end
 local function capabilities(binding: gateway.Binding): Object
     local bound, surface_error = gateway.surface(binding)
     if not bound then return reply_result(surface_error, nil) end
@@ -207,8 +188,6 @@ local function capabilities(binding: gateway.Binding): Object
     for _, item in ipairs(available) do
         tools[#tools + 1] = {name = item.name, description = item.description, policies = item.policies, annotations = item.annotations}
     end
-    local launchable = false
-    for _, item in ipairs(available) do if item.name == "thread_launch" then launchable = true end end
     local traits: {Object} = {}
     for _, trait in ipairs(config.catalog.traits) do
         traits[#traits + 1] = {id = trait.id, title = trait.title, tools = trait.tools}
@@ -217,133 +196,12 @@ local function capabilities(binding: gateway.Binding): Object
         action_id = binding.action_id, revision = bound.revision, digest = bound.digest,
         tools = tools, traits = traits, allowed_traits = config.allowed_traits, active_traits = bound.selection.active,
         requestable_access = config.access,
-        launch = {allowed = launchable, policy_ref = binding.policy_ref,
-            definitions_tool = launchable and "launch_definitions" or nil},
+        session_tools = session_tools.NAMES,
         thread_access = {thread_id = binding.thread_id,
-            note = "thread_read, thread_wait and thread_message reach the bound thread; thread_sessions pages the sessions its membership opens"},
+            note = "thread_read, thread_wait and thread_message reach the bound thread; session_list lists durable sessions"},
         authoring = {guide_tool = "overlay", guide_operation = "guide",
             preflight_tool = "delivery", preflight_operation = "preflight",
             note = "read the capabilities report, then the overlay guide index, then preflight a frozen digest before delivery request"}}}, nil)
-end
-local function list_directory(binding: gateway.Binding, executor: funcs.Executor, request: mcp.SessionPageArgs): Object
-    local candidates, sessions_error = gateway.workspace_sessions(binding)
-    if not candidates then return reply_result(sessions_error, nil) end
-    local peers: {sessions.DirectoryCandidate} = {}
-    local node_id, node_error = local_node()
-    if not node_id then return refused("UNAVAILABLE", node_error or "node identity unavailable") end
-    for _, item in ipairs(candidates) do
-        local reply, err = executor:call("bee.threads.service:inbox_describe", {thread_id = item.thread_id, action_id = item.action_id,
-            attempt_id = item.attempt_id, node_id = node_id})
-        if err then return refused("UNAVAILABLE", tostring(err)) end
-        local result = bounds.object(reply)
-        if result and result.ok == true then
-            local value = bounds.object(result.value)
-            local grant_epoch = value and bounds.count(value.grant_epoch)
-            local attempt_state = value and bounds.text(value.attempt_state, 128)
-            local delivery_state = value and bounds.text(value.delivery_state, 128)
-            local last_inbox_sequence = value and bounds.count(value.last_inbox_sequence)
-            if not value or grant_epoch == nil or grant_epoch == 0 or type(value.sendable) ~= "boolean"
-                or not attempt_state or not delivery_state or last_inbox_sequence == nil then
-                return refused("UNAVAILABLE", "thread owner returned an invalid session directory entry")
-            end
-            peers[#peers + 1] = {session = item, name = item.name or item.action_id, node_id = node_id,
-                grant_epoch = grant_epoch, discoverable = true,
-                sendable = value.sendable, attempt_state = attempt_state,
-                delivery_state = delivery_state, last_inbox_sequence = last_inbox_sequence}
-        else
-            local fault = result and bounds.object(result.error)
-            local code = fault and tostring(fault.code) or ""
-            if code ~= "DENIED" and code ~= "NOT_FOUND" then return reply_result(reply, nil) end
-        end
-    end
-    local views = sessions.directory(peers, binding.action_id)
-    local page = sessions.page(views, request.cursor, request.limit)
-    return reply_result({ok = true, value = {peers = page.items, next_cursor = page.next_cursor,
-        eof = page.eof, truncated = not page.eof}}, nil)
-end
--- The exact local action address an inbox operation targets, or the refusal
--- naming why it is not ours. A local address resolves among the bound
--- workspace's sessions; a remote address is handed to the host-selected remote
--- resolver, which the destination owner re-checks when the send arrives.
-local function inbox_target(binding: gateway.Binding, address: unknown, local_node_id: string): (sessions.Candidate?, Object?)
-    local object = bounds.object(address)
-    local node_id = object and bounds.id(object.node_id)
-    local action_id = object and bounds.id(object.action_id)
-    if not node_id or not action_id or node_id ~= local_node_id then return nil, refused("NOT_FOUND", "address is not on this node") end
-    local candidates, failure = gateway.workspace_sessions(binding)
-    if not candidates then return nil, reply_result(failure, nil) end
-    for _, item in ipairs(candidates) do if item.action_id == action_id then return item, nil end end
-    return nil, refused("NOT_FOUND", "action address is not in this workspace")
-end
--- A remote session_inbox_send names a node-qualified address: the host-selected
--- resolver answers the thread and workspace it names on its own node, and the
--- gateway sends there with the same body it would send locally. The remote
--- owner authenticates the forwarded principal and re-checks every grant, so
--- resolution is discovery, not authority; an unconfigured or unknown address is
--- reported as not found.
-local function remote_send(binding: gateway.Binding, tool: mcp.Tool, request: Object, executor: funcs.Executor): Object
-    local object = bounds.object(request.address)
-    local node_id = object and bounds.id(object.node_id)
-    local action_id = object and bounds.id(object.action_id)
-    if not node_id or not action_id then return refused("NOT_FOUND", "address must name a node and action") end
-    local resolved, resolve_error = remote.resolve({node_id = node_id, action_id = action_id})
-    if not resolved then return refused("NOT_FOUND", resolve_error or "remote address is not resolvable") end
-    local digest, digest_error = sends.payload_digest({message_id = request.message_id, content = request.content})
-    if not digest then return refused("INVALID_ARGUMENT", tostring(digest_error)) end
-    local body: Object = {thread_id = resolved.thread_id, target_action_id = action_id, sender_thread_id = binding.thread_id,
-        sender_action_id = binding.action_id, node_id = node_id, workspace_id = resolved.workspace_id,
-        grant_epoch = resolved.grant_epoch, idempotency_key = request.idempotency_key, message_id = request.message_id,
-        content = request.content, payload_digest = digest}
-    if tool.name == "session_reply" then body.in_reply_to = request.in_reply_to; body.outcome = request.outcome end
-    local reply, call_error = executor:call(tool.operation, body)
-    return reply_result(reply, call_error)
-end
--- The managed-run tools map to the harness launch facade's own run operation,
--- the same one an application reaches as agents.status/wait/cancel. The
--- endpoint's target scope admits that facade plus the membership probe below.
-local run_call = "bee.harness.launch:agent_run_call"
-local thread_probe = "bee.threads.service:get"
--- A caller reaches only runs it launched. Launching is the membership: a child
--- thread_launch starts on a new thread is created and admitted under the
--- caller, so the caller is an active member of it, and a caller-thread launch
--- runs on the caller's own thread. The thread owner answers membership; an
--- unrelated thread, or an identity the caller fabricated, names no thread it
--- belongs to and is refused. This is durable at thread_launch return and never
--- races the child carrier's own admission.
-local function run_visible(executor: funcs.Executor, thread_id: string): boolean
-    local reply, call_error = executor:call(thread_probe, {thread_id = thread_id})
-    if call_error then return false end
-    local answer = bounds.object(reply)
-    if not answer or answer.ok ~= true then return false end
-    local value = bounds.object(answer.value)
-    local membership = value and bounds.object(value.membership)
-    return membership ~= nil and membership.active == true
-end
-local function run_tool(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
-    local executor, failure = subject_executor(binding, tool, values, nil)
-    if not executor then return failure :: Object end
-    local operation = "status"
-    if tool.name == "run_wait" then operation = "wait" end
-    if tool.name == "run_cancel" then operation = "cancel" end
-    local body: Object = {operation = operation, thread_id = request.thread_id, attempt_id = request.attempt_id}
-    if operation == "wait" or operation == "cancel" then body.wait_ms = request.wait_ms or 0 end
-    if operation == "cancel" then body.idempotency_key = request.idempotency_key end
-    -- The caller reaches only runs it launched: the run is refused by name
-    -- before any owner operation runs unless the caller is an active member of
-    -- the child thread, which is how a launched child's thread is its own.
-    if not run_visible(executor, request.thread_id) then
-        return refused("NOT_FOUND", "no run this caller launched names thread " .. request.thread_id)
-    end
-    local reply, call_error = executor:call(run_call, body)
-    if call_error then return reply_result(nil, call_error) end
-    local answer = bounds.object(reply)
-    if answer and answer.ok ~= true then
-        local fault = bounds.object(answer.error)
-        if fault and tostring(fault.code) == "DENIED" then
-            return refused("NOT_FOUND", "no run this caller launched names thread " .. request.thread_id)
-        end
-    end
-    return reply_result(reply, nil)
 end
 
 -- A caller may name a member_thread it is an active member of, such as a child
@@ -391,41 +249,11 @@ local function session_projection(binding: gateway.Binding, tool: mcp.Tool, requ
     if encode_error or not encoded then return refused("UNAVAILABLE", "owner reply could not be encoded", nil, true, remedy) end
     return mcp.tool_result(encoded, checked.ok ~= true, checked)
 end
-local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?, page_arguments: mcp.SessionPageArgs?): Object
+local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
     if session_tools.is_session_tool(tool.name) then return session_projection(binding, tool, request, values) end
-    if tool.name == "run_status" or tool.name == "run_wait" or tool.name == "run_cancel" then
-        return run_tool(binding, tool, request, values)
-    end
     local executor, failure = subject_executor(binding, tool, values, runtime)
     if not executor then return failure :: Object end
-    if tool.name == "thread_sessions" or tool.name == "session_directory" then
-        if not page_arguments then return refused("INTERNAL", "validated session page arguments are missing") end
-        if tool.name == "thread_sessions" then return list_sessions(binding, executor, page_arguments) end
-        return list_directory(binding, executor, page_arguments)
-    end
     if tool.name == "capabilities" then return capabilities(binding) end
-    if tool.name == "session_inbox_send" or tool.name == "session_reply" then
-        local address = bounds.object(request.address)
-        local node_id, node_error = local_node()
-        if not node_id then return refused("UNAVAILABLE", node_error or "node identity unavailable") end
-        if address and bounds.id(address.node_id) and bounds.id(address.node_id) ~= node_id then
-            return remote_send(binding, tool, request, executor)
-        end
-        local target, missing = inbox_target(binding, request.address, node_id)
-        if not target then return missing :: Object end
-        local digest, digest_err = sends.payload_digest({message_id = request.message_id, content = request.content})
-        if not digest then return refused("INVALID_ARGUMENT", tostring(digest_err)) end
-        local body: Object = {thread_id = target.thread_id, target_action_id = target.action_id, sender_thread_id = binding.thread_id,
-            sender_action_id = binding.action_id, node_id = node_id, grant_epoch = request.grant_epoch,
-            idempotency_key = request.idempotency_key, message_id = request.message_id, content = request.content, payload_digest = digest}
-        if tool.name == "session_reply" then body.in_reply_to = request.in_reply_to; body.outcome = request.outcome end
-        local reply, call_error = executor:call(tool.operation, body)
-        return reply_result(reply, call_error)
-    end
-    if tool.name == "session_inbox" or tool.name == "session_ack" then
-        request.thread_id = binding.thread_id
-        request.action_id = binding.action_id
-    end
     if tool.name == "thread_notify" then
         local target_thread_id: string
         local target_action_id: string? = nil
@@ -617,25 +445,11 @@ local function handle(): nil
     if not tool then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "tool is not admitted for this binding")); return nil end
     local arguments: Object? = nil
     local argument_error: string? = nil
-    local page_arguments: mcp.SessionPageArgs? = nil
     if tool.name == "thread_read" then arguments, argument_error = mcp.read_arguments(parameters)
     elseif tool.name == "thread_wait" then arguments, argument_error = mcp.wait_arguments(parameters)
     elseif tool.name == "thread_message" then arguments, argument_error = mcp.message_arguments(parameters)
-    elseif tool.name == "thread_sessions" or tool.name == "session_directory" then
-        local parsed, parse_error = mcp.sessions_arguments(parameters)
-        arguments, argument_error = parsed, parse_error
-        page_arguments = parsed
     elseif tool.name == "thread_notify" then arguments, argument_error = mcp.notify_arguments(parameters)
-    elseif tool.name == "session_inbox_send" then arguments, argument_error = mcp.inbox_message_arguments(parameters, false)
-    elseif tool.name == "session_reply" then arguments, argument_error = mcp.inbox_message_arguments(parameters, true)
-    elseif tool.name == "session_inbox" then arguments, argument_error = mcp.inbox_page_arguments(parameters)
-    elseif tool.name == "session_ack" then arguments, argument_error = mcp.inbox_ack_arguments(parameters)
     elseif session_tools.is_session_tool(tool.name) then arguments, argument_error = session_tools.decode(tool.name, parameters)
-    elseif tool.name == "thread_launch" then arguments, argument_error = mcp.launch_arguments(parameters)
-    elseif tool.name == "run_status" then arguments, argument_error = mcp.run_arguments(parameters, false)
-    elseif tool.name == "run_wait" then arguments, argument_error = mcp.run_arguments(parameters, false)
-    elseif tool.name == "run_cancel" then arguments, argument_error = mcp.run_arguments(parameters, true)
-    elseif tool.name == "launch_definitions" then arguments, argument_error = mcp.launch_definitions_arguments(parameters, binding.workspace_id)
     elseif tool.name == "capabilities" then arguments, argument_error = mcp.capabilities_arguments(parameters)
     elseif tool.name == "request_capability" then arguments, argument_error = mcp.capability_arguments(parameters)
     elseif tool.name == "capability_status" then arguments, argument_error = mcp.capability_status_arguments(parameters)
@@ -649,7 +463,7 @@ local function handle(): nil
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters, binding.workspace_id)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)
     else arguments = bounds.object(parameters.arguments); if not arguments then argument_error = "tool arguments must be an object" end end
-    if arguments and (tool.name == "delivery" or tool.name == "publish" or tool.name == "launch_definitions") then
+    if arguments and (tool.name == "delivery" or tool.name == "publish") then
         argument_error = mcp.bound_workspace(arguments, binding.workspace_id)
         if argument_error then arguments = nil end
     end
@@ -664,7 +478,7 @@ local function handle(): nil
         runtime = granted
     end
     if tool.name == "thread_wait" then answer(response, http.STATUS.OK, mcp.result(call.id, wait(binding, tool, arguments, values)))
-    else answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime, page_arguments))) end
+    else answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime))) end
     return nil
 end
 return {handle = handle}

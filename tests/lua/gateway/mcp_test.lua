@@ -85,38 +85,9 @@ local function define_tests()
                 test.not_nil(properties[name])
             end
         end)
-        test.it("carries an optional workspace identity into a launch and refuses any other value", function()
-            local chosen = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", workspace_id = string.rep("a", 32)}})
-            test.eq(chosen and chosen.workspace_id, string.rep("a", 32))
-            local own = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k"}})
-            test.is_nil(own and own.workspace_id)
-            local _, malformed = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", workspace_id = "Other"}})
-            test.eq(malformed, "workspace_id must be a workspace identity")
-        end)
-        test.it("carries working directory, thread, placement and saved profile choices into a launch", function()
-            local chosen = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k",
-                workdir = {root_ref = "bee.env:workspace_root", path = "legacy/app"}, thread = {title = "Scan"}, placement = "native",
-                saved_profile_id = "p", saved_profile_revision = 1}})
-            if not chosen then error("launch arguments") end
-            test.eq((chosen.workdir :: Object).path, "legacy/app")
-            test.eq((chosen.thread :: Object).title, "Scan")
-            test.eq(chosen.placement, "native")
-            local _, both = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", thread = {thread_id = "t", title = "x"}}})
-            test.eq(both, "thread names either a thread_id or a title")
-            local _, escaping = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", workdir = {root_ref = "r", path = "../x"}}})
-            test.eq(escaping, "workdir.path: subpath has an invalid segment")
-            -- Any bounded identifier names a placement kind; which kinds this
-            -- host actually admits is decided where the launch resolves its
-            -- placement binding, never by a fixed set here.
-            local installable = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", placement = "vm"}})
-            test.eq(installable and installable.placement, "vm")
-            local _, malformed = mcp.launch_arguments({arguments = {definition_ref = "d", brief = "b", idempotency_key = "k", placement = "bad\0placement"}})
-            test.eq(malformed, "placement is not an identifier")
-            local tool = mcp.tool("thread_launch")
-            if not tool then error("thread_launch tool") end
-            local properties = tool.schema.properties :: Object
-            for _, name in ipairs({"workspace_id", "workdir", "thread", "placement", "saved_profile_id", "saved_profile_revision"}) do test.not_nil(properties[name]) end
-            test.is_true(tool.description:find("PLACEMENT_UNAVAILABLE", 1, true) ~= nil)
+        test.it("retires the legacy launch parser and tool from the gateway surface", function()
+            test.is_true(mcp.is_retired_tool("thread_launch"))
+            test.is_nil(mcp.tool("thread_launch"))
         end)
         test.it("decodes capability elevation requests with a bounded TTL", function()
             local tool = mcp.tool("request_capability")
@@ -160,7 +131,7 @@ local function define_tests()
                 test.eq(tool.operation, "bee.gateway.binding:" .. name)
                 test.eq(tool.policies[1], mcp.TOOL_POLICY_REFS.install)
                 test.is_true(mcp.is_tool_policy_reference(tool.policies[1]))
-                test.not_nil(mcp.OUTPUT_SCHEMAS[name])
+                test.not_nil((mcp.OUTPUT_SCHEMAS :: {[string]: Object})[name])
             end
             local install = mcp.install_arguments({arguments = {component = "acme/tool", version = "1.2.0"}}, false)
             test.eq(install and install.version, "1.2.0")
@@ -469,35 +440,31 @@ local function define_tests()
                 test.eq(output.type, "object")
                 test.not_nil(mcp.OUTPUT_SCHEMAS[tostring(tool.name)])
             end
-            local fault = mcp.tool_error("NOT_FOUND", "no such session", "session", false, "call thread_sessions")
+            local fault = mcp.tool_error("NOT_FOUND", "no such session", "session", false, "call session_list")
             test.eq(fault.error.code, "NOT_FOUND")
             test.eq(fault.error.field, "session")
             test.eq(fault.error.retryable, false)
-            test.eq(fault.error.remedy, "call thread_sessions")
+            test.eq(fault.error.remedy, "call session_list")
             local structured = mcp.tool_result("{}", false, {ok = true})
             test.eq((structured.structuredContent :: {[string]: unknown}).ok, true)
             local capabilities = mcp.tool("capabilities")
             if not capabilities then error("capabilities tool") end
             test.eq(capabilities.annotations.readOnlyHint, true)
             test.eq(capabilities.operation, "bee.gateway.binding:surface")
-            local definitions = mcp.tool("launch_definitions")
-            if not definitions then error("launch_definitions tool") end
-            test.eq(definitions.annotations.readOnlyHint, true)
-            test.eq(definitions.operation, "bee.harness.launch:launch_definitions_call")
+            test.is_nil(mcp.tool("launch_definitions"))
         end)
-        test.it("matches typed session, directory and capability results to their advertised output schemas", function()
-            local session_page = {ok = true, value = {sessions = {{session = "agent-a", action_id = "agent-a",
-                attempt_id = "attempt-a", thread_id = "thread-a", title = "A", self = true}}, next_cursor = 1, eof = false, truncated = true}}
-            conforms(session_page, mcp.OUTPUT_SCHEMAS.thread_sessions, "thread_sessions")
-            local directory = {ok = true, value = {peers = {{name = "A", address = {node_id = "node-a", action_id = "agent-a"},
-                action_id = "agent-a", attempt_id = "attempt-a", grant_epoch = 1, sendable = true, self = true,
-                attempt_state = "running", delivery_state = "empty", last_inbox_sequence = 0}}, eof = true, truncated = false}}
-            conforms(directory, mcp.OUTPUT_SCHEMAS.session_directory, "session_directory")
+        test.it("matches capability results to their advertised output schema and retires old session tools", function()
+            for _, name in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "thread_sessions",
+                "session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply", "launch_definitions"}) do
+                test.is_nil(mcp.tool(name), name)
+                test.is_nil((mcp.OUTPUT_SCHEMAS :: {[string]: Object})[name], name)
+            end
             local capabilities = {ok = true, value = {workspace_id = "workspace-a", thread_id = "thread-a", action_id = "agent-a",
                 revision = 1, digest = string.rep("a", 64), tools = {{name = "thread_read", description = "Read",
                     policies = {"bee.gateway:tool_read_policy_ref"}, annotations = {readOnlyHint = true}}},
                 traits = {{id = "bee.traits:read", title = "Read", tools = {"thread_read"}}},
-                allowed_traits = {"bee.traits:read"}, active_traits = {}, launch = {allowed = false},
+                allowed_traits = {"bee.traits:read"}, active_traits = {}, session_tools = {"session_catalog", "session_open", "session_run", "session_send",
+                    "session_await", "session_join", "session_get", "session_list", "session_cancel", "session_close"},
                 thread_access = {thread_id = "thread-a", note = "read"},
                 authoring = {guide_tool = "overlay", guide_operation = "guide", preflight_tool = "delivery",
                     preflight_operation = "preflight", note = "read first"}}}
@@ -509,46 +476,34 @@ local function define_tests()
             test.eq(traits.type, "array")
             test.not_nil(((traits.items :: Object).properties :: Object).id)
         end)
-        test.it("pages session discovery with stable cursors", function()
-            local first = mcp.sessions_arguments({arguments = {limit = 2}})
-            test.eq(first and first.cursor, 0)
-            test.eq(first and first.limit, 2)
-            local next_page = mcp.sessions_arguments({arguments = {cursor = 2, limit = 2}})
-            test.eq(next_page and next_page.cursor, 2)
-            local _, bad_cursor = mcp.sessions_arguments({arguments = {cursor = -1}})
-            test.not_nil(bad_cursor)
-            local _, bad_limit = mcp.sessions_arguments({arguments = {limit = 65}})
-            test.eq(bad_limit, "limit must be between 1 and 64")
-            local _, unknown = mcp.sessions_arguments({arguments = {workspace_id = "other"}})
-            test.eq(unknown, "unknown field workspace_id")
+        test.it("publishes the canonical session catalog and list projections", function()
+            local catalog = mcp.tool("session_catalog")
+            local list = mcp.tool("session_list")
+            if not catalog or not list then error("session catalog/list tools are missing") end
+            local catalog_properties = catalog.schema.properties :: Object
+            test.not_nil(catalog_properties.kind)
+            test.not_nil(catalog_properties.include_unavailable)
+            test.not_nil(catalog_properties.cursor)
+            test.is_nil(catalog_properties.after)
+            local list_properties = list.schema.properties :: Object
+            test.not_nil(list_properties.filter)
+            test.not_nil(list_properties.cursor)
+            test.is_nil(list_properties.after)
             local empty = mcp.capabilities_arguments({arguments = {}})
             test.not_nil(empty)
             local _, capability_field = mcp.capabilities_arguments({arguments = {workspace_id = "other"}})
             test.eq(capability_field, "unknown field workspace_id")
-            local bound = string.rep("c", 32)
-            local scoped = mcp.launch_definitions_arguments({arguments = {}}, bound)
-            test.eq(scoped and scoped.workspace_id, bound)
-            local named = mcp.launch_definitions_arguments({arguments = {workspace_id = string.rep("d", 32)}}, bound)
-            test.eq(named and named.workspace_id, string.rep("d", 32))
-            test.not_nil(mcp.bound_workspace(named :: {[string]: unknown}, bound))
         end)
-        test.it("advertises session discovery, addressing and one-shot notices over the bound subject", function()
-            local sessions = mcp.tool("thread_sessions")
-            if not sessions then error("thread_sessions is not in the catalog") end
-            test.eq(sessions.operation, "bee.threads.service:get")
-            test.eq(sessions.annotations.readOnlyHint, true)
-            test.eq(sessions.policies[1], mcp.TOOL_POLICY_REFS.read)
+        test.it("advertises durable session discovery and transcript addressing over the bound subject", function()
+            test.is_nil(mcp.tool("thread_sessions"))
             local notify = mcp.tool("thread_notify")
             if not notify then error("thread_notify is not in the catalog") end
             test.eq(notify.operation, "bee.threads.service:notify")
             test.eq(notify.annotations.readOnlyHint, false)
             test.eq(notify.policies[1], mcp.TOOL_POLICY_REFS.message)
             test.eq(#((notify.schema.required :: {string})), 1)
-            local listed = mcp.sessions_arguments({arguments = {}})
-            test.not_nil(listed)
-            test.not_nil(mcp.sessions_arguments({}))
-            local _, sessions_field = mcp.sessions_arguments({arguments = {workspace_id = "other"}})
-            test.eq(sessions_field, "unknown field workspace_id")
+            test.eq(mcp.tool("session_catalog") and mcp.tool("session_catalog").operation, "bee.sessions:catalog.list")
+            test.eq(mcp.tool("session_list") and mcp.tool("session_list").operation, "bee.sessions:contract.list")
             local notice = mcp.notify_arguments({arguments = {session = "action-b", idempotency_key = "wait-for-b"}})
             test.eq(notice and notice.session, "action-b")
             test.eq(notice and notice.idempotency_key, "wait-for-b")
@@ -578,33 +533,10 @@ local function define_tests()
             local message_schema = (mcp.tool("thread_message") :: mcp.Tool).schema
             test.not_nil((message_schema.properties :: {[string]: unknown}).session)
         end)
-        test.it("decodes exact action inbox tools without accepting caller identity or thread overrides", function()
-            local directory = mcp.tool("session_directory")
-            test.eq(directory and directory.operation, "bee.threads.service:inbox_describe")
-            test.eq(directory and directory.policies[2], mcp.TOOL_POLICY_REFS.discover)
-            local send = mcp.tool("session_inbox_send")
-            test.eq(send and send.operation, "bee.threads.service:inbox_send")
-            test.eq(send and send.policies[2], mcp.TOOL_POLICY_REFS.send_grant)
-            local base = {address = {node_id = "node-a", action_id = "action-b"}, grant_epoch = 3,
-                idempotency_key = "key", message_id = "m1", content = {text = "hello"}}
-            local parsed = mcp.inbox_message_arguments({arguments = base}, false)
-            test.eq(parsed and (parsed.address :: {[string]: unknown}).action_id, "action-b")
-            local forged: {[string]: unknown} = {}
-            for key, value in pairs(base) do forged[key] = value end
-            forged.sender_action_id = "forged"
-            local _, refused = mcp.inbox_message_arguments({arguments = forged}, false)
-            test.eq(refused, "unknown field sender_action_id")
-            local reply: {[string]: unknown} = {}
-            for key, value in pairs(base) do reply[key] = value end
-            reply.in_reply_to = {thread_id = "thread-b", record_id = "record-b"}
-            reply.outcome = "succeeded"
-            test.not_nil(mcp.inbox_message_arguments({arguments = reply}, true))
-            local _, missing = mcp.inbox_message_arguments({arguments = base}, true)
-            test.is_true(tostring(missing):find("reply correlation", 1, true) ~= nil)
-            local ack = mcp.inbox_ack_arguments({arguments = {inbox_sequence = 8, idempotency_key = "ack-8"}})
-            test.eq(ack and ack.inbox_sequence, 8)
-            local _, outside = mcp.inbox_page_arguments({arguments = {after_sequence = 0, limit = 65}})
-            test.eq(outside, "after_sequence and limit are outside inbox bounds")
+        test.it("does not expose action inbox tools after the session cutover", function()
+            for _, name in ipairs({"session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply"}) do
+                test.is_nil(mcp.tool(name), name)
+            end
         end)
         test.it("holds a binding valid only under its epoch, before expiry and until revoked", function()
             local binding: gateway.Binding = {binding_id = "b", subject = "s", action_id = "a", attempt_id = "t", thread_id = "th", owner_incarnation = 1, carrier_epoch = 1, credential_generation = 1,

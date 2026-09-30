@@ -76,7 +76,7 @@ local function expected_modules(raw: unknown): {ExpectedModule}?
     if count ~= #raw or count > 512 then return nil end
     local result: {ExpectedModule} = {}
     local seen: {[string]: boolean} = {}
-    for _, item in ipairs(raw :: {unknown}) do
+    for _, item in ipairs(raw) do
         local value = bounds.object(item)
         if not value then return nil end
         local component = bounds.line(value.component, 160)

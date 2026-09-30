@@ -130,6 +130,7 @@ def run(binary, previous=None):
             assert path.is_file(), f"missing state-bound database: {path}"
             assert path.read_bytes()[:16] == b"SQLite format 3\0", f"not a SQLite database: {path}"
         assert (state / bindings["BEE_PLACEMENT_ROOT"]).is_dir(), "placement root escaped state"
+        assert (state / bindings["BEE_APP_DATABASE_ROOT"]).is_dir(), "application database root escaped state"
     with tempfile.TemporaryDirectory(prefix="bee-project-nodes-") as temporary:
         root = Path(temporary)
         home = root / "home"

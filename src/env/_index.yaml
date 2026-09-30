@@ -26,11 +26,17 @@ entries:
   directory: .
   base: project
   auto_init: false
+- name: app_database_root
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_APP_DATABASE_ROOT
+  default: .wippy/app-db
+  readonly: true
 - name: app_databases
   kind: fs.directory
   meta:
     comment: Host-provisioned directory holding isolated application databases; it lies under Bee state, outside every approved readable tree
-  directory: .wippy/app-db
+  directory: ${env:bee.env:app_database_root}
   base: project
   auto_init: true
   mode: '0700'

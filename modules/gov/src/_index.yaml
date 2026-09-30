@@ -299,6 +299,7 @@ entries:
     artifact: bee.gov:artifact
     application_admission: bee.gov:governed_application_admission
     capability_grants: bee.gov:capability_grants
+    capability_files: bee.gov:capability_files
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
 - name: hub_resolver

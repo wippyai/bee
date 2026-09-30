@@ -66,7 +66,7 @@ function M.send(db: sql.DB, actor: string, request: unknown): Result
         if not context then return context_error or failure("INVALID_ARGUMENT", "invalid context") end
         local result = authority.submit_message(tx, head, caller, object.message, context)
         if not result.ok then return result end
-        local committed = result.value :: {record_id: string, sequence: integer}
+        local committed = result.value
         return authority.remember(tx, actor, "send", mutation, {record_id = committed.record_id, sequence = committed.sequence, caller_node_id = caller_node, payload_digest = declared})
     end)
 end

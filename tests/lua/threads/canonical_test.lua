@@ -27,7 +27,7 @@ local function define_tests()
             local values = {table.create(1, 0), table.create(0, 1), {},
                 {list = table.create(1, 0)}, {map = table.create(0, 1)}}
             for _, value in ipairs(values) do
-                test.eq(canonical.encode(value), json.encode(value))
+                test.eq(canonical.encode(value), (json.encode(value)))
             end
         end)
         test.it("keeps populated tables on their existing shapes", function()

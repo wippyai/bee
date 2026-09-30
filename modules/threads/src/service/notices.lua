@@ -32,15 +32,15 @@ end
 -- observed execution exit closes the attempt. Pure.
 function M.ending(stored: record_types.Record): Ending?
     if stored.kind == "turn.end" then
-        return {what = "turn", outcome = (stored.body :: record_types.TurnEnd).outcome}
+        return {what = "turn", outcome = (stored.body).outcome}
     end
     if stored.kind == "receipt" then
-        return {what = "exit", outcome = (stored.body :: record_types.Receipt).outcome}
+        return {what = "exit", outcome = (stored.body).outcome}
     end
     if stored.kind ~= "observation" then return nil end
-    local data = (stored.body :: record_types.Observation).data
+    local data = (stored.body).data
     if data.type == "turn.signal" then
-        local signal = data :: record_types.TurnSignal
+        local signal = data
         if signal.phase == "ended" then return {what = "turn", outcome = signal.reported_outcome} end
         return nil
     end
@@ -74,7 +74,8 @@ local function deliver(tx: sql.Transaction, notice: reader.Notice, cause: record
     local context: authority.Context = {causation = {thread_id = cause.thread_id, record_id = cause.record_id}}
     local committed = authority.project_message(tx, head, notice.watcher_actor, decoded, context, "notice/" .. notice.watcher_actor, notice.notice_id)
     if not committed.ok then return nil, committed end
-    local value = committed.value :: {record_id: string}
+    local value = authority.committed(committed.value)
+    if not value then return nil, failure("INTERNAL", "commit failed") end
     local fire_err = transaction.fire_notice(tx, notice.notice_id, value.record_id)
     if fire_err then return nil, storage(fire_err) end
     return notice.watcher_thread_id, nil
@@ -108,7 +109,7 @@ local function settle(tx: sql.Transaction, notice: reader.Notice): (string?, Res
         if attempt_id then
             rows, rows_err = reader.attempt_records(tx, notice.target_thread_id, attempt_id, after, M.SCAN_RECORDS)
         else
-            rows, rows_err = reader.action_records(tx, notice.target_thread_id, action_id :: string, after, M.SCAN_RECORDS)
+            rows, rows_err = reader.action_records(tx, notice.target_thread_id, action_id, after, M.SCAN_RECORDS)
         end
         if not rows then return nil, storage(rows_err or "read notice target records") end
         for _, row in ipairs(rows) do

@@ -29,6 +29,13 @@ function M.summary(head: reader.Head): types.Summary
     return {thread_id = head.thread_id, title = head.title, state = head.state, revision = head.revision,
         head_sequence = head.head_sequence, owner_id = head.owner_actor, created_at = head.created_at, workspace_id = head.workspace_id}
 end
+function M.committed(value: unknown): types.Committed?
+    local object = bounds.object(value)
+    if not object then return nil end
+    local record_id, sequence = bounds.id(object.record_id), bounds.integer(object.sequence)
+    if not record_id or not sequence then return nil end
+    return {record_id = record_id, sequence = sequence}
+end
 -- Every mutation names its thread and an idempotency key; the canonical
 -- request is what a retry must repeat exactly.
 function M.mutation(request: unknown): (Mutation?, Result?)
@@ -382,7 +389,7 @@ function M.admitted_for(tx: sql.Transaction, action_id: string, actor: string): 
     for _, encoded in ipairs(admissions) do
         local stored, stored_error = record.decode_json(encoded)
         if not stored then return false, failure("INTERNAL", stored_error or "stored admission is corrupt") end
-        if (stored.body :: record_types.Admitted).principal_id == actor then return true, nil end
+        if (stored.body).principal_id == actor then return true, nil end
     end
     return false, nil
 end
@@ -398,7 +405,7 @@ local function correlated_request(tx: sql.Transaction, head: reader.Head, caller
     if stored.kind ~= "message" then return nil, failure("INVALID_ARGUMENT", "in_reply_to must name a request message") end
     local request, request_error = record.decode_json(stored.record_json)
     if not request then return nil, failure("INTERNAL", request_error or "stored record is corrupt") end
-    local body = request.body :: record_types.Message
+    local body = request.body
     if body.message_kind ~= "request" then return nil, failure("INVALID_ARGUMENT", "in_reply_to must name a request message") end
     local obligation, obligation_err = reader.obligation(tx, head.thread_id, body.message_id, caller.actor)
     if obligation_err then return nil, storage(obligation_err) end
@@ -432,7 +439,8 @@ local function commit_message(tx: sql.Transaction, head: reader.Head, decoded: r
     end
     local result = commit(owed)
     if not result.ok or result.replayed then return result end
-    local committed = result.value :: types.Committed
+    local committed = M.committed(result.value)
+    if not committed then return failure("INTERNAL", "commit failed") end
     for _, recipient in ipairs(recipients) do
         local insert_err = transaction.insert_obligation(tx, head.thread_id, decoded.message_id, recipient, committed.record_id, decoded.message_kind, committed.sequence)
         if insert_err then return storage(insert_err) end
@@ -461,13 +469,15 @@ function M.submit_message(tx: sql.Transaction, head: reader.Head, caller: reader
         if not obligation then return refused or failure("INTERNAL", "request unavailable") end
         settled = obligation
     end
+    local payload: record_types.RecordPayload = {kind = "message", body = decoded}
     local result = commit_message(tx, head, decoded, decoded.recipient_ids, function(owed: integer): Result
-        local committed, refused = M.commit_record(tx, head, caller.actor, "bee", {kind = "message", body = decoded}, context, nil, nil, owed)
+        local committed, refused = M.commit_record(tx, head, caller.actor, "bee", payload, context, nil, nil, owed)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
         return transaction.success(committed, false)
     end)
     if not result.ok then return result end
-    local committed = result.value :: types.Committed
+    local committed = M.committed(result.value)
+    if not committed then return failure("INTERNAL", "commit failed") end
     if settled then
         local answered: record_types.Answered = {request_message_id = settled.message_id, recipient_id = caller.actor,
             reply_message_id = decoded.message_id, outcome = decoded.outcome or "succeeded"}
@@ -570,8 +580,8 @@ function M.record(db: sql.DB, actor: string, request: unknown): Result
     local source: record_types.Source = "bee"
     if kind == "observation" then
         local declared = bounds.member(object.source, {"stream", "hook", "transcript", "mcp"})
-        if not declared then return failure("INVALID_ARGUMENT", "observation source must be stream, hook, transcript or mcp") end
-        source = declared :: record_types.Source
+        if declared ~= "stream" and declared ~= "hook" and declared ~= "transcript" and declared ~= "mcp" then return failure("INVALID_ARGUMENT", "observation source must be stream, hook, transcript or mcp") end
+        source = declared
     elseif object.source ~= nil then
         return failure("INVALID_ARGUMENT", "messages carry no source")
     end

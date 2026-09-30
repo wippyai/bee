@@ -16,11 +16,11 @@ function M.mark(value: unknown): (types.DeliveryMark?, string?)
     if not delivery_id then return nil, "delivery_id is not an identifier" end
     if not message_id then return nil, "message_id is not an identifier" end
     if not recipient_id then return nil, "recipient_id is not an identifier" end
-    if not state then return nil, "delivery state is not claimed, delivered, released or uncertain" end
+    if state ~= "claimed" and state ~= "delivered" and state ~= "released" and state ~= "uncertain" then return nil, "delivery state is not claimed, delivered, released or uncertain" end
     if not epoch or epoch < 1 then return nil, "owner_epoch must be a positive integer" end
     if not channel then return nil, "channel is not an identifier" end
     local mark: types.DeliveryMark = {delivery_id = delivery_id, message_id = message_id, recipient_id = recipient_id,
-        state = state :: types.DeliveryState, owner_epoch = epoch, channel = channel}
+        state = state, owner_epoch = epoch, channel = channel}
     local evidence, valid = values.optional_id(object, "evidence_ref")
     if not valid then return nil, "evidence_ref is not an identifier" end
     mark.evidence_ref = evidence

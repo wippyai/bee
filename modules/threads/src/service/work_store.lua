@@ -37,7 +37,7 @@ end
 
 local function object(value: unknown): Row?
     if type(value) ~= "table" then return nil end
-    return value :: Row
+    return value
 end
 
 local function has_only(row: Row, allowed: {[string]: boolean}): boolean
@@ -112,7 +112,7 @@ local function query_one(tx: sql.Transaction, statement: string, params: {unknow
     if query_error or not rows then return nil, "read " .. label end
     if #rows > 1 then return nil, label .. " rows are corrupt" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: Row, nil
+    return rows[1], nil
 end
 
 local function execute(tx: sql.Transaction, statement: string, params: {unknown}, label: string): string?
@@ -148,18 +148,18 @@ local function work_row(row: Row): (Work?, string?)
     local result_json: string? = nil
     if row.result_json ~= nil then
         if type(row.result_json) ~= "string" then return nil, "work result is corrupt" end
-        result_json = row.result_json :: string
+        result_json = row.result_json
     end
     local uncertainty_json: string? = nil
     if row.uncertainty_json ~= nil then
         if type(row.uncertainty_json) ~= "string" then return nil, "work uncertainty is corrupt" end
-        uncertainty_json = row.uncertainty_json :: string
+        uncertainty_json = row.uncertainty_json
     end
     if not work_ref or not session_ref or not workspace or not input_json or not input_digest or not output_schema
         or (sender_kind ~= "session" and sender_kind ~= "principal") or not sender_id
         or not phase or not sequence or not revision or not operation_ref or not created_at then return nil, "work row is corrupt" end
     return {work_ref = work_ref, session_ref = session_ref, workspace_id = workspace, sequence = sequence,
-        revision = revision, phase = phase, input_json = input_json :: string, input_digest = input_digest,
+        revision = revision, phase = phase, input_json = input_json, input_digest = input_digest,
         output_schema = output_schema, sender_kind = sender_kind, sender_id = sender_id, result_json = result_json,
         uncertainty_json = uncertainty_json, operation_ref = operation_ref, created_at = created_at}, nil
 end
@@ -172,17 +172,17 @@ local function turn_row(row: Row): (Turn?, string?)
     local checkpoint_json: string? = nil
     if row.checkpoint_json ~= nil then
         if type(row.checkpoint_json) ~= "string" then return nil, "turn checkpoint is corrupt" end
-        checkpoint_json = row.checkpoint_json :: string
+        checkpoint_json = row.checkpoint_json
     end
     local accept_record_id: string? = nil
     if row.accept_record_id ~= nil then
         if type(row.accept_record_id) ~= "string" then return nil, "turn acceptance is corrupt" end
-        accept_record_id = row.accept_record_id :: string
+        accept_record_id = row.accept_record_id
     end
     local settle_record_id: string? = nil
     if row.settle_record_id ~= nil then
         if type(row.settle_record_id) ~= "string" then return nil, "turn settlement is corrupt" end
-        settle_record_id = row.settle_record_id :: string
+        settle_record_id = row.settle_record_id
     end
     if not turn_ref or not session_ref or not work_ref or not claim_token or not input_digest or not phase or not owner_epoch or owner_epoch < 1
         or not reserve_record_id or not created_at then return nil, "turn row is corrupt" end
@@ -245,7 +245,7 @@ local function operation_replay(tx: sql.Transaction, actor: string, workspace: s
         return failure("CONFLICT", "operation key already names a different request"), nil
     end
     if type(row.receipt_json) ~= "string" then return nil, "operation receipt is corrupt" end
-    local receipt, decode_error = json.decode(row.receipt_json :: string)
+    local receipt, decode_error = json.decode(row.receipt_json)
     if decode_error or type(receipt) ~= "table" then return nil, "operation receipt cannot be decoded" end
     return transaction.success(receipt, true), nil
 end
@@ -302,9 +302,9 @@ local function node_and_operation(node: string?, workspace: string): (string?, s
         node, node_error = node_id()
         if not node then return nil, nil, node_error or "node identity is unavailable" end
     end
-    local operation_ref, reference_error = operation_reference(node :: string, workspace)
+    local operation_ref, reference_error = operation_reference(node, workspace)
     if not operation_ref then return nil, nil, reference_error or "allocate operation reference" end
-    return node :: string, operation_ref, nil
+    return node, operation_ref, nil
 end
 
 local function operation_context(tx: sql.Transaction, actor: string, workspace: string, operation_key: string,
@@ -331,7 +331,7 @@ end
 local function decode_json(value: string): (unknown, string?)
     local decoded, decode_error = json.decode(value)
     if decode_error then return nil, "stored JSON is corrupt" end
-    return decoded :: unknown, nil
+    return decoded, nil
 end
 
 local function current_epoch(tx: sql.Transaction): (integer?, string?)
@@ -344,6 +344,8 @@ end
 function M.session_create(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {operation_key = true, title = true, route = true, thread_id = true}) then return missing_request() end
     local operation_key = key(input.operation_key)
@@ -358,16 +360,16 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
     if input.thread_id ~= nil and not existing_thread then return missing_request() end
     local arguments = {title = title, route_digest = route_digest, thread_id = existing_thread}
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string, operation_key, "session_create", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, workspace, operation_key, "session_create", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
-        local node, op_ref, reference_error = node_and_operation(nil, workspace :: string)
+        local node, op_ref, reference_error = node_and_operation(nil, workspace)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local session_id, session_id_error = allocate_id()
         local thread_id, thread_id_error = allocate_id()
         if existing_thread then thread_id = existing_thread end
         if not session_id or not thread_id then return failure("INTERNAL", session_id_error or thread_id_error or "allocate session identity") end
-        local session_ref = qualified("bs", node, workspace :: string, session_id)
+        local session_ref = qualified("bs", node, workspace, session_id)
         local stored_route: Row = {}
         for name, value in pairs(object(input.route) or {}) do stored_route[name] = value end
         stored_route.session_ref = session_ref
@@ -382,10 +384,10 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
             local head, head_error = query_one(tx, "SELECT owner_actor, workspace_id FROM bee_thread_heads WHERE thread_id = ?", {existing_thread}, "interactive thread")
             if head_error then return transaction.storage_failure(head_error) end
             if not head or head.workspace_id ~= workspace then return failure("DENIED", "interactive session requires its workspace thread") end
-            local member, member_error = reader.member(tx, existing_thread, caller :: string)
+            local member, member_error = reader.member(tx, existing_thread, caller)
             if member_error then return transaction.storage_failure(member_error) end
             if not member or not member.active then
-                local stable, alias_error = reader.app_live_stable(tx, caller :: string)
+                local stable, alias_error = reader.app_live_stable(tx, caller)
                 if alias_error then return transaction.storage_failure(alias_error) end
                 if stable then member, member_error = reader.app_family_member(tx, existing_thread, stable) end
                 if member_error then return transaction.storage_failure(member_error) end
@@ -394,10 +396,10 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
                 return failure("DENIED", "interactive session requires active participant membership in its workspace thread")
             end
         else
-            local head_error = transaction.insert_head(tx, {thread_id = thread_id, owner_actor = caller :: string, title = title :: string,
+            local head_error = transaction.insert_head(tx, {thread_id = thread_id, owner_actor = caller, title = title,
                 created_at = now, workspace_id = workspace})
             if head_error then return failure("INTERNAL", head_error) end
-            local member_error = transaction.insert_member(tx, thread_id, caller :: string, "owner", 1)
+            local member_error = transaction.insert_member(tx, thread_id, caller, "owner", 1)
             if member_error then return failure("INTERNAL", member_error) end
         end
         local peer_error = transaction.insert_member(tx, thread_id, session_ref, "participant", 1)
@@ -405,20 +407,21 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         local session_error = execute(tx, "INSERT INTO bee_sessions (session_ref, thread_id, workspace_id, owner_actor, title, state, revision, created_at, updated_at, route_json) " ..
             "VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, ?)", {session_ref, thread_id, workspace, caller, title, now, now, stored_route_json}, "create session")
         if session_error then return failure("INTERNAL", session_error) end
-        local session: Session = {session_ref = session_ref, thread_id = thread_id, workspace_id = workspace :: string,
-            owner_actor = caller :: string, title = title :: string, state = "active", revision = 1, created_at = now, updated_at = now,
-            route_json = stored_route_json :: string, context_json = "{}"}
-        local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "session.created", session_ref, 1,
+        local session: Session = {session_ref = session_ref, thread_id = thread_id, workspace_id = workspace,
+            owner_actor = caller, title = title, state = "active", revision = 1, created_at = now, updated_at = now,
+            route_json = stored_route_json, context_json = "{}"}
+        local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "session.created", session_ref, 1,
             {title = title, route_digest = route_digest})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append session creation event") end
         local receipt = {session = session_ref, operation = op_ref, state = "active", revision = 1, committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, workspace :: string, operation_key, op_ref, "session_create", request_digest :: string, session_ref, receipt, now)
+        return finish_operation(tx, caller, workspace, operation_key, op_ref, "session_create", request_digest, session_ref, receipt, now)
     end)
 end
 
 function M.session_attach(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {session = true, attempt_id = true, operation_key = true}) then return missing_request() end
     local session_ref, attempt, operation_key = ref(input.session), text(input.attempt_id, 160), key(input.operation_key)
@@ -428,7 +431,7 @@ function M.session_attach(db: sql.DB, actor: string, request: unknown): Result
         if session_error then return transaction.storage_failure(session_error) end
         if not session or session.owner_actor ~= caller then return failure("DENIED", "interactive attachment belongs to its admitted owner") end
         local arguments = {session = session_ref, attempt_id = attempt}
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, session.workspace_id, operation_key, "session_attach", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, session.workspace_id, operation_key, "session_attach", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
         local route_value, route_error = decode_json(session.route_json)
@@ -441,22 +444,24 @@ function M.session_attach(db: sql.DB, actor: string, request: unknown): Result
         local node, op_ref, reference_error = node_and_operation(nil, session.workspace_id)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "allocate attachment operation") end
         local now = transaction.now()
-        local _, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "session.attached", session_ref, session.revision + 1, {attempt_id = attempt})
+        local _, sequence, event_error = append_event(tx, session, caller, op_ref, "session.attached", session_ref, session.revision + 1, {attempt_id = attempt})
         if not sequence then return failure("INTERNAL", event_error or "append attachment") end
         local update_error = execute(tx, "UPDATE bee_sessions SET route_json = ?, state = 'active', revision = revision + 1, updated_at = ? WHERE session_ref = ?", {route_json, now, session_ref}, "attach session window")
         if update_error then return failure("INTERNAL", update_error) end
-        return finish_operation(tx, caller :: string, session.workspace_id, operation_key, op_ref, "session_attach", request_digest :: string, session_ref, {session = session_ref, operation = op_ref, attempt_id = attempt}, now)
+        return finish_operation(tx, caller, session.workspace_id, operation_key, op_ref, "session_attach", request_digest, session_ref, {session = session_ref, operation = op_ref, attempt_id = attempt}, now)
     end)
 end
 
 function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     local session_ref = input and has_only(input, {session = true}) and ref(input.session) or nil
     if not session_ref then return missing_request() end
     return transaction.read(db, function(tx: sql.Transaction): Result
-        local session, query_error = get_session(tx, session_ref, workspace :: string)
+        local session, query_error = get_session(tx, session_ref, workspace)
         if query_error then return transaction.storage_failure(query_error) end
         if not session then return failure("NOT_FOUND", "session does not exist") end
         local rows, count_error = tx:query("SELECT phase, COUNT(*) AS count, " ..
@@ -518,6 +523,7 @@ end
 function M.session_scan(db: sql.DB, actor: string, request: unknown): Result
     local _, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {cursor = true, limit = true, workspace = true}) then return missing_request() end
     local cursor = input.cursor == nil and nil or ref(input.cursor)
@@ -527,7 +533,7 @@ function M.session_scan(db: sql.DB, actor: string, request: unknown): Result
     end
     local selected_workspace = input.workspace == nil and nil or text(input.workspace, 32)
     if input.workspace ~= nil and (not selected_workspace or (selected_workspace ~= workspace and not access.may_list_workspace(selected_workspace))) then return failure("DENIED", "workspace visibility requires a host grant") end
-    local page_limit = limit :: integer
+    local page_limit = limit
     local cursor_parameter = cursor or sql.NULL
     return transaction.read(db, function(tx: sql.Transaction): Result
         local homes, homes_error = tx:query("SELECT DISTINCT workspace_id FROM bee_sessions", {})
@@ -567,6 +573,8 @@ end
 function M.session_transition(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {session = true, state = true, operation_key = true, expected_revision = true}) then return missing_request() end
     local session_ref, operation_key = ref(input.session), key(input.operation_key)
@@ -578,13 +586,13 @@ function M.session_transition(db: sql.DB, actor: string, request: unknown): Resu
     end
     local arguments = {session = session_ref, state = target}
     if expected_revision then arguments.expected_revision = expected_revision end
-    workspace = mutation_workspace(session_ref :: string, workspace, "close")
+    workspace = mutation_workspace(session_ref, workspace, "close")
     if not workspace then return failure("DENIED", "session control requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string, operation_key, "session_transition", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, workspace, operation_key, "session_transition", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
-        local session, query_error = get_session(tx, session_ref, workspace :: string)
+        local session, query_error = get_session(tx, session_ref, workspace)
         if query_error then return transaction.storage_failure(query_error) end
         if not session then return failure("NOT_FOUND", "session does not exist") end
         if expected_revision and expected_revision ~= session.revision then return failure("CONFLICT", "session revision changed") end
@@ -600,7 +608,7 @@ function M.session_transition(db: sql.DB, actor: string, request: unknown): Resu
             allowed = session.state == "closing" or session.state == "active" or session.state == "suspended"
         end
         if not allowed then return failure("CONFLICT", "session lifecycle transition is not allowed") end
-        local node, op_ref, reference_error = node_and_operation(nil, workspace :: string)
+        local node, op_ref, reference_error = node_and_operation(nil, workspace)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local now = transaction.now()
         local revision = session.revision
@@ -613,13 +621,13 @@ function M.session_transition(db: sql.DB, actor: string, request: unknown): Resu
         local record_id, sequence = nil, nil
         if target ~= session.state then
             local event_error: string?
-            record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "session.state_changed", session_ref,
+            record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "session.state_changed", session_ref,
                 revision, {from = session.state, to = target})
             if not record_id or not sequence then return failure("INTERNAL", event_error or "append lifecycle event") end
         end
         local receipt = {session = session_ref, operation = op_ref, state = target, revision = revision,
             committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, workspace :: string, operation_key, op_ref, "session_transition", request_digest :: string, session_ref, receipt, now)
+        return finish_operation(tx, caller, workspace, operation_key, op_ref, "session_transition", request_digest, session_ref, receipt, now)
     end)
 end
 
@@ -647,6 +655,8 @@ end
 function M.work_send(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {session = true, operation_key = true, input = true, output_schema = true}) then return missing_request() end
     local session_ref, operation_key = ref(input.session), key(input.operation_key)
@@ -655,26 +665,26 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
     if not session_ref or not operation_key or not output_schema or input.input == nil or not input_json then
         return failure("INVALID_ARGUMENT", input_error or "session, key, input or output schema is invalid")
     end
-    local input_digest = digest(input_json :: string)
+    local input_digest = digest(input_json)
     if not input_digest then return failure("INTERNAL", "measure immutable work input") end
     local arguments = {session = session_ref, input = input_json, output_schema = output_schema}
-    workspace = mutation_workspace(session_ref :: string, workspace, "send")
+    workspace = mutation_workspace(session_ref, workspace, "send")
     if not workspace then return failure("DENIED", "sending requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string, operation_key, "work_send", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, workspace, operation_key, "work_send", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
-        local session, session_error = get_session(tx, session_ref :: string, workspace :: string)
+        local session, session_error = get_session(tx, session_ref, workspace)
         if session_error then return transaction.storage_failure(session_error) end
         if not session then return failure("NOT_FOUND", "session does not exist") end
         if session.state == "closing" or session.state == "closed" then return failure("CONFLICT", "session is not accepting work") end
-        local node, op_ref, reference_error = node_and_operation(nil, workspace :: string)
+        local node, op_ref, reference_error = node_and_operation(nil, workspace)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local id, id_error = allocate_id()
         if not id then return failure("INTERNAL", id_error or "allocate work reference") end
-        local work_ref = qualified("bw", node, workspace :: string, id)
+        local work_ref = qualified("bw", node, workspace, id)
         local now = transaction.now()
-        local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.queued", work_ref, 1,
+        local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "work.queued", work_ref, 1,
             {session = session_ref, input_digest = input_digest, output_schema = output_schema, input = input.input,
                 sender = {kind = caller:match("^bs:") and "session" or "principal", id = caller}})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append work event") end
@@ -685,7 +695,7 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
         if work_error then return failure("INTERNAL", work_error) end
         local receipt = {work = work_ref, session = session_ref, operation = op_ref, committed_at = now, sequence = sequence,
             kind = "request", state = "queued", output_schema = output_schema, sender = {kind = sender_kind, id = caller}}
-        return finish_operation(tx, caller :: string, workspace :: string, operation_key, op_ref, "work_send", request_digest :: string, work_ref, receipt, now)
+        return finish_operation(tx, caller, workspace, operation_key, op_ref, "work_send", request_digest, work_ref, receipt, now)
     end)
 end
 
@@ -712,11 +722,13 @@ end
 function M.work_describe(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     local work_ref = input and has_only(input, {work = true}) and ref(input.work) or nil
     if not work_ref then return missing_request() end
     return transaction.read(db, function(tx: sql.Transaction): Result
-        local work, query_error = get_work(tx, work_ref :: string, workspace :: string)
+        local work, query_error = get_work(tx, work_ref, workspace)
         if query_error then return transaction.storage_failure(query_error) end
         if not work then return failure("NOT_FOUND", "work does not exist") end
         local value, value_error = work_value(work)
@@ -738,7 +750,7 @@ function M.work_describe(db: sql.DB, actor: string, request: unknown): Result
                 value.owner_epoch = execution.owner_epoch
                 value.turn_phase = execution.turn_phase
                 if type(execution.checkpoint_json) == "string" then
-                    local checkpoint, checkpoint_error = decode_json(execution.checkpoint_json :: string)
+                    local checkpoint, checkpoint_error = decode_json(execution.checkpoint_json)
                     if checkpoint_error then return failure("INTERNAL", checkpoint_error) end
                     value.checkpoint = checkpoint
                 end
@@ -751,6 +763,7 @@ end
 function M.work_history(db: sql.DB, actor: string, request: unknown): Result
     local _, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {session = true, cursor = true, limit = true}) then return missing_request() end
     local session_ref = ref(input.session)
@@ -778,6 +791,7 @@ end
 function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     local limit = input and has_only(input, {limit = true}) and (input.limit == nil and MAX_FEED_PAGE or integer(input.limit)) or nil
     if not limit or limit < 1 or limit > MAX_FEED_PAGE then return failure("INVALID_ARGUMENT", "work scan limit is outside its bound") end
@@ -796,7 +810,7 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
         if query_error or not rows then return transaction.storage_failure("scan session work") end
         local items: {Row} = {}
         for _, row_value in ipairs(rows) do
-            local row = row_value :: Row
+            local row = row_value
             local work, work_error = work_row(row)
             if not work then return failure("INTERNAL", work_error or "decode scanned work") end
             local route_value, route_error = decode_json(tostring(row.route_json or ""))
@@ -816,7 +830,7 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
                 local checkpoint: unknown = nil
                 if row.checkpoint_json ~= nil then
                     if type(row.checkpoint_json) ~= "string" then return failure("INTERNAL", "turn checkpoint is corrupt") end
-                    checkpoint, route_error = decode_json(row.checkpoint_json :: string)
+                    checkpoint, route_error = decode_json(row.checkpoint_json)
                     if route_error then return failure("INTERNAL", route_error) end
                 end
                 if not turn_ref or not claim_token or not owner_epoch then return failure("INTERNAL", "active turn identity is corrupt") end
@@ -834,6 +848,8 @@ end
 function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {work = true, reason = true, operation_key = true}) then return missing_request() end
     local work_ref, operation_key = ref(input.work), key(input.operation_key)
@@ -843,17 +859,17 @@ function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
     end
     local arguments: Row = {work = work_ref}
     if reason then arguments.reason = reason end
-    workspace = mutation_workspace(work_ref :: string, workspace, "cancel")
+    workspace = mutation_workspace(work_ref, workspace, "cancel")
     if not workspace then return failure("DENIED", "cancellation requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string,
+        local request_digest, replay, context_error = operation_context(tx, caller, workspace,
             operation_key, "work_cancel", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
-        local work, work_error = get_work(tx, work_ref :: string, workspace :: string)
+        local work, work_error = get_work(tx, work_ref, workspace)
         if work_error then return transaction.storage_failure(work_error) end
         if not work then return failure("NOT_FOUND", "work does not exist") end
-        local session, session_error = get_session(tx, work.session_ref, workspace :: string)
+        local session, session_error = get_session(tx, work.session_ref, workspace)
         if session_error then return transaction.storage_failure(session_error) end
         if not session then return failure("NOT_FOUND", "work session does not exist") end
         local node, op_ref, reference_error = node_and_operation(nil, session.workspace_id)
@@ -865,7 +881,7 @@ function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
                 artifacts = {"work was cancelled before executor activation"}}
             local result_json, checked_result, checked_error = result_value(cancelled, work.output_schema)
             if not result_json or not checked_result then return failure("INVALID_ARGUMENT", checked_error or "cancellation result is invalid") end
-            local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.cancelled",
+            local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "work.cancelled",
                 work.work_ref, work.revision + 1, {before_activation = true, reason = summary})
             if not record_id or not sequence then return failure("INTERNAL", event_error or "append cancellation event") end
             local update_error = execute(tx, "UPDATE bee_session_work SET phase = 'settled', revision = revision + 1, result_json = ? " ..
@@ -876,7 +892,7 @@ function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
                 "(work_ref, operation_ref, reason, requested_at) VALUES (?, ?, ?, ?) ON CONFLICT(work_ref) DO NOTHING",
                 {work.work_ref, op_ref, reason or sql.NULL, now}, "record work cancellation")
             if insert_error then return failure("INTERNAL", insert_error) end
-            local _, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.cancel_requested",
+            local _, sequence, event_error = append_event(tx, session, caller, op_ref, "work.cancel_requested",
                 work.work_ref, work.revision + 1, {reason = reason or ""})
             if not sequence then return failure("INTERNAL", event_error or "append cancellation request") end
             local update_error = execute(tx, "UPDATE bee_session_work SET revision = revision + 1 " ..
@@ -884,14 +900,16 @@ function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
             if update_error then return failure("CONFLICT", update_error) end
         end
         local receipt = {operation = op_ref, subject = work.work_ref, state = "requested", effect = "cancel"}
-        return finish_operation(tx, caller :: string, session.workspace_id, operation_key, op_ref, "work_cancel",
-            request_digest :: string, work.work_ref, receipt, now)
+        return finish_operation(tx, caller, session.workspace_id, operation_key, op_ref, "work_cancel",
+            request_digest, work.work_ref, receipt, now)
     end)
 end
 
 function M.operation_lookup(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     local operation_key = input and has_only(input, {operation_key = true}) and key(input.operation_key) or nil
     if not operation_key then return missing_request() end
@@ -902,7 +920,7 @@ function M.operation_lookup(db: sql.DB, actor: string, request: unknown): Result
         if query_error then return transaction.storage_failure(query_error) end
         if not row then return transaction.success({found = false, operation_key = operation_key}, false) end
         if type(row.receipt_json) ~= "string" then return failure("INTERNAL", "operation receipt is corrupt") end
-        local receipt, decode_error = decode_json(row.receipt_json :: string)
+        local receipt, decode_error = decode_json(row.receipt_json)
         if decode_error then return failure("INTERNAL", decode_error) end
         return transaction.success({found = true, operation_key = operation_key, operation = row.operation,
             operation_ref = row.operation_ref, target = row.target_ref, request_digest = row.request_digest,
@@ -913,6 +931,8 @@ end
 function M.operation_describe(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     local operation_ref = input and has_only(input, {operation = true}) and ref(input.operation) or nil
     if not operation_ref then return missing_request() end
@@ -923,7 +943,7 @@ function M.operation_describe(db: sql.DB, actor: string, request: unknown): Resu
         if query_error then return transaction.storage_failure(query_error) end
         if not row then return failure("NOT_FOUND", "operation does not exist") end
         if type(row.receipt_json) ~= "string" then return failure("INTERNAL", "operation receipt is corrupt") end
-        local receipt, decode_error = decode_json(row.receipt_json :: string)
+        local receipt, decode_error = decode_json(row.receipt_json)
         if decode_error then return failure("INTERNAL", decode_error) end
         return transaction.success({found = true, operation_key = row.operation_key, operation = row.operation,
             operation_ref = row.operation_ref, target = row.target_ref, request_digest = row.request_digest,
@@ -934,18 +954,20 @@ end
 local function extension_payload(encoded: string): (Row?, string?, string?)
     local stored, decode_error = record.decode_json(encoded)
     if not stored or stored.kind ~= "observation" then return nil, nil, decode_error or "journal record is not an observation" end
-    local body = stored.body :: record_types.Observation
+    local body = stored.body
     if body.type ~= "extension" or body.data.type ~= "extension" then return nil, nil, "journal event schema is invalid" end
-    local extension = body.data :: record_types.Extension
+    local extension = body.data
     if extension.event_name ~= "bee.sessions.event" or extension.event_revision ~= "1" then return nil, nil, "journal event revision is unsupported" end
     local payload, payload_error = json.decode(extension.payload_json)
     if payload_error or type(payload) ~= "table" then return nil, nil, "journal event payload is corrupt" end
-    return payload :: Row, body.observed_at, nil
+    return payload, body.observed_at, nil
 end
 
 function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
+    local caller = assert(caller)
+    local workspace = assert(workspace)
     local input = object(request)
     if not input or not has_only(input, {session = true, after_sequence = true, limit = true}) then return missing_request() end
     local session_ref = ref(input.session)
@@ -955,9 +977,9 @@ function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
     if not session_ref or cursor == nil or not limit or limit < 1 or limit > MAX_FEED_PAGE then
         return failure("INVALID_ARGUMENT", "session, after_sequence or feed limit is invalid")
     end
-    local page_limit = limit :: integer
+    local page_limit = limit
     return transaction.read(db, function(tx: sql.Transaction): Result
-        local session, query_error = get_session(tx, session_ref, workspace :: string)
+        local session, query_error = get_session(tx, session_ref, workspace)
         if query_error then return transaction.storage_failure(query_error) end
         if not session then return failure("NOT_FOUND", "session does not exist") end
         local rows, records_error = tx:query("SELECT record_id, sequence, record_json, committed_at FROM bee_thread_records " ..
@@ -974,7 +996,7 @@ function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
             local event_id, sequence = text(row.record_id, 160), integer(row.sequence)
             local encoded, committed_at = type(row.record_json) == "string" and row.record_json or nil, text(row.committed_at, 64)
             if not event_id or not sequence or not encoded or not committed_at then return failure("INTERNAL", "session feed row is corrupt") end
-            local payload, observed_at, payload_error = extension_payload(encoded :: string)
+            local payload, observed_at, payload_error = extension_payload(encoded)
             if not payload then return failure("INTERNAL", payload_error or "decode session event") end
             events[#events + 1] = {owner = "threads", id = event_id, schema = "bee.sessions.event@1", sequence = sequence,
                 recorded_at = committed_at, observed_at = observed_at,
@@ -992,17 +1014,18 @@ local TURN_COLUMNS = "turn_ref, session_ref, work_ref, claim_token, owner_epoch,
 function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {session = true, operation_key = true}) then return missing_request() end
     local session_ref, operation_key = ref(input.session), key(input.operation_key)
     if not session_ref or not operation_key then return missing_request() end
     local arguments = {session = session_ref}
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local session, session_error = get_session(tx, session_ref :: string, workspace)
+        local session, session_error = get_session(tx, session_ref, workspace)
         if session_error then return transaction.storage_failure(session_error) end
         if not session then return failure("NOT_FOUND", "session does not exist") end
         local scope_workspace = session.workspace_id
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, scope_workspace, operation_key, "turn_reserve", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, scope_workspace, operation_key, "turn_reserve", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
         local epoch, epoch_error = current_epoch(tx)
@@ -1012,7 +1035,7 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
         local now = transaction.now()
         if session.state ~= "active" and session.state ~= "closing" then
             local receipt = {session = session_ref, turn = nil, state = session.state, operation = op_ref, committed_at = now}
-            return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest :: string, session_ref, receipt, now)
+            return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, session_ref, receipt, now)
         end
         local active_row, active_error = query_one(tx, "SELECT " .. TURN_COLUMNS .. " FROM bee_session_turns " ..
             "WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active turn")
@@ -1022,7 +1045,7 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
             if not active then return failure("INTERNAL", decode_error or "active turn is corrupt") end
             if active.owner_epoch ~= epoch then return failure("UNKNOWN_OUTCOME", "an earlier owner epoch has an unsettled turn") end
             local receipt = {session = session_ref, turn = nil, state = "busy", operation = op_ref, committed_at = now}
-            return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest :: string, session_ref, receipt, now)
+            return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, session_ref, receipt, now)
         end
         local work_row_data, work_error = query_one(tx, "SELECT work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
             "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at FROM bee_session_work " ..
@@ -1030,15 +1053,15 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
         if work_error then return transaction.storage_failure(work_error) end
         if not work_row_data then
             local receipt = {session = session_ref, turn = nil, state = "idle", operation = op_ref, committed_at = now}
-            return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest :: string, session_ref, receipt, now)
+            return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, session_ref, receipt, now)
         end
         local work, decode_error = work_row(work_row_data)
         if not work then return failure("INTERNAL", decode_error or "queued work is corrupt") end
         local turn_id, turn_id_error = allocate_id()
         local claim, claim_error = allocate_id()
         if not turn_id or not claim then return failure("INTERNAL", turn_id_error or claim_error or "allocate turn claim") end
-        local turn_ref = qualified("bturn", node :: string, scope_workspace, turn_id)
-        local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "turn.reserved", work.work_ref,
+        local turn_ref = qualified("bturn", node, scope_workspace, turn_id)
+        local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "turn.reserved", work.work_ref,
             work.revision + 1, {turn = turn_ref, input_digest = work.input_digest, owner_epoch = epoch})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn reservation") end
         local insert_error = execute(tx, "INSERT INTO bee_session_turns (turn_ref, session_ref, work_ref, claim_token, owner_epoch, input_digest, phase, " ..
@@ -1052,20 +1075,21 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
         local receipt = {session = session_ref, work = work.work_ref, turn = turn_ref, claim = claim,
             input_digest = work.input_digest, owner_epoch = epoch, state = "reserved", operation = op_ref,
             committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest :: string, work.work_ref, receipt, now)
+        return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, work.work_ref, receipt, now)
     end)
 end
 
 function M.turn_recover(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {turn = true, operation_key = true}) then return missing_request() end
     local turn_ref, operation_key = ref(input.turn), key(input.operation_key)
     if not turn_ref or not operation_key then return missing_request() end
     local arguments = {turn = turn_ref}
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local turn, turn_error = get_turn(tx, turn_ref :: string)
+        local turn, turn_error = get_turn(tx, turn_ref)
         if turn_error then return transaction.storage_failure(turn_error) end
         if not turn then return failure("NOT_FOUND", "turn does not exist") end
         if turn.phase == "settled" then return failure("CONFLICT", "settled turn cannot be recovered") end
@@ -1075,7 +1099,7 @@ function M.turn_recover(db: sql.DB, actor: string, request: unknown): Result
         if session_error then return transaction.storage_failure(session_error) end
         if not session then return failure("NOT_FOUND", "turn session does not exist") end
         local scope_workspace = session.workspace_id
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, scope_workspace,
+        local request_digest, replay, context_error = operation_context(tx, caller, scope_workspace,
             operation_key, "turn_recover", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
@@ -1087,7 +1111,7 @@ function M.turn_recover(db: sql.DB, actor: string, request: unknown): Result
             local node, op_ref, reference_error = node_and_operation(nil, scope_workspace)
             if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
             local now = transaction.now()
-            local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "turn.recovered", turn.work_ref,
+            local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "turn.recovered", turn.work_ref,
                 turn.owner_epoch + 1, {turn = turn.turn_ref, previous_epoch = turn.owner_epoch, owner_epoch = epoch})
             if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn recovery") end
             local update_error = execute(tx, "UPDATE bee_session_turns SET claim_token = ?, owner_epoch = ? WHERE turn_ref = ? AND phase IN ('reserved','accepted')",
@@ -1096,16 +1120,16 @@ function M.turn_recover(db: sql.DB, actor: string, request: unknown): Result
             local receipt = {session = turn.session_ref, work = turn.work_ref, turn = turn.turn_ref, claim = claim_token,
                 input_digest = turn.input_digest, owner_epoch = epoch, state = turn.phase, operation = op_ref,
                 committed_at = now, sequence = sequence}
-            return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "turn_recover",
-                request_digest :: string, turn.work_ref, receipt, now)
+            return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_recover",
+                request_digest, turn.work_ref, receipt, now)
         end
         local node, op_ref, reference_error = node_and_operation(nil, scope_workspace)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local now = transaction.now()
         local receipt = {session = turn.session_ref, work = turn.work_ref, turn = turn.turn_ref, claim = claim_token,
             input_digest = turn.input_digest, owner_epoch = epoch, state = turn.phase, operation = op_ref, committed_at = now}
-        return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "turn_recover",
-            request_digest :: string, turn.work_ref, receipt, now)
+        return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_recover",
+            request_digest, turn.work_ref, receipt, now)
     end)
 end
 
@@ -1129,6 +1153,7 @@ end
 function M.work_uncertain(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {turn = true, claim = true, evidence = true, operation_key = true}) then return missing_request() end
     local turn_ref, claim_token, operation_key = ref(input.turn), text(input.claim, 128), key(input.operation_key)
@@ -1142,18 +1167,18 @@ function M.work_uncertain(db: sql.DB, actor: string, request: unknown): Result
     end
     local arguments = {turn = turn_ref, claim = claim_token, evidence = evidence_json}
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local turn, work, session, claim_error = claimed_turn(tx, turn_ref :: string, claim_token :: string, workspace)
+        local turn, work, session, claim_error = claimed_turn(tx, turn_ref, claim_token, workspace)
         if claim_error then return claim_error end
         if not turn or not work or not session then return failure("INTERNAL", "uncertain turn context is incomplete") end
         if turn.phase ~= "accepted" or work.phase ~= "accepted" then return failure("CONFLICT", "only an accepted turn can be marked uncertain") end
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, session.workspace_id,
+        local request_digest, replay, context_error = operation_context(tx, caller, session.workspace_id,
             operation_key, "work_uncertain", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
         local now = transaction.now()
         local node, op_ref, reference_error = node_and_operation(nil, session.workspace_id)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
-        local _, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.uncertain", work.work_ref,
+        local _, sequence, event_error = append_event(tx, session, caller, op_ref, "work.uncertain", work.work_ref,
             work.revision + 1, evidence)
         if not sequence then return failure("INTERNAL", event_error or "append uncertainty event") end
         local update_error = execute(tx, "UPDATE bee_session_work SET uncertainty_json = ?, revision = revision + 1 " ..
@@ -1161,14 +1186,15 @@ function M.work_uncertain(db: sql.DB, actor: string, request: unknown): Result
         if update_error then return failure("CONFLICT", update_error) end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
             state = "uncertain", evidence = evidence, operation = op_ref, committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, session.workspace_id, operation_key, op_ref, "work_uncertain",
-            request_digest :: string, work.work_ref, receipt, now)
+        return finish_operation(tx, caller, session.workspace_id, operation_key, op_ref, "work_uncertain",
+            request_digest, work.work_ref, receipt, now)
     end)
 end
 
 function M.turn_pull(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {turn = true, claim = true}) then return missing_request() end
     local turn_ref, claim_token = ref(input.turn), text(input.claim, 128)
@@ -1198,6 +1224,7 @@ end
 function M.turn_accept(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {turn = true, claim = true, input_digest = true, checkpoint = true, operation_key = true}) then return missing_request() end
     local turn_ref, claim_token, input_digest = ref(input.turn), text(input.claim, 128), text(input.input_digest, 128)
@@ -1208,17 +1235,17 @@ function M.turn_accept(db: sql.DB, actor: string, request: unknown): Result
     end
     local arguments = {turn = turn_ref, claim = claim_token, input_digest = input_digest, checkpoint = checkpoint_json}
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local turn_identity, turn_error = get_turn(tx, turn_ref :: string)
+        local turn_identity, turn_error = get_turn(tx, turn_ref)
         if turn_error then return transaction.storage_failure(turn_error) end
         if not turn_identity then return failure("NOT_FOUND", "turn does not exist") end
         local session_identity, session_error = get_session(tx, turn_identity.session_ref, workspace)
         if session_error then return transaction.storage_failure(session_error) end
         if not session_identity then return failure("NOT_FOUND", "turn session does not exist") end
         local scope_workspace = session_identity.workspace_id
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, scope_workspace, operation_key, "turn_accept", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, scope_workspace, operation_key, "turn_accept", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
-        local turn, work, session, claim_error = claimed_turn(tx, turn_ref :: string, claim_token :: string, scope_workspace)
+        local turn, work, session, claim_error = claimed_turn(tx, turn_ref, claim_token, scope_workspace)
         if claim_error then return claim_error end
         if not turn or not work or not session then return failure("INTERNAL", "turn acceptance context is incomplete") end
         if turn.phase ~= "reserved" or work.phase ~= "reserved" then return failure("CONFLICT", "only a reserved turn can be accepted") end
@@ -1226,7 +1253,7 @@ function M.turn_accept(db: sql.DB, actor: string, request: unknown): Result
         local node, op_ref, reference_error = node_and_operation(nil, scope_workspace)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local now = transaction.now()
-        local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "turn.accepted", work.work_ref,
+        local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "turn.accepted", work.work_ref,
             work.revision + 1, {turn = turn.turn_ref, input_digest = input_digest})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn acceptance") end
         local update_turn_error = execute(tx, "UPDATE bee_session_turns SET phase = 'accepted', checkpoint_json = ?, accept_record_id = ? " ..
@@ -1237,13 +1264,14 @@ function M.turn_accept(db: sql.DB, actor: string, request: unknown): Result
         if update_work_error then return failure("CONFLICT", update_work_error) end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref, state = "accepted",
             operation = op_ref, committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "turn_accept", request_digest :: string, work.work_ref, receipt, now)
+        return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_accept", request_digest, work.work_ref, receipt, now)
     end)
 end
 
 function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {turn = true, claim = true, operation_key = true, observation = true}) then
         return missing_request()
@@ -1256,37 +1284,38 @@ function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
     end
     local arguments = {turn = turn_ref, claim = claim_token, observation = observation_json}
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local turn_identity, turn_error = get_turn(tx, turn_ref :: string)
+        local turn_identity, turn_error = get_turn(tx, turn_ref)
         if turn_error then return transaction.storage_failure(turn_error) end
         if not turn_identity then return failure("NOT_FOUND", "turn does not exist") end
         local session_identity, session_error = get_session(tx, turn_identity.session_ref, workspace)
         if session_error then return transaction.storage_failure(session_error) end
         if not session_identity then return failure("NOT_FOUND", "turn session does not exist") end
         local scope_workspace = session_identity.workspace_id
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, scope_workspace,
-            operation_key :: string, "turn_observation", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, scope_workspace,
+            operation_key, "turn_observation", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
-        local turn, work, session, claim_error = claimed_turn(tx, turn_ref :: string, claim_token :: string, scope_workspace)
+        local turn, work, session, claim_error = claimed_turn(tx, turn_ref, claim_token, scope_workspace)
         if claim_error then return claim_error end
         if not turn or not work or not session then return failure("INTERNAL", "turn observation context is incomplete") end
         if turn.phase ~= "accepted" or work.phase ~= "accepted" then return failure("CONFLICT", "only an accepted turn may append observations") end
         local node, op_ref, reference_error = node_and_operation(nil, scope_workspace)
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local now = transaction.now()
-        local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "turn.observation",
+        local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "turn.observation",
             work.work_ref, work.revision, {turn = turn.turn_ref, observation = decoded_observation})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn observation") end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
             event_key = decoded_observation.event_key, operation = op_ref, committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, scope_workspace, operation_key :: string, op_ref,
-            "turn_observation", request_digest :: string, work.work_ref, receipt, now)
+        return finish_operation(tx, caller, scope_workspace, operation_key, op_ref,
+            "turn_observation", request_digest, work.work_ref, receipt, now)
     end)
 end
 
 function M.work_settle(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
+    local caller = assert(caller)
     local input = object(request)
     if not input or not has_only(input, {turn = true, claim = true, result = true, operation_key = true, context = true}) then return missing_request() end
     local turn_ref, claim_token, operation_key = ref(input.turn), text(input.claim, 128), key(input.operation_key)
@@ -1303,17 +1332,17 @@ function M.work_settle(db: sql.DB, actor: string, request: unknown): Result
     local arguments: Row = {turn = turn_ref, claim = claim_token, result = result_json}
     if context_json then arguments.context = context_json end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local turn_identity, turn_error = get_turn(tx, turn_ref :: string)
+        local turn_identity, turn_error = get_turn(tx, turn_ref)
         if turn_error then return transaction.storage_failure(turn_error) end
         if not turn_identity then return failure("NOT_FOUND", "turn does not exist") end
         local session_identity, session_error = get_session(tx, turn_identity.session_ref, workspace)
         if session_error then return transaction.storage_failure(session_error) end
         if not session_identity then return failure("NOT_FOUND", "turn session does not exist") end
         local scope_workspace = session_identity.workspace_id
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, scope_workspace, operation_key, "work_settle", arguments)
+        local request_digest, replay, context_error = operation_context(tx, caller, scope_workspace, operation_key, "work_settle", arguments)
         if context_error then return failure("INTERNAL", context_error) end
         if replay then return replay end
-        local turn, work, session, claim_error = claimed_turn(tx, turn_ref :: string, claim_token :: string, scope_workspace)
+        local turn, work, session, claim_error = claimed_turn(tx, turn_ref, claim_token, scope_workspace)
         if claim_error then return claim_error end
         if not turn or not work or not session then return failure("INTERNAL", "work settlement context is incomplete") end
         if turn.phase ~= "accepted" or work.phase ~= "accepted" then return failure("CONFLICT", "only accepted work can be settled") end
@@ -1325,7 +1354,7 @@ function M.work_settle(db: sql.DB, actor: string, request: unknown): Result
         if not result_digest then return failure("INTERNAL", "measure work result") end
         local now = transaction.now()
         local next_revision = work.revision + 1
-        local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.settled", work.work_ref,
+        local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "work.settled", work.work_ref,
             next_revision, {turn = turn.turn_ref, state = checked_result.state, result_digest = result_digest})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append work settlement") end
         local turn_error = execute(tx, "UPDATE bee_session_turns SET phase = 'settled', settle_record_id = ? " ..
@@ -1341,7 +1370,7 @@ function M.work_settle(db: sql.DB, actor: string, request: unknown): Result
         end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref, phase = "settled",
             result = checked_result, operation = op_ref, committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, scope_workspace, operation_key, op_ref, "work_settle", request_digest :: string, work.work_ref, receipt, now)
+        return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "work_settle", request_digest, work.work_ref, receipt, now)
     end)
 end
 

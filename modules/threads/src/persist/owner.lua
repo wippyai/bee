@@ -65,6 +65,6 @@ function M.authority(tx: sql.Transaction): (string?, string?)
     local rows, query_err = tx:query("SELECT authority_id FROM bee_thread_owner WHERE singleton = 1")
     if query_err or not rows then return nil, "read owner authority" end
     if #rows == 0 or type(rows[1].authority_id) ~= "string" then return nil, nil end
-    return rows[1].authority_id :: string, nil
+    return rows[1].authority_id, nil
 end
 return M

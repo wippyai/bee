@@ -20,7 +20,7 @@ local function main()
     db:release()
     if not incarnation then error(establish_error) end
     local function sweep()
-        local store = database.open(resource :: string)
+        local store = database.open(resource)
         if not store then return end
         local woken = notices.fire(store, nil)
         store:release()

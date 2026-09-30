@@ -45,7 +45,7 @@ function M.may_discover(address: string): boolean return security.can(M.INBOX_DI
 M.FORWARDED_PREFIX = "bee.hive.member."
 function M.forwarded(actor: string?): boolean
     if type(actor) ~= "string" then return false end
-    return (actor :: string):sub(1, #M.FORWARDED_PREFIX) == M.FORWARDED_PREFIX
+    return (actor):sub(1, #M.FORWARDED_PREFIX) == M.FORWARDED_PREFIX
 end
 function M.may_create(thread_id: string): boolean
     return security.can(M.CREATE, thread_id)

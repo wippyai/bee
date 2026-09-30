@@ -68,8 +68,23 @@ function M.new(names: {[string]: string}): State
         nodes = {}, index = {}, names = names, catalogs = {}, catalog_revisions = {}, selected_node = nil, selected_workspace = nil, wanted_node = nil, wanted_workspace = nil, pane = "nodes",
         pending = nil, outcome = "", sessions = {}, technical = false, listings = {}, editing = false, search = ""}
 end
+local function is_uuid(value: string): boolean
+    if #value == 36 and value:find("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") ~= nil then
+        return true
+    end
+    if #value == 32 and value:find("^%x+$") ~= nil then
+        return true
+    end
+    return false
+end
 local function label_of(state: State, node_id: string): string
-    return M.text(state.names[node_id] or node_id, M.LABEL_LIMIT)
+    if state.names[node_id] then
+        return M.text(state.names[node_id], M.LABEL_LIMIT)
+    end
+    if is_uuid(node_id) then
+        return M.text(names.label(node_id), M.LABEL_LIMIT)
+    end
+    return M.text(node_id, M.LABEL_LIMIT)
 end
 local function order(state: State)
     table.sort(state.nodes, function(a: Node, b: Node): boolean

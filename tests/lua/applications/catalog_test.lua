@@ -357,8 +357,12 @@ local function define_tests()
             end
             local timeline = bindings["bee.threads.timeline:app"]
             if not timeline then error("timeline package binding missing") end
-            test.eq((timeline.policies :: {string})[1], "bee.security:ordinary_app_subsystem_boundary")
-            test.eq((timeline.policies :: {string})[2], "bee.threads.timeline:client_policy")
+            -- Measured admissions carry sorted distinct policies.
+            local policies = timeline.policies :: {string}
+            test.eq(#policies, 3)
+            test.eq(policies[1], "bee.security.threads:thread_workspace_list_policy")
+            test.eq(policies[2], "bee.security:ordinary_app_subsystem_boundary")
+            test.eq(policies[3], "bee.threads.timeline:client_policy")
             test.eq(timeline.thread_access, "none")
             local processes = bindings["bee.host.processes:app"]
             if not processes then error("processes package binding missing") end

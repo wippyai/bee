@@ -218,7 +218,8 @@ local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, va
         request.thread_id = selected
     end
     if tool.name == "request_capability" or tool.name == "capability_status" or tool.name == "install_request"
-        or tool.name == "uninstall_request" or tool.name == "install_status" then
+        or tool.name == "uninstall_request" or tool.name == "install_status"
+        or tool.name == "publish_request" or tool.name == "publish_status" then
         request.binding_id = binding.binding_id
     end
     if tool.name == "thread_message" then
@@ -342,6 +343,8 @@ local function handle(): nil
     elseif tool.name == "install_request" then arguments, argument_error = mcp.install_arguments(parameters, false)
     elseif tool.name == "uninstall_request" then arguments, argument_error = mcp.install_arguments(parameters, true)
     elseif tool.name == "install_status" then arguments, argument_error = mcp.install_status_arguments(parameters)
+    elseif tool.name == "publish_request" then arguments, argument_error = mcp.hub_publish_arguments(parameters)
+    elseif tool.name == "publish_status" then arguments, argument_error = mcp.hub_publish_status_arguments(parameters)
     elseif tool.name == "delivery" then arguments, argument_error = mcp.delivery_arguments(parameters, binding.workspace_id)
     elseif tool.name == "publish" then arguments, argument_error = mcp.publish_arguments(parameters, binding.workspace_id)
     elseif tool.name == "application_open" then arguments, argument_error = mcp.open_arguments(parameters)

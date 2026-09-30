@@ -31,8 +31,10 @@ M.MANAGE = "bee.approvals.manage"
 M.OWN = "bee.approvals.own"
 M.CONSUME = "bee.approvals.consume"
 M.INSTALLATION_EFFECTS = "installation_effects"
+M.PUBLICATION_EFFECTS = "publication_effects"
 M.WORKER_NAME = "bee.approvals.outbox"
 M.INSTALLATION_WORKER_NAME = "bee.approvals.installation_effect_worker"
+M.PUBLICATION_WORKER_NAME = "bee.approvals.publication_effect_worker"
 M.AUTHORITY_NAME = "bee.approvals.authority"
 M.THREAD_GET = "bee.threads.service:get"
 M.THREAD_READ = "bee.threads.service:read_after"
@@ -168,6 +170,7 @@ end
 local function wake()
     wake_worker(M.WORKER_NAME)
     wake_worker(M.INSTALLATION_WORKER_NAME)
+    wake_worker(M.PUBLICATION_WORKER_NAME)
 end
 function M.reply(result: Result): Reply
     if result.ok then return {ok = true, error = nil, value = result.value, replayed = result.replayed} end
@@ -176,7 +179,7 @@ end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
 local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
-    complete_installation_effect = true, reconcile = true}
+    complete_installation_effect = true, complete_publication_effect = true, reconcile = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
 -- other authorities through the executor; the operation then runs inside
@@ -892,6 +895,60 @@ local function op_complete_installation_effect(tx: sql.Transaction, actor: strin
     if not updated then return storage("read completed installation effect") end
     return success(M.view(updated), false)
 end
+local function op_publication_effects(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"limit"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
+    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
+    if not security.can(M.OWN, M.PUBLICATION_EFFECTS) then
+        return failure("DENIED", "caller may not enumerate approved publication effects")
+    end
+    local rows, err = store.publication_effects(tx, now, limit)
+    if err or not rows then return storage("read approved publication effects") end
+    local effects: {Object} = {}
+    for _, raw in ipairs(rows) do
+        local row, decode_error = decode_row(raw)
+        if not row then return storage("decode publication effect: " .. tostring(decode_error)) end
+        effects[#effects + 1] = M.view(row)
+    end
+    return success({effects = effects}, false)
+end
+local function op_complete_publication_effect(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "result"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local approval_id = bounds.id(object.approval_id)
+    local proposal_digest = bounds.id(object.proposal_digest)
+    local effect_key = bounds.id(object.effect_key)
+    if not approval_id or not proposal_digest or not effect_key then
+        return failure("INVALID_ARGUMENT", "approval_id, proposal_digest and effect_key are required")
+    end
+    local result = bounds.object(object.result)
+    local result_json: string? = nil
+    local encode_error: string? = nil
+    if result then result_json, encode_error = canonical.encode(result, 8192) end
+    if not result or not result_json then return failure("INVALID_ARGUMENT", "result must be a bounded Hub reply: " .. tostring(encode_error or "invalid result")) end
+    if #result_json > 8192 then return failure("INVALID_ARGUMENT", "Hub reply exceeds the publication receipt bound") end
+    local row, load_error = load(tx, approval_id)
+    if load_error then return storage(load_error) end
+    if not row then return failure("NOT_FOUND", "approval request does not exist") end
+    if not security.can(M.CONSUME, text(row.workspace_id) or "") then
+        return failure("DENIED", "caller is not an effect owner for this workspace")
+    end
+    if row.requester_id ~= actor then return failure("DENIED", "only the consuming requester completes this effect") end
+    if row.state ~= "decided" or row.decision ~= "approved" or row.proposal_digest ~= proposal_digest
+        or row.consumed_effect ~= effect_key or row.consumer_id ~= actor then
+        return failure("CONFLICT", "publication effect is not consumed by this requester", M.view(row))
+    end
+    if row.effect_completed_at ~= nil then
+        if row.effect_result_json ~= result_json then return failure("CONFLICT", "publication effect already has a different receipt", M.view(row)) end
+        return success(M.view(row), true)
+    end
+    local update_error = store.complete_effect(tx, approval_id, stamp(now), result_json, stamp(now))
+    if update_error then return storage("record completed publication effect") end
+    local updated = load(tx, approval_id)
+    if not updated then return storage("read completed publication effect") end
+    return success(M.view(updated), false)
+end
 local function may_read(actor: string, row: Row): (boolean, string?)
     if row.requester_id == actor then return true, nil end
     if security.can(M.MANAGE, text(row.workspace_id) or "") then return true, nil end
@@ -1170,6 +1227,7 @@ operations.attention_count = op_attention_count
 operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
+operations.publication_effects, operations.complete_publication_effect = op_publication_effects, op_complete_publication_effect
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
@@ -1180,6 +1238,8 @@ function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
 function M.installation_effects(value: unknown): Reply return run(value, "installation_effects") end
 function M.complete_installation_effect(value: unknown): Reply return run(value, "complete_installation_effect") end
+function M.publication_effects(value: unknown): Reply return run(value, "publication_effects") end
+function M.complete_publication_effect(value: unknown): Reply return run(value, "complete_publication_effect") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
 function M.attention_count(value: unknown): Reply return run(value, "attention_count") end

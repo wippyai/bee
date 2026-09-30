@@ -187,6 +187,24 @@ entries:
     path: .resource_ref
   - entry: bee.gateway.security:installation_policy
     path: .policy.resources +=
+- name: target_tool_hub_publish_policy
+  kind: ns.requirement
+  meta: {comment: Host-selected policy for the built-in Hub publication tools; it admits filing and read-only polling while the owner worker applies only the approved upload}
+  targets:
+  - entry: bee.gateway:tool_hub_publish_policy_ref
+    path: .resource_ref
+  - entry: bee.gateway.api:mcp_http
+    path: .security.policies +=
+  - entry: bee.gateway.security:tool_policy_read_policy
+    path: .policy.resources +=
+- name: target_publish_configuration
+  kind: ns.requirement
+  meta: {comment: Host-selected Hub publication configuration naming the approval policy agent publication requests are filed under; an absent link fails closed}
+  targets:
+  - entry: bee.gateway:publish_configuration_ref
+    path: .resource_ref
+  - entry: bee.gateway.security:publication_policy
+    path: .policy.resources +=
 - name: database_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: The linked SQL resource; target_db fills resource_ref}
@@ -313,6 +331,12 @@ entries:
 - name: install_configuration_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Linked host module installation configuration; target_install_configuration fills resource_ref}
+- name: tool_hub_publish_policy_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host policy for the built-in Hub publication tools}
+- name: publish_configuration_ref
+  kind: registry.entry
+  meta: {type: bee.resource_ref, comment: Linked host Hub publication configuration; target_publish_configuration fills resource_ref}
 - name: configuration
   kind: library.lua
   source: file://configuration.lua

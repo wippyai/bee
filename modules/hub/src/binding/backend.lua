@@ -89,6 +89,39 @@ local function handle(raw: unknown): Result
         if not expected then return transaction.failure("INVALID", "confirmation digest is required") end
         return publish(value.request, expected)
     elseif value.operation == "status" then return publication.status(value.expected_digest, value.request) end
+    if value.operation == "publish_request" or value.operation == "publish_apply" then
+        local host, host_error = host_resources.process_host()
+        if not host then return transaction.failure("UNAVAILABLE", host_error or "Hub worker host is unavailable") end
+        local id, id_error = uuid.v4()
+        if not id then return transaction.failure("UNAVAILABLE", tostring(id_error)) end
+        local topic = "bee.hub.publish_result." .. id
+        local replies, listen_error = process.listen(topic, {message = true})
+        if not replies then return transaction.failure("UNAVAILABLE", tostring(listen_error)) end
+        local operation = value.operation == "publish_request" and "plan" or "apply"
+        local worker_request = value.request
+        if operation == "apply" then
+            local supplied = bounds.object(value.request) or {}
+            worker_request = {plan_digest = value.expected_digest, component = supplied.component}
+        end
+        local pid, spawn_error = process.spawn("bee.hub.service:publish_worker", host,
+            process.pid(), topic, operation, worker_request)
+        if not pid then process.unlisten(replies); return transaction.failure("UNAVAILABLE", tostring(spawn_error)) end
+        local deadline = time.after("300s")
+        while true do
+            local event = channel.select({replies:case_receive(), deadline:case_receive()})
+            if not event.ok or event.channel == deadline then
+                process.unlisten(replies)
+                return transaction.failure("UNCERTAIN", "publication is still running or its reply was lost; check its result")
+            end
+            local message = event.value
+            if message:from() == pid then
+                local result = decode_reply(message:payload():data())
+                process.unlisten(replies)
+                return result or transaction.failure("UNCERTAIN", "invalid publish worker reply; check the publication result")
+            end
+        end
+        return transaction.failure("UNCERTAIN", "Hub publish worker did not return a result")
+    end
     return transaction.failure("INVALID", "unknown Hub operation")
 end
 return {handle = handle}

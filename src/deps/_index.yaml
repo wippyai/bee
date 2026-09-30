@@ -32,6 +32,8 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+  - name: target_publish_configuration
+    value: bee:hub_publication
 - name: gov
   kind: ns.dependency
   component: bee/gov
@@ -88,6 +90,10 @@ entries:
     value: bee.security.gateway:gateway_tool_session_policy
   - name: target_install_configuration
     value: bee:module_installation
+  - name: target_tool_hub_publish_policy
+    value: bee.security.gateway:gateway_tool_hub_publish_policy
+  - name: target_publish_configuration
+    value: bee:module_publication
 - name: hive
   kind: ns.dependency
   component: bee/hive

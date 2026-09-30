@@ -160,28 +160,20 @@ function M.decision(view_raw: unknown): Status
     return {status = "refused", code = reason:upper(), message = "the request " .. reason .. " before a decision"}
 end
 
--- publish_command: the exact uploader invocation for verified bytes. It
--- carries no credential: the CLI reads the person's publishing credential
--- from its host-confined store and the receipt records digests only.
-function M.publish_command(verified: Verified, cli: string, wapp: string): {string}
-    return {cli, "publish", "--config", verified.request.source, "--wapp", wapp,
+-- publish_command: the exact uploader invocation for verified bytes from
+-- the worker-owned content snapshot. It carries no credential: the CLI
+-- reads the person's publishing credential from its host-confined store
+-- and the receipt records digests only.
+function M.publish_command(verified: Verified, cli: string, snapshot: string): {string}
+    return {cli, "publish", "--config", snapshot,
         "--version", verified.request.version, "--create", "--protected",
         "--module-visibility", verified.request.visibility}
 end
 
--- plan_command: the exact dry-run invocation that packs the source without
--- uploading. The worker stages the reported pack file and measures its
--- bytes; the approval digest binds those bytes.
+-- plan_command: the exact dry-run invocation that preflights the snapshot
+-- without uploading. A source that does not pack never reaches approval.
 function M.plan_command(decoded: Decoded, cli: string): {string}
     return {cli, "publish", "--config", decoded.source, "--version", decoded.version, "--dry-run"}
-end
-
--- parse_pack_path: the staged pack file the dry run reports.
-function M.parse_pack_path(output: unknown): string?
-    if type(output) ~= "string" then return nil end
-    local path = (output :: string):match("Pack created:%s+([^\n]+)%s+%(%d+ B%)")
-    if not path or path:sub(1, 1) ~= "/" or path:find("%z", 1, true) or #path > 8192 then return nil end
-    return path
 end
 
 -- parse_digest: the Hub digest the uploader reports for the uploaded bytes.

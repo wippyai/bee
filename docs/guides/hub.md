@@ -169,6 +169,43 @@ policy admits filing and polling requests and never applying them. The shipped
 agent launch policies include them. The configuration link
 `target_install_configuration` fails closed when absent.
 
+## Agent publication requests
+
+An agent publishes a package to the Hub only through a person-approved grant:
+
+```json
+{"name": "publish_request", "arguments": {"component": "bee/probe", "version": "0.0.1-probe.1", "visibility": "private", "source": "/home/person/work/probe"}}
+{"name": "publish_status", "arguments": {"request_id": "<request_id>"}}
+```
+
+The host admits the source directory against the configured source roots,
+copies it into a worker-owned snapshot, measures the exact content bytes and
+preflights the pack without uploading. It files one approval, bound to the
+agent's thread and attempt, under the approval policy the host configuration
+`bee:module_publication` names (`module-publication`, decided in Approvals).
+The approval shows the module, version, content digest, visibility,
+organization and source directory; the plan digest binds all of them. Filing
+changes nothing on the Hub and returns `request_id` and `status: pending`.
+
+`publish_status` reports `pending`, `refused`, `approved` (uploading),
+`applied` or `failed`. On the first poll after the person approves, the
+gateway consumes the decision once and uploads exactly the approved snapshot
+through the Hub facade with management authority added to that one call; the
+snapshot is re-measured first and changed bytes refuse the upload. The receipt
+records the content digest beside the Hub pack digest under the plan digest,
+and later polls replay it. The publishing credential never reaches the agent:
+the uploader CLI reads the person's host-confined credential, the command
+carries no secret, and receipts hold digests only.
+
+The person selects the publishing organization, uploader executable, admitted
+source roots and snapshot staging root once in the host configuration
+`bee:hub_publication`; every publication must belong to that organization and
+an absent link fails closed. Sources hold plain files only; links and special
+files are refused. The uploader runs under the host-selected executor
+`bee.hub:publish_executor`, which needs a POSIX sh with GNU find, sort and
+sha256sum. The host grants the tools per launch policy and links their MCP
+policy through the gateway's `target_tool_hub_publish_policy`.
+
 ## Limits and checks
 
 Hub installation is local and host-authorized. It is separate from authored

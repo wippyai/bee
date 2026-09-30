@@ -105,9 +105,9 @@ local function define_tests()
                 policy = "hub-publication", proposal = proposal}
             local verified = publishing.verify(view, "agent", "ws", "hub-publication", CONTEXT)
             if not verified then error("verify") end
-            local command = publishing.publish_command(verified, "/bin/wippy", "/stage/pack.wapp")
+            local command = publishing.publish_command(verified, "/bin/wippy", "/stage/content")
             local joined = table.concat(command, " ")
-            test.eq(joined, "/bin/wippy publish --config /home/person/work/probe --wapp /stage/pack.wapp " ..
+            test.eq(joined, "/bin/wippy publish --config /stage/content " ..
                 "--version 0.0.1-probe.1 --create --protected --module-visibility private")
             for _, item in ipairs(command) do
                 test.is_false((tostring(item)):find("token") ~= nil)
@@ -120,14 +120,6 @@ local function define_tests()
             if not decoded then error("decode") end
             local joined = table.concat(publishing.plan_command(decoded, "/bin/wippy"), " ")
             test.eq(joined, "/bin/wippy publish --config /home/person/work/probe --version 0.0.1-probe.1 --dry-run")
-        end)
-
-        test.it("reads the staged pack path from dry-run output", function()
-            local output = "\nModule: bee/publish-probe\n  Packing module...\n" ..
-                "  Pack created: /tmp/stage/publish-probe-0.0.1-probe.1.wapp (751 B)\n" ..
-                "  Digest: sha256:" .. DIGEST .. "\n  Dry run complete\n"
-            test.eq(publishing.parse_pack_path(output), "/tmp/stage/publish-probe-0.0.1-probe.1.wapp")
-            test.is_nil(publishing.parse_pack_path("no pack here"))
         end)
 
         test.it("reads the Hub digest from uploader output", function()

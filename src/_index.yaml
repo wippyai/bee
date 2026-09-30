@@ -331,6 +331,7 @@ entries:
     organization: ""
     cli: ""
     source_roots: []
+    staging_root: ""
 - name: docs_corpus
   kind: fs.directory
   directory: ./src/corpus

@@ -7,7 +7,7 @@ M.PROCESS_HOST_REF = "bee.hub:process_host_ref"
 M.PUBLISH_CONFIGURATION_REF = "bee.hub:publish_configuration_ref"
 M.PUBLISH_EXECUTOR_REF = "bee.hub:publish_executor_ref"
 M.DEFAULT_PUBLISH_EXECUTOR = "bee.hub:publish_executor"
-type PublishConfig = {organization: string, cli: string, source_roots: {string}}
+type PublishConfig = {organization: string, cli: string, source_roots: {string}, staging_root: string}
 
 function M.process_host(): (string?, string?)
     local linked, link_error = registry.get(M.PROCESS_HOST_REF)
@@ -27,8 +27,9 @@ local function absolute_path(value: unknown): string?
 end
 
 -- The person's one-time Hub publication selection: the organization every
--- publication must belong to, the uploader CLI the worker runs and the
--- source roots it may pack. An absent link fails closed.
+-- publication must belong to, the uploader CLI the worker runs, the source
+-- roots it may pack and the worker-owned staging root holding approved
+-- content snapshots. An absent link fails closed.
 function M.publish_config(): (PublishConfig?, string?)
     local linked, link_error = registry.get(M.PUBLISH_CONFIGURATION_REF)
     if not linked then return nil, tostring(link_error or "Hub publication is not configured") end
@@ -52,7 +53,9 @@ function M.publish_config(): (PublishConfig?, string?)
         end
     end
     if #roots == 0 then return nil, "Hub publication admits no source root" end
-    return {organization = organization, cli = cli, source_roots = roots}, nil
+    local staging = config and absolute_path(config.staging_root) or nil
+    if not staging then return nil, "Hub publication names no snapshot staging root" end
+    return {organization = organization, cli = cli, source_roots = roots, staging_root = staging}, nil
 end
 
 function M.publish_executor(): (string?, string?)

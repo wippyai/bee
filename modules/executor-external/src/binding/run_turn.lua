@@ -15,7 +15,7 @@ type Listener = {outputs: unknown, exits: unknown, events: unknown}
 
 local function error_text(value: unknown): string
     if type(value) == "table" then
-        local object = value :: {[string]: unknown}
+        local object = value
         if type(object.message) == "string" then return object.message end
         if type(object.code) == "string" then return object.code end
     end
@@ -60,10 +60,10 @@ end
 
 local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean,
     request: {[string]: unknown}): (unknown, string?)
-    local listener = bounds.object(listener_value) :: Listener?
+    local listener = bounds.object(listener_value)
     local attempt, attempt_error = unwrap_attempt(attempt_value)
     if not listener or not attempt then return nil, attempt_error or "output listener or attempt is malformed" end
-    local attempt_object = attempt :: {[string]: unknown}
+    local attempt_object = attempt
     local attempt_id = tostring(attempt_object.attempt_id)
     local runner = bounds.id(attempt_object.runner)
     local generation = bounds.integer(attempt_object.attachment_generation)
@@ -269,7 +269,7 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
         end,
         observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean,
             _checkpoint: unknown?, turn_request: turn.Request)
-            return observe(listener, attempt, normalizer_target, resumed, turn_request :: {[string]: unknown})
+            return observe(listener, attempt, normalizer_target, resumed, turn_request)
         end,
         close = function(value: unknown)
             local listener = bounds.object(value)

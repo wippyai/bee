@@ -184,16 +184,25 @@ local function candidate_for(definition: string, kind: string, ref: string, titl
         checked_at = "1970-01-01T00:00:00.000Z", reasons = {locate_error or "route readiness could not be checked"}, features = {}, actions = {}}
 end
 
-function M.list(request: unknown, workspace: string): (Object?, string?)
-    local input = object(request)
-    if not input or bounds.fields(input, {kind = true, include_unavailable = true, cursor = true}) then
+function M.parse_request(value: unknown): ({kind: string, include_unavailable: boolean, cursor: string?}?, string?)
+    local input = object(value)
+    if not input or bounds.fields(input, {"kind", "include_unavailable", "cursor"}) then
         return nil, "catalog request is malformed"
     end
     local kind = input.kind == nil and "definition" or input.kind
     if kind ~= "definition" and kind ~= "profile" then return nil, "catalog kind is invalid" end
-    if input.include_unavailable ~= nil and type(input.include_unavailable) ~= "boolean" then return nil, "include_unavailable must be boolean" end
+    if input.include_unavailable ~= nil and type(input.include_unavailable) ~= "boolean" then
+        return nil, "include_unavailable must be boolean"
+    end
     local cursor = input.cursor == nil and nil or bounds.text(input.cursor, 2048)
     if input.cursor ~= nil and not cursor then return nil, "catalog cursor is invalid" end
+    return {kind = kind, include_unavailable = input.include_unavailable == true, cursor = cursor}, nil
+end
+
+function M.list(request: unknown, workspace: string): (Object?, string?)
+    local input, parse_error = M.parse_request(request)
+    if not input then return nil, parse_error end
+    local kind, cursor = input.kind, input.cursor
 
     local items: {Candidate} = {}
     local diagnostics: {Object} = {}
@@ -223,7 +232,7 @@ function M.list(request: unknown, workspace: string): (Object?, string?)
             local data = object(entry.data) or {}
             local candidate = candidate_for(definition, "definition", definition,
                 tostring(data.title or definition), workspace, nil, nil)
-            if input.include_unavailable == true or candidate.status == "ready" then items[#items + 1] = candidate end
+            if input.include_unavailable or candidate.status == "ready" then items[#items + 1] = candidate end
         end
         complete = count == #definitions
         if not complete then cursor = next_ref end
@@ -240,7 +249,7 @@ function M.list(request: unknown, workspace: string): (Object?, string?)
                 if definition and profile_id and revision then
                     local candidate = candidate_for(definition, "profile", profile_id,
                         tostring(profile.title or profile_id), workspace, profile_id, revision)
-                    if input.include_unavailable == true or candidate.status == "ready" then items[#items + 1] = candidate end
+                    if input.include_unavailable or candidate.status == "ready" then items[#items + 1] = candidate end
                 end
             end
             complete = profile_complete == true

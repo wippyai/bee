@@ -3,12 +3,13 @@ local tty = require("tty")
 local appearance = require("appearance")
 local frame = require("frame")
 local build_info = require("build_info")
+local live_updates = require("live_updates")
 type Pane = "theme" | "background" | "taskbar" | "edit_mode" | "about"
 type Grid = {columns: integer, rows: integer, capacity: integer, card_width: integer}
 type Frame = {rows: {string}, hits: {frame.Hit}}
 local M = {}
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
-local function about_details(info: build_info.Info, width: integer): {string}
+local function about_details(info: build_info.Info, width: integer, live: live_updates.Status?, pending: boolean?): {string}
     local details: {string} = {}
     local function field(label: string, value: string)
         local clean = value:gsub("%c", " ")
@@ -20,18 +21,43 @@ local function about_details(info: build_info.Info, width: integer): {string}
         details[#details + 1] = label
         for first = 1, #clean, room do details[#details + 1] = "  " .. clean:sub(first, first + room - 1) end
     end
-    field("Version", info.version)
-    field("Build", info.build)
-    field("Source revision", info.source_revision)
-    field("Source URL", info.source)
-    field("Runtime commit", info.runtime_commit)
-    field("Runtime URL", info.runtime)
-    field("Native version", info.native_version)
-    field("Native module", info.native)
+    field("Bee source URL", info.source)
+    field("Binary runtime commit", info.runtime_commit)
+    field("Binary runtime URL", info.runtime)
+    field("Binary native version", info.native_version)
+    field("Binary native module", info.native)
     field("Website", info.website)
+    details[#details + 1] = "Live Bee packs"
+    if pending then
+        field("Hub status", "checking installed versions and updates…")
+    elseif not live then
+        field("Hub status", "not checked")
+    elseif live.state == "error" then
+        field("Hub status", "unavailable · " .. live.message)
+    else
+        for _, item in ipairs(live.modules) do
+            local status = item.component .. "  installed " .. (item.installed_version ~= "" and item.installed_version or "unknown")
+            if item.available_version ~= "" then
+                status = status .. " · Hub " .. item.available_version
+                if item.update_available then status = status .. " · update available"
+                else status = status .. " · current" end
+            else status = status .. " · Hub version unavailable" end
+            if item.component == "bee/bee" and live.bee_update and live.bee_update.needs_new_binary then
+                status = status .. " · needs a newer Bee binary"
+            end
+            field("Pack", status)
+        end
+        if #live.modules == 0 then field("Pack", "no installed Bee packs were found") end
+        if live.message ~= "" then field("Hub status", live.message) end
+        if live.bee_update and live.bee_update.needs_new_binary and live.bee_update.reason ~= "" then
+            field("Native compatibility", live.bee_update.reason)
+        end
+    end
     return details
 end
-function M.about_count(width: integer): integer return #about_details(build_info.info(), width) end
+function M.about_count(width: integer, live: live_updates.Status?, pending: boolean?, info: build_info.Info?): integer
+    return #about_details(info or build_info.info(), width, live, pending)
+end
 function M.grid(width: integer, height: integer): Grid
     local columns = maximum(1, math.floor(math.min(3, (width - 2) // 24)))
     local rows = maximum(0, (height - 6) // 6)
@@ -49,12 +75,13 @@ function M.offset(index: integer, offset: integer, grid: Grid, count: integer, r
     return math.floor(math.max(0, math.min(last, value)))
 end
 local HINTS = frame.hints({{key = "←→↑↓", verb = "choose"}, {key = "Tab", verb = "switch"}, {key = "D", verb = "default"}})
-local ABOUT_HINTS = frame.hints({{key = "Tab", verb = "switch"}, {key = "PgUp/PgDn", verb = "scroll"}})
+local ABOUT_HINTS = frame.hints({{key = "R", verb = "refresh"}, {key = "Tab", verb = "switch"}, {key = "PgUp/PgDn", verb = "scroll"}})
 local EDIT_HINTS = frame.hints({{key = "E", verb = "enable"}, {key = "D", verb = "disable"}, {key = "Tab", verb = "switch"}})
 local TABS: {frame.Tab} = {{kind = "theme", label = "Themes", short = "Theme"}, {kind = "background", label = "Backgrounds", short = "BG"},
     {kind = "taskbar", label = "Tabs", short = "Tabs"}, {kind = "edit_mode", label = "Edit mode", short = "Edit"},
     {kind = "about", label = "About", short = "About"}}
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, pane: Pane, offset: integer, message: string?): Frame
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, pane: Pane, offset: integer,
+    message: string?, live: live_updates.Status?, live_pending: boolean?, info: build_info.Info?): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
     local grid = M.grid(width, height)
@@ -79,13 +106,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         return {rows = frame.rows(painter), hits = painter.hits}
     end
     if pane == "about" then
-        local details = about_details(build_info.info(), width)
+        local details = about_details(info or build_info.info(), width, live, live_pending)
         local capacity = math.floor(math.max(0, height - 5))
         local first = math.floor(math.max(0, math.min(math.max(0, #details - capacity), offset)))
         for index = 1, math.floor(math.min(capacity, #details - first)) do
             frame.line(painter, 4 + index - 1, details[first + index], theme.text)
         end
-        local page = "Build details are from the loaded Bee bundle"
+        local page = "Binary identity is baked · Live Bee packs read from Hub"
         if capacity == 0 then page = "Resize to read build details"
         elseif #details > capacity then
             page = "Details " .. tostring(first + 1) .. "–" .. tostring(math.min(#details, first + capacity)) .. "/" .. tostring(#details)

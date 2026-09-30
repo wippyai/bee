@@ -20,6 +20,14 @@ hub-preview-check:
 .PHONY: hub-unit-check
 hub-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_unit.py
+.PHONY: hub-self-update-runtime-check
+hub-self-update-runtime-check:
+	python3 tests/runtime_self_update_check.py
+.PHONY: settings-unit-check capability-grants-unit-check
+settings-unit-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.settings view_test
+capability-grants-unit-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov capability_grants_test
 .PHONY: hub-migration-runner-check
 hub-migration-runner-check:
 	@test -n "$(HUB_MIGRATION_PACK)" || { echo 'Set HUB_MIGRATION_PACK to the wippy/migration 0.3.17 artifact.'; exit 1; }

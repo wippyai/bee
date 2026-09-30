@@ -10,9 +10,19 @@ local funcs = require("funcs")
 local appearance = require("appearance")
 local frame = require("frame")
 local view = require("view")
+local build_info = require("build_info")
+local live_updates = require("live_updates")
+type UpdateRead = {future: funcs.Future, response: channel.Channel}
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
+    local function host_fact(id: string): string?
+        local result, problem = env.get(id)
+        if problem or type(result) ~= "string" or result == "" then return nil end
+        return result
+    end
+    local binary_info = build_info.info(host_fact("bee.env:binary_native_module"),
+        host_fact("bee.env:binary_native_version"), host_fact("bee.env:binary_runtime_commit"))
     local broker = launch.broker_pid
     local announced = false
     local input = assert(tty.events())
@@ -29,6 +39,10 @@ local function main(value: unknown)
     local pane: view.Pane = "theme"
     local offset = 0
     local last_checkpoint = ""
+    local live_status: live_updates.Status? = nil
+    local live_pending = false
+    local update_read: UpdateRead? = nil
+    local refresh_again = false
     if launch.resume_state ~= "" then
         local restored: unknown = json.decode(launch.resume_state)
         if type(restored) ~= "table" or (restored.pane ~= "theme" and restored.pane ~= "background" and restored.pane ~= "taskbar"
@@ -47,7 +61,7 @@ local function main(value: unknown)
         if pending_timeout then pending_timeout:stop() end
         pending_timeout = assert(time.timer("5s"))
     end
-    local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or (pane == "background" and #appearance.backgrounds() or (pane == "about" and view.about_count(width) or 0))) end
+    local function count(): integer return pane == "taskbar" and 2 or (pane == "theme" and #appearance.themes() or (pane == "background" and #appearance.backgrounds() or (pane == "about" and view.about_count(width, live_status, live_pending, binary_info) or 0))) end
     local function selected(): integer
         if pane == "taskbar" then return preferences.taskbar == "icons" and 2 or 1 end
         if pane == "theme" then
@@ -59,7 +73,7 @@ local function main(value: unknown)
     end
     local function reveal()
         if pane == "about" then
-            offset = math.floor(math.max(0, math.min(math.max(0, view.about_count(width) - math.max(0, height - 5)), offset)))
+            offset = math.floor(math.max(0, math.min(math.max(0, view.about_count(width, live_status, live_pending, binary_info) - math.max(0, height - 5)), offset)))
             return
         end
         offset = view.offset(selected(), offset, view.grid(width, height), count(), true)
@@ -96,7 +110,7 @@ local function main(value: unknown)
     local function browse(amount: integer)
         if pane == "about" then
             local capacity = math.max(0, height - 5)
-            offset = math.floor(math.max(0, math.min(math.max(0, view.about_count(width) - capacity), offset + amount)))
+            offset = math.floor(math.max(0, math.min(math.max(0, view.about_count(width, live_status, live_pending, binary_info) - capacity), offset + amount)))
             dirty = true
             return
         end
@@ -104,8 +118,35 @@ local function main(value: unknown)
         offset = view.offset(selected(), offset + amount, grid, count(), false)
         dirty = true
     end
+    local function request_live_updates(force: boolean?)
+        if update_read then
+            if force then refresh_again = true end
+            return
+        end
+        live_pending = true
+        dirty = true
+        local future, future_error = funcs.new():async("bee.hub.binding:call", {operation = "updates"})
+        if not future or future_error then
+            live_status = live_updates.failure(tostring(future_error or "Hub status call is unavailable"))
+            live_pending = false
+            reveal()
+            dirty = true
+            return
+        end
+        local response = future:response()
+        if not response then
+            future:cancel()
+            live_status = live_updates.failure("Hub status response channel is unavailable")
+            live_pending = false
+            reveal()
+            dirty = true
+            return
+        end
+        update_read = {future = future, response = response}
+    end
     local function switch(next_pane: view.Pane)
         pane = next_pane; offset = 0; reveal(); dirty = true
+        if pane == "about" and not live_status then request_live_updates() end
     end
     local function query_edit_mode(kind: "text" | "confirm", operation: string, initial: string?)
         if edit_query ~= "" then status = "Finish the current edit-mode prompt first"; dirty = true; return end
@@ -142,10 +183,11 @@ local function main(value: unknown)
         end
         dirty = true
     end
+    if pane == "about" then request_live_updates() end
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
-            local drawn = view.draw(width, height, preferences, pane, offset, status)
+            local drawn = view.draw(width, height, preferences, pane, offset, status, live_status, live_pending, binary_info)
             hits = drawn.hits
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
@@ -157,6 +199,7 @@ local function main(value: unknown)
             dirty = false
         end
         local cases = {input:case_receive(), lifecycle:case_receive(), states:case_receive(), queries:case_receive()}
+        if update_read then cases[#cases + 1] = update_read.response:case_receive() end
         if pending_timeout then cases[#cases + 1] = pending_timeout:channel():case_receive() end
         local event = channel.select(cases)
         if not event.ok then break end
@@ -165,6 +208,16 @@ local function main(value: unknown)
         elseif pending_timeout and event.channel == pending_timeout:channel() then
             pending_timeout = nil
             if pending ~= "" then pending = ""; preferences = confirmed; status = "Appearance update timed out"; dirty = true end
+        elseif update_read and event.channel == update_read.response then
+            local current = update_read
+            local result, result_error = current.future:result()
+            update_read = nil
+            live_pending = false
+            if result_error or not result then live_status = live_updates.failure(tostring(result_error or "Hub status call returned no reply"))
+            else live_status = live_updates.decode(result:data()) end
+            reveal()
+            dirty = true
+            if refresh_again then refresh_again = false; request_live_updates() end
         elseif event.channel == states then
             local message = event.value
             if broker and message:from() == broker then
@@ -220,6 +273,8 @@ local function main(value: unknown)
                 local grid = view.grid(width, height)
                 if pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
                     and (data.key == "e" or data.key == "E") then query_edit_mode("text", "enable_input", nil)
+                elseif pane == "about" and key == "runes" and (data.key == "r" or data.key == "R") and not data.ctrl and not data.alt then
+                    request_live_updates(true)
                 elseif pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
                     and (data.key == "d" or data.key == "D") then query_edit_mode("confirm", "disable_confirm", nil)
                 elseif pane ~= "edit_mode" and key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()
@@ -259,6 +314,7 @@ local function main(value: unknown)
         end
     end
     if pending_timeout then pending_timeout:stop() end
+    if update_read then update_read.future:cancel() end
     process.unlisten(states)
     process.unlisten(queries)
     output:close()

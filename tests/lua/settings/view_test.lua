@@ -3,6 +3,8 @@ local tty = require("tty")
 local view = require("view")
 local frames = require("frames")
 local appearance = require("appearance")
+local live_updates = require("live_updates")
+local build_info = require("build_info")
 local function define_tests()
     test.describe("Appearance chooser", function()
         test.it("shows errors in compact settings without losing selection controls", function()
@@ -59,7 +61,7 @@ local function define_tests()
             local end_offset = view.offset(14, 0, grid, 14, true)
             test.is_true(14 > end_offset and 14 <= end_offset + grid.capacity)
         end)
-        test.it("shows loaded bundle identity and the project website in About", function()
+        test.it("shows binary native identity and the project website in About", function()
             for _, width in ipairs({1, 18, 28, 62, 100}) do
                 for _, height in ipairs({1, 4, 8, 18}) do
                     local frame = view.draw(width, height, appearance.defaults(), "about", 0)
@@ -76,9 +78,52 @@ local function define_tests()
             test.is_true(text:find("BEE SETTINGS · ABOUT", 1, true) ~= nil)
             test.is_true(text:find("development source (unknown)", 1, true) ~= nil)
             test.is_true(text:find("https://bee.wippy.ai", 1, true) ~= nil)
-            local compact = table.concat(view.draw(40, 8, appearance.defaults(), "about", 100).rows, "\n")
-            test.is_true(compact:find("Native", 1, true) ~= nil)
-            test.is_true(compact:find("Website", 1, true) ~= nil)
+            local compact: {string} = {}
+            for offset = 0, view.about_count(40) do
+                compact[#compact + 1] = table.concat(view.draw(40, 8, appearance.defaults(), "about", offset).rows, "\n")
+            end
+            local scrolled = table.concat(compact, "\n")
+            test.is_true(scrolled:find("Binary native version", 1, true) ~= nil)
+            test.is_true(scrolled:find("Binary native module", 1, true) ~= nil)
+            test.is_true(scrolled:find("Binary runtime commit", 1, true) ~= nil)
+            test.is_true(scrolled:find("Website", 1, true) ~= nil)
+            test.is_true(scrolled:find("Live Bee packs", 1, true) ~= nil)
+        end)
+        test.it("shows live pack versions, available updates and native compatibility in About", function()
+            local status = live_updates.decode({ok = true, replayed = false, value = {
+                modules = {
+                    {component = "bee/bee", installed_version = "1.0.0", available_version = "2.0.0", update_available = true},
+                    {component = "bee/application", installed_version = "1.0.0", available_version = "2.0.0", update_available = true},
+                },
+                bee_update = {installed_version = "1.0.0", available_version = "2.0.0", update_available = true,
+                    needs_new_binary = true, reason = "needs a newer Bee binary: native/launch requires 2.0.0"},
+                catalog_error = "",
+            }})
+            local info = build_info.info("github.com/wippyai/bee/native", "v1.2.3", "0123456789abcdef0123456789abcdef01234567")
+            local text = table.concat(view.draw(100, 24, appearance.defaults(), "about", 0, nil, status, false, info).rows, "\n")
+            test.is_nil(text:find("Binary version", 1, true))
+            test.is_true(text:find("Binary native version", 1, true) ~= nil)
+            test.is_true(text:find("v1.2.3", 1, true) ~= nil)
+            test.is_true(text:find("Binary runtime commit", 1, true) ~= nil)
+            test.is_true(text:find("Live Bee packs", 1, true) ~= nil)
+            test.is_true(text:find("bee/application", 1, true) ~= nil)
+            test.is_true(text:find("installed 1.0.0", 1, true) ~= nil)
+            test.is_true(text:find("Hub 2.0.0", 1, true) ~= nil)
+            test.is_true(text:find("update available", 1, true) ~= nil)
+            test.is_true(text:find("needs a newer Bee binary", 1, true) ~= nil)
+            test.is_true(view.about_count(100, status, false) > view.about_count(100, nil, false))
+        end)
+        test.it("rejects malformed live Hub status at the Settings boundary", function()
+            local valid = {ok = true, replayed = false, value = {modules = {},
+                bee_update = {installed_version = "1.0.0", available_version = "1.0.0", update_available = false,
+                    needs_new_binary = false, reason = ""}, catalog_error = ""}}
+            test.eq(live_updates.decode(valid).state, "ready")
+            valid.unexpected = true
+            test.eq(live_updates.decode(valid).state, "error")
+            valid.unexpected = nil
+            valid.value.modules = {{component = "example/app", installed_version = "1.0.0",
+                available_version = "2.0.0", update_available = true}}
+            test.eq(live_updates.decode(valid).state, "error")
         end)
         test.it("shows person-confirmed, bounded edit mode controls at every terminal size", function()
             for _, width in ipairs({1, 12, 28, 48, 80}) do

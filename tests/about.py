@@ -9,19 +9,24 @@ def exercise(packed):
         ui = Desktop(directory, packed=packed, apps=("bee.settings:app",))
         try:
             ui.wait("BEE SETTINGS", timeout=10)
-            ui.key(b"\t\t\t")
+            ui.key(b"\t\t\t\t")
             ui.wait("BEE SETTINGS · ABOUT", timeout=10)
             text = ui.text()
-            for label in ("Version", "Build", "Source", "Runtime", "Native", "Website"):
+            for label in ("Binary runtime commit", "Binary native version", "Binary native module", "Website"):
                 assert label in text, text
+            assert "Live Bee packs" in text, text
             assert "https://bee.wippy.ai" in text, text
             assert "development source (unknown)" in text, text
+            ui.key(b"\x1b[6~" * 30)
+            ui.wait("bee/hub", timeout=20)
+            live = ui.text()
+            assert "installed" in live, live
             ui.key(b"\x1b[24~")
             ui.wait("BEE SETTINGS · ABOUT", timeout=10)
             ui.resize(48, 16)
             ui.wait("BEE SETTINGS", timeout=10)
             ui.key(b"\x1b[6~" * 60)
-            ui.wait("Website", timeout=10)
+            ui.wait("Binary website", timeout=10)
             ui.quit()
         finally:
             ui.close()

@@ -42,7 +42,7 @@ function M.resolve(pinned: registry.Snapshot, requested: string?): (types.Placem
     if type(contracts) ~= "table" then return nil, "placement binding " .. ref .. " has no contracts" end
     local mapped: {[string]: string} = {}
     local found = false
-    for _, raw in ipairs(contracts :: {unknown}) do
+    for _, raw in ipairs(contracts) do
         local contract = bounds.object(raw)
         if contract and contract.contract == M.CONTRACT then
             if found then return nil, "placement binding " .. ref .. " declares the placement contract twice" end

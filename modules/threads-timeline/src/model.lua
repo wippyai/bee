@@ -17,6 +17,7 @@ M.MAX_ROWS = 512
 M.PAGE_LIMIT = 64
 M.WAIT_MS = 30000
 M.LIST = "bee.threads.service:list"
+M.LIST_WORKSPACE = "bee.threads.service:list_workspace"
 M.GET = "bee.threads.service:get"
 M.SUBSCRIBE = "bee.threads.delivery:subscribe"
 M.PAGE = "bee.threads.delivery:page"
@@ -35,7 +36,7 @@ type Recap = {through_sequence: integer, revision: integer, lines: {string}, las
 type Picker = {threads: {Summary}, selected: string?, next_after: string?, unavailable: string?}
 type Phase = "picking" | "attaching" | "attached" | "resume_required" | "reset_required" | "unavailable"
 type State = {
-    picker: Picker, thread_id: string?, consumer_id: string, attach_key: string?, title: string, thread_state: string, head_sequence: integer,
+    picker: Picker, thread_id: string?, consumer_id: string, workspace_id: string?, attach_key: string?, title: string, thread_state: string, head_sequence: integer,
     phase: Phase, session: session.Session?, subscription_id: string?, rows: {Row}, dropped_through: integer, gap_after: integer?,
     recap: Recap?, unavailable: string, notice: string, selected: integer?, follow: boolean, technical: boolean,
 }
@@ -43,8 +44,8 @@ type PageResult = {kind: "accepted", has_more: boolean} | {kind: "refused"}
 function M.text(value: unknown, limit: integer?): string
     return text.bound(value, limit or format.LINE_LIMIT)
 end
-function M.new(consumer_id: string): State
-    return {picker = {threads = {}, selected = nil, next_after = nil, unavailable = nil}, thread_id = nil, consumer_id = consumer_id, attach_key = nil, title = "", thread_state = "",
+function M.new(consumer_id: string, workspace_id: string?): State
+    return {picker = {threads = {}, selected = nil, next_after = nil, unavailable = nil}, thread_id = nil, consumer_id = consumer_id, workspace_id = workspace_id, attach_key = nil, title = "", thread_state = "",
         head_sequence = 0, phase = "picking", session = nil, subscription_id = nil, rows = {}, dropped_through = 0, gap_after = nil,
         recap = nil, unavailable = "", notice = "", selected = nil, follow = true, technical = false}
 end
@@ -91,10 +92,16 @@ local function decode_list(value: unknown): ListResult
     end
     return {ok = true, threads = threads, next_after = next_after}
 end
--- Picking: threads the caller may read, one bounded page at a time.
+-- Picking: the workspace's threads when this viewer is bound to one, so
+-- threads owned by other applications stay visible; otherwise the threads
+-- the caller may read. One bounded page at a time either way.
 function M.list_intent(state: State): Intent
     local request: Object = {limit = M.PAGE_LIMIT}
     if state.picker.next_after then request.after_thread_id = state.picker.next_after end
+    if state.workspace_id then
+        request.workspace_id = state.workspace_id
+        return {target = M.LIST_WORKSPACE, request = request}
+    end
     return {target = M.LIST, request = request}
 end
 function M.apply_list(state: State, reply: Reply): boolean

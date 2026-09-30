@@ -35,7 +35,7 @@ local function main(value: unknown)
     local owner = caller.new(function(target: string, request: unknown): (unknown, string?)
         return funcs.new():call(target, request)
     end)
-    local state: model.State = model.new("bee.threads.timeline." .. launch.instance_id)
+    local state: model.State = model.new("bee.threads.timeline." .. launch.instance_id, launch.workspace_id)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid timeline checkpoint") end
     if requested then
         if type(requested) ~= "string" or requested == "" or #requested > 200 or requested:find("%c") then error("Invalid thread id") end

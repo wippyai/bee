@@ -47,7 +47,7 @@ entries:
 - name: cancellation
   kind: library.lua
   source: file://cancellation.lua
-  modules: [funcs]
+  modules: [funcs, security]
   imports: {bounds: bee.threads.records:bounds}
 - name: scheduler_worker
   kind: process.lua

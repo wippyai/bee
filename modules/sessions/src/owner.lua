@@ -189,11 +189,29 @@ local function attach(request: Object): Reply
     if plan.plan_digest ~= request.plan_digest or plan.mode ~= "window" then return fail("CONFLICT", "interactive attach plan changed", operation_key) end
     local driver = ref(plan.binding_ref)
     if not driver then return unavailable("interactive plan omitted its driver", operation_key) end
-    local created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
-        title = plan.title or definition, route = {definition = definition, plan_digest = plan.plan_digest,
-            delivery = "hook", driver_binding_ref = driver, provider = driver:match("^bee%.driver%.([^:]+):"),
-            profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
-    if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
+    local prior_raw, lookup_error = journal.invoke("operation_lookup", {operation_key = operation_key})
+    local prior = object(prior_raw)
+    if lookup_error or not prior then return unavailable(lookup_error or "interactive operation lookup unavailable", operation_key) end
+    local created: unknown = nil
+    local err: string? = nil
+    if prior.found == true then
+        if prior.operation ~= "session_create" then return fail("CONFLICT", "interactive key belongs to another operation", operation_key) end
+        created = prior.receipt
+        local receipt = object(created)
+        local existing, read_error = journal.invoke("session_describe", {session = receipt and receipt.session})
+        local stored = object(existing)
+        local route = stored and object(stored.route)
+        if read_error or not stored or stored.thread_ref ~= thread or not route or route.definition ~= definition
+            or route.driver_binding_ref ~= driver or route.profile_id ~= plan.profile_id then
+            return fail("CONFLICT", "interactive key belongs to another admitted window", operation_key)
+        end
+    else
+        created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
+            title = plan.title or definition, route = {definition = definition, plan_digest = plan.plan_digest,
+                delivery = "hook", driver_binding_ref = driver, provider = driver:match("^bee%.driver%.([^:]+):"),
+                profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
+        if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
+    end
     local receipt = object(created)
     local existing, existing_error = journal.invoke("session_describe", {session = receipt and receipt.session})
     local current = object(existing)
@@ -213,6 +231,47 @@ local function attach(request: Object): Reply
     local attached, attach_error = journal.invoke("session_attach", {session = receipt and receipt.session, attempt_id = request.attempt_id, operation_key = "attach:" .. tostring(request.attempt_id)})
     if attach_error or not attached then return unavailable(attach_error or "native attachment failed", operation_key) end
     return succeed(created)
+end
+
+local function detach(request: Object): Reply
+    local session, attempt, operation_key = ref(request.session), bounds.id(request.attempt_id), key(request.operation_key)
+    if not session or not attempt or not operation_key or bounds.fields(request, {"session", "attempt_id", "operation_key"}) then
+        return fail("INVALID", "interactive detach identities are incomplete", operation_key)
+    end
+    local raw, read_error = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    local route = stored and object(stored.route)
+    if read_error or not stored or not route then return unavailable(read_error or "interactive session unavailable", operation_key) end
+    if not security.can("bee.sessions.attach", tostring(route.definition)) then return fail("DENIED", "interactive detach requires a host grant", operation_key) end
+    if route.delivery ~= "hook" or route.native_attempt_id ~= attempt then return fail("STALE", "detach belongs to another attachment", operation_key) end
+    local methods = object(route.placement_methods)
+    local target = methods and ref(methods.reconcile)
+    if not target then return unavailable("interactive route omits placement reconciliation", operation_key) end
+    local placement_raw, call_error = funcs.call(target, {attempt_id = attempt})
+    local placement = object(placement_raw)
+    local value = placement and object(placement.value)
+    local evidence = value and (object(value.attempt) or value)
+    if call_error or not placement or placement.ok ~= true or not evidence or evidence.attempt_id ~= attempt then
+        return unavailable("interactive exit cannot be reconciled", operation_key)
+    end
+    if evidence.execution_state ~= "exited" or evidence.exit_source == nil then
+        return fail("CONFLICT", "interactive attachment has no proven process exit", operation_key)
+    end
+    local active = object(stored.active_turn)
+    if active then
+        local recovered, recovery_error = journal.invoke("turn_recover", {turn = active.turn, operation_key = "detach-recover:" .. operation_key})
+        local claim = object(recovered)
+        if recovery_error or not claim then return unavailable(recovery_error or "interactive claim unavailable", operation_key) end
+        local _, mark_error = journal.invoke("work_uncertain", {turn = active.turn, claim = claim.claim,
+            operation_key = "detach-uncertain:" .. operation_key,
+            evidence = {summary = "interactive process exited without a proven Work result", artifacts = {"placement attempt " .. attempt}}})
+        if mark_error then return unavailable(mark_error, operation_key) end
+    end
+    if stored.state == "active" then
+        local transitioned, transition_error = journal.invoke("session_transition", {session = session, state = "suspended", operation_key = operation_key})
+        if transition_error or not transitioned then return unavailable(transition_error or "interactive suspension unavailable", operation_key) end
+    end
+    return succeed({session = session, attempt_id = attempt})
 end
 
 local function hook_boundary(request: Object): Reply
@@ -498,7 +557,7 @@ local function close(request: Object): Reply
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
     if not operation_key or not session
-        or bounds.fields(request, {session = true, expected_incarnation = true, operation_key = true}) then
+        or bounds.fields(request, {"session", "expected_incarnation", "operation_key"}) then
         return fail("INVALID", "close requires a session and operation_key", operation_key)
     end
     if request.expected_incarnation ~= nil and request.expected_incarnation ~= 1 then
@@ -526,7 +585,7 @@ local function cancel(request: Object): Reply
     local reason = request.reason == nil and nil or bounds.text(request.reason, 16384)
     if not operation_key or not work or work:sub(1, 3) ~= "bw:"
         or (request.reason ~= nil and not reason)
-        or bounds.fields(request, {work = true, reason = true, expected_incarnation = true, operation_key = true}) then
+        or bounds.fields(request, {"work", "reason", "expected_incarnation", "operation_key"}) then
         return fail("INVALID", "cancel requires a work ref, optional reason, and operation_key", operation_key)
     end
     local cancel_operation_key = operation_key :: string
@@ -561,7 +620,7 @@ local function cancel(request: Object): Reply
         if marker_error and marker == nil then return unavailable(marker_error, operation_key) end
         return succeed(raw)
     end
-    local result = cancellation.stop(placement_methods, attempt_id)
+    local result = cancellation.stop(placement_methods, attempt_id, route)
     if result.state == "uncertain" then
         local uncertain_key, uncertain_key_error = internal_key("cancel-uncertain", cancel_operation_key)
         if not uncertain_key then return unavailable(uncertain_key_error or "cannot derive cancellation evidence key", operation_key) end
@@ -585,8 +644,7 @@ end
 
 local function join(request: Object): Reply
     local operation_key = key(request.operation_key)
-    if not operation_key or bounds.fields(request, {works = true, policy = true, quorum = true,
-        timeout_ms = true, operation_key = true}) then
+    if not operation_key or bounds.fields(request, {"works", "policy", "quorum", "timeout_ms", "operation_key"}) then
         return fail("INVALID", "join requires works and operation_key", operation_key)
     end
     local raw_works = bounds.array(request.works, 64)
@@ -666,9 +724,9 @@ local function join(request: Object): Reply
 end
 
 local function list(request: Object): Reply
-    if bounds.fields(request, {filter = true, cursor = true}) then return fail("INVALID", "list accepts only filter and cursor") end
+    if bounds.fields(request, {"filter", "cursor"}) then return fail("INVALID", "list accepts only filter and cursor") end
     local filter = object(request.filter)
-    if request.filter ~= nil and (not filter or bounds.fields(filter, {lifecycle = true, activity = true, workspace = true, definition = true})) then
+    if request.filter ~= nil and (not filter or bounds.fields(filter, {"lifecycle", "activity", "workspace", "definition"})) then
         return fail("INVALID", "session filter is malformed")
     end
     local lifecycle = filter and filter.lifecycle or nil
@@ -707,6 +765,7 @@ function M.call(method: string, request: unknown): Reply
     if not input then return fail("INVALID", "request must be an object", nil) end
     if method == "attach" then return attach(input) end
     if method == "hook_boundary" then return hook_boundary(input) end
+    if method == "detach" then return detach(input) end
     if method == "open" then return open(input) end
     if method == "run" then
         local operation_key = key(input.operation_key)

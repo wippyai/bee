@@ -1651,6 +1651,24 @@ local function define_tests()
             test.eq(#receipt, 1)
             test.eq(receipt[1], "intent.recorded")
         end)
+        test.it("retains structured private provider state across cleaned turn attempts", function()
+            local session_ref = fresh("private-turn-session")
+            for _, marker in ipairs({"first", "second"}) do
+                local request = retained_launch(OWNER, session_ref, marker)
+                local declared = request.launch :: {[string]: unknown}
+                declared.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {{path = ".codex/history", kind = "state", optional = true, write_back = false}}}
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                test.is_true(wait_for(function()
+                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+                end, 8000))
+                attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+            end
+            local key = assert(homes.session_key(OWNER, session_ref))
+            local session_path = assert(homes.ensure_session(key))
+            local home_path = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("cat " .. quote.posix(home_path .. "/marker")), "first\nsecond\n")
+        end)
         test.it("retains a selected session home and publishes changed configuration", function()
             local session_ref = fresh("session")
             local first = retained_launch(OWNER, session_ref, "first")
@@ -2291,10 +2309,8 @@ local function define_tests()
                 .. ' && printf projected-fixture-ok && printf %s ' .. quote.posix(refreshed_login) .. ' > "$CODEX_HOME/auth.json"'
             local request = launch({"sh", "-c", script}, "process_group")
             request.attempt_id = attempt_id
-            request.session_ref = fresh("private-provider-session")
             request.projections = {projection.projection_id}
             local declared_launch = request.launch :: {[string]: unknown}
-            declared_launch.home_ref = "session"
             declared_launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
                 files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
                     {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},

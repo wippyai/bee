@@ -227,7 +227,7 @@ local function await_proofs(workspace_id: string, action_id: string, attempt_id:
             if managed.first_instance == managed.second_instance or managed.first_view == managed.second_view
                 or managed.unapproved_refused ~= true
                 or managed.selected ~= true or not bounds.id(managed.approval_id)
-                or managed.window_definition ~= "bee.harness.window:app" or not window_instance or not window_view then
+                or managed.window_definition ~= "bee.harness.app:app" or not window_instance or not window_view then
                 error("managed application proof does not match the opened apps")
             end
             return {approval_id = managed.approval_id, first_view = managed.first_view, second_view = managed.second_view,

@@ -156,7 +156,7 @@ local function define_tests()
                     if policy.name ~= name then rows[#rows + 1] = policy end
                 end
                 local row: {[string]: unknown} = {name = name, max_ttl_ms = 60000,
-                    approvers = approvers or {{definition_id = "bee.approvals.inbox:app"}}}
+                    approvers = approvers or {{definition_id = "bee.approvals.inbox.app:app"}}}
                 if confirm ~= nil then row.confirm = confirm end
                 rows[#rows + 1] = row
                 data.policies = rows
@@ -201,7 +201,7 @@ local function define_tests()
             local stripped = assert(registry.get("bee:approver_policies"))
             local stripped_data = stripped.data :: {[string]: unknown}
             stripped_data.policies = {{name = "workspace-application-delivery",
-                approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}}
+                approvers = {{definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}}
             local changes = registry.snapshot():changes()
             assert(changes:update(stripped))
             assert(changes:apply())

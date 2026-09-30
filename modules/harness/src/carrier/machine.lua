@@ -236,7 +236,7 @@ local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAc
     if mismatch then return nil, label .. " acceptance: " .. mismatch end
     return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
 end
-local function measure(request: Request): (Measured?, string?)
+local function measure(request: Request, session_turn: boolean?): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
     local snapshot, snapshot_error = catalog.read(pinned, nil)
@@ -280,14 +280,19 @@ local function measure(request: Request): (Measured?, string?)
     -- renders and freezes the driver's final delivery with its own HOME path.
     local gateway: placement_types.Gateway? = nil
     local gateway_input: configuration_protocol.GatewayInput? = nil
-    if #launch_policy.gateway_tools > 0 or #launch_policy.gateway_hooks > 0 then
+    local selected, selected_error = driver_resolver.profile(pinned, request.binding_ref, request.profile_id)
+    if selected_error then return nil, selected_error end
+    local selected_hooks = driver_resolver.select_hooks(selected, launch_policy.gateway_hooks)
+    if #launch_policy.gateway_tools > 0 or #selected_hooks > 0 then
         local address, endpoint_error = gateway_configuration.endpoint()
         if not address then return nil, "gateway: " .. tostring(endpoint_error) end
         local hook_destination: string? = nil
-        if #launch_policy.gateway_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
+        if #selected_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
         gateway = {endpoint = address, tools = launch_policy.gateway_tools, destination = gateway_configuration.DESTINATION,
-            hooks = launch_policy.gateway_hooks, hook_destination = hook_destination}
-        local hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref)
+            hooks = selected_hooks, hook_destination = hook_destination}
+        local hook_command: string? = nil
+        local command_error: string? = nil
+        if #selected_hooks > 0 then hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref) end
         if command_error then return nil, command_error end
         gateway_input = {hook_command = hook_command, endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
             token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
@@ -323,7 +328,7 @@ end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.
 local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?): (Plan?, string?)
-    local measured, measure_error = measure(request)
+    local measured, measure_error = measure(request, session_turn)
     if not measured then return nil, measure_error end
     local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then

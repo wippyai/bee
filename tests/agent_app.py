@@ -94,7 +94,7 @@ def configure_continuous_source(project, workspace_id):
     approvals = yaml.safe_load(approvals_path.read_text())
     policies = next(item for item in approvals["entries"] if item["name"] == "approver_policies")
     policies["policies"] = [{"name": "local-agent-app-delivery",
-                             "approvers": [{"definition_id": "bee.approvals.inbox:app"}],
+                             "approvers": [{"definition_id": "bee.approvals.inbox.app:app"}],
                              "max_ttl_ms": 600000}]
     approvals_path.write_text(yaml.safe_dump(approvals, sort_keys=False))
 

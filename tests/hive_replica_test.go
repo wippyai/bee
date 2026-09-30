@@ -367,8 +367,8 @@ func testHiveSupervisorReplica(t *testing.T, agent *hiveAgentArtifactScenario) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			oldApprovers := "- name: approver_policies\n  kind: registry.entry\n  meta:\n    type: bee.approval_policies\n    comment: Host-owned approver policies; a request names one, and only its approvers decide it\n  policies:\n  - name: workspace-application-delivery\n    approvers:\n    - definition_id: bee.approvals.inbox:app\n    max_ttl_ms: 600000"
-			newApprovers := "- name: approver_policies\n  kind: registry.entry\n  meta:\n    type: bee.approval_policies\n    comment: Host-owned approver policies; a request names one, and only its approvers decide it\n  policies:\n  - name: workspace-application-delivery\n    approvers:\n    - definition_id: bee.approvals.inbox:app\n    max_ttl_ms: 600000\n  - name: local-install\n    approvers: [bee.replica.probe]\n    max_ttl_ms: 60000"
+			oldApprovers := "- name: approver_policies\n  kind: registry.entry\n  meta:\n    type: bee.approval_policies\n    comment: Host-owned approver policies; a request names one, and only its approvers decide it\n  policies:\n  - name: workspace-application-delivery\n    approvers:\n    - definition_id: bee.approvals.inbox.app:app\n    max_ttl_ms: 600000"
+			newApprovers := "- name: approver_policies\n  kind: registry.entry\n  meta:\n    type: bee.approval_policies\n    comment: Host-owned approver policies; a request names one, and only its approvers decide it\n  policies:\n  - name: workspace-application-delivery\n    approvers:\n    - definition_id: bee.approvals.inbox.app:app\n    max_ttl_ms: 600000\n  - name: local-install\n    approvers: [bee.replica.probe]\n    max_ttl_ms: 60000"
 			updated = strings.Replace(string(approvals), oldApprovers, newApprovers, 1)
 			if updated == string(approvals) {
 				t.Fatal("stage destination approval profile")

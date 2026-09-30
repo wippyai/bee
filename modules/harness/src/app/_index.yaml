@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.harness.window
+namespace: bee.harness.app
 entries:
 - name: request
   kind: library.lua
@@ -28,7 +28,7 @@ entries:
   source: file://delivery.lua
   modules: [funcs, channel]
   imports:
-    hooks: bee.harness.window:hooks
+    hooks: bee.harness.app:hooks
 - name: interrupted
   kind: library.lua
   source: file://interrupted.lua
@@ -37,8 +37,8 @@ entries:
     continuation: bee.harness.carrier:continuation
     checkpoint: bee.harness.carrier:checkpoint
     bounds: bee.threads.records:bounds
-    hooks: bee.harness.window:hooks
-    delivery: bee.harness.window:delivery
+    hooks: bee.harness.app:hooks
+    delivery: bee.harness.app:delivery
     records: bee.harness.carrier:hook_records
 - name: restore_view
   kind: library.lua
@@ -53,24 +53,24 @@ entries:
   imports:
     client: bee.application:client
     text: bee.application:text
-    window_request: bee.harness.window:request
-    input_event: bee.harness.window:input
+    window_request: bee.harness.app:request
+    input_event: bee.harness.app:input
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
-    picker: bee.harness.window:picker
-    recovery: bee.harness.window:recovery
-    hooks: bee.harness.window:hooks
-    delivery: bee.harness.window:delivery
+    picker: bee.harness.app:picker
+    recovery: bee.harness.app:recovery
+    hooks: bee.harness.app:hooks
+    delivery: bee.harness.app:delivery
     records: bee.harness.carrier:hook_records
     appearance: bee.application:appearance
-    restore_view: bee.harness.window:restore_view
+    restore_view: bee.harness.app:restore_view
 - name: app
   kind: process.lua
   source: file://app.lua
   method: main
   modules: []
   imports:
-    runtime: bee.harness.window:runtime
+    runtime: bee.harness.app:runtime
     window: bee.placement.native.service:window
   meta:
     type: bee.application
@@ -104,7 +104,7 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
-    agents: bee.harness.window:agents
+    agents: bee.harness.app:agents
 - name: session_view
   kind: library.lua
   source: file://session_view.lua
@@ -113,7 +113,7 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
-    agents: bee.harness.window:agents
+    agents: bee.harness.app:agents
     protocol: bee.application:sessions_protocol
 - name: picker
   kind: library.lua
@@ -125,16 +125,16 @@ entries:
     client: bee.application:client
     caller: bee.application:caller
     appearance: bee.application:appearance
-    input_event: bee.harness.window:input
+    input_event: bee.harness.app:input
     sessions: bee.application:sessions
-    agents: bee.harness.window:agents
-    session_view: bee.harness.window:session_view
-    directory_view: bee.harness.window:directory_view
+    agents: bee.harness.app:agents
+    session_view: bee.harness.app:session_view
+    directory_view: bee.harness.app:directory_view
     sessions_protocol: bee.application:sessions_protocol
     admission: bee.harness.launch:admission
-    view: bee.harness.window:picker_view
-    forms: bee.harness.window:profile_form
-    profile_view: bee.harness.window:profile_view
+    view: bee.harness.app:picker_view
+    forms: bee.harness.app:profile_form
+    profile_view: bee.harness.app:profile_view
 
 - name: profile_editor
   kind: library.lua
@@ -152,7 +152,7 @@ entries:
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
     protocol: bee.harness.profiles:protocol
-    editor: bee.harness.window:profile_editor
+    editor: bee.harness.app:profile_editor
 - name: profile_view
   kind: library.lua
   source: file://profile_view.lua
@@ -163,8 +163,8 @@ entries:
     text: bee.application:text
     caller: bee.application:caller
     folder_picker: bee.application:folder_picker
-    editor: bee.harness.window:profile_editor
-    forms: bee.harness.window:profile_form
+    editor: bee.harness.app:profile_editor
+    forms: bee.harness.app:profile_form
 
 - name: directory_view
   kind: library.lua
@@ -174,4 +174,4 @@ entries:
     appearance: bee.application:appearance
     text: bee.application:text
     protocol: bee.application:sessions_protocol
-    agents: bee.harness.window:agents
+    agents: bee.harness.app:agents

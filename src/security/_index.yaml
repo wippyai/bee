@@ -12,7 +12,7 @@ entries:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.console:executor_policy
     - bee.console:command_policy
-  - definition_id: bee.approvals.inbox:app
+  - definition_id: bee.approvals.inbox.app:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.security.approvals:approval_decide_policy

@@ -14,4 +14,5 @@ function M.catalog(request: unknown): unknown return owner.call("catalog", reque
 function M.history(request: unknown): unknown return owner.call("history", request) end
 function M.attach(request: unknown): unknown return owner.call("attach", request) end
 function M.hook_boundary(request: unknown): unknown return owner.call("hook_boundary", request) end
+function M.detach(request: unknown): unknown return owner.call("detach", request) end
 return M

@@ -362,14 +362,17 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if not tools then return nil, nil, "launch policy gateway_tools: " .. tostring(tools_error) end
     local hooks, hooks_error = bounds.ids(data.gateway_hooks == nil and {} or data.gateway_hooks, true)
     if not hooks then return nil, nil, "launch policy gateway_hooks: " .. tostring(hooks_error) end
-    table.sort(tools); table.sort(hooks)
+    hooks = resolver.select_hooks(selected_profile, hooks)
+    table.sort(tools)
     local gateway: configuration_protocol.GatewayInput? = nil
     if #tools > 0 or #hooks > 0 then
         local endpoint, endpoint_error = gateway_configuration.endpoint()
         if not endpoint then return nil, nil, endpoint_error or "gateway endpoint" end
         local command_ref = data.hook_command_ref == nil and nil or bounds.id(data.hook_command_ref)
-        if data.hook_command_ref ~= nil and (not command_ref or #hooks == 0) then return nil, nil, "hook_command_ref requires hooks and an env.variable identifier" end
-        local hook_command, command_error = gateway_configuration.hook_command(command_ref)
+        if data.hook_command_ref ~= nil and not command_ref then return nil, nil, "hook_command_ref requires hooks and an env.variable identifier" end
+        local hook_command: string? = nil
+        local command_error: string? = nil
+        if #hooks > 0 then hook_command, command_error = gateway_configuration.hook_command(command_ref) end
         if command_error then return nil, nil, command_error end
         gateway = {hook_command = hook_command, endpoint = endpoint, action_id = request.action_id, tools = tools, hooks = hooks,
             token_environment = gateway_configuration.DESTINATION,

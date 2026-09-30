@@ -424,7 +424,7 @@ def configure_open_agent(project):
     policy["data"]["executables"] = {"claude": str(ROOT / "tests/fixtures/harness/bin/claude")}
     policy["data"]["environment"]["BEE_FIXTURE_STREAM"] = \
         str(ROOT / "tests/fixtures/drivers/claude/stream-json-2/plain.jsonl")
-    policy["data"]["environment"]["BEE_FIXTURE_WINDOW_DEFINITION"] = "bee.harness.window:app"
+    policy["data"]["environment"]["BEE_FIXTURE_WINDOW_DEFINITION"] = "bee.harness.app:app"
     harness = project / "modules/harness/src/_index.yaml"
     harness_document = yaml.safe_load(harness.read_text())
     activation = next(entry for entry in harness_document["entries"] if entry["name"] == "harness_activation")
@@ -611,7 +611,7 @@ def assert_inbox_decider(root, workspace_id, policy="local-app-journey"):
     assert row and re.fullmatch(
         rf"bee\.application:{re.escape(workspace_id)}:[0-9a-f-]+", row[0]), row
     checkpoint = saved_application(root, row[0].rsplit(":", 1)[1])
-    assert checkpoint["definition_id"] == "bee.approvals.inbox:app", checkpoint
+    assert checkpoint["definition_id"] == "bee.approvals.inbox.app:app", checkpoint
 
 
 def activation_evidence(root):

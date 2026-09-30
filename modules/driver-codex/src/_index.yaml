@@ -212,6 +212,10 @@ entries:
           git_writable_roots_adapter: codex_workspace_write
       - id: window
         mode: window
+        hooks:
+          transports: [command, mcp_tool]
+          events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SessionEnd]
+          adapter_ref: bee.driver.codex:protocol
         protocol: pty
         protocol_revision: native-window-1
         answer_path: {strategy: none}
@@ -309,7 +313,7 @@ entries:
     comment: CLI command to launch Codex CLI in the agent window
   data:
     name: codex
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     arguments:
     - bee.driver.codex:default_window
     fullscreen: true

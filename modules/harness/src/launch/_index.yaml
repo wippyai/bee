@@ -25,7 +25,7 @@ entries:
     placement_types: bee.placement:types
     placement_resolver: bee.placement:resolver
     continuation: bee.harness.carrier:continuation
-    interrupted: bee.harness.window:interrupted
+    interrupted: bee.harness.app:interrupted
     profiles: bee.harness.profiles:protocol
 - name: agent_resolver
   kind: library.lua

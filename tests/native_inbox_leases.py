@@ -15,7 +15,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-inbox-leases-") as temporary
     folder = Path(temporary) / "project"
     folder.mkdir()
     state = Path(temporary) / "state"
-    ui = NativeDesktop(binary, folder, state, application="bee.approvals.inbox:app")
+    ui = NativeDesktop(binary, folder, state, application="bee.approvals.inbox.app:app")
     try:
         ui.wait("APPROVALS", timeout=30)
         ui.pump(.5)

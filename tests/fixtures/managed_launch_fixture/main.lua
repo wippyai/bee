@@ -71,7 +71,7 @@ local function define_tests()
             -- to start into it, exactly as the workspace host does. A picker
             -- definition forbids the override and joins its instance instead.
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "fixture-open", op = "open", workspace_id = WORKSPACE,
-                definition_id = "bee.harness.window:app", thread_id = thread, arguments = {request}}))
+                definition_id = "bee.harness.app:app", thread_id = thread, arguments = {request}}))
             local opened = receive_reply(replies, "fixture-open", "open")
             assert(opened.error_code == "", "fixture provider window did not become ready: " .. tostring(opened.error))
             local id = tostring(opened.id)

@@ -368,7 +368,7 @@ local function main(value: unknown)
                 elseif text == "s" or text == "b" then
                     local detail = state.detail
                     if detail and detail.requesting_session then
-                        local _, err = client.navigate(launch, "bee.harness.window:app", {"--session", detail.requesting_session})
+                        local _, err = client.navigate(launch, "bee.harness.app:app", {"--session", detail.requesting_session})
                         status = err or "Opening the requesting session"
                     else status = "This request has no source session" end
                     dirty = true
@@ -405,7 +405,7 @@ local function main(value: unknown)
                     elseif hit.kind == "source" then
                         local detail = state.detail
                         if detail and detail.requesting_session then
-                            local _, err = client.navigate(launch, "bee.harness.window:app", {"--session", detail.requesting_session})
+                            local _, err = client.navigate(launch, "bee.harness.app:app", {"--session", detail.requesting_session})
                             status = err or "Opening requesting session"; dirty = true
                         end
                     elseif hit.kind == "open" then perform(open_selected)

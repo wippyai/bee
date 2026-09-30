@@ -119,6 +119,10 @@ local function define_tests()
             rows = agents.directory(client_of(client), "w")
             test.eq(rows and #rows, 1)
         end)
+        test.it("keeps uncertain work observable without offering it as current work", function()
+            local conv: any = {turns = {{state = "uncertain", input = "fix", text = "Outcome unknown"}}}
+            test.is_false(agents.pending(conv :: agents.Conversation))
+        end)
         test.it("cancels working Work with a stable key and leaves the session open", function()
             local keys: {string} = {}
             local current: any = {state = "working", input = "fix", text = "", work = {

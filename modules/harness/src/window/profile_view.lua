@@ -275,7 +275,8 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     return nil
 end
 
-local HINTS = frame.hints({{key = "Tab", verb = "fields"}, {key = "Ctrl+S", verb = "save"}, {key = "Ctrl+D", verb = "remove"}, {key = "Esc", verb = "cancel"}})
+local HINTS = frame.hints({{key = "Tab", verb = "fields"}, {key = "Ctrl+S", verb = "save"},
+    {key = "Ctrl+P", verb = "permissions"}, {key = "Esc", verb = "cancel"}})
 local FOLDER_HINTS = frame.hints({{key = "Enter", verb = "open"}, {key = "⌫", verb = "up"}, {key = "U", verb = "use this folder"},
     {key = "D", verb = "definition folder"}, {key = "Esc", verb = "back"}})
 local THREAD_HINTS = frame.hints({{key = "Enter", verb = "choose"}, {key = "Esc", verb = "back"}})
@@ -343,7 +344,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.actions(painter, height - 1, buttons)
     end
     if state.status ~= "" and height >= 7 then frame.line(painter, height - 2, text.bound(state.status, 4096), painter.theme.text) end
-    frame.footer(painter, "", "Tab fields · Ctrl+S save · Ctrl+P permissions · Esc cancel")
+    frame.footer(painter, "", HINTS)
     return {rows = frame.rows(painter), hits = painter.hits}
 end
 return M

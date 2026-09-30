@@ -8,7 +8,8 @@ local agents = require("agents")
 local protocol = require("protocol")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}}
-local HINTS = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+X", verb = "close session"}, {key = "Esc", verb = "back"}})
+local HINTS = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
+    {key = "Ctrl+X", verb = "close session"}, {key = "Esc", verb = "sessions"}})
 local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "error"}
 local STATE_ROLE = {queued = "muted", working = "muted", ready = "text", failed = "error", blocked = "warn", uncertain = "warn"}
 local STATE_LABEL = {queued = "queued", working = "working", ready = "", failed = "", blocked = "blocked", uncertain = "uncertain"}
@@ -132,7 +133,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local message = status ~= "" and status or conv.notice
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", "Enter send · Ctrl+K stop work · Ctrl+X close session · Esc sessions") end
+    if height >= 2 then frame.footer(painter, "", HINTS) end
     return {rows = frame.rows(painter), hits = painter.hits}
 end
 return M

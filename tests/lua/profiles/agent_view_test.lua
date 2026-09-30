@@ -11,8 +11,9 @@ type Object = {[string]: unknown}
 local function listing_of(value: unknown): agents.Listing return value :: agents.Listing end
 local function conversation_of(value: unknown): agents.Conversation return value :: agents.Conversation end
 local function screen(rows: {string}): string return table.concat(rows, "\n") end
-local function conversation(activity: string, turns: {Object}): agents.Conversation
-    return conversation_of({title = "Worker", lifecycle = "active", activity = activity, queued = 1, turns = turns, notice = ""})
+local function conversation(activity: string, turns: {Object}, ref: string?): agents.Conversation
+    local session_ref = ref or ""
+    return conversation_of({session = ref and {ref = function(): string return session_ref end} or nil, title = "Worker", lifecycle = "active", activity = activity, queued = 1, turns = turns, notice = ""})
 end
 local function define_tests()
     test.describe("Agent picker screen", function()
@@ -121,9 +122,7 @@ local function define_tests()
             end
         end)
         test.it("shows the session rail on a wide conversation and preserves mouse coordinates", function()
-            local conv = conversation("working", {{input = "fix", state = "working", text = ""}})
-            local handle: any = {ref = function(): string return "bs:n:w:s" end}
-            conv.session = handle
+            local conv = conversation("working", {{input = "fix", state = "working", text = ""}}, "bs:n:w:s")
             local rows: any = {{session = "bs:n:w:s", title = "Fix API"}, {session = "bs:n:w:other", title = "Review docs"}}
             local shown = session_view.draw(120, 36, appearance.defaults(), conv, "draft", "", rows :: {protocol.SessionSnapshot})
             test.eq(#shown.rows, 36)

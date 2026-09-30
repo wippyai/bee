@@ -214,7 +214,7 @@ end
 
 function M.pending(conv: Conversation): boolean
     for _, turn in ipairs(conv.turns) do
-        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then return true end
+        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" then return true end
     end
     return false
 end

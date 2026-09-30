@@ -6,9 +6,8 @@ local text = require("text")
 local agents = require("agents")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
-local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "M", verb = "attach"},
-    {key = "U", verb = "unavailable"}, {key = "R", verb = "re-probe"}, {key = "N", verb = "new"}, {key = "E", verb = "edit"},
-    {key = "Esc", verb = "close"}})
+local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "U", verb = "unavailable"},
+    {key = "R", verb = "refresh"}, {key = "?", verb = "more"}, {key = "Esc", verb = "back"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?): Frame
     local painter = frame.new(width, height, preferences)
@@ -54,7 +53,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         message = tostring(listing.unavailable) .. " unavailable"
     end
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", "↑↓ select · Enter open · U unavailable · R refresh · ? more · Esc back") end
+    if height >= 2 then frame.footer(painter, "", HINTS) end
     return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
 end
 return M

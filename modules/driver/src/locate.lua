@@ -1,15 +1,17 @@
 -- MIT. Normalize host-probed driver availability without touching credentials.
 local bounds = require("bounds")
+local login_evidence = require("login_evidence")
 local M = {}
 local STATUSES = {"ready", "missing", "unconfigured", "incompatible", "unknown"}
 
-type Spec = {provider: string, executable: string, login_path: string?}
-type Request = {profile_id: string, configured: boolean, executable: {[string]: unknown}?, login_file_exists: boolean?,
+type Spec = {provider: string, executable: string, login_evidence: login_evidence.Declaration?}
+type Request = {profile_id: string, configured: boolean, executable: {[string]: unknown}?, login_checks: {login_evidence.Check}?,
     platform: {[string]: unknown}?, checked_at: string?}
 type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
+type Login = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
 type Result = {provider: string, status: LocateStatus,
     executable: {name: string, present: boolean?, version: string?},
-    login: {evidence: "file_exists" | "not_required", path: string?, exists: boolean?},
+    login: Login,
     platform: {os: string?, arch: string?, compatible: boolean?}, checked_at: string?, reason: string?}
 
 local function safe_relative(path: string?): boolean
@@ -20,12 +22,12 @@ local function safe_relative(path: string?): boolean
 end
 
 function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
-    if not bounds.id(spec.provider) or not bounds.id(spec.executable) or not safe_relative(spec.login_path) then
+    if not bounds.id(spec.provider) or not bounds.id(spec.executable) then
         return nil, "driver locate specification is malformed"
     end
     local object = bounds.object(raw)
     if not object then return nil, "locate probe must be an object" end
-    local extra = bounds.fields(object, {"profile_id", "configured", "executable", "login_file_exists", "platform", "checked_at"})
+    local extra = bounds.fields(object, {"profile_id", "configured", "executable", "login_checks", "platform", "checked_at"})
     if extra then return nil, "locate probe: " .. extra end
     local profile_id = bounds.id(object.profile_id)
     if not profile_id then return nil, "locate probe profile_id is invalid" end
@@ -67,10 +69,14 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
         platform.compatible = raw_platform.compatible
     end
 
-    if spec.login_path and object.login_file_exists ~= nil and type(object.login_file_exists) ~= "boolean" then
-        return nil, "locate probe login_file_exists must be boolean"
-    end
-    if not spec.login_path and object.login_file_exists ~= nil then return nil, "this driver does not use login-file evidence" end
+    local checks: {login_evidence.Check} = {}
+    local present: boolean? = true
+    if spec.login_evidence then
+        local decoded, check_error = login_evidence.decode_checks(object.login_checks, spec.login_evidence)
+        if not decoded then return nil, check_error end
+        checks = decoded
+        present = login_evidence.present(spec.login_evidence, checks)
+    elseif object.login_checks ~= nil then return nil, "this driver does not declare login evidence" end
     local checked_at: string? = nil
     if object.checked_at ~= nil then
         checked_at = bounds.text(object.checked_at, 64)
@@ -87,25 +93,22 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
         status, reason = "missing", "the configured executable is absent"
     elseif executable.present == nil or executable.version == nil or platform.os == nil or platform.arch == nil or platform.compatible == nil then
         status, reason = "unknown", "the host probe did not establish executable version and platform compatibility"
-    elseif spec.login_path and object.login_file_exists == nil then
-        status, reason = "unknown", "login-file existence was not checked"
-    elseif spec.login_path and object.login_file_exists == false then
-        status, reason = "unconfigured", "the provider login file is absent"
+    elseif present == nil then
+        status, reason = "unknown", "the host could not establish any declared login evidence"
+    elseif present == false then
+        status, reason = "unconfigured", "all declared login evidence is absent or its status command failed"
     else
         status = "ready"
-        if spec.login_path then reason = "the provider login file exists; its contents and validity were not checked" end
+        if spec.login_evidence then reason = "declared login evidence is present; credential contents and service validity were not checked" end
     end
 
-    local login: Result["login"]
-    if spec.login_path then
-        login = {evidence = "file_exists", path = spec.login_path, exists = object.login_file_exists}
-    else
-        login = {evidence = "not_required", exists = true}
-    end
+    local login: Login
+    if spec.login_evidence then login = {evidence = "any_of", exists = present}
+    else login = {evidence = "not_required", exists = true} end
     local result_platform: Result["platform"] = {os = platform.os :: string?, arch = platform.arch :: string?, compatible = platform.compatible :: boolean?}
     local result: Result = {provider = spec.provider, status = status,
         executable = {name = spec.executable, present = executable.present, version = executable.version},
-        login = login, platform = result_platform, checked_at = checked_at, reason = reason}
+        login = login :: Login, platform = result_platform, checked_at = checked_at, reason = reason}
     return result, nil
 end
 
@@ -135,7 +138,7 @@ function M.decode(raw: unknown): (Result?, string?)
     local raw_login = bounds.object(object.login)
     if not raw_login then return nil, "locate result login must be an object" end
     if bounds.fields(raw_login, {"evidence", "path", "exists"}) then return nil, "locate result login has unknown fields" end
-    local login_evidence = bounds.member(raw_login.evidence, {"file_exists", "not_required"})
+    local login_evidence = bounds.member(raw_login.evidence, {"file_exists", "any_of", "not_required"})
     if not login_evidence then return nil, "locate result login.evidence is invalid" end
     local login_path: string? = nil
     if raw_login.path ~= nil then
@@ -144,7 +147,7 @@ function M.decode(raw: unknown): (Result?, string?)
     end
     if raw_login.exists ~= nil and type(raw_login.exists) ~= "boolean" then return nil, "locate result login.exists must be boolean" end
     if login_evidence == "file_exists" and not login_path then return nil, "locate result login.path is required for file evidence" end
-    if login_evidence == "not_required" and login_path ~= nil then return nil, "locate result login.path is unexpected" end
+    if login_evidence ~= "file_exists" and login_path ~= nil then return nil, "locate result login.path is unexpected" end
     local raw_platform = bounds.object(object.platform)
     if not raw_platform then return nil, "locate result platform must be an object" end
     if bounds.fields(raw_platform, {"os", "arch", "compatible"}) then return nil, "locate result platform has unknown fields" end
@@ -163,8 +166,9 @@ function M.decode(raw: unknown): (Result?, string?)
         reason = bounds.text(object.reason, 512)
         if not reason or reason:find("[%c]") then return nil, "locate result reason is invalid" end
     end
-    local evidence_kind: "file_exists" | "not_required"
-    if login_evidence == "file_exists" then evidence_kind = "file_exists" else evidence_kind = "not_required" end
+    local evidence_kind: "file_exists" | "any_of" | "not_required"
+    if login_evidence == "file_exists" then evidence_kind = "file_exists"
+    elseif login_evidence == "any_of" then evidence_kind = "any_of" else evidence_kind = "not_required" end
     local decoded: Result = {provider = provider, status = status :: LocateStatus,
         executable = {name = executable_name, present = raw_executable.present :: boolean?, version = executable_version},
         login = {evidence = evidence_kind, path = login_path, exists = raw_login.exists :: boolean?},

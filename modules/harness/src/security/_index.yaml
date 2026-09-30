@@ -82,9 +82,9 @@ entries:
 - name: launch_locate_probe_policy
   kind: security.policy.expr
   meta:
-    comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and login-file existence without reading file contents
+    comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and alternative login metadata without reading credential contents
   policy:
-    expression: '(action == "env.get" && resource matches "^bee[.]driver[.](claude|codex|opencode|agy|grok|muse):executable$") || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || ((action == "exec.get" || action == "exec.run") && resource == "bee.placement.native:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")'
+    expression: '(action == "env.get" && (resource matches "^bee[.]driver[.](claude|codex|opencode|agy|grok|muse):executable$" || resource == "bee.harness.launch:host_environment_names" || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || ((action == "exec.get" || action == "exec.run") && resource == "bee.placement.native:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")'
     actions: [registry.get, registry.snapshot, env.get, exec.get, exec.run, fs.get]
     resources: '*'
     effect: allow

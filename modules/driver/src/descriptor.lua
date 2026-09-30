@@ -2,9 +2,10 @@
 local bounds = require("bounds")
 local registry = require("registry")
 local turn_budget = require("turn_budget")
+local login_evidence = require("login_evidence")
 local M = {}
 M.TYPE = "bee.driver.cli_descriptor"
-M.SCHEMA = "bee.driver.cli-descriptor@1"
+M.SCHEMA = "bee.driver.cli-descriptor@2"
 M.MAX_TEMPLATE_ITEMS = 128
 M.MAX_TEMPLATE_DEPTH = 8
 M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}
@@ -16,7 +17,7 @@ type Descriptor = {
     provider: string,
     executable: string,
     version_probe: Object,
-    login_evidence: Object,
+    login_evidence: login_evidence.Declaration,
     platform: Object,
     codec: string,
     json_paths: Object,
@@ -370,13 +371,8 @@ function M.decode(value: unknown): (Descriptor?, string?)
     for _, arg in ipairs(probe_argv) do if not bounds.text(arg, 128) then return nil, "CLI descriptor.version_probe.argv contains invalid text" end end
     if probe.pattern ~= nil and (not bounds.text(probe.pattern, 128) or probe.pattern == "") then return nil, "CLI descriptor.version_probe.pattern is invalid" end
 
-    local login, login_error = object(item.login_evidence, "CLI descriptor.login_evidence")
-    if not login then return nil, login_error end
-    if bounds.fields(login, {"path", "command", "variable", "directory"}) then return nil, "CLI descriptor.login_evidence has unknown fields" end
-    local login_path, login_command = bounds.text(login.path, 512), bounds.text(login.command, 128)
-    if not login_path or not safe_relative(login_path) or not login_command or login_command == "" then return nil, "CLI descriptor.login_evidence is invalid" end
-    if login.variable ~= nil and (not bounds.id(login.variable) or not login.variable:match("^[A-Z][A-Z0-9_]*$")) then return nil, "CLI descriptor.login_evidence.variable is invalid" end
-    if login.directory ~= nil and (not bounds.text(login.directory, 128) or not safe_relative(login.directory)) then return nil, "CLI descriptor.login_evidence.directory is invalid" end
+    local login, login_error = login_evidence.decode(item.login_evidence)
+    if not login then return nil, "CLI descriptor.login_evidence: " .. tostring(login_error) end
 
     local platform, platform_error = object(item.platform, "CLI descriptor.platform")
     if not platform then return nil, platform_error end

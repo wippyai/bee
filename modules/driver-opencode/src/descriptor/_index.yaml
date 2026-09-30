@@ -7,11 +7,16 @@ entries:
     type: bee.driver.cli_descriptor
     comment: OpenCode CLI command, JSON event codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@1
+    schema_revision: bee.driver.cli-descriptor@2
     provider: opencode
     executable: opencode
     version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
-    login_evidence: {path: .local/share/opencode/auth.json, command: opencode auth login, variable: HOME}
+    login_evidence:
+      command: opencode auth login
+      any_of:
+      - {kind: file_exists, paths: [.local/share/opencode/auth.json], variable: XDG_DATA_HOME, directory: .local/share}
+      - {kind: file_exists, paths: [.config/opencode/opencode.json, .config/opencode/opencode.jsonc], variable: XDG_CONFIG_HOME, directory: .config}
+      - {kind: env_present, names: [ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, XAI_API_KEY, OPENCODE_API_KEY, OPENCODE_CONFIG_CONTENT]}
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: opencode-json-events
     json_paths:

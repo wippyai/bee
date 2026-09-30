@@ -7,11 +7,16 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Claude Code command, stream-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@1
+    schema_revision: bee.driver.cli-descriptor@2
     provider: claude
     executable: claude
     version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
-    login_evidence: {path: .claude/.credentials.json, command: claude, variable: CLAUDE_CONFIG_DIR, directory: .claude}
+    login_evidence:
+      command: claude auth login
+      any_of:
+      - {kind: file_exists, paths: [.claude/.credentials.json], variable: CLAUDE_CONFIG_DIR, directory: .claude}
+      - {kind: env_present, names: [ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN]}
+      - {kind: auth_status, argv: [auth, status], success_exit_code: 0, timeout_ms: 3000}
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: claude-stream-json
     json_paths:

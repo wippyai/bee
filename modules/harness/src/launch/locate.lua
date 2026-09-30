@@ -1,9 +1,10 @@
 -- MIT. Probe one activated external driver from its validated descriptor.
--- Login evidence is a metadata existence check; credential bytes are never read.
+-- Login checks use metadata and silent exit codes; credential bytes are never read.
 local bounds = require("bounds")
 local descriptor_codec = require("descriptor")
 local driver_resolver = require("driver_resolver")
 local env = require("env")
+local json = require("json")
 local exec = require("exec")
 local fs = require("fs")
 local locate = require("locate")
@@ -13,6 +14,7 @@ local resources = require("resources")
 local driver_types = require("driver_types")
 local probe_capture = require("probe_capture")
 local probe_version = require("probe_version")
+local login_evidence = require("login_evidence")
 local M = {}
 local LOGIN_SOURCE = "bee.env:machine_login_source"
 
@@ -24,12 +26,17 @@ function M.new_cache(): Cache
     return {drivers = {}, platform = nil, platform_checked = false}
 end
 
-local function capture(argv: {string}): (string?, integer?, string?, boolean?)
+local function capture(argv: {string}, timeout_ms: integer?, silent: boolean?): (string?, integer?, string?, boolean?)
     local executor_ref, reference_error = resources.executor()
     if not executor_ref then return nil, nil, reference_error or "host executor is unavailable", false end
     local executor, executor_error = exec.get(executor_ref)
     if not executor then return nil, nil, tostring(executor_error or "host executor is unavailable"), false end
-    local proc, command_error = executor:exec(quote.line(argv))
+    local command = quote.line(argv)
+    if silent then command = quote.line({"sh", "-c", "exec " .. command .. " </dev/null >/dev/null 2>&1"}) end
+    local home, home_error = env.get("bee.env:machine_home")
+    local environment: {[string]: string} = {}
+    if not home_error and type(home) == "string" then environment.HOME = home end
+    local proc, command_error = executor:exec(command, {env = environment})
     if not proc then
         executor:release()
         local missing = command_error ~= nil and command_error:kind() == errors.NOT_FOUND
@@ -56,7 +63,7 @@ local function capture(argv: {string}): (string?, integer?, string?, boolean?)
         close = function(_self) stderr:close() end,
     }
     local output, code, probe_error = probe_capture.capture(capture_process, capture_stdout, capture_stderr,
-        function() executor:release() end)
+        function() executor:release() end, timeout_ms)
     if probe_error then return nil, nil, probe_error, false end
     return output, code, nil, false
 end
@@ -74,16 +81,29 @@ local function platform_probe(cache: Cache): Platform
 end
 
 local function executable_version(path: string, probe: {[string]: unknown}): (string?, boolean?)
-    return probe_version.read(path, probe, capture)
+    return probe_version.read(path, probe, function(argv) return capture(argv, nil, false) end)
 end
 
-local function login_exists(path: string): boolean?
-    local volume, volume_error = fs.get(LOGIN_SOURCE)
+local function login_exists(path: string, variable: string?, directory: string?): boolean?
+    local volume = fs.get(LOGIN_SOURCE)
     if not volume then return nil end
     local info, stat_error = volume:stat(path)
     if info then return true end
     if stat_error and stat_error:kind() == errors.NOT_FOUND then return false end
     return nil
+end
+
+local function environment_names(): {[string]: boolean}?
+    local raw, read_error = env.get("bee.harness.launch:host_environment_names")
+    if read_error or type(raw) ~= "string" then return nil end
+    local decoded, decode_error = json.decode(raw)
+    if decode_error or type(decoded) ~= "table" then return nil end
+    local names: {[string]: boolean} = {}
+    for _, name in ipairs(decoded :: {unknown}) do
+        if type(name) ~= "string" then return nil end
+        names[name :: string] = true
+    end
+    return names
 end
 
 local function has_locate_facet(pinned: registry.Snapshot, binding: {[string]: unknown}): boolean
@@ -109,11 +129,9 @@ local function selected_descriptor(pinned: registry.Snapshot, provider: string):
 end
 
 local function unsupported(selected: Descriptor, reason: string, platform: Platform?): driver_types.LocateResult
-    local login = bounds.object(selected.login_evidence) or {}
-    local login_path = bounds.text(login.path, 512)
     local result: driver_types.LocateResult = {provider = selected.provider, status = "incompatible",
         executable = {name = selected.executable},
-        login = {evidence = "file_exists", path = login_path},
+        login = {evidence = "any_of"},
         platform = platform or {}, reason = reason}
     return result
 end
@@ -179,15 +197,26 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     if not executable_error or executable_error:kind() == errors.NOT_FOUND then
         version, executable_present = executable_version(executable_path, bounds.object(selected.version_probe) or {})
     end
-    local evidence = bounds.object(selected.login_evidence) or {}
-    local login_path = bounds.text(evidence.path, 512) or ""
-    local login_file_exists: boolean? = nil
-    if login_path ~= "" then login_file_exists = login_exists(login_path) end
+    local names = environment_names()
+    local checks = login_evidence.probe(selected.login_evidence, {
+        file = login_exists,
+        environment = function(name)
+            if not names then return nil end
+            return names[name] == true
+        end,
+        status = function(args: {string}, timeout: integer): integer?
+            if executable_present ~= true then return nil end
+            local argv: {string} = {executable_path}
+            for _, arg in ipairs(args) do argv[#argv + 1] = arg end
+            local _, code = capture(argv, timeout, true)
+            return code
+        end,
+    })
     local probe = {profile_id = profile_id, configured = true,
-        executable = {present = executable_present, version = version},
-        login_file_exists = login_file_exists,
+        executable = {present = executable_present, version = version}, login_checks = checks,
         platform = {os = platform.os, arch = platform.arch, compatible = compatible}}
-    local result, result_error = locate.evaluate({provider = provider, executable = executable_name, login_path = login_path}, probe)
+    local result, result_error = locate.evaluate({provider = provider, executable = executable_name,
+        login_evidence = selected.login_evidence}, probe)
     if not result then
         local fallback = unknown(provider, result_error or "driver locate could not evaluate host facts")
         cache.drivers[cache_key] = fallback

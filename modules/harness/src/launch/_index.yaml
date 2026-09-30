@@ -66,7 +66,7 @@ entries:
 - name: locate
   kind: library.lua
   source: file://locate.lua
-  modules: [env, exec, fs, registry]
+  modules: [env, exec, fs, registry, json]
   imports:
     bounds: bee.threads.records:bounds
     descriptor: bee.driver:descriptor
@@ -77,6 +77,7 @@ entries:
     resources: bee.placement.native:resources
     probe_capture: bee.harness.launch:probe_capture
     probe_version: bee.harness.launch:probe_version
+    login_evidence: bee.driver:login_evidence
 - name: probe_capture
   kind: library.lua
   source: file://probe_capture.lua
@@ -146,3 +147,9 @@ entries:
     actions: [funcs.security, security.policy_group.get, funcs.call, registry.snapshot]
     resources: '*'
     effect: allow
+
+- name: host_environment_names
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: environment_names
+  readonly: true

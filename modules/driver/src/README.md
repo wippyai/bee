@@ -29,16 +29,62 @@ exit alone never establishes a successful turn.
 
 External CLI bindings also implement `bee.driver:locate_facet`. Its `locate`
 method evaluates host-probed executable presence and version, platform support,
-and provider login-file existence. Results are `ready`, `missing`,
+and alternative provider login evidence. Results are `ready`, `missing`,
 `unconfigured`, `incompatible`, or `unknown`. Login contents are never read;
-file existence is evidence of setup only, not proof that a login is valid.
+file or config existence and environment presence are setup evidence, not proof that a login is valid.
 
 The six external CLI packages use the shared `bee.driver:universal`
 implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
-entry with executable and version probe, login evidence path, launch templates,
+entry (`bee.driver.cli-descriptor@2`) with executable and version probe, an any-of login evidence declaration, launch templates,
 option and flag templates, JSON paths, and a codec ID. The host validates the
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
+
+`login_evidence` declares a display-only `command` and one to eight `any_of`
+alternatives. One positive observation makes the login ready. If all checks
+are negative it is unconfigured; if none is positive and a check cannot run,
+readiness is unknown. Alternatives are strict, bounded records:
+
+| Kind | Fields | Host observation |
+|---|---|---|
+| `file_exists` | `paths` (1–8 relative paths; eight total), optional provider `variable`/`directory` | Metadata under the host-selected machine login source; no file reads |
+| `env_present` | `names` (1–16 environment names) | Native host environment names only; no values enter Lua |
+| `auth_status` | `argv` (1–8 arguments), `success_exit_code` (0–255), `timeout_ms` (1–30000) | The selected CLI's local non-interactive status command; stdin closed, stdout/stderr discarded before capture |
+
+The host probe supplies machine HOME to status commands and bounds their
+lifetime. It never runs interactive login, refresh, model listing or provider
+requests to establish readiness. Descriptor metadata does not grant execution,
+credential access, environment inheritance or home permissions. A private route
+still needs its host-selected credential/config projection; a host-home route
+still needs its admitted policy. Window file advisories retain the same
+alternatives; they cannot report absence while non-file alternatives remain
+unobserved.
+
+| CLI | Declared sources | Default window home |
+|---|---|---|
+| Claude | `.claude/.credentials.json`; `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`; `auth status` exit 0 | Authorized host HOME (status also covers macOS Keychain) |
+| Codex | `.codex/auth.json`; `OPENAI_API_KEY`, `CODEX_API_KEY`; `login status` exit 0 | Authorized host HOME (status also covers OS credential storage) |
+| Agy | `.gemini/antigravity-cli/antigravity-oauth-token`; `GEMINI_API_KEY` | Authorized host HOME |
+| Grok | `.grok/auth.json` or `.grok/config.toml`; `XAI_API_KEY`, `GROK_CODE_XAI_API_KEY` | Private HOME; existing `grok_login` projection carries auth and config independently |
+| Muse | `.config/muse/auth.json`; `META_API_KEY` | Authorized host HOME |
+| OpenCode | `.local/share/opencode/auth.json`, `.config/opencode/opencode.json` or `.jsonc`; declared provider key environment names or inline config | Authorized host HOME, including provider key files referenced by config |
+
+Grok and OpenCode config existence establishes setup without inspecting keys,
+provider selection or referenced file contents. A config with no usable provider
+can therefore pass this evidence check; actual authentication remains the CLI's
+responsibility. Agy, Grok, Muse and OpenCode do not expose a local status command
+whose exit code alone proves login in the installed CLI help, so their
+descriptors do not run one. Agy's OS-keyring-only login has no safe observable
+status evidence; without its fallback token or API-key environment name it
+reports unconfigured rather than inventing evidence.
+
+Authentication sources: [Claude authentication](https://code.claude.com/docs/en/authentication),
+[Codex authentication](https://developers.openai.com/codex/auth),
+[OpenCode providers](https://opencode.ai/docs/providers) and
+[config substitutions](https://opencode.ai/docs/config); Grok's bundled
+`02-authentication.md` and configuration reference; installed Agy `--help` and
+bundled API-key changelog; Muse `login --help` and `auth --help`. Claude and
+Codex status commands are declared with a 3000 ms timeout.
 
 Each observed wire protocol has one shared codec: Claude stream-json, Codex
 JSONL, OpenCode JSON events, Agy stream-json, Grok streaming-json, and Muse

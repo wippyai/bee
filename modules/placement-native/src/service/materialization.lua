@@ -150,6 +150,11 @@ function M.login_notice(request: types.LaunchRequest, selected_home: string,
         local present = is_file(path)
         if present == nil or present == true then return nil end
     end
+    -- This advisory has no authority to execute a status command or inspect
+    -- environment credentials. Unobserved alternatives leave login unknown.
+    for _, evidence in ipairs(login.any_of or {}) do
+        if evidence.kind ~= "file_exists" then return nil end
+    end
     return {code = "LOGIN_REQUIRED", provider = login.provider, command = login.command}
 end
 function M.prepare_login_notice(request: types.LaunchRequest, private_home: string,

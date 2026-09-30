@@ -41,7 +41,7 @@ local function actor_id(): string?
     if type(id) ~= "string" then return nil end
     local bounded = bounds.id(id)
     if type(bounded) ~= "string" then return nil end
-    return bounded :: string
+    return bounded
 end
 
 local function error_text(value: unknown): string?
@@ -55,7 +55,7 @@ local function fail(db, reason: string, gateway_binding: string?, attempt_id: st
         -- failed. Revoke it here; bytes never enter this facade's return
         -- value or a durable record.
         local raw, revoke_error = funcs.call(resources.GATEWAY_REVOKE, {binding_id = gateway_binding})
-        local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        local reply = type(raw) == "table" and raw or nil
         if revoke_error or not reply or reply.ok ~= true then
             if attempt_id then
                 store.transition(db, attempt_id, {evidence = {kind = "gateway.revoke_failed", detail = "window open failed: " .. tostring(revoke_error or "gateway refused revoke")}})
@@ -81,7 +81,7 @@ end
 
 local function options(value: unknown): (Options?, string?)
     if type(value) ~= "table" then return nil, "window options must be an object" end
-    local object = value :: {[string]: unknown}
+    local object = value
     for key in pairs(object) do
         if key ~= "width" and key ~= "height" and key ~= "term" and key ~= "expected_binding" and key ~= "expected_placement_binding" and key ~= "generation" then
             return nil, "unknown window option " .. tostring(key)
@@ -93,17 +93,17 @@ local function options(value: unknown): (Options?, string?)
     local width_value: unknown = bounds.integer(object.width)
     local height_value: unknown = bounds.integer(object.height)
     if type(width_value) ~= "number" or type(height_value) ~= "number" then return nil, "window dimensions must be integers" end
-    local width, height = math.floor(width_value :: number), math.floor(height_value :: number)
-    local term = object.term :: string
+    local width, height = math.floor(width_value), math.floor(height_value)
+    local term = object.term
     if width < 1 or width > MAX_WIDTH or height < 1 or height > MAX_HEIGHT then return nil, "window dimensions are out of bounds" end
     if term == "" or #term > 64 or term:find("[%z%c]", 1) then return nil, "window term is invalid" end
-    local expected_binding = object.expected_binding
-    if expected_binding ~= nil and not bounds.id(expected_binding) then return nil, "expected_binding is invalid" end
-    local expected_placement_binding = object.expected_placement_binding
-    if expected_placement_binding ~= nil and not bounds.id(expected_placement_binding) then return nil, "expected_placement_binding is invalid" end
+    local expected_binding = bounds.id(object.expected_binding)
+    if object.expected_binding ~= nil and not expected_binding then return nil, "expected_binding is invalid" end
+    local expected_placement_binding = bounds.id(object.expected_placement_binding)
+    if object.expected_placement_binding ~= nil and not expected_placement_binding then return nil, "expected_placement_binding is invalid" end
     local generation = bounds.integer(object.generation)
     if object.generation ~= nil and (not generation or generation < 1) then return nil, "generation is invalid" end
-    return {generation = generation, width = width, height = height, term = term, expected_binding = expected_binding :: string?, expected_placement_binding = expected_placement_binding :: string?}, nil
+    return {generation = generation, width = width, height = height, term = term, expected_binding = expected_binding, expected_placement_binding = expected_placement_binding}, nil
 end
 
 -- Open is the only constructor. It derives the caller from the authenticated
@@ -115,7 +115,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     if not owner then return nil, "no authenticated actor" end
     local bounded_attempt_id = bounds.id(attempt_id)
     if type(bounded_attempt_id) ~= "string" then return nil, "attempt_id is invalid" end
-    attempt_id = bounded_attempt_id :: string
+    attempt_id = bounded_attempt_id
     local chosen, option_error = options(value)
     if not chosen then return nil, option_error end
 
@@ -207,7 +207,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
             if not ok or finished then return end
             local raw: unknown = message:payload():data()
             if type(raw) == "table" then
-                local data = raw :: {[string]: unknown}
+                local data = raw
                 local authorized = data.control_token == control_token
                     or (tostring(message:from()) == tostring(process.pid()) and data.command == "status")
                 if not authorized then goto next_control end
@@ -333,7 +333,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         local binding = gateway_binding
         gateway_binding = nil
         local raw, revoke_error = funcs.call(resources.GATEWAY_REVOKE, {binding_id = binding})
-        local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        local reply = type(raw) == "table" and raw or nil
         if revoke_error or not reply or reply.ok ~= true then
             store.transition(db, attempt_id, {evidence = {kind = "gateway.revoke_failed", detail = why .. ": " .. tostring(revoke_error or "gateway refused revoke")}})
         else

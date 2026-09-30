@@ -49,6 +49,20 @@ local POLICY = "bee.placement.native:test_launch_policy"
 local NO_PROVIDER_POLICY = "bee.placement.native:test_launch_policy_without_provider"
 local FIXTURE_BINDING = "bee.placement.native:fixture_agent_binding"
 local counter = 0
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
@@ -81,7 +95,7 @@ local function admit_credential_source()
     end
     list[#list + 1] = {ref = "bee.placement.native:sentinel_key", workspace_id = "*", audience = OWNER, provider = "claude", projection_kinds = {"environment"}}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("admit credential source: " .. tostring(err)) end
 end
@@ -123,7 +137,7 @@ local function admit_login_source(source: string, private_codex_home: boolean?)
     file_policy.data.policy.resources = {source}
     write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     changes:update(file_policy)
     changes:update(write_policy)
     local applied, apply_error = changes:apply()
@@ -151,7 +165,7 @@ local function admit_claude_login_source(source: string)
     file_policy.data.policy.resources = {source}
     write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     changes:update(file_policy)
     changes:update(write_policy)
     local applied, apply_error = changes:apply()
@@ -174,7 +188,7 @@ local function admit_grok_login_source(source: string)
     file_policy.data.policy.resources = {source}
     write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     changes:update(file_policy)
     changes:update(write_policy)
     local applied, apply_error = changes:apply()
@@ -186,7 +200,7 @@ local function resource_mode(mode: string)
     local data = entry.data :: {[string]: unknown}
     data.mode = mode
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("set resource mode: " .. tostring(err)) end
 end
@@ -340,7 +354,7 @@ local function admit_root(ref: string)
     roots[#roots + 1] = {root_ref = ROOT, access = "write"}
     roots[#roots + 1] = {root_ref = READONLY, access = "read"}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("admit root: " .. tostring(err)) end
 end
@@ -352,7 +366,7 @@ local function activate_fixture_binding()
     for _, binding in ipairs(bindings) do if binding == FIXTURE_BINDING then return end end
     bindings[#bindings + 1] = FIXTURE_BINDING
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("activate fixture binding: " .. tostring(err)) end
 end
@@ -716,7 +730,7 @@ local function define_tests()
                 test.is_nil(materialization.prepare_login_notice(decoded, "/private-attempt-home", nil))
             end)
             local restore = registry.snapshot():changes()
-            restore:update(original)
+            restore:update(registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             if not ok then error(tostring(failure)) end
@@ -921,7 +935,7 @@ local function define_tests()
                 test.eq(attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
             end)
             local restore = registry.snapshot():changes()
-            restore:update(original)
+            restore:update(registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             if not ok then error(tostring(err)) end
@@ -1358,7 +1372,7 @@ local function define_tests()
             test.eq(measured.kind, "script")
             test.eq(measured.interpreter, "/bin/sh")
             test.eq(tostring(measured.digest):len(), 64)
-            test.eq(measured.digest, hash.sha256("#!/bin/sh\necho measured\n"))
+            test.eq(measured.digest, (hash.sha256("#!/bin/sh\necho measured\n")))
             local image = value(call(OWNER, "measure_executable", {path = "/bin/sh"}))
             test.eq(image.kind, "elf")
             test.eq(tostring(image.digest):len(), 64)
@@ -1511,7 +1525,7 @@ local function define_tests()
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                 if item.kind == "configuration.materialized" then
                     test.is_true(tostring(item.detail):find("digest " .. rendered.digest, 1, true) ~= nil)
-                    test.is_nil(tostring(item.detail):find("/home", 1, true))
+                    test.is_nil((tostring(item.detail):find("/home", 1, true)))
                 end
             end
         end)
@@ -2020,8 +2034,8 @@ local function define_tests()
             }) do
                 local _, changed_error = homes.retain_login(session_path, changed, "different-opaque-login-bytes")
                 test.eq(changed_error, "retained login source changed")
-                test.is_nil(changed_error:find("opaque-login-not-in-errors", 1, true))
-                test.is_nil(changed_error:find("different-opaque-login-bytes", 1, true))
+                test.is_nil((changed_error:find("opaque-login-not-in-errors", 1, true)))
+                test.is_nil((changed_error:find("different-opaque-login-bytes", 1, true)))
             end
             local partial_key = assert(homes.session_key(OWNER, fresh("login-partial-session")))
             local partial_session = assert(homes.ensure_session(partial_key))
@@ -2395,7 +2409,7 @@ local function define_tests()
             local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
             local write_back_refused = false
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
-                test.is_nil(tostring(item.detail):find("ambient-refresh", 1, true))
+                test.is_nil((tostring(item.detail):find("ambient-refresh", 1, true)))
                 if item.kind == "credential.write_back" then error("fixture login unexpectedly wrote back") end
                 if item.kind == "credential.write_back_failed" then
                     test.is_true(tostring(item.detail):find("provider login write-back requires runtime no-follow fs", 1, true) ~= nil)
@@ -2505,8 +2519,8 @@ local function define_tests()
             local first_exit = (value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).exit
             if not first_exit then error("environment probe has no exit receipt") end
             test.eq(first_exit.code, 0)
-            test.not_nil(child_environment:find("PROBE_VALUE=probe-42\n", 1, true))
-            test.is_nil(child_environment:find('{"fixture":"login"}', 1, true))
+            test.not_nil((child_environment:find("PROBE_VALUE=probe-42\n", 1, true)))
+            test.is_nil((child_environment:find('{"fixture":"login"}', 1, true)))
             attempt_of(call(OWNER, "cleanup", {attempt_id = first_id}))
             local session_key = assert(homes.session_key(OWNER, session_ref))
             local session_path = assert(homes.ensure_session(session_key))
@@ -2524,7 +2538,7 @@ local function define_tests()
             test.eq(shell("cat " .. home .. "/.codex/auth.json"), '{"fixture":"refreshed"}')
             local page = value(call(OWNER, "evidence", {attempt_id = second_id, limit = 64}))
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
-                test.is_nil(tostring(item.detail):find("refreshed", 1, true))
+                test.is_nil((tostring(item.detail):find("refreshed", 1, true)))
             end
             attempt_of(call(OWNER, "cleanup", {attempt_id = second_id}))
             local changed_request = retained_launch(OWNER, session_ref, "changed-login")
@@ -2536,7 +2550,7 @@ local function define_tests()
             test.is_false(refused.ok)
             test.eq(refused.error and refused.error.code, "UNAVAILABLE")
             test.is_true(has(kinds(changed_id), "credential.refused"))
-            test.is_nil(shell("cat " .. home .. "/marker"):find("changed-login", 1, true))
+            test.is_nil((shell("cat " .. home .. "/marker"):find("changed-login", 1, true)))
         end)
         test.it("composes Grok configuration only from the current admitted initializer", function()
             local source = "bee.credentials:codex_login_fixture"
@@ -2924,12 +2938,12 @@ local function define_tests()
                 test.is_false(failed.ok)
                 local message = tostring(failed.error and failed.error.message)
                 test.is_true(message:find("ANTHROPIC_API_KEY is already assigned", 1, true) ~= nil)
-                test.is_nil(message:find(SENTINEL, 1, true))
+                test.is_nil((message:find(SENTINEL, 1, true)))
                 local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
                 local refused = false
                 for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                     test.is_true(item.kind ~= "child.started")
-                    test.is_nil(tostring(item.detail):find(SENTINEL, 1, true))
+                    test.is_nil((tostring(item.detail):find(SENTINEL, 1, true)))
                     if item.kind == "credential.refused" then refused = true end
                 end
                 test.is_true(refused)
@@ -2937,7 +2951,7 @@ local function define_tests()
                 if not db then error("placement store") end
                 local row = store.row(db, attempt_id)
                 db:release()
-                test.is_nil(tostring(row and row.request_json):find(SENTINEL, 1, true))
+                test.is_nil((tostring(row and row.request_json):find(SENTINEL, 1, true)))
             end
         end)
         test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
@@ -3090,7 +3104,7 @@ return {run = function(options)
     for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots", "bee.resources:resource_roots", "bee.credentials:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
-    for _, original in ipairs(originals) do changes:update(original) end
+    for _, original in ipairs(originals) do changes:update(registry_input(original)) end
     assert(changes:apply())
     if not ok then error(tostring(result)) end
     return result

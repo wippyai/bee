@@ -85,7 +85,7 @@ end
 
 local function json_array(value: unknown, label: string): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a JSON array" end
-    local list = value :: {unknown}
+    local list = value
     local count = 0
     local highest = 0
     for key in pairs(list) do
@@ -100,7 +100,7 @@ local function json_array(value: unknown, label: string): ({unknown}?, string?)
 end
 
 local function decode_json_object(content: string, label: string, empty: boolean): (Object?, string?)
-    if empty and content == "" then return table.create(0, 1) :: Object, nil end
+    if empty and content == "" then return table.create(0, 1), nil end
     local decoded, decode_error = json.decode(content)
     local object, object_error = json_object(decoded, label)
     if not object then return nil, tostring(decode_error or object_error) end
@@ -126,7 +126,7 @@ local function target_parent(document: Object, path: {string}): (Object?, string
         local key = path[index]
         local value = current[key]
         if value == nil then
-            local child: Object = table.create(0, 1) :: Object
+            local child: Object = table.create(0, 1)
             current[key] = child
             current = child
         else
@@ -139,7 +139,7 @@ local function target_parent(document: Object, path: {string}): (Object?, string
 end
 
 local function rebuild_patch_source(source: Object, operations: {types.JsonOperation}): (Object?, string?)
-    local rebuilt: Object = table.create(0, 1) :: Object
+    local rebuilt: Object = table.create(0, 1)
     for _, operation in ipairs(operations) do
         local selected, selected_error = selected_json_path(source, operation.path, "source JSON recipe path")
         if selected == nil then return nil, selected_error end

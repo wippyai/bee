@@ -117,6 +117,7 @@ entries:
   method: main
   modules: [process, channel, time, sql, exec, funcs]
   imports:
+    bounds: bee.protocol:bounds
     service: bee.placement.native.service:service
     materialization: bee.placement.native.service:materialization
     store: bee.placement.native.persist:store

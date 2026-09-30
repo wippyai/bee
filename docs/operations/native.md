@@ -163,15 +163,38 @@ databases. These mappings apply to newly assembled executables; an application
 pack update alone does not change the installed launcher's defaults.
 
 On first boot the embedded pack seeds `deployments/<bundle-id>/wippy.lock` and
-its vendor deployment.
-Later boots preserve the installed selection. `update` uses the normal Wippy Hub
-resolver in a staged deployment, lints against the compiled native modules,
-verifies artifact hashes, then switches the activation record. Failure retains
-the previous selection. Stop Bee before updating; the state directory has an
-exclusive process-lifetime lock. Hub credentials and an available published Bee
-module are required for real Bee updates. The [release protocol](releasing.md)
-provides a local Hub preflight and publication workflow. In-app Hub installation
-is not implemented.
+its vendor deployment. Later boots preserve the installed selection. The
+standalone `bee update` command uses the normal Wippy Hub resolver in a staged
+deployment, lints against the compiled native modules, verifies artifact hashes,
+then switches the activation record. Failure retains the previous selection.
+This offline deployment command requires Bee to stop because the state directory
+has an exclusive process-lifetime lock.
+
+The Modules app also offers **Update Bee** while Bee is running. It updates the
+host `bee/bee` dependency root through the Hub plan, approval, publication,
+receipt and migration path, resolving the Bee-owned `bee/*` pack closure while
+preserving third-party roots. It does not stop the current owner; new registry
+definitions are available to later calls, and an owner restart restores the
+selected pack graph from registry history and verified cached artifacts. A
+newer Bee executable baseline takes precedence through the runtime's normal
+dependency-resolution reconciliation. Hub credentials and published Bee packs
+are required. The [release protocol](releasing.md) provides the publication
+workflow. To roll Bee's packs back, select an earlier `bee/bee` version from
+Hub version history and confirm it as a root update. `bee gov revert OWNER`
+continues to restore governed overlay activations; it does not change Bee's
+deployment root.
+
+Bee packs that need native support declare `native_requirements` on an
+`ns.definition` entry's metadata, for example
+`native_requirements: [{package: github.com/wippyai/bee/native/launch, version: v1.2.3}]`.
+The Hub planner compares each required package and semantic version against the
+native manifest baked into the running executable. It also checks the target
+`bee/bee` root's embedded native versions and runtime commit, keeping those
+binary fields accurate after a live update. It blocks an incompatible pack
+closure with **needs a newer Bee binary**. The About page labels the live Bee
+pack version separately from the binary native version and runtime commit, then
+shows installed Bee pack versions and available Hub updates. Native code and
+native component changes still require a new executable.
 
 The executable's immutable bundle is seeded under `deployments/<bundle-id>`.
 `run` continues the selected deployment, while `recover` starts the shipped
@@ -189,10 +212,9 @@ updating an application pack does not change an already installed launcher.
 
 `wippy` exposes the Wippy CLI directly, with its explicit logging flags. `wippy
 update` is the CLI operation for direct Wippy updates; the executable's `update`
-operation uses standalone staging. Native code updates
-require a new executable; Hub updates replace application packs. Lint catches
-missing module exports and type incompatibilities, but a semantic native-version
-requirement gate is not implemented.
+operation uses standalone staging. Native code updates require a new executable;
+the live Hub path updates application packs and checks declared native package
+requirements against the current executable.
 
 ### Native executable replacement
 

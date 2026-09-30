@@ -4,11 +4,14 @@ local inventory = require("inventory")
 local catalog = require("catalog")
 local publication = require("publication")
 local semver = require("semver")
+local binary_identity = require("binary_identity")
 local M = {}
 
 type Pack = {component: string, installed_version: string, available_version: string, update_available: boolean}
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
-type Result = {modules: {Pack}, bee_update: BeeUpdate, catalog_error: string}
+type Binary = {native_module: string, native_version: string, runtime_commit: string}
+type Result = {modules: {Pack}, bee_update: BeeUpdate, catalog_error: string, binary: Binary?}
+local MAX_STATUS_PAGES = 16
 
 local function bee_component(name: string): boolean
     return name == "bee/bee" or name:match("^bee/") ~= nil
@@ -17,7 +20,7 @@ end
 local function latest_versions(): ({[string]: string}, string)
     local versions: {[string]: string} = {}
     local page = 1
-    while page <= 2 do
+    while page <= MAX_STATUS_PAGES do
         local result, problem = catalog.browse({keyword = "bee", page = page})
         if not result then return versions, tostring(problem or "Bee package catalog is unavailable") end
         for _, item in ipairs(result.items) do
@@ -26,7 +29,7 @@ local function latest_versions(): ({[string]: string}, string)
         if result.page * result.page_size >= result.total then break end
         page = page + 1
     end
-    if page > 2 then return versions, "Bee package catalog exceeds the status bound" end
+    if page > MAX_STATUS_PAGES then return versions, "Bee package catalog exceeds the status bound" end
     return versions, ""
 end
 
@@ -72,7 +75,13 @@ function M.read(): (Result?, string?)
         end
     end
     table.sort(packs, function(a: Pack, b: Pack): boolean return a.component < b.component end)
-    return {modules = packs, bee_update = self_update, catalog_error = catalog_error}, nil
+    local baked: binary_identity.Baked? = binary_identity.read_host()
+    local binary: Binary? = nil
+    if baked and baked.native_module and baked.native_version and baked.runtime_commit then
+        binary = {native_module = baked.native_module, native_version = baked.native_version,
+            runtime_commit = baked.runtime_commit}
+    end
+    return {modules = packs, bee_update = self_update, catalog_error = catalog_error, binary = binary}, nil
 end
 
 return M

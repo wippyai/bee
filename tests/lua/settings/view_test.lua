@@ -97,9 +97,13 @@ local function define_tests()
                 },
                 bee_update = {installed_version = "1.0.0", available_version = "2.0.0", update_available = true,
                     needs_new_binary = true, reason = "needs a newer Bee binary: native/launch requires 2.0.0"},
+                binary = {native_module = "github.com/wippyai/bee/native", native_version = "v1.2.3",
+                    runtime_commit = "0123456789abcdef0123456789abcdef01234567"},
                 catalog_error = "",
             }})
-            local info = build_info.info("github.com/wippyai/bee/native", "v1.2.3", "0123456789abcdef0123456789abcdef01234567")
+            local identity = status.binary
+            local info = build_info.info(identity and identity.native_module, identity and identity.native_version,
+                identity and identity.runtime_commit)
             local text = table.concat(view.draw(100, 24, appearance.defaults(), "about", 0, nil, status, false, info).rows, "\n")
             test.is_nil(text:find("Binary version", 1, true))
             test.is_true(text:find("Binary native version", 1, true) ~= nil)
@@ -116,7 +120,8 @@ local function define_tests()
         test.it("rejects malformed live Hub status at the Settings boundary", function()
             local valid = {ok = true, replayed = false, value = {modules = {},
                 bee_update = {installed_version = "1.0.0", available_version = "1.0.0", update_available = false,
-                    needs_new_binary = false, reason = ""}, catalog_error = ""}}
+                    needs_new_binary = false, reason = ""}, binary = {native_module = "github.com/wippyai/bee/native",
+                    native_version = "v1.2.3", runtime_commit = "0123456789abcdef0123456789abcdef01234567"}, catalog_error = ""}}
             test.eq(live_updates.decode(valid).state, "ready")
             valid.unexpected = true
             test.eq(live_updates.decode(valid).state, "error")
@@ -124,6 +129,16 @@ local function define_tests()
             valid.value.modules = {{component = "example/app", installed_version = "1.0.0",
                 available_version = "2.0.0", update_available = true}}
             test.eq(live_updates.decode(valid).state, "error")
+            valid.value.modules = {}
+            valid.value.binary.runtime_commit = "invalid"
+            test.eq(live_updates.decode(valid).state, "error")
+        end)
+        test.it("accepts an empty Bee deployment root before the first Hub self-update", function()
+            local status = live_updates.decode({ok = true, replayed = false, value = {modules = {},
+                bee_update = {installed_version = "", available_version = "", update_available = false,
+                    needs_new_binary = false, reason = ""}, catalog_error = ""}})
+            test.eq(status.state, "ready")
+            test.eq(status.bee_update and status.bee_update.installed_version, "")
         end)
         test.it("shows person-confirmed, bounded edit mode controls at every terminal size", function()
             for _, width in ipairs({1, 12, 28, 48, 80}) do

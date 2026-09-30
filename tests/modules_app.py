@@ -29,6 +29,7 @@ AGENT_DIGEST = "d" * 64
 FACADE = '''
 local security = require("security")
 local recovered = false
+local agent_install_applied = false
 -- The agent-requested package: reads never carry management authority; the
 -- approved apply does, for exactly the approved digest and request.
 local function agent_tool(raw: {[string]: unknown}): {[string]: unknown}
@@ -49,6 +50,7 @@ local function agent_tool(raw: {[string]: unknown}): {[string]: unknown}
     assert(manage, "approved apply lacks Hub management authority")
     assert(raw.expected_digest == AGENT_DIGEST and request.action == "install" and request.version == "1.0.0"
         and request.migration_policy == "up", "agent apply changed the approved plan")
+    agent_install_applied = true
     return {ok = true, replayed = false, value = {state = "complete", message = "Agent tool installed"}}
 end
 local function handle(raw: unknown): {[string]: unknown}
@@ -104,6 +106,12 @@ local function handle(raw: unknown): {[string]: unknown}
                 "fixture:07", "fixture:08", "fixture:09", "fixture:10", "fixture:11", "fixture:12",
                 "fixture:last"}}}
     elseif raw.operation == "status" then
+        if raw.expected_digest == AGENT_DIGEST then
+            if not agent_install_applied then
+                return {ok = false, replayed = false, code = "NOT_FOUND", message = "Agent install has no Hub receipt yet"}
+            end
+            return {ok = true, replayed = false, value = {state = "complete", message = "Agent tool installed"}}
+        end
         local rows = {}
         for index = 1, 12 do rows[index] = {id = "recovery:step" .. tostring(index), target_db = "recovery:db", module = "bee/recovery", status = "applied"} end
         local receipt = {digest = string.rep("b", 64), action = "install", component = "bee/recovery",

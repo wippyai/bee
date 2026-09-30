@@ -16,13 +16,7 @@ type UpdateRead = {future: funcs.Future, response: channel.Channel}
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
-    local function host_fact(id: string): string?
-        local result, problem = env.get(id)
-        if problem or type(result) ~= "string" or result == "" then return nil end
-        return result
-    end
-    local binary_info = build_info.info(host_fact("bee.env:binary_native_module"),
-        host_fact("bee.env:binary_native_version"), host_fact("bee.env:binary_runtime_commit"))
+    local binary_info = build_info.info()
     local broker = launch.broker_pid
     local announced = false
     local input = assert(tty.events())
@@ -214,7 +208,13 @@ local function main(value: unknown)
             update_read = nil
             live_pending = false
             if result_error or not result then live_status = live_updates.failure(tostring(result_error or "Hub status call returned no reply"))
-            else live_status = live_updates.decode(result:data()) end
+            else
+                live_status = live_updates.decode(result:data())
+                local identity = live_status.binary
+                if identity then
+                    binary_info = build_info.info(identity.native_module, identity.native_version, identity.runtime_commit)
+                end
+            end
             reveal()
             dirty = true
             if refresh_again then refresh_again = false; request_live_updates() end

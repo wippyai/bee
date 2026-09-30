@@ -19,14 +19,17 @@ with tempfile.TemporaryDirectory(prefix="bee-native-about-") as temporary:
         ui.wait("BEE SETTINGS", timeout=20)
         ui.key(b"\t\t\t\t")
         ui.wait("BEE SETTINGS · ABOUT")
+        ui.wait(manifest["runtime"]["commit"], timeout=30)
+        ui.wait("Pack  bee/agents", timeout=30)
         initial = ui.text()
         assert "development (unknown)" not in initial, initial
         assert "Live Bee packs" in initial, initial
         expected = os.environ.get("BEE_ABOUT_SOURCE", "")
         if expected:
             assert expected[:12] in initial, initial
-        ui.key(b"\x1b[6~" * 30)
-        ui.wait("https://bee.wippy.ai")
+        if "https://bee.wippy.ai" not in initial:
+            ui.key(b"\x1b[6~")
+            ui.wait("https://bee.wippy.ai")
         combined = initial + ui.text()
         assert "Binary runtime commit" in combined, combined
         assert "Binary native version" in combined, combined
@@ -36,13 +39,15 @@ with tempfile.TemporaryDirectory(prefix="bee-native-about-") as temporary:
         for native in manifest["native"]:
             assert native["version"] in combined, combined
         ui.key(b"\x1b[6~" * 30)
-        ui.key(b"\x1b[5~" * 30)
         ui.wait("bee/hub", timeout=20)
         assert "installed" in ui.text(), ui.text()
         ui.key(b"\x1b[24~")
+        ui.wait("BEE SETTINGS · ABOUT")
+        ui.key(b"\x1b[5~" * 30)
         ui.wait("https://bee.wippy.ai")
         ui.resize(48, 16)
-        ui.key(b"\x1b[6~" * 30)
+        ui.key(b"\x1b[5~" * 30)
+        ui.key(b"\x1b[6~")
         ui.wait("Website")
         ui.quit()
     finally:

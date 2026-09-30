@@ -11,14 +11,23 @@ registry rewrite.
 
 The public `bee.hub.binding:call` function accepts `{operation, request?, expected_digest?}`
 and returns `{ok, value?, code?, message?, replayed}`. The host grants
-`bee.hub.read` or `bee.hub.manage` for the requested component; effect-free
-planning also requires installed-catalog read authority, while apply alone
-requires management authority. The facade
+`bee.hub.read` or `bee.hub.manage` for ordinary package operations. Planning
+also requires installed-catalog read authority. The host deployment root
+`bee/bee` has a separate `bee.hub.self_update` grant, host-selected only for
+the person-operated Modules app; agents and overlays receive no such grant.
+The app presents an exact plan and requires the person to confirm each update. Apply
+uses the same durable receipt and migration path as other Hub root changes. The facade
 validates and authorizes the operation before entering its fixed private scope.
 Requests cannot select credentials, a registry URL, an actor or a host path.
 
 Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`,
-`installed` and `installed_source`. Catalog keyword defaults to `bee`; an empty keyword clears it.
+`installed`, `installed_source` and `updates`. `updates` returns installed Bee
+pack versions, each available Hub version, update availability and whether the
+latest `bee/bee` closure needs a newer native binary. It reads the host-owned
+binary identity and the live registry inventory. Its catalog scan is bounded
+to 16 pages of 50 items; it returns the versions read so far with a catalog
+status error if the Hub search exceeds that bound. Catalog keyword defaults to
+`bee`; an empty keyword clears it.
 `inspect` and `state` return entry summaries first, at most 32 per page with a
 `next_offset` cursor, and entry source only on explicit `include_data`; read
 selected source through `files` and `read_file` windows.
@@ -36,8 +45,26 @@ See [the API and acceptance status](../../docs/guides/hub.md) for request exampl
 Management operations are `plan`, `apply` and `status`. Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. Exact dependency pins do not list release history; ranges page lazily.
+For self-update, the request updates the installed host `bee/bee` root and
+resolves its `bee/*` closure, preserving the root's typed parameters and every
+third-party root. Bee pack components cannot be installed, updated or removed
+directly. A pack can declare native needs in `ns.definition.meta.native_requirements`
+as `{package = "native/module", version = "1.2.3"}` rows. The planner compares
+those semantic versions against the executable's Go module build list, exposed
+only through the native launch host's read-only environment facts. The release
+source builder adds a `bee.binary_identity` entry to the target root pack from
+the build manifest; planning checks its native components and runtime commit
+against those executable facts. A target that needs an unavailable native
+version or another runtime commit is refused with `needs a newer Bee binary`
+before apply. Select an earlier `bee/bee` version in its version history to plan
+a rollback as another root update. Governed overlay restoration remains on its
+separate path. The About page reads the native module version and runtime commit
+from those same executable facts, while showing current and available pack
+versions from Hub inventory.
 Apply replans in a private worker before publishing the dependency-root change
-and an operation receipt to durable registry history. Status reads one receipt
+and an operation receipt to durable registry history. Registry history retains
+the selected pack graph for an owner restart; a newer executable baseline is
+reconciled by the runtime's dependency resolver. Status reads one receipt
 by digest or pages through the caller's operation history with `{page = 1}`.
 Modules opens that history with Operations (O); recovery reviews the stored
 request and digest before a separate confirmation. The worker serializes Bee

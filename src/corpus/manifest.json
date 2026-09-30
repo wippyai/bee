@@ -435,9 +435,9 @@
       "topic": "component"
     },
     {
-      "bytes": 6320,
+      "bytes": 8364,
       "id": "component/hub",
-      "sha256": "c600c9a636c70515bdc0a63526b6596a95bb8b38cef081720e48fe660ad5b99c",
+      "sha256": "924ae2260f96655b90786d2497432179d57a351e81e2f3e37523898d4b25bd46",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -590,7 +590,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 682920,
+    "bytes": 684964,
     "documents": 73
   }
 }

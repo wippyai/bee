@@ -8,7 +8,7 @@ def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-about-") as directory:
         ui = Desktop(directory, packed=packed, apps=("bee.settings:app",))
         try:
-            ui.wait("BEE SETTINGS", timeout=10)
+            ui.wait("BEE SETTINGS", timeout=30)
             ui.key(b"\t\t\t\t")
             ui.wait("BEE SETTINGS · ABOUT", timeout=10)
             text = ui.text()
@@ -17,16 +17,18 @@ def exercise(packed):
             assert "Live Bee packs" in text, text
             assert "https://bee.wippy.ai" in text, text
             assert "development source (unknown)" in text, text
+            ui.wait("Pack  bee/agents", timeout=30)
             ui.key(b"\x1b[6~" * 30)
-            ui.wait("bee/hub", timeout=20)
+            ui.wait("bee/hub", timeout=10)
             live = ui.text()
             assert "installed" in live, live
             ui.key(b"\x1b[24~")
             ui.wait("BEE SETTINGS · ABOUT", timeout=10)
             ui.resize(48, 16)
             ui.wait("BEE SETTINGS", timeout=10)
-            ui.key(b"\x1b[6~" * 60)
-            ui.wait("Binary website", timeout=10)
+            ui.key(b"\x1b[5~" * 60)
+            ui.key(b"\x1b[6~")
+            ui.wait("Website", timeout=10)
             ui.quit()
         finally:
             ui.close()

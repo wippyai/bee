@@ -630,4 +630,4 @@ DOCKER_PROVIDER ?= claude
 DOCKER_PROOF_MODE ?= window
 docker-placement-live-check:
 	test -n "$(DOCKER_IMAGE)" -a -n "$(DOCKER_EVIDENCE)"
-	TMPDIR="$(abspath .wippy/docker-work/tmp)" python3 tests/docker_placement_live.py --image "$(DOCKER_IMAGE)" --evidence "$(DOCKER_EVIDENCE)" --provider "$(DOCKER_PROVIDER)" --mode "$(DOCKER_PROOF_MODE)" --standalone "$(abspath dist/bee)"
+	TMPDIR="$(abspath .wippy/docker-work/tmp)" python3 tests/docker_placement_live.py --image "$(DOCKER_IMAGE)" --evidence "$(DOCKER_EVIDENCE)" --provider "$(DOCKER_PROVIDER)" --mode "$(DOCKER_PROOF_MODE)" --standalone "$(abspath dist/bee)" $(if $(DOCKER_OPENCODE_MODEL),--opencode-model "$(DOCKER_OPENCODE_MODEL)")

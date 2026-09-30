@@ -44,10 +44,14 @@ entries:
         provider_home_private: false
         login: true
       first_turn:
+        stdin: ''
+        stdin_eof: true
         argv: [run, --format, json, --, {field: brief}]
         readiness: protocol:thread.started
         provider_home_private: true
       resume:
+        stdin: ''
+        stdin_eof: true
         argv: [run, --format, json, --session, {field: resume_ref}, --, {field: brief}]
         readiness: protocol:thread.started
         provider_home_private: true

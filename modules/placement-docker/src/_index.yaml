@@ -69,6 +69,8 @@ entries:
     path: .default
   - entry: bee.placement.docker.service:sweeper_service
     path: .host
+  - entry: bee.placement.docker.service:image_owner_service
+    path: .host
 - name: bootloader_service_start
   kind: ns.requirement
   default: false
@@ -98,3 +100,33 @@ entries:
   targets:
   - entry: bee.placement.docker.service:sweeper_service
     path: .lifecycle.security.policies
+- name: coding
+  kind: registry.entry
+  meta:
+    type: bee.placement_profile
+    title: Docker coding agents
+  data:
+    schema_revision: bee.placement-profile@1
+    placement_binding: bee.placement.docker.binding:binding
+    image_recipe_ref: bee.placement.docker:coding_recipe
+    user: 1000:1000
+    network: bee-coding
+    limits: {memory: 4294967296, cpu: 200000, pids: 256}
+    mounts: [{resource: project, target: /workspace, access: write}]
+- name: coding_recipe
+  kind: registry.entry
+  meta: {type: bee.runtime_recipe}
+  data:
+    schema_revision: bee.runtime-recipe@1
+    base: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
+    artifacts:
+    - {name: claude, executable_ref: bee.driver.claude:executable}
+    - name: codex
+      executable_ref: bee.driver.codex:executable
+      candidates:
+      - ../node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
+      - ../node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
+    - {name: agy, executable_ref: bee.driver.agy:executable}
+    - {name: grok, executable_ref: bee.driver.grok:executable}
+    - {name: muse, executable_ref: bee.driver.muse:executable, sibling_prefix: muse-bin-}
+    - {name: opencode, executable_ref: bee.driver.opencode:executable}

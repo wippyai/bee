@@ -16,6 +16,7 @@ local workdir_preparers = require("workdir_preparers")
 local docker_client = require("docker_client")
 local paths = require("paths")
 local resources = require("resources")
+local image_service = require("image")
 local M = {}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
@@ -76,7 +77,7 @@ local function provider_home(loaded: Loaded): (string?, string?)
     local request = loaded.request
     local key, key_error = homes.attempt_key(request.owner_id, request.attempt_id)
     local parent = homes.ATTEMPTS
-    if request.session_ref and request.launch.home_ref and (not request.launch.provider_home or request.launch.provider_home.private ~= true) then
+    if request.session_ref and request.launch.home_ref and (not request.launch.provider_home or request.launch.provider_home.private ~= true or request.launch.provider_home.retain_session == true) then
         key, key_error = homes.session_key(request.owner_id, request.session_ref)
         parent = homes.SESSIONS
     end
@@ -149,14 +150,37 @@ function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
     return found, nil, false
 end
 function M.prepare(value: unknown): Reply
-    local request, decode_error = request_codec.decode(value)
+    local input = bounds.object(value)
+    if not input then return fail("INVALID", "Docker preparation must be an object") end
+    local progress_recipient: string? = nil
+    if input.progress_recipient ~= nil then
+        progress_recipient = bounds.line(input.progress_recipient, 512)
+        if not progress_recipient then return fail("INVALID", "invalid image progress recipient") end
+    end
+    local launch: {[string]: unknown} = {}
+    for key, item in pairs(input) do if key ~= "progress_recipient" then launch[key] = item end end
+    local request, decode_error = request_codec.decode(launch)
     if not request then return fail("INVALID", decode_error or "invalid launch request") end
+    if request.owner_id ~= actor() then return fail("DENIED", "Docker request belongs to another actor") end
     if not request.placement_profile_ref then return fail("DENIED", "Docker launch requires a host-admitted placement profile") end
     local pinned, pin_error = registry.snapshot()
     if not pinned then return fail("UNAVAILABLE", tostring(pin_error)) end
     local profile, profile_error = profiles.resolve(pinned, request.placement_profile_ref)
     if not profile then return fail("DENIED", profile_error or "placement profile unavailable") end
-    local spec, spec_error = spec_codec.resolve(profile, request)
+    local admission_error = spec_codec.admit(profile, request)
+    if admission_error then return fail("DENIED", admission_error) end
+    if profile.profile.network ~= "none" then
+        local client = docker_client.new("/var/run/docker.sock")
+        local network = client and client:inspect_network(profile.profile.network or "") or nil
+        if not network then return fail("UNAVAILABLE", "host-selected Docker network is missing: " .. (profile.profile.network or "")) end
+    end
+    if request.gateway and (request.gateway.endpoint:match("^127%.") or request.gateway.endpoint:match("^localhost:")
+        or request.gateway.endpoint:match("^%[::1%]:")) then
+        return fail("UNAVAILABLE", "Docker gateway is bound to host loopback; the host must select a restricted reachable interface")
+    end
+    local image, route, image_error = image_service.resolve(profile, progress_recipient)
+    if image_error then return fail("UNAVAILABLE", image_error) end
+    local spec, spec_error = spec_codec.resolve(profile, request, nil, image, route)
     if not spec then return fail("DENIED", spec_error or "Docker specification refused") end
     local encoded, encode_error = json.encode(spec)
     if not encoded then return fail("INVALID", tostring(encode_error)) end
@@ -352,10 +376,20 @@ function M.capabilities(value: unknown): Reply
         local pinned = registry.snapshot()
         local selected = pinned and profiles.resolve(pinned, ref) or nil
         if not selected or selected.profile.placement_binding ~= spec_codec.BINDING then return fail("INVALID", "profile does not select Docker") end
-        local image_ref = selected.profile.image_ref
-        if not image_ref then return fail("INVALID", "Docker profile has no image") end
         local client = docker_client.new("/var/run/docker.sock")
         if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
+        local network = selected.profile.network
+        local present = network == "none" or (network ~= nil and client:inspect_network(network) ~= nil)
+        report.network_readiness = {present = present, reason = present and "host-selected Docker network is available"
+            or "host-selected Docker network is missing; admit its restricted gateway interface before use: " .. (network or "")}
+        local image_ref = selected.profile.image_ref
+        if selected.profile.image_recipe_ref then
+            local readiness, readiness_error = image_service.readiness(selected.profile.image_recipe_ref, runtime_name)
+            if not readiness then return fail("UNAVAILABLE", readiness_error or "runtime artifact discovery unavailable") end
+            report.image_readiness = readiness
+            return succeed(report)
+        end
+        if not image_ref then return fail("INVALID", "Docker profile has no image") end
         local image, inspect_error = client:inspect_image(image_ref)
         local object = not inspect_error and bounds.object(image) or nil
         local config = object and bounds.object(object.Config) or nil

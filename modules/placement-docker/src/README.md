@@ -1,12 +1,16 @@
 # bee.placement.docker
 
 Docker placement ports the lineage PoC's container PTY transport and retained
-provider homes onto Bee's placement contract. The runtime's current
+provider homes onto Bee's placement contract. EOF-based input, including
+OpenCode's empty batch stdin, uses a protected private-home file or `/dev/null`
+for empty input so the container observes an actual EOF. The runtime's current
 `executor:terminal()` replaces the PoC's `child:attach_terminal()` and attaches
 the container PTY to the application's granted virtual surface.
 
-A `bee.placement_profile` selects an immutable image, non-root user, named
-network, positive limits, resource targets and interactive executor route.
+A `bee.placement_profile` selects either an immutable `image_ref` or a host-owned
+`image_recipe_ref`, a non-root user, named network, positive limits and resource
+targets. Explicit images select an interactive route; recipes produce it through
+the image owner.
 Drivers prepare commands without naming executors. Both PTY windows and streamed
 turns share the native placement's materialization and receipt mechanism.
 Private provider homes come from the existing credential broker. Declared
@@ -42,14 +46,37 @@ and returns `image_readiness`: image presence, runtime artifact presence and
 container platform. This is a read-only observation. The Sessions catalog
 passes a saved profile's placement selection through the host locator.
 
-First launch fetches a missing registry image by its admitted digest, with
+The built-in `bee.placement.docker:coding` profile appears in the Agent placement
+form and selects `coding_recipe`. First use discovers the installed Linux CLI
+artifacts from host-selected executable references, measures their ELF platform
+and SHA-256 digests, and copies only those code artifacts into a build context.
+The recipe pins its Node base by digest. Mixed or unsupported artifact platforms
+are refused. Docker build output and per-artifact steps appear on the Agent
+surface. A bounded receipt under placement's `images/receipts` records the recipe
+digest, observed image ID, platform and progress. Temporary build contexts are
+removed on completion or build refusal; image layers remain a host-owned cache.
+
+The lifecycle-owned image process authenticates request senders against recorded
+requests and verifies the current host profile digest. It serializes builds and
+publishes only the derived executor and interactive route in its protected
+`bee.placement.docker:runtime` overlay. Applications receive no publication
+permission. Cached tags must match the recipe, artifact labels and platform;
+placement freezes the actual immutable image ID into each attempt. Docker
+`prepare` accepts an optional bounded `progress_recipient` for display output,
+excluded from the stored launch identity. Image-owner loss or reply timeout
+returns an unknown outcome, with no automatic retry. Owner cancellation closes
+the active build process and removes its context.
+
+The coding profile names `bee-coding`; the host must admit that network and bind
+the gateway to a restricted interface reachable from it. Network readiness is
+reported before launch, and preparation refuses host-loopback gateway addresses.
+Automatic network/gateway provisioning remains a proposal. The default native
+loopback gateway does not make this Docker profile ready by itself.
+
+For explicit registry images, first launch fetches the admitted digest with
 `docker.image_fetching` and `docker.image_ready` evidence. A missing local image
-ID is refused with a build instruction. `make docker-runtime-image` builds a
-digest-recorded image from explicit Linux CLI executable artifacts without
-mounting login sources. Automatic local artifact discovery/build and live
-per-layer download progress remain proposals.
-The built-in `bee.placement.docker:coding` profile is not published; hosts must
-admit an explicit image profile and its interactive executor route.
+ID is refused with a build instruction. `make docker-runtime-image` also builds
+from explicit Linux CLI artifacts without mounting login sources.
 
 Validation covers real start/replay, foreign-owner denial, quoted stdin and EOF,
 owner SIGKILL/restart, exact-ID cancellation and evidence-before-removal. Live

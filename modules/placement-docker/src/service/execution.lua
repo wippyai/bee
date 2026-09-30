@@ -89,9 +89,13 @@ function M.prepare(_db: sql.DB, request: types.LaunchRequest, prepared: material
     for _, argument in ipairs(prepared.arguments) do argv[#argv + 1] = translate(argument) or argument end
     local stdin_materialized = request.launch.stdin ~= nil and request.launch.stdin_eof == true
     if stdin_materialized then
-        local written, write_error = homes.write_protected(prepared.home_path, ".bee-stdin", request.launch.stdin or "")
-        if not written then return nil, nil, nil, write_error end
-        argv = {"/bin/sh", "-c", "exec " .. quote.line(argv) .. " < " .. quote.posix(spec_codec.HOME .. "/.bee-stdin")}
+        local input = "/dev/null"
+        if request.launch.stdin ~= "" then
+            local written, write_error = homes.write_protected(prepared.home_path, ".bee-stdin", request.launch.stdin or "")
+            if not written then return nil, nil, nil, write_error end
+            input = spec_codec.HOME .. "/.bee-stdin"
+        end
+        argv = {"/bin/sh", "-c", "exec " .. quote.line(argv) .. " < " .. quote.posix(input)}
     end
     local executor, executor_error = exec.get(ref)
     if not executor then return nil, nil, nil, "Docker executor unavailable: " .. tostring(executor_error) end

@@ -118,6 +118,7 @@ entries:
     - bee.docker.proof:authority
     - bee.placement.docker.security:docker_policy
     - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
     - bee.placement.native.security:placement_store_policy
   meta:
     command:

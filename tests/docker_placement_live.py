@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--provider', choices=PROVIDERS, default='claude')
     parser.add_argument('--mode', choices=('window', 'session', 'restart'), default='window')
     parser.add_argument('--standalone', type=Path)
+    parser.add_argument('--opencode-model', help='Host-selected provider/model for real OpenCode login evidence')
     args = parser.parse_args()
     args.evidence = args.evidence.resolve()
     args.evidence.mkdir(parents=True, exist_ok=True)
@@ -51,9 +52,15 @@ def main():
             doc = yaml.safe_load(index.read_text())
             by_name = {e['name']: e for e in doc['entries']}
             profile = by_name['profile']['data']
-            profile.update(image_ref=args.image, network=network)
-            by_name['executor'].update(image=args.image, network_mode=network)
-            by_name['interactive']['data']['image_ref'] = args.image
+            if args.image == 'auto':
+                profile.pop('image_ref', None)
+                profile.pop('interactive_route_ref', None)
+                profile.update(image_recipe_ref='bee.placement.docker:coding_recipe', network=network)
+                doc['entries'] = [e for e in doc['entries'] if e['name'] not in ('executor', 'interactive')]
+            else:
+                profile.update(image_ref=args.image, network=network)
+                by_name['executor'].update(image=args.image, network_mode=network)
+                by_name['interactive']['data']['image_ref'] = args.image
             by_name['expectation']['data'].update(provider=args.provider, mode='crash-start' if args.mode == 'restart' else args.mode, state=str(args.evidence))
             index.write_text(yaml.safe_dump(doc, sort_keys=False))
             def trust_project(e):
@@ -61,6 +68,8 @@ def main():
                     if item['path'] == '.claude/.claude.json':
                         item['content'] = json.dumps({'hasCompletedOnboarding': True, 'projects': {'/workspace': {'hasTrustDialogAccepted': True}}})
             edit('modules/driver-claude/src/_index.yaml', 'credential_format', trust_project)
+            if args.provider == 'opencode' and args.opencode_model:
+                edit('modules/driver-opencode/src/descriptor/_index.yaml', 'cli', lambda e: e['data']['argv_templates']['first_turn']['argv'].__setitem__(slice(1, 1), ['--model', args.opencode_model]))
             # The host owns these profiles; the drivers still name no executor.
             for provider in PROVIDERS:
                 executable = shutil.which(provider)
@@ -94,7 +103,7 @@ def main():
             environment = workspace.database_environment(state, BEE_PLACEMENT_ROOT=str(placement))
             environment['BEE_DOCKER_EVIDENCE'] = str(args.evidence)
             environment['TMPDIR'] = str(ROOT / '.wippy/docker-work/tmp')
-            for name in ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'CLAUDECODE'):
+            for name in ('ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'CLAUDECODE'):
                 environment.pop(name, None)
             command = [str(workspace.RUNTIME)]
             if args.standalone:

@@ -140,6 +140,44 @@ local function run()
             process.unlisten(output)
             if not ok then error(tostring(failure)) end
         end)
+        test.it("gives an argv-based batch provider immediate EOF for empty input", function()
+            local id = "docker-empty-stdin-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
+            local selected = request(id)
+            selected.launch.argv = {"-c", "cat; printf EMPTY_EOF_OK"}
+            selected.launch.stdin = ""
+            selected.launch.stdin_eof = true
+            local output = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            value(call("prepare", selected))
+            value(call("attach", {attempt_id = id, recipient = process.pid(), generation = 1}))
+            local ok, failure = pcall(function()
+                running(id)
+                local deadline = time.after("20s")
+                local stdout = ""
+                local eof = 0
+                while eof < 2 do
+                    local received = channel.select({output:case_receive(), deadline:case_receive()})
+                    assert(received.ok and received.channel == output, "empty Docker input did not reach EOF")
+                    local message = received.value
+                    local data = message:payload():data()
+                    assert(type(data) == "table" and data.attempt_id == id and data.generation == 1)
+                    if data.stream == "stdout" and type(data.data) == "string" then stdout = stdout .. data.data end
+                    if data.eof then eof = eof + 1 end
+                    process.send(message:from(), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence})
+                end
+                test.eq(stdout, "EMPTY_EOF_OK")
+            end)
+            call("stop", {attempt_id = id, mode = "forced"})
+            call("cleanup", {attempt_id = id})
+            process.unlisten(output)
+            if not ok then error(tostring(failure)) end
+        end)
+        test.it("refuses changed profile admission before preparing an image", function()
+            local selected = request("docker-stale-profile")
+            selected.placement_profile_digest = string.rep("0", 64)
+            local reply = call("prepare", selected)
+            test.is_false(reply.ok)
+            test.eq(reply.error and reply.error.message, "placement profile changed since admission")
+        end)
         test.it("reports image and runtime readiness without starting a container", function()
             local reply = call("capabilities", {placement_profile_ref = PROFILE, runtime_name = "claude"})
             test.is_true(reply.ok)

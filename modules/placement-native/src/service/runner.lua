@@ -206,7 +206,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local stdin_closed = false
     if stdin_materialized then
         stdin_closed = true
-        evidence(db, attempt_id, "stdin.materialized", "initial input supplied through an admitted private-home file with EOF")
+        evidence(db, attempt_id, "stdin.materialized", "initial input supplied through an admitted source with EOF")
     elseif request.launch.stdin then
         -- The complete initial input goes first, then stdin is closed once
         -- for a launch that reads until end of file; each step leaves

@@ -25,6 +25,13 @@ local function run()
             value = docker(); value.user = "0:0"
             test.is_nil(profiles.decode(value))
         end)
+        test.it("admits a host-selected image recipe without accepting a mutable tag", function()
+            local value = docker(); value.image_ref = nil; value.image_recipe_ref = "bee.placement.docker:coding_recipe"
+            local decoded = assert(profiles.decode(value))
+            test.eq(decoded.image_recipe_ref, "bee.placement.docker:coding_recipe")
+            value.image_ref = "sha256:" .. string.rep("a", 64)
+            test.is_nil(profiles.decode(value))
+        end)
         test.it("refuses missing limits and unsafe or duplicate mount targets", function()
             local value = docker(); value.limits = {memory = 0, cpu = 200000, pids = 256}
             test.is_nil(profiles.decode(value))

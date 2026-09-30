@@ -8,22 +8,29 @@ M.HOME = "/home/bee"
 type Spec = {profile_ref: string, profile_digest: string, image: string, user: string, network: string, limits: profiles.Limits,
     mounts: {profiles.Mount}, interactive_route_ref: string?, attempt_id: string}
 type Observation = {backend_ref: string, state: string, attempt_id: string, home_source: string, observed_image_digest: string, exit_code: integer?}
-function M.resolve(profile: profiles.Resolved, request: types.LaunchRequest, admitted_digest: string?): (Spec?, string?)
+function M.admit(profile: profiles.Resolved, request: types.LaunchRequest): string?
     local value = profile.profile
-    if value.placement_binding ~= M.BINDING or not value.image_ref or not value.user or not value.network or not value.limits then
-        return nil, "profile does not select Docker placement"
+    if value.placement_binding ~= M.BINDING or not value.user or not value.network or not value.limits then
+        return "profile does not select Docker placement"
     end
-    if request.placement_profile_digest ~= profile.digest then return nil, "placement profile changed since admission" end
-    if request.environment_refs.HOME or request.environment.HOME then return nil, "Docker requires a private provider home" end
-    if request.launch.provider_home and not request.launch.provider_home.private then return nil, "Docker requires private provider projection" end
+    if request.placement_profile_ref ~= profile.ref or request.placement_profile_digest ~= profile.digest then return "placement profile changed since admission" end
+    if request.environment_refs.HOME or request.environment.HOME then return "Docker requires a private provider home" end
+    if request.launch.provider_home and not request.launch.provider_home.private then return "Docker requires private provider projection" end
     local granted: {[string]: types.ResourceGrant} = {}
     for _, grant in ipairs(request.resources) do granted[grant.name] = grant end
     for _, mount in ipairs(value.mounts) do
         local grant = granted[mount.resource]
-        if not grant or (mount.access == "write" and grant.access ~= "write") then return nil, "Docker mount has no admitted resource grant: " .. mount.resource end
+        if not grant or (mount.access == "write" and grant.access ~= "write") then return "Docker mount has no admitted resource grant: " .. mount.resource end
     end
-    return {profile_ref = profile.ref, profile_digest = profile.digest, image = value.image_ref, user = value.user, network = value.network,
-        limits = value.limits, mounts = value.mounts, attempt_id = request.attempt_id, interactive_route_ref = value.interactive_route_ref}, nil
+    return nil
+end
+function M.resolve(profile: profiles.Resolved, request: types.LaunchRequest, admitted_digest: string?, resolved_image: string?, resolved_route: string?): (Spec?, string?)
+    local reason = M.admit(profile, request)
+    if reason then return nil, reason end
+    local value = profile.profile
+    if not value.image_ref and not resolved_image then return nil, "runtime image is not prepared" end
+    return {profile_ref = profile.ref, profile_digest = profile.digest, image = value.image_ref or assert(resolved_image), user = assert(value.user), network = assert(value.network),
+        limits = assert(value.limits), mounts = value.mounts, attempt_id = request.attempt_id, interactive_route_ref = value.interactive_route_ref or resolved_route}, nil
 end
 function M.decode(value: unknown, request: types.LaunchRequest, admitted_digest: string?): (Spec?, string?)
     local raw = bounds.object(value)

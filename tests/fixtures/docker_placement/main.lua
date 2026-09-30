@@ -99,6 +99,7 @@ local function window(provider: string, definition: string, profile_id: string, 
         for index = 1, 2400 do
             local frame = plain(table.concat(assert(view:snapshot()).rows, "\n"))
             if index % 40 == 0 then save(provider .. "-startup.txt", frame) end
+            if frame:find("Preparing Docker image", 1, true) then save("image-progress.txt", frame) end
             if not trust_sent and frame:lower():find("trust", 1, true) and (frame:find("folder", 1, true) or frame:find("directory", 1, true)) then
                 if provider == "claude" and frame:match("❯%s+No,%s+exit") then
                     if not trust_selected then
@@ -116,8 +117,8 @@ local function window(provider: string, definition: string, profile_id: string, 
                 theme_sent = true
             elseif (provider == "claude" and not frame:find("Welcome to", 1, true) and not frame:find("Enter to confirm", 1, true)
                 and not frame:find("Accessing workspace", 1, true) and frame:find("Claude Code", 1, true) and (frame:find("❯", 1, true) or frame:find("Try", 1, true)))
-                or (provider == "codex" and not frame:lower():find("trust", 1, true) and not frame:find("Loading", 1, true)
-                    and frame:find("OpenAI Codex", 1, true) and frame:find("›", 1, true)) then
+                or (provider == "codex" and not frame:lower():find("trust", 1, true) and not frame:lower():find("loading", 1, true)
+                    and trust_sent and frame:find("OpenAI Codex", 1, true) and frame:find("›", 1, true)) then
                 save(provider .. "-ready.txt", frame); ready = true; break
             end
             time.sleep("25ms")

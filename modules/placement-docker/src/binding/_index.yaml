@@ -36,6 +36,7 @@ entries:
     - bee.security.gateway:gateway_supervision_policy
     - bee.placement.docker.security:docker_policy
     - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
 - name: start
   kind: function.lua
   source: file://methods.lua

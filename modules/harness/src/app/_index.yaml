@@ -38,6 +38,7 @@ entries:
     records: bee.harness.carrier:hook_records
     appearance: bee.application:appearance
     restore_view: bee.harness.app:restore_view
+    bounds: bee.threads.records:bounds
 - name: app
   kind: process.lua
   source: file://app.lua

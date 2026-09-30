@@ -209,12 +209,17 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             local reply = not capability_error and bounds.object(raw) or nil
             local value = reply and reply.ok == true and bounds.object(reply.value) or nil
             local image = value and bounds.object(value.image_readiness) or nil
+            local network = value and bounds.object(value.network_readiness) or nil
+            if network and network.present ~= true then
+                local result = unknown(provider, bounds.line(network.reason, 1024) or "Docker network readiness is unavailable")
+                return result
+            end
             if not image or type(image.present) ~= "boolean" or type(image.runtime_present) ~= "boolean" then
                 local result = unknown(provider, "Docker runtime readiness is unavailable")
                 cache.drivers[cache_key] = result; return result
             end
-            if image.present ~= true or image.runtime_present ~= true then
-                local result = unknown(provider, image.present == true and "Docker image does not declare this runtime artifact" or "Docker runtime image is missing; a registry digest is fetched on first launch")
+            if (image.present ~= true and image.buildable ~= true) or image.runtime_present ~= true then
+                local result = unknown(provider, bounds.line(image.reason, 1024) or (image.present == true and "Docker image does not declare this runtime artifact" or "Docker runtime image is missing; a registry digest is fetched on first launch"))
                 cache.drivers[cache_key] = result; return result
             end
             executable_present = true

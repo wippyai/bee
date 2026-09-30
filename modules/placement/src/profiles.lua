@@ -10,7 +10,7 @@ M.SCHEMA = "bee.placement-profile@1"
 type Access = "read" | "write"
 type Mount = {resource: string, target: string, access: "read" | "write"}
 type Limits = {memory: integer, cpu: integer, pids: integer}
-type Profile = {placement_binding: string, image_ref: string?, user: string?, network: string?, limits: Limits?,
+type Profile = {placement_binding: string, image_ref: string?, image_recipe_ref: string?, user: string?, network: string?, limits: Limits?,
     interactive_route_ref: string?, mounts: {Mount}}
 type Resolved = {ref: string, digest: string, profile: Profile}
 local function absolute(value: unknown): string?
@@ -22,7 +22,7 @@ end
 function M.decode(value: unknown): (Profile?, string?)
     local object = bounds.object(value)
     if not object then return nil, "placement profile must be an object" end
-    local extra = bounds.fields(object, {"schema_revision", "placement_binding", "image_ref", "user", "network", "limits", "interactive_route_ref", "mounts"})
+    local extra = bounds.fields(object, {"schema_revision", "placement_binding", "image_ref", "image_recipe_ref", "user", "network", "limits", "interactive_route_ref", "mounts"})
     if extra then return nil, "placement profile: " .. extra end
     if object.schema_revision ~= M.SCHEMA then return nil, "unsupported placement profile schema" end
     local binding = bounds.id(object.placement_binding)
@@ -36,9 +36,11 @@ function M.decode(value: unknown): (Profile?, string?)
     end
     if binding ~= "bee.placement.docker.binding:binding" then return nil, "unsupported placement binding" end
     local image = bounds.line(object.image_ref, 512)
-    if not image then return nil, "Docker image must be digest-pinned" end
-    local digest = image:match("^sha256:([0-9a-f]+)$") or image:match("^[A-Za-z0-9_.:/%-]+@sha256:([0-9a-f]+)$")
-    if not digest or #digest ~= 64 then return nil, "Docker image must be digest-pinned" end
+    local recipe = bounds.id(object.image_recipe_ref)
+    if (image == nil) == (recipe == nil) then return nil, "Docker profile selects exactly one pinned image or runtime recipe" end
+    if object.image_recipe_ref ~= nil and not recipe then return nil, "invalid runtime recipe reference" end
+    local digest = image and (image:match("^sha256:([0-9a-f]+)$") or image:match("^[A-Za-z0-9_.:/%-]+@sha256:([0-9a-f]+)$")) or nil
+    if image and (not digest or #digest ~= 64) then return nil, "Docker image must be digest-pinned" end
     local user = bounds.line(object.user, 64)
     if not user or not user:match("^[1-9][0-9]*:[1-9][0-9]*$") then return nil, "Docker user must be a non-root uid:gid" end
     local network = bounds.line(object.network, 128)
@@ -70,7 +72,7 @@ function M.decode(value: unknown): (Profile?, string?)
         targets[#targets + 1] = target; names[resource] = true
         mounts[#mounts + 1] = {resource = resource, target = target, access = item.access :: Access}
     end
-    return {placement_binding = binding, image_ref = image, user = user, network = network,
+    return {placement_binding = binding, image_ref = image, image_recipe_ref = recipe, user = user, network = network,
         limits = {memory = memory, cpu = cpu, pids = pids}, interactive_route_ref = route, mounts = mounts}, nil
 end
 function M.resolve(pinned: registry.Snapshot, requested: string?): (Resolved?, string?)

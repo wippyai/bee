@@ -116,3 +116,11 @@ entries:
     projection: bee.placement.native.service:provider_projection
     formats: bee.credentials:formats
     types: bee.driver:types
+- name: image_test
+  kind: function.lua
+  source: file://image_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    image: bee.placement.docker.service:image

@@ -161,6 +161,10 @@ entries:
           kind: fs_directory
           ref: bee.env:machine_login_source
         optional: true
+      opencode_api_key:
+        provider: opencode
+        source: {kind: env_variable, ref: bee.driver.opencode:api_key}
+        optional: true
       opencode_login:
         provider: opencode
         source:
@@ -195,6 +199,7 @@ entries:
     - bee.security.storage:workspace_folder_browse_policy
     - bee.placement.docker.security:docker_policy
     - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
   targets:
   - entry: bee.security:application_admission
     path: .bindings +=

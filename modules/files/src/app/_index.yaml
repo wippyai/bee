@@ -21,7 +21,7 @@ entries:
   kind: process.lua
   source: file://app.lua
   method: main
-  modules: [tty, process, channel, uuid, fs]
+  modules: [tty, process, channel, uuid, fs, registry]
   imports:
     frame: bee.application:frame
     client: bee.application:client

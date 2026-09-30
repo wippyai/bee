@@ -51,10 +51,11 @@ local QUERIES: {[string]: string} = {
         (number) @number
         [
           "local" "function" "end" "if" "then" "elseif" "else"
-          "for" "while" "do" "repeat" "until" "return" "break"
+          "for" "while" "do" "repeat" "until" "return"
           "in" "not" "and" "or"
         ] @keyword
-        ["true" "false" "nil"] @constant
+        [(true) (false) (nil)] @constant
+        (break_statement) @keyword
         (function_call name: (identifier) @function)
     ]],
     ["python"] = [[
@@ -196,51 +197,36 @@ function M.highlight(content: string, lang_name: string?, theme_name: string?, r
 
     -- Determine digit width for line numbers
     local digits = #tostring(total_lines)
-    if digits < 2 then digits = 2 end
-    local gutter_width = digits + 4 -- marker(2) + digits + " │ "
+    local gutter_width = digits + 3
 
     local lang_id = lang_name or nil
     local captures_by_line: {[integer]: {Span}} = {}
 
-    if lang_id then
-        local ts = (treesitter :: any)
-        local ts_lang = ts["language"](lang_id)
-        if ts_lang then
-            local parser = ts["newParser"]()
-            if parser and parser:setLanguage(ts_lang) then
-                local tree = parser:parse(content)
-                if tree then
-                    local root = tree:rootNode()
-                    local query_str = QUERIES[lang_id]
-                    if root and query_str then
-                        local q, err = ts["newQuery"](ts_lang, query_str)
-                        if q and not err then
-                            local captures = q:captures(root)
-                            for _, cap in ipairs(captures) do
-                                local node = cap.node
-                                local sp = node:startPoint()
-                                local ep = node:endPoint()
-                                local start_row = sp.row + 1
-                                local end_row = ep.row + 1
-
-                                for r = start_row, end_row do
-                                    if not captures_by_line[r] then
-                                        captures_by_line[r] = {}
-                                    end
-                                    local col_s = (r == start_row) and sp.column or 0
-                                    local col_e = (r == end_row) and ep.column or 9999
-                                    local list = captures_by_line[r]
-                                    list[#list + 1] = {
-                                        col_start = col_s,
-                                        col_end = col_e,
-                                        role = cap.name,
-                                    }
-                                end
-                            end
-                        end
+    local query_str = lang_id and QUERIES[lang_id] or nil
+    if lang_id and query_str then
+        local parsed, parse_error = treesitter.parse(lang_id, content)
+        if parsed and not parse_error then
+            local query, query_error = treesitter.query(lang_id, query_str)
+            if query_error then error("Compile " .. lang_id .. " highlighting query: " .. tostring(query_error)) end
+            if query then
+                local captures = query:captures(parsed:root_node(), content)
+                for _, cap in ipairs(captures) do
+                    local sp = cap.node:start_point()
+                    local ep = cap.node:end_point()
+                    for r = sp.row + 1, ep.row + 1 do
+                        local row = math.floor(r)
+                        local list = captures_by_line[row] or {}
+                        captures_by_line[row] = list
+                        list[#list + 1] = {
+                            col_start = math.floor(row == sp.row + 1 and sp.column or 0),
+                            col_end = math.floor(row == ep.row + 1 and ep.column or #(lines[row] or "")),
+                            role = cap.name,
+                        }
                     end
                 end
+                query:close()
             end
+            parsed:close()
         end
     end
 
@@ -257,9 +243,9 @@ function M.highlight(content: string, lang_name: string?, theme_name: string?, r
 
     for line_idx, line in ipairs(lines) do
         local in_range = range and line_idx >= range.start_line and line_idx <= range.end_line
-        local marker = in_range and "› " or "  "
+        local marker = in_range and "›" or " "
         local num_str = string.format("%" .. tostring(digits) .. "d", line_idx)
-        local num_styled = appearance.style(in_range and theme.accent or theme.muted, theme.surface) .. marker .. num_str .. " │ " .. RESET
+        local num_styled = appearance.style(in_range and theme.accent or theme.muted, theme.surface) .. marker .. num_str .. " │" .. RESET
 
         local line_spans = captures_by_line[line_idx]
         local styled_code = ""

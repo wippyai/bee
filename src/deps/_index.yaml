@@ -141,6 +141,9 @@ entries:
   kind: ns.dependency
   component: bee/files
   version: 0.1.0-dev
+  parameters:
+  - name: target_workspace_root
+    value: bee.env:files_root
 - name: application
   kind: ns.dependency
   component: bee/application

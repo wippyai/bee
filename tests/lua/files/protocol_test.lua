@@ -1,7 +1,7 @@
 local test = require("test")
 local protocol = require("protocol")
 
-local function run()
+local function define_tests()
     test.describe("Files protocol target decoding", function()
         test.it("decodes single file path", function()
             local target, err = protocol.decode_target({"src/main.lua"})
@@ -56,6 +56,17 @@ local function run()
             test.eq(target.end_line, 30)
         end)
 
+        test.it("decodes bounded owner navigation and refuses malformed ranges", function()
+            local target = assert(protocol.decode_navigation({path = "src/main.lua", line = 2, end_line = 4}))
+            test.eq(target.line, 2)
+            test.eq(target.end_line, 4)
+            for _, raw in ipairs({{path = ".wippy/private.db"}, {path = "src/main.lua", line = 0},
+                {path = "src/main.lua", line = 1.5}, {path = "src/main.lua", line = 2, end_line = {}},
+                {path = "src/main.lua", end_line = 2}, {path = "src/main.lua", line = 3, end_line = 2}}) do
+                test.is_nil(protocol.decode_navigation(raw))
+            end
+        end)
+
         test.it("refuses unsafe or private paths", function()
             local _, err1 = protocol.decode_target({".wippy"})
             test.not_nil(err1)
@@ -75,4 +86,4 @@ local function run()
     end)
 end
 
-return {run = run}
+return test.run_cases(define_tests)

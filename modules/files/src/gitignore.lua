@@ -54,6 +54,32 @@ local function glob_to_lua_pattern(glob: string): string
     return table.concat(tokens)
 end
 
+local function matches_glob(glob: string, path: string): boolean
+    local parts: {string} = {}
+    local segments: {string} = {}
+    for part in glob:gmatch("[^/]+") do parts[#parts + 1] = part end
+    for segment in path:gmatch("[^/]+") do segments[#segments + 1] = segment end
+    local memo: {[string]: boolean} = {}
+    local function match_at(i: integer, j: integer): boolean
+        local key = tostring(i) .. ":" .. tostring(j)
+        local cached = memo[key]
+        if cached ~= nil then return cached end
+        local result: boolean
+        if i > #parts then
+            result = j > #segments
+        elseif parts[i] == "**" then
+            result = match_at(i + 1, j) or (j <= #segments and match_at(i, j + 1))
+        else
+            result = j <= #segments
+                and segments[j]:match("^" .. glob_to_lua_pattern(parts[i]) .. "$") ~= nil
+                and match_at(i + 1, j + 1)
+        end
+        memo[key] = result
+        return result
+    end
+    return match_at(1, 1)
+end
+
 local function parse_rule(line: string, prefix: string): Rule?
     -- Trim whitespace and carriage returns
     local trimmed = line:gsub("^%s+", ""):gsub("%s+$", ""):gsub("\r", "")
@@ -139,17 +165,17 @@ function MatcherMethods.ignored(self: Matcher, path: string, is_dir: boolean): b
                     end
                 end
                 if rel_path then
-                    if rel_path:match(rule.lua_pattern) then
+                    if matches_glob(rule.pattern, rel_path) then
                         matches = true
-                    elseif is_dir and (rel_path .. "/"):match(rule.lua_pattern) then
+                    elseif is_dir and matches_glob(rule.pattern, rel_path .. "/") then
                         matches = true
                     end
                 end
             else
                 -- Non-anchored matches against basename or full relative path
-                if basename:match(rule.lua_pattern) then
+                if matches_glob(rule.pattern, basename) then
                     matches = true
-                elseif clean:match(rule.lua_pattern) then
+                elseif matches_glob(rule.pattern, clean) then
                     matches = true
                 end
             end

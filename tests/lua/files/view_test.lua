@@ -11,7 +11,7 @@ end
 local function make_mock_fs(files: {[string]: {is_dir: boolean, content: string?}})
     local mock = {}
     function mock:readdir(path: string)
-        local prefix = path == "" and "" or path .. "/"
+        local prefix = (path == "" or path == ".") and "" or path .. "/"
         local entries = {}
         for p, info in pairs(files) do
             if p:sub(1, #prefix) == prefix then
@@ -50,7 +50,7 @@ local function make_mock_fs(files: {[string]: {is_dir: boolean, content: string?
     return mock
 end
 
-local function run()
+local function define_tests()
     local mock_fs = make_mock_fs({
         ["src"] = {is_dir = true},
         ["src/main.lua"] = {is_dir = false, content = "local x = 1\nlocal y = 2\nlocal z = 3\n"},
@@ -121,6 +121,13 @@ local function run()
             test.is_true(r24:find("move", 1, true) ~= nil)
         end)
 
+        test.it("keeps the tree visible beside an empty preview", function()
+            local state = model.new(mock_fs, "", nil)
+            local rendered = view.render(state, 120, 36, appearance.defaults())
+            test.is_true(plain(rendered.rows[3]):find("README.md", 1, true) ~= nil)
+            test.is_true(plain(rendered.rows[3]):find("Select a file", 1, true) ~= nil)
+        end)
+
         test.it("renders Help modal when modal state is help", function()
             local state = model.new(mock_fs, "", nil)
             model.open_modal(state, "help")
@@ -169,4 +176,4 @@ local function run()
     end)
 end
 
-return {run = run}
+return test.run_cases(define_tests)

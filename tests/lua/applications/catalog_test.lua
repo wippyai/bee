@@ -371,6 +371,12 @@ local function define_tests()
             test.is_true(has(selected, "bee.workspace.manager:app"))
             test.is_true(has(selected, "bee.hub.modules:app"))
             test.is_true(has(selected, "bee.gov.overlays:app"))
+            local files = bindings["bee.files.app:app"]
+            if not files then error("Files package binding missing") end
+            test.eq(#(files.policies :: {string}), 2)
+            test.eq((files.policies :: {string})[1], "bee.security.files:read_policy")
+            test.eq((files.policies :: {string})[2], "bee.security:ordinary_app_subsystem_boundary")
+            test.eq(files.thread_access, "observe_post")
             test.is_true(has(selected, "bee.settings:app"))
             test.is_true(selected.evidence ~= "")
             test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline:app"))

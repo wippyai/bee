@@ -2,7 +2,7 @@ local test = require("test")
 local syntax = require("syntax")
 local appearance = require("appearance")
 
-local function run()
+local function define_tests()
     local theme = appearance.defaults().theme
 
     test.describe("Syntax highlighting and line numbers", function()
@@ -30,6 +30,7 @@ local function run()
             test.eq(#doc.lines, 2)
             -- First line should contain styled output
             local line1 = doc.lines[1]
+            test.is_true(line1:find(appearance.style(appearance.theme(theme).accent, appearance.theme(theme).surface) .. "local", 1, true) ~= nil)
             test.is_true(#line1 > #code) -- Contains ANSI escape sequences for coloring
             -- Plain text version without escapes should contain line number and text
             local plain1 = syntax.strip_ansi(line1)
@@ -69,4 +70,4 @@ local function run()
     end)
 end
 
-return {run = run}
+return test.run_cases(define_tests)

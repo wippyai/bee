@@ -128,9 +128,9 @@ function M.render(state: model.State, width: integer, height: integer, preferenc
                 frame.add_hit(painter, "preview_line", line_num, tostring(line_num), preview_x, y, preview_width, 1)
             end
         elseif state.preview_error then
-            frame.line(painter, work_first + 1, "  Error: " .. state.preview_error, theme.error)
+            frame.put(painter, preview_x, work_first + 1, "Error: " .. state.preview_error, preview_width, theme.error)
         else
-            frame.line(painter, work_first + 1, "  Select a file from the tree to preview.", theme.muted)
+            frame.put(painter, preview_x, work_first + 1, "Select a file from the tree to preview.", preview_width, theme.muted)
         end
     else
         -- Narrow / Compact layout: Tabs on row 2, single pane filling work area
@@ -194,12 +194,24 @@ function M.render(state: model.State, width: integer, height: integer, preferenc
             {kind = "more", label = "More", key = "M", enabled = true},
             {kind = "help", label = "? Help", key = "?", enabled = true},
         }
+        if width < 100 then
+            for _, button in ipairs(buttons) do button.key = nil end
+        end
         frame.actions(painter, action_y, buttons)
     end
 
     -- Footer (final row)
     local status_text = state.status ~= "" and state.status or "Ready"
-    frame.footer(painter, status_text, HINTS)
+    local hints = HINTS
+    if tty.text.width(status_text) + tty.text.width(hints) + 6 > width then
+        hints = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"},
+            {key = "?", verb = "help"}})
+    end
+    if tty.text.width(status_text) + tty.text.width(hints) + 6 > width then
+        frame.footer(painter, "", hints)
+    else
+        frame.footer(painter, status_text, hints)
+    end
 
     -- Modals / Overlays
     if state.modal == "help" then

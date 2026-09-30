@@ -100,13 +100,13 @@ function M.expand(tree: Tree, node: Node): boolean
             end
         end
 
-        local iter, state = vol:readdir(node.path)
+        local iterator, iterator_state = vol:readdir(node.path == "" and "." or node.path)
         local dirs: {Node} = {}
         local files: {Node} = {}
         local count = 0
 
-        if iter then
-            for entry in iter, state do
+        if iterator then
+            for entry in iterator, iterator_state do
                 count = count + 1
                 if count > MAX_ENTRIES_PER_DIR then
                     node.truncated = true
@@ -114,7 +114,7 @@ function M.expand(tree: Tree, node: Node): boolean
                 end
 
                 local entry_name = entry.name
-                if entry_name and entry_name ~= "." and entry_name ~= ".." then
+                if type(entry_name) == "string" and entry_name ~= "." and entry_name ~= ".." then
                     local child_path = node.path == "" and entry_name or node.path .. "/" .. entry_name
                     local verified, err = protocol.verify_path(child_path)
                     local is_directory = entry.type == "directory"

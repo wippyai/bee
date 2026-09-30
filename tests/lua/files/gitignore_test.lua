@@ -1,7 +1,7 @@
 local test = require("test")
 local gitignore = require("gitignore")
 
-local function run()
+local function define_tests()
     test.describe("Gitignore parser and matcher", function()
         test.it("always ignores private .wippy and .git", function()
             local matcher = gitignore.new("")
@@ -79,4 +79,4 @@ foo/**/bar
     end)
 end
 
-return {run = run}
+return test.run_cases(define_tests)

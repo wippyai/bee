@@ -31,6 +31,7 @@ entries:
   kind: function.lua
   source: file://tree_test.lua
   method: run
+  modules: [fs, funcs, security]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -56,3 +57,14 @@ entries:
     model: bee.files.app:model
     view: bee.files.app:view
     appearance: bee.application:appearance
+- name: access_probe
+  kind: function.lua
+  source: file://access_probe.lua
+  method: acquire
+  modules: [fs]
+- name: probe_call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.files.test:access_probe]
+    effect: allow

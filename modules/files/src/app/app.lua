@@ -5,6 +5,7 @@ local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
 local fs = require("fs")
+local registry = require("registry")
 local client = require("client")
 local appearance = require("appearance")
 local protocol = require("protocol")
@@ -29,7 +30,13 @@ local function main(value: unknown)
     local preferences = appearance.defaults()
 
     -- Acquire the workspace root volume
-    local volume, vol_err = fs.get("bee.env:workspace_root")
+    local reference, reference_error = registry.get("bee.files:workspace_root_ref")
+    local resource = reference and reference.data.resource_ref
+    if reference_error or type(resource) ~= "string" or resource == "" then
+        error("Workspace filesystem reference is unavailable")
+    end
+    local volume, volume_error = fs.get(resource)
+    if not volume then error("Workspace filesystem is unavailable: " .. tostring(volume_error)) end
 
     local state: model.State = model.new(volume, "", launch.arguments)
     client.ready(launch, {negotiate_close = true})
@@ -111,15 +118,14 @@ local function main(value: unknown)
                 dirty = true
             end
         elseif selected.channel == nav_sub then
-            -- Agent navigation request: {path = "...", line = 42, end_line = 50}
-            local payload = selected.value:payload():data()
-            if type(payload) == "table" and type(payload.path) == "string" then
-                local range = nil
-                if type(payload.line) == "number" then
-                    range = {start_line = math.floor(payload.line), end_line = math.floor(payload.end_line or payload.line)}
+            local sender = tostring(selected.value:from())
+            local target = (sender == launch.workspace_pid or sender == launch.broker_pid)
+                and protocol.decode_navigation(selected.value:payload():data()) or nil
+            if target then
+                local range = target.line and {start_line = target.line, end_line = target.end_line or target.line} or nil
+                if model.open_file(state, target.path, range) then
+                    client.title(launch, "Files · " .. target.path)
                 end
-                model.open_file(state, payload.path, range)
-                client.title(launch, "Files · " .. state.current_path)
                 dirty = true
             end
         elseif selected.channel == input then
@@ -139,7 +145,7 @@ local function main(value: unknown)
                     model.close_modal(state)
                     dirty = true
                 elseif state.modal == "more" then
-                    if key_type == "escape" or key == "q" or key == "Esc" then
+                    if key_type == "esc" or key == "q" or key == "Esc" then
                         model.close_modal(state)
                         dirty = true
                     elseif key_type == "up" or key == "k" then
@@ -159,22 +165,21 @@ local function main(value: unknown)
                         dirty = true
                     end
                 elseif state.modal == "search" then
-                    if key_type == "escape" then
+                    if key_type == "esc" then
                         model.close_modal(state)
                         dirty = true
                     elseif key_type == "enter" then
                         -- Open current selected match
-                        model.close_modal(state)
-                        model.activate(state)
+                        model.open_search_result(state)
                         if state.current_path then
                             client.title(launch, "Files · " .. state.current_path)
                         end
                         dirty = true
                     elseif key_type == "up" then
-                        model.move(state, -1)
+                        model.search_move(state, -1)
                         dirty = true
                     elseif key_type == "down" then
-                        model.move(state, 1)
+                        model.search_move(state, 1)
                         dirty = true
                     elseif key_type == "backspace" then
                         if #state.search_query > 0 then
@@ -186,7 +191,7 @@ local function main(value: unknown)
                         dirty = true
                     end
                 elseif state.modal == "jump" then
-                    if key_type == "escape" then
+                    if key_type == "esc" then
                         model.close_modal(state)
                         dirty = true
                     elseif key_type == "enter" then
@@ -211,10 +216,10 @@ local function main(value: unknown)
                     elseif key_type == "down" or key == "j" then
                         model.move(state, 1)
                         dirty = true
-                    elseif key_type == "page_up" then
+                    elseif key_type == "pgup" then
                         model.page(state, -1, height - 4)
                         dirty = true
-                    elseif key_type == "page_down" then
+                    elseif key_type == "pgdown" then
                         model.page(state, 1, height - 4)
                         dirty = true
                     elseif key_type == "tab" then
@@ -230,7 +235,7 @@ local function main(value: unknown)
                         handle_action("more")
                     elseif key == "?" then
                         handle_action("help")
-                    elseif key_type == "escape" or key == "q" then
+                    elseif key_type == "esc" or key == "q" then
                         if state.current_path and state.active_pane == "preview" then
                             model.switch_pane(state)
                             dirty = true

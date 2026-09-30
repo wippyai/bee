@@ -1,5 +1,8 @@
 local test = require("test")
 local tree = require("tree")
+local fs = require("fs")
+local funcs = require("funcs")
+local security = require("security")
 local gitignore = require("gitignore")
 
 -- Simple mock filesystem for isolated tree unit tests
@@ -7,7 +10,7 @@ local function make_mock_fs(files: {[string]: {is_dir: boolean, content: string?
     local mock = {}
 
     function mock:readdir(path: string)
-        local prefix = path == "" and "" or path .. "/"
+        local prefix = (path == "" or path == ".") and "" or path .. "/"
         local entries = {}
         for p, info in pairs(files) do
             if p:sub(1, #prefix) == prefix then
@@ -53,8 +56,41 @@ local function make_mock_fs(files: {[string]: {is_dir: boolean, content: string?
     return mock
 end
 
-local function run()
+local function define_tests()
     test.describe("File tree lazy loader and scanner", function()
+        test.it("grants only the stock read volume and grants nothing by importing fs", function()
+            local call_policy = assert(security.policy("bee.files.test:probe_call_policy"))
+            local read_policy = assert(security.policy("bee.security.files:read_policy"))
+            local function acquire(resource: string, read: boolean): boolean
+                local policies: {security.Policy} = {call_policy}
+                if read then policies[#policies + 1] = read_policy end
+                local executor = funcs.new():with_actor(security.new_actor("bee.files.test"))
+                    :with_scope(security.new_scope(policies))
+                local acquired, err = executor:call("bee.files.test:access_probe", resource)
+                test.is_nil(err)
+                return acquired == true
+            end
+            test.is_false(acquire("bee.env:files_root", false))
+            test.is_true(acquire("bee.env:files_root", true))
+            test.is_false(acquire("bee.env:workspace_root", true))
+            test.is_false(acquire("bee.env:machine_login_source", true))
+        end)
+
+        test.it("renders the host-selected read-only workspace with the runtime filesystem", function()
+            local volume = assert(fs.get("bee.env:files_root"))
+            local t = tree.new(volume)
+            local rows = tree.flatten(t)
+            local found = false
+            for _, row in ipairs(rows) do
+                if row.label == "wippy.yaml" then found = true end
+                test.is_false(row.label == ".wippy" or row.label == ".git")
+            end
+            test.is_true(found)
+            local written = volume:writefile("bee-files-readonly-probe", "must be refused")
+            test.is_false(written == true)
+            test.is_false(volume:exists("bee-files-readonly-probe"))
+        end)
+
         test.it("initializes root and lazily expands directories", function()
             local fs = make_mock_fs({
                 ["src"] = {is_dir = true},
@@ -123,7 +159,9 @@ local function run()
             for _, c in ipairs(t.root.children) do
                 names[#names + 1] = c.name
             end
-            test.eq(names, {"src", ".gitignore"})
+            test.eq(#names, 2)
+            test.eq(names[1], "src")
+            test.eq(names[2], ".gitignore")
         end)
 
         test.it("finds and loads path directly for navigation", function()
@@ -168,4 +206,4 @@ local function run()
     end)
 end
 
-return {run = run}
+return test.run_cases(define_tests)

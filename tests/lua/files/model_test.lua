@@ -5,7 +5,7 @@ local model = require("model")
 local function make_mock_fs(files: {[string]: {is_dir: boolean, content: string?}})
     local mock = {}
     function mock:readdir(path: string)
-        local prefix = path == "" and "" or path .. "/"
+        local prefix = (path == "" or path == ".") and "" or path .. "/"
         local entries = {}
         for p, info in pairs(files) do
             if p:sub(1, #prefix) == prefix then
@@ -44,7 +44,7 @@ local function make_mock_fs(files: {[string]: {is_dir: boolean, content: string?
     return mock
 end
 
-local function run()
+local function define_tests()
     test.describe("Files application model", function()
         local mock_fs = make_mock_fs({
             ["src"] = {is_dir = true},
@@ -115,6 +115,23 @@ local function run()
             test.eq(state.preview_selected, 3)
         end)
 
+        test.it("opens the selected search result after clearing the filter", function()
+            local state = model.new(mock_fs, "", {"src/main.lua"})
+            model.open_modal(state, "search")
+            model.set_search_query(state, "README")
+            model.open_search_result(state)
+            test.eq(state.current_path, "README.md")
+            test.eq(state.modal, "none")
+            test.eq(#state.tree_rows, 3)
+        end)
+
+        test.it("marks the jumped line in the rendered document", function()
+            local state = model.new(mock_fs, "", {"src/main.lua", "1-2"})
+            model.jump_to_line(state, 3, 20)
+            test.is_nil(state.doc.lines[1]:find("›", 1, true))
+            test.is_true(state.doc.lines[3]:find("›", 1, true) ~= nil)
+        end)
+
         test.it("handles modals: help, more, search, jump", function()
             local state = model.new(mock_fs, "", nil)
             test.eq(state.modal, "none")
@@ -139,4 +156,4 @@ local function run()
     end)
 end
 
-return {run = run}
+return test.run_cases(define_tests)

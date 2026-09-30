@@ -14,6 +14,7 @@ type Range = {
 
 type Document = {
     lines: {string},
+    raw_lines: {string},
     total_lines: integer,
     language: string?,
 }
@@ -52,6 +53,13 @@ type State = {
 
 function M.refresh_tree_rows(state: State)
     state.tree_rows = tree.flatten(state.tree, state.modal == "search" and state.search_query ~= "" and state.search_query or nil)
+    if state.modal == "search" then
+        local matches: {tree.TreeRow} = {}
+        for _, row in ipairs(state.tree_rows) do
+            if not row.expandable then matches[#matches + 1] = row end
+        end
+        state.tree_rows = matches
+    end
     if state.tree_selected > #state.tree_rows then
         state.tree_selected = math.floor(math.max(1, #state.tree_rows))
     end
@@ -222,6 +230,7 @@ function M.jump_to_line(state: State, line_num: integer, capacity: integer?)
     state.preview_offset = off
     state.preview_selected = sel
     state.highlight_range = {start_line = sel, end_line = sel}
+    state.doc = syntax.highlight(table.concat(doc.raw_lines, "\n") .. "\n", doc.language, nil, state.highlight_range)
     state.status = "Line " .. tostring(sel) .. " of " .. tostring(doc.total_lines)
 end
 
@@ -229,6 +238,8 @@ function M.open_modal(state: State, modal_kind: "none" | "help" | "more" | "sear
     state.modal = modal_kind
     if modal_kind == "search" then
         state.search_query = ""
+        state.tree_selected = 1
+        M.refresh_tree_rows(state)
     elseif modal_kind == "jump" then
         state.jump_input = ""
     elseif modal_kind == "more" then
@@ -246,6 +257,17 @@ end
 function M.set_search_query(state: State, query: string)
     state.search_query = query
     M.refresh_tree_rows(state)
+end
+
+function M.open_search_result(state: State)
+    local row = state.tree_rows[state.tree_selected]
+    local path = row and not row.expandable and row.node.path or nil
+    M.close_modal(state)
+    if path then M.open_file(state, path, nil) end
+end
+
+function M.search_move(state: State, delta: integer)
+    state.tree_selected = math.floor(math.max(1, math.min(#state.tree_rows, state.tree_selected + delta)))
 end
 
 function M.select_tree(state: State, index: integer)

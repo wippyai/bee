@@ -88,6 +88,12 @@ entries:
     actions: [registry.get, registry.snapshot, env.get, exec.get, exec.run, fs.get]
     resources: '*'
     effect: allow
+- name: launch_docker_readiness_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.placement.docker.binding:capabilities]
+    effect: allow
 - name: profile_store_policy
   kind: security.policy
   meta:

@@ -76,3 +76,23 @@ modules:
   version: 0.1.0-dev
 - name: bee/sessions
   version: 0.1.0-dev
+- name: bee/placement-docker
+  version: 0.1.0-dev
+- name: userspace/docker
+  version: 0.5.12
+  hash: sha256:e1a897dc2147731aa3be69b56c92c88595afe0a64a38b8efefe695cfc5f20021
+- name: wippy/bootloader
+  version: 0.3.16
+  hash: a31e9c64ec482ced0b0095bc0c85b2a69a7b1361c207ab43ffae807da473f6bc
+- name: wippy/migration
+  version: 0.3.19
+  hash: 3067a844cc4a453a6f39a8adc332def9ee7c00e4eba2afb27d7e3ddacb3cda1c
+- name: wippy/security
+  version: 0.4.3
+  hash: f636859979e88b23647a78fb9aa8a553799de18750b0fb5fb085cbe21542c86c
+- name: wippy/terminal
+  version: 0.4.5
+  hash: 028180c6044cdd9bbe15330255a4926770e02a291511930264a615f6388824f0
+- name: wippy/test
+  version: 0.4.17
+  hash: 37a304cc20aa3005004255e9fda16835a94119db520c0c97e1db044c7844a229

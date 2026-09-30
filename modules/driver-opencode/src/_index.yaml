@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee OpenCode driver
-    comment: Optional harness binding; host activation and launch policies authorize its use
+    comment: Optional harness binding; host activation and launch policies authorize
+      its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -58,7 +59,8 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     canonical: bee.threads.records:canonical
     configure_protocol: bee.driver:configuration
@@ -67,7 +69,6 @@ entries:
   source: file://launch.lua
   imports:
     universal: bee.driver:universal
-
 - name: locate
   kind: library.lua
   source: file://locate.lua
@@ -136,43 +137,64 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
-        hooks: {transports: [], events: []}
-        answer_path: {strategy: none}
-        resume: {strategy: none, portable: false}
+        hooks:
+          transports: []
+          events: []
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
         isolation_env:
-          variables: [HOME]
+          variables:
+          - HOME
           private_home: false
         exit_codes_trustworthy: false
-        input_ready: {strategy: none}
-        permission_exchange: {mode: none}
+        input_ready:
+          strategy: none
+        permission_exchange:
+          mode: none
 - name: default_window
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned OpenCode window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned OpenCode window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-window
     title: OpenCode
-    command_names: [opencode]
+    command_names:
+    - opencode
     binding_ref: bee.driver.opencode:binding
     profile_id: window
     session_profile_id: batch
-    session_credentials: [opencode_login]
+    session_credentials:
+    - opencode_login
     session_mode: batch
     policy_ref: ''
     default_mode: window
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: new}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
     session_resource: session
     credentials: []
-    presentation: {start_menu: true, fullscreen: true, reuse: never}
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator and caller-owned shared thread; the CLI offers no sandbox or permission flag Bee can select, so the host records it as unconfined
+    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator
+      and caller-owned shared thread; the CLI offers no sandbox or permission flag
+      Bee can select, so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-research-batch
@@ -182,12 +204,21 @@ entries:
     profile_id: batch
     policy_ref: ''
     default_mode: batch
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
     session_resource: session
-    credentials: [opencode_login]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
+    credentials:
+    - opencode_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
     unconfined: true
 - name: command
   kind: registry.entry
@@ -200,7 +231,6 @@ entries:
     arguments:
     - bee.driver.opencode:default_window
     fullscreen: true
-
 - name: credential_format
   kind: registry.entry
   meta:
@@ -215,10 +245,13 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected non-interactive OpenCode batch policy for bounded research actions on a caller-owned thread
+    comment: Host-selected non-interactive OpenCode batch policy for bounded research
+      actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -226,22 +259,40 @@ entries:
     drain_ms: 5000
     fixture: false
     executables: {}
-    executable_env: {opencode: bee.driver.opencode:executable}
+    executable_env:
+      opencode: bee.driver.opencode:executable
     environment: {}
     allow_host_home: false
-    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
     gateway_hooks: []
     profile_options: {}
     prepare_options: {}
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding
 - name: launch_policy_opencode_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned OpenCode window; missing host executable leaves
-      the declaration unavailable
+    comment: Host-selected executable binding for the component-owned OpenCode window;
+      missing host executable leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -253,7 +304,22 @@ entries:
       opencode: bee.driver.opencode:executable
     environment: {}
     allow_host_home: true
-    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
     gateway_hooks: []
     profile_options: {}
     prepare_options: {}
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding

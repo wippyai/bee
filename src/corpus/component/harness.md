@@ -13,7 +13,7 @@ readiness descriptors.
 | `bee.harness.carrier` | Runs one admitted CLI attempt, persists its checkpoint and settles its thread receipt through the typed driver and placement contracts. |
 | `bee.harness.launch` | Decodes `bee.launch_definition` entries, measures admission plans, admits the authenticated caller, prepares declared workspace resources and resolves component-owned CLI command names. The `locate_probe` entry measures activated descriptor drivers for the Sessions catalog; it reads login-file existence only. |
 | `bee.harness.profiles` | Stores bounded workspace preferences in the node-owned profile feed. Reads and writes still require the caller's workspace authority. |
-| `bee.harness.app` | Runs the Sessions application. Its list reads the public sessions contract and reopens stable addresses, including closed sessions. Its new-session picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit native PTY attach path. |
+| `bee.harness.app` | Runs the Sessions application. Its list reads the public sessions contract and reopens stable addresses, including closed sessions. Its new-session picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit PTY attach path. |
 
 ## Session catalog and readiness
 
@@ -39,6 +39,14 @@ profile ID and revision into `session_open`; a changed profile must be selected
 again. Profile contents do not add authority. Provider credentials are
 projected by the host credential broker and are never returned through the
 catalog.
+
+Profiles may select a host-admitted `placement_profile_ref`. Admission freezes
+its digest alongside the placement binding and refuses a changed profile before
+dispatch. The Agent profile form lists only placements admitted by its launch
+policy. For Docker, readiness inspects the selected image's platform and runtime
+artifact metadata and checks host login evidence through the same locator;
+it never runs a host binary as proof of a container runtime. Missing images
+appear with a concrete reason in the unavailable catalog.
 
 ## Boundaries
 
@@ -73,3 +81,11 @@ Stock definitions offer Customize copy. Name, admitted folder and model are
 basic fields. Ctrl+P opens Advanced permissions for instructions, conversation
 selection, other options and tool grants with human-readable names. Saving uses
 the existing profile revision and operation keys and grants no new authority.
+
+Docker profiles with host-selected environment provisioning can be ready before
+the network exists. The Sessions turn admission requests the existing person
+approval, provisions the owned bridge and reachable restricted gateway, and then
+uses the same external executor. The Agent conversation shows preparation
+progress. In a Docker profile editor, Ctrl+R and Enter revoke this admission;
+Escape cancels. This control belongs to the app namespace and requires the
+host's person-only revocation grant.

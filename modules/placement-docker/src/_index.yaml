@@ -1,0 +1,174 @@
+version: '1.0'
+namespace: bee.placement.docker
+entries:
+- name: definition
+  kind: ns.definition
+  module: placement-docker
+  readme: file://README.md
+  meta:
+    title: Bee Docker placement
+- name: dependency_placement
+  kind: ns.dependency
+  component: bee/placement
+  version: '*'
+- name: dependency_local
+  kind: ns.dependency
+  component: bee/placement-native
+  version: '*'
+- name: dependency_docker
+  kind: ns.dependency
+  component: userspace/docker
+  version: 0.5.12
+- name: protected_namespace
+  kind: ns.requirement
+  default: bee.placement.docker
+  targets:
+  - entry: bee:protected_kernel
+    path: .data.namespaces +=
+- name: spec
+  kind: library.lua
+  source: file://spec.lua
+  imports:
+    request_codec: bee.placement:request
+    profiles: bee.placement:profiles
+    types: bee.placement:types
+    bounds: bee.threads.records:bounds
+- name: docker_service_groups
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: userspace.docker.service:root.service
+    path: .lifecycle.security.groups
+- name: docker_service_start
+  kind: ns.requirement
+  default: false
+  targets:
+  - entry: userspace.docker.service:root.service
+    path: .lifecycle.auto_start
+- name: boot_environment
+  kind: env.storage.memory
+- name: dependency_bootloader
+  kind: ns.dependency
+  component: wippy/bootloader
+  version: 0.3.16
+  parameters:
+  - name: env_storage
+    value: bee.placement.docker:boot_environment
+- name: docker_database
+  kind: ns.requirement
+  default: bee.placement.native:db
+  targets:
+  - entry: userspace.docker:database
+    path: .default
+- name: process_host
+  kind: ns.requirement
+  targets:
+  - entry: userspace.docker:process_host
+    path: .default
+  - entry: wippy.bootloader:application_host
+    path: .default
+  - entry: bee.placement.docker.service:sweeper_service
+    path: .host
+  - entry: bee.placement.docker.service:image_owner_service
+    path: .host
+- name: bootloader_service_start
+  kind: ns.requirement
+  default: false
+  targets:
+  - entry: wippy.bootloader:bootloader.service
+    path: .lifecycle.auto_start
+- name: bootloader_service_groups
+  kind: ns.requirement
+  default: []
+  targets:
+  - entry: wippy.bootloader:bootloader.service
+    path: .lifecycle.security.groups
+- name: sweeper_policies
+  kind: ns.requirement
+  meta:
+    comment: Host-selected policy grants for the supervision sweeper
+  default:
+  - bee.placement.native.security:placement_store_policy
+  - bee.placement.native.security:placement_exec_policy
+  - bee.placement.native.security:placement_service_policy
+  - bee.resources.security:resource_resolve_policy
+  - bee.credentials.security:credential_materialize_policy
+  - bee.placement.native.security:placement_sweeper_policy
+  - bee.security.gateway:gateway_supervision_policy
+  - bee.placement.docker.security:docker_policy
+  - bee.placement.docker.security:docker_socket_policy
+  targets:
+  - entry: bee.placement.docker.service:sweeper_service
+    path: .lifecycle.security.policies
+- name: coding
+  kind: registry.entry
+  meta:
+    type: bee.placement_profile
+    title: Docker coding agents
+  data:
+    schema_revision: bee.placement-profile@1
+    placement_binding: bee.placement.docker.binding:binding
+    image_recipe_ref: bee.placement.docker:coding_recipe
+    user: 1000:1000
+    network: bee-coding
+    limits:
+      memory: 4294967296
+      cpu: 200000
+      pids: 256
+    mounts:
+    - resource: project
+      target: /workspace
+      access: write
+- name: coding_recipe
+  kind: registry.entry
+  meta:
+    type: bee.runtime_recipe
+  data:
+    schema_revision: bee.runtime-recipe@1
+    base: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
+    artifacts:
+    - name: claude
+      executable_ref: bee.driver.claude:executable
+    - name: codex
+      executable_ref: bee.driver.codex:executable
+      candidates:
+      - ../node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
+      - ../node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
+    - name: agy
+      executable_ref: bee.driver.agy:executable
+    - name: grok
+      executable_ref: bee.driver.grok:executable
+    - name: muse
+      executable_ref: bee.driver.muse:executable
+      sibling_prefix: muse-bin-
+    - name: opencode
+      executable_ref: bee.driver.opencode:executable
+- name: environment
+  kind: library.lua
+  source: file://environment.lua
+- name: environment_configuration
+  kind: registry.entry
+  meta:
+    type: bee.docker_environment
+  data:
+    value: {}
+- name: environment_provisioning
+  kind: ns.requirement
+  targets:
+  - entry: bee.placement.docker:environment_configuration
+    path: .data.value
+- name: image_owner_policies
+  kind: ns.requirement
+  default:
+  - bee.placement.native.security:placement_store_policy
+  - bee.placement.native.security:placement_exec_policy
+  - bee.placement.native.security:placement_runner_policy
+  - bee.placement.docker.security:docker_policy
+  - bee.placement.docker.security:docker_socket_policy
+  - bee.placement.docker.security:image_policy
+  - bee.placement.docker.security:image_client_policy
+  meta:
+    comment: Host-selected approval, overlay and listener lifecycle authority for first-use provisioning
+  targets:
+  - entry: bee.placement.docker.service:image_owner_service
+    path: .lifecycle.security.policies

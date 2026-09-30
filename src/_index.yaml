@@ -332,6 +332,11 @@ entries:
     - definition_id: bee.approvals.inbox.app:app
     confirm: explicit
     max_ttl_ms: 600000
+  - name: docker-environment
+    approvers:
+    - definition_id: bee.approvals.inbox.app:app
+    confirm: explicit
+    max_ttl_ms: 600000
 - name: module_installation
   kind: registry.entry
   meta:

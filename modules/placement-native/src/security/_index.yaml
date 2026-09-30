@@ -23,7 +23,7 @@ entries:
     - bee.placement.native:host_files_ref
     - bee.placement.native:admitted_roots_ref
     - bee.placement.native:resource_mode_ref
-    - bee.placement.native:workdir_preparers_ref
+    - bee.placement.native.service:workdir_preparers_ref
     - bee.placement.native:placement_workdir_preparers
     - custom
     - security

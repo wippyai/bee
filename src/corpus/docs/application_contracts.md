@@ -10,7 +10,7 @@ desktop surface. A process ID, definition ID and instance ID are different
 identities.
 
 The broker bounds one workspace at 64 admitted definitions, 16 view-owned
-instances, 16 policy bindings per definition, 16 stop waiters per instance and
+instances, 32 policy bindings per definition, 16 stop waiters per instance and
 128 completed owner request IDs. Request deduplication is bounded and in
 memory; it is not durable exactly-once execution.
 

@@ -28,6 +28,8 @@ type Request = {
     profile_id: string,
     brief: string,
     policy_ref: string,
+    placement_profile_ref: string?,
+    placement_profile_digest: string?,
     placement_binding_ref: string?,
     placement_binding_digest: string?,
     resources: {placement_types.ResourceGrant},

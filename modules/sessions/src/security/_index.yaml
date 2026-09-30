@@ -88,8 +88,8 @@ entries:
   kind: security.policy.expr
   meta: {comment: The scheduler restores only the owner identity carried by the canonical workspace-homed turn}
   policy:
-    actions: [security.actor.create, funcs.security]
-    expression: 'action == "funcs.security" || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"'
+    actions: [security.actor.create, funcs.security, funcs.context]
+    expression: 'action in ["funcs.security", "funcs.context"] || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"'
     resources: '*'
     effect: allow
 

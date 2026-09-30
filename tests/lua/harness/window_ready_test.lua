@@ -10,6 +10,7 @@ local channel = require("channel")
 local time = require("time")
 local tty = require("tty")
 local uuid = require("uuid")
+local json = require("json")
 local recovery = require("recovery")
 
 local WORKSPACE = string.rep("c", 32)
@@ -23,7 +24,8 @@ end
 
 local function define_tests()
     test.describe("Managed window readiness", function()
-        test.it("announces a direct launch ready before its launch work reaches the native open", function()
+        for _, structured in ipairs({false, true}) do
+        test.it("announces " .. (structured and "structured" or "direct") .. " launch readiness before opening the terminal", function()
             local ref = "bee.driver.claude.descriptor:cli"
             local original = assert(registry.get(ref))
             local fixture = assert(registry.get(ref))
@@ -49,7 +51,7 @@ local function define_tests()
                     instance_id = instance_id, view_id = instance_id, definition_id = "bee.harness.app:app",
                     execution_generation = 1, definition_revision = "1", registry_revision = "1",
                     launch_token = uuid.v7(), resume_schema = recovery.SCHEMA, resume_state = "",
-                    arguments = {DEFINITION}}, self)
+                    arguments = {structured and assert(json.encode({request_id = "structured-ready", definition_ref = DEFINITION, brief = ""})) or DEFINITION}}, self)
             if not window then error("window spawn failed: " .. tostring(spawn_error)) end
             local pid = tostring(window)
 
@@ -108,6 +110,7 @@ local function define_tests()
             apply(original)
             if not ok then error(tostring(failure)) end
         end)
+        end
     end)
 end
 return test.run_cases(define_tests)

@@ -1,0 +1,205 @@
+version: '1.0'
+namespace: bee.placement.docker.binding
+entries:
+- name: binding
+  kind: contract.binding
+  meta:
+    type: placement
+    placement_kind: docker
+  contracts:
+  - contract: bee.placement:placement
+    methods:
+      prepare: bee.placement.docker.binding:prepare
+      start: bee.placement.docker.binding:start
+      status: bee.placement.docker.binding:status
+      stop: bee.placement.docker.binding:stop
+      reconcile: bee.placement.docker.binding:reconcile
+      cleanup: bee.placement.docker.binding:cleanup
+      evidence: bee.placement.docker.binding:evidence
+      attach: bee.placement.docker.binding:attach
+      capabilities: bee.placement.docker.binding:capabilities
+      measure_executable: bee.placement.docker.binding:measure_executable
+      close_stdin: bee.placement.docker.binding:close_stdin
+- name: prepare
+  kind: function.lua
+  source: file://methods.lua
+  method: prepare
+  imports: &id001
+    service: bee.placement.docker.service:service
+  security: &id002
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_client_policy
+- name: start
+  kind: function.lua
+  source: file://methods.lua
+  method: start
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: status
+  kind: function.lua
+  source: file://methods.lua
+  method: status
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: stop
+  kind: function.lua
+  source: file://methods.lua
+  method: stop
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: reconcile
+  kind: function.lua
+  source: file://methods.lua
+  method: reconcile
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: cleanup
+  kind: function.lua
+  source: file://methods.lua
+  method: cleanup
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: evidence
+  kind: function.lua
+  source: file://methods.lua
+  method: evidence
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: attach
+  kind: function.lua
+  source: file://methods.lua
+  method: attach
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: capabilities
+  kind: function.lua
+  source: file://methods.lua
+  method: capabilities
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: measure_executable
+  kind: function.lua
+  source: file://methods.lua
+  method: measure_executable
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: close_stdin
+  kind: function.lua
+  source: file://methods.lua
+  method: close_stdin
+  imports:
+    service: bee.placement.docker.service:service
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_service_policy
+    - bee.resources.security:resource_resolve_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_supervision_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: prepare_environment
+  kind: function.lua
+  source: file://methods.lua
+  method: prepare_environment
+  imports: *id001
+  security: *id002

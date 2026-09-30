@@ -19,7 +19,7 @@ type Field = {kind: string, name: string, label: string, option_kind: string?, m
 type ThreadRow = {thread_id: string?, title: string}
 type Threads = {items: {ThreadRow}, selected: integer, error: string?}
 type State = {form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
-    status: string, confirming_remove: boolean, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
+    status: string, confirming_remove: boolean, confirming_revoke: boolean?, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 
@@ -32,7 +32,7 @@ function M.new(form: forms.Form, ask: Ask): State
         end
     end
     return {form = form, title = form.draft.title, guidance = form.draft.instructions,
-        option_text = option_text, selected = 1, status = "", confirming_remove = false, ask = ask,
+        option_text = option_text, selected = 1, status = "", confirming_remove = false, confirming_revoke = false, ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
 end
 local function folder_label(state: State): string
@@ -62,6 +62,7 @@ end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"}}
     if state.form.draft._allowed.workdir then result[#result + 1] = {kind = "workdir", name = "", label = folder_label(state)} end
+    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Placement: " .. (state.form.draft.placement_profile_ref or "bee.placement:native")} end
     local options = editor.options(state.form.draft)
     for _, option in ipairs(options or {}) do
         if option.name == "model" then
@@ -98,7 +99,13 @@ function M.action(state: State, action: string): string?
     if action == "advanced" and not state.form.pending then
         state.advanced = not state.advanced; state.selected = 1; return nil
     end
+    if action == "revoke_docker" and state.form.draft.placement_profile_ref == "bee.placement.docker:coding" then
+        state.confirming_revoke = true
+        state.status = "Revoke Docker network and gateway access? Enter confirms; Esc keeps it."
+        return nil
+    end
     if action == "cancel" then
+        if state.confirming_revoke then state.confirming_revoke = false; state.status = ""; return nil end
         if state.confirming_remove then state.confirming_remove = false; return nil end
         return "cancel"
     end
@@ -223,6 +230,16 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         elseif hit then return M.action(state, hit.kind) end
     elseif event.type == "key" and event.action == "press" then
         if event.key_type == "escape" or event.key_type == "esc" then return M.action(state, "cancel") end
+        if state.confirming_revoke then
+            if event.key_type == "enter" then
+                local reply = state.ask("bee.placement.docker.binding:prepare_environment", {workspace_id = state.form.workspace_id,
+                    placement_profile_ref = state.form.draft.placement_profile_ref, revoke = true})
+                state.status = reply.ok and "Docker network and gateway access revoked" or reply.error and reply.error.message or "Revocation did not answer"
+                state.confirming_revoke = false
+            end
+            return nil
+        end
+        if event.ctrl and event.key == "r" then return M.action(state, "revoke_docker") end
         if state.confirming_remove then
             if event.key_type == "enter" then return M.action(state, "remove") end
             return nil
@@ -245,12 +262,13 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    if field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
+    if field.kind == "placement" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
         if event.type == "key" and event.action == "press" and
             (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
             local err: string? = nil
-            if field.kind == "tool" then ok, err = editor.toggle_tool(state.form.draft, field.name)
+            if field.kind == "placement" then ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
+            elseif field.kind == "tool" then ok, err = editor.toggle_tool(state.form.draft, field.name)
             else ok, err = editor.cycle_option(state.form.draft, field.name, event.key_type == "left" and -1 or 1) end
             state.status = ok and "" or (err or "Option is unavailable")
         end
@@ -276,7 +294,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
 end
 
 local HINTS = frame.hints({{key = "Tab", verb = "fields"}, {key = "Ctrl+S", verb = "save"},
-    {key = "Ctrl+P", verb = "permissions"}, {key = "Esc", verb = "cancel"}})
+    {key = "Ctrl+P", verb = "permissions"}, {key = "Ctrl+R", verb = "revoke Docker access"}, {key = "Esc", verb = "cancel"}})
 local FOLDER_HINTS = frame.hints({{key = "Enter", verb = "open"}, {key = "⌫", verb = "up"}, {key = "U", verb = "use this folder"},
     {key = "D", verb = "definition folder"}, {key = "Esc", verb = "back"}})
 local THREAD_HINTS = frame.hints({{key = "Enter", verb = "choose"}, {key = "Esc", verb = "back"}})

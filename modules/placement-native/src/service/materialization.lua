@@ -295,7 +295,7 @@ local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRe
     end
     return work_dir, sandbox_args, nil
 end
-function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?): (Prepared?, string?, string?)
+function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?, guest_home: string?): (Prepared?, string?, string?)
     local gateway_binding: string? = nil
     local writebacks: {WriteBack} = {}
     local function finish_stopped_without_child(): boolean
@@ -364,7 +364,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "home.failed", home_os_error or "home path", {execution = "exited"})
         return refused(home_os_error or "home path")
     end
-    local environment, environment_error = resolve_environment(request, home_os)
+    local environment, environment_error = resolve_environment(request, guest_home or home_os)
     if not environment then
         evidence(db, attempt_id, "environment.failed", environment_error or "environment", {execution = "exited"})
         return refused(environment_error or "environment")
@@ -470,7 +470,20 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 evidence(db, attempt_id, "credential.refused", "provider login files do not match the driver declaration", {execution = "exited"})
                 return refused("provider login files do not match the driver declaration")
             end
-            if provider_home and provider_home.private then
+            if guest_home then
+                local roots: {string} = {guest_home}
+                if request.placement_profile_ref then
+                    local selected, profile_error = provider_projection.roots(request.placement_profile_ref)
+                    if not selected then return refused(profile_error or "container projection roots unavailable") end
+                    for _, root in ipairs(selected) do roots[#roots + 1] = root end
+                end
+                local format, format_error = provider_projection.container(provider_home, source.format, roots)
+                if not format then
+                    evidence(db, attempt_id, "configuration.refused", format_error or "container projection refused", {execution = "exited"})
+                    return refused(format_error or "container projection refused")
+                end
+                source.format = format
+            elseif provider_home and provider_home.private then
                 local machine_home, machine_home_error = env.get("bee.env:machine_home")
                 if type(machine_home) ~= "string" or machine_home_error then return refused("provider source home unavailable") end
                 local projected_format, format_error = provider_projection.native(provider_home, source.format, machine_home, home_os)

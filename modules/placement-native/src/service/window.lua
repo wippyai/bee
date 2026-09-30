@@ -20,6 +20,7 @@ local funcs = require("funcs")
 local service = require("service")
 local protocol = require("protocol")
 local identity = require("identity")
+local process_backend = require("process_backend")
 
 type Options = {width: integer, height: integer, term: string, expected_binding: string?, expected_placement_binding: string?, generation: integer?}
 type Window = {
@@ -49,7 +50,7 @@ local function error_text(value: unknown): string?
     return tostring(value)
 end
 
-local function fail(db, reason: string, gateway_binding: string?, attempt_id: string?, child_created: boolean?): (Window?, string?)
+local function fail(db, backend: process_backend.Backend?, reason: string, gateway_binding: string?, attempt_id: string?, child_created: boolean?): (Window?, string?)
     if gateway_binding then
         -- A gateway binding may have been minted before a later PTY step
         -- failed. Revoke it here; bytes never enter this facade's return
@@ -71,8 +72,13 @@ local function fail(db, reason: string, gateway_binding: string?, attempt_id: st
         end
         local attempt = store.attempt(db, attempt_id)
         if attempt and attempt.execution_state == "exited" then
-            local cleaned = service.cleanup_attempt(attempt, true)
-            if not cleaned.ok then reason = reason .. "; cleanup: " .. tostring(cleaned.error and cleaned.error.message) end
+            if backend then
+                local cleaned, cleanup_error = backend.cleanup(attempt, true)
+                if not cleaned then reason = reason .. "; cleanup: " .. tostring(cleanup_error) end
+            else
+                local cleaned = service.cleanup_attempt(attempt, true)
+                if not cleaned.ok then reason = reason .. "; cleanup: " .. tostring(cleaned.error and cleaned.error.message) end
+            end
         end
     end
     if db then db:release() end
@@ -110,7 +116,7 @@ end
 -- actor and performs the intended-to-start compare-and-set before materializing
 -- anything or creating a child. The returned value contains only process-local
 -- native handles and lifecycle methods.
-function M.open(attempt_id: string, value: unknown): (Window?, string?)
+function M.open_local(attempt_id: string, value: unknown, backend: process_backend.Backend?): (Window?, string?)
     local owner = actor_id()
     if not owner then return nil, "no authenticated actor" end
     local bounded_attempt_id = bounds.id(attempt_id)
@@ -122,67 +128,78 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     local db, open_error = store.open()
     if not db then return nil, open_error or "open placement store" end
     local row, row_error = store.row(db, attempt_id)
-    if not row then return fail(db, row_error or "attempt is not recorded", nil) end
-    if row.owner_id ~= owner then return fail(db, "attempt is owned by another actor", nil) end
+    if not row then return fail(db, backend, row_error or "attempt is not recorded", nil) end
+    if row.owner_id ~= owner then return fail(db, backend, "attempt is owned by another actor", nil) end
     local request, request_error = store.request(row)
-    if not request then return fail(db, request_error or "attempt request is unreadable", nil) end
-    if request.owner_id ~= owner or request.attempt_id ~= attempt_id then return fail(db, "attempt owner does not match its request", nil) end
+    if not request then return fail(db, backend, request_error or "attempt request is unreadable", nil) end
+    if request.owner_id ~= owner or request.attempt_id ~= attempt_id then return fail(db, backend, "attempt owner does not match its request", nil) end
     local generation = bounds.count(row.attachment_generation)
-    if not generation then return fail(db, "attempt attachment generation is corrupt", nil) end
+    if not generation then return fail(db, backend, "attempt attachment generation is corrupt", nil) end
     if chosen.expected_placement_binding and request.placement_binding_ref ~= chosen.expected_placement_binding then
-        return fail(db, "attempt uses another placement binding", nil)
+        return fail(db, backend, "attempt uses another placement binding", nil)
     end
-    if request.placement_binding_ref and request.placement_binding_ref ~= "bee.placement.native.binding:binding" then
-        return fail(db, "native window cannot use a non-native placement binding", nil)
+    if request.placement_binding_ref and request.placement_binding_ref ~= (backend and backend.binding or "bee.placement.native.binding:binding") then
+        return fail(db, backend, "native window cannot use a non-native placement binding", nil)
     end
     if chosen.generation and (generation ~= chosen.generation or row.recipient ~= process.pid()) then
-        return fail(db, "window attachment generation is not admitted", nil)
+        return fail(db, backend, "window attachment generation is not admitted", nil)
     end
-    if row.execution_state ~= "intended" then return fail(db, "attempt is already in use or has settled", nil) end
+    if row.execution_state ~= "intended" then return fail(db, backend, "attempt is already in use or has settled", nil) end
 
     local issued_authority, authority_error = uuid.v4()
-    if not issued_authority then return fail(db, tostring(authority_error or "runner authority"), nil) end
+    if not issued_authority then return fail(db, backend, tostring(authority_error or "runner authority"), nil) end
     local control_token, control_error = store.runner_authority(db, attempt_id, issued_authority)
-    if not control_token then return fail(db, control_error or "runner authority unavailable", nil) end
+    if not control_token then return fail(db, backend, control_error or "runner authority unavailable", nil) end
 
     local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "window.started", detail = "managed window owner " .. process.pid()}})
-    if not starting.ok then return fail(db, starting.message or "attempt is no longer intended", nil) end
+    if not starting.ok then return fail(db, backend, starting.message or "attempt is no longer intended", nil) end
 
     local attempt, attempt_error = store.attempt(db, attempt_id)
-    if attempt_error then return fail(db, "attempt is corrupt: " .. attempt_error, nil) end
-    if not attempt then return fail(db, "attempt is not recorded", nil) end
+    if attempt_error then return fail(db, backend, "attempt is corrupt: " .. attempt_error, nil) end
+    if not attempt then return fail(db, backend, "attempt is not recorded", nil) end
     local authorized_key, authorization_error = service.authorize_materialization(attempt, row, request, chosen.expected_binding)
     if authorization_error then
         store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "window.authorization_failed", detail = tostring(authorization_error.error and authorization_error.error.message or "launch authorization failed")}})
-        return fail(db, authorization_error.error and authorization_error.error.message or "launch authorization failed", nil)
+        return fail(db, backend, authorization_error.error and authorization_error.error.message or "launch authorization failed", nil)
     end
 
-    local prepared, preparation_error, gateway_binding = materialization.prepare(db, request, attempt_id, generation, chosen.expected_binding, authorized_key)
+    local prepared, preparation_error, gateway_binding = materialization.prepare(db, request, attempt_id, generation, chosen.expected_binding, authorized_key, backend and backend.guest_home or nil)
     if not prepared then
         -- Materialization records its own terminal evidence. Keep the gateway
         -- identity long enough for fail() to revoke it if needed.
-        return fail(db, preparation_error or "attempt materialization", gateway_binding, attempt_id)
+        return fail(db, backend, preparation_error or "attempt materialization", gateway_binding, attempt_id)
     end
 
+    local executor: exec.Executor? = nil
+    local argv: {string} = {}
+    local execution_options: process_backend.Options = {work_dir = prepared.working_directory, env = prepared.environment, process_group = row.capability == "process_group"}
+    if backend then
+        local selected, arguments, chosen_options, selection_error = backend.prepare(db, request, prepared)
+        if not selected or not arguments or not chosen_options then return fail(db, backend, selection_error or "placement executor unavailable", gateway_binding, attempt_id) end
+        executor, argv, execution_options = selected, arguments, chosen_options
+    else
     local executor_ref, reference_error = resources.executor()
-    local executor, executor_error
+    local executor_error
     if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
     if not executor then
         store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "executor.failed", detail = tostring(executor_error)}})
-        return fail(db, "executor unavailable", gateway_binding, attempt_id)
+        return fail(db, backend, "executor unavailable", gateway_binding, attempt_id)
     end
     if request.executable then
         local verified, verify_error = executable.verify(request.launch.executable, request.executable)
         if not verified then
             store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "executable.changed", detail = tostring(verify_error)}})
             executor:release()
-            return fail(db, verify_error or "executable changed", gateway_binding, attempt_id)
+            return fail(db, backend, verify_error or "executable changed", gateway_binding, attempt_id)
         end
         store.transition(db, attempt_id, {evidence = {kind = "executable.measured", detail = verified.revision .. " " .. verified.kind .. " digest " .. verified.digest}})
     end
 
-    local argv: {string} = {request.launch.executable}
+    argv = {request.launch.executable}
     for _, argument in ipairs(prepared.arguments) do argv[#argv + 1] = argument end
+
+    end
+    if not executor then return fail(db, backend, "placement executor unavailable", gateway_binding, attempt_id) end
 
     local closed = false
     local stop_requested = false
@@ -195,7 +212,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     if not controls then
         store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "child.not_started", detail = "window control listener unavailable before child creation"}})
         executor:release()
-        return fail(db, "window control listener unavailable", gateway_binding, attempt_id)
+        return fail(db, backend, "window control listener unavailable", gateway_binding, attempt_id)
     end
     -- The PTY owner is the recorded runner. Answer the same supervision probe
     -- as a streamed runner, without consuming the application's done channel.
@@ -250,24 +267,34 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         local current = store.row(db, attempt_id)
         local reason = current and current.execution_state == "stopping" and "window stopped during startup"
             or creating.message or "attempt stopped before terminal start"
-        return fail(db, reason, gateway_binding, attempt_id)
+        return fail(db, backend, reason, gateway_binding, attempt_id)
     end
-    local started, start_error = executor:terminal(quote.line(argv), {work_dir = prepared.working_directory, env = prepared.environment,
-        pty = {width = chosen.width, height = chosen.height, term = chosen.term}, process_group = row.capability == "process_group"})
+    local started, start_error = executor:terminal(quote.line(argv), {work_dir = execution_options.work_dir, env = execution_options.env, mounts = execution_options.mounts,
+        pty = {width = chosen.width, height = chosen.height, term = chosen.term}, process_group = execution_options.process_group})
     if not started then
         finished = true
         process.unlisten(controls)
         store.transition(db, attempt_id, {execution = "exited", evidence = {kind = "child.refused", detail = "executor refused the PTY command: " .. tostring(start_error)}})
         executor:release()
-        return fail(db, "start terminal: " .. tostring(start_error), gateway_binding, attempt_id)
+        return fail(db, backend, "start terminal: " .. tostring(start_error), gateway_binding, attempt_id)
     end
     terminal = started
     if stop_requested and started:close() then closed = true end
 
     local fields: {[string]: unknown} = {}
     local identity_detail = "execution identity unavailable"
+    if backend then
+        local identified, identification_error = backend.identity(request)
+        if not identified then
+            started:close()
+            executor:release()
+            return fail(db, backend, identification_error or "container identity unavailable", gateway_binding, attempt_id, true)
+        end
+        fields = identified
+        identity_detail = "container identified by attempt environment and provider home"
+    end
     local pid, pid_error = started:pid()
-    if pid then
+    if pid and not backend then
         local found, read_error = identity.read(executor, pid)
         if found then
             fields.pid = found.pid
@@ -309,7 +336,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         local current = store.row(db, attempt_id)
         if not current or current.execution_state ~= "stopping" then
             executor:release()
-            return fail(db, settled.message or "record terminal start", gateway_binding, attempt_id, true)
+            return fail(db, backend, settled.message or "record terminal start", gateway_binding, attempt_id, true)
         end
         local stopped
         if started:status() == "done" then
@@ -318,14 +345,14 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
             stopped = store.transition(db, attempt_id, {expected_execution = "stopping", fields = fields, evidence = {kind = "stop.pending", detail = "terminal close requested during startup; " .. identity_detail}})
         end
         executor:release()
-        if not stopped.ok then return fail(db, stopped.message or "record terminal stop", gateway_binding, attempt_id, true) end
-        return fail(db, "window stopped during startup", gateway_binding, attempt_id, true)
+        if not stopped.ok then return fail(db, backend, stopped.message or "record terminal stop", gateway_binding, attempt_id, true) end
+        return fail(db, backend, "window stopped during startup", gateway_binding, attempt_id, true)
     end
     if startup_exit then
         finished = true
         process.unlisten(controls)
         executor:release()
-        return fail(db, "terminal completed during startup", gateway_binding, attempt_id, true)
+        return fail(db, backend, "terminal completed during startup", gateway_binding, attempt_id, true)
     end
 
     local function retire_gateway(why: string)
@@ -358,8 +385,13 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         local attempt = store.attempt(db, attempt_id)
         local cleanup_error: string? = nil
         if attempt then
-            local cleaned = service.cleanup_attempt(attempt, true)
-            if not cleaned.ok then cleanup_error = cleaned.error and cleaned.error.message or "cleanup failed" end
+            if backend then
+                local cleaned, backend_error = backend.cleanup(attempt, false)
+                if not cleaned then cleanup_error = backend_error or "cleanup failed" end
+            else
+                local cleaned = service.cleanup_attempt(attempt, true)
+                if not cleaned.ok then cleanup_error = cleaned.error and cleaned.error.message or "cleanup failed" end
+            end
         end
         db:release()
         return cleanup_error == nil, cleanup_error
@@ -378,6 +410,12 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         end,
         close = function(_): (boolean, string?)
             if closed then return true, nil end
+            if backend and backend.stop then
+                local attempt = store.attempt(db, attempt_id)
+                if not attempt then return false, "terminal attempt is unavailable" end
+                local stopped, stop_error = backend.stop(attempt)
+                if not stopped then return false, stop_error end
+            end
             local ok, close_error = started:close()
             if ok then closed = true end
             return ok, error_text(close_error)
@@ -385,6 +423,10 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         finish = finish,
     }
     return facade, nil
+end
+
+function M.open(attempt_id: string, value: unknown): (Window?, string?)
+    return M.open_local(attempt_id, value, nil)
 end
 
 return M

@@ -176,7 +176,8 @@ local function measured_candidate(cache: locate.Cache, readiness_cache: readines
         binding_digest = binding_digest or "unresolved", profile_digest = profile_digest or plan_digest,
         runtime_identity = "local", availability_revision = tostring(route_generation or generation)}
     local value, locate_error = locate.locate(cache, input, function(_: locate.CandidateInput): (locate.LocateObservation?, string?)
-        local probe = readiness.probe(selected.binding_ref, selected.profile_id, readiness_cache)
+        local placement_profile_ref = plan_object and bounds.id(plan_object.placement_profile_ref) or nil
+        local probe = readiness.probe(selected.binding_ref, selected.profile_id, readiness_cache, placement_profile_ref)
         if probe.error then return nil, probe.error end
         if not probe.located or not probe.result then return nil, "The active driver does not provide readiness evidence." end
         local reasons: {string} = {}
@@ -216,9 +217,14 @@ end
 local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: string, entry: Object,
     kind: Kind, title: string, revision: integer?, profile_id: string?, workspace: string,
     cache: locate.Cache, readiness_cache: readiness.Cache, generation: integer): (locate.Candidate?, string?)
+    local candidate_ref = ref
+    if kind == "profile" then
+        if not profile_id then return nil, "saved profile identity is missing" end
+        candidate_ref = profile_id
+    end
     local decoded, decode_error = definition.decode(ref, entry)
     if not decoded then
-        return unavailable_candidate(cache, kind, ref, title, revision, "incompatible",
+        return unavailable_candidate(cache, kind, candidate_ref, title, revision, "incompatible",
             decode_error or "The launch definition is invalid.", generation)
     end
     local plan: unknown = nil
@@ -228,7 +234,7 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
     else
         plan, refused = admission.read(pinned, ref, nil, true)
     end
-    return measured_candidate(cache, readiness_cache, kind, ref, title, revision, decoded, plan, refused, generation)
+    return measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
 end
 
 local function valid_cursor(value: unknown): integer?

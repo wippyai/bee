@@ -4,6 +4,15 @@ local decode = require("decode")
 local client = require("client")
 local arguments = require("arguments")
 local function define_tests()
+    test.describe("Application admission policy bound", function()
+        test.it("admits the reviewed native and Docker Agent policies and rejects overflow", function()
+            local policies: {string} = {}
+            for index = 1, 18 do policies[index] = "test:policy" .. tostring(index) end
+            test.not_nil(contract.binding({definition_id = "test:agent", policies = policies}))
+            for index = 19, 33 do policies[index] = "test:policy" .. tostring(index) end
+            test.is_nil(contract.binding({definition_id = "test:agent", policies = policies}))
+        end)
+    end)
     test.describe("Application launch arguments", function()
         test.it("bounds host policy composition and rejects sparse policy lists", function()
             local policies: {string} = {}

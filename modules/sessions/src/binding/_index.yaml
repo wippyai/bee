@@ -34,7 +34,7 @@ entries:
     methods: {list: bee.sessions.binding:catalog}
 - name: target_owner_policies
   kind: ns.requirement
-  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_registry_read_policy, bee.harness.security:carrier_environment_policy, bee.sessions.security:owner_admission_policy, bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy]
+  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_registry_read_policy, bee.harness.security:carrier_environment_policy, bee.sessions.security:owner_admission_policy, bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy, bee.harness.security:profile_workspace_policy]
   meta:
     comment: Host-selected authority for the Sessions admission and journal boundary
   targets:

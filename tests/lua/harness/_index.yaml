@@ -178,7 +178,7 @@ entries:
   source: file://window_ready_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "120s"}
-  modules: [process, channel, time, tty, uuid, registry]
+  modules: [process, channel, time, tty, uuid, registry, json]
   security:
     policies: [bee.harness.catalog:apply_test_policy]
   imports:

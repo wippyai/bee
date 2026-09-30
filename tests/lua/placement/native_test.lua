@@ -497,6 +497,7 @@ local function define_tests()
             test.eq(provider_home.variable, "CLAUDE_CONFIG_DIR")
             test.eq(provider_home.directory, ".claude")
             local provider_files = provider_home.files :: {{[string]: unknown}}
+            test.eq(#provider_files, 3)
             local login_path = ""
             for _, file in ipairs(provider_files) do
                 if file.kind == "login" then
@@ -520,6 +521,7 @@ local function define_tests()
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/.credentials.json"'
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/settings.json"'
                 .. ' && test -s "$HOME/.claude.json"'
+                .. ' && test ! -e "$CLAUDE_CONFIG_DIR/.claude.json"'
                 .. ' && actual="$(find "$HOME" -type f | sed "s|^$HOME/||" | sort)"'
                 .. ' && expected="$(printf "%s\\n" .claude.json .claude/.credentials.json .claude/settings.json | sort)"'
                 .. ' && test "$actual" = "$expected"'

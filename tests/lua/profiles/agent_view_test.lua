@@ -4,6 +4,9 @@ local picker_view = require("picker_view")
 local session_view = require("session_view")
 local appearance = require("appearance")
 local agents = require("agents")
+local directory_view = require("directory_view")
+local protocol = require("protocol")
+local tty = require("tty")
 type Object = {[string]: unknown}
 local function listing_of(value: unknown): agents.Listing return value :: agents.Listing end
 local function conversation_of(value: unknown): agents.Conversation return value :: agents.Conversation end
@@ -28,7 +31,7 @@ local function define_tests()
             local text = screen(picker_view.draw(120, 20, appearance.defaults(), listing_of(ready), 1, "", false, false).rows)
             test.is_true(text:find("Show unavailable", 1, true) ~= nil)
             test.is_true(text:find("1 unavailable", 1, true) ~= nil)
-            test.is_true(text:find("Re-probe", 1, true) ~= nil)
+            test.is_true(text:find("Refresh", 1, true) ~= nil)
         end)
         test.it("strips terminal controls and offers no launch where nothing can be chosen", function()
             local hostile: any = {items = {{ref = "f:p", kind = "definition", title = "Profile\27]52;injected", status = "ready",
@@ -40,12 +43,12 @@ local function define_tests()
                 local small = picker_view.draw(size[1], size[2], appearance.defaults(), listing_of(hostile), 1, "", false, false)
                 test.eq(small.capacity, 0)
                 for _, hit in ipairs(small.hits) do
-                    test.is_true(hit.kind ~= "open" and hit.kind ~= "attach" and hit.kind ~= "new" and hit.kind ~= "edit")
+                    test.is_true(hit.kind ~= "open" and hit.kind ~= "setup" and hit.kind ~= "edit")
                 end
             end
             local empty: any = {items = {}, unavailable = 0, notes = {}}
             for _, hit in ipairs(picker_view.draw(80, 12, appearance.defaults(), listing_of(empty), 0, "", false, false).hits) do
-                test.is_true(hit.kind ~= "open" and hit.kind ~= "attach" and hit.kind ~= "new" and hit.kind ~= "edit")
+                test.is_true(hit.kind ~= "open" and hit.kind ~= "setup" and hit.kind ~= "edit")
             end
             local loading = table.concat(picker_view.draw(80, 12, appearance.defaults(), listing_of(empty), 0, "Loading agents…", false, false).rows)
             test.is_true(loading:find("Loading agents", 1, true) ~= nil)
@@ -63,10 +66,10 @@ local function define_tests()
             local drawn = picker_view.draw(120, 24, appearance.defaults(), listing_of(two), 2, "", false, false)
             local rows: {string} = {}
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
-            test.is_true(rows[1]:find("AGENT", 1, true) ~= nil and rows[1]:find("2 agents", 1, true) ~= nil)
+            test.is_true(rows[1]:find("NEW SESSION", 1, true) ~= nil and rows[1]:find("2 agents", 1, true) ~= nil)
             test.eq(rows[3]:sub(1, 7), " Alpha ")
             test.eq(rows[4]:sub(1, #"›"), "›")
-            test.is_true(rows[24]:find("Enter open · M attach", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Enter open · U unavailable", 1, true) ~= nil)
             local chosen = 0
             for _, hit in ipairs(drawn.hits) do if hit.kind == "choice" and hit.y == 4 then chosen = hit.index end end
             test.eq(chosen, 2)
@@ -75,6 +78,21 @@ local function define_tests()
             local empty: any = {items = {}, unavailable = 0, notes = {}}
             local text = screen(picker_view.draw(120, 20, appearance.defaults(), listing_of(empty), 0, "", false, false).rows)
             test.is_true(text:find("No agents are ready on this node", 1, true) ~= nil)
+        end)
+    end)
+    test.describe("Sessions list", function()
+        test.it("renders addressable stopped sessions and stable help at 120 and 80", function()
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local rows: any = {{session = "bs:n:w:s", title = "Fix API", lifecycle = "closed", activity = "idle", queue_count = 0}}
+                local shown = directory_view.draw(size[1], size[2], appearance.defaults(), rows :: {protocol.SessionSnapshot}, 1, "Refreshed", false)
+                test.eq(#shown.rows, size[2])
+                for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), size[1]) end
+                local plain = screen(shown.rows):gsub("\27%[[0-9;]*m", "")
+                test.is_true(plain:find("Fix API", 1, true) ~= nil)
+                test.is_true(plain:find("closed", 1, true) ~= nil)
+                test.is_nil(plain:find("bs:n:w:s", 1, true))
+                test.is_true(shown.rows[size[2]]:find("Enter open", 1, true) ~= nil)
+            end
         end)
     end)
     test.describe("Agent session screen", function()
@@ -90,6 +108,34 @@ local function define_tests()
             test.is_true(text:find("  line two", 1, true) ~= nil)
             test.is_true(text:find("  queued", 1, true) ~= nil)
             test.is_true(text:find("> draft", 1, true) ~= nil)
+        end)
+        test.it("keeps conversation identity, stop control and help in rendered frames", function()
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local shown = session_view.draw(size[1], size[2], appearance.defaults(), conversation("working", {
+                    {input = "Fix API", state = "working", text = ""}}), "next", "Working")
+                test.eq(#shown.rows, size[2])
+                for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), size[1]) end
+                test.is_true(screen(shown.rows):find("Work queue", 1, true) ~= nil)
+                test.is_true(screen(shown.rows):find("Stop current work", 1, true) ~= nil)
+                test.is_true(shown.rows[size[2]]:find("Ctrl+K stop work", 1, true) ~= nil)
+            end
+        end)
+        test.it("shows the session rail on a wide conversation and preserves mouse coordinates", function()
+            local conv = conversation("working", {{input = "fix", state = "working", text = ""}})
+            local handle: any = {ref = function(): string return "bs:n:w:s" end}
+            conv.session = handle
+            local rows: any = {{session = "bs:n:w:s", title = "Fix API"}, {session = "bs:n:w:other", title = "Review docs"}}
+            local shown = session_view.draw(120, 36, appearance.defaults(), conv, "draft", "", rows :: {protocol.SessionSnapshot})
+            test.eq(#shown.rows, 36)
+            for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), 120) end
+            test.is_true(screen(shown.rows):find("Review docs", 1, true) ~= nil)
+            local sidebar, send = false, false
+            for _, hit in ipairs(shown.hits) do
+                test.is_true(hit.x + hit.width - 1 <= 120 and hit.y <= 36)
+                if hit.kind == "sidebar_session" and hit.index == 2 then sidebar = true end
+                if hit.kind == "send" and hit.x > 26 then send = true end
+            end
+            test.is_true(sidebar and send)
         end)
         test.it("labels blocked results", function()
             local lines = session_view.lines(conversation("blocked", {{input = "b", state = "blocked", text = "budget spent"}}), 40)

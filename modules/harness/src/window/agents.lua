@@ -4,7 +4,13 @@
 -- contract. Calls are synchronous; the window runs them off its event loop.
 local sessions = require("sessions")
 local json = require("json")
+local sessions_protocol = require("sessions_protocol")
+local bounds = require("bounds")
+local caller = require("caller")
 local M = {}
+type Snapshot = sessions_protocol.SessionSnapshot
+type Workspace = {label: string, folder: string}
+type Ask = (string, {[string]: unknown}) -> caller.Reply
 
 M.MAX_PAGES = 16
 M.MAX_TURNS = 64
@@ -14,7 +20,7 @@ type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, t
     status: string, ready: boolean, reason: string}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain"
-type Turn = {work: sessions.Work, input: string, state: TurnState, text: string}
+type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
     turns: {Turn}, unsent: Unsent?, notice: string}
@@ -135,7 +141,7 @@ function M.refresh(conv: Conversation): boolean
     conv.title, conv.lifecycle, conv.activity, conv.queued = snapshot.title, snapshot.lifecycle, snapshot.activity, snapshot.queue_count
     conv.notice = ""
     for _, turn in ipairs(conv.turns) do
-        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" then
+        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then
             local observed, await_fault = turn.work:await({timeout_ms = 0})
             if not observed then
                 conv.notice = describe(await_fault)
@@ -150,9 +156,65 @@ function M.refresh(conv: Conversation): boolean
     return true
 end
 
+function M.remember(current: Conversation, saved: Conversation): Conversation
+    return {session = current.session, title = current.title, lifecycle = current.lifecycle, activity = current.activity,
+        queued = current.queued, turns = saved.turns, unsent = saved.unsent, notice = current.notice}
+end
+
+function M.resume(client: sessions.Client, ref: string): (Conversation?, string?)
+    local session, fault = client:get(ref)
+    if not session then return nil, describe(fault) end
+    return conversation(session), nil
+end
+
+function M.home(ref: string): string?
+    return ref:match("^bs:[^:]+:([^:]+):")
+end
+function M.workspace(id: string, ask: Ask): Workspace?
+    local reply = ask("bee.workspace.catalog:read", {workspace_id = id})
+    if not reply.ok then return nil end
+    local value = bounds.object(reply.value)
+    local row = value and bounds.object(value.workspace)
+    if not row or row.workspace_id ~= id then return nil end
+    local label = bounds.line(row.label, 240)
+    local path = bounds.subpath(row.subpath)
+    if not label or not path then return nil end
+    return {label = label ~= "" and label or "Workspace", folder = path ~= "" and path or "Workspace root"}
+end
+
+function M.directory(client: sessions.Client, workspace: string?): ({Snapshot}?, string?)
+    local rows: {Snapshot} = {}
+    local cursor: string? = nil
+    for _ = 1, M.MAX_PAGES do
+        local page, fault = client:list({cursor = cursor})
+        if not page then return nil, describe(fault) end
+        for _, item in ipairs(page.items) do
+            local home = M.home(item.session)
+            if not workspace or home == workspace then rows[#rows + 1] = item end
+        end
+        if not page.next then return rows, nil end
+        cursor = page.next
+    end
+    return rows, "More sessions are available; narrow the workspace filter"
+end
+
+function M.stop(conv: Conversation, new_key: () -> string): boolean
+    local chosen: Turn? = nil
+    for _, turn in ipairs(conv.turns) do
+        if turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then chosen = turn; break end
+        if not chosen and turn.state == "queued" then chosen = turn end
+    end
+    if not chosen then conv.notice = "No current work to stop"; return false end
+    chosen.cancel_key = chosen.cancel_key or new_key()
+    local operation, fault = chosen.work:cancel({operation_key = chosen.cancel_key, reason = "Stopped from Sessions"})
+    if not operation then conv.notice = describe(fault); return false end
+    conv.notice = "Stop requested; waiting for the recorded outcome"
+    return true
+end
+
 function M.pending(conv: Conversation): boolean
     for _, turn in ipairs(conv.turns) do
-        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" then return true end
+        if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then return true end
     end
     return false
 end

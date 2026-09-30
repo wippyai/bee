@@ -14,21 +14,21 @@ type Response = {state: State, action: string, close: boolean}
 local M = {}
 function M.items(focused: boolean, initial: boolean, has_windows: boolean?, catalog: {Descriptor}?): {Item}
     local items: {Item} = {}
+    local apps: {Item} = {}
+    local advanced: {Item} = {}
+    local settings: {Item} = {}
     for _, descriptor in ipairs(catalog or {}) do
-        local current = items
-        for part in descriptor.group:gmatch("[^/]+") do
-            local found: Item? = nil
-            for _, item in ipairs(current) do
-                if item.children and item.action == "group:" .. part then found = item; break end
-            end
-            if not found then
-                found = {label = part, action = "group:" .. part, enabled = true, children = {}}
-                current[#current + 1] = found
-            end
-            if found.children then current = found.children end
-        end
-        current[#current + 1] = {label = descriptor.title, action = "open:" .. descriptor.definition_id, enabled = true}
+        local item: Item = {label = descriptor.title, action = "open:" .. descriptor.definition_id, enabled = true}
+        if descriptor.role == "sessions" or descriptor.title == "Agent" then item.label = "Sessions"; items[#items + 1] = item
+        elseif descriptor.role == "approvals" then item.label = "Needs you"; items[#items + 1] = item
+        elseif descriptor.role == "appearance" then settings[#settings + 1] = item
+        elseif descriptor.role == "inspection" or descriptor.role == "governance" or descriptor.role == "overlays" or descriptor.role == "hive" or descriptor.role == "timeline" or descriptor.role == "modules" then
+            advanced[#advanced + 1] = item
+        else apps[#apps + 1] = item end
     end
+    if #advanced > 0 then apps[#apps + 1] = {label = "Advanced", action = "group:advanced", enabled = true, children = advanced} end
+    items[#items + 1] = {label = "Apps", action = "group:apps", enabled = true, children = apps}
+    items[#items + 1] = {label = "Settings/Help", action = "group:settings", enabled = true, children = settings}
     if initial then table.insert(items, 1, {label = "Open application", shortcut = "Ctrl+N", action = "initial", enabled = true}) end
     items[#items + 1] = {label = "Exit", shortcut = "Ctrl+Q", action = "quit", enabled = true}
     return items
@@ -59,7 +59,7 @@ function M.entries(state: State, scene: model.Scene, initial: boolean, catalog: 
                 return descend({
                     {label = "Restore", action = "restore", enabled = win.mode ~= "floating"},
                     {label = "Minimize", shortcut = "Alt+F9", action = "minimize", enabled = win.mode ~= "minimized"},
-                    {label = "Maximize / restore", shortcut = "F11", action = "fullscreen", enabled = win.mode ~= "minimized"},
+                    {label = win.mode == "fullscreen" and "Advanced: floating layout" or "Full-pane layout", shortcut = "F11", action = "fullscreen", enabled = win.mode ~= "minimized"},
                     {label = "Snap left", action = "snap_left", enabled = win.mode ~= "minimized"},
                     {label = "Snap right", action = "snap_right", enabled = win.mode ~= "minimized"},
                     {label = "Collapse", action = "collapse", enabled = win.mode == "floating"},

@@ -887,7 +887,20 @@ local function main(owner: string, initial_application: string?, secondary_appli
                             for _, hit in ipairs(tab_hits) do
                                 if x >= hit.x and x < hit.x + hit.width then
                                     hit_tab = true
-                                    if hit.action == "connection" then
+                                    if hit.action == "sessions" or hit.action == "attention" or hit.action == "help" then
+                                        local role = hit.action == "sessions" and "sessions" or (hit.action == "attention" and "approvals" or "appearance")
+                                        for _, app in ipairs(catalog) do if app.role == role then application("open", app.definition_id, ""); break end end
+                                    elseif hit.action == "apps" then
+                                        start = {selected = 1, offset = 0}; dirty = true
+                                        local items = menu.items(false, false, false, catalog)
+                                        for index, item in ipairs(items) do
+                                            if item.action == "group:apps" then
+                                                local path: {integer} = {index}
+                                                local opened: menu.State = {selected = 1, offset = 0, path = path}
+                                                start = opened; break
+                                            end
+                                        end
+                                    elseif hit.action == "connection" then
                                         connection_open = true; start = nil; dirty = true
                                     elseif event.button == "right" then
                                         start = {selected = 1, offset = 0, kind = "window", target = hit.id, x = x, y = y + 1}

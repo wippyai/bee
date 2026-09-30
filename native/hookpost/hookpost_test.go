@@ -303,3 +303,36 @@ func TestRunCancelsActualPipeRead(t *testing.T) {
 		t.Fatal("pipe read did not cancel promptly")
 	}
 }
+
+func TestRunToForwardsOnlyBoundedAuthenticatedContext(t *testing.T) {
+	t.Setenv("BEE_TOKEN", "context-test-token")
+	cases := []struct {
+		name, body string
+		valid      bool
+	}{
+		{"context", `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message from peer"}}`, true},
+		{"decision", `{"decision":"allow","hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message"}}`, false},
+		{"wrong event", `{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"message"}}`, false},
+		{"nested decision", `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message","decision":"allow"}}`, false},
+		{"extra document", `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"message"}}{}`, false},
+		{"oversized", strings.Repeat("x", MaxPayloadBytes+1), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.Copy(io.Discard, r.Body)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer server.Close()
+			var output strings.Builder
+			err := RunTo(context.Background(), io.NopCloser(strings.NewReader(`{}`)), &output, strings.TrimPrefix(server.URL, "http://"), "action", "BEE_TOKEN", "UserPromptSubmit")
+			if tc.valid {
+				if err != nil || !strings.Contains(output.String(), "message from peer") {
+					t.Fatalf("context transport: %v", err)
+				}
+			} else if err == nil || output.Len() != 0 {
+				t.Fatal("unsafe response was forwarded")
+			}
+		})
+	}
+}

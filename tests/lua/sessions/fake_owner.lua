@@ -159,4 +159,5 @@ function M.catalog(request: unknown): Reply
         reasons = {}, features = {}, actions = {}}}, complete = true, unavailable_count = 0, diagnostics = {}})
 end
 
+function M.history(_: unknown): unknown return {ok = true, value = {items = {}}} end
 return M

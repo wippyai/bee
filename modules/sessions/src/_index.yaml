@@ -45,7 +45,7 @@ entries:
 - name: owner
   kind: library.lua
   source: file://owner.lua
-  modules: [security, hash]
+  modules: [security, hash, funcs]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -54,6 +54,7 @@ entries:
     cancellation: bee.sessions.service:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.sessions.service:catalog
+    scheduler: bee.sessions.service:scheduler
 - name: driver_route
   kind: library.lua
   source: file://driver_route.lua
@@ -61,7 +62,7 @@ entries:
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua
-  modules: [registry, funcs]
+  modules: [registry, funcs, security]
   imports:
     scheduler: bee.sessions.service:scheduler
 - name: contract
@@ -74,6 +75,7 @@ entries:
   - {name: join, description: Join an exact ordered set of work items}
   - {name: get, description: Read an exact session, work or operation}
   - {name: list, description: List durable sessions independently of executor readiness}
+  - {name: history, description: Page immutable work inputs for a session}
   - {name: cancel, description: Request evidence-backed work cancellation}
   - {name: close, description: Seal a session and reconcile its cleanup}
 - name: catalog

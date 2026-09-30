@@ -13,3 +13,8 @@ The driver's launch and normalization operations define prompts,
 resume identity, events and usage. The executor does not write to a live
 CLI session; each turn uses only the launch defined by the selected
 driver contract.
+
+Each attempt records progress before prepare, gateway admission and CLI start.
+Normalized assistant text, tool events and usage are appended live through the
+fenced Threads observation operation. Caller identity comes from the canonical
+Session route, under host-selected admission policies.

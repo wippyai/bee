@@ -208,7 +208,7 @@ local function main(value: unknown, constructors: {[string]: Open})
         error("Managed window resume schema is unsupported")
     end
     local restoring = launch.resume_state ~= ""
-    local selected = not restoring and #launch.arguments == 0
+    local selected = not restoring and (#launch.arguments == 0 or launch.arguments[1] == "--session")
     local direct = not restoring and #launch.arguments == 1 and launch.arguments[1]:sub(1, 1) ~= "{"
     local saved: recovery.Saved? = nil
     local admitted: admission.Admitted? = nil

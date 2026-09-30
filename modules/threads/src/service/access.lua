@@ -30,6 +30,9 @@ function M.workspace(): string?
     if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
     return tostring(value)
 end
+function M.may_use_sessions_workspace(workspace_id: string, operation: string): boolean
+    return security.can("bee.sessions.workspace." .. operation, workspace_id)
+end
 function M.may_list_workspace(workspace_id: string): boolean
     return security.can(M.WORKSPACE, workspace_id)
 end

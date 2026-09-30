@@ -340,6 +340,8 @@ entries:
   methods:
   - name: session_create
     description: Create a durable session in the canonical thread journal
+  - name: session_attach
+    description: Attach the admitted native attempt to its durable interactive session
   - name: session_describe
     description: Read a session and its current work summary
   - name: session_scan
@@ -350,6 +352,8 @@ entries:
     description: Commit immutable work with owner-set sender identity
   - name: work_describe
     description: Read a work phase and its result when settled
+  - name: work_history
+    description: Page immutable work inputs for a session
   - name: work_scan
     description: Scan the next queued work and unsettled turn for the Sessions scheduler
   - name: turn_reserve
@@ -380,11 +384,13 @@ entries:
   - contract: bee.threads:journal
     methods:
       session_create: bee.threads.service:session_create
+      session_attach: bee.threads.service:session_attach
       session_describe: bee.threads.service:session_describe
       session_scan: bee.threads.service:session_scan
       session_transition: bee.threads.service:session_transition
       work_send: bee.threads.service:work_send
       work_describe: bee.threads.service:work_describe
+      work_history: bee.threads.service:work_history
       work_scan: bee.threads.service:work_scan
       turn_reserve: bee.threads.service:turn_reserve
       turn_recover: bee.threads.service:turn_recover

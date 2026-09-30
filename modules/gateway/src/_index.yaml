@@ -228,6 +228,7 @@ entries:
 - name: sessions
   kind: library.lua
   source: file://sessions.lua
+  imports: {protocol: bee.application:sessions_protocol}
 - name: hooks
   kind: library.lua
   source: file://hooks.lua

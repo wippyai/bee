@@ -25,6 +25,8 @@ type Definition = {
     binding_ref: string,
     profile_id: string,
     session_profile_id: string?,
+    session_credentials: {string}?,
+    session_mode: string?,
     policy_ref: string,
     agent_ref: string?,
     default_mode: string,
@@ -81,7 +83,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch definition" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "session_profile_id", "policy_ref", "agent_ref", "default_mode",
+    local unknown_field = bounds.fields(data, {"schema_revision", "launch_id", "title", "command_names", "binding_ref", "profile_id", "session_profile_id", "session_credentials", "session_mode", "policy_ref", "agent_ref", "default_mode",
         "allowed_overrides", "workdir_policy", "thread_policy", "session_resource", "credentials", "presentation",
         "allow_wider_tools", "unconfined", "options", "worktree"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
@@ -93,6 +95,8 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if not policy_ref then return nil, ref .. ": policy_ref is not an identifier" end
     local session_profile_id = data.session_profile_id == nil and nil or bounds.id(data.session_profile_id)
     if data.session_profile_id ~= nil and not session_profile_id then return nil, ref .. ": session_profile_id is not an identifier" end
+    local session_mode = data.session_mode == nil and nil or bounds.member(data.session_mode, {"session", "batch"})
+    if data.session_mode ~= nil and not session_mode then return nil, ref .. ": session_mode must be session or batch" end
     local title = bounds.text(data.title, 256)
     if not title or title == "" then return nil, ref .. ": title must be nonempty text" end
     local agent_ref: string? = nil
@@ -117,6 +121,12 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if data.session_resource ~= nil then
         session_resource = bounds.id(data.session_resource)
         if not session_resource then return nil, ref .. ": session_resource is not an identifier" end
+    end
+    local session_credentials: {string}? = nil
+    if data.session_credentials ~= nil then
+        local selected, selected_error = bounds.ids(data.session_credentials, true)
+        if not selected then return nil, ref .. ": session_credentials: " .. tostring(selected_error) end
+        session_credentials = selected
     end
     local credentials, credentials_error = bounds.ids(data.credentials == nil and {} or data.credentials, true)
     if not credentials then return nil, ref .. ": credentials: " .. tostring(credentials_error) end
@@ -143,7 +153,7 @@ function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
     if hash_error or not digest then return nil, ref .. ": digest failed" end
-    return {ref = ref, digest = digest, launch_id = launch_id, title = title, command_names = commands, binding_ref = binding_ref, profile_id = profile_id, session_profile_id = session_profile_id,
+    return {ref = ref, digest = digest, launch_id = launch_id, title = title, command_names = commands, binding_ref = binding_ref, profile_id = profile_id, session_profile_id = session_profile_id, session_credentials = session_credentials, session_mode = session_mode,
         policy_ref = policy_ref, agent_ref = agent_ref, default_mode = mode, allowed_overrides = overrides, workdir_policy = workdir, thread_policy = thread, session_resource = session_resource, credentials = credentials,
         presentation = {start_menu = presentation.start_menu == true, fullscreen = presentation.fullscreen == true, reuse = reuse},
         allow_wider_tools = data.allow_wider_tools == true, unconfined = data.unconfined == true, options = options}, nil

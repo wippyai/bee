@@ -51,7 +51,7 @@ entries:
     comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application
       also resolves the public sessions contracts, whose owner authorizes each operation
   policy:
-    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding"))
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding"))
     actions:
     - bee.harness.setup
     - funcs.call
@@ -130,5 +130,11 @@ entries:
     comment: Lets a managed agent launch into a workspace other than its binding's; the host attaches it to the launch tool only for agents it trusts to act across workspaces
   policy:
     actions: [bee.workspace.manager.launch]
+    resources: '*'
+    effect: allow
+- name: interactive_session_policy
+  kind: security.policy
+  policy:
+    actions: [bee.sessions.attach]
     resources: '*'
     effect: allow

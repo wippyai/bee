@@ -13,12 +13,14 @@ entries:
   kind: ns.requirement
   default: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy,
     bee.security.threads:thread_node_policy, bee.security.threads:thread_sessions_owner_policy,
-    bee.sessions.security:scheduler_policy]
+    bee.sessions.security:scheduler_policy, bee.sessions.security:scheduler_principal_policy]
   meta:
     comment: Host-selected policy allowlist for the scheduler actor
   targets:
   - entry: bee.sessions.service:scheduler_service
     path: .lifecycle.security.policies
+  - entry: bee.sessions.service:turn_run
+    path: .security.policies
 - name: locate
   kind: library.lua
   source: file://locate.lua
@@ -51,8 +53,9 @@ entries:
   kind: process.lua
   source: file://scheduler_worker.lua
   method: main
-  modules: [process, time, channel, logger]
+  modules: [process, time, channel, logger, hash, funcs]
   imports:
+    bounds: bee.threads.records:bounds
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions:threads_journal
     executors: bee.sessions:executor_registry
@@ -65,3 +68,15 @@ entries:
     security:
       actor: {id: bee.sessions.scheduler}
       policies: []
+
+- name: turn_run
+  kind: function.lua
+  source: file://scheduler_worker.lua
+  method: turn_run
+  modules: [process, time, channel, logger, hash, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    scheduler: bee.sessions.service:scheduler
+    threads_journal: bee.sessions:threads_journal
+    executors: bee.sessions:executor_registry
+  security: {policies: []}

@@ -30,13 +30,14 @@ type AwaitOptions = {timeout_ms: integer?}
 type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
 type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string}
 type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
-type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, operation_key: string}
-type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, input: Input, output: string?,
+type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, operation_key: string}
+type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, input: Input, output: string?,
     timeout_ms: integer?, operation_key: string}
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
     operation_key: string}
-type ListOptions = {filter: {lifecycle: string?, activity: string?}?, cursor: string?}
+type ListOptions = {filter: {lifecycle: string?, activity: string?, workspace: string?, definition: string?}?, cursor: string?}
+type HistoryOptions = {session: string, cursor: integer?, limit: integer?}
 type CatalogOptions = {kind: CatalogKind?, include_unavailable: boolean?, cursor: string?}
 
 type Operation = {receipt: protocol.ControlReceipt, ref: (Operation) -> string,
@@ -50,7 +51,8 @@ type Session = {receipt: protocol.OpenReceipt?, snapshot: protocol.SessionSnapsh
     send: (Session, SendOptions) -> (Work?, Fault?),
     await: (Session, Work, AwaitOptions?) -> (WorkAwait?, Fault?),
     close: (Session, CloseOptions) -> (Operation?, Fault?),
-    get: (Session) -> (Session?, Fault?)}
+    get: (Session) -> (Session?, Fault?),
+    history: (Session, {cursor: integer?, limit: integer?}?) -> (protocol.HistoryPage?, Fault?)}
 type Call = {work: Work, observation: WorkAwait}
 
 type Client = {
@@ -64,6 +66,7 @@ type Client = {
     get: (Client, string) -> (Session?, Fault?),
     work: (Client, string) -> (Work?, Fault?),
     list: (Client, ListOptions?) -> (protocol.ListPage?, Fault?),
+    history: (Client, HistoryOptions) -> (protocol.HistoryPage?, Fault?),
     catalog: (Client, CatalogOptions?) -> (protocol.CatalogPage?, Fault?),
 }
 
@@ -165,7 +168,7 @@ local function output_of(value: unknown): (string?, Fault?)
     return output, nil
 end
 
-local function spec_of(definition: unknown, profile: unknown, workdir: unknown): ({[string]: unknown}?, Fault?)
+local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown): ({[string]: unknown}?, Fault?)
     local ref = protocol.any_ref(definition)
     if not ref then return nil, invalid("definition must be a ref") end
     local spec: {[string]: unknown} = {definition = ref}
@@ -182,6 +185,10 @@ local function spec_of(definition: unknown, profile: unknown, workdir: unknown):
         local folder = protocol.any_ref(workdir)
         if not folder then return nil, invalid("workdir must be a resource ref") end
         spec.workdir = folder
+    end
+    if workspace ~= nil then
+        if type(workspace) ~= "string" or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, invalid("workspace must be a canonical workspace ID") end
+        spec.workspace = workspace
     end
     return spec, nil
 end
@@ -276,12 +283,15 @@ local function new_client(): Client
         handle.get = function(_: Session): (Session?, Fault?)
             return client:get(snapshot.session)
         end
+        handle.history = function(_: Session, options: {cursor: integer?, limit: integer?}?): (protocol.HistoryPage?, Fault?)
+            return client:history({session = snapshot.session, cursor = options and options.cursor, limit = options and options.limit})
+        end
         return handle
     end
 
     -- Opens a session with its first work in one owner operation.
     local function run(options: CallOptions): (Work?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
         if not spec then return nil, spec_fault end
         local input, input_fault = input_of(options.input)
         if input == nil then return nil, input_fault end
@@ -299,7 +309,7 @@ local function new_client(): Client
     end
 
     client.open = function(_: Client, options: OpenOptions): (Session?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
         if not spec then return nil, spec_fault end
         local request: {[string]: unknown} = {spec = spec}
         local key, key_fault = operation_key(options.operation_key)
@@ -470,15 +480,27 @@ local function new_client(): Client
         return work_handle(work, decoded.value.session, owner.incarnation, nil), nil
     end
 
+    client.history = function(_: Client, options: HistoryOptions): (protocol.HistoryPage?, Fault?)
+        local session = protocol.ref("session", options.session)
+        local cursor = options.cursor == nil and nil or bounds.count(options.cursor)
+        local limit = options.limit == nil and 64 or protocol.position(options.limit)
+        if not session or (options.cursor ~= nil and cursor == nil) or not limit or limit > 64 then return nil, invalid("history requires a session and bounded cursor/limit") end
+        local value, failure = invoke(M.SESSIONS, "history", {session = session, cursor = cursor, limit = limit}, nil)
+        if failure then return nil, failure end
+        local page, decode_error = protocol.decode_history(value)
+        if not page then return nil, unreadable(decode_error, nil) end
+        return page, nil
+    end
+
     client.list = function(_: Client, options: ListOptions?): (protocol.ListPage?, Fault?)
         local request: {[string]: unknown} = {}
         if options and options.filter ~= nil then
             local filter = bounds.object(options.filter)
-            if not filter or bounds.fields(filter, {"lifecycle", "activity"}) then return nil, invalid("filter is malformed") end
+            if not filter or bounds.fields(filter, {"lifecycle", "activity", "workspace", "definition"}) then return nil, invalid("filter is malformed") end
             local allowed: {[string]: {string}} = {lifecycle = {"opening", "active", "suspended", "closing", "closed"},
                 activity = {"idle", "working", "blocked", "stalled"}}
             for name, raw in pairs(filter) do
-                local matched = false
+                local matched = (name == "workspace" or name == "definition") and bounds.id(raw) ~= nil
                 for _, item in ipairs(allowed[name] or {}) do if item == raw then matched = true end end
                 if not matched then return nil, invalid("filter " .. name .. " is invalid") end
             end

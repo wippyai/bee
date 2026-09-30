@@ -42,6 +42,7 @@ local function main(value: unknown)
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local answers = assert(process.listen("bee.application.query.result", {message = true}))
+    local navigations = assert(process.listen("bee.application.navigate", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
@@ -249,6 +250,7 @@ local function main(value: unknown)
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     perform(function()
         refresh()
+        if #launch.arguments == 2 and launch.arguments[1] == "--approval" and state.rows[launch.arguments[2]] then model.select(state, launch.arguments[2]) end
         if state.selected and state.rows[state.selected :: string] then open_selected() elseif state.selected then model.select(state, nil) end
     end)
     while running do
@@ -271,7 +273,7 @@ local function main(value: unknown)
             end
             dirty = false
         end
-        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(), ticks:case_receive(), updates:case_receive()})
+        local event = channel.select({input:case_receive(), lifecycle:case_receive(), states:case_receive(), answers:case_receive(), navigations:case_receive(), ticks:case_receive(), updates:case_receive()})
         if not event.ok then break end
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then running = false end
@@ -287,6 +289,14 @@ local function main(value: unknown)
                 local payload: unknown = message:payload():data()
                 local next_preferences = appearance.decode(payload)
                 if next_preferences and type(payload) == "table" and payload.version == 1 then preferences = next_preferences; dirty = true end
+            end
+        elseif event.channel == navigations then
+            local args = client.navigation(launch, tostring(event.value:from()), event.value:payload():data())
+            if args and #args == 2 and args[1] == "--approval" then
+                perform(function()
+                    refresh()
+                    if state.rows[args[2]] then model.select(state, args[2]); open_selected() else status = "Request is unavailable" end
+                end)
             end
         elseif event.channel == answers then
             local message = event.value
@@ -355,6 +365,13 @@ local function main(value: unknown)
                 elseif text == "n" then ask_batch("denied")
                 elseif text == "l" then ask_lease("lease_propose")
                 elseif text == "g" then ask_lease("lease_grant")
+                elseif text == "s" or text == "b" then
+                    local detail = state.detail
+                    if detail and detail.requesting_session then
+                        local _, err = client.navigate(launch, "bee.harness.window:app", {"--session", detail.requesting_session})
+                        status = err or "Opening the requesting session"
+                    else status = "This request has no source session" end
+                    dirty = true
                 elseif key == "enter" or text == "o" then perform(open_selected)
                 elseif text == "a" then ask("approve")
                 elseif text == "d" then ask("deny")
@@ -385,6 +402,12 @@ local function main(value: unknown)
                     elseif hit.kind == "row" then
                         local row = rows[hit.index]
                         if row then model.select(state, row.approval_id); dirty = true end
+                    elseif hit.kind == "source" then
+                        local detail = state.detail
+                        if detail and detail.requesting_session then
+                            local _, err = client.navigate(launch, "bee.harness.window:app", {"--session", detail.requesting_session})
+                            status = err or "Opening requesting session"; dirty = true
+                        end
                     elseif hit.kind == "open" then perform(open_selected)
                     elseif hit.kind == "approve" or hit.kind == "deny" or hit.kind == "withdraw" then ask(hit.kind)
                     elseif hit.kind == "refresh" then perform(function() if state.pending then recover() else refresh() end end)
@@ -400,7 +423,7 @@ local function main(value: unknown)
     ticker:stop()
     mesh:close()
     process.unlisten(states)
-    process.unlisten(answers)
+    process.unlisten(answers); process.unlisten(navigations)
     output:close()
     tty.stop()
 end

@@ -1,6 +1,15 @@
 version: '1.0'
 namespace: bee.tests.sessions
 entries:
+- name: interactive_test
+  kind: function.lua
+  source: file://interactive_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, sql, uuid]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
 - name: executor_registry_test
   kind: function.lua
   source: file://executor_registry_test.lua
@@ -63,6 +72,7 @@ entries:
       cancel: bee.tests.sessions:fake_cancel
       close: bee.tests.sessions:fake_close
       list: bee.tests.sessions:fake_list
+      history: bee.tests.sessions:fake_history
 - name: fake_catalog_owner
   kind: contract.binding
   meta: {type: test_support}
@@ -174,3 +184,9 @@ entries:
     journal: bee.sessions:threads_journal
   security:
     policies: [bee.tests.sessions:probe_policy]
+- name: fake_history
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: history
+  meta: {type: test_support}
+  modules: [security]

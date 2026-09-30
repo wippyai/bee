@@ -104,7 +104,7 @@ function M.binding(value: unknown): Binding?
     local policies: {string} = {}
     local count = 0
     for key in pairs(value.policies) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 16 then return nil end
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 32 then return nil end
         count = count + 1
     end
     for i = 1, count do
@@ -123,5 +123,15 @@ function M.binding(value: unknown): Binding?
     return {definition_id = id, policies = policies, appearance_write = value.appearance_write == true,
         application_stop = value.application_stop == true, scope_management = value.scope_management == true,
         close_grace_ms = close_grace_ms == nil and 250 or math.floor(close_grace_ms), thread_access = thread_access}
+end
+function M.navigation(value: unknown, instance: string, view: string, token: string, workspace: string): Request?
+    if type(value) ~= "table" then return nil end
+    local request = M.request(value)
+    if not request or request.op ~= "open" or request.workspace_id ~= workspace
+        or value.source_instance_id ~= instance or value.source_view_id ~= view or value.launch_token ~= token
+        or request.restore_instance_id ~= "" or request.restore_view_id ~= "" or request.resume_state ~= ""
+        or request.resume_schema ~= "" or request.thread_id ~= nil or request.recipient ~= "" or request.id ~= ""
+        or value.runtime_provenance ~= nil or value.observer ~= nil then return nil end
+    return request
 end
 return M

@@ -11,4 +11,7 @@ function M.list(request: unknown): unknown return owner.call("list", request) en
 function M.cancel(request: unknown): unknown return owner.call("cancel", request) end
 function M.close(request: unknown): unknown return owner.call("close", request) end
 function M.catalog(request: unknown): unknown return owner.call("catalog", request) end
+function M.history(request: unknown): unknown return owner.call("history", request) end
+function M.attach(request: unknown): unknown return owner.call("attach", request) end
+function M.hook_boundary(request: unknown): unknown return owner.call("hook_boundary", request) end
 return M

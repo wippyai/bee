@@ -220,7 +220,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             advance("client_boot")
             if retained_owner then
                 local client_policies: {security.Policy} = {}
-                for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy", "bee.security.storage:client_storage_policy", "bee.security.desktop:client_node_defaults_call_policy", "bee.security.desktop:client_node_defaults_read_policy",
+                for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy", "bee.security.desktop:presenter_actor_policy", "bee.security.storage:client_storage_policy", "bee.security.desktop:client_node_defaults_call_policy", "bee.security.desktop:client_node_defaults_read_policy",
         "bee.security.desktop:client_workspace_catalog_call_policy", "bee.security.storage:workspace_catalog_read_policy"}) do
                     client_policies[#client_policies + 1] = assert(security.policy(name))
                 end

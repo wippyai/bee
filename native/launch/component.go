@@ -80,7 +80,7 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 		}
 		args := launch.Args
 		return app.Plan{Run: func(ctx context.Context) error {
-			return hookpost.Run(ctx, os.Stdin, args[1], args[2], args[3], args[4])
+			return hookpost.RunTo(ctx, os.Stdin, os.Stdout, args[1], args[2], args[3], args[4])
 		}}, nil
 	}
 	desktop := launch.Op == app.OpRun && launch.Command == desktopCommand

@@ -114,10 +114,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local input_row = height - 3
     local last = input_row - 1
     local lines = M.lines(conv, math.floor(math.max(1, width - 2)))
-    if height >= 7 then frame.line(painter, 3, "Work queue", theme.muted) end
+    if height >= 7 then frame.line(painter, 3, "Work queue · " .. (conv.session.snapshot.provider or "Agent") .. " · " .. conv.session:ref(), theme.muted) end
     if #lines == 0 and height >= 9 then
         frame.empty(painter, 4, "Ready for work", "Type below, then Enter sends work to this session")
-        frame.line(painter, 6, "Earlier work history is unavailable in this view", theme.muted)
     end
     if last >= 3 then
         frame.log(painter, 4, last - 1, {lines = lines, selected = 0, offset = math.floor(math.max(0, #lines - (last - 4))), focused = false})

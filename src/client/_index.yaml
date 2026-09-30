@@ -104,6 +104,7 @@ entries:
         policies:
         - bee.security.desktop:desktop_policy
         - bee.security.desktop:client_spawn_policy
+        - bee.security.desktop:presenter_actor_policy
         - bee.security.storage:client_storage_policy
         - bee.security.desktop:local_launcher_spawn_policy
         - bee.security.desktop:local_super_edit_recovery_call_policy

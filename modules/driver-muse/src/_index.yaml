@@ -173,7 +173,9 @@ entries:
     command_names: [muse]
     binding_ref: bee.driver.muse:binding
     profile_id: window
-    session_profile_id: session
+    session_profile_id: batch
+    session_credentials: [muse_login]
+    session_mode: batch
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]

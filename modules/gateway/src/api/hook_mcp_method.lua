@@ -4,6 +4,7 @@ local gateway = require("gateway")
 local mcp = require("mcp")
 local hooks = require("hooks")
 local transport_admission = require("admission")
+local boundary = require("session_boundary")
 type Object = {[string]: unknown}
 local function answer(response: http.Response, status: number, body: Object)
     response:set_status(status)
@@ -52,7 +53,14 @@ local function handle(): nil
     -- Codex reads a hook tool's text content as hook stdout: Stop requires
     -- JSON there, so an empty content list is the proven answer.
     local outcome = reply.value :: Object
-    local content = table.create(1, 0)
+    local context, boundary_error = boundary.deliver(binding, outcome)
+    if not context then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, boundary_error or "session boundary failed")); return nil end
+    local content: {Object} = {}
+    if context.hookSpecificOutput ~= nil then
+        local encoded, encode_error = json.encode(context)
+        if encode_error or not encoded then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, "context encoding failed")); return nil end
+        content[1] = {type = "text", text = encoded}
+    end
     answer(response, http.STATUS.OK, mcp.result(call.id, {content = content,
         structuredContent = {status = outcome.status, event_id = outcome.event_id}, isError = false}))
     return nil

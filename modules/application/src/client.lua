@@ -138,4 +138,23 @@ function M.thread_result(launch: Launch, sender: string, operation: thread_proto
         or reply.execution_generation ~= launch.execution_generation then return nil end
     return reply
 end
+
+-- Queue navigation through this application's authenticated broker execution.
+function M.navigate(launch: Launch, definition_id: string, target: {string}?): (string?, string?)
+    local definition = thread_bounds.id(definition_id)
+    local args = arguments.decode(target)
+    if not definition or not args then return nil, "Invalid navigation target" end
+    local request_id = assert(uuid.v7())
+    local sent, err = process.send(launch.broker_pid, "bee.app.request", {version = 1, op = "open", request_id = request_id,
+        workspace_id = launch.workspace_id, definition_id = definition, arguments = args,
+        source_instance_id = launch.instance_id, source_view_id = launch.view_id, launch_token = launch.launch_token})
+    if not sent then return nil, tostring(err) end
+    return request_id, nil
+end
+function M.navigation(launch: Launch, sender: string, value: unknown): {string}?
+    if sender ~= launch.broker_pid or type(value) ~= "table" or value.version ~= 1
+        or value.instance_id ~= launch.instance_id or value.view_id ~= launch.view_id
+        or value.execution_generation ~= launch.execution_generation or value.launch_token ~= launch.launch_token then return nil end
+    return arguments.decode(value.arguments)
+end
 return M

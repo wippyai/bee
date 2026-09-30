@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 21998,
+      "bytes": 22558,
       "id": "docs/application_contracts",
-      "sha256": "b8585534a012ebff6176775dadb60ef8921620660d37b21e0250c56e312ed9dd",
+      "sha256": "35f1779481bf4b73da17b147e044ca1f53003bd3952a06ffbdf058af7a5c1896",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8703,
+      "bytes": 8924,
       "id": "component/application",
-      "sha256": "518468a3e856329aa7ddae03e4e152863d49e9eb18290b4b336fa47c1922cdf3",
+      "sha256": "68f222a17329005492594bfbb03585deabf815b2e052333de9b0e483df193c8a",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -392,6 +392,14 @@
       "sha256": "4331f11e368a071633f7388a5f567d313e83f9d0af857845a4d71fb179235834",
       "source": "modules/executor-external/src/README.md",
       "title": "Bee external executor",
+      "topic": "component"
+    },
+    {
+      "bytes": 1879,
+      "id": "component/files",
+      "sha256": "2c31f34a23e315dbd4941c36768668f80bcff16c5b05eab63ee98f0d177aef8f",
+      "source": "modules/files/src/README.md",
+      "title": "Files",
       "topic": "component"
     },
     {
@@ -614,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 689037,
-    "documents": 76
+    "bytes": 691697,
+    "documents": 77
   }
 }

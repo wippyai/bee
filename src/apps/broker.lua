@@ -470,6 +470,19 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         reply.restart_policy, reply.resume_state = item.descriptor.restart_policy, item.resume_state
         return reply
     end
+    local function reopen(item: Instance, req: contract.Request)
+        if #req.arguments > 0 then
+            local sent, err = process.send(item.execution_pid, "bee.application.navigate", {version = 1,
+                instance_id = item.instance_id, view_id = item.view_id,
+                execution_generation = item.producer_generation, launch_token = item.launch_token,
+                arguments = req.arguments})
+            if not sent then
+                emit(contract.reply(req.request_id, "open", "navigation_failed", tostring(err)), true)
+                return
+            end
+        end
+        emit(identified(item, "focus", req.request_id), true)
+    end
     local launch_binding: (BindingCoordinator) -> ()
     local binding_context: thread_binding.Context
     local function begin_runtime(req: contract.Request, provenance: open_protocol.Provenance,
@@ -501,7 +514,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                         emit(contract.reply(req.request_id, "open", "permission_denied", "Application thread membership changed"), true)
                     else
                         existing.thread_id = stored.thread_id
-                        emit(identified(existing, "focus", req.request_id), true)
+                        reopen(existing, req)
                     end
                 end
             else emit(contract.reply(req.request_id, "open", "busy", "Application binding recovery is incomplete"), true) end
@@ -552,7 +565,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 thread_binding.fail(binding_engine, binding_context, coordinator, "request_expired", "Application changed while thread access was being admitted")
             else
                 item.thread_id = stored.thread_id
-                emit(identified(item, "focus", open.request.request_id), true)
+                reopen(item, open.request)
                 coordinator.open = nil
             end
             return
@@ -1694,11 +1707,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                         elseif existing then
                             if req.thread_id ~= nil and req.thread_id ~= existing.thread_id then
                                 emit(contract.reply(req.request_id, "open", "thread_conflict", "Singleton application is associated with another thread"), true)
-                            elseif existing.state.phase == "ready" then
-                                if #req.arguments > 0 then process.send(existing.execution_pid, "bee.application.navigate", {version = 1,
-                                    instance_id = existing.instance_id, view_id = existing.view_id,
-                                    execution_generation = existing.producer_generation, launch_token = existing.launch_token, arguments = req.arguments}) end
-                                emit(identified(existing, "focus", req.request_id), true)
+                            elseif existing.state.phase == "ready" then reopen(existing, req)
                             else emit(contract.reply(req.request_id, "open", "busy", "Application is changing state"), true) end
                         elseif req.restore_instance_id ~= "" and (req.resume_schema ~= descriptor.resume_schema or descriptor.restart_policy == "never") then
                             emit(contract.reply(req.request_id, "open", "incompatible_checkpoint", "Application checkpoint schema is incompatible"), true)

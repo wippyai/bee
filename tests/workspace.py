@@ -269,7 +269,7 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         host.write_text(yaml.safe_dump(document, sort_keys=False))
         found, documents = registry_entries(folder, {"application_admission"})
         admission_index, admission = found["application_admission"]
-        admission["bindings"] += [{"definition_id": identity, "policies": ["bee.security:ordinary_app_subsystem_boundary"]} for identity in ["bee.apps:welcome", "bee.apps:palette"]]
+        admission["bindings"] += [{"definition_id": identity, "policies": ["bee.security:ordinary_app_subsystem_boundary"]} for identity in ["bee.apps:welcome", "bee.apps:palette", "bee.apps:singleton_probe"]]
         admission_index.write_text(yaml.safe_dump(documents[admission_index], sort_keys=False))
         if missing_dependency:
             subprocess.run([str(RUNTIME), "install"], cwd=folder, check=True)
@@ -383,7 +383,7 @@ AGENT_PACKAGES = (
 )
 BUNDLE_PACKAGES = (
     "bee/hive-manager", "bee/threads-timeline", "bee/workspace-manager",
-    "bee/host-processes", "bee/hub-modules", "bee/gov-overlays", *AGENT_PACKAGES,
+    "bee/host-processes", "bee/hub-modules", "bee/gov-overlays", "bee/files", *AGENT_PACKAGES,
 )
 
 

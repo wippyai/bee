@@ -80,6 +80,17 @@ local function define_tests()
             test.is_false(catalog.replaces(running, descriptor("2", "state.v1", "manual")))
             test.is_false(catalog.replaces(running, nil))
         end)
+        test.it("does not let descriptor metadata select a navigation topic", function()
+            local value = {api_version = 1, lifetime = "view", title = "Files",
+                revision = "1", instance_policy = "singleton"}
+            local standard = assert(contract.descriptor("test:app", value))
+            value.navigation_topic = "bee.files.navigate"
+            local custom = assert(contract.descriptor("test:app", value))
+            test.is_true(catalog.same({revision = "r", evidence = "e", bindings = {}, items = {standard}},
+                {revision = "r", evidence = "e", bindings = {}, items = {custom}}))
+            value.navigation_topic = string.rep("x", 161) .. ".navigate"
+            test.not_nil(contract.descriptor("test:app", value))
+        end)
         test.it("keeps negotiated close alive until an explicit decision", function()
             local state = lifecycle.start(0)
             state = lifecycle.reduce(state, "ready", 0)

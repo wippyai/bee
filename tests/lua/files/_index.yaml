@@ -1,0 +1,71 @@
+version: '1.0'
+namespace: bee.files.test
+entries:
+- name: syntax_test
+  kind: function.lua
+  source: file://syntax_test.lua
+  method: run
+  modules: [treesitter]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    syntax: bee.files:syntax
+    appearance: bee.application:appearance
+- name: protocol_test
+  kind: function.lua
+  source: file://protocol_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    protocol: bee.files:protocol
+- name: gitignore_test
+  kind: function.lua
+  source: file://gitignore_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    gitignore: bee.files:gitignore
+- name: tree_test
+  kind: function.lua
+  source: file://tree_test.lua
+  method: run
+  modules: [fs, funcs, security]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    tree: bee.files:tree
+    gitignore: bee.files:gitignore
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  modules: [treesitter]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.files.app:model
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  modules: [tty, treesitter]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.files.app:model
+    view: bee.files.app:view
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+- name: access_probe
+  kind: function.lua
+  source: file://access_probe.lua
+  method: acquire
+  modules: [fs]
+- name: probe_call_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.files.test:access_probe]
+    effect: allow

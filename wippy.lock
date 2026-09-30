@@ -74,6 +74,8 @@ modules:
   version: 0.1.0-dev
 - name: bee/agents
   version: 0.1.0-dev
+- name: bee/files
+  version: 0.1.0-dev
 - name: bee/sessions
   version: 0.1.0-dev
 - name: bee/placement-docker

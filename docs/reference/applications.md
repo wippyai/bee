@@ -209,9 +209,16 @@ checkpoints. A singleton opened with a different live association returns
 
 An open may carry up to 16 dense string arguments, each at most 1 KiB and 8 KiB
 combined, without control characters. The broker and client validate them.
-Arguments participate in open deduplication, are launch-only, are not accepted
-on close/bind/shutdown, and are not automatically persisted. Focusing a live
-singleton does not deliver new arguments. `bee run definition-id [arguments...]`
+Arguments participate in open deduplication, are not accepted on
+close/bind/shutdown, and are not automatically persisted. A ready singleton
+reopen with nonempty arguments queues `{version = 1, instance_id, view_id,
+execution_generation, launch_token, arguments}` from the authenticated broker
+to the retained producer on the fixed `bee.application.navigate` topic before
+returning focus. The receiver calls `client.navigation(launch, sender, payload)`;
+it accepts only the current broker, instance, view, generation and launch token,
+then decodes bounded arguments. Queued delivery does not acknowledge successful
+navigation. Empty arguments only focus, and a duplicate completed open does
+not redeliver. Admission and thread-owner checks precede delivery. `bee run definition-id [arguments...]`
 uses this boundary; explicit initial arguments take precedence over a selected
 checkpoint.
 

@@ -122,6 +122,16 @@ local function define_tests()
             test.eq(launch.arguments[2], "run-a")
             test.eq(launch.arguments[3], "")
         end)
+        test.it("keeps navigation routing out of the public catalog", function()
+            local items = assert(decode.catalog({{definition_id = "test:app", definition_revision = "1",
+                title = "Files", icon = "F", group = "Tools", role = "inspection", singleton = true,
+                navigation_topic = "bee.files.navigate", resume_schema = "", restart_policy = "never"}}))
+            local exposed_topic = false
+            for key in pairs(items[1]) do
+                if key == "navigation_topic" then exposed_topic = true end
+            end
+            test.is_false(exposed_topic)
+        end)
         test.it("keeps unbound opens and rejects malformed launch thread identity", function()
             local value = {version = 1, broker_pid = "broker", workspace_pid = "workspace",
                 workspace_id = "0123456789abcdef0123456789abcdef", instance_id = "instance", view_id = "view",

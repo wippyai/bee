@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.security.files
+entries:
+- name: read_policy
+  kind: security.policy
+  meta:
+    comment: Stock Files resolves its host-linked workspace reference and acquires only the read-only volume
+  policy:
+    actions: [registry.get, fs.get]
+    resources: [bee.files:workspace_root_ref, bee.env:files_root]
+    effect: allow

@@ -139,14 +139,6 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         end
         return nil
     end
-    local function finish_stdout()
-        local problem = stream.finish(decoder)
-        if problem then output_error = output_error or problem end
-        local reply, normalize_error = normalizer_call(normalizer_target, state, stream.next_index(decoder), nil, true, resumed)
-        if normalize_error then output_error = output_error or normalize_error; return end
-        local apply_error = apply(reply)
-        if apply_error then output_error = output_error or apply_error end
-    end
     local function owner_value(target: string, fields: Object): (Object?, string?)
         local raw, call_error = funcs.call(target, fields)
         if call_error then return nil, tostring(call_error) end
@@ -274,6 +266,21 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             unacked[write_id] = nil
         else
             output_error = output_error or "stdin refused the permission response: " .. tostring(data.reason or "unknown")
+        end
+    end
+    local function finish_stdout()
+        local problem = stream.finish(decoder)
+        if problem then output_error = output_error or problem end
+        local base = #observations
+        local reply, normalize_error = normalizer_call(normalizer_target, state, stream.next_index(decoder), nil, true, resumed)
+        if normalize_error then output_error = output_error or normalize_error; return end
+        local apply_error = apply(reply)
+        if apply_error then output_error = output_error or apply_error end
+        if #observations > base then
+            local fresh: {unknown} = {}
+            for index = base + 1, #observations do fresh[#fresh + 1] = observations[index] end
+            ask_new(fresh)
+            track_echo(fresh)
         end
     end
     local function accept_output(sender: string, raw: unknown)

@@ -6,7 +6,7 @@ local scheduler = require("scheduler")
 local M = {}
 M.CONTRACT = "bee.threads:journal"
 M.BINDING_REF = "bee.sessions:threads_journal_ref"
-M.METHODS = {"session_create", "session_describe", "session_scan", "session_transition", "work_send", "work_describe",
+M.METHODS = {"session_create", "session_attach", "session_describe", "session_scan", "session_transition", "work_send", "work_describe",
     "work_history", "work_scan", "turn_reserve", "turn_recover", "turn_pull", "turn_accept", "turn_observation", "work_settle", "work_uncertain", "work_cancel",
     "operation_lookup", "operation_describe", "feed_read"}
 

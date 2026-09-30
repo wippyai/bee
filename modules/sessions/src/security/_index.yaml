@@ -8,7 +8,11 @@ entries:
   policy:
     actions: [registry.get, registry.snapshot, funcs.call]
     resources:
+    - bee.sessions.binding:open
+    - bee.sessions:threads_journal_ref
+    - bee.threads:journal_local
     - bee.threads.service:session_create
+    - bee.threads.service:session_attach
     - bee.threads.service:session_describe
     - bee.threads.service:session_scan
     - bee.threads.service:session_transition
@@ -32,7 +36,15 @@ entries:
     - bee.harness.profiles:contract
     - bee.harness.profiles:call
     - bee.harness.launch:admission
+    - bee.harness.launch:setup
     - bee.harness.launch:locate_probe
+    effect: allow
+- name: owner_setup_policy
+  kind: security.policy.expr
+  policy:
+    actions: [bee.harness.setup]
+    resources: '*'
+    expression: 'resource == actor.meta.workspace_id && resource != ""'
     effect: allow
 - name: scheduler_policy
   kind: security.policy
@@ -43,6 +55,7 @@ entries:
     resources:
     - bee.sessions.scheduler
     - bee.sessions.scheduler.wake
+    - bee.sessions.service:turn_run
     - bee.sessions:threads_journal_ref
     - bee.sessions:executor_selection
     - bee.sessions.binding:external_executor_binding
@@ -50,6 +63,7 @@ entries:
     - bee.executor.external.binding:run_turn
     - bee.threads.service:session_scan
     - bee.threads.service:session_create
+    - bee.threads.service:session_attach
     - bee.threads.service:session_describe
     - bee.threads.service:session_transition
     - bee.threads.service:work_send
@@ -77,4 +91,12 @@ entries:
     actions: [security.actor.create, funcs.security]
     expression: 'action == "funcs.security" || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"'
     resources: '*'
+    effect: allow
+
+- name: owner_workspace_identity_policy
+  kind: security.policy.expr
+  policy:
+    actions: [security.actor.create, funcs.security]
+    resources: '*'
+    expression: 'action == "funcs.security" || resource == actor.id'
     effect: allow

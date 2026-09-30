@@ -340,6 +340,8 @@ entries:
   methods:
   - name: session_create
     description: Create a durable session in the canonical thread journal
+  - name: session_attach
+    description: Attach the admitted native attempt to its durable interactive session
   - name: session_describe
     description: Read a session and its current work summary
   - name: session_scan
@@ -382,6 +384,7 @@ entries:
   - contract: bee.threads:journal
     methods:
       session_create: bee.threads.service:session_create
+      session_attach: bee.threads.service:session_attach
       session_describe: bee.threads.service:session_describe
       session_scan: bee.threads.service:session_scan
       session_transition: bee.threads.service:session_transition

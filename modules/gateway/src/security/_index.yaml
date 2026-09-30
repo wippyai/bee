@@ -193,3 +193,26 @@ entries:
     bounds: bee.threads.records:bounds
     installation: bee.hub:installation
     subject_call: bee.gateway.security:subject_call
+
+- name: session_boundary_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, bee.sessions.hook_boundary]
+    resources: '*'
+    expression: '(action == "funcs.call" && resource == "bee.sessions.binding:hook_boundary") || (action == "bee.sessions.hook_boundary" && resource == actor.id)'
+    effect: allow
+- name: session_boundary_resolver_policy
+  kind: security.policy
+  policy:
+    actions: [security.policy.get]
+    resources: [bee.gateway.security:session_boundary_policy]
+    effect: allow
+
+- name: directory_projection_policy
+  kind: security.policy.expr
+  meta: {comment: Workspace catalog projections read only the public Sessions list after reauthorizing the selected workspace}
+  policy:
+    actions: [contract.get, contract.open, contract.call, contract.security, security.actor.create, funcs.security]
+    resources: '*'
+    expression: '(action == "contract.get" && resource == "bee.sessions:contract") || (action == "contract.security" && resource == "security") || action == "contract.open" || (action == "contract.call" && resource == "list") || (action == "security.actor.create" && resource == actor.id) || action == "funcs.security"'
+    effect: allow

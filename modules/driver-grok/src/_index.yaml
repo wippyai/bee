@@ -187,6 +187,7 @@ entries:
     binding_ref: bee.driver.grok:binding
     profile_id: window
     session_profile_id: session
+    session_credentials: [grok_login]
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]

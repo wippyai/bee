@@ -158,6 +158,7 @@ entries:
     binding_ref: bee.driver.opencode:binding
     profile_id: window
     session_profile_id: batch
+    session_credentials: [opencode_login]
     session_mode: batch
     policy_ref: ''
     default_mode: window

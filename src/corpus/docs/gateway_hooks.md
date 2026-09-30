@@ -1,8 +1,11 @@
 # Gateway hooks
 
 Gateway hooks carry bounded lifecycle observations from a managed harness to its
-bound thread. They are not a control channel: a hook cannot approve work, alter
-prompt execution, settle a turn, extend an attempt or create authority.
+bound thread. They cannot approve work, extend an attempt or create authority. For an
+interactive Session, the authenticated turn boundary also pulls queued Work and
+returns its prompt and owner-set sender as additional context. Stop records that
+interactive Work as completed; StopFailure records failure. Managed executor
+turns retain their driver-terminal and placement-exit settlement path.
 
 The hook HTTP handlers are `bee.gateway.api:*`; queue, claim, acknowledgment,
 rejection, and sealing calls are `bee.gateway.binding:*`. The host owns the
@@ -19,11 +22,12 @@ credential. A tool credential cannot use a hook endpoint, and a hook credential
 cannot call an MCP tool. The endpoints check the binding, action, Host, bearer,
 payload bounds and selected event before accepting an observation.
 
-An accepted HTTP submission returns an event ID with an empty success body. An
-accepted MCP submission names its status and event ID as structured content and
-carries empty text content, because Codex requires JSON at Stop. Refusals are
-status responses or JSON-RPC errors. No response carries a decision,
-continuation flag, prompt content, transcript or control instruction.
+An accepted HTTP submission returns its event ID and, when interactive Work is
+ready, a context-only `hookSpecificOutput`. MCP returns the same context as JSON
+text content; otherwise it carries empty text content. Refusals are status
+responses or JSON-RPC errors. Responses never carry a permission decision or
+continuation flag. The gateway derives SessionRef, workspace and attachment from
+the authenticated binding; payload fields cannot choose the receiving identity.
 
 ## Durable intake
 
@@ -54,8 +58,9 @@ seals, drains within its configured budget, rejects unclaimed work and revokes
 the binding. Expiry, listener replacement and fenced carrier loss follow the
 same rule.
 
-Hook events remain observations even during shutdown. They never replace the
-carrier's terminal result or its explicit close and drain rules.
+Managed hook events remain observations during shutdown and never replace the
+executor terminal result. Interactive window-exit lifecycle and crash
+reconciliation remain unfinished.
 
 ## Provider configuration
 

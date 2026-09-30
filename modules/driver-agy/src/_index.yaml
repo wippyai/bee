@@ -186,6 +186,7 @@ entries:
     binding_ref: bee.driver.agy:binding
     profile_id: window
     session_profile_id: session
+    session_credentials: [agy_login]
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]

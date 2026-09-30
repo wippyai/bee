@@ -46,6 +46,11 @@ var knownEvents = map[string]struct{}{
 // and submits it once. stdin must be closeable so cancellation can interrupt a
 // blocked read (os.Stdin satisfies this contract).
 func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenSource, event string) error {
+	return RunTo(ctx, stdin, io.Discard, endpoint, actionID, tokenSource, event)
+}
+
+// RunTo forwards a bounded context-only response to the hook caller.
+func RunTo(ctx context.Context, stdin io.ReadCloser, stdout io.Writer, endpoint, actionID, tokenSource, event string) error {
 	if ctx == nil {
 		return errors.New("hook-post: context is required")
 	}
@@ -113,7 +118,32 @@ func Run(ctx context.Context, stdin io.ReadCloser, endpoint, actionID, tokenSour
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusAccepted {
 		return errors.New("hook-post: gateway rejected request with status " + strconv.Itoa(response.StatusCode))
 	}
-	return nil
+	data, err := io.ReadAll(io.LimitReader(response.Body, MaxPayloadBytes+1))
+	if err != nil || len(data) > MaxPayloadBytes {
+		return errors.New("hook-post: response exceeds its bound or could not be read")
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil
+	}
+	var envelope struct {
+		Output *struct {
+			Event   string `json:"hookEventName"`
+			Context string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&envelope) != nil || envelope.Output == nil || envelope.Output.Event != event || len(envelope.Output.Context) == 0 || len(envelope.Output.Context) > 24576 {
+		return errors.New("hook-post: invalid context response")
+	}
+	var extra json.RawMessage
+	if decoder.Decode(&extra) != io.EOF {
+		return errors.New("hook-post: multiple response documents")
+	}
+	if stdout == nil {
+		return errors.New("hook-post: stdout is required")
+	}
+	return json.NewEncoder(stdout).Encode(envelope)
 }
 
 func resolveToken(source string) (string, error) {

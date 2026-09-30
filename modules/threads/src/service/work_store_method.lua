@@ -7,6 +7,9 @@ local M = {}
 function M.session_create(request: unknown): types.Reply
     return boundary.run(work_store.session_create, request, true)
 end
+function M.session_attach(request: unknown): types.Reply
+    return boundary.run(work_store.session_attach, request, true)
+end
 function M.session_describe(request: unknown): types.Reply
     return boundary.run(work_store.session_describe, request, false)
 end

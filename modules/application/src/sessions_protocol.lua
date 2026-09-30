@@ -3,6 +3,8 @@
 -- returns the typed value or a description of the first violation.
 local bounds = require("bounds")
 local canonical = require("canonical")
+local record_values = require("record_values")
+local record_types = require("record_types")
 local M = {}
 
 M.MAX_TEXT_BYTES = 16384
@@ -26,7 +28,7 @@ type Fault = {code: string, message: string, retry: Retry, operation_key: string
 type Action = {operation: string, label: string}
 type BlockerKind = "budget" | "authority" | "capacity" | "recovery" | "stalled"
 type Blocker = {kind: BlockerKind, message: string, subject: string, actions: {Action}}
-type Succeeded = {outcome: "succeeded", schema: string, value: unknown, artifacts: {string}, usage: {string}}
+type Succeeded = {outcome: "succeeded", schema: string, value: unknown, artifacts: {string}, usage: record_types.Usage}
 type Unsuccessful = {outcome: "failed" | "cancelled" | "rejected", error: Fault, artifacts: {string}}
 type Result = Succeeded | Unsuccessful
 type WorkReceipt = {work: string, session: string, operation: string, committed_at: string, sequence: integer,
@@ -273,7 +275,7 @@ function M.decode_result(value: unknown): (Result?, string?)
     if object.outcome == "succeeded" then
         local checked, failure = shape(object, "result", {"outcome", "schema", "value", "artifacts", "usage"})
         if not checked then return nil, failure end
-        local schema, artifacts, usage = M.any_ref(checked.schema), refs(checked.artifacts), refs(checked.usage)
+        local schema, artifacts, usage = M.any_ref(checked.schema), refs(checked.artifacts), record_values.usage(checked.usage)
         if not schema or not artifacts or not usage or not M.json(checked.value) then return nil, "succeeded result is malformed" end
         return {outcome = "succeeded", schema = schema, value = checked.value, artifacts = artifacts, usage = usage}, nil
     end

@@ -34,6 +34,16 @@ local function define_tests()
             test.is_nil(protocol.decode_history(page))
         end)
 
+        test.it("decodes provider usage counts and rejects malformed usage", function()
+            local result = succeeded()
+            result.usage = {input_tokens = 2, output_tokens = 4, cached_tokens = 10}
+            local decoded = assert(protocol.decode_result(result))
+            test.eq(decoded.usage.output_tokens, 4)
+            result.usage = {input_tokens = -1}
+            test.is_nil(protocol.decode_result(result))
+            result.usage = {cost_decimal = "1.2"}
+            test.is_nil(protocol.decode_result(result))
+        end)
         test.it("accepts exactly the four await branches for a work", function()
             for _, tag in ipairs({"ready", "pending", "blocked", "uncertain"}) do
                 local decoded, failure = protocol.decode_work_await(work_await(tag))

@@ -45,7 +45,7 @@ entries:
 - name: owner
   kind: library.lua
   source: file://owner.lua
-  modules: [security, hash]
+  modules: [security, hash, funcs]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -54,6 +54,7 @@ entries:
     cancellation: bee.sessions.service:cancellation
     admission: bee.harness.launch:admission
     catalog_service: bee.sessions.service:catalog
+    scheduler: bee.sessions.service:scheduler
 - name: driver_route
   kind: library.lua
   source: file://driver_route.lua

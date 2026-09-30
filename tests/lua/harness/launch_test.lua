@@ -13,6 +13,7 @@ local registry = require("registry")
 local env = require("env")
 local exec = require("exec")
 local time = require("time")
+local hash = require("hash")
 local admission = require("admission")
 local definitions = require("definitions")
 local launch_policy = require("launch_policy")
@@ -43,9 +44,12 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
+local function workspace_id(prefix: string): string
+    return assert(hash.sha256(fresh(prefix))):sub(1, 32)
+end
 local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
-    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
+    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.security:interactive_session_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(extra: {string}?): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -326,7 +330,15 @@ local function count(list: {string}, wanted: string): integer
 end
 local function define_tests()
     test.describe("Launch admission", function()
-        local workspace = fresh("ws")
+        local roots_entry = assert(registry.get("bee.resources:resource_roots"))
+        roots_entry.data.roots[#roots_entry.data.roots + 1] = {root_ref = ROOT, access = "write"}
+        apply(roots_entry)
+        local catalog_scope = security.new_scope({assert(security.policy("bee.workspace.catalog:call_test_policy")),
+            assert(security.policy("bee.security.storage:workspace_catalog_manage_policy"))})
+        local catalog_reply, catalog_error = funcs.new():with_actor(assert(security.new_actor(REQUESTER))):with_scope(catalog_scope)
+            :call("bee.workspace.catalog:create", {label = fresh("launch"), root_ref = "bee.harness.catalog:project_fixture", subpath = fresh("launch-home"), create_directory = true})
+        if catalog_error then error(tostring(catalog_error)) end
+        local workspace = tostring(value(catalog_reply :: admission.Reply).workspace_id)
         prepare_host(workspace)
         test.it("decodes dedicated worktrees without mutable or untyped definition options", function()
             local entry = assert(registry.get(DEFINITION))
@@ -658,6 +670,26 @@ local function define_tests()
                 local _, invalid = admission.decode_request(request)
                 test.eq(invalid == nil, false)
             end
+        end)
+        test.it("pins explicit machine-login projections for structured default sessions", function()
+            for _, provider in ipairs({"claude", "codex", "agy", "muse", "grok", "opencode"}) do
+                local ref = "bee.driver." .. provider .. ":default_window"
+                local entry = assert(registry.get(ref))
+                local decoded = assert(definitions.decode(ref, entry))
+                test.not_nil(decoded.session_credentials)
+                local found = false
+                for _, name in ipairs(decoded.session_credentials or {}) do
+                    if name == provider .. "_login" then found = true end
+                end
+                test.is_true(found)
+            end
+            local entry = assert(registry.get("bee.driver.claude:default_window"))
+            local changed = {data = {}}
+            for name, value in pairs(entry.data) do changed.data[name] = value end
+            changed.data.session_credentials = {false}
+            local invalid, err = definitions.decode("bee.driver.claude:default_window", changed)
+            test.is_nil(invalid)
+            test.not_nil(err)
         end)
         test.it("ships hidden research routes for every batch driver with bounded policies", function()
             local cases = {

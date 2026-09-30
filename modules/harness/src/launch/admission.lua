@@ -206,6 +206,7 @@ end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, session_route: boolean?): (Plan?, Reply?, placement_types.Preferences?)
     if session_route and launch.session_profile_id then
         launch.profile_id = launch.session_profile_id
+        if launch.session_credentials then launch.credentials = launch.session_credentials end
         launch.default_mode = launch.session_mode or "session"
     end
     local definition_ref = launch.ref
@@ -575,6 +576,15 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
     -- Session authority is selected by the host definition. A retained
     -- session gets one stable digest-derived identity per launch request, while the
     -- default remains ephemeral and receives no session grant.
+    local interactive_session: string? = nil
+    if not session_turn and plan.mode == "window" and previous then
+        local attached, attach_error = call("bee.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
+            plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
+            attempt_id = ids.attempt_id, operation_key = "window-session:" .. (previous and previous.origin_request_id or request.request_id)})
+        if not attached then return nil, attach_error end
+        interactive_session = bounds.id(attached.session)
+        if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
+    end
     local resources: {placement_types.ResourceGrant} = {}
     local session_ref: string? = session_turn and session_turn.session_ref or nil
     if session_resource then
@@ -582,7 +592,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
             local session_digest, session_error = digest_of({workspace_id = request.workspace_id,
                 request_id = previous and previous.origin_request_id or request.request_id})
             if not session_digest then return nil, fail("UNAVAILABLE", tostring(session_error or "derive retained session identity")) end
-            session_ref = "session:" .. session_digest
+            session_ref = interactive_session or "session:" .. session_digest
         end
         if previous and not session_turn then
             -- Saved references grant nothing. Existing owner operations verify
@@ -617,6 +627,15 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
         local created, create_refused = call(M.THREADS .. ":create", {thread_id = "thread:" .. request.request_id, idempotency_key = "launch:" .. request.request_id .. ":thread", title = request.thread_title or launch.title})
         if not created then return nil, create_refused end
         thread_id = tostring(created.thread_id)
+    end
+    if not session_turn and plan.mode == "window" and not previous then
+        local attached, attach_error = call("bee.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
+            plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
+            attempt_id = ids.attempt_id, operation_key = "window-session:" .. (previous and previous.origin_request_id or request.request_id)})
+        if not attached then return nil, attach_error end
+        interactive_session = bounds.id(attached.session)
+        if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
+        session_ref = interactive_session
     end
     local working: string? = nil
     if workdir_name then

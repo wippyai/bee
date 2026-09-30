@@ -243,6 +243,7 @@ entries:
     binding_ref: bee.driver.claude:binding
     profile_id: window
     session_profile_id: session
+    session_credentials: [claude_api_key, claude_login]
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]

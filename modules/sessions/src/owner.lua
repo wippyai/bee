@@ -7,6 +7,8 @@ local catalog_service = require("catalog_service")
 local driver_route = require("driver_route")
 local hash = require("hash")
 local security = require("security")
+local funcs = require("funcs")
+local scheduler = require("scheduler")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -91,7 +93,7 @@ end
 local function open(request: Object): Reply
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
-    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir"}) then
+    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace"}) then
         return fail("INVALID", "open requires a definition, optional profile/workdir, and operation_key", operation_key)
     end
     local definition = ref(spec.definition)
@@ -112,6 +114,23 @@ local function open(request: Object): Reply
     end
     local owner_id, workspace = identity()
     if not owner_id or not workspace then return fail("DENIED", "the authenticated caller has no workspace identity", operation_key) end
+    if spec.workspace ~= nil then
+        local target_workspace = bounds.id(spec.workspace)
+        if not target_workspace or #target_workspace ~= 32 or target_workspace:find("[^0-9a-f]") then return fail("INVALID", "workspace must be a canonical workspace ID", operation_key) end
+        if target_workspace ~= workspace then
+            if not security.can("bee.sessions.workspace.open", target_workspace) then return fail("DENIED", "opening in another workspace requires its host grant", operation_key) end
+            local actor, actor_error = security.new_actor(owner_id, {workspace_id = target_workspace})
+            if not actor then return unavailable(tostring(actor_error), operation_key) end
+            local executor, executor_error = funcs.new():with_actor(actor)
+            if not executor then return unavailable(tostring(executor_error), operation_key) end
+            local raw, call_error = executor:call("bee.sessions.binding:open", {spec = {definition = definition,
+                profile = profile, workdir = workdir}, operation_key = operation_key})
+            if call_error then return unavailable(tostring(call_error), operation_key) end
+            local reply = object(raw)
+            if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
+            return reply :: Reply
+        end
+    end
     local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision, nil, nil, nil, true)
     if not plan then
         local fault = object(refused)
@@ -127,6 +146,13 @@ local function open(request: Object): Reply
     end
     if type(plan_value.session_resource) ~= "string" or plan_value.session_resource == "" then
         return fail("UNAVAILABLE", "the selected definition has no retained session resource", operation_key)
+    end
+    local setup_raw, setup_error = funcs.call("bee.harness.launch:setup", {workspace_id = workspace,
+        definition_ref = definition, expected_plan_digest = plan_value.plan_digest,
+        saved_profile_id = profile_id, saved_profile_revision = profile_revision, session_turn = true})
+    local setup = object(setup_raw)
+    if setup_error or not setup or setup.ok ~= true then
+        return unavailable(tostring(setup_error or (setup and setup.error) or "session resource setup failed"), operation_key)
     end
     local methods, methods_error = driver_route.resolve(driver_binding_ref)
     if not methods then return unavailable(methods_error or "selected driver methods are unavailable", operation_key) end
@@ -148,6 +174,98 @@ local function open(request: Object): Reply
     return succeed({session = session, operation = operation, snapshot = current})
 end
 
+local function attach(request: Object): Reply
+    local operation_key = key(request.operation_key)
+    local definition, thread = ref(request.definition), bounds.id(request.thread_id)
+    if not operation_key or not definition or not thread or bounds.fields(request, {"operation_key", "definition", "thread_id", "plan_digest", "saved_profile_id", "saved_profile_revision", "attempt_id"}) then return fail("INVALID", "interactive attach identities are incomplete", operation_key) end
+    if not security.can("bee.sessions.attach", definition) then return fail("DENIED", "interactive attach requires a host grant", operation_key) end
+    local _, workspace = identity()
+    if not workspace then return fail("DENIED", "interactive attach has no workspace", operation_key) end
+    local profile_id = request.saved_profile_id == nil and nil or ref(request.saved_profile_id)
+    local revision = request.saved_profile_revision == nil and nil or bounds.integer(request.saved_profile_revision)
+    local pinned, refused = admission.resolve(definition, "window", workspace, profile_id, revision, nil, nil, nil, false)
+    local plan = object(pinned)
+    if not plan then return unavailable(tostring(refused and refused.error and refused.error.message or "interactive plan is unavailable"), operation_key) end
+    if plan.plan_digest ~= request.plan_digest or plan.mode ~= "window" then return fail("CONFLICT", "interactive attach plan changed", operation_key) end
+    local driver = ref(plan.binding_ref)
+    if not driver then return unavailable("interactive plan omitted its driver", operation_key) end
+    local created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
+        title = plan.title or definition, route = {definition = definition, plan_digest = plan.plan_digest,
+            delivery = "hook", driver_binding_ref = driver, provider = driver:match("^bee%.driver%.([^:]+):"),
+            profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
+    if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
+    local receipt = object(created)
+    local existing, existing_error = journal.invoke("session_describe", {session = receipt and receipt.session})
+    local current = object(existing)
+    local previous = current and object(current.route)
+    local active = current and object(current.active_turn)
+    if existing_error then return unavailable(existing_error, operation_key) end
+    if active and previous and previous.native_attempt_id ~= request.attempt_id then
+        local recovered, recovery_error = journal.invoke("turn_recover", {turn = active.turn,
+            operation_key = "attach-recover:" .. tostring(request.attempt_id)})
+        local claim = object(recovered)
+        if recovery_error or not claim then return unavailable(recovery_error or "interactive recovery unavailable", operation_key) end
+        local _, mark_error = journal.invoke("work_uncertain", {turn = active.turn, claim = claim.claim,
+            operation_key = "attach-uncertain:" .. tostring(request.attempt_id),
+            evidence = {summary = "interactive attachment ended without a proven turn result", artifacts = {}}})
+        if mark_error then return unavailable(mark_error, operation_key) end
+    end
+    local attached, attach_error = journal.invoke("session_attach", {session = receipt and receipt.session, attempt_id = request.attempt_id, operation_key = "attach:" .. tostring(request.attempt_id)})
+    if attach_error or not attached then return unavailable(attach_error or "native attachment failed", operation_key) end
+    return succeed(created)
+end
+
+local function hook_boundary(request: Object): Reply
+    local caller = identity()
+    local session, event, event_key = ref(request.session), request.event, key(request.operation_key)
+    local attempt = bounds.id(request.attempt_id)
+    if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id"})
+        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
+    if not security.can("bee.sessions.hook_boundary", session) then return fail("DENIED", "hook boundary requires the authenticated gateway", event_key) end
+    local raw, err = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    local route = stored and object(stored.route)
+    if err or not route then return unavailable(err or "interactive route unavailable", event_key) end
+    if route.delivery ~= "hook" then return succeed({}) end
+    if route.native_attempt_id ~= attempt then return fail("STALE", "hook belongs to an earlier native attachment", event_key) end
+    local event_digest, digest_error = hash.sha256(event_key :: string)
+    if not event_digest then return unavailable(tostring(digest_error), event_key) end
+    local boundary_key = event_digest :: string
+    if event ~= "UserPromptSubmit" then
+        local active = stored and object(stored.active_turn)
+        if not active then return succeed({}) end
+        local recovered, recovery_error = journal.invoke("turn_recover", {turn = active.turn,
+            operation_key = "hook-recover:" .. boundary_key})
+        local claim = object(recovered)
+        if recovery_error or not claim then return unavailable(recovery_error or "interactive recovery unavailable", event_key) end
+        local pulled, pull_error = journal.invoke("turn_pull", {turn = active.turn, claim = claim.claim})
+        local turn = object(pulled)
+        local checkpoint = turn and object(turn.checkpoint)
+        if pull_error or not checkpoint then return unavailable(pull_error or "interactive checkpoint unavailable", event_key) end
+        if checkpoint.attempt_id ~= attempt then return succeed({}) end
+        local settled, settle_error = journal.invoke("work_settle", {turn = active.turn, claim = claim.claim,
+            operation_key = "hook-stop:" .. boundary_key, result = event == "Stop" and {state = "succeeded", schema = "bee:Text@1", value = {text = "Interactive turn completed"}}
+                or {state = "failed", error = {code = "INTERACTIVE_FAILED", message = "Interactive turn failed"}}})
+        if settle_error or not settled then return unavailable(settle_error or "interactive turn settlement unavailable", event_key) end
+        return succeed({})
+    end
+    local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-start:" .. boundary_key})
+    local turn = object(reserved)
+    if reserve_error or not turn then return unavailable(reserve_error or "interactive work reserve unavailable", event_key) end
+    if not turn.turn then return succeed({}) end
+    local pulled, pull_error = journal.invoke("turn_pull", {turn = turn.turn, claim = turn.claim})
+    local input = object(pulled)
+    local sender = input and object(input.sender)
+    if pull_error or not input or not sender then return unavailable(pull_error or "interactive turn input unavailable", event_key) end
+    if input.phase == "settled" then return succeed({}) end
+    local accepted, accept_error = journal.invoke("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = input.input_digest,
+        checkpoint = {attempt_id = route.native_attempt_id, hook_event = event_key}, operation_key = "hook-accept:" .. boundary_key})
+    if accept_error or not accepted then return unavailable(accept_error or "interactive turn accept unavailable", event_key) end
+    local prompt, prompt_error = scheduler.prompt(input.input)
+    if not prompt then return unavailable(prompt_error or "interactive input unavailable", event_key) end
+    return succeed({additional_context = "[Bee message from " .. tostring(sender.id) .. "]\n" .. prompt})
+end
+
 local function send(request: Object): Reply
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
@@ -163,6 +281,11 @@ local function send(request: Object): Reply
     if current.lifecycle ~= "active" then return fail("CONFLICT", "session is not accepting work", operation_key) end
     local output_schema = request.output == nil and "bee:Text@1" or ref(request.output)
     if not output_schema then return fail("INVALID", "output must be a schema ref", operation_key) end
+    local stored = journal.invoke("session_describe", {session = session})
+    local route = object(stored) and object((object(stored) :: Object).route)
+    if route and route.delivery == "hook" and output_schema ~= "bee:Text@1" then
+        return fail("INVALID", "interactive delivery supports Text acknowledgments", operation_key)
+    end
     local receipt, send_error = journal.invoke("work_send", {session = session, operation_key = operation_key,
         input = request.input, output_schema = output_schema})
     if send_error or not receipt then return unavailable(send_error or "Threads returned no work receipt", operation_key) end
@@ -582,6 +705,8 @@ end
 function M.call(method: string, request: unknown): Reply
     local input = object(request)
     if not input then return fail("INVALID", "request must be an object", nil) end
+    if method == "attach" then return attach(input) end
+    if method == "hook_boundary" then return hook_boundary(input) end
     if method == "open" then return open(input) end
     if method == "run" then
         local operation_key = key(input.operation_key)

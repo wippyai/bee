@@ -167,6 +167,13 @@ end
 local function handle(value: unknown): ({[string]: unknown}?, string?)
     local request = bounds.object(value)
     if not request then return nil, "turn request must be an object" end
+    local function progress(stage: string, label: string): string?
+        local _, append_error = service_call("bee.threads.service:turn_observation", {turn = request.attempt_id,
+            claim = request.claim, operation_key = "executor-progress:" .. tostring(request.attempt_id):sub(-72) .. ":" .. stage,
+            observation = {type = "text", event_key = "executor:" .. stage,
+                data = {type = "text", segment_id = "executor-progress", operation = "replace", channel = "progress", text = label}}})
+        return append_error
+    end
     local current_plan: machine.Plan? = nil
     local function host_call(target: string, arguments: unknown): (unknown, string?)
         local result, call_error = funcs.call(target, arguments)
@@ -207,6 +214,8 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             return {placement_request = planned.placement_request, normalize_target = planned.normalize_target}, nil
         end,
         prepare = function(placement_request: unknown)
+            local progress_error = progress("prepare", "Preparing agent")
+            if progress_error then return nil, progress_error end
             return service_call(placement_target(request, "prepare"), placement_request)
         end,
         listen = function()
@@ -217,10 +226,14 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             return service_call(placement_target(request, "attach"), {attempt_id = attempt_id, recipient = process.pid(), generation = generation})
         end,
         admit_gateway = function(generation: integer): (string?, string?)
+            local progress_error = progress("gateway", "Connecting Bee tools")
+            if progress_error then return nil, progress_error end
             if not current_plan then return nil, "host launch plan is unavailable" end
             return machine.admit_gateway(host_io, current_plan, generation)
         end,
         gateway_ready = function(binding_id: string): string?
+            local progress_error = progress("ready", "Checking Bee tool connection")
+            if progress_error then return progress_error end
             if not current_plan then return "host launch plan is unavailable" end
             return machine.gateway_ready(host_io, binding_id)
         end,
@@ -228,6 +241,8 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
             machine.revoke_gateway(host_io, binding_id)
         end,
         start = function(attempt_id: string, gateway_binding: string?)
+            local progress_error = progress("start", "Starting agent")
+            if progress_error then return nil, progress_error end
             local request_value: {[string]: unknown} = {attempt_id = attempt_id}
             if gateway_binding then request_value.gateway_binding = gateway_binding end
             return service_call(placement_target(request, "start"), request_value)

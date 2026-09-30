@@ -144,8 +144,8 @@ local function observe_thread(conv: Conversation)
     if not rows or not cursor then return end
     for _, raw in ipairs(rows) do
         local envelope = thread_record.decode(raw)
-        if envelope and envelope.type == "extension" then
-            local extension = envelope.data
+        if envelope and envelope.kind == "observation" and envelope.body.type == "extension" then
+            local extension = envelope.body.data
             if extension.event_name == "bee.sessions.event" then
                 local decoded = json.decode(extension.payload_json)
                 local event = bounds.object(decoded)
@@ -154,7 +154,7 @@ local function observe_thread(conv: Conversation)
                 local data = observation and bounds.object(observation.data)
                 if event and event.kind == "turn.observation" and observation and data then
                     for _, turn in ipairs(conv.turns) do
-                        if detail and detail.work == turn.work:ref() and (turn.state == "queued" or turn.state == "working") then
+                        if detail and event.subject == turn.work:ref() and (turn.state == "queued" or turn.state == "working") then
                             if observation.type == "text" and type(data.text) == "string" and #data.text <= 65536 then
                                 local segment = bounds.id(data.segment_id) or "answer"
                                 turn.segments = turn.segments or {}

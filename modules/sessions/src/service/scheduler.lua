@@ -39,7 +39,7 @@ type Issue = {work: string?, stage: string, reason: string}
 type Pass = {scanned: integer, reserved: integer, activated: integer, recovered: integer,
     running: integer, uncertain: integer, skipped: integer, issues: {Issue}}
 type Wake = () -> (boolean, string?)
-type Service = {send: (Object) -> (WorkReceipt?, string?), run_pass: () -> (Pass?, string?)}
+type Service = {send: (Object) -> (WorkReceipt?, string?), run_pass: (string?) -> (Pass?, string?)}
 
 local function valid_id(value: unknown): boolean
     return type(value) == "string" and #value > 0 and #value <= 256
@@ -228,7 +228,15 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     invocation.observation_target = observation_target
     if context.attempt_id ~= nil then invocation.previous_attempt_id = context.attempt_id end
     local outcome, run_error = executor.run_turn(invocation)
-    if run_error or not outcome then add_issue(pass, due.work, "run_turn", run_error or "external executor returned no outcome"); return end
+    if run_error or not outcome then
+        local reason = run_error or "external executor returned no outcome"
+        add_issue(pass, due.work, "run_turn", reason)
+        local _, mark_error = journal.mark_uncertain({turn = turn.turn, claim = turn.claim,
+            evidence = {summary = reason, artifacts = {}}, operation_key = key("executor-error", turn.turn)})
+        if mark_error then add_issue(pass, due.work, "work_uncertain", mark_error)
+        else pass.uncertain = pass.uncertain + 1 end
+        return
+    end
     if outcome.state == "pending" or outcome.state == "uncertain" then
         if outcome.state == "pending" then pass.running = pass.running + 1 else pass.uncertain = pass.uncertain + 1 end
         if outcome.state == "uncertain" then
@@ -282,7 +290,7 @@ function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: str
             end
             return receipt, nil
         end,
-        run_pass = function(): (Pass?, string?)
+        run_pass = function(only_work: string?): (Pass?, string?)
             local page, scan_error = journal.scan_due({limit = M.MAX_SCAN})
             if scan_error or not page then return nil, scan_error or "Threads returned no work page" end
             local work, page_error = decode_page(page)
@@ -290,7 +298,8 @@ function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: str
             local pass: Pass = {scanned = #work, reserved = 0, activated = 0, recovered = 0,
                 running = 0, uncertain = 0, skipped = 0, issues = {}}
             for _, due in ipairs(work) do
-                if due.cancel_requested then run_cancel(journal, pass, due, run_id)
+                if only_work ~= nil and due.work ~= only_work then pass.skipped = pass.skipped + 1
+                elseif due.cancel_requested then run_cancel(journal, pass, due, run_id)
                 else run_due(journal, registry, pass, due, run_id) end
             end
             return pass, nil

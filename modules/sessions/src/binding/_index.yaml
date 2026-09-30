@@ -34,10 +34,14 @@ entries:
     methods: {list: bee.sessions.binding:catalog}
 - name: target_owner_policies
   kind: ns.requirement
-  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_admission_policy]
+  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_admission_policy, bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy]
   meta:
     comment: Host-selected authority for the Sessions admission and journal boundary
   targets:
+  - entry: bee.sessions.binding:attach
+    path: .security.policies
+  - entry: bee.sessions.binding:hook_boundary
+    path: .security.policies
   - entry: bee.sessions.binding:open
     path: .security.policies
   - entry: bee.sessions.binding:run
@@ -135,5 +139,17 @@ entries:
   source: file://owner_method.lua
   method: catalog
   modules: [security]
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
+- name: attach
+  kind: function.lua
+  source: file://owner_method.lua
+  method: attach
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
+- name: hook_boundary
+  kind: function.lua
+  source: file://owner_method.lua
+  method: hook_boundary
   imports: {owner: bee.sessions:owner}
   security: {policies: []}

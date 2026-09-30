@@ -27,6 +27,8 @@ entries:
   imports:
     bounds: bee.protocol:bounds
     canonical: bee.protocol:canonical
+    record_values: bee.threads.records:values
+    record_types: bee.threads.records:types
 - name: sessions
   kind: library.lua
   source: file://sessions.lua

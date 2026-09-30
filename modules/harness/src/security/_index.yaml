@@ -132,3 +132,9 @@ entries:
     actions: [bee.workspace.manager.launch]
     resources: '*'
     effect: allow
+- name: interactive_session_policy
+  kind: security.policy
+  policy:
+    actions: [bee.sessions.attach]
+    resources: '*'
+    effect: allow

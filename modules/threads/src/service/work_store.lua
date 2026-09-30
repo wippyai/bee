@@ -344,7 +344,7 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
     local input = object(request)
-    if not input or not has_only(input, {operation_key = true, title = true, route = true}) then return missing_request() end
+    if not input or not has_only(input, {operation_key = true, title = true, route = true, thread_id = true}) then return missing_request() end
     local operation_key = key(input.operation_key)
     local title = input.title == nil and "Session" or text(input.title, 512)
     local route_json, route_error = encode(input.route or {})
@@ -353,7 +353,9 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
     end
     local route_digest = digest(route_json)
     if not route_digest then return failure("INTERNAL", "measure pinned session route") end
-    local arguments = {title = title, route_digest = route_digest}
+    local existing_thread = input.thread_id == nil and nil or text(input.thread_id, 160)
+    if input.thread_id ~= nil and not existing_thread then return missing_request() end
+    local arguments = {title = title, route_digest = route_digest, thread_id = existing_thread}
     return transaction.write(db, function(tx: sql.Transaction): Result
         local request_digest, replay, context_error = operation_context(tx, caller :: string, workspace :: string, operation_key, "session_create", arguments)
         if context_error then return failure("INTERNAL", context_error) end
@@ -362,6 +364,7 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
         local session_id, session_id_error = allocate_id()
         local thread_id, thread_id_error = allocate_id()
+        if existing_thread then thread_id = existing_thread end
         if not session_id or not thread_id then return failure("INTERNAL", session_id_error or thread_id_error or "allocate session identity") end
         local session_ref = qualified("bs", node, workspace :: string, session_id)
         local stored_route: Row = {}
@@ -374,11 +377,17 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         local stored_route_json, stored_route_error = encode(stored_route)
         if not stored_route_json then return failure("INVALID_ARGUMENT", stored_route_error or "session route is invalid") end
         local now = transaction.now()
-        local head_error = transaction.insert_head(tx, {thread_id = thread_id, owner_actor = caller :: string, title = title :: string,
-            created_at = now, workspace_id = workspace})
-        if head_error then return failure("INTERNAL", head_error) end
-        local member_error = transaction.insert_member(tx, thread_id, caller :: string, "owner", 1)
-        if member_error then return failure("INTERNAL", member_error) end
+        if existing_thread then
+            local head, head_error = query_one(tx, "SELECT owner_actor, workspace_id FROM bee_thread_heads WHERE thread_id = ?", {existing_thread}, "interactive thread")
+            if head_error then return transaction.storage_failure(head_error) end
+            if not head or head.owner_actor ~= caller or head.workspace_id ~= workspace then return failure("DENIED", "interactive session requires its caller-owned workspace thread") end
+        else
+            local head_error = transaction.insert_head(tx, {thread_id = thread_id, owner_actor = caller :: string, title = title :: string,
+                created_at = now, workspace_id = workspace})
+            if head_error then return failure("INTERNAL", head_error) end
+            local member_error = transaction.insert_member(tx, thread_id, caller :: string, "owner", 1)
+            if member_error then return failure("INTERNAL", member_error) end
+        end
         local peer_error = transaction.insert_member(tx, thread_id, session_ref, "participant", 1)
         if peer_error then return failure("INTERNAL", peer_error) end
         local session_error = execute(tx, "INSERT INTO bee_sessions (session_ref, thread_id, workspace_id, owner_actor, title, state, revision, created_at, updated_at, route_json) " ..
@@ -392,6 +401,39 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append session creation event") end
         local receipt = {session = session_ref, operation = op_ref, state = "active", revision = 1, committed_at = now, sequence = sequence}
         return finish_operation(tx, caller :: string, workspace :: string, operation_key, op_ref, "session_create", request_digest :: string, session_ref, receipt, now)
+    end)
+end
+
+function M.session_attach(db: sql.DB, actor: string, request: unknown): Result
+    local caller, workspace, denied = authenticated(actor, true)
+    if denied then return denied end
+    local input = object(request)
+    if not input or not has_only(input, {session = true, attempt_id = true, operation_key = true}) then return missing_request() end
+    local session_ref, attempt, operation_key = ref(input.session), text(input.attempt_id, 160), key(input.operation_key)
+    if not session_ref or not attempt or not operation_key then return missing_request() end
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local session, session_error = get_session(tx, session_ref, workspace)
+        if session_error then return transaction.storage_failure(session_error) end
+        if not session or session.owner_actor ~= caller then return failure("DENIED", "interactive attachment belongs to its admitted owner") end
+        local arguments = {session = session_ref, attempt_id = attempt}
+        local request_digest, replay, context_error = operation_context(tx, caller :: string, session.workspace_id, operation_key, "session_attach", arguments)
+        if context_error then return failure("INTERNAL", context_error) end
+        if replay then return replay end
+        local route_value, route_error = decode_json(session.route_json)
+        local route = object(route_value)
+        if route_error or not route or route.delivery ~= "hook" then return failure("CONFLICT", "only interactive sessions attach a native window") end
+        if session.state ~= "active" and session.state ~= "suspended" then return failure("CONFLICT", "sealed sessions cannot attach a window") end
+        route.native_attempt_id = attempt
+        local route_json, encode_error = encode(route)
+        if not route_json then return failure("INTERNAL", encode_error or "encode attached route") end
+        local node, op_ref, reference_error = node_and_operation(nil, session.workspace_id)
+        if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "allocate attachment operation") end
+        local now = transaction.now()
+        local _, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "session.attached", session_ref, session.revision + 1, {attempt_id = attempt})
+        if not sequence then return failure("INTERNAL", event_error or "append attachment") end
+        local update_error = execute(tx, "UPDATE bee_sessions SET route_json = ?, state = 'active', revision = revision + 1, updated_at = ? WHERE session_ref = ?", {route_json, now, session_ref}, "attach session window")
+        if update_error then return failure("INTERNAL", update_error) end
+        return finish_operation(tx, caller :: string, session.workspace_id, operation_key, op_ref, "session_attach", request_digest :: string, session_ref, {session = session_ref, operation = op_ref, attempt_id = attempt}, now)
     end)
 end
 
@@ -450,7 +492,10 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
             local summary = value and text(value.text, 65536) or fault and text(fault.message, 16384) or tostring(result.state)
             last_result = {work = last.work_ref, outcome = result.state, summary = (summary or ""):sub(1, 4096), at = last.created_at}
         end
+        local active_turn, turn_error = query_one(tx, "SELECT turn_ref, claim_token, work_ref FROM bee_session_turns WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active interactive turn")
+        if turn_error then return transaction.storage_failure(turn_error) end
         return transaction.success({session = session.session_ref, thread_ref = session.thread_id, workspace = session.workspace_id,
+            active_turn = active_turn and {turn = active_turn.turn_ref, claim = active_turn.claim_token, work = active_turn.work_ref} or nil,
             last_result = last_result, title = session.title, state = session.state, route = route,
             revision = session.revision, created_at = session.created_at, updated_at = session.updated_at,
             queued = queued, active = reserved + accepted, settled = settled, uncertain = uncertain, stalled = stalled,
@@ -618,7 +663,8 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
         local work_ref = qualified("bw", node, workspace :: string, id)
         local now = transaction.now()
         local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.queued", work_ref, 1,
-            {session = session_ref, input_digest = input_digest, output_schema = output_schema})
+            {session = session_ref, input_digest = input_digest, output_schema = output_schema, input = input.input,
+                sender = {kind = caller:match("^bs:") and "session" or "principal", id = caller}})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append work event") end
         local sender_kind = caller:match("^bs:") and "session" or "principal"
         local work_error = execute(tx, "INSERT INTO bee_session_work (work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
@@ -731,7 +777,7 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
             "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
             "LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
             "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref " ..
-            "WHERE (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
+            "WHERE COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull' AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
             "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
             "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
             "ORDER BY w.sequence LIMIT ?", {workspace or sql.NULL, workspace or sql.NULL, limit}, "scan session work")

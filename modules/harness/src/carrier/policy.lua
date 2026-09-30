@@ -13,7 +13,6 @@ local preferences = require("preferences")
 local mcp = require("mcp")
 local surface = require("surface")
 local M = {}
-M.MAX_AGENT_LAUNCH = 16
 M.MAX_AGENT_DELEGATES = 16
 M.MAX_AGENT_MODELS = 16
 M.SCHEMA = "bee.launch-policy@2"
@@ -26,7 +25,6 @@ M.OVERRIDES = {"workdir", "thread", "placement"}
 -- policy may only name the adapter the profile itself pins.
 type PermissionExchange = {adapter_ref: string, acceptance_ref: string, fixture_digest: string, approver_policy: string, poll_ms: integer, ttl_ms: integer}
 type EnvironmentResolver = (string) -> (string?, string?)
-type AgentLaunch = string
 type Policy = {
     ref: string,
     digest: string,
@@ -50,16 +48,6 @@ type Policy = {
     -- admitted to; empty means the launch has no gateway binding.
     gateway_tools: {string},
     gateway_surface: {[string]: unknown}?,
-    -- agent_launch lists the launch definitions a managed agent under this
-    -- policy may start through the gateway, in the agent's own workspace.
-    -- Empty means the agent may launch nothing; a launch policy never
-    -- conveys grant, credential or overlay authority.
-    agent_launch: {AgentLaunch},
-    -- agent_launch_unconfined names the subset of agent_launch definitions
-    -- the host explicitly permits even though their CLI runs without a
-    -- usable workdir confinement. An unconfined definition absent here is
-    -- refused at agent launch.
-    agent_launch_unconfined: {AgentLaunch},
     -- agent_model_map approves framework agent models for this route: each
     -- agent-declared model name maps to the driver model identifier the
     -- launch carries. An agent model without a mapping is refused.
@@ -153,7 +141,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_launch", "agent_launch_unconfined", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -268,44 +256,6 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not effective then return nil, effective_error end
         gateway_tools = effective
     end
-    local agent_launch: {AgentLaunch} = {}
-    if data.agent_launch ~= nil then
-        local rows = data.agent_launch
-        if type(rows) ~= "table" then return nil, ref .. ": agent_launch must be a list" end
-        local count = 0
-        for key in pairs(rows) do
-            if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, ref .. ": agent_launch must be a dense list" end
-            count = count + 1
-        end
-        if count > M.MAX_AGENT_LAUNCH then return nil, ref .. ": agent_launch exceeds " .. tostring(M.MAX_AGENT_LAUNCH) .. " definitions" end
-        local seen: {[string]: boolean} = {}
-        for index = 1, count do
-            local definition_ref = bounds.id(rows[index])
-            if not definition_ref then return nil, ref .. ": agent_launch entry is not an identifier" end
-            if seen[definition_ref] then return nil, ref .. ": agent_launch names " .. definition_ref .. " twice" end
-            seen[definition_ref] = true
-            agent_launch[#agent_launch + 1] = definition_ref
-        end
-    end
-    local agent_launch_unconfined: {AgentLaunch} = {}
-    if data.agent_launch_unconfined ~= nil then
-        local rows = data.agent_launch_unconfined
-        if type(rows) ~= "table" then return nil, ref .. ": agent_launch_unconfined must be a list" end
-        local count = 0
-        for key in pairs(rows) do
-            if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, ref .. ": agent_launch_unconfined must be a dense list" end
-            count = count + 1
-        end
-        if count > M.MAX_AGENT_LAUNCH then return nil, ref .. ": agent_launch_unconfined exceeds " .. tostring(M.MAX_AGENT_LAUNCH) .. " definitions" end
-        local seen: {[string]: boolean} = {}
-        for index = 1, count do
-            local definition_ref = bounds.id(rows[index])
-            if not definition_ref then return nil, ref .. ": agent_launch_unconfined entry is not an identifier" end
-            if seen[definition_ref] then return nil, ref .. ": agent_launch_unconfined names " .. definition_ref .. " twice" end
-            seen[definition_ref] = true
-            agent_launch_unconfined[#agent_launch_unconfined + 1] = definition_ref
-        end
-    end
     local agent_model_map: {[string]: string} = {}
     if data.agent_model_map ~= nil then
         local declared = bounds.object(data.agent_model_map)
@@ -371,7 +321,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         gateway_ttl_ms = declared
     end
     local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
-        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_launch = agent_launch, agent_launch_unconfined = agent_launch_unconfined, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
+        start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end
 type SurfaceValue = {[string]: unknown}

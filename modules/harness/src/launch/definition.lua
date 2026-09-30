@@ -39,8 +39,7 @@ type Definition = {
     allow_wider_tools: boolean,
     -- The host records that this definition's CLI runs without a usable
     -- workdir confinement: no sandbox or permission flag Bee can select
-    -- restricts it. An orchestrator launches it only through the explicit
-    -- agent_launch_unconfined allow-list on its own launch policy.
+    -- restricts it.
     unconfined: boolean,
     options: placement_types.WorkdirOptions?,
 }

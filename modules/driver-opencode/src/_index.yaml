@@ -226,7 +226,7 @@ entries:
     executable_env: {opencode: bee.driver.opencode:executable}
     environment: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_inbox_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: []
     profile_options: {}
     prepare_options: {}
@@ -250,21 +250,7 @@ entries:
       opencode: bee.driver.opencode:executable
     environment: {}
     allow_host_home: true
-    gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_sessions
-    - thread_notify
-    - session_directory
-    - session_inbox_send
-    - session_inbox
-    - session_ack
-    - session_reply
-    - overlay
-    - delivery
-    - docs
-    - components
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: []
     profile_options: {}
     prepare_options: {}

@@ -726,9 +726,19 @@ local function define_tests()
                     for _, tool in ipairs(policy.gateway_tools) do if tool == "thread_message" then has_thread_message = true end end
                     test.is_true(has_thread_message)
                 end
-                local has_workspace = false
-                for _, tool in ipairs(policy.gateway_tools) do if tool == "overlay" then has_workspace = true end end
-                test.is_true(has_workspace)
+                local retained_tools = {
+                    session_catalog = true, session_open = true, session_run = true, session_send = true,
+                    session_await = true, session_join = true, session_get = true, session_list = true,
+                    session_cancel = true, session_close = true, thread_read = true, thread_message = true,
+                }
+                local seen_tools: {[string]: boolean} = {}
+                for _, tool in ipairs(policy.gateway_tools) do
+                    test.is_true(retained_tools[tool] == true, selected.policy .. " admits removed tool " .. tool)
+                    test.is_false(seen_tools[tool] == true, selected.policy .. " repeats tool " .. tool)
+                    seen_tools[tool] = true
+                end
+                test.eq(#policy.gateway_tools, 12)
+                for tool in pairs(retained_tools) do test.is_true(seen_tools[tool] == true, selected.policy .. " omits " .. tool) end
             end
         end)
         test.it("keeps the named Codex profile policy bounded", function()

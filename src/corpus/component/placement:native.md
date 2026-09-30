@@ -133,6 +133,10 @@ broker supplies bounded bytes only for source paths admitted by the host;
 placement compares every returned login and setup path with the driver
 declaration before creating files. It never scans the source home or copies
 unlisted files. Optional absent logins leave the token destination absent.
+An admitted launch with a SessionRef and writable home resource uses that
+Session’s retained home, including private provider homes. Login, configuration
+and conversation state remain there across turns. Launches without a selected
+session home use separate attempt homes.
 
 `homes.project_attempt_login` writes only the broker's primary login file and
 its admitted setup initializers into a newly created attempt home. Claude's
@@ -178,8 +182,10 @@ absent file or one created by interactive sign-in; later machine credentials
 never replace either choice. Required sources refuse a missing login. Changing
 the optional policy changes the retained binding and refuses reuse. Empty
 provided login bytes remain an error. Default provider windows use the
-explicitly authorized host HOME and select no login projection; private batch
-profiles project their declared files into attempt homes. Fixture unit tests
+explicitly authorized host HOME and select no login projection, except Grok,
+whose private window projects `grok_login` into its selected retained session
+home. Private batch launches without a retained home selection project their
+declared files into attempt homes. Fixture unit tests
 cover all six driver declarations and placement paths, and the confined Codex
 fixture worker verifies that unrelated machine-home files stay outside its
 attempt home. `managed-launch-fixture-check` uses fixture CLIs only.

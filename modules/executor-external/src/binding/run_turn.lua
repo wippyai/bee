@@ -74,6 +74,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local terminal: driver_types.Terminal? = nil
     local observations: {{[string]: unknown}} = {}
     local stdout_eof, stderr_eof, exited = false, false, false
+    local stopped = false
     local output_error: string? = nil
     local exit_uncertain = false
     local stderr_bytes: integer = 0
@@ -164,6 +165,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             local exit = bounds.object(message:payload():data())
             if tostring(message:from()) == runner and exit and exit.attempt_id == attempt_id and exit.generation == generation then
                 exited = true
+                stopped = exit.stopped == true
                 exit_uncertain = exit.uncertain == true
                 output_error = output_error or completion_event("process_exited")
             end
@@ -177,9 +179,9 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         end
     end
     if monitored then process.unmonitor(runner) end
-    if output_error then return {terminal = terminal, observations = observations}, output_error end
-    if exit_uncertain then return {terminal = terminal, observations = observations}, "placement runner did not prove process exit" end
-    return {terminal = terminal, observations = observations}, nil
+    if output_error then return {terminal = terminal, observations = observations, stopped = stopped}, output_error end
+    if exit_uncertain then return {terminal = terminal, observations = observations, stopped = stopped}, "placement runner did not prove process exit" end
+    return {terminal = terminal, observations = observations, stopped = stopped}, nil
 end
 
 local function handle(value: unknown): ({[string]: unknown}?, string?)

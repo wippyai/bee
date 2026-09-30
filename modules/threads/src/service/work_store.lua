@@ -8,6 +8,7 @@ local system = require("system")
 local access = require("access")
 local transaction = require("transaction")
 local thread_owner = require("thread_owner")
+local reader = require("reader")
 local record = require("record")
 local observation = require("observation")
 local record_types = require("record_types")
@@ -380,7 +381,18 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         if existing_thread then
             local head, head_error = query_one(tx, "SELECT owner_actor, workspace_id FROM bee_thread_heads WHERE thread_id = ?", {existing_thread}, "interactive thread")
             if head_error then return transaction.storage_failure(head_error) end
-            if not head or head.owner_actor ~= caller or head.workspace_id ~= workspace then return failure("DENIED", "interactive session requires its caller-owned workspace thread") end
+            if not head or head.workspace_id ~= workspace then return failure("DENIED", "interactive session requires its workspace thread") end
+            local member, member_error = reader.member(tx, existing_thread, caller :: string)
+            if member_error then return transaction.storage_failure(member_error) end
+            if not member or not member.active then
+                local stable, alias_error = reader.app_live_stable(tx, caller :: string)
+                if alias_error then return transaction.storage_failure(alias_error) end
+                if stable then member, member_error = reader.app_family_member(tx, existing_thread, stable) end
+                if member_error then return transaction.storage_failure(member_error) end
+            end
+            if not member or not member.active or (member.role ~= "owner" and member.role ~= "participant") then
+                return failure("DENIED", "interactive session requires active participant membership in its workspace thread")
+            end
         else
             local head_error = transaction.insert_head(tx, {thread_id = thread_id, owner_actor = caller :: string, title = title :: string,
                 created_at = now, workspace_id = workspace})
@@ -777,7 +789,7 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
             "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
             "LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
             "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref " ..
-            "WHERE COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull' AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
+            "WHERE w.phase IN ('queued','reserved','accepted') AND COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull' AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
             "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
             "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
             "ORDER BY w.sequence LIMIT ?", {workspace or sql.NULL, workspace or sql.NULL, limit}, "scan session work")

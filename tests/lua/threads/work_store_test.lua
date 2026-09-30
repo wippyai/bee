@@ -17,6 +17,21 @@ end
 
 local function define_tests()
     test.describe("Threads canonical session work store", function()
+        test.it("attaches an admitted participant to its workspace thread while refusing outsiders", function()
+            local owner = harness.principal("thread-owner", harness.ALL, WORKSPACE)
+            local thread = harness.thread(owner, "host-shared interactive thread")
+            local participant = harness.principal("admitted-app", {"bee.threads:session_owner_test_policy"}, WORKSPACE)
+            harness.value(owner:call("join", {thread_id = thread, member_id = participant.id, role = "participant",
+                expected_revision = 1, idempotency_key = harness.key()}))
+            local opened = harness.value(participant:call("session_create", {thread_id = thread, operation_key = harness.key(), route = {delivery = "hook"}}))
+            test.eq(harness.value(participant:call("session_describe", {session = opened.session})).thread_ref, thread)
+            local observer = harness.principal("observer-app", {"bee.threads:session_owner_test_policy"}, WORKSPACE)
+            harness.value(owner:call("join", {thread_id = thread, member_id = observer.id, role = "observer",
+                expected_revision = 2, idempotency_key = harness.key()}))
+            test.eq(harness.code(observer:call("session_create", {thread_id = thread, operation_key = harness.key()})), "DENIED")
+            local stranger = harness.principal("outsider", {"bee.threads:session_owner_test_policy"}, WORKSPACE)
+            test.eq(harness.code(stranger:call("session_create", {thread_id = thread, operation_key = harness.key()})), "DENIED")
+        end)
         test.it("attaches windows to one durable session and excludes hook work from the pull executor", function()
             local sessions = harness.session_owner(WORKSPACE)
             local thread_owner = harness.principal("sessions-owner", harness.ALL, WORKSPACE)
@@ -353,6 +368,21 @@ local function define_tests()
             for _, row in ipairs(due.items) do if row.work == active.work then found = row.cancel_requested == true end end
             test.is_true(found)
             test.eq(harness.value(sessions:call("operation_describe", {operation = active_cancel.operation})).receipt.subject, active.work)
+            harness.value(sessions:call("work_settle", {turn = reservation.turn, claim = reservation.claim,
+                result = result("cancelled"), operation_key = harness.key()}))
+            local redirected = harness.value(sessions:call("work_send", {session = opened.session,
+                operation_key = harness.key(), input = "redirect after cancellation"}))
+            local next_due = harness.value(sessions:call("work_scan", {limit = 16}))
+            local next_found = false
+            for _, row in ipairs(next_due.items) do
+                test.is_true(row.work ~= active.work, "settled cancellation is absent from pull scans")
+                if row.work == redirected.work then
+                    next_found = true
+                    test.eq(row.state, "queued")
+                end
+            end
+            test.is_true(next_found)
+
         end)
 
         test.it("allows launch journal mutations only through the sessions owner scope", function()

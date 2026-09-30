@@ -100,3 +100,12 @@ entries:
     resources: '*'
     expression: 'action == "funcs.security" || resource == actor.id'
     effect: allow
+
+- name: owner_registry_read_policy
+  kind: security.policy
+  meta:
+    comment: The Sessions owner reads admitted driver, definition and launch policy metadata from one pinned catalog; this grants no registry mutation or launch permission
+  policy:
+    actions: [registry.get, registry.snapshot]
+    resources: ['*']
+    effect: allow

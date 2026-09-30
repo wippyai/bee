@@ -162,7 +162,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local checkpoint_deadline = time.after("3s")
     local checkpoint_event = channel.select({checkpoints:case_receive(), checkpoint_deadline:case_receive()})
-    assert(checkpoint_event.channel ~= checkpoint_deadline and checkpoint_event.ok, "window checkpoint was not delivered")
+    assert(checkpoint_event.channel ~= checkpoint_deadline and checkpoint_event.ok, "window checkpoint was not delivered: " .. placement_report())
     local checkpoint_message = checkpoint_event.value
     assert(tostring(checkpoint_message:from()) == broker, "window checkpoint came from an unauthenticated sender")
     local checkpoint_data = checkpoint_message:payload():data()

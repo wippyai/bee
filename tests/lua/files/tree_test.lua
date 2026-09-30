@@ -63,7 +63,7 @@ local function run()
                 ["README.md"] = {is_dir = false, content = "# Hello"},
             })
             local t = tree.new(fs)
-            test.is_not_nil(t)
+            test.not_nil(t)
             test.eq(t.root.loaded, false)
 
             -- Expand root
@@ -135,7 +135,7 @@ local function run()
             })
             local t = tree.new(fs)
             local node = tree.find_or_load(t, "src/app/view.lua")
-            test.is_not_nil(node)
+            test.not_nil(node)
             test.eq(node.name, "view.lua")
             test.eq(node.path, "src/app/view.lua")
 

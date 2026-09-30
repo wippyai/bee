@@ -36,3 +36,23 @@ entries:
     test: wippy.test:test
     tree: bee.files:tree
     gitignore: bee.files:gitignore
+- name: model_test
+  kind: function.lua
+  source: file://model_test.lua
+  method: run
+  modules: [treesitter]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.files.app:model
+- name: view_test
+  kind: function.lua
+  source: file://view_test.lua
+  method: run
+  modules: [tty, treesitter]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    model: bee.files.app:model
+    view: bee.files.app:view
+    appearance: bee.application:appearance

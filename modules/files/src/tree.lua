@@ -63,7 +63,7 @@ function M.new(volume: unknown, root_path: string?, matcher: gitignore.Matcher?)
     if vol and vol.readfile then
         local gi_path = clean_root == "" and ".gitignore" or clean_root .. "/.gitignore"
         local content, err = vol:readfile(gi_path)
-        if content and not err then
+        if type(content) == "string" and not err then
             gm:add_rules(content, clean_root)
         end
     end

@@ -70,7 +70,7 @@ entries:
     packages:
       approval_policy: workspace-application-delivery
       kinds: [process.lua, library.lua, ns.requirement, security.policy, registry.entry, contract.binding, env.variable]
-      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, registry, system]
+      modules: [tty, process, channel, json, time, uuid, base64, hash, funcs, registry, system, fs, treesitter]
       policies: [bee.security:ordinary_app_subsystem_boundary]
       thread_access: none
       applications:
@@ -109,4 +109,9 @@ entries:
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.gov.overlays:client_policy,
           bee.security.gov:governance_delivery_read_policy, bee.security.gov:governance_delivery_manage_policy,
           bee.security.gov:governance_delivery_activate_policy]
+        thread_access: none
+      - component: bee.files.app
+        definition_id: bee.files.app:app
+        capabilities: [workspace.files.read]
+        policies: [bee.security:ordinary_app_subsystem_boundary]
         thread_access: none

@@ -67,10 +67,10 @@ end
 local function parse_line_num(s: string?): integer?
     if not s then return nil end
     local n = tonumber(s)
-    if not n or n ~= math.floor(n) or n < 1 or n > 1000000 then
-        return nil
+    if n and n == math.floor(n) and n >= 1 and n <= 1000000 then
+        return math.floor(n)
     end
-    return math.floor(n)
+    return nil
 end
 
 -- Decodes line range strings like "42", "42-50", "42:50".

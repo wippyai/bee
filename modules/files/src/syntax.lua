@@ -203,16 +203,17 @@ function M.highlight(content: string, lang_name: string?, theme_name: string?, r
     local captures_by_line: {[integer]: {Span}} = {}
 
     if lang_id then
-        local ts_lang = treesitter.language(lang_id)
+        local ts = (treesitter :: any)
+        local ts_lang = ts["language"](lang_id)
         if ts_lang then
-            local parser = treesitter.newParser()
+            local parser = ts["newParser"]()
             if parser and parser:setLanguage(ts_lang) then
                 local tree = parser:parse(content)
                 if tree then
                     local root = tree:rootNode()
                     local query_str = QUERIES[lang_id]
                     if root and query_str then
-                        local q, err = treesitter.newQuery(ts_lang, query_str)
+                        local q, err = ts["newQuery"](ts_lang, query_str)
                         if q and not err then
                             local captures = q:captures(root)
                             for _, cap in ipairs(captures) do
@@ -246,10 +247,10 @@ function M.highlight(content: string, lang_name: string?, theme_name: string?, r
     local role_color: {[string]: string} = {
         ["keyword"] = theme.accent,
         ["constant"] = theme.accent,
-        ["string"] = theme.success,
-        ["number"] = theme.warning,
+        ["string"] = theme.ok,
+        ["number"] = theme.warn,
         ["comment"] = theme.muted,
-        ["function"] = appearance.selection_text(theme) ~= "" and theme.accent or theme.text,
+        ["function"] = theme.accent,
     }
 
     local rendered: {string} = {}
@@ -310,22 +311,22 @@ end
 
 -- Calculates scroll window keeping selected line in view.
 function M.window(total_lines: integer, capacity: integer, selected: integer, offset: integer): (integer, integer)
-    local slots = math.max(0, capacity)
-    local last = math.max(0, total_lines - slots)
-    local val = math.max(0, math.min(last, offset))
+    local slots = math.floor(math.max(0, capacity))
+    local last = math.floor(math.max(0, total_lines - slots))
+    local val = math.floor(math.max(0, math.min(last, offset)))
     if selected > 0 and slots > 0 then
         if selected <= val then val = selected - 1 end
         if selected > val + slots then val = selected - slots end
     end
-    return math.max(0, math.min(last, val)), slots
+    return math.floor(math.max(0, math.min(last, val))), slots
 end
 
 -- Calculates jump offset centering target_line in the viewport.
 function M.jump(total_lines: integer, capacity: integer, target_line: integer): (integer, integer)
-    local clamped = math.max(1, math.min(total_lines, target_line))
+    local clamped = math.floor(math.max(1, math.min(total_lines, target_line)))
     local half = capacity // 2
-    local offset = math.max(0, clamped - half)
-    local max_offset = math.max(0, total_lines - capacity)
+    local offset = math.floor(math.max(0, clamped - half))
+    local max_offset = math.floor(math.max(0, total_lines - capacity))
     if offset > max_offset then
         offset = max_offset
     end

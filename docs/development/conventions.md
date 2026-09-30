@@ -183,4 +183,6 @@ against the manifest without modifying repository module files. Documentation
 edits need link/source consistency checks and an update to the relevant current
 contract; avoid machine-specific paths, credentials and local stores.
 
-Run `make fixture-lint` to type-check the disposable test composition without running tests.
+`make lint` and `make fixture-lint` enable strict-any: native and decoded values
+must be narrowed before use. `make fixture-lint` checks the disposable test
+composition without running tests.

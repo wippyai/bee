@@ -21,6 +21,15 @@ entries:
     recovery: bee.host:recovery
     records: bee.workspace:recovery
     inventory: bee.host:inventory
+- name: restores_test
+  kind: function.lua
+  source: file://restores_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    restores: bee.host:restores
+    records: bee.workspace:recovery
 - name: inventory_test
   kind: function.lua
   source: file://inventory_test.lua

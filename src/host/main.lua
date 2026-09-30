@@ -18,6 +18,7 @@ local connections = require("connections")
 local inventory = require("inventory")
 local transfer = require("transfer")
 local open_protocol = require("open_protocol")
+local restores = require("restores")
 local binding_protocol = require("binding_protocol")
 local execution = require("execution")
 local handoff = require("handoff")
@@ -139,13 +140,13 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local broker = resumed and resumed.broker or tostring(assert(spawn_broker()))
     local broker_started = resumed ~= nil
     local broker_recovery_requested = resumed ~= nil
-    local restoring = ""
     local restore_queue: {recovery.Record} = {}
     if not resumed then
         for _, record in ipairs(snapshot.applications) do
             if record.restart_policy == "automatic" then restore_queue[#restore_queue + 1] = record end
         end
     end
+    local restore_schedule = restores.new(restore_queue)
     local ready = resumed ~= nil
     local host_upgrading = false
     local upgrade_deadline: Channel<time.Time>? = nil
@@ -254,23 +255,22 @@ local function main(owner: string, workspace: unknown, database_resource: string
         return true
     end
     local function restore_next()
-        if restoring ~= "" or stopping or broker_replacing then return end
+        if stopping or broker_replacing then return end
         -- Installed overlays may become available after the first catalog.
         -- Keep their saved records pending without delaying other applications.
-        local selected: integer? = nil
-        for index, candidate in ipairs(restore_queue) do
-            for _, descriptor in ipairs(live_inventory.catalog) do
-                if descriptor.definition_id == candidate.definition_id then selected = index; break end
-            end
-            if selected then break end
-        end
-        local record = selected and table.remove(restore_queue, selected) or nil
-        if record then
-            restoring = uuid.v7()
-            send("bee.app.request", {version = 1, request_id = restoring, op = "open", workspace_id = workspace_id,
+        local known: {[string]: boolean} = {}
+        for _, descriptor in ipairs(live_inventory.catalog) do known[descriptor.definition_id] = true end
+        local selected = restores.select(restore_schedule, function(definition_id: string): boolean
+            return known[definition_id] == true
+        end)
+        for _, record in ipairs(selected) do
+            local request_id = uuid.v7()
+            restores.track(restore_schedule, request_id)
+            send("bee.app.request", {version = 1, request_id = request_id, op = "open", workspace_id = workspace_id,
                 definition_id = record.definition_id, thread_id = record.thread_id, restore_instance_id = record.instance_id,
                 restore_view_id = record.id, resume_schema = record.resume_schema, resume_state = record.resume_state})
-        else
+        end
+        if #selected == 0 and not restores.pending(restore_schedule) then
             if not ready and broker_started then
                 resolve_prepared_intents()
                 resume_clients()
@@ -335,7 +335,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
         assert(process.send(broker, "bee.application.binding.result", reply))
     end
     local function broker_drained(): boolean
-        if restoring ~= "" or next(pending_opens) ~= nil or next(pending_transfers) ~= nil
+        if restores.pending(restore_schedule) or next(pending_opens) ~= nil or next(pending_transfers) ~= nil
             or next(client_connections.changes) ~= nil or next(client_connections.appearance_routes) ~= nil then return false end
         for _, route in pairs(client_connections.routes) do if not route.completed then return false end end
         return true
@@ -435,11 +435,11 @@ local function main(owner: string, workspace: unknown, database_resource: string
                     broker_replacing = false
                     broker_exited = false
                     broker_started, broker_recovery_requested, ready = false, false, false
-                    restoring = ""
                     restore_queue = {}
                     for _, record in ipairs(snapshot.applications) do
                         if record.restart_policy == "automatic" then restore_queue[#restore_queue + 1] = record end
                     end
+                    restores.reset(restore_schedule, restore_queue)
                     live_inventory = inventory.empty(live_inventory)
                 end
                 if event.kind == process.event.EXIT and tostring(event.from) == owner then break end
@@ -735,9 +735,8 @@ local function main(owner: string, workspace: unknown, database_resource: string
                                 end
                             end
                             if not open_waiters and not connections.reply(client_connections, reply, live_inventory) then
-                                if restoring ~= "" and reply.request_id == restoring and reply.op == "open" then
+                                if reply.op == "open" and restores.complete(restore_schedule, reply.request_id) then
                                     deliver("bee.host.restore_result", reply)
-                                    restoring = ""
                                     restore_next()
                                 else deliver("bee.app.reply", reply) end
                             end

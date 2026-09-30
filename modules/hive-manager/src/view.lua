@@ -6,7 +6,7 @@ local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
 local names = require("names")
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
 local function status_word(node: model.Node): string
     if node.client_only then return "client" end
@@ -27,7 +27,7 @@ local function bytes(value: integer?): string
     end
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "Tab", verb = "workspaces"},
-    {key = "C", verb = "control"}, {key = "O", verb = "observe"}, {key = "R", verb = "refresh"}})
+    {key = "C", verb = "control"}, {key = "O", verb = "observe"}, {key = "R", verb = "refresh"}, {key = "T", verb = "details"}, {key = "Esc", verb = "back or close"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, offset: integer, status: string): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
@@ -94,8 +94,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local window: frame.Window = {offset = 0, capacity = 0}
     if #nodes == 0 then
-        frame.empty(painter, 4, state.technical and "No nodes reported" or "No computers reported",
-            state.technical and "Nodes appear here when they join this hive · R refresh" or "Computers appear here when they join this hive · R refresh")
+        frame.empty(painter, 4, state.technical and "No nodes reported" or "No computers connected",
+            state.technical and "Nodes appear here when they join this hive · R refresh" or "Computers appear here when they join your hive · R refresh")
     else
         local columns: {frame.Column} = {}
         if state.technical then
@@ -213,11 +213,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local workspace = model.selected_workspace(state)
     if height >= 4 then
         frame.actions(painter, height - 1, {
-            {kind = "open", label = "Open", enabled = selected ~= nil and not selected.client_only and catalog == nil, primary = true},
-            {kind = "control", label = "Control", enabled = workspace ~= nil and idle and model.can_control(state)},
-            {kind = "observe", label = "Observe", enabled = workspace ~= nil and idle, primary = catalog ~= nil},
-            {kind = "refresh", label = "Refresh", enabled = idle},
-            {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
+            {kind = "open", key = "Enter", label = "Open", enabled = selected ~= nil and not selected.client_only and catalog == nil, primary = true},
+            {kind = "control", key = "C", label = "Control", enabled = workspace ~= nil and idle and model.can_control(state)},
+            {kind = "observe", key = catalog ~= nil and "Enter" or "O", label = "Observe", enabled = workspace ~= nil and idle, primary = catalog ~= nil},
+            {kind = "refresh", key = "R", label = "Refresh", enabled = idle},
+            {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true},
         })
     end
     local message = status
@@ -225,6 +225,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if message == "" and state.pending then message = "Waiting for the desktop owner…" end
     if message == "" and state.membership_detail ~= "" then message = "Membership: " .. state.membership_detail end
     frame.footer(painter, message, HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

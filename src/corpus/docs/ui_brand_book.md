@@ -54,8 +54,8 @@ The terminal supplies the monospace typeface. Design in cells.
   spaces, such as `" Run "`.
 - Put the action bar on the penultimate row (`frame.actions`) and the footer on
   the final row (`frame.footer`): the changing status at the left, the stable
-  key hints at the right. In short windows the status wins the row; keep the
-  action that lets the user recover.
+  key hints and clickable `? help` at the right. Bound status text so hints
+  remain visible. Overflow actions appear in `F10 More`.
 - Write key hints as key then lowercase verb, joined with ` · `
   (`frame.hints`): `↑↓ select · Enter open · Esc close`.
 - Truncate by display width with an ellipsis; every frame call does this. Byte
@@ -120,7 +120,8 @@ information, and never use animation as the only evidence that work continues.
 
 Every mouse action has a keyboard route. Arrow keys move within a collection;
 Tab changes panes; Enter performs the selected primary action; Escape backs out
-or closes. Ignore key-release events. A resize repaints from model state and
+or closes. Letter shortcuts accept either case outside text fields; `R` refreshes
+and `T` opens Details. `F10` opens More and `?` opens shared Help. Ignore key-release events. A resize repaints from model state and
 must not trigger remote work.
 
 Treat all external text as hostile presentation data. Pass it through

@@ -5,7 +5,7 @@ local frame = require("frame")
 local build_info = require("build_info")
 type Pane = "theme" | "background" | "taskbar" | "edit_mode" | "about"
 type Grid = {columns: integer, rows: integer, capacity: integer, card_width: integer}
-type Frame = {rows: {string}, hits: {frame.Hit}}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 local M = {}
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 local function about_details(info: build_info.Info, width: integer): {string}
@@ -81,7 +81,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             if height >= 6 then frame.line(painter, 6, "Enable accepts exact non-kernel namespaces for up to 24h.", theme.muted) end
         end
         if height >= 3 then frame.footer(painter, notice ~= "" and notice or "Choose E or D to continue", EDIT_HINTS) end
-        return {rows = frame.rows(painter), hits = painter.hits}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
     end
     if pane == "about" then
         local details = about_details(build_info.info(), width)
@@ -96,7 +96,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             page = "Details " .. tostring(first + 1) .. "–" .. tostring(math.min(#details, first + capacity)) .. "/" .. tostring(#details)
         end
         if height >= 3 then frame.footer(painter, notice ~= "" and notice or page, ABOUT_HINTS) end
-        return {rows = frame.rows(painter), hits = painter.hits}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
     end
     if grid.capacity == 0 or width < 12 then
         local label = pane == "taskbar" and (preferences.taskbar == "icons" and "Icons" or "Labels") or (pane == "theme" and theme.title or preferences.background)
@@ -110,7 +110,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             frame.line(painter, 4, label, theme.text)
         end
         if notice ~= "" and height >= 3 then frame.line(painter, height >= 5 and height or 3, notice, theme.text) end
-        return {rows = frame.rows(painter), hits = painter.hits}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
     end
     for slot = 1, grid.capacity do
         local index = offset + slot
@@ -165,6 +165,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.add_hit(painter, "page", 1, "", width - 3, height - 1, 3, 1)
     end
     frame.footer(painter, status, HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

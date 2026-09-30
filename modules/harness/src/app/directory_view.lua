@@ -5,7 +5,7 @@ local text = require("text")
 local protocol = require("protocol")
 local agents = require("agents")
 local M = {}
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     rows: {protocol.SessionSnapshot}, selected: integer, status: string, filtered: boolean, workspaces: {[string]: agents.Workspace}?, filter_label: string?): Frame
     local painter = frame.new(width, height, preferences)
@@ -27,12 +27,12 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N new session · choose an agent, then send work") end
     if height >= 6 then frame.line(painter, height - 2, text.bound(status, 512), painter.theme.text) end
     if height >= 6 then frame.actions(painter, height - 1, {
-        {kind = "open", label = "Open", enabled = rows[selected] ~= nil, primary = true},
-        {kind = "new_session", label = "New session", enabled = true},
-        {kind = "workspace", label = filtered and "All workspaces" or "Workspace", enabled = true},
-        {kind = "refresh", label = "Refresh", enabled = true},
+        {kind = "open", key = "Enter", label = "Open", enabled = rows[selected] ~= nil, primary = true},
+        {kind = "new_session", key = "N", label = "New session", enabled = true},
+        {kind = "workspace", key = "W", label = filtered and "All workspaces" or "Workspace", enabled = true},
+        {kind = "refresh", key = "R", label = "Refresh", enabled = true},
     }) end
-    frame.footer(painter, "", "↑↓ select · Enter open · N new · W workspace · R refresh · ? help")
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    frame.footer(painter, "", "↑↓ select · Enter open · N new · W workspace · R refresh · Esc close")
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

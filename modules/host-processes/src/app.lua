@@ -17,6 +17,7 @@ local function main(value: unknown)
     local broker = launch.broker_pid
     local announced = false
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local replies = assert(process.listen("bee.application.result", {message = true}))
@@ -90,6 +91,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local drawn = view.draw(width, height, snapshot, history, preferences, selected, offset, paused, status, confirming, services, rows, by_steps)
+            frame.render(drawn, menu, preferences)
             hits, capacity, offset = drawn.hits, drawn.capacity, drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
@@ -122,47 +124,50 @@ local function main(value: unknown)
                 end
             end
         else
-            local data = event.value
-            if data.type == "close" then running = false
-            elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
-            elseif data.type == "key" and data.action ~= "release" then
-                local key = data.key_type
-                if confirming then
-                    if key == "enter" and broker then
-                        local request_id = uuid.v7()
-                        pending = stop_request.begin(request_id)
-                        local sent, send_error = process.send(broker, "bee.application.control", {version = 1, request_id = request_id, op = "stop", execution_pid = selected})
-                        confirming = false
-                        if sent and not send_error then status = "Stopping application…"
-                        else pending = nil; status = "Stop request failed: " .. tostring(send_error) end
-                        dirty = true
-                    elseif key == "esc" or key == "escape" then confirming = false; dirty = true end
-                elseif key == "tab" then
-                    services = not services; selected = ""; offset = 0; status = ""; order(); dirty = true
-                elseif key == "up" then move(-1)
-                elseif key == "down" then move(1)
-                elseif key == "pgup" then move(-math.floor(math.max(1, capacity)))
-                elseif key == "pgdown" then move(math.floor(math.max(1, capacity)))
-                elseif key == "home" then move(-#rows)
-                elseif key == "end" then move(#rows)
-                elseif data.key == "s" then by_steps = not by_steps; order(); reveal(); dirty = true
-                elseif data.key == " " or data.key == "p" then toggle_pause()
-                elseif key == "delete" or key == "del" then end_app()
-                elseif key == "esc" or key == "escape" then running = false end
-            elseif data.type == "mouse" then
-                local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
-                if data.action == "wheel" then move((data.button == "wheel_up" or data.button == "up") and -1 or 1)
-                elseif data.action == "press" and data.button == "left" then
-                    local hit = frame.hit(hits, x, y)
-                    local kind = hit and hit.kind or ""
-                    if kind == "pause" then toggle_pause()
-                    elseif kind == "processes" or kind == "services" then
-                        services = kind == "services"
-                        selected = ""; offset = 0; status = ""; confirming = false; order(); dirty = true
-                    elseif kind == "sort" and not confirming then by_steps = not by_steps; order(); reveal(); dirty = true
-                    elseif kind == "stop" and not confirming then end_app()
-                    elseif hit and kind == "row" then
-                        selected = hit.key; confirming = false; status = ""; dirty = true
+            local data, handled = frame.route(menu, event.value, false)
+            if handled then dirty = true end
+            if data then
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+                elseif data.type == "key" and data.action ~= "release" then
+                    local key = data.key_type
+                    if confirming then
+                        if key == "enter" and broker then
+                            local request_id = uuid.v7()
+                            pending = stop_request.begin(request_id)
+                            local sent, send_error = process.send(broker, "bee.application.control", {version = 1, request_id = request_id, op = "stop", execution_pid = selected})
+                            confirming = false
+                            if sent and not send_error then status = "Stopping application…"
+                            else pending = nil; status = "Stop request failed: " .. tostring(send_error) end
+                            dirty = true
+                        elseif key == "esc" or key == "escape" then confirming = false; dirty = true end
+                    elseif key == "tab" then
+                        services = not services; selected = ""; offset = 0; status = ""; order(); dirty = true
+                    elseif key == "up" then move(-1)
+                    elseif key == "down" then move(1)
+                    elseif key == "pgup" then move(-math.floor(math.max(1, capacity)))
+                    elseif key == "pgdown" then move(math.floor(math.max(1, capacity)))
+                    elseif key == "home" then move(-#rows)
+                    elseif key == "end" then move(#rows)
+                    elseif data.key == "s" then by_steps = not by_steps; order(); reveal(); dirty = true
+                    elseif data.key == " " or data.key == "p" then toggle_pause()
+                    elseif key == "delete" or key == "del" then end_app()
+                    elseif key == "esc" or key == "escape" then running = false end
+                elseif data.type == "mouse" then
+                    local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
+                    if data.action == "wheel" then move((data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                    elseif data.action == "press" and data.button == "left" then
+                        local hit = frame.hit(hits, x, y)
+                        local kind = hit and hit.kind or ""
+                        if kind == "pause" then toggle_pause()
+                        elseif kind == "processes" or kind == "services" then
+                            services = kind == "services"
+                            selected = ""; offset = 0; status = ""; confirming = false; order(); dirty = true
+                        elseif kind == "sort" and not confirming then by_steps = not by_steps; order(); reveal(); dirty = true
+                        elseif kind == "stop" and not confirming then end_app()
+                        elseif hit and kind == "row" then
+                            selected = hit.key; confirming = false; status = ""; dirty = true
+                        end
                     end
                 end
             end

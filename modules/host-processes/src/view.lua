@@ -5,7 +5,7 @@ local probe = require("probe")
 local text = require("text")
 local viz = require("viz")
 type Row = {pid: string, source: string, state: string, steps: integer?}
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
 function M.items(snapshot: probe.Snapshot, services: boolean): {Row}
     local rows: {Row} = {}
@@ -82,17 +82,18 @@ function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, histo
         {title = services and "Restarts" or "Steps", width = 10, align = "right"}}
     local window = frame.table(painter, first, last, {columns = columns, cells = cells, keys = keys, kind = "row",
         selected = selected_index, offset = offset})
+    if #rows == 0 then frame.empty(painter, first + 1, services and "No services" or "No processes", paused and "P resume updates" or "Apps appear here while they are running") end
     if detail_y > 0 and selected_index > 0 then frame.line(painter, detail_y, text.bound(selected, 512), theme.muted) end
     if height >= 3 then
         frame.actions(painter, height - 1, {
-            {kind = "pause", label = paused and "Resume" or "Pause", enabled = true, active = paused},
-            {kind = "sort", label = by_steps and (services and "Sort: restarts" or "Sort: steps") or "Sort: name", enabled = true},
-            {kind = "stop", label = "Stop app", enabled = not services and selected ~= "", primary = confirming},
+            {kind = "pause", key = "P", label = paused and "Resume" or "Pause", enabled = true, active = paused},
+            {kind = "sort", key = "S", label = by_steps and (services and "Sort: restarts" or "Sort: steps") or "Sort: name", enabled = true},
+            {kind = "stop", key = "Del", label = "Stop app", enabled = not services and selected ~= "", primary = confirming},
         })
     end
     local footer = text.bound(status ~= "" and status or (snapshot.error or ""), 512)
-    if confirming then footer = "Stop selected app? Enter confirms · Esc cancels" end
-    frame.footer(painter, footer, confirming and "" or HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    if confirming then footer = "Stop selected app?" end
+    frame.footer(painter, footer, confirming and "Enter confirms · Esc cancels" or HINTS)
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

@@ -53,7 +53,14 @@ local function define_tests()
                     if hit.kind == "publish_publication" then has_publish = true end
                     test.is_true(hit.x + hit.width - 1 <= width)
                 end
-                test.is_true(has_prepare)
+                if width < 80 then
+                    local available = false
+                    for _, button in ipairs(assert(frame.controls).overflow) do
+                        if button.kind == "prepare_publication" and button.enabled then available = true end
+                    end
+                    test.is_true(has_prepare or available)
+                    test.is_true(rendered:find("F10 More", 1, true) ~= nil)
+                else test.is_true(has_prepare) end
                 test.is_false(has_publish)
             end
             model.apply_publication_prepare(state, {ok = true, replayed = false, value = {component = "acme/app", version = "1.0.0",

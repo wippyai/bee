@@ -5,9 +5,10 @@ local frame = require("frame")
 local text = require("text")
 local agents = require("agents")
 local M = {}
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "U", verb = "unavailable"},
-    {key = "R", verb = "refresh"}, {key = "?", verb = "more"}, {key = "Esc", verb = "back"}})
+    {key = "R", verb = "refresh"}, {key = "Esc", verb = "back"}, {key = "E", verb = "customize copy or edit"},
+    {key = "N", verb = "new profile"}, {key = "S", verb = "setup"}, {key = "M", verb = "manual Terminal attach"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?): Frame
     local painter = frame.new(width, height, preferences)
@@ -40,11 +41,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if height >= 3 then
         local chosen = item ~= nil and window.capacity > 0
         frame.actions(painter, height - 1, {
-            {kind = item and not item.ready and "setup" or "open", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
-            {kind = "unavailable", label = show_unavailable and "Hide unavailable" or "Show unavailable", enabled = not busy},
-            {kind = "refresh", label = "Refresh", enabled = not busy},
-            {kind = "edit", label = item and item.kind == "profile" and "Edit" or "Customize copy", enabled = not busy and chosen},
-            {kind = "close", label = "Back", enabled = true},
+            {kind = item and not item.ready and "setup" or "open", key = "Enter", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
+            {kind = "unavailable", key = "U", label = show_unavailable and "Hide unavailable" or "Show unavailable", enabled = not busy},
+            {kind = "refresh", key = "R", label = "Refresh", enabled = not busy},
+            {kind = "edit", key = "E", label = item and item.kind == "profile" and "Edit" or "Customize copy", enabled = not busy and chosen},
+            {kind = "close", key = "Esc", label = "Back", enabled = true},
         })
     end
     local message = status
@@ -54,6 +55,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
     if height >= 2 then frame.footer(painter, "", HINTS) end
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

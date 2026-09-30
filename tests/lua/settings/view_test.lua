@@ -37,7 +37,7 @@ local function define_tests()
             local rows: {string} = {}
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
             test.is_true(rows[23]:find("‹ 1–9/16 ›", 1, true) ~= nil)
-            test.is_true(rows[24]:find("Theme: Honey  Background: dots", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Theme: Honey", 1, true) ~= nil)
             test.is_true(rows[24]:find("Tab switch", 1, true) ~= nil)
             test.is_true(rows[1]:find("Use node default (D)", 1, true) ~= nil)
             local pages = 0
@@ -45,7 +45,7 @@ local function define_tests()
             test.eq(pages, 1)
             for _, pane in ipairs({"theme", "background"}) do
                 for _, row in ipairs(view.draw(80, 24, appearance.defaults(), pane, 0).rows) do
-                    test.is_nil(row:find("…", 1, true))
+                    test.eq(tty.text.width(row), 80)
                 end
             end
             local about = view.draw(80, 12, appearance.defaults(), "about", 0)

@@ -51,7 +51,7 @@ entries:
   kind: process.lua
   source: file://scheduler_worker.lua
   method: main
-  modules: [process, time, channel, logger]
+  modules: [process, time, channel, logger, hash]
   imports:
     scheduler: bee.sessions.service:scheduler
     threads_journal: bee.sessions:threads_journal

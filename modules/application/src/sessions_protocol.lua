@@ -62,7 +62,10 @@ type Continuity = {mode: "exact" | "provider_resume" | "reconstructed" | "fresh"
 type Execution = {state: "absent" | "starting" | "running" | "quiescent" | "unknown", evidence_at: string, stale: boolean}
 type Lifecycle = "opening" | "active" | "suspended" | "closing" | "closed"
 type Activity = "idle" | "working" | "blocked" | "stalled"
-type SessionSnapshot = {session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
+type LastResult = {work: string, outcome: string, summary: string, at: string}
+type HistoryItem = {work: string, sequence: integer, input: unknown, created_at: string}
+type HistoryPage = {items: {HistoryItem}, next: integer?}
+type SessionSnapshot = {thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type OperationReceipt = OpenReceipt | WorkReceipt | ControlReceipt
@@ -540,8 +543,26 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "execution", "queue_count", "effective_limits", "continuity", "actions"})
+        "activity", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result"})
     if not object then return nil, failure end
+    local extras: {[string]: string} = {}
+    for _, name in ipairs({"thread_ref", "workspace", "driver", "provider", "definition"}) do
+        if object[name] ~= nil then
+            local value = bounds.id(object[name])
+            if not value then return nil, "session " .. name .. " is invalid" end
+            extras[name] = value
+        end
+    end
+    local last_result: LastResult? = nil
+    if object.last_result ~= nil then
+        local last = shape(object.last_result, "last result", {"work", "outcome", "summary", "at"})
+        local work = last and M.ref("work", last.work)
+        local outcome = last and one_of(last.outcome, {"succeeded", "failed", "cancelled", "rejected"})
+        local summary = last and bounds.text(last.summary, 4096)
+        local at = last and bounds.timestamp(last.at)
+        if not work or not outcome or not summary or not at then return nil, "last result is malformed" end
+        last_result = {work = work, outcome = outcome, summary = summary, at = at}
+    end
     local session, revision, incarnation = M.ref("session", object.session), M.position(object.revision), M.position(object.incarnation)
     local title = bounds.text(object.title, M.MAX_TITLE_BYTES)
     local lifecycle = one_of(object.lifecycle, {"opening", "active", "suspended", "closing", "closed"})
@@ -577,11 +598,33 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     if continuity_mode == "provider_resume" then decoded_continuity = "provider_resume"
     elseif continuity_mode == "reconstructed" then decoded_continuity = "reconstructed"
     elseif continuity_mode == "fresh" then decoded_continuity = "fresh" end
-    return {session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
+    return {thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
+        definition = extras.definition, last_result = last_result,
+        session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
         activity = decoded_activity,
         execution = {state = decoded_state, evidence_at = evidence_at, stale = execution_object.stale == true},
         queue_count = queue_count, effective_limits = limits,
         continuity = {mode = decoded_continuity, evidence = evidence}, actions = actions}, nil
+end
+
+function M.decode_history(value: unknown): (HistoryPage?, string?)
+    local page = shape(value, "work history", {"items", "next"})
+    local rows = page and bounds.array(page.items, 64)
+    if not page or not rows then return nil, "work history is malformed" end
+    local items: {HistoryItem} = {}
+    local previous = 0
+    for _, raw in ipairs(rows) do
+        local row = shape(raw, "history item", {"work", "sequence", "input", "created_at"})
+        local work = row and M.ref("work", row.work)
+        local sequence = row and M.position(row.sequence)
+        local at = row and bounds.timestamp(row.created_at)
+        if not row or not work or not sequence or sequence <= previous or not at or row.input == nil then return nil, "history item is malformed" end
+        items[#items + 1] = {work = work, sequence = sequence, input = row.input, created_at = at}
+        previous = sequence
+    end
+    local next_cursor = page.next == nil and nil or M.position(page.next)
+    if page.next ~= nil and (not next_cursor or next_cursor ~= previous) then return nil, "history cursor is malformed" end
+    return {items = items, next = next_cursor}, nil
 end
 
 function M.decode_open_receipt(value: unknown): (OpenReceipt?, string?)

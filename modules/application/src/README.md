@@ -17,7 +17,7 @@ application, select a workspace, open a store, or grant access to a thread.
 | `diagram` | Layout diagrams on the frame: `mesh` (nodes at chosen or ringed positions, braille-routed edges, node hits), `treemap` (squarified tiles of sized items) and `flame` (icicle chart of a value tree); pure painters with hit targets, in the same node and bar vocabulary as `viz` |
 | `thread_protocol` | Exact bounded requests and replies for the authenticated application-to-broker thread facade |
 | `folder_picker` | A folder picker over the roots the host admits through the workspace catalog's `roots` and `folders` operations: the pure paging and navigation model and its table on the frame |
-| `sessions`, `sessions_protocol` | The typed `sessions` client: `call`, `open`, `send`, `await`, `join`, `cancel`, `close`, `get`, `work`, `list` and `catalog` over the `bee.sessions` owner contracts, with Session, Work and Operation handles; `sessions_protocol` holds the closed reply types and their decoders |
+| `sessions`, `sessions_protocol` | The typed `sessions` client: `call`, `open`, `send`, `await`, `join`, `cancel`, `close`, `get`, `work`, `history`, `list` and `catalog` over the `bee.sessions` owner contracts, with Session, Work and Operation handles; `sessions_protocol` holds the closed reply types and their decoders |
 | `host_leases` | Leases on node-managed workspace hosts: the holder registers a lease name, asks the node host manager for a workspace's host and releases it; the manager answers only the holder of that name, and the host policy `bee.security.desktop:workspace_host_lease_policy` decides who may name leases |
 
 Proven reference screens for each application class (deploy board, CI board,
@@ -69,3 +69,5 @@ Every mutation requires an explicit `operation_key`. The SDK cannot derive a
 durable identity from the current application broker or client, so applications
 must persist their own key before dispatch and reuse it after an uncertain
 reply. Reusing a key with different arguments is a conflict.
+
+Session snapshots expose `thread_ref`, `workspace`, driver/provider, definition and the latest settled result summary. `session:history{cursor?, limit?}` pages immutable Work inputs and refs in sequence order; rehydrate each Work to observe its current result. `client.navigate(launch, definition_id, arguments?)` queues an admitted app open through the current authenticated broker execution.

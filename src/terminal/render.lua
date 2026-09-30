@@ -27,7 +27,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     capture: layout.Capture?, preview: model.Rect?, status: string, label: string,
     preferences: appearance.Preferences?, start: menu.State?, initial: boolean?, catalog: {menu.Descriptor}?, editor: title_editor.State?, modal: dialog.State?,
     badges: {[string]: surface.Badge}?, active_selection: selection.State?, connection_info: connection.Info?, connection_open: boolean?, ready: boolean?,
-    transfers: display_transfer.Snapshot?, display_id: string?, workspaces: workspace_menu.Menu?): Frame
+    transfers: display_transfer.Snapshot?, display_id: string?, workspaces: workspace_menu.Menu?, attention_count: integer?): Frame
     local prefs = preferences or appearance.defaults()
     local theme = appearance.theme(prefs.theme)
     local FRAME = appearance.style(theme.border, theme.surface)
@@ -81,7 +81,7 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     end
     local hits: {TabHit} = {}
     if height >= 3 then
-        local strip = bar.draw(scene, order, status, label, prefs, start ~= nil and start.kind == nil, badges)
+        local strip = bar.draw(scene, order, status, label, prefs, start ~= nil and start.kind == nil, badges, attention_count)
         hits = strip.hits
         canvas:put(1, 1, strip.text, width)
     end

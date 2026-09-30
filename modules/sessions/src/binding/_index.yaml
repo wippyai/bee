@@ -22,6 +22,7 @@ entries:
       join: bee.sessions.binding:join
       get: bee.sessions.binding:get
       list: bee.sessions.binding:list
+      history: bee.sessions.binding:history
       cancel: bee.sessions.binding:cancel
       close: bee.sessions.binding:close
 - name: catalog_binding
@@ -50,6 +51,8 @@ entries:
   - entry: bee.sessions.binding:get
     path: .security.policies
   - entry: bee.sessions.binding:list
+    path: .security.policies
+  - entry: bee.sessions.binding:history
     path: .security.policies
   - entry: bee.sessions.binding:cancel
     path: .security.policies
@@ -103,6 +106,13 @@ entries:
   kind: function.lua
   source: file://owner_method.lua
   method: list
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
+- name: history
+  kind: function.lua
+  source: file://owner_method.lua
+  method: history
   modules: [security]
   imports: {owner: bee.sessions:owner}
   security: {policies: []}

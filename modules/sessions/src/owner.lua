@@ -73,7 +73,10 @@ local function snapshot(value: unknown): (Object?, string?)
     elseif active > 0 or queued > 0 then activity = "working" end
     local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
     if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
-    return {session = row.session, revision = row.revision, incarnation = 1, title = row.title,
+    local route = object(row.route) or {}
+    return {session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
+        driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
+        revision = row.revision, incarnation = 1, title = row.title,
         lifecycle = lifecycle, activity = activity,
         execution = {state = active > 0 and "running" or "quiescent", evidence_at = at, stale = false},
         queue_count = queued, effective_limits = {}, continuity = {mode = "provider_resume"}, actions = {}}, nil
@@ -131,7 +134,7 @@ local function open(request: Object): Reply
     if not placement_methods then return unavailable("admission omitted placement operations", operation_key) end
     local route: Object = {definition = definition, plan_digest = plan_value.plan_digest,
         saved_profile_id = profile_id, saved_profile_revision = profile_revision, workdir = workdir,
-        driver_binding_ref = driver_binding_ref, profile_id = profile_ref, driver_methods = methods,
+        driver_binding_ref = driver_binding_ref, provider = driver_binding_ref:match("^bee%.driver%.([^:]+):"), profile_id = profile_ref, driver_methods = methods,
         placement_methods = placement_methods}
     local created, create_error = journal.invoke("session_create", {operation_key = operation_key,
         title = plan_value.title or definition, route = route})
@@ -587,6 +590,13 @@ function M.call(method: string, request: unknown): Reply
         if not receipt then return unavailable("open returned no session receipt", operation_key) end
         return send({session = receipt.session, input = input.input, output = input.output,
             expected_incarnation = 1, operation_key = operation_key})
+    end
+    if method == "history" then
+        local session = ref(input.session)
+        if not session or bounds.fields(input, {"session", "cursor", "limit"}) then return fail("INVALID", "history requires a session") end
+        local page, page_error = journal.invoke("work_history", input)
+        if page_error or not page then return unavailable(page_error or "history unavailable", nil) end
+        return succeed(page)
     end
     if method == "send" then return send(input) end
     if method == "get" then return session_get(input) end

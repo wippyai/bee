@@ -75,3 +75,5 @@ ceiling names only the feed, read and replica operations.
 | `persist/` | Approval request, history, inbox, incarnation and thread-projection outbox storage |
 | `migrations/` | Immutable approval schema ledger |
 | `service/` | Authority and outbox worker processes |
+
+Approval views expose `requesting_session` when the authenticated requester is a SessionRef. The read-only `bee.approvals.binding:attention_count` accepts `{workspace_id}` and returns `{ok=true,value={count=N}}` for pending, unexpired requests. It requires the exact `bee.approvals.attention` grant for that workspace and provides neither request details nor decision authority.

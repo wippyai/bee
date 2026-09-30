@@ -1,4 +1,5 @@
 local tty = require("tty")
+local funcs = require("funcs")
 local logger = require("logger")
 local log = logger:named("bee.presenter")
 local title_editor = require("title_editor")
@@ -49,6 +50,21 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local output = assert(tty.surface({alternate_screen = true, hide_cursor = true, synchronized_output = true}))
     assert(tty.mouse(true))
     local width, height = tty.screen_size()
+    local attention_count: integer? = nil
+    local attention_pending = false
+    local attention_updates = channel.new(1)
+    local attention_ticker = time.ticker("2s")
+    local function refresh_attention()
+        if attention_pending then return end
+        attention_pending = true
+        coroutine.spawn(function()
+            local reply, err = funcs.call("bee.approvals.binding:attention_count", {workspace_id = workspace_id})
+            local value = type(reply) == "table" and reply.value or nil
+            local count = type(value) == "table" and value.count or nil
+            attention_updates:send({count = not err and type(reply) == "table" and reply.ok == true and count or nil})
+        end)
+    end
+    refresh_attention()
     local scene: model.Scene = model.new(width, height)
     local status_values: status_surface.Snapshot = {revision = 0, items = {}}
     local transfers: display_transfer.Snapshot = {version = 1, revision = 0, items = {}}
@@ -399,14 +415,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
         if active_selection and not selection_body(active_selection) then cancel_selection(); status = "Text selection unavailable: view changed" end
         local frame = render.draw(scene, tabs_order, contents, capture, preview, status, "Workspace " .. names.label(workspace_id),
             preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated,
-            transfers, display_id, workspaces)
+            transfers, display_id, workspaces, attention_count)
         tab_hits = frame.tabs
         output:present(frame.rows, {cursor = frame.cursor})
         dirty = false
     end
     assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))
     while running do
-        local cases = {input:case_receive(), lifecycle:case_receive(),
+        local cases = {attention_updates:case_receive(), attention_ticker:channel():case_receive(), input:case_receive(), lifecycle:case_receive(),
             replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(),
             transfer_updates:case_receive(), transfer_results:case_receive(), attachment_updates:case_receive(),
             dialog_states:case_receive(), dialog_results:case_receive(), delivery_updates:case_receive(),
@@ -414,7 +430,16 @@ local function main(owner: string, initial_application: string?, secondary_appli
         if clipboard_timeout then cases[#cases + 1] = clipboard_timeout:channel():case_receive() end
         local selected = channel.select(cases)
         if not selected.ok then break end
-        if selected.channel == lifecycle then
+        if selected.channel == attention_updates then
+            attention_pending = false
+            local update: unknown = selected.value
+            local row = type(update) == "table" and update :: {[string]: unknown} or nil
+            local count = row and row.count
+            attention_count = type(count) == "number" and count >= 0 and count == math.floor(count) and math.floor(count) or nil
+            dirty = true
+        elseif selected.channel == attention_ticker:channel() then
+            refresh_attention()
+        elseif selected.channel == lifecycle then
             local event = selected.value
             if event.kind == process.event.CANCEL then break end
             if event.kind == process.event.EXIT and tostring(event.from) == owner then

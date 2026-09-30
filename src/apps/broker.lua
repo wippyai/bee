@@ -1537,10 +1537,18 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     else stop(item, waiter, data.op == "force_stop") end
                 end
             end
-        elseif selected.channel == requests and selected.value:from() == owner then
+        elseif selected.channel == requests then
             local raw_request: unknown = selected.value:payload():data()
             local req = contract.request(raw_request)
             local raw_object = type(raw_request) == "table" and raw_request :: {[string]: unknown} or nil
+            if tostring(selected.value:from()) ~= owner then
+                local source = find_pid(tostring(selected.value:from()))
+                if not source or not raw_object or not req or req.op ~= "open"
+                    or raw_object.source_instance_id ~= source.instance_id or raw_object.source_view_id ~= source.view_id
+                    or raw_object.launch_token ~= source.launch_token or req.workspace_id ~= workspace_id
+                    or req.restore_instance_id ~= "" or req.thread_id ~= nil or req.recipient ~= ""
+                    or raw_object.runtime_provenance ~= nil then req = nil end
+            end
             local runtime_provenance = raw_object and raw_object.runtime_provenance ~= nil
                 and open_protocol.provenance(raw_object.runtime_provenance) or nil
             if req and req.workspace_id ~= workspace_id then

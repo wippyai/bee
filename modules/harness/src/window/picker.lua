@@ -228,6 +228,18 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         end)
     end
+    if launch.arguments[1] == "--session" then
+        local target = sessions_protocol.ref("session", launch.arguments[2])
+        if target then
+            open_serial = open_serial + 1
+            local serial = open_serial
+            opening = true
+            coroutine.spawn(function()
+                local conv, err = agents.resume(sessions.client(), target)
+                if running and serial == open_serial then opens:send({serial = serial, conversation = conv, error = err}) end
+            end)
+        else status = "Invalid session target" end
+    end
     process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
     while true do
         if dirty then

@@ -71,7 +71,7 @@ local function tabstrip(scene: model.Scene, order: {string}, width: integer, ico
 end
 
 function M.draw(scene: model.Scene, order: {string}, status: string, label: string,
-    preferences: appearance.Preferences, opened: boolean, badges: {[string]: surface.Badge}?): Frame
+    preferences: appearance.Preferences, opened: boolean, badges: {[string]: surface.Badge}?, attention_count: integer?): Frame
     status = string.gsub(status, "%c", " ")
     label = string.gsub(label, "%c", " ")
     local theme = appearance.theme(preferences.theme)
@@ -89,7 +89,8 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     elseif width >= 60 then right = " " .. label .. " ▾ "
     elseif width >= 24 then right = " Status ▾ " end
     right = tty.text.truncate(right, math.floor(math.max(0, width >= 80 and 18 or width // 2)))
-    local places = width >= 80 and " Sessions  Needs you —  Apps  Help " or ""
+    local attention = " Needs you " .. (attention_count ~= nil and tostring(attention_count) or "—") .. " "
+    local places = width >= 80 and (" Sessions " .. attention .. " Apps  Help ") or ""
     local origin = 7 + tty.text.width(places)
     local room = math.floor(math.max(0, width - origin - tty.text.width(right) - tty.text.width(restore)))
     local strip = tabstrip(scene, order, room, preferences.taskbar == "icons", badges)
@@ -98,8 +99,8 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     local hits: {TabHit} = {}
     if places ~= "" then
         hits[#hits + 1] = {id = "", x = 8, width = 10, action = "sessions"}
-        hits[#hits + 1] = {id = "", x = 18, width = 13, action = "attention"}
-        local tail = 18 + 13
+        hits[#hits + 1] = {id = "", x = 18, width = tty.text.width(attention), action = "attention"}
+        local tail = 18 + tty.text.width(attention)
         hits[#hits + 1] = {id = "", x = tail, width = 6, action = "apps"}
         hits[#hits + 1] = {id = "", x = tail + 6, width = 5, action = "help"}
     end

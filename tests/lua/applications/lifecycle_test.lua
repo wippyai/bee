@@ -163,6 +163,11 @@ local function define_tests()
             test.is_nil(contract.request({version = 1, op = "open", request_id = "", definition_id = "test:app"}))
             test.is_nil(contract.request({version = 1, op = "open", request_id = "1", definition_id = "test:\27app"}))
             test.is_nil(contract.binding({definition_id = "test:app", policies = {[2] = "test:policy"}}))
+            local shipped_policies: {string} = {}
+            for index = 1, 19 do shipped_policies[index] = "host:policy" .. tostring(index) end
+            test.not_nil(contract.binding({definition_id = "test:app", policies = shipped_policies}))
+            for index = 20, 33 do shipped_policies[index] = "host:policy" .. tostring(index) end
+            test.is_nil(contract.binding({definition_id = "test:app", policies = shipped_policies}))
             test.is_nil(contract.binding({definition_id = "test:app", policies = {}, appearance_write = "true"}))
             local descriptor = contract.descriptor("test:app", {api_version = 1, lifetime = "view", title = "Test",
                 revision = "1", instance_policy = "multiple", policies = {"root"}, appearance_write = true})

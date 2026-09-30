@@ -4,6 +4,7 @@ local process = require("process")
 local time = require("time")
 local channel = require("channel")
 local logger = require("logger")
+local hash = require("hash")
 local scheduler = require("scheduler")
 local threads_journal = require("threads_journal")
 local executors = require("executors")
@@ -15,7 +16,9 @@ M.SCAN_INTERVAL = "5s"
 local function pass(): string?
     local runtime, runtime_error = executors.runtime()
     if not runtime then return runtime_error or "executor registry is unavailable" end
-    local service, service_error = scheduler.create(threads_journal.adapter(), runtime, nil, tostring(process.pid()))
+    local run_id, identity_error = hash.sha256(tostring(process.pid()))
+    if not run_id then return tostring(identity_error or "scheduler identity unavailable") end
+    local service, service_error = scheduler.create(threads_journal.adapter(), runtime, nil, run_id)
     if not service then return service_error or "scheduler could not be initialized" end
     local report, pass_error = service.run_pass()
     if not report then return pass_error or "scheduler scan failed" end

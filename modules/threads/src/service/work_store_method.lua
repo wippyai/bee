@@ -58,4 +58,7 @@ end
 function M.feed_read(request: unknown): types.Reply
     return boundary.run(work_store.feed_read, request, false)
 end
+function M.work_history(request: unknown): types.Reply
+    return boundary.run(work_store.work_history, request, false)
+end
 return M

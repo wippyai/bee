@@ -206,7 +206,7 @@ end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, session_route: boolean?): (Plan?, Reply?, placement_types.Preferences?)
     if session_route and launch.session_profile_id then
         launch.profile_id = launch.session_profile_id
-        launch.default_mode = "session"
+        launch.default_mode = launch.session_mode or "session"
     end
     local definition_ref = launch.ref
     local chosen = launch.default_mode

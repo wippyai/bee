@@ -164,7 +164,22 @@ end
 function M.resume(client: sessions.Client, ref: string): (Conversation?, string?)
     local session, fault = client:get(ref)
     if not session then return nil, describe(fault) end
-    return conversation(session), nil
+    local conv = conversation(session)
+    local cursor: integer? = nil
+    for _ = 1, M.MAX_PAGES do
+        local page, history_fault = session:history({cursor = cursor})
+        if not page then conv.notice = describe(history_fault); break end
+        for _, item in ipairs(page.items) do
+            local work, work_fault = client:work(item.work)
+            if not work then return nil, describe(work_fault) end
+            conv.turns[#conv.turns + 1] = {work = work, input = render(item.input), state = "queued", text = ""}
+            if #conv.turns > M.MAX_TURNS then table.remove(conv.turns, 1) end
+        end
+        cursor = page.next
+        if not cursor then break end
+    end
+    M.refresh(conv)
+    return conv, nil
 end
 
 function M.home(ref: string): string?

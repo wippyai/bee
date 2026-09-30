@@ -355,6 +355,13 @@ local function main(value: unknown)
                 elseif text == "n" then ask_batch("denied")
                 elseif text == "l" then ask_lease("lease_propose")
                 elseif text == "g" then ask_lease("lease_grant")
+                elseif text == "s" or text == "b" then
+                    local detail = state.detail
+                    if detail and detail.requesting_session then
+                        local _, err = client.navigate(launch, "bee.harness.window:app", {"--session", detail.requesting_session})
+                        status = err or "Opening the requesting session"
+                    else status = "This request has no source session" end
+                    dirty = true
                 elseif key == "enter" or text == "o" then perform(open_selected)
                 elseif text == "a" then ask("approve")
                 elseif text == "d" then ask("deny")

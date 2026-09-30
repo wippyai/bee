@@ -350,6 +350,8 @@ entries:
     description: Commit immutable work with owner-set sender identity
   - name: work_describe
     description: Read a work phase and its result when settled
+  - name: work_history
+    description: Page immutable work inputs for a session
   - name: work_scan
     description: Scan the next queued work and unsettled turn for the Sessions scheduler
   - name: turn_reserve
@@ -385,6 +387,7 @@ entries:
       session_transition: bee.threads.service:session_transition
       work_send: bee.threads.service:work_send
       work_describe: bee.threads.service:work_describe
+      work_history: bee.threads.service:work_history
       work_scan: bee.threads.service:work_scan
       turn_reserve: bee.threads.service:turn_reserve
       turn_recover: bee.threads.service:turn_recover

@@ -14,6 +14,7 @@ entries:
     - bee.threads.service:session_transition
     - bee.threads.service:work_send
     - bee.threads.service:work_describe
+    - bee.threads.service:work_history
     - bee.threads.service:work_scan
     - bee.threads.service:turn_reserve
     - bee.threads.service:turn_recover
@@ -44,12 +45,15 @@ entries:
     - bee.sessions.scheduler.wake
     - bee.sessions:threads_journal_ref
     - bee.sessions:executor_selection
+    - bee.sessions.binding:external_executor_binding
+    - bee.threads:journal_local
     - bee.executor.external.binding:run_turn
     - bee.threads.service:session_create
     - bee.threads.service:session_describe
     - bee.threads.service:session_transition
     - bee.threads.service:work_send
     - bee.threads.service:work_describe
+    - bee.threads.service:work_history
     - bee.threads.service:work_scan
     - bee.threads.service:turn_reserve
     - bee.threads.service:turn_recover

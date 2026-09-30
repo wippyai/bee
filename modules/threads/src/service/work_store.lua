@@ -361,6 +361,8 @@ function M.session_create(db: sql.DB, actor: string, request: unknown): Result
         if head_error then return failure("INTERNAL", head_error) end
         local member_error = transaction.insert_member(tx, thread_id, caller :: string, "owner", 1)
         if member_error then return failure("INTERNAL", member_error) end
+        local peer_error = transaction.insert_member(tx, thread_id, session_ref, "participant", 1)
+        if peer_error then return failure("INTERNAL", peer_error) end
         local session_error = execute(tx, "INSERT INTO bee_sessions (session_ref, thread_id, workspace_id, owner_actor, title, state, revision, created_at, updated_at, route_json) " ..
             "VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, ?)", {session_ref, thread_id, workspace, caller, title, now, now, stored_route_json}, "create session")
         if session_error then return failure("INTERNAL", session_error) end
@@ -417,7 +419,21 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
         if not stalled then return failure("INTERNAL", "stalled turn count is corrupt") end
         local route, route_error = decode_json(session.route_json)
         if route_error then return failure("INTERNAL", route_error) end
-        return transaction.success({session = session.session_ref, title = session.title, state = session.state, route = route,
+        local last_rows, last_error = tx:query("SELECT work_ref, result_json, created_at FROM bee_session_work WHERE session_ref = ? AND phase = 'settled' ORDER BY sequence DESC LIMIT 1", {session_ref})
+        if last_error or not last_rows then return transaction.storage_failure("read last session result") end
+        local last_result: Row? = nil
+        if #last_rows == 1 then
+            local last = last_rows[1]
+            local decoded, decode_error = decode_json(tostring(last.result_json or ""))
+            local result = object(decoded)
+            if decode_error or not result then return failure("INTERNAL", "last session result is corrupt") end
+            local value = object(result.value)
+            local fault = object(result.error)
+            local summary = value and text(value.text, 65536) or fault and text(fault.message, 16384) or tostring(result.state)
+            last_result = {work = last.work_ref, outcome = result.state, summary = (summary or ""):sub(1, 4096), at = last.created_at}
+        end
+        return transaction.success({session = session.session_ref, thread_ref = session.thread_id, workspace = session.workspace_id,
+            last_result = last_result, title = session.title, state = session.state, route = route,
             revision = session.revision, created_at = session.created_at, updated_at = session.updated_at,
             queued = queued, active = reserved + accepted, settled = settled, uncertain = uncertain, stalled = stalled,
             head_sequence = head_sequence}, false)
@@ -630,6 +646,33 @@ function M.work_describe(db: sql.DB, actor: string, request: unknown): Result
             end
         end
         return transaction.success(value, false)
+    end)
+end
+
+function M.work_history(db: sql.DB, actor: string, request: unknown): Result
+    local _, workspace, denied = authenticated(actor)
+    if denied then return denied end
+    local input = object(request)
+    if not input or not has_only(input, {session = true, cursor = true, limit = true}) then return missing_request() end
+    local session_ref = ref(input.session)
+    local cursor = input.cursor == nil and 0 or integer(input.cursor)
+    local limit = input.limit == nil and 64 or integer(input.limit)
+    if not session_ref or not cursor or cursor < 0 or not limit or limit < 1 or limit > 64 then return missing_request() end
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        local session, session_error = get_session(tx, session_ref, workspace)
+        if session_error then return transaction.storage_failure(session_error) end
+        if not session then return failure("NOT_FOUND", "session does not exist") end
+        local rows, query_error = tx:query("SELECT work_ref, sequence, input_json, created_at FROM bee_session_work WHERE session_ref = ? AND sequence > ? ORDER BY sequence LIMIT ?", {session_ref, cursor, limit + 1})
+        if query_error or not rows then return transaction.storage_failure("read session work history") end
+        local items: {Row} = {}
+        local more = #rows > limit
+        for index = 1, math.min(#rows, limit) do
+            local row = rows[index]
+            local input_value, decode_error = decode_json(tostring(row.input_json))
+            if decode_error then return failure("INTERNAL", decode_error) end
+            items[#items + 1] = {work = row.work_ref, sequence = row.sequence, input = input_value, created_at = row.created_at}
+        end
+        return transaction.success({items = items, next = more and items[#items].sequence or nil}, false)
     end)
 end
 

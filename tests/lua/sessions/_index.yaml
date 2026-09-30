@@ -63,6 +63,7 @@ entries:
       cancel: bee.tests.sessions:fake_cancel
       close: bee.tests.sessions:fake_close
       list: bee.tests.sessions:fake_list
+      history: bee.tests.sessions:fake_history
 - name: fake_catalog_owner
   kind: contract.binding
   meta: {type: test_support}
@@ -174,3 +175,9 @@ entries:
     journal: bee.sessions:threads_journal
   security:
     policies: [bee.tests.sessions:probe_policy]
+- name: fake_history
+  kind: function.lua
+  source: file://fake_owner.lua
+  method: history
+  meta: {type: test_support}
+  modules: [security]

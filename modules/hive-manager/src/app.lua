@@ -53,6 +53,7 @@ local function main(value: unknown)
     if not launch then error("Invalid application launch") end
     local broker = launch.broker_pid
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local answers = assert(process.listen("bee.application.query.result", {message = true}))
@@ -248,6 +249,7 @@ local function main(value: unknown)
             dirty = false
         elseif dirty then
             local drawn = layout.draw(width, height, preferences, state, offset, status)
+            frame.render(drawn, menu, preferences)
             hits = drawn.hits
             offset = drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -340,51 +342,56 @@ local function main(value: unknown)
                 if result.action == "accept" then perform(function() act(asked.intent) end) else status = "Cancelled"; dirty = true end
             end
         else
-            local data = event.value
-            if data.type == "close" then running = false
-            elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
-            elseif data.type == "key" and data.action ~= "release" and state.editing then
-                local key = data.key_type
-                if key == "enter" then
-                    if model.submit(state) then perform(open_selected) end
-                elseif key == "esc" or key == "escape" then model.edit(state, false)
-                elseif key == "backspace" then model.erase(state)
-                elseif type(data.key) == "string" and data.key ~= "" and (key == nil or key == "") then model.type_text(state, data.key) end
-                dirty = true
-            elseif data.type == "key" and data.action ~= "release" then
-                local key = data.key_type
-                local letter = tostring(data.key or "")
-                status = ""
-                if state.pane == "workspaces" and (key == "pgup" or key == "pgdown") then
-                    if model.page(state, key == "pgdown" and 1 or -1) then perform(open_selected) end
+            local data, handled = frame.route(menu, event.value, state.editing)
+            if handled then dirty = true end
+            if data then
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+                elseif data.type == "key" and data.action ~= "release" and state.editing then
+                    local key = data.key_type
+                    if key == "enter" then
+                        if model.submit(state) then perform(open_selected) end
+                    elseif key == "esc" or key == "escape" then model.edit(state, false)
+                    elseif key == "backspace" then model.erase(state)
+                    elseif type(data.key) == "string" and data.key ~= "" and (key == nil or key == "") then model.type_text(state, data.key) end
                     dirty = true
-                elseif state.pane == "workspaces" and letter == "/" then model.edit(state, true); dirty = true
-                elseif key == "up" or letter == "k" then model.move(state, -1); dirty = true
-                elseif key == "down" or letter == "j" then model.move(state, 1); dirty = true
-                elseif key == "pgup" then model.move(state, -8); dirty = true
-                elseif key == "pgdown" then model.move(state, 8); dirty = true
-                elseif key == "tab" then model.toggle_pane(state); dirty = true
-                elseif key == "enter" then
-                    if state.pane == "nodes" then perform(open_selected) else ask("observe") end
-                elseif letter == "c" then ask("control")
-                elseif letter == "o" then ask("observe")
-                elseif letter == "r" then request_refresh()
-                elseif letter == "t" then model.toggle_technical(state); dirty = true
-                elseif key == "esc" or key == "escape" then running = false end
-            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
-                if hit then
+                elseif data.type == "key" and data.action ~= "release" then
+                    local key = data.key_type
+                    local letter = tostring(data.key or "")
                     status = ""
-                    if hit.kind == "node" then model.select_node(state, hit.key); model.set_pane(state, "nodes"); dirty = true
-                    elseif hit.kind == "workspace" then model.select_workspace(state, hit.key); model.set_pane(state, "workspaces"); dirty = true
-                    elseif hit.kind == "open" then perform(open_selected)
-                    elseif hit.kind == "control" then ask("control")
-                    elseif hit.kind == "observe" then ask("observe")
-                    elseif hit.kind == "refresh" then request_refresh()
-                    elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
+                    if state.pane == "workspaces" and (key == "pgup" or key == "pgdown") then
+                        if model.page(state, key == "pgdown" and 1 or -1) then perform(open_selected) end
+                        dirty = true
+                    elseif state.pane == "workspaces" and letter == "/" then model.edit(state, true); dirty = true
+                    elseif key == "up" or letter == "k" then model.move(state, -1); dirty = true
+                    elseif key == "down" or letter == "j" then model.move(state, 1); dirty = true
+                    elseif key == "pgup" then model.move(state, -8); dirty = true
+                    elseif key == "pgdown" then model.move(state, 8); dirty = true
+                    elseif key == "tab" then model.toggle_pane(state); dirty = true
+                    elseif key == "enter" then
+                        if state.pane == "nodes" then perform(open_selected) else ask("observe") end
+                    elseif letter == "c" then ask("control")
+                    elseif letter == "o" then ask("observe")
+                    elseif letter == "r" then request_refresh()
+                    elseif letter == "t" then model.toggle_technical(state); dirty = true
+                    elseif key == "esc" or key == "escape" then
+                        if state.pane == "workspaces" then model.set_pane(state, "nodes"); dirty = true else running = false end
+                    end
+                elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                    local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                    if hit then
+                        status = ""
+                        if hit.kind == "node" then model.select_node(state, hit.key); model.set_pane(state, "nodes"); dirty = true
+                        elseif hit.kind == "workspace" then model.select_workspace(state, hit.key); model.set_pane(state, "workspaces"); dirty = true
+                        elseif hit.kind == "open" then perform(open_selected)
+                        elseif hit.kind == "control" then ask("control")
+                        elseif hit.kind == "observe" then ask("observe")
+                        elseif hit.kind == "refresh" then request_refresh()
+                        elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
+                    end
+                elseif data.type == "mouse" and data.action == "wheel" then
+                    model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1); dirty = true
                 end
-            elseif data.type == "mouse" and data.action == "wheel" then
-                model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1); dirty = true
             end
         end
     end

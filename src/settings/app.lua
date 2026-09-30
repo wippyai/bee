@@ -16,6 +16,7 @@ local function main(value: unknown)
     local broker = launch.broker_pid
     local announced = false
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local queries = assert(process.listen("bee.application.query.result", {message = true}))
@@ -146,6 +147,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local drawn = view.draw(width, height, preferences, pane, offset, status)
+            frame.render(drawn, menu, preferences)
             hits = drawn.hits
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
@@ -210,49 +212,52 @@ local function main(value: unknown)
                 end
             end
         else
-            local data = event.value
-            if data.type == "close" then running = false
-            elseif data.type == "resize" then
-                width, height = data.width, data.height
-                reveal(); dirty = true
-            elseif data.type == "key" and data.action ~= "release" then
-                local key = data.key_type
-                local grid = view.grid(width, height)
-                if pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
-                    and (data.key == "e" or data.key == "E") then query_edit_mode("text", "enable_input", nil)
-                elseif pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
-                    and (data.key == "d" or data.key == "D") then query_edit_mode("confirm", "disable_confirm", nil)
-                elseif pane ~= "edit_mode" and key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()
-                elseif key == "left" then choose(selected() - 1)
-                elseif key == "right" then choose(selected() + 1)
-                elseif key == "up" then choose(selected() - grid.columns)
-                elseif key == "down" then choose(selected() + grid.columns)
-                elseif key == "home" then choose(1)
-                elseif key == "end" then choose(count())
-                elseif key == "pgup" then browse(-math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
-                elseif key == "pgdown" then browse(math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
-                elseif key == "tab" then switch(pane == "theme" and "background"
-                    or (pane == "background" and "taskbar" or (pane == "taskbar" and "edit_mode"
-                    or (pane == "edit_mode" and "about" or "theme"))))
-                elseif key == "esc" or key == "escape" then running = false end
-            elseif data.type == "mouse" then
-                local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
-                if data.action == "wheel" and y >= 4 and y < height - 2 then
+            local data, handled = frame.route(menu, event.value, false)
+            if handled then dirty = true end
+            if data then
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then
+                    width, height = data.width, data.height
+                    reveal(); dirty = true
+                elseif data.type == "key" and data.action ~= "release" then
+                    local key = data.key_type
                     local grid = view.grid(width, height)
-                    local step = (data.button == "wheel_up" or data.button == "up") and -grid.columns or grid.columns
-                    browse(step)
-                elseif data.action == "press" and data.button == "left" then
-                    local hit = frame.hit(hits, x, y)
-                    if hit then
-                        if hit.kind == "inherit" then inherit()
-                        elseif hit.kind == "theme" then switch("theme")
-                        elseif hit.kind == "background" then switch("background")
-                        elseif hit.kind == "taskbar" then switch("taskbar")
-                        elseif hit.kind == "edit_mode" then switch("edit_mode")
-                        elseif hit.kind == "about" then switch("about")
-                        elseif hit.kind == "select" then choose(hit.index)
-                        elseif hit.kind == "step" then choose(selected() + hit.index)
-                        elseif hit.kind == "page" then browse(hit.index * view.grid(width, height).capacity) end
+                    if pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
+                        and (data.key == "e" or data.key == "E") then query_edit_mode("text", "enable_input", nil)
+                    elseif pane == "edit_mode" and key == "runes" and not data.ctrl and not data.alt
+                        and (data.key == "d" or data.key == "D") then query_edit_mode("confirm", "disable_confirm", nil)
+                    elseif pane ~= "edit_mode" and key == "runes" and data.key == "d" and not data.ctrl and not data.alt then inherit()
+                    elseif key == "left" then choose(selected() - 1)
+                    elseif key == "right" then choose(selected() + 1)
+                    elseif key == "up" then choose(selected() - grid.columns)
+                    elseif key == "down" then choose(selected() + grid.columns)
+                    elseif key == "home" then choose(1)
+                    elseif key == "end" then choose(count())
+                    elseif key == "pgup" then browse(-math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
+                    elseif key == "pgdown" then browse(math.floor(pane == "about" and math.max(1, height - 5) or grid.capacity))
+                    elseif key == "tab" then switch(pane == "theme" and "background"
+                        or (pane == "background" and "taskbar" or (pane == "taskbar" and "edit_mode"
+                        or (pane == "edit_mode" and "about" or "theme"))))
+                    elseif key == "esc" or key == "escape" then running = false end
+                elseif data.type == "mouse" then
+                    local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
+                    if data.action == "wheel" and y >= 4 and y < height - 2 then
+                        local grid = view.grid(width, height)
+                        local step = (data.button == "wheel_up" or data.button == "up") and -grid.columns or grid.columns
+                        browse(step)
+                    elseif data.action == "press" and data.button == "left" then
+                        local hit = frame.hit(hits, x, y)
+                        if hit then
+                            if hit.kind == "inherit" then inherit()
+                            elseif hit.kind == "theme" then switch("theme")
+                            elseif hit.kind == "background" then switch("background")
+                            elseif hit.kind == "taskbar" then switch("taskbar")
+                            elseif hit.kind == "edit_mode" then switch("edit_mode")
+                            elseif hit.kind == "about" then switch("about")
+                            elseif hit.kind == "select" then choose(hit.index)
+                            elseif hit.kind == "step" then choose(selected() + hit.index)
+                            elseif hit.kind == "page" then browse(hit.index * view.grid(width, height).capacity) end
+                        end
                     end
                 end
             end

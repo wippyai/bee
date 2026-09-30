@@ -21,6 +21,7 @@ local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     assert(tty.start())
@@ -256,6 +257,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local drawn = view.draw(width, height, preferences, state, offset)
+            frame.render(drawn, menu, preferences)
             hits = drawn.hits
             offset = drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -277,74 +279,77 @@ local function main(value: unknown)
                 if next_preferences and type(data) == "table" and data.version == 1 then preferences = next_preferences; dirty = true end
             end
         else
-            local data = event.value
-            if data.type == "close" then running = false
-            elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
-            elseif data.type == "key" and data.action ~= "release" then
-                local key = data.key_type
-                local text = tostring(data.key or "")
-                if key == "tab" or text == "\t" then
-                    if not selection_locked() then model.toggle_pane(state); offset = 0; dirty = true end
-                elseif key == "up" or text == "k" then
-                    if state.pane == "review" then offset = math.floor(math.max(0, offset - 1))
-                    elseif not selection_locked() then
-                        if state.pane == "available" then model.move_available(state, -1) else model.move(state, -1) end
-                    end
-                    dirty = true
-                elseif key == "down" or text == "j" then
-                    if state.pane == "review" then offset = offset + 1
-                    elseif not selection_locked() then
-                        if state.pane == "available" then model.move_available(state, 1) else model.move(state, 1) end
-                    end
-                    dirty = true
-                elseif key == "pgup" then
-                    if state.pane == "review" then offset = math.floor(math.max(0, offset - 8))
-                    elseif not selection_locked() then
-                        if state.pane == "available" then model.move_available(state, -8) else model.move(state, -8) end
-                    end
-                    dirty = true
-                elseif key == "pgdown" then
-                    if state.pane == "review" then offset = offset + 8
-                    elseif not selection_locked() then
-                        if state.pane == "available" then model.move_available(state, 8) else model.move(state, 8) end
-                    end
-                    dirty = true
-                elseif key == "enter" then
-                    local kind, _, enabled = view.primary(state)
-                    if enabled then take(kind) end
-                elseif text == "a" then take(state.pane == "available" and "stage" or "accept")
-                elseif text == "n" then take("reject")
-                elseif text == "s" then take(state.pane == "available" and "stage" or "select")
-                elseif text == "p" then take("prepare")
-                elseif text == "x" then take("step")
-                elseif text == "i" then take("status")
-                elseif text == "g" then take("recover")
-                elseif text == "f" then take("refresh")
-                elseif text == "t" then take("details")
-                elseif key == "esc" or key == "escape" then running = false end
-            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
-                if hit then
-                    local pane = view.pane_of(hit.kind)
-                    if pane then
-                        if not selection_locked() then
-                            model.show_pane(state, pane)
-                            offset = 0; dirty = true
+            local data, handled = frame.route(menu, event.value, false)
+            if handled then dirty = true end
+            if data then
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+                elseif data.type == "key" and data.action ~= "release" then
+                    local key = data.key_type
+                    local text = tostring(data.key or "")
+                    if key == "tab" or text == "\t" then
+                        if not selection_locked() then model.toggle_pane(state); offset = 0; dirty = true end
+                    elseif key == "up" or text == "k" then
+                        if state.pane == "review" then offset = math.floor(math.max(0, offset - 1))
+                        elseif not selection_locked() then
+                            if state.pane == "available" then model.move_available(state, -1) else model.move(state, -1) end
                         end
-                    elseif hit.kind == "available" then
-                        if not selection_locked() then model.select_available(state, hit.key); dirty = true end
-                    elseif hit.kind == "plan" then
-                        if not selection_locked() then model.select(state, hit.key); dirty = true end
-                    else take(hit.kind) end
+                        dirty = true
+                    elseif key == "down" or text == "j" then
+                        if state.pane == "review" then offset = offset + 1
+                        elseif not selection_locked() then
+                            if state.pane == "available" then model.move_available(state, 1) else model.move(state, 1) end
+                        end
+                        dirty = true
+                    elseif key == "pgup" then
+                        if state.pane == "review" then offset = math.floor(math.max(0, offset - 8))
+                        elseif not selection_locked() then
+                            if state.pane == "available" then model.move_available(state, -8) else model.move(state, -8) end
+                        end
+                        dirty = true
+                    elseif key == "pgdown" then
+                        if state.pane == "review" then offset = offset + 8
+                        elseif not selection_locked() then
+                            if state.pane == "available" then model.move_available(state, 8) else model.move(state, 8) end
+                        end
+                        dirty = true
+                    elseif key == "enter" then
+                        local kind, _, enabled = view.primary(state)
+                        if enabled then take(kind) end
+                    elseif text == "a" then take(state.pane == "available" and "stage" or "accept")
+                    elseif text == "n" then take("reject")
+                    elseif text == "s" then take(state.pane == "available" and "stage" or "select")
+                    elseif text == "p" then take("prepare")
+                    elseif text == "x" then take("step")
+                    elseif text == "i" then take("status")
+                    elseif text == "g" then take("recover")
+                    elseif text == "r" or text == "f" then take("refresh")
+                    elseif text == "t" then take("details")
+                    elseif key == "esc" or key == "escape" then running = false end
+                elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                    local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                    if hit then
+                        local pane = view.pane_of(hit.kind)
+                        if pane then
+                            if not selection_locked() then
+                                model.show_pane(state, pane)
+                                offset = 0; dirty = true
+                            end
+                        elseif hit.kind == "available" then
+                            if not selection_locked() then model.select_available(state, hit.key); dirty = true end
+                        elseif hit.kind == "plan" then
+                            if not selection_locked() then model.select(state, hit.key); dirty = true end
+                        else take(hit.kind) end
+                    end
+                elseif data.type == "mouse" and data.action == "wheel" then
+                    if state.pane == "review" then
+                        offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)))
+                    elseif not selection_locked() then
+                        if state.pane == "available" then model.move_available(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                        else model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1) end
+                    end
+                    dirty = true
                 end
-            elseif data.type == "mouse" and data.action == "wheel" then
-                if state.pane == "review" then
-                    offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)))
-                elseif not selection_locked() then
-                    if state.pane == "available" then model.move_available(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1)
-                    else model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1) end
-                end
-                dirty = true
             end
         end
     end

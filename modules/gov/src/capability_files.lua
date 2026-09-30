@@ -14,8 +14,9 @@ M.DATABASE_PREFIX = "bee.gov.grants:database."
 -- tree may contain it, so an ancestor subroot is refused as well.
 local PRIVATE_ROOT = ".wippy"
 local PRIVATE_PREFIX = ".wippy/"
--- Application databases live outside every approved readable tree.
-M.DATABASE_DIR = ".wippy/app-db"
+-- Application databases live outside every approved readable tree, under the
+-- host-selected application database root binding.
+M.DATABASE_ROOT = "${env:bee.env:app_database_root}"
 
 local function segments(value: string): ({string}?, string?)
     if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c") then
@@ -153,6 +154,12 @@ function M.volume(owner_raw: unknown, folder_raw: unknown, subpath_raw: unknown,
         data = config}, nil
 end
 
+local DATABASE_FILE_PATTERN = "^" .. (M.DATABASE_ROOT:gsub("%p", "%%%0")) .. "/[0-9a-f]+%.db$"
+
+function M.database_file(file: unknown): boolean
+    return type(file) == "string" and (file :: string):find(DATABASE_FILE_PATTERN) ~= nil
+end
+
 function M.database_id(owner_raw: unknown, name_raw: unknown): (string?, string?)
     if type(owner_raw) ~= "string" or #owner_raw == 0 or #owner_raw > 160 then
         return nil, "database grant owner is invalid"
@@ -174,7 +181,7 @@ function M.database(owner_raw: unknown, name_raw: unknown): (Database?, string?)
     local suffix, suffix_error = hex(owner_raw .. "\n" .. valid)
     if not suffix then return nil, suffix_error end
     return {id = id, kind = "db.sql.sqlite", meta = {comment = "Host-provisioned application database"},
-        data = {file = M.DATABASE_DIR .. "/" .. suffix .. ".db"}}, nil
+        data = {file = M.DATABASE_ROOT .. "/" .. suffix .. ".db"}}, nil
 end
 
 local function policy(id: string, actions: {string}, resources: {string}, comment: string): Policy

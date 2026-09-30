@@ -250,6 +250,11 @@ function M.show(state: State, phase: Phase)
     state.phase = phase
 end
 
+function M.begin_plan(state: State)
+    reset_plan(state)
+    M.show(state, "plan")
+end
+
 function M.catalog_intent(state: State): Intent
     local request: Object = {keyword = state.keyword, page = state.page}
     if state.query ~= "" then request.query = state.query end

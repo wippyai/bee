@@ -367,3 +367,10 @@ home. Undeclared, absent, traversing or unresolved dependencies refuse before
 child creation; refusal evidence contains no configuration values. Native
 descriptive text containing a home path remains text. Docker projection retains
 its stricter host-command and path checks and declared portable configuration.
+
+After an independently observed child exit, pipe draining has a bounded read
+budget. Time spent with reads paused at the output spool limit does not consume
+that budget. After child exit, the retention deadline bounds each continuous wait at the
+spool limit; acknowledged progress that resumes reads ends that wait. Once both
+streams end, one retention deadline bounds the remaining unacknowledged output. Drain expiration records forced
+truncation; retention expiration records output loss rather than consumption.

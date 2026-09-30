@@ -35,6 +35,7 @@
       "BEE_GATEWAY_DB": "gateway.db",
       "BEE_PLACEMENT_DB": "placement.db",
       "BEE_PLACEMENT_ROOT": "placement",
+      "BEE_APP_DATABASE_ROOT": "app-db",
       "BEE_GOVERNANCE_DB": "governance.db",
       "BEE_SYNC_DB": "sync.db"
     }

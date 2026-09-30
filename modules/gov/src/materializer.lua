@@ -8,6 +8,7 @@ local hash = require("hash")
 local bounds = require("bounds")
 local application_admission = require("application_admission")
 local capability_grants = require("capability_grants")
+local capability_files = require("capability_files")
 
 local M = {}
 
@@ -202,8 +203,7 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             local database_config = database and bounds.object(database.data) or nil
             local file = database_config and database_config.file or nil
             if not database or not id or not id:match("^bee%.gov%.grants:database%.[0-9a-f]+$")
-                or database.kind ~= "db.sql.sqlite" or type(file) ~= "string"
-                or (file :: string):sub(1, 14) ~= ".wippy/app-db/" then
+                or database.kind ~= "db.sql.sqlite" or not capability_files.database_file(file) then
                 return nil, nil, nil, "generated capability database is invalid"
             end
             if database_ids[id] then return nil, nil, nil, "generated capability database is duplicated" end

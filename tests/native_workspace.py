@@ -10,7 +10,7 @@ import pyte
 from tui_smoke import Desktop
 
 STORE_NAMES = ("workspace", "threads", "approvals", "resources", "credentials", "placement", "gateway", "node", "governance", "sync")
-STATE_ENVIRONMENT = {f"BEE_{name.upper()}_DB" for name in STORE_NAMES} | {"BEE_PLACEMENT_ROOT", "BEE_CLIENT_DB"}
+STATE_ENVIRONMENT = {f"BEE_{name.upper()}_DB" for name in STORE_NAMES} | {"BEE_PLACEMENT_ROOT", "BEE_APP_DATABASE_ROOT", "BEE_CLIENT_DB"}
 
 
 class NativeDesktop(Desktop):

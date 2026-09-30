@@ -35,6 +35,7 @@ entries:
     access: bee.gateway.security:access
     elevation: bee.gateway.security:elevation
     installation: bee.gateway.security:installation
+    hubpublish: bee.gateway.security:publish
 - name: open
   kind: function.lua
   source: file://open_method.lua
@@ -209,6 +210,34 @@ entries:
     - bee.gateway.security:database_ref_policy
     - bee.gateway.security:execute_policy
     - bee.gateway.security:installation_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: publish_request
+  kind: function.lua
+  source: file://publish_request_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: publish_status
+  kind: function.lua
+  source: file://publish_status_method.lua
+  method: handle
+  imports:
+    gateway: bee.gateway.binding:gateway
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
 - name: installation_binding

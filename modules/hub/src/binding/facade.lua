@@ -6,6 +6,7 @@ local catalog = require("catalog")
 local inspection = require("inspection")
 local plan = require("plan")
 local preview = require("preview")
+local publishing = require("publishing")
 local transaction = require("transaction")
 type Result = transaction.Result
 local BACKEND = "bee.hub.binding:backend"
@@ -15,7 +16,7 @@ local function handle(raw: unknown): Result
     if not value then return transaction.failure("INVALID", "Hub request must be an object") end
     local extra = bounds.fields(value, {"operation", "request", "expected_digest"})
     if extra then return transaction.failure("INVALID", extra) end
-    local operation = bounds.member(value.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan", "apply", "status"})
+    local operation = bounds.member(value.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan", "apply", "status", "publish_plan", "publish_apply", "publish_status"})
     if not operation then return transaction.failure("INVALID", "unknown Hub operation") end
     local resource = "catalog"
     if operation == "catalog" then
@@ -43,6 +44,19 @@ local function handle(raw: unknown): Result
         local request, problem = plan.decode(value.request)
         if not request then return transaction.failure("INVALID", problem or "invalid package request") end
         resource = request.component
+    elseif operation == "publish_plan" then
+        local request, problem = publishing.decode(value.request)
+        if not request then return transaction.failure("INVALID", problem or "invalid publication request") end
+        resource = request.component
+    elseif operation == "publish_apply" then
+        local supplied = bounds.object(value.request)
+        local digest = supplied and value.expected_digest or nil
+        local component = supplied and bounds.line(supplied.component, 160) or nil
+        if type(digest) ~= "string" or #digest ~= 64 or not digest:match("^[0-9a-f]+$")
+            or not component or not component:match("^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$") then
+            return transaction.failure("INVALID", "publication apply names a component and its plan digest")
+        end
+        resource = component
     elseif operation == "status" then
         if value.expected_digest ~= nil then
             if value.request ~= nil then return transaction.failure("INVALID", "receipt lookup takes no request body") end
@@ -57,17 +71,26 @@ local function handle(raw: unknown): Result
             end
         end
     elseif value.request ~= nil then return transaction.failure("INVALID", "operation takes no request body") end
-    if operation == "apply" or (operation == "status" and value.expected_digest ~= nil) then
+    if operation == "apply" or operation == "publish_apply"
+        or (operation == "status" and value.expected_digest ~= nil) or operation == "publish_status" then
         local digest = value.expected_digest
         if type(digest) ~= "string" or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then
             return transaction.failure("INVALID", "operation requires a plan digest")
+        end
+        if operation == "publish_status" and value.request ~= nil then
+            return transaction.failure("INVALID", "receipt lookup takes no request body")
         end
     elseif value.expected_digest ~= nil then return transaction.failure("INVALID", "operation takes no plan digest") end
     -- Planning resolves and verifies the complete dependency closure but does
     -- not publish registry state. It can reveal other installed roots, so a
     -- scoped caller also needs inventory/catalog read authority. Only apply
-    -- crosses the management boundary.
-    local action = operation == "apply" and "bee.hub.manage" or "bee.hub.read"
+    -- crosses the management boundary. Publication planning stages uploader
+    -- bytes on the host and publication applies them, so both need
+    -- management authority; receipt reads stay fenced by receipt ownership.
+    local action = "bee.hub.read"
+    if operation == "apply" or operation == "publish_plan" or operation == "publish_apply" then
+        action = "bee.hub.manage"
+    end
     if not security.actor() or not security.can(action, resource) then return transaction.failure("DENIED", "Hub operation is not authorized") end
     if operation == "plan" and not security.can("bee.hub.read", "catalog") then
         return transaction.failure("DENIED", "Hub plan inventory is not authorized")

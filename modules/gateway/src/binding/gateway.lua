@@ -33,6 +33,7 @@ local listener_store = require("listener_store")
 local access = require("access")
 local elevation = require("elevation")
 local installation = require("installation")
+local hubpublish = require("hubpublish")
 local sessions = require("sessions")
 local M = {}
 function M.accepts_host(value: unknown): boolean
@@ -1307,6 +1308,31 @@ function M.install_status(value: unknown): Reply
     if not binding or not policy_name then return refusal :: Reply end
     return installation.status(installation.port(binding), binding, policy_name, request)
 end
+local function publication_call(value: unknown, fields: {string}): (Binding?, string?, unknown?, Reply?)
+    local binding, refusal = own_binding(value)
+    if not binding then return nil, nil, nil, refusal end
+    local policy_name, policy_refusal = hubpublish.approval_policy()
+    if not policy_name then return nil, nil, nil, policy_refusal end
+    local object = bounds.object(value) or {}
+    local request: {[string]: unknown} = {}
+    for _, name in ipairs(fields) do request[name] = object[name] end
+    return binding, policy_name, request, nil
+end
+-- One entry serves both publication tools; the method files name the
+-- operation. Filing, polling and the approved upload share the
+-- thread-bound approval the person decides on.
+function M.publish(operation: string, value: unknown): Reply
+    if operation == "request" then
+        local binding, policy_name, request, refusal = publication_call(value, {"component", "version", "visibility", "source"})
+        if not binding or not policy_name then return refusal :: Reply end
+        return hubpublish.request(hubpublish.port(binding), binding, policy_name, request)
+    elseif operation == "status" then
+        local binding, policy_name, request, refusal = publication_call(value, {"request_id"})
+        if not binding or not policy_name then return refusal :: Reply end
+        return hubpublish.status(hubpublish.port(binding), binding, policy_name, request)
+    end
+    return fail("INVALID", "unknown publication operation")
+end
 -- A credential is valid only for its action, kind, current generation and expiry.
 function M.authenticate(token: string, action_id: string, kind: string): (Binding?, Reply?)
     if #token == 0 or #token > 128 then return nil, fail("UNAUTHENTICATED", "token is not presentable") end
@@ -1742,4 +1768,6 @@ function M.hook_reject(value: unknown): Reply
     if commit_error then return fail("STORAGE", "commit hook rejection") end
     return succeed({binding_id = binding.binding_id, rejected = rejected})
 end
+
+
 return M

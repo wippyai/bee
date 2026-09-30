@@ -38,6 +38,18 @@ entries:
     migration_runner: bee.hub.binding:migration_runner
     migrations: bee.hub:migrations
     migration_work: bee.hub:migration_work
+- name: publish
+  kind: library.lua
+  source: file://publish.lua
+  modules: [registry, security, exec, channel]
+  imports:
+    bounds: bee.threads.records:bounds
+    publishing: bee.hub:publishing
+    transaction: bee.persist:transaction
+    inspect: bee.hub.binding:inspect
+    host_resources: bee.hub:host_resources
+    paths: bee.placement:paths
+    quote: bee.driver.kit:quote
 - name: backend
   kind: function.lua
   source: file://backend.lua
@@ -49,6 +61,7 @@ entries:
     inventory_reader: bee.hub:inventory_reader
     inspect: bee.hub.binding:inspect
     publication: bee.hub.binding:publication
+    publisher: bee.hub.binding:publish
     transaction: bee.persist:transaction
     preview: bee.hub.binding:preview
     host_resources: bee.hub:host_resources
@@ -63,6 +76,7 @@ entries:
     catalog: bee.hub.binding:catalog
     inspection: bee.hub:inspection
     plan: bee.hub:plan
+    publishing: bee.hub:publishing
     transaction: bee.persist:transaction
     preview: bee.hub.binding:preview
   security: {policies: [bee.hub.security:facade_policy]}

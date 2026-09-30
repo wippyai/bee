@@ -29,7 +29,7 @@ local READ_ANNOTATIONS: Object = {readOnlyHint = true, destructiveHint = false, 
 local WRITE_ANNOTATIONS: Object = {readOnlyHint = false, destructiveHint = false, idempotentHint = true, openWorldHint = false}
 -- The component owns these links; the host fills each one through a typed
 -- requirement. A built-in description never hard-codes a host policy ID.
-type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, run: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string, capability: string, install: string}
+type ToolPolicyRefs = {read: string, message: string, inbox: string, discover: string, send_grant: string, launch: string, run: string, overlay: string, docs: string, components: string, delivery: string, publish: string, application_open: string, capabilities: string, launch_definitions: string, capability: string, install: string, hub_publish: string}
 local TOOL_POLICY_REFS: ToolPolicyRefs = {
     read = "bee.gateway:tool_read_policy_ref",
     message = "bee.gateway:tool_message_policy_ref",
@@ -48,6 +48,7 @@ local TOOL_POLICY_REFS: ToolPolicyRefs = {
     launch_definitions = "bee.gateway:tool_launch_policy_ref",
     capability = "bee.gateway:tool_read_policy_ref",
     install = "bee.gateway:tool_install_policy_ref",
+    hub_publish = "bee.gateway:tool_hub_publish_policy_ref",
 }
 local BUILTIN_POLICY_REFS: {[string]: boolean} = {}
 for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = true end
@@ -236,6 +237,21 @@ local TOOLS: {Tool} = {
         schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
             request_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
+    {name = "publish_request", description = "Ask the person to publish one package to the Wippy Hub from this agent's workspace. The host packs the source without uploading, measures the exact bytes and files one approval showing the module, version, pack digest, visibility, organization and source directory. Filing changes nothing on the Hub; poll publish_status with the returned request_id. The publishing credential never reaches the agent; only the host uploader uses it after approval.",
+        operation = "bee.gateway.binding:publish_request",
+        policies = {TOOL_POLICY_REFS.hub_publish}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"component", "version", "visibility", "source"}, properties = {
+            component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name under the host publishing organization"},
+            version = {type = "string", minLength = 1, maxLength = 128, description = "Exact version to publish"},
+            visibility = {type = "string", enum = {"public", "private"}, description = "Module visibility for a newly created module"},
+            source = {type = "string", minLength = 1, maxLength = 8192, description = "Absolute module source directory the host admits"},
+        }}},
+    {name = "publish_status", description = "Poll one publication request by request_id: pending, refused (the person denied it or it expired), approved (uploading), applied, or failed with the Hub code and message. On the first poll after approval the host consumes the decision once and uploads exactly the approved bytes; a replayed poll replays the recorded receipt.",
+        operation = "bee.gateway.binding:publish_status",
+        policies = {TOOL_POLICY_REFS.hub_publish}, annotations = WRITE_ANNOTATIONS,
+        schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
+            request_id = {type = "string", minLength = 1, maxLength = 160},
+        }}},
     {name = "delivery", description = "Check a frozen component pack without staging it (preflight needs the frozen snapshot_digest and stages nothing; call it before request), request delivery of your frozen pack to this destination (request publishes the frozen artifact, stages it and reads the destination's preflight verdict and needs snapshot_digest), or read a staged version's review, selection and activation status (status needs neither digest nor node; source_node and intent_id narrow it). It names the human steps it cannot take: review in Overlays, approval in Approvals and apply by the activation owner. Request and preflight stage and check; status only reads.",
         operation = "bee.gov.binding:delivery_call",
         policies = {TOOL_POLICY_REFS.delivery}, annotations = WRITE_ANNOTATIONS,
@@ -401,6 +417,8 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
     install_request = output_schema({type = "object"}),
     uninstall_request = output_schema({type = "object"}),
     install_status = output_schema({type = "object"}),
+    publish_request = output_schema({type = "object"}),
+    publish_status = output_schema({type = "object"}),
 }
 M.OUTPUT_SCHEMAS = OUTPUT_SCHEMAS
 -- Opening a reviewed application is deliberately not a base capability.  The
@@ -664,6 +682,32 @@ function M.install_arguments(params: Object, uninstall: boolean): (Object?, stri
     return request, nil
 end
 function M.install_status_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"request_id"})
+    if unknown_field then return nil, unknown_field end
+    local request_id = bounds.id(arguments.request_id)
+    if not request_id then return nil, "request_id is required and must be an identifier" end
+    return {request_id = request_id}, nil
+end
+-- Publication requests name the exact package version, its visibility and
+-- the admitted source directory; the host packs and measures the bytes.
+function M.hub_publish_arguments(params: Object): (Object?, string?)
+    local arguments = bounds.object(params.arguments)
+    if not arguments then return nil, "arguments must be an object" end
+    local unknown_field = bounds.fields(arguments, {"component", "version", "visibility", "source"})
+    if unknown_field then return nil, unknown_field end
+    local component = bounds.line(arguments.component, 160)
+    if not component then return nil, "component is required as owner/name" end
+    local version = bounds.line(arguments.version, 128)
+    if not version then return nil, "version is required as an exact package version" end
+    local visibility = bounds.member(arguments.visibility, {"public", "private"})
+    if not visibility then return nil, "visibility is required as public or private" end
+    local source = bounds.text(arguments.source, 8192)
+    if not source then return nil, "source is required as an absolute module directory" end
+    return {component = component, version = version, visibility = visibility, source = source}, nil
+end
+function M.hub_publish_status_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
     local unknown_field = bounds.fields(arguments, {"request_id"})

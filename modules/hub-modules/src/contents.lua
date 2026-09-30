@@ -15,7 +15,7 @@ function M.new(): State
         rows = {}, selected = 1, lines = {}, notice = "", next_offset = nil, offset = 0, pending = false}
 end
 local function object(raw: unknown): Object?
-    return type(raw) == "table" and raw :: Object or nil
+    return type(raw) == "table" and raw or nil
 end
 local function list(raw: unknown, limit: integer): {unknown}?
     if type(raw) ~= "table" then return nil end
@@ -27,7 +27,7 @@ local function list(raw: unknown, limit: integer): {unknown}?
     end
     local result: {unknown} = {}
     for index = 1, count do
-        local item = (raw :: {[integer]: unknown})[index]
+        local item = (raw)[index]
         if item == nil then return nil end
         result[index] = item
     end
@@ -157,7 +157,7 @@ function M.apply(state: State, operation: string, reply: Reply)
             local row = object(raw)
             local name = row and clean(row.name, 1024)
             if not row or not name or name == "." or name == ".." or name:find("[/\\]") or (row.type ~= "directory" and row.type ~= "file") then fail("Invalid package filename"); return end
-            rows[#rows + 1] = {key = name, label = name .. (row.type == "directory" and "/" or ""), kind = row.type :: string, value = nil}
+            rows[#rows + 1] = {key = name, label = name .. (row.type == "directory" and "/" or ""), kind = row.type, value = nil}
         end
         state.notice = #rows == 0 and "This directory is empty" or "Read-only packaged files"
     elseif operation == "read_file" then

@@ -66,7 +66,7 @@ end
 local function clone(value: unknown): unknown
     if type(value) ~= "table" then return value end
     local result: {[unknown]: unknown} = {}
-    for key, item in pairs(value :: {[unknown]: unknown}) do result[clone(key)] = clone(item) end
+    for key, item in pairs(value) do result[clone(key)] = clone(item) end
     return result
 end
 
@@ -129,7 +129,7 @@ local function operation_request(raw: unknown, action: string, owner: string): O
     local selected_version = version(value.version)
     if not selected_version or type(value.parameters) ~= "table" then return nil end
     local parameters: {Object} = {}
-    for index, raw_parameter in ipairs(value.parameters :: {unknown}) do
+    for index, raw_parameter in ipairs(value.parameters) do
         if index > M.MAX_PARAMETERS then return nil end
         local parameter = object(raw_parameter)
         if not parameter then return nil end
@@ -296,7 +296,7 @@ local function publication_identity(state: State, workspace_id: unknown): (strin
     end
     if not component(state.publication_component) then return nil, "enter a component in namespace/name form" end
     if not version(state.publication_version) then return nil, "enter an explicit version" end
-    return workspace :: string, nil
+    return workspace, nil
 end
 
 function M.publication_prepare_intent(state: State, workspace_id: unknown): (Intent?, string?)
@@ -458,7 +458,7 @@ function M.recover(state: State): string?
     if not operation.request then return "this operation has no stored request for recovery" end
     local preserved = clone(operation.request)
     if type(preserved) ~= "table" then return "this operation has no stored request for recovery" end
-    state.recovery = {digest = operation.digest, request = preserved :: Object, operation = operation}
+    state.recovery = {digest = operation.digest, request = preserved, operation = operation}
     state.phase, state.notice = "confirm", ""
     return nil
 end
@@ -498,7 +498,7 @@ function M.confirm_intent(state: State): (Intent?, string?)
     if state.recovery then
         local request = clone(state.recovery.request)
         if type(request) ~= "table" then return nil, "recovery request is unavailable" end
-        return {operation = "apply", request = request :: Object, expected_digest = state.recovery.digest}, nil
+        return {operation = "apply", request = request, expected_digest = state.recovery.digest}, nil
     end
     local plan = state.plan
     if not plan then return nil, "prepare a plan first" end

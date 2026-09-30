@@ -22,8 +22,8 @@ type Editor = {field: string, buffer: string, name: string?}
 
 local function reply(value: unknown): Reply
     if type(value) == "table" and type(value.ok) == "boolean" and type(value.replayed) == "boolean" then
-        local raw = value :: Object
-        local receipt = type(raw.value) == "table" and raw.value :: Object or nil
+        local raw = value
+        local receipt = type(raw.value) == "table" and raw.value or nil
         local state = receipt and type(receipt.state) == "string" and receipt.state or ""
         local failed = state == "failed" or state == "recovery_required"
         return {ok = raw.ok == true and not failed, replayed = raw.replayed == true,
@@ -279,17 +279,17 @@ local function main(value: unknown)
     end
 
     local function choose_relative(delta: integer)
-        local rows: {unknown} = state.phase == "catalog" and (state.catalog :: {unknown}) or (state.installed :: {unknown})
+        local rows: {unknown} = state.phase == "catalog" and (state.catalog) or (state.installed)
         if #rows == 0 then return end
         local current = 0
         for index, raw in ipairs(rows) do
-            if type(raw) == "table" and (raw :: Object).component == state.selected then current = index; break end
+            if type(raw) == "table" and (raw).component == state.selected then current = index; break end
         end
         local next = math.floor(math.max(1, math.min(#rows, current + delta)))
         local raw = rows[next]
-        if type(raw) == "table" and type((raw :: Object).component) == "string" then
+        if type(raw) == "table" and type((raw).component) == "string" then
             local old_offset = offset
-            choose((raw :: Object).component :: string, false)
+            choose((raw).component, false)
             offset = math.floor(math.max(0, math.min(old_offset, next - 1)))
             if next > offset + visible_rows then offset = math.floor(math.max(0, next - visible_rows)) end
         end

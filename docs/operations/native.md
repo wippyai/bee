@@ -27,13 +27,15 @@ registry state remain in the selected state directory.
 ## Build and check
 
 ```sh
-make native-tools
+make native-tools BEE_NATIVE_LOCAL=1
 make check WIPPY="$PWD/.wippy/bin/bee-wippy"
 make native-check
 make native-portable-check
 ```
 
 The source tools and executable use the same compiled component selection.
+`BEE_NATIVE_LOCAL=1` builds the checked-out native sources for development
+tools and executables.
 `make native-binary-check` launches the source-free executable with literal
 arguments, checks Settings recovery, the terminal, fullscreen aliases and
 presenter rejoin. The fixture reads only disposable stores; it uses the source-free

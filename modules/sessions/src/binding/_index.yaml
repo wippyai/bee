@@ -13,6 +13,7 @@ entries:
   meta: {type: bee.sessions.owner_binding}
   contracts:
   - contract: bee.sessions:contract
+    default: true
     methods:
       open: bee.sessions.binding:open
       run: bee.sessions.binding:run
@@ -28,6 +29,7 @@ entries:
   meta: {type: bee.sessions.catalog_binding}
   contracts:
   - contract: bee.sessions:catalog
+    default: true
     methods: {list: bee.sessions.binding:catalog}
 - name: target_owner_policies
   kind: ns.requirement

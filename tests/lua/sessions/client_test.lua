@@ -58,7 +58,9 @@ local function define_tests()
 
     test.describe("Sessions operation keys", function()
         test.it("requires an explicit key even inside an application handler", function()
-            local opened, fault = sessions.open({definition = "research:worker"})
+            local open = sessions.open :: (unknown) -> (unknown, unknown)
+            local opened, raw_fault = open({definition = "research:worker"})
+            local fault = type(raw_fault) == "table" and raw_fault :: {code: string, retry: string, message: string} or nil
             test.is_nil(opened)
             test.eq(fault and fault.code, "KEY_REQUIRED")
             test.eq(fault and fault.retry, "never")

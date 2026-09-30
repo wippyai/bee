@@ -27,15 +27,15 @@ type JoinPolicy = "all_success" | "all_settled" | "first_success" | "quorum"
 type CatalogKind = "definition" | "profile"
 
 type AwaitOptions = {timeout_ms: integer?}
-type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string?}
-type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string?}
-type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string?}
-type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, operation_key: string?}
+type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
+type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string}
+type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
+type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, operation_key: string}
 type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, input: Input, output: string?,
-    timeout_ms: integer?, operation_key: string?}
+    timeout_ms: integer?, operation_key: string}
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
-    operation_key: string?}
+    operation_key: string}
 type ListOptions = {filter: {lifecycle: string?, activity: string?}?, cursor: string?}
 type CatalogOptions = {kind: CatalogKind?, include_unavailable: boolean?, cursor: string?}
 

@@ -12,7 +12,9 @@ function M.run(input: {scenario: string}): {[string]: unknown}
             operation = result.work.receipt and result.work.receipt.operation or ""}
     end
     if input.scenario == "context" then
-        local session, fault = sessions.open({definition = "research:worker"})
+        local open = sessions.open :: (unknown) -> (unknown, unknown)
+        local session, raw_fault = open({definition = "research:worker"})
+        local fault = type(raw_fault) == "table" and raw_fault :: {code: string} or nil
         return {code = code(fault), session = session and session:ref() or ""}
     end
     if input.scenario == "keys" then

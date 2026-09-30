@@ -537,40 +537,35 @@ local function define_tests()
             if not policy then error("fixture policy entry") end
             local data = policy.data :: {[string]: unknown}
             local saved_drain = data.runner_drain_ms
-            data.runner_drain_ms = 1000
+            local saved_carrier_drain = data.drain_ms
+            data.runner_drain_ms = 2000
+            -- The carrier settles past runner_drain_ms + drain_ms without
+            -- the terminal envelope; a wide carrier drain isolates the
+            -- runner's post-exit deadline under test.
+            data.drain_ms = 300000
             local narrowed = registry.snapshot():changes()
             narrowed:update(policy)
             local shrunk, shrink_error = narrowed:apply()
             if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
             local thread_id = thread()
             local attempt_id = fresh("attempt")
-            local expected = 1500
-            -- The carrier holds after its first commit while the child
-            -- prints some 305 KB, past the 256 KB spool yet under what the
-            -- spool, pipe and chunk channel absorb together: the spool stays
-            -- full so the pipe tail holding the result is still unread at
-            -- the exit and the drain arms, no matter how fast either side
-            -- runs. Released at the exit poll, 188 commits at 60 ms keep
-            -- acknowledging far past the 1000 ms drain with every gap far
-            -- under it, while without the re-arm at most ~27 KB more fits
-            -- the spool before the deadline discards the tail.
+            local expected = 280
+            -- 280 deltas of 2000 bytes are some 590 KB, far past the 256 KB
+            -- spool: the spool pins full while the child writes, so the pipe
+            -- tail holding the result is still unread at the exit and the
+            -- drain arms. Each commit waits 800 ms, so the carrier drains at
+            -- most 20 KB/s: in the 2 s window past the exit at most 40 KB of
+            -- the full pipes leave, while every gap stays under the drain
+            -- and the full drain takes some seventeen times it. Without the
+            -- re-arm the deadline discards the tail; with it every
+            -- acknowledgment extends the drain and the terminal envelope
+            -- arrives.
             local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected),
-                BEE_FIXTURE_FLOOD_PACE = "0"}
-            local launch = request(thread_id, attempt_id, environment)
-            local paused = assert(process.listen("bee.carrier.paused", {message = true}))
-            local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, 8, "committed", 60)
-            await_paused(paused, pid, "committed")
-            local exited = false
-            for _ = 1, 600 do
-                local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
-                if (status.attempt :: {[string]: unknown}).execution_state == "exited" then exited = true break end
-                time.sleep("50ms")
-            end
-            process.unlisten(paused)
-            if not exited then error("child never exited") end
-            process.send(pid, "bee.carrier.continue", {go = true})
-            local outcome = await_carrier(pid, "slow drain run", 120000)
+                BEE_FIXTURE_FLOOD_TEXT = "2000", BEE_FIXTURE_FLOOD_PACE = "0"}
+            local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
+                "open", nil, nil, nil, 800, 300000)
             data.runner_drain_ms = saved_drain
+            data.drain_ms = saved_carrier_drain
             local widened = registry.snapshot():changes()
             widened:update(policy)
             local restored, restore_error = widened:apply()
@@ -583,7 +578,11 @@ local function define_tests()
             local deltas = 0
             for _, item in ipairs(observations(records, nil)) do
                 local body = item.body :: {[string]: unknown}
-                if (body.data :: {[string]: unknown}).type == "text" then deltas = deltas + 1 end
+                local data = body.data :: {[string]: unknown}
+                if data.type == "text" then
+                    test.eq(data.text, string.rep("x", 2000), "every burst delta retains its full content")
+                    deltas = deltas + 1
+                end
             end
             test.eq(deltas, expected)
             local truncated = 0

@@ -122,9 +122,13 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
 elif [ -n "${BEE_FIXTURE_FLOOD:-}" ]; then
   count="$BEE_FIXTURE_FLOOD"
   pace="${BEE_FIXTURE_FLOOD_PACE:-0.01}"
+  flood_text="${BEE_FIXTURE_FLOOD_TEXT:-80}"
+  flood_pad=""
+  j=0
+  while [ "$j" -lt "$flood_text" ]; do flood_pad="${flood_pad}x"; j=$((j + 1)); done
   i=0
   while [ "$i" -lt "$count" ]; do
-    printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}}\n'
+    printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"%s"}}}\n' "$flood_pad"
     if [ "$pace" != "0" ]; then sleep "$pace"; fi
     i=$((i + 1))
   done

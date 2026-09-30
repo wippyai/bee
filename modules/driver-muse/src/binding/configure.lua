@@ -16,7 +16,7 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
             local token_file: configure_protocol.Configuration?
             local token_error: string?
             token_file, hook_token_source, token_error = configuration.hook_token_file(request.home_directory, request.attempt_id,
-                request.gateway.hook_token_environment :: string)
+                assert(request.gateway.hook_token_environment))
             if not token_file then return {ok = false, error = tostring(token_error)} end
             files[#files + 1] = token_file
         end

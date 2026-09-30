@@ -88,4 +88,4 @@ entries:
       directory: .grok
       files:
       - {source_path: .grok/auth.json, path: .grok/auth.json, kind: login, optional: true, write_back: true}
-      - {source_path: .grok/config.toml, path: .grok/.bee-global-config.toml, kind: config, optional: true, write_back: false}
+      - {source_path: .grok/config.toml, path: .grok/.bee-global-config.toml, kind: config, optional: true, write_back: false, container_omit: [hooks, mcp_servers]}

@@ -238,7 +238,10 @@ function M.render(file: types.Configuration, environment: {[string]: string}, ga
         if #base > 131072 then return nil, "configuration composition base exceeds byte limit" end
         local composed: string?
         local compose_error: string?
-        if file.composition.kind == "toml_insert" then
+        if file.composition.kind == "copy" then
+            if content ~= "" then return nil, "copy composition requires empty content" end
+            composed = base
+        elseif file.composition.kind == "toml_insert" then
             composed, compose_error = compose_toml(base, file.composition.path, content)
             if not composed then return nil, "compose TOML configuration: " .. tostring(compose_error) end
         elseif file.composition.kind == "json_patch" then

@@ -511,7 +511,9 @@ function M.decode(value: unknown): (Descriptor?, string?)
     for _, raw_file in ipairs(home_files) do
         local file, file_error = object(raw_file, "CLI descriptor.provider_home.files item")
         if not file then return nil, file_error end
-        if bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back"}) then return nil, "CLI descriptor.provider_home.files item has unknown fields" end
+        if bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back", "container_content", "container_omit"}) then return nil, "CLI descriptor.provider_home.files item has unknown fields" end
+        if file.container_omit ~= nil and (file.kind ~= "config" or not bounds.ids(file.container_omit, true) or #(bounds.ids(file.container_omit, true) or {}) > 16) then return nil, "container_omit requires config keys" end
+        if file.container_content ~= nil and (file.kind ~= "config" or not bounds.text(file.container_content, 8192)) then return nil, "container_content requires bounded config text" end
         if file.source_path ~= nil and (not bounds.text(file.source_path, 512) or not safe_relative(file.source_path)) then return nil, "CLI descriptor.provider_home source path is invalid" end
         if not bounds.text(file.path, 512) or not safe_relative(file.path) or not bounds.member(file.kind, {"login", "config", "state"})
             or type(file.optional) ~= "boolean" or type(file.write_back) ~= "boolean" then return nil, "CLI descriptor.provider_home file is invalid" end

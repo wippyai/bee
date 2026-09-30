@@ -18,7 +18,10 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
                 return {ok = false, error = "opencode does not support gateway hook event " .. event}
             end
         end
-        return {ok = true, delivery = {arguments = {}, files = {}}}
+        if request.private_home ~= true then return {ok = true, delivery = {arguments = {}, files = {}}} end
+        local file, file_error = configuration.login_configuration()
+        if not file then return {ok = false, error = tostring(file_error)} end
+        return {ok = true, delivery = {arguments = {}, files = {file}}}
     end
     local file, file_error = configuration.settings_file(request.gateway)
     if not file then return {ok = false, error = tostring(file_error)} end

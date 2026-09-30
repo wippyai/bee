@@ -158,7 +158,7 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     for index, raw in ipairs(raw_files) do
         local file = bounds.object(raw)
         if not file then return nil, "launch.provider_home.files[" .. tostring(index) .. "] must be an object" end
-        local file_unknown = bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back"})
+        local file_unknown = bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back", "container_content", "container_omit"})
         if file_unknown then return nil, "launch.provider_home.files[" .. tostring(index) .. "]: " .. file_unknown end
         local path = bounds.text(file.path, M.MAX_REQUIRED_PATH_BYTES)
         if not path or not safe_relative(path) then return nil, "launch.provider_home.files[" .. tostring(index) .. "].path must be a safe relative path" end
@@ -176,6 +176,16 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
             if type(file.optional) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].optional must be a boolean" end
             optional = file.optional
         end
+        local container_omit: {string}? = nil
+        if file.container_omit ~= nil then
+            container_omit = bounds.ids(file.container_omit, true)
+            if kind ~= "config" or not container_omit or #container_omit > 16 then return nil, "container_omit requires bounded config keys" end
+        end
+        local container_content: string? = nil
+        if file.container_content ~= nil then
+            container_content = bounds.text(file.container_content, 8192)
+            if kind ~= "config" or not container_content then return nil, "container_content requires bounded config text" end
+        end
         local write_back = false
         if file.write_back ~= nil then
             if type(file.write_back) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
@@ -187,7 +197,7 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
         elseif kind == "config" then
             if not source_path then return nil, "ambient provider files need a source path" end
             if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
-            files[index] = {source_path = source_path, path = path, kind = "config", optional = optional, write_back = false}
+            files[index] = {source_path = source_path, path = path, kind = "config", optional = optional, write_back = false, container_content = container_content, container_omit = container_omit}
         else
             if source_path ~= nil then return nil, "generated provider state cannot name a source file" end
             if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end

@@ -106,3 +106,13 @@ entries:
   security:
     policies:
     - bee.placement.native:apply_test_policy
+- name: projection_test
+  kind: function.lua
+  source: file://projection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    projection: bee.placement.native.service:provider_projection
+    formats: bee.credentials:formats
+    types: bee.driver:types

@@ -22,6 +22,7 @@ local formats = require("formats")
 local configuration = require("configuration")
 local workdir_preparers = require("workdir_preparers")
 local writable_roots_adapter = require("writable_roots_adapter")
+local provider_projection = require("provider_projection")
 local M = {}
 type WriteBack = {projection_id: string, generation: integer, source_digest: string, path: string}
 type WriteBackResult = {projection_id: string, ok: boolean, code: string?, message: string?, written: boolean?}
@@ -468,6 +469,20 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 or not provider_home_matches(provider_home, projected.source_path, projected.format, projected.write_back)) then
                 evidence(db, attempt_id, "credential.refused", "provider login files do not match the driver declaration", {execution = "exited"})
                 return refused("provider login files do not match the driver declaration")
+            end
+            if guest_home then
+                local roots: {string} = {guest_home}
+                if request.placement_profile_ref then
+                    local selected, profile_error = provider_projection.roots(request.placement_profile_ref)
+                    if not selected then return refused(profile_error or "container projection roots unavailable") end
+                    for _, root in ipairs(selected) do roots[#roots + 1] = root end
+                end
+                local format, format_error = provider_projection.container(provider_home, source.format, roots)
+                if not format then
+                    evidence(db, attempt_id, "configuration.refused", format_error or "container projection refused", {execution = "exited"})
+                    return refused(format_error or "container projection refused")
+                end
+                source.format = format
             end
             local login_path = source.path
             if not login_path then return refused("file login path unavailable") end

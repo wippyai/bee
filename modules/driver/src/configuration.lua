@@ -20,16 +20,17 @@ M.MAX_GATEWAY_HOOKS = 32
 M.MAX_HOME_DIRECTORY_BYTES = 4096
 M.MAX_ENDPOINT_BYTES = 512
 M.GATEWAY_PROVIDER_REF = "bee:gateway_endpoint"
+M.LOGIN_PROVIDER_REF = "bee:provider_login"
 M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
 type SecretField = {path: {string}, environment: string, prefix: string}
 type JsonOperation = {kind: "default" | "insert" | "append", path: {string}}
-type Composition = {kind: "toml_insert", base_path: string, path: {string}} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
+type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
-type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, attempt_id: string?, fixture: boolean}
+type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
 M.instructions = instructions.decode
@@ -116,7 +117,7 @@ end
 function M.decode_request(value: unknown): (Request?, string?)
     local request = bounds.object(value)
     if not request then return nil, "configuration request must be an object" end
-    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "attempt_id", "fixture", "instructions", "instruction_builder"})
+    local unexpected = bounds.fields(request, {"provider_ref", "provider", "gateway", "home_directory", "private_home", "attempt_id", "fixture", "instructions", "instruction_builder"})
     if unexpected then return nil, "configuration request: " .. unexpected end
     if type(request.fixture) ~= "boolean" then return nil, "configuration request.fixture must be a boolean" end
     local instructions, instructions_error = M.instructions(request.instructions)
@@ -141,6 +142,7 @@ function M.decode_request(value: unknown): (Request?, string?)
         gateway, gateway_error = decode_gateway(request.gateway)
         if not gateway then return nil, gateway_error end
     end
+    if request.private_home ~= nil and type(request.private_home) ~= "boolean" then return nil, "private_home must be boolean" end
     local home_directory: string? = nil
     if request.home_directory ~= nil then
         home_directory = bounds.text(request.home_directory, M.MAX_HOME_DIRECTORY_BYTES)
@@ -151,7 +153,7 @@ function M.decode_request(value: unknown): (Request?, string?)
         attempt_id = bounds.id(request.attempt_id)
         if not attempt_id then return nil, "configuration request.attempt_id is not an identifier" end
     end
-    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, attempt_id = attempt_id, fixture = request.fixture :: boolean}, nil
+    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = request.private_home :: boolean?, attempt_id = attempt_id, fixture = request.fixture :: boolean}, nil
 end
 local function sequence(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
@@ -181,7 +183,8 @@ function M.decode_file(value: unknown): (Configuration?, string?)
     if path_error then return nil, "configuration.path " .. path_error end
     if not path or path == "" then return nil, "configuration.path must be a nonempty safe relative path" end
     local content = bounds.text(item.content, M.MAX_CONFIGURATION_BYTES)
-    if not content or content == "" then return nil, "configuration.content must be bounded nonempty text" end
+    local composition_object = bounds.object(item.composition)
+    if not content or (content == "" and (not composition_object or composition_object.kind ~= "copy")) then return nil, "configuration.content must be bounded nonempty text" end
     local digest = bounds.id(item.digest)
     if not digest or #digest ~= 64 or not digest:match("^[0-9a-f]+$") then return nil, "configuration.digest must be a lowercase sha256 hex digest" end
     local actual, hash_error = hash.sha256(content)
@@ -197,7 +200,10 @@ function M.decode_file(value: unknown): (Configuration?, string?)
         if base_error or not base_path or base_path == "" or base_path == path then
             return nil, "configuration composition base_path must be a distinct safe relative path"
         end
-        if composition.kind == "toml_insert" then
+        if composition.kind == "copy" then
+            if bounds.fields(composition, {"kind", "base_path"}) or content ~= "" then return nil, "copy composition requires empty content and a base path" end
+            result.composition = {kind = "copy", base_path = base_path}
+        elseif composition.kind == "toml_insert" then
             if bounds.fields(composition, {"kind", "base_path", "path"}) then return nil, "invalid configuration composition" end
             local raw_path, path_error = sequence(composition.path, "configuration composition path", 8)
             if not raw_path or #raw_path == 0 then return nil, path_error or "configuration composition path is empty" end
@@ -323,7 +329,7 @@ function M.decode_stored_delivery(value: unknown): (Delivery?, string?)
     local retained: Delivery = {arguments = decoded.arguments, files = decoded.files, git_writable_roots_adapter = adapter}
     return retained, nil
 end
-function M.decode_reply(value: unknown, selected_provider: string?, gateway: GatewayInput?, instructions: string?): (Delivery?, string?)
+function M.decode_reply(value: unknown, selected_provider: string?, gateway: GatewayInput?, instructions: string?, private_home: boolean?): (Delivery?, string?)
     local reply = bounds.object(value)
     if not reply then return nil, "driver configure: reply must be an object" end
     local unexpected = bounds.fields(reply, {"ok", "error", "delivery"})
@@ -343,7 +349,8 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
         local provider_file = selected_provider ~= nil and file.provider_ref == selected_provider
         local gateway_file = gateway ~= nil and file.provider_ref == M.GATEWAY_PROVIDER_REF
         local instructions_file = instructions ~= nil and file.provider_ref == M.INSTRUCTIONS_PROVIDER_REF and file.content == instructions
-        if not provider_file and not gateway_file and not instructions_file then return nil, "driver configure file " .. file.path .. " names an unselected source" end
+        local login_file = private_home == true and file.provider_ref == M.LOGIN_PROVIDER_REF and file.composition ~= nil and file.composition.kind == "copy" and not file.secret_fields
+        if not provider_file and not gateway_file and not instructions_file and not login_file then return nil, "driver configure file " .. file.path .. " names an unselected source" end
         if file.secret_fields then
             if not gateway_file or not gateway then return nil, "configuration secret fields require the admitted gateway" end
             for _, field in ipairs(file.secret_fields) do
@@ -419,11 +426,12 @@ function M.call(target: string, request_value: unknown, configure_renderer: stri
         provider = request.provider,
         gateway = request.gateway,
         home_directory = request.home_directory,
+        private_home = request.private_home,
         attempt_id = request.attempt_id,
         fixture = request.fixture,
     }
     local raw, call_error = scoped:call(target, driver_request)
     if call_error then return nil, "driver configure: " .. tostring(call_error) end
-    return M.decode_reply(raw, request.provider_ref, request.gateway, final_instructions)
+    return M.decode_reply(raw, request.provider_ref, request.gateway, final_instructions, request.private_home)
 end
 return M

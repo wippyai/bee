@@ -184,6 +184,7 @@ entries:
       reuse: never
     private_credentials:
     - opencode_login
+    - opencode_api_key
 - name: research_batch
   kind: registry.entry
   meta:
@@ -210,6 +211,7 @@ entries:
     session_resource: session
     credentials:
     - opencode_login
+    - opencode_api_key
     presentation:
       start_menu: false
       fullscreen: false
@@ -232,6 +234,7 @@ entries:
     type: bee.credential_format
   data:
     schema_revision: bee.credential-format@1
+    environment_destination: OPENAI_API_KEY
     file:
       path: .local/share/opencode/auth.json
       content_format: json
@@ -316,3 +319,8 @@ entries:
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+- name: api_key
+  kind: env.variable
+  storage: bee.driver.opencode:environment
+  variable: OPENAI_API_KEY
+  readonly: true

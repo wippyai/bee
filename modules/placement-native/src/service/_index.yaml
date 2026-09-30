@@ -132,6 +132,7 @@ entries:
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
     bounds: bee.threads.records:bounds
     configuration: bee.placement.native:configuration
+    provider_projection: bee.placement.native.service:provider_projection
     types: bee.placement:types
     paths: bee.placement:paths
     gateway_protocol: bee.gateway:protocol
@@ -207,3 +208,12 @@ entries:
       actor:
         id: bee.placement.sweeper
       policies: []
+- name: provider_projection
+  kind: library.lua
+  source: file://provider_projection.lua
+  modules: [json, toml, registry]
+  imports:
+    profiles: bee.placement:profiles
+    bounds: bee.threads.records:bounds
+    formats: bee.credentials:formats
+    types: bee.driver:types

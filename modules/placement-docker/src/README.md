@@ -9,7 +9,16 @@ A `bee.placement_profile` selects an immutable image, non-root user, named
 network, positive limits, resource targets and interactive executor route.
 Drivers prepare commands without naming executors. Both PTY windows and streamed
 turns share the native placement's materialization and receipt mechanism.
-Private provider homes come from the existing credential broker. Docker mounts
+Private provider homes come from the existing credential broker. Declared
+`container_content` replaces host config with a clean container config;
+`container_omit` drops declared host hook/MCP settings before encoding. Other
+copied JSON/TOML config is decoded and refused before child creation if it has
+commands, includes, plugins, host paths or unresolved file/environment references.
+Login bytes remain broker-owned and are never inspected by these config checks.
+Codex uses its own auth.json with a clean config. OpenCode can receive the
+host-admitted OPENAI_API_KEY by name with a clean config; its CLI selects the
+provider. Private Grok/OpenCode turns publish their admitted config even without
+gateway tools. Docker mounts
 the private home at `/home/bee` and only the resources admitted for the attempt.
 
 One unpatched runtime executor creates each container with `BEE_ATTEMPT_ID`.

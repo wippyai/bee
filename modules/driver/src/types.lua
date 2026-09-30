@@ -69,7 +69,7 @@ type LocateResult = {provider: string, status: LocateStatus, executable: LocateE
     login: LocateLogin, platform: LocatePlatform, checked_at: string?, reason: string?}
 type ProviderHomeFile =
     {source_path: string, path: string, kind: "login", optional: boolean, write_back: boolean}
-    | {source_path: string, path: string, kind: "config", optional: boolean, write_back: false}
+    | {source_path: string, path: string, kind: "config", optional: boolean, write_back: false, container_content: string?, container_omit: {string}?}
     | {source_path: nil, path: string, kind: "state", optional: boolean, write_back: false}
 type ProviderHomeEnvironment = {variable: string, directory: string}
 -- A private managed home receives only these provider-owned files from the

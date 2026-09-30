@@ -18,6 +18,7 @@ local agent_resolver = require("agent_resolver")
 local carrier = require("carrier")
 local placement_types = require("placement_types")
 local placement_resolver = require("placement_resolver")
+local placement_profiles = require("placement_profiles")
 local continuation = require("continuation")
 local interrupted = require("interrupted")
 local profiles = require("profiles")
@@ -49,6 +50,8 @@ type Plan = {
     profile_digest: string,
     policy_ref: string,
     policy_digest: string,
+    placement_profile_ref: string?,
+    placement_profile_digest: string?,
     placement_binding_ref: string,
     placement_binding_digest: string,
     placement_methods: {[string]: string},
@@ -297,7 +300,17 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     -- Resolve placement alongside the driver and policy from this immutable
     -- registry snapshot. The policy may select an implementation; absent that
     -- field the resolver's native host default is used.
-    local placement, placement_error = placement_resolver.resolve(pinned, launch_policy.placement_binding)
+    local selected_profile_ref = selected and selected.profile.placement_profile_ref or nil
+    local resolved_profile: placement_profiles.Resolved? = nil
+    if selected_profile_ref then
+        if not bounds.member(selected_profile_ref, launch_policy.placement_profiles) then return nil, fail("FORBIDDEN", "launch policy does not admit this placement profile") end
+        local resolved, profile_error = placement_profiles.resolve(pinned, selected_profile_ref)
+        if not resolved then return nil, fail("UNAVAILABLE", profile_error or "placement profile") end
+        resolved_profile = resolved
+    end
+    local selected_binding = launch_policy.placement_binding
+    if resolved_profile then selected_binding = resolved_profile.profile.placement_binding end
+    local placement, placement_error = placement_resolver.resolve(pinned, selected_binding)
     if not placement then return nil, fail("UNAVAILABLE", placement_error or "placement binding") end
     if not binding then return nil, fail("UNAVAILABLE", "binding " .. launch.binding_ref .. " is not usable on this host") end
     -- A listed profile needs a host-selected executable, but this passive
@@ -307,7 +320,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     for _, executable in pairs(launch_policy.executables) do
         if executable:sub(1, 1) == "/" then has_absolute_executable = true end
     end
-    if not has_absolute_executable then
+    if not has_absolute_executable and placement.placement_kind ~= "docker" then
         return nil, fail("UNAVAILABLE", "launch policy " .. launch.policy_ref .. " has no absolute executable binding")
     end
     -- Provider data selects part of the generated private-home configuration.
@@ -326,6 +339,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         if not bounds.member(name, policy.OVERRIDES) or bounds.member(name, launch_policy.allowed_overrides) then overrides[#overrides + 1] = name end
     end
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
+        placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
         provider = provider_digest, mode = chosen, saved_profile = selected,
         agent = agent and agent.digest or nil, agent_model = checked and checked.model or nil,
@@ -334,6 +348,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
         profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
+        placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,
         placement_methods = placement.methods, placement_kind = placement.placement_kind, overrides = overrides,
         catalog_generation = snapshot.generation, mode = chosen, plan_digest = plan_digest,
@@ -619,7 +634,8 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
         working = workdir_name
     end
     local projections: {string} = {}
-    for index, credential in ipairs(launch.credentials) do
+    local credentials = plan.placement_kind == "docker" and launch.private_credentials or launch.credentials
+    for index, credential in ipairs(credentials) do
         local issued, issue_refused = call(M.CREDENTIALS .. ":issue_projection", {workspace_id = request.workspace_id, name = credential, audience = requester, attempt_id = ids.attempt_id,
             profile_id = plan.profile_id, profile_digest = plan.profile_digest, binding_digest = plan.binding_digest, launch_policy_digest = plan.policy_digest,
             idempotency_key = "launch:" .. request.request_id .. ":credential:" .. tostring(index)})
@@ -629,7 +645,7 @@ function M.admit_request(value: unknown): (Admitted?, Reply?)
     local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
         preferences = preferences or preference_value(selected),
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
-        placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
+        placement_profile_ref = plan.placement_profile_ref, placement_profile_digest = plan.placement_profile_digest, placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
         working_directory = working, projections = projections, workspace_id = request.workspace_id, session_ref = session_ref,
         previous_attempt_id = previous and previous.previous_attempt_id or nil, reauthorize = previous and previous.reauthorize or nil, origin_view = request.origin_view,
         options = launch.options}

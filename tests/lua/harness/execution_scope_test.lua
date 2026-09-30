@@ -33,7 +33,7 @@ local function define_tests()
             if not entry then error("missing application admission") end
             local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
             for _, binding in ipairs(data.bindings) do
-                if binding.definition_id ~= "bee.harness.window:app" then
+                if binding.definition_id ~= "bee.harness.app:app" then
                     local names: {string} = {"bee.harness.catalog:scope_probe_allow", "bee.harness.catalog:scope_probe_broad_store"}
                     for _, name in ipairs(binding.policies) do names[#names + 1] = name end
                     local access = probe(names)
@@ -49,7 +49,7 @@ local function define_tests()
             local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
             local found = false
             for _, binding in ipairs(data.bindings) do
-                if binding.definition_id == "bee.harness.window:app" then
+                if binding.definition_id == "bee.harness.app:app" then
                     found = true
                     local names: {string} = {"bee.harness.catalog:scope_probe_allow"}
                     for _, name in ipairs(binding.policies) do names[#names + 1] = name end

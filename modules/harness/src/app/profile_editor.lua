@@ -23,6 +23,7 @@ type Allowed = {
     instructions: boolean,
     workdir: boolean,
     thread: boolean,
+    placements: {string}?,
 }
 type Draft = {
     title: string,
@@ -32,6 +33,7 @@ type Draft = {
     instructions: string,
     workdir: protocol.Workdir?,
     thread: protocol.Thread?,
+    placement_profile_ref: string?,
     -- Kept out of the public result. It is copied at construction and is
     -- consulted on every edit and result validation.
     _allowed: Allowed,
@@ -55,7 +57,7 @@ end
 local function decode_allowed(value: unknown): (Allowed?, string?)
     local raw = object(value)
     if not raw then return nil, "editor allowlist must be an object" end
-    local extra = bounds.fields(raw, {"options", "mcp_tools", "instructions", "workdir", "thread"})
+    local extra = bounds.fields(raw, {"options", "mcp_tools", "instructions", "workdir", "thread", "placements"})
     if extra then return nil, "editor allowlist: " .. extra end
     if raw.options == nil or raw.mcp_tools == nil then
         return nil, "editor allowlist needs options and mcp_tools"
@@ -92,19 +94,22 @@ local function decode_allowed(value: unknown): (Allowed?, string?)
     end
     local tools: {string} = {}
     for index, tool in ipairs(raw.mcp_tools :: {unknown}) do tools[index] = tool :: string end
-    return {options = options, mcp_tools = tools, instructions = raw.instructions :: boolean,
+    local placements, placements_error = bounds.ids(raw.placements or {}, true)
+    if not placements then return nil, placements_error end
+    return {placements = placements, options = options, mcp_tools = tools, instructions = raw.instructions :: boolean,
         workdir = raw.workdir == true, thread = raw.thread == true}, nil
 end
 
 local function raw_profile(draft: Draft): {[string]: unknown}
     return {title = draft.title, definition_ref = draft.definition_ref, options = draft.options,
-        mcp_tools = draft.mcp_tools, instructions = draft.instructions, workdir = draft.workdir, thread = draft.thread}
+        mcp_tools = draft.mcp_tools, instructions = draft.instructions, workdir = draft.workdir, thread = draft.thread, placement_profile_ref = draft.placement_profile_ref}
 end
 
 local function result_for(draft: Draft): (Profile?, string?)
     if not draft._allowed then return nil, "editor allowlist is missing" end
     local profile, profile_error = protocol.profile(raw_profile(draft))
     if not profile then return nil, profile_error or "profile is invalid" end
+    if profile.placement_profile_ref and not bounds.member(profile.placement_profile_ref, draft._allowed.placements or {}) then return nil, "this launch does not admit that placement profile" end
     if profile.workdir and not draft._allowed.workdir then return nil, "this launch does not allow choosing a folder" end
     if profile.thread and not draft._allowed.thread then return nil, "this launch does not allow choosing a thread" end
     local _, preference_error = preferences.apply(policy(draft._allowed), {
@@ -126,6 +131,7 @@ local function replace(draft: Draft, profile: Profile)
     draft.instructions = profile.instructions
     draft.workdir = profile.workdir
     draft.thread = profile.thread
+    draft.placement_profile_ref = profile.placement_profile_ref
 end
 
 function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
@@ -135,12 +141,21 @@ function M.new(profile: Profile, raw_allowed: unknown): (Draft?, string?)
     if not decoded then return nil, profile_error or "profile is invalid" end
     local draft: Draft = {title = decoded.title, definition_ref = decoded.definition_ref,
         options = decoded.options, mcp_tools = decoded.mcp_tools, instructions = decoded.instructions,
-        workdir = decoded.workdir, thread = decoded.thread, _allowed = allowed}
+        placement_profile_ref = decoded.placement_profile_ref, workdir = decoded.workdir, thread = decoded.thread, _allowed = allowed}
     local _, invalid = result_for(draft)
     if invalid then return nil, invalid end
     return draft, nil
 end
 
+function M.cycle_placement(draft: Draft, delta: integer): (boolean, string?)
+    local choices = draft._allowed.placements or {}
+    if #choices == 0 then return false, "this launch admits no placement choices" end
+    local selected = 0
+    for index, choice in ipairs(choices) do if choice == draft.placement_profile_ref then selected = index end end
+    selected = math.floor(((selected + delta - 1) % #choices) + 1)
+    draft.placement_profile_ref = choices[selected]
+    return true, nil
+end
 function M.set_title(draft: Draft, value: unknown): (boolean, string?)
     local base, base_error = current(draft)
     if not base then return false, base_error end

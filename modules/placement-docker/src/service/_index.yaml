@@ -1,0 +1,85 @@
+version: '1.0'
+namespace: bee.placement.docker.service
+entries:
+- name: service
+  kind: library.lua
+  source: file://service.lua
+  modules:
+  - process
+  - security
+  - registry
+  - funcs
+  - json
+  imports:
+    bounds: bee.threads.records:bounds
+    request_codec: bee.placement:request
+    profiles: bee.placement:profiles
+    spec: bee.placement.docker:spec
+    store: bee.placement.native.persist:store
+    local_attempts: bee.placement.native.service:service
+    homes: bee.placement.native.service:homes
+    types: bee.placement:types
+    workdir_preparers: bee.placement.native.service:workdir_preparers
+    docker_client: userspace.docker:docker_client
+    paths: bee.placement:paths
+    resources: bee.placement.native:resources
+- name: execution
+  kind: library.lua
+  source: file://execution.lua
+  modules:
+  - exec
+  - registry
+  - json
+  - sql
+  imports:
+    bounds: bee.threads.records:bounds
+    types: bee.placement:types
+    materialization: bee.placement.native.service:materialization
+    process_backend: bee.placement.native:process_backend
+    resources: bee.placement.native:resources
+    homes: bee.placement.native.service:homes
+    service: bee.placement.docker.service:service
+    spec: bee.placement.docker:spec
+    paths: bee.placement:paths
+    quote: bee.driver.kit:quote
+- name: runner
+  kind: process.lua
+  source: file://runner.lua
+  method: main
+  imports:
+    runner: bee.placement.native:process_runner
+    execution: bee.placement.docker.service:execution
+  security:
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_materialize_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+- name: window
+  kind: library.lua
+  source: file://window.lua
+  imports:
+    window: bee.placement.native.service:window
+    execution: bee.placement.docker.service:execution
+- name: sweeper
+  kind: process.lua
+  source: file://sweeper.lua
+  method: main
+  modules:
+  - process
+  - channel
+  - time
+  imports:
+    service: bee.placement.docker.service:service
+- name: sweeper_service
+  kind: process.service
+  process: bee.placement.docker.service:sweeper
+  lifecycle:
+    auto_start: true
+    security:
+      actor:
+        id: bee.placement.docker.sweeper
+      policies: []

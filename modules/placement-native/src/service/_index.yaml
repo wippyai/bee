@@ -4,7 +4,9 @@ entries:
 - name: executable
   kind: library.lua
   source: file://executable.lua
-  modules: [fs, hash]
+  modules:
+  - fs
+  - hash
   imports:
     bounds: bee.threads.records:bounds
     resources: bee.placement.native:resources
@@ -13,7 +15,8 @@ entries:
 - name: executable_stream
   kind: library.lua
   source: file://executable_stream.lua
-  modules: [hash]
+  modules:
+  - hash
 - name: output_buffer
   kind: library.lua
   source: file://output_buffer.lua
@@ -28,14 +31,17 @@ entries:
 - name: capability
   kind: library.lua
   source: file://capability.lua
-  modules: [exec]
+  modules:
+  - exec
   imports:
     types: bee.placement:types
     resources: bee.placement.native:resources
 - name: homes
   kind: library.lua
   source: file://homes.lua
-  modules: [fs, hash]
+  modules:
+  - fs
+  - hash
   imports:
     formats: bee.credentials:formats
     bounds: bee.threads.records:bounds
@@ -44,7 +50,8 @@ entries:
 - name: identity
   kind: library.lua
   source: file://identity.lua
-  modules: [exec]
+  modules:
+  - exec
   imports:
     resources: bee.placement.native:resources
 - name: writable_roots_adapter
@@ -56,7 +63,11 @@ entries:
 - name: workdir_preparers
   kind: library.lua
   source: file://workdir_preparers.lua
-  modules: [registry, funcs, sql, json]
+  modules:
+  - registry
+  - funcs
+  - sql
+  - json
   imports:
     resources: bee.placement.native:resources
     types: bee.placement:types
@@ -66,7 +77,17 @@ entries:
 - name: service
   kind: library.lua
   source: file://service.lua
-  modules: [process, channel, time, security, uuid, json, funcs, registry, system, sql]
+  modules:
+  - process
+  - channel
+  - time
+  - security
+  - uuid
+  - json
+  - funcs
+  - registry
+  - system
+  - sql
   imports:
     gateway_configuration: bee.gateway:configuration
     configuration: bee.driver:configuration
@@ -92,10 +113,17 @@ entries:
     credential_protocol: bee.credentials:protocol
     resource_resolution: bee.placement.native.service:resource_resolution
     workdir_preparers: bee.placement.native.service:workdir_preparers
+    placement_profiles: bee.placement:profiles
 - name: materialization
   kind: library.lua
   source: file://materialization.lua
-  modules: [env, fs, funcs, sql, process, hash]
+  modules:
+  - env
+  - fs
+  - funcs
+  - sql
+  - process
+  - hash
   imports:
     store: bee.placement.native.persist:store
     resources: bee.placement.native:resources
@@ -114,7 +142,13 @@ entries:
   kind: process.lua
   source: file://runner.lua
   method: main
-  modules: [process, channel, time, sql, exec, funcs]
+  modules:
+  - process
+  - channel
+  - time
+  - sql
+  - exec
+  - funcs
   imports:
     service: bee.placement.native.service:service
     materialization: bee.placement.native.service:materialization
@@ -126,12 +160,23 @@ entries:
     protocol: bee.placement.native:protocol
     quote: bee.driver.kit:quote
     types: bee.placement:types
+    process_backend: bee.placement.native:process_backend
   security:
-    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_runner_policy, bee.credentials.security:credential_materialize_policy, bee.security.gateway:gateway_materialize_policy]
+    policies:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.credentials.security:credential_materialize_policy
+    - bee.security.gateway:gateway_materialize_policy
 - name: window
   kind: library.lua
   source: file://window.lua
-  modules: [process, exec, tty, security, funcs]
+  modules:
+  - process
+  - exec
+  - tty
+  - security
+  - funcs
   imports:
     protocol: bee.placement.native:protocol
     store: bee.placement.native.persist:store
@@ -142,11 +187,15 @@ entries:
     service: bee.placement.native.service:service
     bounds: bee.threads.records:bounds
     identity: bee.placement.native.service:identity
+    process_backend: bee.placement.native:process_backend
 - name: sweeper
   kind: process.lua
   source: file://sweeper.lua
   method: main
-  modules: [process, channel, time]
+  modules:
+  - process
+  - channel
+  - time
   imports:
     service: bee.placement.native.service:service
 - name: sweeper_service
@@ -155,5 +204,6 @@ entries:
   lifecycle:
     auto_start: true
     security:
-      actor: {id: bee.placement.sweeper}
+      actor:
+        id: bee.placement.sweeper
       policies: []

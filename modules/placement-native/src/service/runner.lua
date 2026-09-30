@@ -20,6 +20,7 @@ local types = require("types")
 local materialization = require("materialization")
 local output_buffer = require("output_buffer")
 local service = require("service")
+local process_backend = require("process_backend")
 type Stream = "stdout" | "stderr"
 type Chunk = {stream: Stream, data: string?, eof: boolean}
 type Pending = {sequence: integer, stream: Stream, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
@@ -35,7 +36,12 @@ local function evidence(db, attempt_id: string, kind: string, detail: string, up
     if not result.ok then return false, result.message end
     return true, nil
 end
-local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?, control_token: string)
+local function main(attempt_id: string, starter: string, reply_topic: string, expected_binding: string?, materialization_key: string?, control_token: string, backend: process_backend.Backend?)
+    local function cleanup(attempt: types.Attempt): (boolean, string?)
+        if backend then return backend.cleanup(attempt, true) end
+        local reply = service.cleanup_attempt(attempt, true)
+        return reply.ok, reply.error and reply.error.message or nil
+    end
     local events = assert(process.events())
     local controls = assert(process.listen(protocol.TOPIC_CONTROL, {message = true}))
     local db, open_error = store.open()
@@ -74,8 +80,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 evidence = {kind = "child.not_started", detail = reason}})
             local attempt = store.attempt(db, attempt_id)
             if attempt then
-                local cleaned = service.cleanup_attempt(attempt, true)
-                if not cleaned.ok then reason = reason .. "; cleanup: " .. tostring(cleaned.error and cleaned.error.message) end
+                local cleaned, cleanup_error = cleanup(attempt)
+                if not cleaned then reason = reason .. "; cleanup: " .. tostring(cleanup_error) end
             end
         end
         retire_gateway("start refused: " .. reason)
@@ -96,31 +102,43 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         local monitored, monitor_error = process.monitor(recipient)
         if not monitored then return refuse("monitor carrier: " .. tostring(monitor_error)) end
     end
-    local materialized, materialization_error, bound_gateway = materialization.prepare(db, request, attempt_id, generation, expected_binding, materialization_key)
+    local materialized, materialization_error, bound_gateway = materialization.prepare(db, request, attempt_id, generation, expected_binding, materialization_key, backend and backend.guest_home or nil)
     gateway_binding = bound_gateway
     if not materialized then return refuse(materialization_error or "attempt materialization") end
-    local environment, work_dir = materialized.environment, materialized.working_directory
-    local executor_ref, reference_error = resources.executor()
-    local executor, executor_error
-    if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
-    if not executor then
-        evidence(db, attempt_id, "executor.failed", tostring(executor_error), {execution = "exited"})
-        return refuse("executor unavailable")
-    end
-    -- The plan's measurement is checked against what the path opens now,
-    -- immediately before exec; a change refuses the start on record.
-    if request.executable then
-        local verified, verify_error = executable.verify(request.launch.executable, request.executable)
-        if not verified then
-            evidence(db, attempt_id, "executable.changed", tostring(verify_error), {execution = "exited"})
-            executor:release()
-            return refuse(verify_error or "executable changed")
+    local executor: exec.Executor? = nil
+    local proc: exec.Process? = nil
+    local stdin_materialized = false
+    if backend then
+        local selected, argv, options, prepare_error = backend.prepare(db, request, materialized)
+        if not selected or not argv or not options then return refuse(prepare_error or "placement executor unavailable") end
+        executor = selected
+        stdin_materialized = options.stdin_materialized == true
+        proc = selected:exec(quote.line(argv), {work_dir = options.work_dir, env = options.env, mounts = options.mounts, process_group = options.process_group})
+    else
+        local environment, work_dir = materialized.environment, materialized.working_directory
+        local executor_ref, reference_error = resources.executor()
+        local executor_error
+        if executor_ref then executor, executor_error = exec.get(executor_ref) else executor_error = reference_error end
+        if not executor then
+            evidence(db, attempt_id, "executor.failed", tostring(executor_error), {execution = "exited"})
+            return refuse("executor unavailable")
         end
-        evidence(db, attempt_id, "executable.measured", verified.revision .. " " .. verified.kind .. " digest " .. verified.digest .. " size " .. tostring(verified.size))
+        -- The plan's measurement is checked against what the path opens now,
+        -- immediately before exec; a change refuses the start on record.
+        if request.executable then
+            local verified, verify_error = executable.verify(request.launch.executable, request.executable)
+            if not verified then
+                evidence(db, attempt_id, "executable.changed", tostring(verify_error), {execution = "exited"})
+                executor:release()
+                return refuse(verify_error or "executable changed")
+            end
+            evidence(db, attempt_id, "executable.measured", verified.revision .. " " .. verified.kind .. " digest " .. verified.digest .. " size " .. tostring(verified.size))
+        end
+        local argv: {string} = {request.launch.executable}
+        for _, argument in ipairs(materialized.arguments) do argv[#argv + 1] = argument end
+        proc = executor:exec(quote.line(argv), {work_dir = work_dir, env = environment, process_group = group})
     end
-    local argv: {string} = {request.launch.executable}
-    for _, argument in ipairs(materialized.arguments) do argv[#argv + 1] = argument end
-    local proc, exec_error = executor:exec(quote.line(argv), {work_dir = work_dir, env = environment, process_group = group})
+    if not executor then return refuse("placement executor unavailable") end
     if not proc then
         -- The executor's own text is not recorded: it may quote the command
         -- or the environment it refused.
@@ -128,8 +146,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         executor:release()
         return refuse("executor refused the command")
     end
-    local stdout = proc:stdout_stream()
-    local stderr = proc:stderr_stream()
+    local stdout = not backend and proc:stdout_stream() or nil
+    local stderr = not backend and proc:stderr_stream() or nil
     local creating = store.transition(db, attempt_id, {expected_execution = "starting", evidence = {kind = "child.creating", detail = "native process start"}})
     if not creating.ok then executor:release(); return refuse(creating.message or "attempt stopped before start") end
     local started, start_error = proc:start()
@@ -139,7 +157,16 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         return refuse("the child did not start")
     end
     child_created = true
+    if backend then
+        stdout = proc:stdout_stream()
+        stderr = proc:stderr_stream()
+    end
     local fields: {[string]: unknown} = {}
+    if backend then
+        local identified, identify_error = backend.identity(request)
+        if not identified then proc:signal(9); executor:release(); return refuse(identify_error or "Docker identity unavailable") end
+        fields = identified
+    end
     local recorded: identity.Identity? = nil
     local handle = proc :: {[string]: unknown}
     if type(handle.pid) == "function" then
@@ -177,7 +204,10 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         process.send(starter, reply_topic, {started = true, attempt = running.attempt})
     end
     local stdin_closed = false
-    if request.launch.stdin then
+    if stdin_materialized then
+        stdin_closed = true
+        evidence(db, attempt_id, "stdin.materialized", "initial input supplied through an admitted private-home file with EOF")
+    elseif request.launch.stdin then
         -- The complete initial input goes first, then stdin is closed once
         -- for a launch that reads until end of file; each step leaves
         -- evidence so accepted input, closure and uncertainty stay distinct.
@@ -584,7 +614,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     if exited and #materialized.writebacks > 0 then
         local scope_absent = false
         local scope_error = "write-back requires a proven-empty process group"
-        if request.required_cleanup == "process_group" and recorded and recorded.pgid then
+        if backend then scope_absent, scope_error = backend.absent(request)
+        elseif request.required_cleanup == "process_group" and recorded and recorded.pgid then
             local absent, absent_error = identity.group_absent(recorded.pgid)
             scope_absent = absent == true
             if absent ~= true then scope_error = absent_error or "provider worker processes remain" end
@@ -609,7 +640,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     process.unlisten(acks)
     evidence(db, attempt_id, "runner.finished", "pending chunks " .. tostring(#pending) .. ", consumed through " .. tostring(consumed_through), {fields = {runner_pid = sql.NULL}})
     local ended = store.attempt(db, attempt_id)
-    if ended and ended.execution_state == "exited" then service.cleanup_attempt(ended, true) end
+    if ended and ended.execution_state == "exited" then cleanup(ended) end
     db:release()
 end
 return {main = main}

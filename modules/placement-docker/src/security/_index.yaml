@@ -1,0 +1,27 @@
+version: '1.0'
+namespace: bee.placement.docker.security
+entries:
+- name: docker_policy
+  kind: security.policy
+  meta:
+    comment: Host-owned Docker placement calls and attempt-bound process mounts
+  policy:
+    actions:
+    - exec.get
+    - exec.mount
+    - registry.get
+    - funcs.call
+    resources: '*'
+    effect: allow
+- name: docker_socket_policy
+  kind: security.policy
+  policy:
+    actions:
+    - http_client.request
+    - http_client.private_ip
+    - http_client.unix_socket
+    resources:
+    - http://docker/*
+    - docker
+    - /var/run/docker.sock
+    effect: allow

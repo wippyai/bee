@@ -51,6 +51,7 @@ local function fields(state: State): {Field}
     if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "Instructions"} end
     if state.form.draft._allowed.workdir then result[#result + 1] = {kind = "workdir", name = "", label = folder_label(state)} end
     if state.form.draft._allowed.thread then result[#result + 1] = {kind = "thread", name = "", label = thread_label(state)} end
+    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Placement: " .. (state.form.draft.placement_profile_ref or "bee.placement:native")} end
     local options = editor.options(state.form.draft)
     for _, option in ipairs(options or {}) do
         result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
@@ -218,12 +219,13 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    if field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
+    if field.kind == "placement" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
         if event.type == "key" and event.action == "press" and
             (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
             local err: string? = nil
-            if field.kind == "tool" then ok, err = editor.toggle_tool(state.form.draft, field.name)
+            if field.kind == "placement" then ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
+            elseif field.kind == "tool" then ok, err = editor.toggle_tool(state.form.draft, field.name)
             else ok, err = editor.cycle_option(state.form.draft, field.name, event.key_type == "left" and -1 or 1) end
             state.status = ok and "" or (err or "Option is unavailable")
         end

@@ -113,7 +113,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local open_thread: string? = nil
     if not selected then open_thread = THREAD end
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", thread_id = open_thread, arguments = selected and {} or {request}}))
+        definition_id = "bee.harness.app:app", thread_id = open_thread, arguments = selected and {} or {request}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
         local message = receive_reply()
@@ -208,7 +208,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
                 "cancelled picker retained an attempt-bound resource grant")
             view:close()
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open-after-cancel", op = "open",
-                workspace_id = WORKSPACE, definition_id = "bee.harness.window:app", arguments = {}}))
+                workspace_id = WORKSPACE, definition_id = "bee.harness.app:app", arguments = {}}))
             opened = nil
             while not opened do
                 local message = receive_reply()

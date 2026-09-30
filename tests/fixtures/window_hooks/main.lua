@@ -111,7 +111,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     assert(catalogs:receive():from() == broker)
 
-    -- 4. Resolve plan and open bee.harness.window:app
+    -- 4. Resolve plan and open bee.harness.app:app
     local plan, refused = admission.resolve(definition, "window")
     if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
 
@@ -128,7 +128,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         request_id = "open",
         op = "open",
         workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app",
+        definition_id = "bee.harness.app:app",
         thread_id = THREAD,
         arguments = {request},
     }))
@@ -410,7 +410,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         request_id = "continuation-open",
         op = "open",
         workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app",
+        definition_id = "bee.harness.app:app",
         restore_instance_id = opened.instance_id,
         restore_view_id = opened.id,
         resume_schema = "bee.agent.window@1",

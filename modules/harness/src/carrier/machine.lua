@@ -25,6 +25,7 @@ local stream_json = require("stream_json")
 local driver_types = require("driver_types")
 local placement_types = require("placement_types")
 local placement_resolver = require("placement_resolver")
+local placement_profiles = require("placement_profiles")
 local placement_protocol = require("placement_protocol")
 local placement_decode = require("placement_decode")
 local record_types = require("record_types")
@@ -260,7 +261,15 @@ local function measure(request: Request): (Measured?, string?)
     -- The policy is host-owned and decoded from this pinned snapshot. It is
     -- the source of placement selection; request fields only prove that the
     -- carrier received the same measured choice from admission.
-    local selected_placement, placement_error = placement_resolver.resolve(pinned, launch_policy.placement_binding)
+    local placement_binding_ref = launch_policy.placement_binding
+    if request.placement_profile_ref then
+        if not bounds.member(request.placement_profile_ref, launch_policy.placement_profiles) then return nil, "launch policy does not admit this placement profile" end
+        local selected, profile_error = placement_profiles.resolve(pinned, request.placement_profile_ref)
+        if not selected then return nil, profile_error end
+        if selected.digest ~= request.placement_profile_digest then return nil, "placement profile changed since admission" end
+        placement_binding_ref = selected.profile.placement_binding
+    end
+    local selected_placement, placement_error = placement_resolver.resolve(pinned, placement_binding_ref)
     if not selected_placement then return nil, placement_error end
     if (request.placement_binding_ref and request.placement_binding_ref ~= selected_placement.binding_id)
         or (request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest) then
@@ -353,6 +362,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     end
     local private_home = previous_private_home
     if private_home == nil then private_home = profile.private_home end
+    if placement_binding.placement_kind == "docker" then private_home = true end
     if not private_home and not launch_policy.allow_host_home then
         return nil, "launch policy does not authorize host HOME"
     end
@@ -400,8 +410,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if not home then return nil, "retained session needs a writable session resource" end
         launch.home_ref = home
     end
-    local bound = launch_policy.executables[launch.executable]
+    local runtime_name = launch.executable
+    local bound = launch_policy.executables[runtime_name]
     if bound then launch.executable = bound end
+    if placement_binding.placement_kind == "docker" then
+        local name = runtime_name:match("^([A-Za-z0-9_.%-]+)$")
+        if not name or not name:match("^[A-Za-z0-9_.%-]+$") then return nil, "Docker executable has no runtime name" end
+        launch.executable = "/usr/local/bin/" .. name
+    end
     -- The host-selected executable is measured by placement, read-only,
     -- and the measurement is part of the plan: the runner verifies it
     -- again before exec. An enabled exchange stands on an acceptance record
@@ -473,6 +489,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         -- host-selected override from the current profile.
         if previous_private_home ~= true or launch_policy.host_environment[name] == nil then environment[name] = value end
     end
+    if placement_binding.placement_kind == "docker" then
+        environment.HOME = nil
+        local home = launch.provider_home
+        if home then
+            if home.variable then environment[home.variable] = nil end
+            for _, item in ipairs(home.extra_variables or {}) do environment[item.variable] = nil end
+        end
+    end
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
@@ -485,7 +509,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         preferences = request.preferences,
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
-        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
+        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
         options = request.options,

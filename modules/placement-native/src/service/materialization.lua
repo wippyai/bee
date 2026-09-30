@@ -294,7 +294,7 @@ local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRe
     end
     return work_dir, sandbox_args, nil
 end
-function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?): (Prepared?, string?, string?)
+function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?, guest_home: string?): (Prepared?, string?, string?)
     local gateway_binding: string? = nil
     local writebacks: {WriteBack} = {}
     local function finish_stopped_without_child(): boolean
@@ -363,7 +363,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "home.failed", home_os_error or "home path", {execution = "exited"})
         return refused(home_os_error or "home path")
     end
-    local environment, environment_error = resolve_environment(request, home_os)
+    local environment, environment_error = resolve_environment(request, guest_home or home_os)
     if not environment then
         evidence(db, attempt_id, "environment.failed", environment_error or "environment", {execution = "exited"})
         return refused(environment_error or "environment")

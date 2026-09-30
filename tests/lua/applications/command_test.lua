@@ -22,7 +22,7 @@ local function define_tests()
                 id = "bee.driver.claude:command",
                 data = {
                     name = "claude",
-                    definition_id = "bee.harness.window:app",
+                    definition_id = "bee.harness.app:app",
                     arguments = {"bee.driver.claude:default_window"},
                     fullscreen = true,
                 },
@@ -30,7 +30,7 @@ local function define_tests()
             local decoded = handler.decode_command(valid_entry)
             if not decoded then error("Valid command entry rejected") end
             test.eq(decoded.name, "claude")
-            test.eq(decoded.definition_id, "bee.harness.window:app")
+            test.eq(decoded.definition_id, "bee.harness.app:app")
             test.eq(#decoded.arguments, 1)
             test.eq(decoded.arguments[1], "bee.driver.claude:default_window")
             test.is_true(decoded.fullscreen)
@@ -74,7 +74,7 @@ local function define_tests()
             for name, definition_ref in pairs(expected) do
                 local launch, err = handler.resolve(name, {})
                 if not launch then error(tostring(err)) end
-                test.eq(launch.definition_id, "bee.harness.window:app")
+                test.eq(launch.definition_id, "bee.harness.app:app")
                 test.eq(#launch.arguments, 1)
                 test.eq(launch.arguments[1], definition_ref)
                 test.is_true(launch.fullscreen)

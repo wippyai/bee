@@ -13,11 +13,11 @@ function M.new_cache(): Cache
     return {}
 end
 
-function M.probe(binding_ref: string, profile_id: string, cache: Cache): Probe
-    local key = binding_ref .. "\n" .. profile_id
+function M.probe(binding_ref: string, profile_id: string, cache: Cache, placement_profile_ref: string?): Probe
+    local key = binding_ref .. "\n" .. profile_id .. "\n" .. (placement_profile_ref or "")
     local existing = cache[key]
     if existing then return existing end
-    local raw, call_error = funcs.call(M.PROBE, {binding_ref = binding_ref, profile_id = profile_id})
+    local raw, call_error = funcs.call(M.PROBE, {binding_ref = binding_ref, profile_id = profile_id, placement_profile_ref = placement_profile_ref})
     if call_error then
         local failed: Probe = {located = true, result = nil, error = tostring(call_error)}
         cache[key] = failed

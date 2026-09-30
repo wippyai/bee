@@ -105,3 +105,16 @@ entries:
   imports:
     quote: bee.driver.kit:quote
 
+- name: profiles
+  kind: library.lua
+  source: file://profiles.lua
+  modules: [hash, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+- name: native
+  kind: registry.entry
+  meta: {type: bee.placement_profile, title: Native}
+  data:
+    schema_revision: bee.placement-profile@1
+    placement_binding: bee.placement.native.binding:binding

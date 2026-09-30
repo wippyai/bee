@@ -342,6 +342,23 @@ local function main(value: unknown, constructors: {[string]: Open})
         output:close()
         return false
     end
+    if not selected and not restoring then
+        -- Resolution, setup, admission, preparation and the native open are
+        -- durable work of unbounded length. Keep the broker's readiness
+        -- deadline independent of it, as the restore path does: the surface
+        -- is ready as soon as it says what it is doing.
+        local output = assert(tty.surface())
+        local width, height = tty.screen_size()
+        local frame = restore_view.draw(width, height, appearance.defaults(), "Preparing the Agent launch…", "Starting Agent", "")
+        assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
+        client.ready(launch, {negotiate_close = true})
+        ready_announced = true
+        local output_closed, output_error = output:close()
+        if not output_closed then
+            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
+            error("Managed window launch surface: " .. tostring(output_error))
+        end
+    end
     if selected then
         local choice, choice_error, picker_cancelled, pending_activation = picker.run(launch, input, lifecycle, closes)
         if picker_cancelled then
@@ -580,21 +597,6 @@ local function main(value: unknown, constructors: {[string]: Open})
             error("Managed window recovery surface: " .. tostring(output_error))
         end
     elseif direct then
-        -- Resolution, setup, admission, preparation and the native open are
-        -- durable work of unbounded length. Keep the broker's readiness
-        -- deadline independent of it, as the restore path does: the surface
-        -- is ready as soon as it says what it is doing.
-        local output = assert(tty.surface())
-        local width, height = tty.screen_size()
-        local frame = restore_view.draw(width, height, appearance.defaults(), "Preparing the Agent launch…", "Starting Agent", "")
-        assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
-        client.ready(launch, {negotiate_close = true})
-        ready_announced = true
-        local output_closed, output_error = output:close()
-        if not output_closed then
-            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-            error("Managed window launch surface: " .. tostring(output_error))
-        end
         local choice, direct_error = picker.direct(launch.workspace_id, launch.arguments[1], launch.thread_id,
             {view_id = launch.view_id, instance_id = launch.instance_id})
         if not choice then

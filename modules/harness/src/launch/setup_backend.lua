@@ -120,7 +120,7 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return fail("request must be an object") end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "workdir"}) then return fail("unknown field") end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "private_credentials", "workdir"}) then return fail("unknown field") end
     local workspace, ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace or not ref then return fail("workspace_id and definition_ref are required") end
     if not security.can("bee.resources.manage", workspace) then return fail("resource management is not authorized") end
@@ -139,15 +139,17 @@ local function handle(raw: unknown): {[string]: unknown}
         if not chosen then return fail(folder_error or "associate workdir") end
         workdir = chosen
     end
-    if #names == 0 and #launch.credentials == 0 then return {ok = true, resources = {}, credentials = {}, workdir = workdir} end
+    if request.private_credentials ~= nil and type(request.private_credentials) ~= "boolean" then return fail("private_credentials must be boolean") end
+    local credentials = request.private_credentials == true and launch.private_credentials or launch.credentials
+    if #names == 0 and #credentials == 0 then return {ok = true, resources = {}, credentials = {}, workdir = workdir} end
     local entry = registry.get(SETUP)
     local data = entry and bounds.object(entry.data)
     local roots = data and bounds.object(data.roots)
     if #names > 0 and not roots then return fail("host setup roots unavailable") end
     local configured = data and bounds.object(data.credentials)
     local selected: {[string]: Credential} = {}
-    if #launch.credentials > 0 and not security.can("bee.credentials.manage", workspace) then return fail("credential management is not authorized") end
-    for _, name in ipairs(launch.credentials) do
+    if #credentials > 0 and not security.can("bee.credentials.manage", workspace) then return fail("credential management is not authorized") end
+    for _, name in ipairs(credentials) do
         local chosen = configured and credential(configured[name])
         if not chosen then return fail("host setup has no valid credential for " .. name) end
         selected[name] = chosen
@@ -158,12 +160,12 @@ local function handle(raw: unknown): {[string]: unknown}
         local ok, setup_error = ensure(workspace, name, root)
         if not ok then return fail(setup_error or "associate") end
     end
-    for _, name in ipairs(launch.credentials) do
+    for _, name in ipairs(credentials) do
         local chosen = selected[name]
         if not chosen then return fail("host setup credential is missing") end
         local ok, setup_error = ensure_credential(workspace, name, chosen)
         if not ok then return fail(setup_error or "define credential") end
     end
-    return {ok = true, resources = names, credentials = launch.credentials, workdir = workdir}
+    return {ok = true, resources = names, credentials = credentials, workdir = workdir}
 end
 return {handle = handle}

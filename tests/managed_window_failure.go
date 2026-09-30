@@ -114,7 +114,7 @@ local function run()
     local plan, refused = admission.resolve("bee.managed.window.fixture:selector_definition", "window")
     assert(plan, tostring(refused and refused.error))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", arguments = {}}))
+        definition_id = "bee.harness.app:app", arguments = {}}))
     local opened
     local open_deadline = time.after("5s")
 	while not opened do

@@ -29,7 +29,7 @@ local function handle(raw: unknown): {[string]: unknown}
     if plan.plan_digest ~= request.expected_plan_digest then return {ok = false, error = "selected launch plan changed"} end
     -- A folder under an admitted root becomes the working directory only
     -- where the definition and its launch policy both allow the override.
-    local backend_request: {[string]: unknown} = {workspace_id = workspace, definition_ref = definition_ref, expected_definition_digest = plan.definition_digest}
+    local backend_request: {[string]: unknown} = {workspace_id = workspace, definition_ref = definition_ref, expected_definition_digest = plan.definition_digest, private_credentials = plan.placement_kind == "docker"}
     if request.workdir ~= nil then
         if not admission.overrides(plan, "workdir") then return {ok = false, error = "the launch does not allow a workdir override"} end
         backend_request.workdir = request.workdir

@@ -353,7 +353,7 @@ end
 function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest",
+    local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest", "placement_profile_ref", "placement_profile_digest",
         "binding_digest", "profile_digest", "launch", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts", "options"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
@@ -368,6 +368,13 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not attempt_id then return nil, "attempt_id is not an identifier" end
     local binding_ref = bounds.id(object.binding_ref)
     if not binding_ref then return nil, "binding_ref is not an identifier" end
+    local placement_profile_ref: string? = nil
+    local placement_profile_digest: string? = nil
+    if object.placement_profile_ref ~= nil then
+        placement_profile_ref = bounds.id(object.placement_profile_ref)
+        placement_profile_digest = digest_hex(object.placement_profile_digest)
+        if not placement_profile_ref or not placement_profile_digest then return nil, "placement profile requires ref and digest" end
+    elseif object.placement_profile_digest ~= nil then return nil, "placement_profile_digest needs placement_profile_ref" end
     local placement_binding_ref: string? = nil
     local placement_binding_digest: string? = nil
     if object.placement_binding_ref ~= nil then
@@ -491,7 +498,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if options_error then return nil, options_error end
     local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
         preferences = selected,
-        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
+        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_profile_ref = placement_profile_ref, placement_profile_digest = placement_profile_digest, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
         required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts, options = options}
     return decoded, nil

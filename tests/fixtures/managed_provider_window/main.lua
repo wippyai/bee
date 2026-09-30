@@ -58,7 +58,7 @@ local function run(provider: string, definition: string, marker: string, title: 
     local request = assert(json.encode({request_id = provider .. "-request", definition_ref = definition, brief = "",
         thread_id = thread}))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = provider .. "-open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", arguments = {request}}))
+        definition_id = "bee.harness.app:app", arguments = {request}}))
     local opened = receive_reply(replies, provider .. "-open", "open")
     assert(opened.error_code == "", "managed " .. provider .. " app did not become ready: " .. tostring(opened.error))
     local id = tostring(opened.id)

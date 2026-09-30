@@ -8,7 +8,7 @@ local frame = require("frame")
 local model = require("model")
 local creation = require("creation")
 local folder_picker = require("folder_picker")
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
 
 -- Every action's key, in bar order; wider canvases also name the tab switch.
@@ -111,7 +111,7 @@ local function list(painter: frame.Painter, rect: frame.Rect, state: model.State
     if #state.items == 0 then
         local title = state.query ~= "" and "No workspace matches " .. state.query or
             (state.tab == "archived" and "No archived workspaces" or "No workspaces yet")
-        frame.empty(painter, rect.y, title, state.query ~= "" and "/ change the search" or "Tab switch", rect)
+        frame.empty(painter, rect.y, title, state.query ~= "" and "/ change the search" or (state.tab == "archived" and "Tab active workspaces" or "N create a workspace"), rect)
         return {offset = 0, capacity = 0}
     end
     local cells: {{string}} = {}
@@ -197,7 +197,7 @@ local function draw_create(painter: frame.Painter, form: creation.Form, offset: 
     end
     local status = form.failure or ""
     frame.footer(painter, status, form.step == "details" and DETAIL_HINTS or FOLDER_HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 
 -- form: the create flow while it is open; it replaces the catalog screen.
@@ -246,11 +246,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local hints = state.editing and EDIT_HINTS or (width >= 110 and WIDE_HINTS or HINTS)
     if state.confirming then
         local selected = model.selected(state)
-        status = "Archive " .. (selected and (selected.label ~= "" and selected.label or selected.workspace_id) or "") .. "? Enter confirms · Esc cancels"
-        hints = ""
+        status = "Archive " .. (selected and (selected.label ~= "" and selected.label or selected.workspace_id) or "") .. "?"
+        hints = "Enter confirms · Esc cancels"
     end
     frame.footer(painter, status, hints)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 
 return M

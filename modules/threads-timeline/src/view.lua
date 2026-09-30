@@ -5,7 +5,7 @@
 local appearance = require("appearance")
 local frame = require("frame")
 local model = require("model")
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
 local function session_line(state: model.State): string
     if state.phase == "attaching" then return "Attaching to the thread owner…" end
@@ -32,9 +32,9 @@ local function row_label(row: model.Row, technical: boolean): string
     return row.glyph .. " " .. row.state_label .. " · " .. row.activity
 end
 local PICKER_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "M", verb = "more"},
-    {key = "R", verb = "refresh"}, {key = "T", verb = "details"}})
+    {key = "R", verb = "refresh"}, {key = "T", verb = "details"}, {key = "Esc", verb = "close"}})
 local THREAD_HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "F", verb = "follow"}, {key = "B", verb = "threads"},
-    {key = "R", verb = "refresh"}, {key = "T", verb = "details"}})
+    {key = "R", verb = "refresh"}, {key = "T", verb = "details"}, {key = "Esc", verb = "back"}})
 local function picker_columns(technical: boolean): {frame.Column}
     local columns: {frame.Column} = {{title = "Thread", width = 0}, {title = "State", width = 10}, {title = "Records", width = 7, align = "right"}}
     if technical then
@@ -75,16 +75,16 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if height >= 4 then
             local available = picker.unavailable == nil
             frame.actions(painter, height - 1, {
-                {kind = "open", label = "Open", enabled = available and picker.selected ~= nil, primary = true},
-                {kind = "more", label = "More", enabled = available and picker.next_after ~= nil},
-                {kind = "refresh", label = "Refresh", enabled = true},
-                {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
+                {kind = "open", key = "Enter", label = "Open", enabled = available and picker.selected ~= nil, primary = true},
+                {kind = "more", key = "M", label = "More", enabled = available and picker.next_after ~= nil},
+                {kind = "refresh", key = "R", label = "Refresh", enabled = true},
+                {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true},
             })
         end
         local message = status
         if message == "" then message = state.notice end
         frame.footer(painter, message, PICKER_HINTS)
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
     end
     local title = "TIMELINE  " .. (state.title ~= "" and state.title or tostring(state.thread_id))
     if state.thread_state ~= "" then title = title .. " · " .. state.thread_state end
@@ -112,7 +112,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if state.follow then start = #rows end
     local window = frame.window(#rows, capacity, selected_index, start)
     if #rows == 0 and state.phase == "attached" and capacity > 0 then
-        frame.empty(painter, list_first, "No records yet", capacity > 1 and "Records appear here as the thread's owner commits them" or nil)
+        frame.empty(painter, list_first, "No records yet", capacity > 1 and "Messages and activity appear here as work continues · R refresh" or nil)
     end
     for slot = 1, window.capacity do
         local index = window.offset + slot
@@ -135,16 +135,16 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     if height >= 4 then
         frame.actions(painter, height - 1, {
-            {kind = "follow", label = state.follow and "Following" or "Follow", enabled = true, active = state.follow},
-            {kind = "threads", label = "Threads", enabled = true},
-            {kind = "refresh", label = "Refresh", enabled = true},
-            {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
+            {kind = "follow", key = "F", label = state.follow and "Following" or "Follow", enabled = true, active = state.follow},
+            {kind = "threads", key = "B", label = "Threads", enabled = true},
+            {kind = "refresh", key = "R", label = "Refresh", enabled = true},
+            {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true},
         })
     end
     local message = status
     if message == "" then message = state.notice end
     if message == "" and state.unavailable ~= "" and state.phase == "attached" then message = "Owner unavailable: " .. state.unavailable end
     frame.footer(painter, message, THREAD_HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

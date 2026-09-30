@@ -217,7 +217,7 @@ local function decide_batch(self: Client, request: Object): model.Reply?
     local outbound: {Object} = {}
     for _, raw in ipairs(items) do
         local item = bounds.object(raw)
-        local address = item and bounds.id(item.approval_id) and self.addresses[bounds.id(item.approval_id) :: string] or nil
+        local address = item and bounds.id(item.approval_id) and self.addresses[bounds.id(item.approval_id)] or nil
         if not item or not address then return failure("DENIED", "approval owner is not known") end
         if owner and owner.id ~= address.source.id then return failure("INVALID_ARGUMENT", "a batch decides requests of one owner") end
         owner = address.source
@@ -226,15 +226,16 @@ local function decide_batch(self: Client, request: Object): model.Reply?
         copied.approval_id = address.approval_id
         outbound[#outbound + 1] = copied
     end
-    local answer = invoke_owner(self, owner :: Source, "bee.approvals.binding:decide_batch", {decisions = outbound})
+    if not owner then return failure("INVALID_ARGUMENT", "decisions must list 1 to 16 requests") end
+    local answer = invoke_owner(self, owner, "bee.approvals.binding:decide_batch", {decisions = outbound})
     if not answer then return nil end
     if answer.kind ~= "success" then return answer end
     local body = bounds.object(answer.value)
     local views = body and body.decisions
     if type(views) ~= "table" then return failure("INVALID_REPLY", "approval owner returned no decisions") end
     local converted: {unknown} = {}
-    for _, raw in ipairs(views :: {unknown}) do
-        local view, view_error = view_for(self, owner :: Source, raw)
+    for _, raw in ipairs(views) do
+        local view, view_error = view_for(self, owner, raw)
         if not view then return failure("INVALID_REPLY", view_error or "invalid owner reply") end
         converted[#converted + 1] = view
     end

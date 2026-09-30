@@ -298,15 +298,15 @@ type InboxPage = {changes: {Change}, next_seq: integer, more: boolean, replace_s
 local function dense_list(value: unknown): {unknown}?
     if type(value) ~= "table" then return nil end
     local count = 0
-    for key in pairs(value :: table) do
+    for key in pairs(value) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil end
         count = count + 1
     end
     if count > M.INBOX_PAGE then return nil end
     local result: {unknown} = {}
     for index = 1, count do
-        if (value :: table)[index] == nil then return nil end
-        result[index] = (value :: table)[index]
+        if (value)[index] == nil then return nil end
+        result[index] = (value)[index]
     end
     return result
 end
@@ -473,7 +473,7 @@ function M.rows(state: State): {Row}
 end
 function M.selected_row(state: State): Row?
     if not state.selected then return nil end
-    return state.rows[state.selected :: string]
+    return state.rows[state.selected]
 end
 function M.select(state: State, approval_id: string?)
     if approval_id ~= state.selected then state.detail = nil end
@@ -693,7 +693,7 @@ function M.permission_lines(value: unknown): {string}
     local limit = view.proposal.ref == "bee.gov:grant-lease" and 8192 or M.LINE_LIMIT
     local function append(raw: unknown, prefix: string)
         if type(raw) ~= "table" then return end
-        for _, value in ipairs(raw :: {unknown}) do
+        for _, value in ipairs(raw) do
             if #lines >= M.MAX_PAYLOAD_LINES then break end
             if type(value) == "string" then lines[#lines + 1] = prefix .. M.text(value, limit) end
         end
@@ -708,10 +708,10 @@ end
 function M.restore(state: State, encoded: string): boolean
     local decoded: unknown = json.decode(encoded)
     if type(decoded) ~= "table" then return false end
-    local saved = decoded :: Object
-    if saved.selected ~= nil and (type(saved.selected) ~= "string" or #(saved.selected :: string) > 200) then return false end
+    local saved = decoded
+    if saved.selected ~= nil and (type(saved.selected) ~= "string" or #(saved.selected) > 200) then return false end
     if saved.technical ~= nil and type(saved.technical) ~= "boolean" then return false end
-    state.selected = saved.selected :: string?
+    state.selected = saved.selected
     state.technical = saved.technical == true
     return true
 end

@@ -191,7 +191,7 @@ end
 local function envelope_lines(envelope: unknown): {string}
     local lines: {string} = {}
     if type(envelope) ~= "table" then return lines end
-    for _, raw in ipairs(envelope :: {unknown}) do
+    for _, raw in ipairs(envelope) do
         local grant = bounds.object(raw)
         if grant and #lines < 8 then
             local scope = json.encode(grant.scope) or "{}"
@@ -209,10 +209,10 @@ local function decode_row(source: string, workspace_id: string, raw: unknown): R
     local state = type(item.state) == "string" and item.state or nil
     if not lease_id or not target or used == nil or not revision or not state then return nil end
     local max = item.max_applies == nil and nil or bounds.count(item.max_applies)
-    local uses = type(item.uses) == "table" and #(item.uses :: {unknown}) or 0
+    local uses = type(item.uses) == "table" and #(item.uses) or 0
     local reserved = 0
     if type(item.uses) == "table" then
-        for _, raw_use in ipairs(item.uses :: {unknown}) do
+        for _, raw_use in ipairs(item.uses) do
             local use = bounds.object(raw_use)
             if use and use.state == "reserved" then reserved = reserved + 1 end
         end
@@ -228,16 +228,16 @@ end
 function M.apply_list(slice: Slice, source: string, workspace_id: string, raw: unknown): string?
     local failure = fault(raw)
     if failure then return failure end
-    local value = bounds.object((raw :: Object).value)
+    local value = bounds.object((raw).value)
     local listed = value and value.leases
-    if type(listed) ~= "table" or #(listed :: {unknown}) > M.MAX_LEASES then return "INVALID_REPLY: lease list is malformed" end
+    if type(listed) ~= "table" or #(listed) > M.MAX_LEASES then return "INVALID_REPLY: lease list is malformed" end
     for key, row in pairs(slice.rows) do if row.source == source then slice.rows[key] = nil end end
-    for _, item in ipairs(listed :: {unknown}) do
+    for _, item in ipairs(listed) do
         local row = decode_row(source, workspace_id, item)
         if not row then return "INVALID_REPLY: a lease row is malformed" end
         slice.rows[source .. "/" .. row.lease_id] = row
     end
-    if slice.selected and not slice.rows[slice.selected :: string] then slice.selected = nil end
+    if slice.selected and not slice.rows[slice.selected] then slice.selected = nil end
     return nil
 end
 
@@ -255,7 +255,7 @@ end
 
 function M.selected(slice: Slice): Row?
     if not slice.selected then return nil end
-    return slice.rows[slice.selected :: string]
+    return slice.rows[slice.selected]
 end
 
 function M.move(slice: Slice, delta: integer)
@@ -355,7 +355,7 @@ function M.apply_batch(slice: Slice, reply: model.Reply?, fold: (model.ApprovalV
     local views = value and value.decisions
     if type(views) ~= "table" then return "INVALID_REPLY: batch result is malformed" end
     local decided = 0
-    for _, raw in ipairs(views :: {unknown}) do
+    for _, raw in ipairs(views) do
         local view = model.decode_view(raw)
         if view then fold(view); decided = decided + 1 end
     end

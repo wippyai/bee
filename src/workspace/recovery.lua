@@ -29,7 +29,9 @@ function M.record(value: unknown): Record?
     local thread_id = value.thread_id == nil and nil or contract.thread_id(value.thread_id)
     if not id or id == "" or not instance or instance == "" or not definition or definition == "" or not schema or schema == ""
         or (value.thread_id ~= nil and not thread_id) then return nil end
-    if value.restart_policy ~= "automatic" and value.restart_policy ~= "manual" then return nil end
+    local raw_restart_policy: unknown = value.restart_policy
+    if raw_restart_policy ~= "automatic" and raw_restart_policy ~= "manual" then return nil end
+    local restart_policy: "automatic" | "manual" = raw_restart_policy
     if type(value.resume_state) ~= "string" or #value.resume_state > 65536 then return nil end
     if value.resume_state ~= "" then
         local _, err = json.decode(value.resume_state)
@@ -42,7 +44,7 @@ function M.record(value: unknown): Record?
         window = scene.windows[1]
     end
     return {id = id, instance_id = instance, definition_id = definition, thread_id = thread_id, resume_schema = schema,
-        restart_policy = value.restart_policy, resume_state = value.resume_state, window = window}
+        restart_policy = restart_policy, resume_state = value.resume_state, window = window}
 end
 function M.decode(encoded: string): Snapshot?
     if #encoded > 2097152 then return nil end

@@ -30,7 +30,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
     local storage_pending: desktop_storage.Pending? = nil
     local announced = false
     local subscriptions: {Channel<process.Message>} = {}
-    local host = ""
+    local host: string = ""
     -- Where host-owner requests go and whose answers are trusted: the host this
     -- supervisor spawned, or the node host manager that owns a leased host.
     local route = ""
@@ -356,7 +356,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 elseif selected.channel == lease_replaced and lease and sender == route and replacing_host
                     and type(data) == "table" and data.version == 1 and data.schema == 1
                     and data.workspace_id == workspace_id and contract.text(data.host, 160) then
-                    host = data.host
+                    host = assert(contract.text(data.host, 160))
                     assert(process.monitor(host))
                     replacing_host, host_deadline = false, nil
                     host_restarts = 0

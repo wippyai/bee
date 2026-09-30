@@ -32,8 +32,9 @@ local function touch(state: State, host: Host)
 end
 
 local function hold(state: State, host: Host, lease: string, holder: string)
-    if not host.leases[lease] then host.lease_count = host.lease_count + 1 end
-    host.leases[lease] = holder
+    local leases = host.leases
+    if not leases[lease] then host.lease_count = host.lease_count + 1 end
+    leases[lease] = holder
     host.idle_at = nil
     host.refused = false
     state.leases[lease] = host.workspace_id
@@ -222,7 +223,7 @@ function M.holdings(state: State, query: unknown): ({workspaces: {{workspace_id:
     local after: string? = nil
     if query ~= nil then
         if type(query) ~= "table" then return nil, "query must be an object" end
-        local object = query :: {[string]: unknown}
+        local object = query
         for key in pairs(object) do
             if key ~= "after" and key ~= "limit" then return nil, "query takes after and limit only" end
         end

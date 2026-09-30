@@ -27,8 +27,8 @@ function M.origin(value: unknown): OriginView?
 end
 
 local function digest(value: unknown): string?
-    if type(value) ~= "string" or #(value :: string) ~= 64 or not (value :: string):match("^[0-9a-f]+$") then return nil end
-    return value :: string
+    if type(value) ~= "string" or #(value) ~= 64 or not (value):match("^[0-9a-f]+$") then return nil end
+    return value
 end
 
 -- The host receives only this narrow provenance record.  It is produced from

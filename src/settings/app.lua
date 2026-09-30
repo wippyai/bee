@@ -31,11 +31,13 @@ local function main(value: unknown)
     local last_checkpoint = ""
     if launch.resume_state ~= "" then
         local restored: unknown = json.decode(launch.resume_state)
-        if type(restored) ~= "table" or (restored.pane ~= "theme" and restored.pane ~= "background" and restored.pane ~= "taskbar"
-            and restored.pane ~= "edit_mode" and restored.pane ~= "about")
+        if type(restored) ~= "table" then error("Invalid Settings checkpoint") end
+        local restored_pane = restored.pane
+        if (restored_pane ~= "theme" and restored_pane ~= "background" and restored_pane ~= "taskbar"
+            and restored_pane ~= "edit_mode" and restored_pane ~= "about")
             or type(restored.offset) ~= "number" or restored.offset < 0 or restored.offset > 10000
             or restored.offset ~= math.floor(restored.offset) then error("Invalid Settings checkpoint") end
-        pane = restored.pane; offset = math.floor(restored.offset)
+        pane = restored_pane; offset = math.floor(restored.offset)
     end
     local hits: {frame.Hit} = {}
     local pending = ""
@@ -133,11 +135,11 @@ local function main(value: unknown)
         end)
         if not ok then status = "Edit mode failed: " .. tostring(result); dirty = true; return end
         if call_error then status = "Edit mode failed: " .. tostring(call_error); dirty = true; return end
-        local reply = type(result) == "table" and result :: {[string]: unknown} or nil
+        local reply = type(result) == "table" and result or nil
         if not reply or reply.ok ~= true then
             status = "Edit mode refused: " .. tostring(reply and (reply.message or reply.code) or "invalid reply")
         else
-            local value = type(reply.value) == "table" and reply.value :: {[string]: unknown} or nil
+            local value = type(reply.value) == "table" and reply.value or nil
             status = value and type(value.message) == "string" and value.message or "Edit mode updated"
         end
         dirty = true

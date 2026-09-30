@@ -19,7 +19,7 @@ function M.decode(value: unknown): (Table?, string?)
     local unknown_field = bounds.fields(object, {"adapters"})
     if unknown_field then return nil, unknown_field end
     if type(object.adapters) ~= "table" then return nil, "adapters must be a list" end
-    local raw = object.adapters :: {unknown}
+    local raw = object.adapters
     local count = 0
     for key in pairs(raw) do
         if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then

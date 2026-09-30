@@ -139,13 +139,13 @@ function M.execute(request_id: string, admission: Admission): types.Reply
     -- Invocation is the principal's own authority: the check runs under the
     -- mapped actor and scope, where no worker grant reaches.
     local verdict, check_error = principal:call(M.INVOKE_CHECK, {operation_ref = admission.operation_ref})
-    if check_error or type(verdict) ~= "table" or (verdict :: {[string]: unknown}).allowed ~= true then
+    if check_error or type(verdict) ~= "table" or (verdict).allowed ~= true then
         return types.reply_error(request_id, types.fault("DENIED", "principal may not invoke " .. admission.operation_ref))
     end
     local raw, call_error = principal:call(admission.operation_ref, admission.input)
     if call_error then return types.reply_error(request_id, types.fault("DENIED", "thread operation refused: " .. tostring(call_error))) end
     if type(raw) ~= "table" then return types.reply_error(request_id, types.fault("INTERNAL", "thread owner answered without a reply")) end
-    local reply = raw :: ServiceReply
+    local reply = raw
     if reply.ok then
         local encoded = canonical.encode(reply.value)
         if encoded and #encoded > types.MAX_OUTPUT_BYTES then

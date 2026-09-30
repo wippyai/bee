@@ -44,7 +44,7 @@ local function define_tests()
             test.eq(pages, 1)
             for _, pane in ipairs({"theme", "background"}) do
                 for _, row in ipairs(view.draw(80, 24, appearance.defaults(), pane, 0).rows) do
-                    test.is_nil(row:find("…", 1, true))
+                    test.is_nil((row:find("…", 1, true)))
                 end
             end
             local about = view.draw(80, 12, appearance.defaults(), "about", 0)

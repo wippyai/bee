@@ -398,7 +398,8 @@ local function main(owner: string, workspace: unknown, database_resource: string
                     workspace_id = workspace_id, reason = "drain_timeout"})
             elseif expired then
                 local now = clock.epoch_seconds(time.now())
-                for request_id, pending in pairs(pending_opens) do
+                for request_id, raw_pending in pairs(pending_opens) do
+                    local pending: OpenWaiters = raw_pending
                     if pending.expires and now >= pending.expires then
                         -- Keep the bounded in-flight record until the broker
                         -- settles, so a late success can still claim the
@@ -406,7 +407,8 @@ local function main(owner: string, workspace: unknown, database_resource: string
                         -- charged as backpressure; no retry is issued.
                         local reply = contract.reply(request_id, "open", "uncertain", "Application open outcome is unknown")
                         reply.workspace_id = workspace_id
-                        for _, caller in ipairs(pending.callers) do
+                        local callers: {string} = pending.callers
+                        for _, caller in ipairs(callers) do
                             process.send(caller, "bee.host.application.reply", {version = 1, workspace_id = workspace_id,
                                 request_id = request_id, reply = reply})
                         end

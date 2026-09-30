@@ -56,8 +56,8 @@ local function encode_value(value: unknown, depth: integer, maximum_depth: integ
         return true, nil
     end
     if type(value) ~= "table" then return false, "value is not encodable" end
-    if next(value :: table) == nil then
-        local shape, shape_error = json.encode(value :: table)
+    if next(value) == nil then
+        local shape, shape_error = json.encode(value)
         if type(shape) ~= "string" then return false, tostring(shape_error or "cannot read empty table shape") end
         return append(output, shape), "value exceeds the encoded byte bound"
     end
@@ -100,11 +100,11 @@ local function encode_value(value: unknown, depth: integer, maximum_depth: integ
 end
 
 function M.empty_like(value: unknown): {[unknown]: unknown}
-    if type(value) == "table" and next(value :: table) == nil then
-        local shape = json.encode(value :: table)
-        if shape == "{}" then return table.create(0, 1) :: {[unknown]: unknown} end
+    if type(value) == "table" and next(value) == nil then
+        local shape = json.encode(value)
+        if shape == "{}" then return table.create(0, 1) end
     end
-    return table.create(1, 0) :: {[unknown]: unknown}
+    return table.create(1, 0)
 end
 
 function M.encode(value: unknown, maximum_bytes: integer?, maximum_depth: integer?): (string?, string?)

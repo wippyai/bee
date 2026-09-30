@@ -5,11 +5,20 @@ local hash = require("hash")
 local contract = require("contract")
 local application_admissions = require("application_admissions")
 local canonical = require("canonical")
+local bounds = require("bounds")
 local M = {}
 type Object = {[string]: unknown}
 type Entry = {id: string, kind: string, meta: Object?, data: Object}
 type Follower = {observed: string?}
 type Selection = {revision: string, evidence: string, bindings: {contract.Binding}, items: {contract.Descriptor}}
+
+local function decode_entry(raw: unknown): Entry?
+    local entry = bounds.object(raw)
+    if not entry then return nil end
+    local id, kind, data = bounds.id(entry.id), bounds.id(entry.kind), bounds.object(entry.data)
+    if not id or not kind or not data then return nil end
+    return {id = id, kind = kind, meta = bounds.object(entry.meta), data = data}
+end
 
 local function static_bindings(entry: Entry?): {contract.Binding}
     if not entry or entry.kind ~= "registry.entry" then error("Invalid application admission") end
@@ -37,7 +46,7 @@ function M.bindings(pinned: registry.Snapshot?): {contract.Binding}
     if pinned then entry, entry_error = pinned:get("bee.security:application_admission")
     else entry, entry_error = registry.get("bee.security:application_admission") end
     if entry_error or not entry then error("Invalid application admission: " .. tostring(entry_error)) end
-    return static_bindings(entry :: Entry)
+    return static_bindings(decode_entry(entry))
 end
 
 local function descriptor(id: string, entries: {[string]: Entry}): contract.Descriptor?
@@ -52,7 +61,9 @@ function M.descriptor(id: string, pinned: registry.Snapshot?): contract.Descript
     local entry, entry_error
     if pinned then entry, entry_error = pinned:get(id) else entry, entry_error = registry.get(id) end
     if entry_error or not entry then return nil end
-    return descriptor(id, {[id] = entry :: Entry})
+    local decoded = decode_entry(entry)
+    if not decoded then return nil end
+    return descriptor(id, {[id] = decoded})
 end
 
 -- Durable registry edits and activation overlay revisions both invalidate the
@@ -92,9 +103,9 @@ end
 local function record_bindings(raw: unknown): {contract.Binding}
     if type(raw) ~= "table" then error("Invalid protected application admission bindings") end
     local count = 0
-    for key in pairs(raw :: table) do
-        if type(key) ~= "number" or key ~= math.floor(key :: number)
-            or (key :: number) < 1 or (key :: number) > 64 then
+    for key in pairs(raw) do
+        if type(key) ~= "number" or key ~= math.floor(key)
+            or (key) < 1 or (key) > 64 then
             error("Invalid protected application admission bindings")
         end
         count = count + 1
@@ -103,7 +114,7 @@ local function record_bindings(raw: unknown): {contract.Binding}
     local result: {contract.Binding} = {}
     local seen: {[string]: boolean} = {}
     for index = 1, count do
-        local binding = contract.binding((raw :: table)[index])
+        local binding = contract.binding((raw)[index])
         if not binding or seen[binding.definition_id] then
             error("Invalid or duplicate protected application admission binding")
         end
@@ -122,7 +133,7 @@ function M.read(workspace_id: string): Selection
     local revision = pinned:version():string()
     local function lookup(id: string): Entry?
         local entry = pinned:get(id)
-        return entry and entry :: Entry or nil
+        return decode_entry(entry)
     end
     local node_id, node_error = system.node.id()
     if not node_id or node_error then error("Node identity is unavailable: " .. tostring(node_error)) end
@@ -184,7 +195,7 @@ end
 -- An open can arrive while an admission write is still converging across its
 -- registry entries. Refresh once more after a miss so a transient torn read
 -- does not become a user-visible not-admitted refusal.
-function M.resolve_open(definition_id: string, refresh: () -> Selection?): (Selection?, contract.Binding?, contract.Descriptor?)
+function M.resolve_open<T: Selection>(definition_id: string, refresh: () -> T?): (T?, contract.Binding?, contract.Descriptor?)
     local selected = refresh()
     local binding, descriptor = open_target(selected, definition_id)
     if binding and descriptor then return selected, binding, descriptor end

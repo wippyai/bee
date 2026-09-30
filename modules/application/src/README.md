@@ -11,7 +11,7 @@ application, select a workspace, open a store, or grant access to a thread.
 | `client`, `arguments`, `interaction` | Application launch and broker-facing values used by standalone application processes |
 | `caller`, `text`, `status_reader`, `status_surface` | Typed owner replies and bounded presentation values |
 | `appearance`, `names` | Shared semantic presentation values for applications and desktop consumers |
-| `frame` | The application frame every Bee application draws with: size classes and layout, header, tabs, action bar, status and key-hint footer, list window, table, tree view, key-value inspector and log viewer (full width, or confined to a pane's `area`), panels, form fields, wizard steps, empty state, virtualized log viewer with search highlight, status badge, toast, modal and command palette (`fuzzy` filter) |
+| `frame` | The application frame every Bee application draws with: size classes and layout, header, tabs, action bar, bounded status and reserved key-hint footer, declared-action Help and overflow More menu, list window, table, tree view, key-value inspector and log viewer (full width, or confined to a pane's `area`), panels, form fields, wizard steps, empty state, virtualized log viewer with search highlight, status badge, toast, modal and command palette (`fuzzy` filter) |
 | `viz` | The visualization kit on the frame: sparklines, line and area charts, bars, columns, stacked bars, histograms, heatmaps, status grids, gauges, progress, stat tiles, inline table bars, timelines, small graphs, scatter plots, candlestick and range charts, a braille radial gauge, a spinner, 100% stacked bars, progress with ETA and bounded live series with a redraw cadence |
 | `forms` | The input kit on the frame: a text field (cursor, word and line motions, select-all, paste, placeholder, `max_length`, masked mode), a bounded number field, a scrolling multi-line text area, a select/dropdown, a checkbox, a radio group and a toggle, plus a form container that owns focus order (Tab/Shift-Tab/click), per-field validation, dirty tracking and a disabled state |
 | `diagram` | Layout diagrams on the frame: `mesh` (nodes at chosen or ringed positions, braille-routed edges, node hits), `treemap` (squarified tiles of sized items) and `flame` (icicle chart of a value tree); pure painters with hit targets, in the same node and bar vocabulary as `viz` |
@@ -32,3 +32,14 @@ Applications still run as standalone processes. The host admits their exact
 definition and policies; the broker supplies execution identity and durable
 thread bindings. Registry metadata and SDK imports do not authorize an
 application or a thread operation.
+
+Shared frame controls are application-owned values. Views return
+`controls = frame.controls(painter)` with their rows and hits. The actor owns
+a `frame.menu()` record, calls `frame.render(drawn, menu, preferences)` before
+presenting, and routes terminal events through `frame.route(menu, event, text_entry)`
+before its normal handlers. Nil means consumed; the second return value requests
+a redraw. More dispatches an enabled choice through the actor's existing mouse
+handler. Help lists declared buttons, tabs and hints, including unavailable
+actions. `Button.key` names the shortcut; `primary` reserves room when buttons
+overflow. Text entry preserves case and literal `?`; the Help footer stays
+clickable. Neither overlay grants permissions or bypasses app confirmations.

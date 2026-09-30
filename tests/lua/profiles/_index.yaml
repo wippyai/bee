@@ -44,13 +44,10 @@ entries:
   source: file://selection_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [funcs, security, uuid]
-  security:
-    policies: [bee.harness.profiles:test_call, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
   imports:
     test: wippy.test:test
-    selection: bee.harness.launch:selection
-    bounds: bee.threads.records:bounds
+    agents: bee.harness.window:agents
+    sessions: bee.application:sessions
 
 - name: context_probe
   kind: function.lua

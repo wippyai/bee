@@ -4,6 +4,7 @@ local bounds = require("bounds")
 local journal = require("journal")
 local admission = require("admission")
 local security = require("security")
+local catalog_service = require("catalog_service")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -230,6 +231,18 @@ local function not_ready(_: Object): Reply
     return fail("UNAVAILABLE", "session operation is not yet available", nil)
 end
 
+local function catalog_list(request: Object): Reply
+    local _, workspace = identity()
+    if not workspace then return fail("DENIED", "the authenticated caller has no workspace", nil) end
+    local page, failure = catalog_service.list(request, workspace)
+    if not page then
+        if not failure then return unavailable("Sessions catalog could not be read.", nil) end
+        local error: Object = {code = failure.code, message = failure.message, retry = failure.retry}
+        return {ok = false, error = error}
+    end
+    return succeed(page)
+end
+
 function M.call(method: string, request: unknown): Reply
     local input = object(request)
     if not input then return fail("INVALID", "request must be an object", nil) end
@@ -246,7 +259,8 @@ function M.call(method: string, request: unknown): Reply
     if method == "send" then return send(input) end
     if method == "get" then return get(input) end
     if method == "await" then return await(input) end
-    if method == "join" or method == "list" or method == "cancel" or method == "close" or method == "catalog" then
+    if method == "catalog" then return catalog_list(input) end
+    if method == "join" or method == "list" or method == "cancel" or method == "close" then
         return not_ready(input)
     end
     return fail("UNSUPPORTED", "unknown sessions operation", nil)

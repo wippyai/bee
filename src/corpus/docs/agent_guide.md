@@ -108,8 +108,7 @@ own permission control where one exists and is proven: Codex
 `--sandbox workspace-write`, Claude Code and Grok default permission
 modes, Muse `on-request` approval, agy `--sandbox`. Grok and OpenCode
 offer no workdir confinement Bee can select, so the host records those
-batch routes as `unconfined`: they open only where the caller's launch policy
-names them in `agent_launch_unconfined`.
+batch routes as `unconfined`.
 
 For an edit-capable profile with a write-granted workdir, the host-selected
 Git worktree plugin resolves the repository's Git directory and shared common

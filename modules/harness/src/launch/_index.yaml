@@ -59,14 +59,51 @@ entries:
 - name: selection
   kind: library.lua
   source: file://selection.lua
-  modules: [funcs, registry]
+  modules: [registry]
   imports:
-    catalog: bee.harness.catalog:catalog
     definitions: bee.harness.launch:definitions
-    admission: bee.harness.launch:admission
     bounds: bee.threads.records:bounds
-    policy: bee.harness.carrier:policy
-    profiles: bee.harness.profiles:protocol
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  modules: [env, exec, fs, registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    descriptor: bee.driver:descriptor
+    driver_resolver: bee.driver:resolver
+    driver_types: bee.driver:types
+    locate: bee.driver:locate
+    quote: bee.driver.kit:quote
+    resources: bee.placement.native:resources
+    probe_capture: bee.harness.launch:probe_capture
+    probe_version: bee.harness.launch:probe_version
+- name: probe_capture
+  kind: library.lua
+  source: file://probe_capture.lua
+  modules: [channel, time]
+- name: probe_version
+  kind: library.lua
+  source: file://probe_version.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: locate_probe
+  kind: function.lua
+  source: file://locate_probe.lua
+  method: handle
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    locator: bee.harness.launch:locate
+  security:
+    policies: [bee.harness.security:launch_locate_probe_policy]
+- name: readiness
+  kind: library.lua
+  source: file://readiness.lua
+  modules: [funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    driver_locate: bee.driver:locate
+    driver_types: bee.driver:types
 - name: setup_backend
   kind: function.lua
   source: file://setup_backend.lua
@@ -94,15 +131,6 @@ entries:
     placement_resolver: bee.placement:resolver
     placement_decode: bee.placement:decode
     prestart: bee.harness.carrier:prestart
-- name: agent_launch_execution_action_policy
-  kind: security.policy.expr
-  meta:
-    comment: The membership, grant and projection actions the called owner operations check again, plus the registry and process-host access launch admission and start require; setup, grants and projections stay in the workspace the launching actor is bound to
-  policy:
-    expression: 'action == "registry.get" || action == "registry.snapshot" || (action == "process.registry.lookup" && resource matches "^bee[.]harness[.]carrier/attempt[-:][A-Za-z0-9_.:-]+$") || action == "process.spawn" || action == "process.spawn.monitored" || action == "process.host" || action == "process.context" || action == "process.monitor" || action == "bee.threads.create" || action == "bee.threads.observe" || action == "bee.threads.lifecycle" || ((action == "bee.harness.setup" || action == "bee.resources.grant" || action == "bee.credentials.issue") && resource != "" && resource == actor.meta.workspace_id) || (action == "bee.harness.profiles.read" && resource != "" && resource == actor.meta.workspace_id && resource == meta.workspace_id)'
-    actions: [registry.get, registry.snapshot, process.registry.lookup, process.spawn, process.spawn.monitored, process.host, process.context, process.monitor, bee.harness.setup, bee.threads.create, bee.threads.observe, bee.threads.lifecycle, bee.resources.grant, bee.credentials.issue, bee.harness.profiles.read]
-    resources: '*'
-    effect: allow
 - name: setup_execution_policy
   kind: security.policy.expr
   groups: [harness_setup_execution_scope]

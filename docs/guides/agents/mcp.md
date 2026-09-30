@@ -161,7 +161,7 @@ Worker definitions carry these containment bases:
 | Claude batch | private, no host inheritance | default permission mode |
 | Muse batch | private, no host inheritance | `on-request` approval |
 | agy batch | private, no host inheritance | `--sandbox` |
-| Grok batch | private, no host inheritance | none provable: recorded `unconfined`, needs the explicit `agent_launch_unconfined` host flag |
+| Grok batch | private, no host inheritance | none provable: recorded `unconfined` |
 | OpenCode batch | private, no host inheritance | none exists: recorded `unconfined` |
 
 These are CLI permission controls, not operating system confinement; see

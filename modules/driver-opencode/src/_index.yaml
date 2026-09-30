@@ -53,12 +53,8 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
-    values: bee.threads.records:values
+    universal: bee.driver:universal
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -70,8 +66,13 @@ entries:
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    types: bee.driver:types
+    universal: bee.driver:universal
+
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -81,9 +82,13 @@ entries:
       dispatch: bee.driver.opencode.binding:dispatch
       normalize: bee.driver.opencode.binding:normalize
       configure: bee.driver.opencode.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.opencode.binding:locate
   meta:
     type: harness.driver
     driver_id: opencode
+    descriptor_ref: bee.driver.opencode.descriptor:cli
     accepts_model: false
     profiles_ref: bee.driver.opencode:profiles
 - name: profiles

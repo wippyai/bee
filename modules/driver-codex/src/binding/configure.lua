@@ -2,9 +2,8 @@
 -- select both this method and its provider from their pinned host records.
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
-local function handle(value: unknown): {[string]: unknown}
-    local request, request_error = configure_protocol.decode_request(value)
-    if not request then return {ok = false, error = request_error or "invalid configuration request"} end
+local universal = require("universal")
+local function handle(request: configure_protocol.Request): {[string]: unknown}
     if not request.provider_ref and not request.provider then
         local arguments, argument_error = configuration.session_arguments(request.gateway, request.instructions)
         if not arguments then return {ok = false, error = tostring(argument_error)} end
@@ -36,4 +35,4 @@ local function handle(value: unknown): {[string]: unknown}
     if request.gateway and #request.gateway.hooks > 0 then arguments = {"--profile", "bee"} end
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
-return {handle = handle}
+return {handle = universal.configure("codex", {codex = handle})}

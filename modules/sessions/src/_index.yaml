@@ -51,6 +51,7 @@ entries:
     canonical: bee.threads.records:canonical
     journal: bee.sessions:threads_journal
     admission: bee.harness.launch:admission
+    catalog_service: bee.sessions.service:catalog
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua

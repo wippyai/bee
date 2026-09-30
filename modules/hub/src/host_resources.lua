@@ -28,8 +28,8 @@ end
 
 -- The person's one-time Hub publication selection: the organization every
 -- publication must belong to, the uploader CLI the worker runs, the source
--- roots it may pack and the worker-owned staging root holding approved
--- content snapshots. An absent link fails closed.
+-- roots it may pack and the worker-owned staging root holding sealed pack
+-- files. An absent link fails closed.
 function M.publish_config(): (PublishConfig?, string?)
     local linked, link_error = registry.get(M.PUBLISH_CONFIGURATION_REF)
     if not linked then return nil, tostring(link_error or "Hub publication is not configured") end

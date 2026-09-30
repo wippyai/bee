@@ -9,3 +9,11 @@ entries:
   imports:
     installation: bee.gateway.security:installation
     approval_service: bee.approvals:service
+- name: publication_worker
+  kind: process.lua
+  source: file://publication_worker.lua
+  method: main
+  modules: [process, channel, time, logger]
+  imports:
+    publish: bee.gateway.security:publish
+    approval_service: bee.approvals:service

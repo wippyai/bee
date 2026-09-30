@@ -61,7 +61,6 @@ entries:
     inventory_reader: bee.hub:inventory_reader
     inspect: bee.hub.binding:inspect
     publication: bee.hub.binding:publication
-    publisher: bee.hub.binding:publish
     transaction: bee.persist:transaction
     preview: bee.hub.binding:preview
     host_resources: bee.hub:host_resources

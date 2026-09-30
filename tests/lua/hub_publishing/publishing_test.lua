@@ -97,7 +97,12 @@ local function define_tests()
             test.is_nil((publishing.verify(tampered, "agent", "ws", "hub-publication", CONTEXT)))
         end)
 
-        test.it("builds the exact upload command without secrets", function()
+        test.it("seals the source tree into one pack file without secrets", function()
+            local joined = table.concat(publishing.pack_command("bee/publish-probe", "/bin/wippy", "/stage/pack.wapp"), " ")
+            test.eq(joined, "/bin/wippy pack --module bee/publish-probe /stage/pack.wapp")
+        end)
+
+        test.it("builds the exact upload command for the sealed pack without secrets", function()
             local digest = publishing.plan_digest(measured())
             if not digest then error("measure") end
             local proposal = publishing.proposal(measured(), CONTEXT)
@@ -105,21 +110,43 @@ local function define_tests()
                 policy = "hub-publication", proposal = proposal}
             local verified = publishing.verify(view, "agent", "ws", "hub-publication", CONTEXT)
             if not verified then error("verify") end
-            local command = publishing.publish_command(verified, "/bin/wippy", "/stage/content")
+            local command = publishing.publish_command(verified, "/bin/wippy", "/cfg/probe", "/stage/pack.wapp")
             local joined = table.concat(command, " ")
-            test.eq(joined, "/bin/wippy publish --config /stage/content " ..
+            test.eq(joined, "/bin/wippy publish --config /cfg/probe --wapp /stage/pack.wapp " ..
                 "--version 0.0.1-probe.1 --create --protected --module-visibility private")
             for _, item in ipairs(command) do
                 test.is_false((tostring(item)):find("token") ~= nil)
             end
         end)
 
-        test.it("builds the exact dry-run command that stages the pack", function()
+        test.it("preflights the sealed pack without uploading it", function()
             local decoded = publishing.decode({component = "bee/publish-probe",
                 version = "0.0.1-probe.1", visibility = "private", source = "/home/person/work/probe"})
             if not decoded then error("decode") end
-            local joined = table.concat(publishing.plan_command(decoded, "/bin/wippy"), " ")
-            test.eq(joined, "/bin/wippy publish --config /home/person/work/probe --version 0.0.1-probe.1 --dry-run")
+            local joined = table.concat(publishing.plan_command(decoded, "/bin/wippy", "/cfg/probe", "/stage/pack.wapp"), " ")
+            test.eq(joined, "/bin/wippy publish --config /cfg/probe --wapp /stage/pack.wapp --version 0.0.1-probe.1 --dry-run")
+        end)
+
+        test.it("resolves the upload outcome against the approved pack digest", function()
+            local other = string.rep("c", 64)
+            local uploaded = publishing.resolve_upload(DIGEST, "sha256:" .. DIGEST, nil)
+            test.eq(uploaded.kind, "published")
+            test.eq(uploaded.hub_digest, "sha256:" .. DIGEST)
+            test.eq(uploaded.replayed, false)
+            local replayed = publishing.resolve_upload(DIGEST, nil, DIGEST)
+            test.eq(replayed.kind, "published")
+            test.eq(replayed.hub_digest, "sha256:" .. DIGEST)
+            test.eq(replayed.replayed, true)
+            local hub_mismatch = publishing.resolve_upload(DIGEST, "sha256:" .. other, nil)
+            test.eq(hub_mismatch.kind, "failed")
+            test.is_true((hub_mismatch.message or ""):find(DIGEST, 1, true) ~= nil)
+            test.is_true((hub_mismatch.message or ""):find(other, 1, true) ~= nil)
+            local existing = publishing.resolve_upload(DIGEST, nil, other)
+            test.eq(existing.kind, "failed")
+            test.is_true((existing.message or ""):find(DIGEST, 1, true) ~= nil)
+            test.is_true((existing.message or ""):find(other, 1, true) ~= nil)
+            local uncertain = publishing.resolve_upload(DIGEST, nil, nil)
+            test.eq(uncertain.kind, "uncertain")
         end)
 
         test.it("reads the Hub digest from uploader output", function()

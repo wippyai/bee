@@ -177,12 +177,12 @@ local function define_tests()
             local _, no_id = mcp.install_status_arguments({arguments = {}})
             test.eq(no_id, "request_id is required and must be an identifier")
         end)
-        test.it("offers publication requests as write tools apart from the read-only components tool", function()
+        test.it("offers publication requests as one write tool and one read-only status", function()
             local listed = mcp.list({"components", "publish_request", "publish_status"}).tools :: {Object}
             test.eq(#listed, 3)
             for _, item in ipairs(listed) do
                 local annotations = item.annotations :: Object
-                test.eq(annotations.readOnlyHint, item.name == "components")
+                test.eq(annotations.readOnlyHint, item.name ~= "publish_request")
                 test.eq(annotations.destructiveHint, false)
             end
             for _, name in ipairs({"publish_request", "publish_status"}) do
@@ -198,7 +198,7 @@ local function define_tests()
             test.eq(request and request.visibility, "private")
             local _, missing = mcp.hub_publish_arguments({arguments = {component = "bee/probe",
                 version = "0.0.1-probe.1", visibility = "private"}})
-            test.eq(missing, "source is required as an absolute module directory")
+            test.eq(missing, "source is required as an absolute locked source tree")
             local _, visibility = mcp.hub_publish_arguments({arguments = {component = "bee/probe",
                 version = "0.0.1-probe.1", visibility = "internal", source = "/home/person/work/probe"}})
             test.eq(visibility, "visibility is required as public or private")

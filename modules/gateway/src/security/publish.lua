@@ -1,11 +1,12 @@
 -- SPDX-License-Identifier: MIT
 -- Agent-requested Hub publication through the approval owner. The agent
--- names a package version and source; the host packs and measures the exact
--- bytes and files one approval showing module, version, digest, visibility,
--- organization and source. The agent never writes the registry or touches
--- the publishing credential: the first status poll after approval consumes
--- the decision and uploads the approved bytes through the Hub facade under
--- the publication apply policy. Later polls read the recorded receipt.
+-- names a package version and source; the worker seals the source tree into
+-- one .wapp file and files one approval showing module, version, pack
+-- digest, visibility, organization and source. The agent never writes the
+-- registry or touches the publishing credential: once the person approves,
+-- an owner worker consumes the decision and uploads the sealed file through
+-- the Hub facade under the publication apply policy. Status polling only
+-- reports the decision and the recorded outcome without uploading.
 local registry = require("registry")
 local funcs = require("funcs")
 local bounds = require("bounds")
@@ -67,18 +68,25 @@ local function context(binding: Binding): {binding_id: string, thread_id: string
         action_id = binding.action_id, attempt_id = binding.attempt_id}
 end
 
--- request: pack and measure the source, then file one approval for the
--- exact bytes. Filing changes nothing on the Hub.
+-- request: seal the source tree into one pack file, then file one approval
+-- for that file's digest. Filing changes nothing on the Hub.
 function M.request(port: Port, binding: Binding, policy: string, raw: unknown): Reply
     local workspace_id = binding.workspace_id
     if not workspace_id then return fail("DENIED", "this binding names no workspace to publish from") end
     local decoded, decode_error = publishing.decode(raw)
     if not decoded then return fail("INVALID", decode_error or "invalid publication request") end
-    local planned, plan_error = hub_value(port, {operation = "publish_plan",
+    local planned, plan_error = hub_value(port, {operation = "publish_request",
         request = {component = decoded.component, version = decoded.version,
             visibility = decoded.visibility, source = decoded.source}})
     if plan_error then return plan_error end
-    local proposal, prompt, proposal_error = publishing.proposal(planned, context(binding))
+    local staged = bounds.object(planned)
+    if not staged then return fail("INCOMPLETE", "publication plan is malformed") end
+    local clean = {component = staged.component, version = staged.version, digest = staged.digest,
+        visibility = staged.visibility, organization = staged.organization, source = staged.source}
+    if tostring(staged.plan_digest) ~= publishing.plan_digest(clean) then
+        return fail("INCOMPLETE", "publication plan digest does not measure its pack")
+    end
+    local proposal, prompt, proposal_error = publishing.proposal(clean, context(binding))
     if not proposal or not prompt then return fail("INCOMPLETE", proposal_error or "publication cannot be approved") end
     local payload = proposal.payload :: Object
     local digest = tostring(payload.plan_digest)
@@ -96,9 +104,10 @@ function M.request(port: Port, binding: Binding, policy: string, raw: unknown): 
         digest = payload.digest, plan_digest = digest, expires_at = approval.expires_at}}
 end
 
--- apply_approved: consumes the approved decision and uploads the approved
--- bytes through Hub. The digest comes from the recorded proposal, never
--- from the agent.
+-- apply_approved: the owner worker consumes the approved decision and
+-- uploads the sealed file through Hub. The digest comes from the recorded
+-- proposal, never from the agent. Agent status polling never calls this;
+-- the publication effect worker does after the approval wakes it.
 function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unknown): Reply
     local value = bounds.object(raw)
     local request_id = value and bounds.id(value.request_id) or nil
@@ -119,24 +128,37 @@ function M.apply_approved(port: Port, binding: Binding, policy: string, raw: unk
     local decision = publishing.decision(view)
     if decision.status ~= "approved" then return reply(decision) end
     local effect_key = publishing.effect_key(request_id)
-    if view.effect_completed_at ~= nil or (view.consumed_effect ~= nil and view.consumed_effect ~= effect_key)
-        or (view.consumer_id ~= nil and view.consumer_id ~= binding.subject) then
-        return fail("DENIED", "approval was consumed by another effect owner")
+    if view.effect_completed_at ~= nil then
+        if view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
+            return fail("DENIED", "approval was consumed by another effect owner")
+        end
+        if view.effect_result == nil then return fail("UNAVAILABLE", "completed publication has no recorded Hub reply") end
+        return reply(publishing.status(view.effect_result))
     end
     if view.consumed_effect == nil and view.consumer_id == nil then
         local digest = bounds.id(view.proposal_digest)
         if not digest then return fail("UNAVAILABLE", "approval carries no proposal digest") end
         local consumed = subject_call.consume(port.approvals, request_id, digest, effect_key, view.owner_incarnation)
         if not consumed.ok then return consumed end
+    elseif view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
+        return fail("DENIED", "approval was consumed by another effect owner")
     end
     local effect = port.hub({operation = "publish_apply", request = {component = request.component},
         expected_digest = verified.digest}, true)
-    return reply(publishing.status(effect))
+    local outcome = publishing.status(effect)
+    if outcome.status ~= "approved" then
+        local digest = bounds.id(view.proposal_digest)
+        if not digest then return fail("UNAVAILABLE", "approval carries no proposal digest") end
+        local completed = port.approvals("complete_publication_effect", {approval_id = request_id,
+            proposal_digest = digest, effect_key = effect_key, result = publishing.effect_result(effect)})
+        if not completed.ok then return completed end
+    end
+    return reply(outcome)
 end
 
--- status: the person's decision, or once uploaded, the recorded receipt.
--- The first poll after approval consumes the decision and uploads exactly
--- the approved bytes; later polls only read.
+-- status: the person's decision, or once the owner worker uploads, the
+-- recorded outcome. Polling never consumes the decision and never uploads;
+-- an approved request without a recorded outcome is still uploading.
 function M.status(port: Port, binding: Binding, policy: string, raw: unknown): Reply
     local value = bounds.object(raw)
     local request_id = value and bounds.id(value.request_id) or nil
@@ -157,14 +179,69 @@ function M.status(port: Port, binding: Binding, policy: string, raw: unknown): R
     local decision = publishing.decision(view)
     if decision.status ~= "approved" then return reply(decision) end
     local effect_key = publishing.effect_key(request_id)
-    if view.consumed_effect ~= nil or view.consumer_id ~= nil then
+    if view.effect_completed_at ~= nil then
         if view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject then
             return fail("DENIED", "approval was consumed by another effect owner")
         end
-        return reply(publishing.status(port.hub({operation = "publish_status",
-            expected_digest = verified.digest}, false)))
+        if view.effect_result == nil then return fail("UNAVAILABLE", "completed publication has no recorded Hub reply") end
+        return reply(publishing.status(view.effect_result))
     end
-    return M.apply_approved(port, binding, policy, {request_id = request_id})
+    if (view.consumed_effect ~= nil or view.consumer_id ~= nil)
+        and (view.consumed_effect ~= effect_key or view.consumer_id ~= binding.subject) then
+        return fail("DENIED", "approval was consumed by another effect owner")
+    end
+    return reply(decision)
+end
+
+-- drain_approved: finds approved Hub publication requests that have not been
+-- consumed, consumes each under the asking subject's binding and uploads it
+-- through Hub. The approval commit wakes the publication effect worker, so
+-- no status poll is needed for an approved publication to run.
+function M.drain_approved(): (integer, string?)
+    local policy, policy_error = M.approval_policy()
+    if not policy then return 0, policy_error and policy_error.error.message or "publication policy unavailable" end
+    local raw, call_error = funcs.new():call("bee.approvals.binding:publication_effects", {limit = 16})
+    if call_error then return 0, tostring(call_error) end
+    local listed = bounds.object(raw)
+    local queue = listed and bounds.object(listed.value) or nil
+    if not listed or listed.ok ~= true or not queue or type(queue.effects) ~= "table" then
+        return 0, "approval owner returned no publication effect queue"
+    end
+    local count = 0
+    local retry_error: string? = nil
+    for _, raw_view in ipairs(queue.effects :: {unknown}) do
+        local view = bounds.object(raw_view)
+        local approval_id = view and bounds.id(view.approval_id) or nil
+        local proposal = view and bounds.object(view.proposal) or nil
+        local payload = proposal and bounds.object(proposal.payload) or nil
+        local binding_id = payload and bounds.id(payload.binding_id) or nil
+        if approval_id and view.policy == policy and proposal and proposal.ref == publishing.REF and payload and binding_id then
+            local raw_resolved, resolve_error = funcs.new():call("bee.gateway.binding:effect_binding",
+                {binding_id = binding_id, tools = {"publish_request"}})
+            if resolve_error then return count, tostring(resolve_error) end
+            local resolved_reply = not resolve_error and bounds.object(raw_resolved) or nil
+            local resolved = resolved_reply and resolved_reply.ok == true and bounds.object(resolved_reply.value) or nil
+            local workspace_id = resolved and bounds.id(resolved.workspace_id) or nil
+            local requester_id = view.requester_id
+            if resolved and workspace_id and requester_id == resolved.subject and view.workspace_id == workspace_id
+                and view.thread_id == resolved.thread_id and payload.binding_id == resolved.binding_id
+                and payload.thread_id == resolved.thread_id and payload.action_id == resolved.action_id
+                and payload.attempt_id == resolved.attempt_id then
+                local binding: Binding = {binding_id = binding_id, subject = tostring(resolved.subject),
+                    action_id = tostring(resolved.action_id), attempt_id = tostring(resolved.attempt_id),
+                    thread_id = tostring(resolved.thread_id), workspace_id = workspace_id}
+                local applied = M.apply_approved(M.port(binding), binding, policy, {request_id = approval_id})
+                if applied.ok then count = count + 1 end
+                if not applied.ok then
+                    local fault = applied.error
+                    retry_error = fault and (fault.code .. ": " .. fault.message) or "publication effect remains pending"
+                end
+            else
+                retry_error = "approved publication binding is not available"
+            end
+        end
+    end
+    return count, retry_error
 end
 
 return M

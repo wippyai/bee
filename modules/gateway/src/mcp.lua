@@ -237,18 +237,18 @@ local TOOLS: {Tool} = {
         schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
             request_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
-    {name = "publish_request", description = "Ask the person to publish one package to the Wippy Hub from this agent's workspace. The host packs the source without uploading, measures the exact bytes and files one approval showing the module, version, pack digest, visibility, organization and source directory. Filing changes nothing on the Hub; poll publish_status with the returned request_id. The publishing credential never reaches the agent; only the host uploader uses it after approval.",
+    {name = "publish_request", description = "Ask the person to publish one package to the Wippy Hub from this agent's workspace. The worker seals the source tree into one .wapp file without uploading and files one approval showing the module, version, pack digest, visibility, organization and source tree. Filing changes nothing on the Hub; poll publish_status with the returned request_id. The publishing credential never reaches the agent; only the host uploader uses it after approval.",
         operation = "bee.gateway.binding:publish_request",
         policies = {TOOL_POLICY_REFS.hub_publish}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"component", "version", "visibility", "source"}, properties = {
             component = {type = "string", minLength = 3, maxLength = 160, description = "Hub package as owner/name under the host publishing organization"},
             version = {type = "string", minLength = 1, maxLength = 128, description = "Exact version to publish"},
             visibility = {type = "string", enum = {"public", "private"}, description = "Module visibility for a newly created module"},
-            source = {type = "string", minLength = 1, maxLength = 8192, description = "Absolute module source directory the host admits"},
+            source = {type = "string", minLength = 1, maxLength = 8192, description = "Absolute locked source tree the host admits"},
         }}},
-    {name = "publish_status", description = "Poll one publication request by request_id: pending, refused (the person denied it or it expired), approved (uploading), applied, or failed with the Hub code and message. On the first poll after approval the host consumes the decision once and uploads exactly the approved bytes; a replayed poll replays the recorded receipt.",
+    {name = "publish_status", description = "Read one publication request by request_id: pending, refused (the person denied it or it expired), approved (the owner worker is uploading), applied, or failed with the Hub code and message. Polling only reports state; after approval the owner worker uploads the sealed pack without any poll.",
         operation = "bee.gateway.binding:publish_status",
-        policies = {TOOL_POLICY_REFS.hub_publish}, annotations = WRITE_ANNOTATIONS,
+        policies = {TOOL_POLICY_REFS.hub_publish}, annotations = READ_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"request_id"}, properties = {
             request_id = {type = "string", minLength = 1, maxLength = 160},
         }}},
@@ -691,7 +691,7 @@ function M.install_status_arguments(params: Object): (Object?, string?)
     return {request_id = request_id}, nil
 end
 -- Publication requests name the exact package version, its visibility and
--- the admitted source directory; the host packs and measures the bytes.
+-- the admitted locked source tree; the worker seals the tree into one pack.
 function M.hub_publish_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
@@ -704,7 +704,7 @@ function M.hub_publish_arguments(params: Object): (Object?, string?)
     local visibility = bounds.member(arguments.visibility, {"public", "private"})
     if not visibility then return nil, "visibility is required as public or private" end
     local source = bounds.text(arguments.source, 8192)
-    if not source then return nil, "source is required as an absolute module directory" end
+    if not source then return nil, "source is required as an absolute locked source tree" end
     return {component = component, version = version, visibility = visibility, source = source}, nil
 end
 function M.hub_publish_status_arguments(params: Object): (Object?, string?)

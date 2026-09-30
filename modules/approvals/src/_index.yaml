@@ -115,6 +115,10 @@ entries:
     description: Host-authorized installation workers read a bounded queue of approved, uncompleted Hub installation effects
   - name: complete_installation_effect
     description: The consuming effect owner records the durable result for its exact approval and effect key; identical completion replays
+  - name: publication_effects
+    description: Host-authorized publication workers read a bounded queue of approved, uncompleted Hub publication effects
+  - name: complete_publication_effect
+    description: The consuming effect owner records the durable result for its exact approval and effect key; identical completion replays
   - name: revalidate
     description: After an authority restart, the effect owner records that an approved decision still holds under the current incarnation
   - name: read
@@ -143,6 +147,8 @@ entries:
       consume: bee.approvals.binding:consume
       installation_effects: bee.approvals.binding:installation_effects
       complete_installation_effect: bee.approvals.binding:complete_installation_effect
+      publication_effects: bee.approvals.binding:publication_effects
+      complete_publication_effect: bee.approvals.binding:complete_publication_effect
       revalidate: bee.approvals.binding:revalidate
       read: bee.approvals.binding:read
       inbox: bee.approvals.binding:inbox

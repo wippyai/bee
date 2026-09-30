@@ -1707,6 +1707,31 @@ entries:
     test: wippy.test:test
     principals: bee.test.principals:bound
     installation: bee.gateway.security:installation
+- name: publication_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:publish_request,
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:admit_action, bee.threads.service:prepare_attempt]
+    effect: allow
+- name: publication_request_test
+  kind: function.lua
+  source: file://publication_request_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, registry, time]
+  security:
+    policies: [bee.harness.catalog:publication_client_policy, bee.gateway.security:execute_policy,
+      bee.gateway.security:publication_policy, bee.gateway.security:publication_queue_policy,
+      bee.gateway.security:installation_resolver_policy,
+      bee.gateway.security:installation_worker_policy, bee.gateway.security:access_reference_policy,
+      bee.gateway.security:access_policy_read_policy, bee.security.approvals:approval_publication_effects_policy]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    publish: bee.gateway.security:publish
+    publishing: bee.hub:publishing
 - name: capability_elevation_test
   kind: function.lua
   source: file://capability_elevation_test.lua

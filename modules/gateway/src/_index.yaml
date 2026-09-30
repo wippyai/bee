@@ -232,7 +232,7 @@ entries:
     path: .policy.resources +=
 - name: target_tool_hub_publish_policy
   kind: ns.requirement
-  meta: {comment: Host-selected policy for the built-in Hub publication tools; it admits filing, polling and applying only the approved upload}
+  meta: {comment: Host-selected policy for the built-in Hub publication tools; it admits filing and read-only polling while the owner worker applies only the approved upload}
   targets:
   - entry: bee.gateway:tool_hub_publish_policy_ref
     path: .resource_ref

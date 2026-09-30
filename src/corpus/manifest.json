@@ -171,9 +171,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 11531,
+      "bytes": 11637,
       "id": "docs/hub_inspection",
-      "sha256": "abc83577c42eb6b1cfae65fa434ba19a7eff93e9c6e51643b8da763b9d41502f",
+      "sha256": "88016714be21c3552fbbf931af964b2dcc2e133b5905195ab22f2f30e505e9d4",
       "source": "docs/guides/hub.md",
       "title": "Hub installation and package reads",
       "topic": "registry"
@@ -291,9 +291,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5149,
+      "bytes": 5610,
       "id": "component/approvals",
-      "sha256": "e83c5fb54aa35b06d6ce62f5622841bedee73960426c41844168fec73d212b72",
+      "sha256": "926ad099420fc8b56915586f9d84a66cc940bd7917822b344dabde9d957dd495",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
       "topic": "component"
@@ -387,9 +387,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8499,
+      "bytes": 8555,
       "id": "component/gateway",
-      "sha256": "11236a9a81031c218743b7e800be8cb6bc79352323d98763f7faa749bb1c1eec",
+      "sha256": "0c59b9763ae25250596b6fe5610f085ee6cc59764c84ce016506503f912fddc2",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -435,9 +435,9 @@
       "topic": "component"
     },
     {
-      "bytes": 6481,
+      "bytes": 6466,
       "id": "component/hub",
-      "sha256": "0573650e3680523fc45c81c71787730e26b0e0979f930152eec70340e848e3cd",
+      "sha256": "cddb7434cc845435cf86ef6281900bc5e07d6cd387b6fc8fbd4d7deb80efceef",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -590,7 +590,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 685933,
+    "bytes": 686541,
     "documents": 73
   }
 }

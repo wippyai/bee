@@ -11,7 +11,6 @@ local inventory_reader = require("inventory_reader")
 local inspect = require("inspect")
 local preview = require("preview")
 local publication = require("publication")
-local publisher = require("publisher")
 local host_resources = require("host_resources")
 local transaction = require("transaction")
 type Result = transaction.Result
@@ -90,7 +89,7 @@ local function handle(raw: unknown): Result
         if not expected then return transaction.failure("INVALID", "confirmation digest is required") end
         return publish(value.request, expected)
     elseif value.operation == "status" then return publication.status(value.expected_digest, value.request) end
-    if value.operation == "publish_plan" or value.operation == "publish_apply" then
+    if value.operation == "publish_request" or value.operation == "publish_apply" then
         local host, host_error = host_resources.process_host()
         if not host then return transaction.failure("UNAVAILABLE", host_error or "Hub worker host is unavailable") end
         local id, id_error = uuid.v4()
@@ -98,7 +97,7 @@ local function handle(raw: unknown): Result
         local topic = "bee.hub.publish_result." .. id
         local replies, listen_error = process.listen(topic, {message = true})
         if not replies then return transaction.failure("UNAVAILABLE", tostring(listen_error)) end
-        local operation = value.operation == "publish_plan" and "plan" or "apply"
+        local operation = value.operation == "publish_request" and "plan" or "apply"
         local worker_request = value.request
         if operation == "apply" then
             local supplied = bounds.object(value.request) or {}
@@ -122,10 +121,6 @@ local function handle(raw: unknown): Result
             end
         end
         return transaction.failure("UNCERTAIN", "Hub publish worker did not return a result")
-    elseif value.operation == "publish_status" then
-        local digest = bounds.line(value.expected_digest, 64)
-        if not digest then return transaction.failure("INVALID", "publication receipt requires a plan digest") end
-        return publisher.status(digest)
     end
     return transaction.failure("INVALID", "unknown Hub operation")
 end

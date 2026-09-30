@@ -1,8 +1,9 @@
 -- MIT. A person-approved Hub publication request: the agent names a package,
--- the host packs and measures its exact bytes, and one approval carries the
--- module, version, digest and visibility the person decides on. The approved
--- digest is the only authority to upload those bytes. Pure: nothing here
--- calls the Hub, the approval owner, the credential broker or the registry.
+-- the worker seals its source tree into one .wapp file, and one approval
+-- carries the module, version, pack digest and visibility the person decides
+-- on. The approved pack digest is the only authority to upload that file.
+-- Pure: nothing here calls the Hub, the approval owner, the credential
+-- broker or the registry.
 local bounds = require("bounds")
 local canonical = require("canonical")
 local hash = require("hash")
@@ -12,6 +13,7 @@ M.REF = "bee.hub:publish"
 M.SOURCE = "hub-publish"
 type Object = {[string]: unknown}
 type Decoded = {component: string, version: string, visibility: string, source: string}
+type Resolution = {kind: string, hub_digest: string?, replayed: boolean?, message: string?}
 type Context = {binding_id: string, thread_id: string, action_id: string, attempt_id: string}
 type Request = {action: string, component: string, version: string, visibility: string,
     digest: string, organization: string, source: string}
@@ -38,7 +40,8 @@ local function source_path(value: unknown): string?
 end
 
 -- decode: the agent's wire shape. A publication names the exact component,
--- version and visibility plus the module source directory the host admits.
+-- version and visibility plus the locked source tree the host admits. The
+-- tree holds the lock the pack selects the component from.
 function M.decode(raw: unknown): (Decoded?, string?)
     local value = bounds.object(raw)
     if not value then return nil, "publication request must be an object" end
@@ -51,7 +54,7 @@ function M.decode(raw: unknown): (Decoded?, string?)
     local visibility = bounds.member(value.visibility, {"public", "private"})
     if not visibility then return nil, "visibility must be public or private" end
     local source = source_path(value.source)
-    if not source then return nil, "source must name an absolute module directory" end
+    if not source then return nil, "source must name an absolute locked source tree" end
     return {component = component, version = version, visibility = visibility, source = source}, nil
 end
 
@@ -79,9 +82,9 @@ local function measured_value(value: unknown): (Measured?, string?)
         visibility = visibility, organization = organization, source = source}, nil
 end
 
--- plan_digest: the measurement binding module, version, pack digest,
+-- plan_digest: the measurement binding module, version, sealed pack digest,
 -- visibility, organization and source. The approval carries it; the worker
--- uploads only staged bytes that measure to it.
+-- uploads only the staged file that hashes to it.
 function M.plan_digest(raw: unknown): string?
     local measured, _ = measured_value(raw)
     if not measured then return nil end
@@ -160,20 +163,55 @@ function M.decision(view_raw: unknown): Status
     return {status = "refused", code = reason:upper(), message = "the request " .. reason .. " before a decision"}
 end
 
--- publish_command: the exact uploader invocation for verified bytes from
--- the worker-owned content snapshot. It carries no credential: the CLI
+-- pack_command: the exact invocation sealing the admitted source tree into
+-- one .wapp file. It runs with the source tree as its working directory and
+-- carries no credential.
+function M.pack_command(component: string, cli: string, outfile: string): {string}
+    return {cli, "pack", "--module", component, outfile}
+end
+
+-- publish_command: the exact uploader invocation for the sealed pack file.
+-- It uploads that file byte for byte and carries no credential: the CLI
 -- reads the person's publishing credential from its host-confined store
 -- and the receipt records digests only.
-function M.publish_command(verified: Verified, cli: string, snapshot: string): {string}
-    return {cli, "publish", "--config", snapshot,
+function M.publish_command(verified: Verified, cli: string, config_dir: string, wapp: string): {string}
+    return {cli, "publish", "--config", config_dir, "--wapp", wapp,
         "--version", verified.request.version, "--create", "--protected",
         "--module-visibility", verified.request.visibility}
 end
 
--- plan_command: the exact dry-run invocation that preflights the snapshot
--- without uploading. A source that does not pack never reaches approval.
-function M.plan_command(decoded: Decoded, cli: string): {string}
-    return {cli, "publish", "--config", decoded.source, "--version", decoded.version, "--dry-run"}
+-- plan_command: the exact dry-run invocation that preflights the sealed pack
+-- without uploading. A file the Hub would not record under the requested
+-- version never reaches approval.
+function M.plan_command(decoded: Decoded, cli: string, config_dir: string, wapp: string): {string}
+    return {cli, "publish", "--config", config_dir, "--wapp", wapp,
+        "--version", decoded.version, "--dry-run"}
+end
+
+-- resolve_upload: the upload outcome against the approved pack digest. A Hub
+-- digest equal to the approved pack records the publication; a Hub digest
+-- for other bytes fails it with both digests named, because Hub versions
+-- are immutable and an existing version never holds our bytes by
+-- assumption. No digest on either side leaves the upload uncertain.
+function M.resolve_upload(approved: string, uploaded: string?, inspected: string?): Resolution
+    if uploaded ~= nil then
+        if uploaded == "sha256:" .. approved then
+            return {kind = "published", hub_digest = uploaded, replayed = false}
+        end
+        return {kind = "failed",
+            message = "Hub recorded digest " .. uploaded .. " for the upload, which differs from the approved pack digest sha256:" ..
+                approved .. "; the approved file was not recorded"}
+    end
+    if inspected ~= nil then
+        if "sha256:" .. inspected == "sha256:" .. approved then
+            return {kind = "published", hub_digest = "sha256:" .. inspected, replayed = true}
+        end
+        return {kind = "failed",
+            message = "version already holds different bytes on the Hub (hub sha256:" .. inspected ..
+                " differs from the approved pack digest sha256:" .. approved ..
+                "); Hub versions are immutable: raise the version and file a new request"}
+    end
+    return {kind = "uncertain"}
 end
 
 -- parse_digest: the Hub digest the uploader reports for the uploaded bytes.

@@ -178,33 +178,35 @@ An agent publishes a package to the Hub only through a person-approved grant:
 {"name": "publish_status", "arguments": {"request_id": "<request_id>"}}
 ```
 
-The host admits the source directory against the configured source roots,
-copies it into a worker-owned snapshot, measures the exact content bytes and
-preflights the pack without uploading. It files one approval, bound to the
-agent's thread and attempt, under the approval policy the host configuration
-`bee:module_publication` names (`module-publication`, decided in Approvals).
-The approval shows the module, version, content digest, visibility,
-organization and source directory; the plan digest binds all of them. Filing
-changes nothing on the Hub and returns `request_id` and `status: pending`.
+The worker admits the locked source tree against the configured source roots,
+seals it once into a `.wapp` file in worker-owned staging and preflights that
+file without uploading. It files one approval, bound to the agent's thread and
+attempt, under the approval policy the host configuration `bee:module_publication`
+names (`module-publication`, decided in Approvals). The approval shows the
+module, version, pack digest, visibility, organization and source tree; the plan
+digest binds all of them. Filing changes nothing on the Hub and returns
+`request_id` and `status: pending`.
 
-`publish_status` reports `pending`, `refused`, `approved` (uploading),
-`applied` or `failed`. On the first poll after the person approves, the
-gateway consumes the decision once and uploads exactly the approved snapshot
-through the Hub facade with management authority added to that one call; the
-snapshot is re-measured first and changed bytes refuse the upload. The receipt
-records the content digest beside the Hub pack digest under the plan digest,
-and later polls replay it. The publishing credential never reaches the agent:
-the uploader CLI reads the person's host-confined credential, the command
-carries no secret, and receipts hold digests only.
+`publish_status` only reports `pending`, `refused`, `approved` (the owner worker
+is uploading), `applied` or `failed`; polling never uploads. Once the person
+approves, the approval commit wakes the publication effect worker, which consumes
+the decision once and uploads exactly the sealed file through the Hub facade
+with management authority added to that one call; the file is re-measured first
+and changed bytes refuse the upload. The Hub-reported digest must equal the
+approved pack digest: a version already on the Hub with the same digest replays
+its receipt, while other bytes fail with both digests named. The receipt records
+the pack digest beside the Hub digest under the plan digest. The publishing
+credential never reaches the agent: the uploader CLI reads the person's
+host-confined credential, the command carries no secret, and receipts hold
+digests only.
 
 The person selects the publishing organization, uploader executable, admitted
-source roots and snapshot staging root once in the host configuration
+source roots and pack staging root once in the host configuration
 `bee:hub_publication`; every publication must belong to that organization and
-an absent link fails closed. Sources hold plain files only; links and special
-files are refused. The uploader runs under the host-selected executor
-`bee.hub:publish_executor`, which needs a POSIX sh with GNU find, sort and
-sha256sum. The host grants the tools per launch policy and links their MCP
-policy through the gateway's `target_tool_hub_publish_policy`.
+an absent link fails closed. The uploader runs under the host-selected executor
+`bee.hub:publish_executor`, which needs a POSIX sh with sha256sum. The host
+grants the tools per launch policy and links their MCP policy through the
+gateway's `target_tool_hub_publish_policy`.
 
 ## Limits and checks
 

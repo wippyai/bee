@@ -1,10 +1,10 @@
--- MIT. Person-approved Hub publication effect: snapshot the admitted
--- source, measure the exact content bytes, upload from the immutable
--- snapshot and record a digest-bound receipt. Called only inside the named
--- publish worker after facade authorization. The uploader command carries
--- no credential; only digests and a bounded failure line enter receipts.
--- The worker needs a POSIX sh with GNU find, sort and sha256sum on its
--- dedicated executor; any other host leaves publication unconfigured.
+-- MIT. Person-approved Hub publication effect: seal the admitted source
+-- tree into one .wapp file, approve that file's sha256, upload exactly that
+-- file and record a digest-bound receipt. Called only inside the named
+-- publish worker after facade authorization. The pack and uploader commands
+-- carry no credential; only digests and a bounded failure line enter
+-- receipts. The worker needs a POSIX sh with sha256sum on its dedicated
+-- executor; any other host leaves publication unconfigured.
 local registry = require("registry")
 local security = require("security")
 local exec = require("exec")
@@ -22,7 +22,7 @@ type Object = {[string]: unknown}
 type Measured = {component: string, version: string, digest: string, visibility: string,
     organization: string, source: string}
 type Receipt = {actor_id: string, digest: string, component: string, version: string, visibility: string,
-    organization: string, source: string, content_digest: string, hub_digest: string,
+    organization: string, source: string, pack_digest: string, hub_digest: string,
     state: string, message: string, action: string}
 M.MAX_STDOUT_BYTES = 256 * 1024
 M.MAX_STDERR_BYTES = 64 * 1024
@@ -96,23 +96,37 @@ local function shell(directory: string, script: string, executor_ref: string): (
     return run({"sh", "-c", script, "bee-publish-snapshot", directory}, executor_ref)
 end
 
--- tree_digest: the content measurement of a directory tree: every regular
--- file's sha256, ordered by path, hashed once. The stream is a pure
--- function of file paths and bytes, so equal trees measure equal digests.
--- Anything that is not a regular file or directory is refused: links and
--- special files never enter an approved snapshot.
-local function tree_digest(directory: string, executor_ref: string): (string?, string?)
-    local odd, odd_error = shell(directory, 'find . \\( -not -type f -not -type d \\) -print -quit', executor_ref)
-    if not odd then return nil, odd_error end
-    if odd.code ~= 0 then return nil, "content walk failed: " .. first_line(odd.err) end
-    if odd.out ~= "" then return nil, "publication source holds links or special files; stage plain files" end
-    local measured, measure_error = shell(directory,
-        'find . -type f -exec sha256sum {} + | LC_ALL=C sort -k2 | sha256sum', executor_ref)
-    if not measured then return nil, measure_error end
-    if measured.code ~= 0 then return nil, "content measurement failed: " .. first_line(measured.err) end
-    local digest = measured.out:match("^([0-9a-f][0-9a-f]+)")
-    if not digest or #digest ~= 64 then return nil, "content measurement is malformed" end
+-- file_digest: the sha256 of one sealed pack file. The approval binds this
+-- digest and the upload sends exactly this file.
+local function file_digest(path: string, executor_ref: string): (string?, string?)
+    local summed, sum_error = run({"sha256sum", path}, executor_ref)
+    if not summed then return nil, sum_error end
+    if summed.code ~= 0 then return nil, "pack measurement failed: " .. first_line(summed.err) end
+    local digest = summed.out:match("^([0-9a-f][0-9a-f]+)")
+    if not digest or #digest ~= 64 then return nil, "pack measurement is malformed" end
     return digest, nil
+end
+
+-- config_dir: the module directory the upload names for the component. A
+-- single-module tree names it at its root; a multi-module tree names each
+-- module under its modules directory. Either directory qualifies only when
+-- its wippy.yaml names exactly the component.
+local function config_dir(source: string, component: string, executor_ref: string): (string?, string?)
+    local short = component:match("/([a-z0-9][a-z0-9._-]*)$")
+    if not short then return nil, "publication component is malformed" end
+    local probed, probe_error = shell(source,
+        "for d in \"$1\" \"$1/modules/" .. short .. "\"; do " ..
+        "if [ -f \"$d/wippy.yaml\" ]; then " ..
+        "org=$(awk '$1 == \"organization:\" { print $2; exit }' \"$d/wippy.yaml\"); " ..
+        "mod=$(awk '$1 == \"module:\" { print $2; exit }' \"$d/wippy.yaml\"); " ..
+        "echo \"$org/$mod $d\"; fi; done", executor_ref)
+    if not probed then return nil, probe_error end
+    if probed.code ~= 0 then return nil, "module identity read failed: " .. first_line(probed.err) end
+    for line in (probed.out .. "\n"):gmatch("([^\n]*)\n") do
+        local identity, directory = line:match("^(%S+) (%S+)$")
+        if identity == component and directory and directory:sub(1, 1) == "/" then return directory, nil end
+    end
+    return nil, "source names no module directory for " .. component
 end
 
 local function measured_record(raw: unknown): Measured?
@@ -141,7 +155,7 @@ local function decode_receipt(raw: unknown): Receipt?
     local visibility = bounds.member(value.visibility, {"public", "private"})
     local organization = bounds.line(value.organization, 128)
     local source = bounds.text(value.source, 8192)
-    local content = hex(value.content_digest)
+    local content = hex(value.pack_digest)
     local hub = value.hub_digest
     if type(hub) ~= "string" then return nil end
     if (hub :: string) ~= "" and not (hub :: string):match("^sha256:[0-9a-f]+$") then return nil end
@@ -153,7 +167,7 @@ local function decode_receipt(raw: unknown): Receipt?
         return nil
     end
     return {actor_id = actor, digest = digest, component = component, version = version, visibility = visibility,
-        organization = organization, source = source, content_digest = content, hub_digest = hub :: string,
+        organization = organization, source = source, pack_digest = content, hub_digest = hub :: string,
         state = state, message = message, action = action}
 end
 
@@ -172,13 +186,13 @@ local function save_receipt(receipt: Receipt): Result
     return transaction.success(receipt, false)
 end
 
-local function save_staging(digest: string, snapshot: string, measured: Object): (boolean, string?)
+local function save_staging(digest: string, wapp: string, config_dir: string, measured: Object): (boolean, string?)
     local snapshot_state, problem = registry.snapshot()
     if not snapshot_state then return false, tostring(problem) end
     local changes, change_error = snapshot_state:changes()
     if not changes then return false, tostring(change_error) end
     local entry = {id = staging_id(digest), kind = "registry.entry",
-        data = {snapshot = snapshot, measured = measured}}
+        data = {wapp = wapp, config_dir = config_dir, measured = measured}}
     local staged, stage_error
     if snapshot_state:get(entry.id) then staged, stage_error = changes:update(entry)
     else staged, stage_error = changes:create(entry) end
@@ -188,66 +202,89 @@ local function save_staging(digest: string, snapshot: string, measured: Object):
     return true, nil
 end
 
-local function load_staging(digest: string): ({snapshot: string, measured: Measured}?, string?)
+local function load_staging(digest: string): ({wapp: string, config_dir: string, measured: Measured}?, string?)
     local snapshot_state, problem = registry.snapshot()
     if not snapshot_state then return nil, tostring(problem) end
     local entry = snapshot_state:get(staging_id(digest))
     if not entry then return nil, "staged publication is unavailable; file a new publish request" end
     local data = bounds.object(entry.data)
     if not data then return nil, "staged publication is unavailable; file a new publish request" end
-    local snapshot = bounds.text(data.snapshot, 8192)
-    if not snapshot then return nil, "staged publication is unavailable; file a new publish request" end
-    if snapshot:sub(1, 1) ~= "/" then return nil, "staged publication is unavailable; file a new publish request" end
+    local wapp = bounds.text(data.wapp, 8192)
+    if not wapp then return nil, "staged publication is unavailable; file a new publish request" end
+    if wapp:sub(1, 1) ~= "/" then return nil, "staged publication is unavailable; file a new publish request" end
+    local config_dir = bounds.text(data.config_dir, 8192)
+    if not config_dir then return nil, "staged publication is unavailable; file a new publish request" end
+    if config_dir:sub(1, 1) ~= "/" then return nil, "staged publication is unavailable; file a new publish request" end
     local measured = measured_record(data.measured)
     if not measured then return nil, "staged publication is unavailable; file a new publish request" end
-    local staged: {snapshot: string, measured: Measured} = {snapshot = snapshot, measured = measured}
+    local staged: {wapp: string, config_dir: string, measured: Measured} = {wapp = wapp, config_dir = config_dir, measured = measured}
     return staged, nil
 end
 
--- snapshot_tree: copy the admitted source into the worker-owned staging
--- root under its content digest. Equal bytes reuse one snapshot, so a
--- repeated plan never duplicates the tree. The snapshot is immutable to
--- agents, and the upload packs exactly these bytes.
-local function snapshot_tree(source: string, staging_root: string, executor_ref: string): (string?, string?, string?)
+-- run_in: run one command with a working directory on the dedicated
+-- executor. The pack reads the admitted source tree from its own directory.
+local function run_in(directory: string, argv: {string}, executor_ref: string): (Run?, string?)
+    local command: {string} = {"sh", "-c", 'cd "$1" && shift && exec "$@"', "bee-publish-pack", directory}
+    for _, item in ipairs(argv) do command[#command + 1] = item end
+    return run(command, executor_ref)
+end
+
+-- seal_pack: pack the admitted source tree once into a sealed .wapp file in
+-- the worker-owned staging root, named by the file's sha256. Equal packs
+-- reuse one file, so a repeated plan never seals twice. Only the sealed
+-- file is approved and uploaded; the source tree is never read again.
+local function seal_pack(source: string, component: string, cli: string,
+    staging_root: string, executor_ref: string): (string?, string?, string?)
     local prepared, prepare_error = run({"mkdir", "-p", staging_root}, executor_ref)
     if not prepared then return nil, nil, prepare_error end
-    if prepared.code ~= 0 then return nil, nil, "snapshot staging failed: " .. first_line(prepared.err) end
+    if prepared.code ~= 0 then return nil, nil, "pack staging failed: " .. first_line(prepared.err) end
     local stamp = tostring(os.time()) .. "-" .. tostring(math.random(1, 1073741824))
-    local tmp = staging_root .. "/publish-" .. stamp
-    local copied, copy_error = run({"cp", "-a", source, tmp}, executor_ref)
-    if not copied then return nil, nil, copy_error end
-    if copied.code ~= 0 then return nil, nil, "source snapshot failed: " .. first_line(copied.err) end
-    local digest, digest_error = tree_digest(tmp, executor_ref)
+    local tmp = staging_root .. "/.publish-" .. stamp .. ".wapp"
+    local packed, pack_error = run_in(source, publishing.pack_command(component, cli, tmp), executor_ref)
+    if not packed then
+        run({"rm", "-f", tmp}, executor_ref)
+        return nil, nil, pack_error
+    end
+    if packed.code ~= 0 then
+        run({"rm", "-f", tmp}, executor_ref)
+        return nil, nil, "module pack failed: " .. first_line(packed.err)
+    end
+    local digest, digest_error = file_digest(tmp, executor_ref)
     if not digest then
-        run({"rm", "-rf", tmp}, executor_ref)
+        run({"rm", "-f", tmp}, executor_ref)
         return nil, nil, digest_error
     end
-    local dest = staging_root .. "/" .. digest
+    local dest = staging_root .. "/" .. digest .. ".wapp"
     local present, present_error = run({"test", "-e", dest}, executor_ref)
     if not present then
-        run({"rm", "-rf", tmp}, executor_ref)
+        run({"rm", "-f", tmp}, executor_ref)
         return nil, nil, present_error
     end
-    if present.code == 0 then
-        run({"rm", "-rf", tmp}, executor_ref)
-        return dest, digest, nil
-    end
-    local moved, move_error = run({"mv", tmp, dest}, executor_ref)
-    if not moved then
-        run({"rm", "-rf", tmp}, executor_ref)
-        return nil, nil, move_error
-    end
-    if moved.code ~= 0 then
-        run({"rm", "-rf", tmp}, executor_ref)
-        return nil, nil, "snapshot staging failed: " .. first_line(moved.err)
+    if present.code ~= 0 then
+        local moved, move_error = run({"mv", tmp, dest}, executor_ref)
+        if not moved then
+            run({"rm", "-f", tmp}, executor_ref)
+            return nil, nil, move_error
+        end
+        if moved.code ~= 0 then
+            run({"rm", "-f", tmp}, executor_ref)
+            return nil, nil, "pack staging failed: " .. first_line(moved.err)
+        end
+    else
+        run({"rm", "-f", tmp}, executor_ref)
+        local content, content_error = file_digest(dest, executor_ref)
+        if not content or content ~= digest then
+            return nil, nil, content_error or "staged pack differs from its digest; file a new publish request"
+        end
     end
     return dest, digest, nil
 end
 
--- plan: snapshot the admitted source, measure the exact bytes and record
--- where they wait for the person's decision. A source that does not pack
--- is refused before any approval. The returned plan digest binds module,
--- version, content digest, visibility, organization and source.
+-- plan: seal the admitted source tree into one .wapp file and record where
+-- it waits for the person's decision. The dry run proves the Hub records
+-- exactly this file under the requested version before any approval. The
+-- returned plan digest binds module, version, pack digest, visibility,
+-- organization and source.
 function M.plan(raw: unknown): (Object?, string?)
     if not security.can("bee.hub.execute", "bee.hub.service:publish_worker") then
         return nil, "Hub publish worker authority required"
@@ -262,26 +299,33 @@ function M.plan(raw: unknown): (Object?, string?)
     if not executor_ref then return nil, executor_error end
     local admitted, admit_error = paths.admit(decoded.source, config.source_roots, executor_ref)
     if not admitted then return nil, admit_error or "publication source is not admitted" end
-    local snapshot, digest, snapshot_error = snapshot_tree(admitted, config.staging_root, executor_ref)
-    if not snapshot or not digest then return nil, snapshot_error end
-    local preflight, preflight_error = run(publishing.plan_command(
-        {component = decoded.component, version = decoded.version,
-            visibility = decoded.visibility, source = snapshot}, config.cli), executor_ref)
+    local wapp, digest, seal_error = seal_pack(admitted, decoded.component, config.cli, config.staging_root, executor_ref)
+    if not wapp or not digest then return nil, seal_error end
+    local directory, dir_error = config_dir(admitted, decoded.component, executor_ref)
+    if not directory then return nil, dir_error end
+    local preflight, preflight_error = run(publishing.plan_command(decoded, config.cli, directory, wapp), executor_ref)
     if not preflight then return nil, preflight_error end
-    if preflight.code ~= 0 then return nil, "module pack failed: " .. first_line(preflight.err) end
+    if preflight.code ~= 0 then return nil, "module preflight failed: " .. first_line(preflight.err) end
+    local hub_digest = publishing.parse_digest(preflight.out)
+    if hub_digest ~= "sha256:" .. digest then
+        return nil, "preflight digest " .. tostring(hub_digest) .. " differs from the sealed pack sha256:" .. digest
+    end
     local measured: Object = {component = decoded.component, version = decoded.version, digest = digest,
         visibility = decoded.visibility, organization = config.organization, source = admitted}
     local plan_digest = publishing.plan_digest(measured)
     if not plan_digest then return nil, "publication measurement cannot be encoded" end
-    local saved, save_error = save_staging(plan_digest, snapshot, measured)
+    local saved, save_error = save_staging(plan_digest, wapp, directory, measured)
     if not saved then return nil, save_error end
     measured.plan_digest = plan_digest
     return measured, nil
 end
 
--- apply: upload from the snapshot the approved plan digest names and record
--- the receipt. The snapshot is re-measured first: changed bytes refuse the
--- upload. A digest that already has a receipt replays it.
+-- apply: upload the sealed file the approved plan digest names and record
+-- the receipt. The file is re-measured first: changed bytes refuse the
+-- upload. The Hub-reported digest must equal the approved pack digest; a
+-- version already on the Hub with the same digest replays its receipt,
+-- while other bytes fail with both digests named. A digest that already
+-- has a receipt replays it.
 function M.apply(raw: unknown): Result
     if not security.can("bee.hub.execute", "bee.hub.service:publish_worker") then
         return transaction.failure("DENIED", "Hub publish worker authority required")
@@ -314,12 +358,12 @@ function M.apply(raw: unknown): Result
     if not config then return transaction.failure("UNAVAILABLE", tostring(config_error)) end
     local executor_ref, executor_error = host_resources.publish_executor()
     if not executor_ref then return transaction.failure("UNAVAILABLE", tostring(executor_error)) end
-    local content, content_error = tree_digest(staged.snapshot, executor_ref)
+    local content, content_error = file_digest(staged.wapp, executor_ref)
     if not content then
         return transaction.failure("NOT_FOUND", tostring(content_error) .. "; file a new publish request")
     end
     if content ~= measured.digest then
-        return transaction.failure("FAILED", "staged snapshot changed after approval; file a new publish request")
+        return transaction.failure("FAILED", "staged pack changed after approval; file a new publish request")
     end
     type UploadRequest = {action: string, component: string, version: string, visibility: string,
         digest: string, organization: string, source: string}
@@ -327,29 +371,35 @@ function M.apply(raw: unknown): Result
         version = measured.version, visibility = measured.visibility, digest = content,
         organization = measured.organization, source = measured.source}
     local verified = {request = upload_request, digest = plan_digest}
-    local uploaded, upload_error = run(publishing.publish_command(verified, config.cli, staged.snapshot), executor_ref)
+    local uploaded, upload_error = run(
+        publishing.publish_command(verified, config.cli, staged.config_dir, staged.wapp), executor_ref)
     if not uploaded then return transaction.failure("UNCERTAIN", tostring(upload_error)) end
-    local hub_digest = publishing.parse_digest(uploaded.out)
-    if uploaded.code == 0 and type(hub_digest) == "string" then
-        return save_receipt({actor_id = actor:id(), digest = plan_digest, component = measured.component,
-            version = measured.version, visibility = measured.visibility,
-            organization = measured.organization, source = measured.source,
-            content_digest = content, hub_digest = hub_digest, state = "published",
-            message = "Publication completed", action = "publish"})
+    local reported = uploaded.code == 0 and publishing.parse_digest(uploaded.out) or nil
+    local seen: string? = nil
+    local inspect_error: string? = nil
+    if reported == nil then
+        local inspected, read_error = inspect.read({component = measured.component, version = measured.version})
+        inspect_error = read_error
+        if inspected then seen = inspected.digest end
     end
-    -- The upload did not report a digest, or the version already exists:
-    -- the worker serializes publications, so a version present on the Hub
-    -- after this attempt holds this snapshot's bytes. The receipt records
-    -- the Hub's own digest beside the approved content digest.
-    local inspected, inspect_error = inspect.read({component = measured.component, version = measured.version})
-    if inspected then
+    local resolution = publishing.resolve_upload(content, reported, seen)
+    if resolution.kind == "published" then
         local receipt = save_receipt({actor_id = actor:id(), digest = plan_digest, component = measured.component,
             version = measured.version, visibility = measured.visibility,
             organization = measured.organization, source = measured.source,
-            content_digest = content, hub_digest = "sha256:" .. inspected.digest, state = "published",
-            message = "Version already on Hub; receipt restored", action = "publish"})
-        receipt.replayed = true
+            pack_digest = content, hub_digest = resolution.hub_digest :: string, state = "published",
+            message = resolution.replayed and "Version already on Hub; receipt restored" or "Publication completed",
+            action = "publish"})
+        receipt.replayed = resolution.replayed == true
         return receipt
+    end
+    if resolution.kind == "failed" then
+        save_receipt({actor_id = actor:id(), digest = plan_digest, component = measured.component,
+            version = measured.version, visibility = measured.visibility,
+            organization = measured.organization, source = measured.source,
+            pack_digest = content, hub_digest = seen and ("sha256:" .. seen) or "", state = "failed",
+            message = resolution.message :: string, action = "publish"})
+        return transaction.failure("FAILED", resolution.message :: string)
     end
     if uploaded.code == 0 then
         return transaction.failure("UNCERTAIN", "upload finished without a Hub digest; Hub read: " ..
@@ -357,11 +407,11 @@ function M.apply(raw: unknown): Result
     end
     local message = "uploader refused publication (exit " .. tostring(uploaded.code) .. "): " .. first_line(uploaded.err)
     if inspect_error then message = message .. "; Hub read: " .. first_line(tostring(inspect_error)) end
-    return transaction.failure("FAILED", message)
+    return transaction.failure("UNCERTAIN", message)
 end
 
--- status: receipt reads run in the backend without worker authority; only
--- the publishing actor reads its own receipts.
+-- status: receipt reads need no worker authority; only the publishing
+-- actor reads its own receipts.
 function M.status(plan_digest_raw: unknown): Result
     local plan_digest = hex(plan_digest_raw)
     if plan_digest_raw ~= nil and not plan_digest then

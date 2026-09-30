@@ -96,6 +96,18 @@ local function define_tests()
             test.eq(decoded.launch.provider_home.private, true)
             test.eq(#(decoded.launch.provider_home.extra_variables or {}), 2)
             test.eq(#decoded.launch.provider_home.files, 2)
+            test.is_nil(decoded.launch.provider_home.retain_session)
+            local home = spec.provider_home :: {[string]: unknown}
+            home.retain_session = true
+            local retained = assert(request.decode(value))
+            test.eq(retained.launch.provider_home and retained.launch.provider_home.retain_session, true)
+            home.retain_session = false
+            local ephemeral = assert(request.decode(value))
+            test.eq(ephemeral.launch.provider_home and ephemeral.launch.provider_home.retain_session, false)
+            home.retain_session = "true"
+            local invalid, invalid_error = request.decode(value)
+            test.is_nil(invalid)
+            test.eq(invalid_error, "launch.provider_home.retain_session must be a boolean")
             rejects(function(item)
                 (item.launch :: {[string]: unknown}).provider_home = {provider = "codex", private = true,
                     variable = "CODEX_HOME", directory = ".codex", files = {{source_path = "../auth.json", path = ".codex/auth.json", kind = "login"}}}

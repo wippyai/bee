@@ -83,6 +83,7 @@ entries:
         readiness: none
         provider_home_private: true
     provider_home:
+      retain_session: true
       variable: GROK_HOME
       directory: .grok
       files:

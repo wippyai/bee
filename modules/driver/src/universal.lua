@@ -340,9 +340,11 @@ local function provider_home(selected: Descriptor, private: boolean, request: Re
     local variable = bounds.text(source.variable, 128)
     local directory = bounds.text(source.directory, 128)
     if variable and directory then
-        return {provider = provider, private = private, variable = variable, directory = directory, extra_variables = extras, files = files}
+        return {provider = provider, private = private, retain_session = source.retain_session == true and true or nil,
+            variable = variable, directory = directory, extra_variables = extras, files = files}
     end
-    return {provider = provider, private = private, variable = nil, directory = nil, extra_variables = extras, files = files}
+    return {provider = provider, private = private, retain_session = source.retain_session == true and true or nil,
+        variable = nil, directory = nil, extra_variables = extras, files = files}
 end
 
 local function build_launch(selected: Descriptor, request: Request): (types.Launch?, string?)

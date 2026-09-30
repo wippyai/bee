@@ -320,7 +320,7 @@ local function provider_home(selected: Descriptor, private: boolean, request: Re
         local source_path: string? = nil
         if type(file.source_path) == "string" then source_path = file.source_path :: string end
         files[#files + 1] = {source_path = source_path, path = file.path :: string, kind = file.kind :: ProviderHomeFileKind,
-            optional = file.optional :: boolean, write_back = file.write_back :: boolean}
+            optional = file.optional :: boolean, write_back = file.write_back :: boolean, container_content = file.container_content :: string?, container_omit = file.container_omit :: {string}?}
     end
     if private then
         local path = named_profile_file(selected, request)

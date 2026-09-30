@@ -57,4 +57,5 @@ entries:
       - {variable: XDG_DATA_HOME, directory: .local/share}
       files:
       - {source_path: .local/share/opencode/auth.json, path: .local/share/opencode/auth.json, kind: login, optional: true, write_back: true}
-      - {source_path: .config/opencode/opencode.json, path: .config/opencode/.bee-global-opencode.json, kind: config, optional: true, write_back: false}
+      - {source_path: .config/opencode/opencode.json, path: .config/opencode/.bee-global-opencode.json, kind: config, optional: true, write_back: false, container_content: '{}'}
+      - {source_path: .config/opencode/towers.key, path: .config/opencode/towers.key, kind: config, optional: true, write_back: false}

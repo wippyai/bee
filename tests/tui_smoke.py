@@ -301,6 +301,7 @@ def exercise(packed, project, deployment):
         try:
             ui.wait("Small shell. Independent applications.")
             ui.assert_local_only()
+            ui.window_control("◇")
             ui.corners()
             before = ui.frame()
             ui.mouse(0, before[0] + 5, before[1])
@@ -344,7 +345,7 @@ def exercise(packed, project, deployment):
             ui.choose("Collapse")
             ui.pump(.1)
             assert "Keys received here" not in ui.text()
-            title_y, title = next((y, line) for y, line in enumerate(ui.screen.display, 1) if "Welcome" in line and "×" in line)
+            title_y, title = next((y, line) for y, line in enumerate(ui.screen.display, 1) if y > 1 and "Welcome" in line and "×" in line)
             assert "╭" not in title and "╮" not in title, "Collapsed bar is an unfinished frame"
             x = title.index("Welcome") + 1
             ui.mouse(0, x, title_y)
@@ -455,6 +456,7 @@ def core_boot(packed):
             assert ui.screen.display[1][0] == "╭" and ui.screen.display[1][34] == "╮"
             ui.choose("Settings")
             ui.wait("BEE SETTINGS")
+            ui.window_control("◇")
             ui.settings_frame_colors()
             ui.window_control("−")
             ui.wait("╰──╲ ╱──╯")
@@ -595,7 +597,8 @@ def process_manager(packed):
             ui.key(b"\x1b[24~"); ui.wait("Heap")
             ui.key(b"\x1b[20;3~")
             ui.wait("− Process Manager")
-            ui.mouse(2, 13, 1); ui.mouse(2, 13, 1, True)
+            tab_x = ui.screen.display[0].index("Process Manager") + 1
+            ui.mouse(2, tab_x, 1); ui.mouse(2, tab_x, 1, True)
             ui.choose("Restore"); ui.wait("Heap")
             ui.key(b"p"); ui.wait("Paused")  # Restoring also owns input.
             for size in [(32, 12), (1, 1), (100, 30)]: ui.resize(*size)

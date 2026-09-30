@@ -850,4 +850,15 @@ local function define_tests()
         end)
     end)
 end
-return require("test").run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local roots = assert(registry.get("bee.placement.native:placement_admitted_roots"))
+    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+    local ok, result = pcall(cases, options)
+    local changes = assert(registry.snapshot()):changes()
+    changes:update(roots)
+    changes:update(mode)
+    assert(changes:apply())
+    if not ok then error(tostring(result)) end
+    return result
+end}

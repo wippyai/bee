@@ -208,3 +208,9 @@ and runner entries, which serve every workspace; an application that runs its
 own placement holds `bee.credentials.security:credential_materialize_workspace_policy`, limited to
 its bound workspace), and `bee.credentials.write_back` (runner-only return of
 an admitted provider login file through the same materialization policy).
+
+OpenCode declares `.config/opencode/towers.key` as an optional auxiliary file
+under the host-admitted OpenCode `.key` rule. The broker projects that exact
+requested file without interpreting its bytes or writing it back. Placement
+rewrites a configuration reference only when this file is materialized; a
+configuration naming a missing or undeclared dependency refuses before start.

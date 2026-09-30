@@ -155,7 +155,7 @@ machine home:
 | Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` | private `HOME` |
 | Grok | `.grok/auth.json` | `.grok/config.toml` | `GROK_HOME` points inside the attempt home |
 | Muse | `.config/muse/auth.json` | `.config/muse/settings.json` | private `HOME` |
-| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json` | XDG config and data roots point inside the attempt home |
+| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`; declared `.config/opencode/towers.key` dependency | XDG config and data roots point inside the attempt home |
 
 Only a provider's login file may be returned to its original path after the
 child exits. The broker requires the active attempt projection and unchanged

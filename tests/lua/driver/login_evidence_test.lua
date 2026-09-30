@@ -103,7 +103,8 @@ local function define_tests()
                     {".config/muse/settings.json", ".config/muse/.bee-global-settings.json", "config", false}}},
             {provider = "opencode", launch = opencode.specification(assert(opencode.decode({profile_id = "batch", brief = "fixture"}))),
                 paths = {{".local/share/opencode/auth.json", ".local/share/opencode/auth.json", "login", true},
-                    {".config/opencode/opencode.json", ".config/opencode/.bee-global-opencode.json", "config", false}}},
+                    {".config/opencode/opencode.json", ".config/opencode/.bee-global-opencode.json", "config", false},
+                    {".config/opencode/towers.key", ".config/opencode/towers.key", "config", false}}},
         }
         for _, case in ipairs(cases) do
             test.it(case.provider .. " declares its exact private provider files", function()

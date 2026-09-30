@@ -524,6 +524,7 @@ function M.prepare(value: unknown): Reply
         if attempt then attempt.notice = login_notice end
         return succeed(attempt)
     end
+    configuration.private_home = context ~= nil or (request.launch.provider_home ~= nil and request.launch.provider_home.private == true)
     configuration.home_directory = home_directory
     -- Placement supplies the measured attempt identity only while rendering
     -- private delivery. It is excluded from the host configuration digest and

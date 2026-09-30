@@ -84,4 +84,4 @@ entries:
       required_profile_file: {field: config_profile, variable: CODEX_HOME, path_template: '{config_profile}.config.toml', default_directory: .codex, window_only: true}
       files:
       - {source_path: .codex/auth.json, path: .codex/auth.json, kind: login, optional: true, write_back: true}
-      - {source_path: .codex/config.toml, path: .codex/config.toml, kind: config, optional: true, write_back: false}
+      - {source_path: .codex/config.toml, path: .codex/config.toml, kind: config, optional: true, write_back: false, container_content: ''}

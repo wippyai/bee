@@ -32,7 +32,7 @@ def begin(ui, marker, *, title=False):
     menu_x, menu_y = x, y
     if title:
         titles = [(row, line) for row, line in enumerate(ui.screen.display, 1)
-                  if row < y and '×' in line and 'Terminal' in line]
+                  if 1 < row < y and '×' in line and 'Terminal' in line]
         menu_y, line = titles[-1]
         menu_x = line.index('Terminal') + 1
     ui.mouse(2, menu_x, menu_y)
@@ -102,12 +102,13 @@ def exercise(packed):
             # Hover after release must not change the selected range.
             ui.mouse(35, x + 2, y + 2)
             ui.key(b'\x03')
-            ui.wait('Clipboard request submitted')
+            ui.wait_until(lambda: bool(copies(ui, start)), 'OSC52 clipboard request')
             assert copies(ui, start) == ['FOREGROUND_SELECTABLE'], (copies(ui, start), ui.text())
             ui.wait('CHANGED_OWNER_OUTPUT')
             ui.key(b"printf 'SELECTION_%s\\n' INPUT_OK\r")
             ui.wait('SELECTION_INPUT_OK')
             # Cancel a later range; no further side effect may appear on rejoin.
+            ui.window_control('◇')
             x, y = begin(ui, 'SELECTION_INPUT_OK', title=True)
             start = len(ui.raw)
             ui.mouse(0, x, y)

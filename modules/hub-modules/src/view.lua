@@ -122,20 +122,50 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local foreground = selected and appearance.selection_text(theme) or theme.text
             local background = selected and theme.accent or theme.surface
             if roomy then
+                local update: model.PackUpdate? = nil
+                for _, candidate in ipairs(state.pack_updates) do
+                    if candidate.component == item.component then update = candidate; break end
+                end
                 local version_width = tty.text.width(item.version)
                 local name_width = maximum(0, width - version_width - 7)
                 frame.row(painter, y, " " .. tty.text.truncate(item.component, name_width, "…"), selected, "component", 0, item.component, nil, nil, stride)
                 frame.put(painter, width - version_width - 2, y, item.version, version_width, foreground, background)
                 local description = item.direct and "Direct installation" or "Dependency"
                 if #item.used_by > 0 then description = description .. " · Required by " .. table.concat(item.used_by, ", ") end
+                if item.component:match("^bee/") and update then
+                    if update.available_version ~= "" then
+                        description = description .. " · Hub " .. update.available_version
+                        if item.component == "bee/bee" and state.bee_update and state.bee_update.needs_new_binary then
+                            description = description .. " · needs a newer Bee binary"
+                        elseif item.component == "bee/bee" and state.bee_update and state.bee_update.update_available then
+                            description = description .. " · U updates the Bee packs together"
+                        elseif update.update_available then description = description .. " · updates with bee/bee" end
+                    elseif state.update_status == "pending" then description = description .. " · checking Hub version…" end
+                end
                 frame.line(painter, y + 1, " " .. description, theme.muted)
                 frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             else
-                frame.row(painter, y, item.component .. "  " .. item.version, selected, "component", 0, item.component)
+                local label = item.component .. "  " .. item.version
+                if item.component:match("^bee/") then
+                    for _, candidate in ipairs(state.pack_updates) do
+                        if candidate.component == item.component and candidate.available_version ~= "" then
+                            label = label .. " · Hub " .. candidate.available_version
+                            if candidate.update_available then label = label .. " · update with Bee" end
+                            break
+                        end
+                    end
+                end
+                frame.row(painter, y, label, selected, "component", 0, item.component)
             end
         end
         local actions = button(2, height - 1, "refresh", " Refresh ", true)
-        frame.footer(painter, status, "↑↓ select · Enter details · R refresh · A authored version")
+        local bee_update = state.bee_update
+        if bee_update and bee_update.update_available then
+            actions = button(actions, height - 1, "bee_update", " Update Bee ", not bee_update.needs_new_binary)
+        end
+        local footer = state.update_status == "pending" and "Checking live Bee pack versions…"
+            or "↑↓ select · Enter details · U update Bee packs · R refresh · A authored version"
+        frame.footer(painter, status, footer)
         return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "authoring" then

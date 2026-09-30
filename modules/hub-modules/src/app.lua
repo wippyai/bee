@@ -98,6 +98,12 @@ local function main(value: unknown)
             status = ""
             model.apply_installed(state, value)
             if state.action == "update" and state.installed_read == "ready" then state.notice = "Installed settings loaded" end
+            if state.phase == "installed" and state.installed_read == "ready" then
+                model.begin_updates(state)
+                generation = generation + 1
+                requested = {intent = model.updates_intent(state), generation = generation}
+            end
+        elseif operation == "updates" then model.apply_updates(state, value)
         elseif operation == "details" then model.apply_details(state, value)
         elseif operation == "inspect" then model.apply_inspect(state, value)
         elseif operation == "plan" then model.apply_plan(state, value)
@@ -202,6 +208,25 @@ local function main(value: unknown)
         offset = 0
         begin(intent)
         changed()
+    end
+
+    local function update_bee()
+        local update = state.bee_update
+        if state.update_status ~= "ready" or not update then status = "Read Hub update status before updating Bee"; changed(); return end
+        local selected_version = state.phase == "details" and state.selected == "bee/bee" and state.selected_version or nil
+        local target = selected_version or update.available_version
+        if target == "" or (not selected_version and not update.update_available) then
+            status = "No newer bee/bee version is available"; changed(); return
+        end
+        if update.needs_new_binary and target == update.available_version then
+            status = update.reason ~= "" and update.reason or "needs a newer Bee binary"; changed(); return
+        end
+        if state.phase ~= "details" or state.selected ~= "bee/bee" then model.select(state, "bee/bee") end
+        model.set_action(state, "update")
+        model.select_version(state, target)
+        model.show_requirements(state, false)
+        invalidate()
+        plan()
     end
 
     local function operation_history()
@@ -462,6 +487,8 @@ local function main(value: unknown)
         elseif kind == "previous" then model.set_page(state, state.page - 1); invalidate(); catalog()
         elseif kind == "next" then model.set_page(state, state.page + 1); invalidate(); catalog()
         elseif kind == "refresh" then invalidate(); installed()
+        elseif kind == "bee_update" then update_bee()
+        elseif kind == "update" and state.selected and state.selected:match("^bee/") then update_bee()
         elseif kind == "install" or kind == "update" or kind == "uninstall" then
             content.open = false; model.set_action(state, kind); model.show_requirements(state, false); reading_readme = false; offset = 0; invalidate()
             -- Updating an existing root must use its current typed values. Read
@@ -597,6 +624,7 @@ local function main(value: unknown)
                         elseif letter == "v" and state.phase == "authoring" then begin_editor("publication_version")
                         elseif letter == "s" and state.phase == "authoring" then begin_editor("publication_snapshot_digest")
                         elseif letter == "i" and state.phase == "details" then handle_hit("install", "")
+                        elseif letter == "u" and state.phase == "installed" then update_bee()
                         elseif letter == "u" and state.phase == "details" then handle_hit("update", "")
                         elseif letter == "x" and state.phase == "details" then handle_hit("uninstall", "")
                         elseif letter == "p" and state.phase == "details" then plan()

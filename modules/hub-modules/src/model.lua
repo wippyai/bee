@@ -24,6 +24,8 @@ type Item = {component: string, title: string, description: string, latest_versi
 type Version = {version: string, yanked: boolean}
 type Detail = {component: string, title: string, description: string, readme: string, versions: {Version}, page: integer, total_versions: integer}
 type Module = {component: string, version: string, source: string, direct: boolean, used_by: {string}}
+type PackUpdate = {component: string, installed_version: string, available_version: string, update_available: boolean}
+type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
 type Parameter = {name: string, value: unknown, json: string}
 type Root = {id: string, component: string, version: string, parameters: {Parameter}}
 type Requirement = {id: string, json: string, origin: string, targets: {string}}
@@ -34,7 +36,9 @@ type Recovery = {digest: string, request: Object, operation: Operation}
 type Publication = {component: string, version: string, snapshot_digest: string, descriptor_digest: string}
 type State = {
     phase: Phase, keyword: string, query: string, page: integer, catalog: {Item}, total: integer,
-    installed: {Module}, installed_roots: {Root}, installed_read: "unknown" | "pending" | "ready" | "error", selected: string?, detail: Detail?, selected_version: string?,
+    installed: {Module}, installed_roots: {Root}, installed_read: "unknown" | "pending" | "ready" | "error",
+    pack_updates: {PackUpdate}, bee_update: BeeUpdate?, update_status: "unknown" | "pending" | "ready" | "error",
+    selected: string?, detail: Detail?, selected_version: string?,
     requirements_open: boolean, requirements: {Requirement}, requirements_digest: string?, selected_requirement: integer,
     action: string, policy: string, parameters: {Parameter}, parameter_touched: {[string]: boolean}, plan: Plan?, result: Result?, notice: string,
     publication_component: string, publication_version: string, publication_snapshot_digest: string, publication_prepared: Publication?,
@@ -202,7 +206,7 @@ end
 
 local function managed_root(root: Root): boolean
     local measured = hash.sha256(root.component)
-    return measured ~= nil and root.id == "bee.hub.deps:" .. measured
+    return root.component == "bee/bee" or (measured ~= nil and root.id == "bee.hub.deps:" .. measured)
 end
 
 local function migration_rows(raw: unknown): ({Object}?, string?)
@@ -232,7 +236,8 @@ end
 
 function M.new(): State
     return {phase = "catalog", keyword = "bee", query = "", page = 1, catalog = {}, total = 0,
-        installed = {}, installed_roots = {}, installed_read = "unknown", selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
+        installed = {}, installed_roots = {}, installed_read = "unknown", pack_updates = {}, bee_update = nil, update_status = "unknown",
+        selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
         requirements_open = false, requirements = {}, requirements_digest = nil, selected_requirement = 1,
         parameters = {}, parameter_touched = {}, plan = nil, result = nil, notice = "",
         publication_component = "", publication_version = "", publication_snapshot_digest = "", publication_prepared = nil,
@@ -243,6 +248,8 @@ end
 -- Presentation changes have no Hub side effect. Keep them here so clients do
 -- not need to reach into the state record just to change panes.
 function M.show(state: State, phase: Phase)
+    local returning_to_plan = phase == "plan" and state.phase == "confirm" and state.recovery == nil
+    if phase ~= "confirm" and not returning_to_plan then state.plan, state.result = nil, nil end
     if phase ~= "confirm" then state.recovery = nil end
     if phase ~= "operations" and phase ~= "confirm" then
         state.selected_operation, state.recovery = nil, nil
@@ -257,6 +264,13 @@ function M.catalog_intent(state: State): Intent
 end
 
 function M.installed_intent(_: State): Intent return {operation = "installed"} end
+
+function M.updates_intent(_: State): Intent return {operation = "updates"} end
+
+function M.begin_updates(state: State)
+    state.pack_updates, state.bee_update = {}, nil
+    state.update_status = "pending"
+end
 
 -- Publication identities are entered explicitly. Freeze remains with the
 -- caller-owned overlay; host profiles retain source-workspace and
@@ -762,6 +776,44 @@ function M.apply_installed(state: State, reply: Reply)
     M.hydrate_update_parameters(state)
     if state.phase == "catalog" or state.phase == "installed" then state.phase = "installed" end
     state.notice = ""
+end
+
+function M.apply_updates(state: State, reply: Reply)
+    state.pack_updates, state.bee_update = {}, nil
+    if not reply.ok or type(reply.value) ~= "table" then
+        state.update_status = "error"
+        state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "Bee update status unavailable"))
+        return
+    end
+    local value = object(reply.value)
+    if not value then state.update_status = "error"; state.notice = "Invalid Bee update status"; return end
+    local supplied, supplied_error = bounds.dense_list(value.modules, M.MAX_ITEMS, "Bee pack status")
+    local root = object(value.bee_update)
+    if not supplied or not root or type(root.update_available) ~= "boolean" or type(root.needs_new_binary) ~= "boolean" then
+        state.update_status = "error"; state.notice = supplied_error or "Invalid Bee root update status"; return
+    end
+    local packs: {PackUpdate} = {}
+    local seen: {[string]: boolean} = {}
+    for _, raw in ipairs(supplied) do
+        local item = object(raw)
+        local name = item and component(item.component)
+        if not item or not name or not name:match("^bee/") or seen[name]
+            or type(item.update_available) ~= "boolean" then
+            state.update_status = "error"; state.notice = "Invalid Bee pack update row"; return
+        end
+        packs[#packs + 1] = {component = name, installed_version = M.text(item.installed_version, 128),
+            available_version = M.text(item.available_version, 128), update_available = item.update_available}
+        seen[name] = true
+    end
+    state.pack_updates = packs
+    state.bee_update = {installed_version = M.text(root.installed_version, 128),
+        available_version = M.text(root.available_version, 128), update_available = root.update_available,
+        needs_new_binary = root.needs_new_binary,
+        reason = M.text(root.reason, 512)}
+    state.update_status = "ready"
+    if type(value.catalog_error) == "string" and value.catalog_error ~= "" then
+        state.notice = M.text(value.catalog_error, 512)
+    end
 end
 
 function M.apply_details(state: State, reply: Reply)

@@ -57,6 +57,10 @@ local function handle(raw: unknown): {[string]: unknown}
         and raw.request.component == "bee/agent-tool" then return agent_tool(raw) end
     if raw.operation == "installed" then
         return {ok = true, replayed = false, value = {version = 1, modules = {}, roots = {}}}
+    elseif raw.operation == "updates" then
+        return {ok = true, replayed = false, value = {modules = {}, bee_update = {
+            installed_version = "", available_version = "", update_available = false,
+            needs_new_binary = false, reason = ""}, catalog_error = ""}}
     end
     if raw.operation == "catalog" then
         return {ok = true, replayed = false, value = {total = 1, items = {{

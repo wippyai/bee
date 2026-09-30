@@ -1,5 +1,7 @@
 -- MIT. Locate probes must drain both child pipes and stop on a fixed deadline.
 local test = require("test")
+local env = require("env")
+local json = require("json")
 local channel = require("channel")
 local time = require("time")
 local probe_capture = require("probe_capture")
@@ -11,6 +13,25 @@ type Process = probe_capture.Process
 
 local function define_tests()
     test.describe("Locate probe process capture", function()
+        test.it("authorizes nonsecret host home and environment presence facts", function()
+            local home, home_error = env.get("bee.env:machine_home")
+            test.is_nil(home_error)
+            test.is_true(type(home) == "string" and home:sub(1, 1) == "/")
+            local raw, read_error = env.get("bee.harness.launch:host_environment_names")
+            test.is_nil(read_error)
+            if type(raw) ~= "string" then error("host presence metadata is unavailable") end
+            local decoded, decode_error = json.decode(raw)
+            test.is_nil(decode_error)
+            if type(decoded) ~= "table" then error("host presence metadata is malformed") end
+            local found = false
+            for _, name in ipairs(decoded :: {unknown}) do
+                test.eq(type(name), "string")
+                if name == "PATH" then found = true end
+                test.is_nil((name :: string):find("=", 1, true))
+            end
+            test.is_true(found)
+        end)
+
         test.it("drains stdout and stderr concurrently", function()
             local stderr_drained = channel.new(1)
             local drained_while_stdout_open = false

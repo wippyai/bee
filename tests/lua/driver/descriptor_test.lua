@@ -1,6 +1,7 @@
 -- MIT. CLI descriptors are strict, bounded registry data.
 local test = require("test")
 local descriptor = require("descriptor")
+local login_evidence = require("login_evidence")
 type Object = {[string]: unknown}
 
 local function copy_object(value: Object): Object
@@ -11,6 +12,94 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()
+            local loaded = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
+            local changed = copy_object(loaded)
+            local valid = {
+                {kind = "file_exists", paths = {".fixture/auth.json", ".fixture/config.jsonc"}},
+                {kind = "env_present", names = {"FIXTURE_API_KEY"}},
+                {kind = "auth_status", argv = {"auth", "status"}, success_exit_code = 0, timeout_ms = 1000},
+            }
+            changed.login_evidence = {command = "fixture login", any_of = valid}
+            test.not_nil(descriptor.decode(changed))
+            local invalid: {unknown} = {
+                {}, {kind = "file_exists", paths = {}},
+                {kind = "file_exists", paths = {"../secret"}},
+                {kind = "env_present", names = {"KEY=value"}},
+                {kind = "env_present", names = {"KEY"}, value = "secret"},
+                {kind = "auth_status", argv = {}, success_exit_code = 0, timeout_ms = 1000},
+                {kind = "auth_status", argv = {"auth", "status"}, success_exit_code = 256, timeout_ms = 1000},
+                {kind = "auth_status", argv = {"auth", "status"}, success_exit_code = 0, timeout_ms = 30001},
+                {kind = "auth_status", argv = {"auth", "status\n"}, success_exit_code = 0, timeout_ms = 1000},
+            }
+            for _, item in ipairs(invalid) do
+                changed.login_evidence = {command = "fixture login", any_of = {item}}
+                local decoded, decode_error = descriptor.decode(changed)
+                test.is_nil(decoded)
+                test.not_nil(decode_error)
+            end
+            changed.login_evidence = {command = "fixture login", any_of = {}}
+            test.is_nil(descriptor.decode(changed))
+        end)
+
+        test.it("declares real login sources for all six CLIs", function()
+            local cases = {
+                {provider = "claude", path = ".claude/.credentials.json", variable = "ANTHROPIC_API_KEY", status = "auth"},
+                {provider = "codex", path = ".codex/auth.json", variable = "CODEX_API_KEY", status = "login"},
+                {provider = "agy", path = ".gemini/antigravity-cli/antigravity-oauth-token", variable = "GEMINI_API_KEY"},
+                {provider = "grok", path = ".grok/config.toml", variable = "XAI_API_KEY"},
+                {provider = "muse", path = ".config/muse/auth.json", variable = "META_API_KEY"},
+                {provider = "opencode", path = ".config/opencode/opencode.jsonc", variable = "OPENCODE_API_KEY"},
+            }
+            for _, case in ipairs(cases) do
+                local selected = assert(descriptor.load("bee.driver." .. case.provider .. ".descriptor:cli"))
+                local paths, names, status = false, false, false
+                for _, evidence in ipairs(selected.login_evidence.any_of) do
+                    if evidence.kind == "file_exists" then
+                        for _, path in ipairs(evidence.paths) do if path == case.path then paths = true end end
+                    elseif evidence.kind == "env_present" then
+                        for _, name in ipairs(evidence.names) do if name == case.variable then names = true end end
+                    else
+                        test.eq(evidence.argv[1], case.status)
+                        test.eq(evidence.argv[2], "status")
+                        test.eq(evidence.success_exit_code, 0)
+                        test.eq(evidence.timeout_ms, 3000)
+                        status = true
+                    end
+                end
+                test.is_true(paths)
+                test.is_true(names)
+                test.eq(status, case.status ~= nil)
+            end
+        end)
+
+        test.it("probes file alternatives, environment names and bounded status without values", function()
+            local declaration = assert(login_evidence.decode({command = "fixture login", any_of = {
+                {kind = "file_exists", paths = {".fixture/missing", ".fixture/config.jsonc"}},
+                {kind = "env_present", names = {"MISSING_KEY", "FIXTURE_KEY"}},
+                {kind = "auth_status", argv = {"auth", "status"}, success_exit_code = 7, timeout_ms = 42},
+            }}))
+            local checks = login_evidence.probe(declaration, {
+                file = function(path, _variable, _directory) return path == ".fixture/config.jsonc" end,
+                environment = function(name) return name == "FIXTURE_KEY" end,
+                status = function(argv, timeout)
+                    test.eq(argv[1], "auth")
+                    test.eq(argv[2], "status")
+                    test.eq(timeout, 42)
+                    return 7
+                end,
+            })
+            test.eq(#checks, 3)
+            for _, check in ipairs(checks) do test.eq(check.present, true) end
+            test.eq(checks[3].exit_code, 7)
+            local uncertain = login_evidence.probe(declaration, {
+                file = function(_path, _variable, _directory) return false end,
+                environment = function(_name) return false end,
+                status = function(_argv, _timeout) return nil end,
+            })
+            test.is_nil(login_evidence.present(declaration, uncertain))
+        end)
+
         test.it("loads each harness descriptor and rejects unknown top-level and nested fields", function()
             local entries = {
                 {ref = "bee.driver.claude.descriptor:cli", provider = "claude", codec = "claude-stream-json"},

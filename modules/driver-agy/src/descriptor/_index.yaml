@@ -7,11 +7,15 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Agy CLI command, stream-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@1
+    schema_revision: bee.driver.cli-descriptor@2
     provider: agy
     executable: agy
     version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
-    login_evidence: {path: .gemini/antigravity-cli/antigravity-oauth-token, command: agy, variable: HOME}
+    login_evidence:
+      command: agy
+      any_of:
+      - {kind: file_exists, paths: [.gemini/antigravity-cli/antigravity-oauth-token]}
+      - {kind: env_present, names: [GEMINI_API_KEY]}
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: agy-stream-json
     json_paths:

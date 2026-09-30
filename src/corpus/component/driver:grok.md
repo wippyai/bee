@@ -12,3 +12,9 @@ The private batch route receives `.grok/auth.json` and uses the admitted
 attempt home, where placement creates the final composed config. If Grok
 refreshes `auth.json`, only that login file is returned through the credential
 broker after exit. The base and generated configuration are not written back.
+
+Login evidence accepts the cached auth file, model-provider settings in
+`.grok/config.toml`, or the declared API-key environment names. The existing
+broker projection carries the admitted config even when the optional auth file
+is absent. The default window keeps its private HOME and host-selected
+`grok_login` projection; config bytes remain private to the broker and CLI.

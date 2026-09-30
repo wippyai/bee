@@ -177,7 +177,9 @@ entries:
   source: file://window_ready_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "120s"}
-  modules: [process, channel, time, tty, uuid]
+  modules: [process, channel, time, tty, uuid, registry]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
@@ -920,7 +922,9 @@ entries:
   source: file://locate_probe_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [channel, time]
+  modules: [channel, time, env, json]
+  security:
+    policies: [bee.harness.security:launch_locate_probe_policy]
   imports:
     test: wippy.test:test
     probe_capture: bee.harness.launch:probe_capture

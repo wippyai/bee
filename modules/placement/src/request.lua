@@ -8,6 +8,7 @@ local canonical = require("canonical")
 local types = require("types")
 local driver_types = require("driver_types")
 local preferences = require("preferences")
+local login_evidence = require("login_evidence")
 local M = {}
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
@@ -246,15 +247,21 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     if object.login ~= nil then
         local declared = bounds.object(object.login)
         if not declared then return nil, "launch.login must be an object" end
-        local login_field = bounds.fields(declared, {"provider", "command", "files"})
+        local login_field = bounds.fields(declared, {"provider", "command", "files", "any_of"})
         if login_field then return nil, "launch.login: " .. login_field end
         local provider = bounds.id(declared.provider)
         if not provider then return nil, "launch.login.provider must be an identifier" end
         local command = bounds.line(declared.command, 128)
         if not command or command == "" then return nil, "launch.login.command must be a bounded single line" end
-        local files, files_error = decode_files(declared.files, "launch.login.files", true)
+        local files, files_error = decode_files(declared.files, "launch.login.files", declared.any_of == nil)
         if not files then return nil, files_error end
-        login = {provider = provider, command = command, files = files}
+        local alternatives: {login_evidence.Evidence}? = nil
+        if declared.any_of ~= nil then
+            local evidence, evidence_error = login_evidence.decode({command = command, any_of = declared.any_of})
+            if not evidence then return nil, evidence_error end
+            alternatives = evidence.any_of
+        end
+        login = {provider = provider, command = command, files = files, any_of = alternatives}
     end
     local provider_home: driver_types.ProviderHome? = nil
     if object.provider_home ~= nil then

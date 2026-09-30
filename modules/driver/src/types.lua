@@ -57,13 +57,14 @@ type Binding = {
 -- by the user's home plus a default directory. Placement checks existence
 -- only; the driver never reads the file's contents.
 type RequiredFile = {variable: string, path: string, default_directory: string?}
--- Evidence is checked by placement in the selected provider home. Paths are
--- alternatives: any existing file is enough. The command is display text.
-type LoginEvidence = {provider: string, command: string, files: {RequiredFile}}
+-- Window advisories keep compatibility file paths and the descriptor
+-- alternatives. Placement observes files; other kinds remain unknown there.
+-- The command is display text, never an instruction to execute login.
+type LoginEvidence = {provider: string, command: string, files: {RequiredFile}, any_of: {login_evidence.Evidence}?}
 type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
 type LocatePlatform = {os: string?, arch: string?, compatible: boolean?}
 type LocateExecutable = {name: string, present: boolean?, version: string?}
-type LocateLogin = {evidence: "file_exists" | "not_required", path: string?, exists: boolean?}
+type LocateLogin = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
 type LocateResult = {provider: string, status: LocateStatus, executable: LocateExecutable,
     login: LocateLogin, platform: LocatePlatform, checked_at: string?, reason: string?}
 type ProviderHomeFile =
@@ -108,6 +109,7 @@ type Terminal = {
 local bounds = require("bounds")
 local events = require("events")
 local values = require("values")
+local login_evidence = require("login_evidence")
 local M = {}
 -- Executable-backed provider login flows remain an explicit integration gate.
 M.AUTHENTICATION_STATUS = "unproven"

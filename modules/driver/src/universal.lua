@@ -392,15 +392,18 @@ local function build_launch(selected: Descriptor, request: Request): (types.Laun
     if type(template.session_end) == "string" and (template.stdin_json == nil or input_written) then launch.session_end = template.session_end :: string end
     if template.provider_home_private ~= nil then launch.provider_home = provider_home(selected, template.provider_home_private == true, request) end
     if template.login == true then
-        local evidence = bounds.object(selected.login_evidence) or {}
-        local variable = type(evidence.variable) == "string" and evidence.variable or "HOME"
-        local directory = type(evidence.directory) == "string" and evidence.directory or nil
-        local path = evidence.path :: string
-        if directory and path:sub(1, #directory + 1) == directory .. "/" then path = path:sub(#directory + 2)
-        elseif variable == "HOME" then directory = nil
-        else return nil, "login evidence path is outside its provider-home directory" end
-        launch.login = {provider = selected.provider, command = evidence.command :: string,
-            files = {{variable = variable, default_directory = directory, path = path}}}
+        local evidence = selected.login_evidence
+        local files: {types.RequiredFile} = {}
+        for _, alternative in ipairs(evidence.any_of) do
+            if alternative.kind == "file_exists" then
+                for _, full_path in ipairs(alternative.paths) do
+                    local path = full_path
+                    if alternative.directory then path = path:sub(#alternative.directory + 2) end
+                    files[#files + 1] = {variable = alternative.variable or "HOME", default_directory = alternative.directory, path = path}
+                end
+            end
+        end
+        launch.login = {provider = selected.provider, command = evidence.command, files = files, any_of = evidence.any_of}
     end
     local required_profile = bounds.object((bounds.object(selected.provider_home) or {}).required_profile_file)
     local profile_field = required_profile and bounds.id(required_profile.field) or nil
@@ -484,9 +487,8 @@ function M.locate(ref: string): (unknown) -> (types.LocateResult?, string?)
         local loaded, load_error = descriptor_reader.load(ref)
         if not loaded then return nil, load_error end
         local selected = loaded
-        local evidence = bounds.object(selected.login_evidence) or {}
         local result, result_error = locate.evaluate({provider = selected.provider, executable = selected.executable,
-            login_path = evidence.path :: string}, raw)
+            login_evidence = selected.login_evidence}, raw)
         return result :: types.LocateResult?, result_error
     end
 end

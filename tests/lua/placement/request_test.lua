@@ -70,6 +70,19 @@ local function define_tests()
                 (item.launch :: {[string]: unknown}).login = {provider = "claude", command = "claude", files = {}}
             end, "launch.login.files must contain 1 to 8 paths")
         end)
+        test.it("preserves non-file alternatives in window login advisories", function()
+            local value = launch()
+            local spec = value.launch :: {[string]: unknown}
+            spec.login = {provider = "fixture", command = "fixture login", files = {},
+                any_of = {{kind = "env_present", names = {"FIXTURE_KEY"}}}}
+            local decoded, err = request.decode(value)
+            if not decoded then error(tostring(err)) end
+            local login = assert(decoded.launch.login)
+            test.eq(#login.files, 0)
+            test.eq(login.any_of and login.any_of[1].kind, "env_present")
+            spec.login = {provider = "fixture", command = "fixture login", files = {}, any_of = {}}
+            test.is_nil(request.decode(value))
+        end)
         test.it("decodes exact provider-home files and bounded private environment roots", function()
             local value = launch()
             local spec = value.launch :: {[string]: unknown}

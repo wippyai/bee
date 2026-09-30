@@ -35,6 +35,7 @@ entries:
     - bee.placement.native.binding:reconcile
     - bee.harness.profiles:contract
     - bee.harness.profiles:call
+    - bee.harness.launch:present
     - bee.harness.launch:admission
     - bee.harness.launch:setup
     - bee.harness.launch:locate_probe

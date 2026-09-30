@@ -517,7 +517,7 @@ end
 -- thread, obtain the attempt-bound resource grant and credential
 -- projections in the requester's own authority, and return the carrier
 -- request. Every acquisition keys on the request id, so a retry replays.
-local function admit_request(value: unknown, session_turn: SessionTurnContext?): (Admitted?, Reply?)
+local function admit_request(value: unknown, session_turn: SessionTurnContext?, session_operation_key: string?): (Admitted?, Reply?)
     local request, decode_error = M.decode_request(value)
     if not request then return nil, fail("INVALID", decode_error or "invalid request") end
     local requester = session_turn and session_turn.owner_id or actor()
@@ -604,7 +604,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
     if not session_turn and plan.mode == "window" and previous then
         local attached, attach_error = call("bee.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
             plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
-            attempt_id = previous.previous_attempt_id, operation_key = "window-session:" .. previous.origin_request_id})
+            attempt_id = previous.previous_attempt_id, operation_key = session_operation_key or "window-session:" .. previous.origin_request_id})
         if not attached then return nil, attach_error end
         interactive_session = bounds.id(attached.session)
         if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
@@ -655,7 +655,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
     if not session_turn and plan.mode == "window" then
         local attached, attach_error = call("bee.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
             plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
-            attempt_id = ids.attempt_id, operation_key = "window-session:" .. (previous and previous.origin_request_id or request.request_id)})
+            attempt_id = ids.attempt_id, operation_key = session_operation_key or "window-session:" .. (previous and previous.origin_request_id or request.request_id)})
         if not attached then return nil, attach_error end
         interactive_session = bounds.id(attached.session)
         if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
@@ -692,8 +692,8 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
         saved_profile_revision = plan.saved_profile_revision,
         owner_component_revision = plan.owner_component_revision}, nil
 end
-function M.admit_request(value: unknown): (Admitted?, Reply?)
-    return admit_request(value, nil)
+function M.admit_request(value: unknown, session_operation_key: string?): (Admitted?, Reply?)
+    return admit_request(value, nil, session_operation_key)
 end
 -- The scheduler is the only caller of this internal admission path. Threads
 -- stores the owner, workspace, session, and thread identities on the route;

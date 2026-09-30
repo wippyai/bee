@@ -10,7 +10,7 @@ type Provenance = {thread_id: string, subject: string, initiating_owner: string,
     access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
 type GatewayContext = {binding_id: string, thread_id: string, subject: string, action_id: string, attempt_id: string,
     workspace_id: string, origin_view: OriginView?, provenance: Provenance}
-type Request = {version: integer, workspace_id: string, request_id: string, definition_id: string, arguments: {string}, caller_token: string, origin_view: OriginView?, provenance: Provenance}
+type Request = {version: integer, workspace_id: string, request_id: string, definition_id: string, arguments: {string}, caller_token: string, origin_view: OriginView?, provenance: Provenance?, presentation: boolean?}
 type Reply = {request_id: string, reply: contract.Reply, display_id: string?}
 
 local function text(value: unknown, limit: integer): string?
@@ -85,20 +85,23 @@ function M.request(value: unknown, workspace_id: string): Request?
     if type(value) ~= "table" or value.version ~= 1 or value.workspace_id ~= workspace_id then return nil end
     for key in pairs(value) do
         if key ~= "version" and key ~= "workspace_id" and key ~= "request_id"
-            and key ~= "definition_id" and key ~= "arguments" and key ~= "caller_token" and key ~= "origin_view" and key ~= "provenance" then return nil end
+            and key ~= "definition_id" and key ~= "arguments" and key ~= "caller_token" and key ~= "origin_view" and key ~= "provenance" and key ~= "presentation" then return nil end
     end
     local request_id = text(value.request_id, 80)
     local definition_id = text(value.definition_id, 160)
     local caller_token = text(value.caller_token, 160)
     local args = arguments.decode(value.arguments)
     if not request_id or not definition_id or not caller_token or not args then return nil end
-    if not caller_token:match("^bee%.application%.open/[0-9a-f-]+$") then return nil end
+    local presentation = value.presentation == true
+    if presentation then
+        if not caller_token:match("^bee%.application%.presentation/[0-9a-f-]+$") or value.provenance ~= nil or value.origin_view ~= nil then return nil end
+    elseif value.presentation ~= nil or not caller_token:match("^bee%.application%.open/[0-9a-f-]+$") then return nil end
     local origin = M.origin(value.origin_view)
     if value.origin_view ~= nil and not origin then return nil end
     local provenance = M.provenance(value.provenance)
-    if not provenance then return nil end
+    if not presentation and not provenance then return nil end
     return {version = 1, workspace_id = workspace_id, request_id = request_id,
-        definition_id = definition_id, arguments = args, caller_token = caller_token, origin_view = origin, provenance = provenance}
+        definition_id = definition_id, arguments = args, caller_token = caller_token, origin_view = origin, provenance = provenance, presentation = presentation}
 end
 
 -- The host forwards the broker's typed application reply and adds only the

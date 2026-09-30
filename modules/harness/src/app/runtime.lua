@@ -203,7 +203,7 @@ type Open = (string, unknown) -> (Window?, string?)
 -- The component-owned process supplies constructors keyed by placement binding.
 -- Request data cannot supply executable callbacks or choose a constructor outside
 -- the host-admitted placement plan.
-local function main(value: unknown, constructors: {[string]: Open})
+local function main(value: unknown, constructors: {[string]: Open}, retained: boolean?, session_operation_key: string?)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
     local input = assert(tty.events())
@@ -382,19 +382,7 @@ local function main(value: unknown, constructors: {[string]: Open})
         end
     end
     if selected then
-        local choice, choice_error, picker_cancelled, pending_activation = picker.run(launch, input, lifecycle, closes)
-        if picker_cancelled then
-            tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
-            if pending_activation then
-                local late = pending_activation:receive() :: picker.Activation
-                if late and late.admitted then
-                    local released, release_error = release_unstarted(late.admitted)
-                    if not released then error("Cancel Agent activation: " .. tostring(release_error)) end
-                end
-            end
-            if choice_error then error(choice_error) end
-            return
-        end
+        local choice, choice_error = picker.run(launch, input, lifecycle, closes)
         if not choice then
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             if choice_error then error(choice_error) end
@@ -641,7 +629,7 @@ local function main(value: unknown, constructors: {[string]: Open})
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
             return
         end
-        local choice, admission_error = admission.admit_request(body)
+        local choice, admission_error = admission.admit_request(body, session_operation_key)
         if not choice then
             show_failure("Managed window admission: " .. failure(admission_error))
             tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
@@ -803,7 +791,7 @@ local function main(value: unknown, constructors: {[string]: Open})
     local encoded, encode_error = recovery.encode(application_saved)
     local checkpoint_id: string? = nil
     local checkpoint_error: string? = encode_error
-    if encoded then checkpoint_id, checkpoint_error = client.checkpoint(launch, encoded) end
+    if encoded and not retained then checkpoint_id, checkpoint_error = client.checkpoint(launch, encoded) end
     local checkpoint_deadline = now_ms() + 6000
     local published_activity: string? = nil
     local published_title: string? = nil

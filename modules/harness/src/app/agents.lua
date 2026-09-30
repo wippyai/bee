@@ -72,8 +72,8 @@ end
 -- The key identifies one open operation: retrying the same key returns the
 -- same session, never a second one.
 function M.open(client: sessions.Client, definition: string, profile: {id: string, revision: integer}?,
-    key: string): (Conversation?, string?)
-    local session, fault = client:open({definition = definition, profile = profile, operation_key = key})
+    key: string, presentation: sessions_protocol.Presentation?): (Conversation?, string?)
+    local session, fault = client:open({definition = definition, profile = profile, presentation = presentation, operation_key = key})
     if not session then return nil, describe(fault) end
     return conversation(session), nil
 end

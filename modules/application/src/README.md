@@ -82,3 +82,12 @@ must persist their own key before dispatch and reuse it after an uncertain
 reply. Reusing a key with different arguments is a conflict.
 
 Session snapshots expose `thread_ref`, `workspace`, driver/provider, definition and the latest settled result summary. `session:history{cursor?, limit?}` pages immutable Work inputs and refs in sequence order; rehydrate each Work to observe its current result. `client.navigate(launch, definition_id, arguments?)` queues an admitted app open through the current authenticated broker execution. A receiving app listens on `bee.application.navigate` and passes the message sender and payload to `client.navigation(launch, sender, payload)`; the helper returns bounded arguments only for the current broker execution.
+
+`sessions.open` and `sessions.call` accept optional `presentation = "headless" |
+"window"`. Headless is the default. Window opens an interactive session with a
+retained native terminal and a detachable viewer when the host grants
+presentation to a controlling person. Its snapshot exposes `presentation` so
+Sessions navigation selects that terminal. Work still uses `send` and reaches
+interactive sessions through their driver hooks at the next turn boundary.
+Closing a viewer leaves the session running; `close` or `cancel` stops its
+placement with exit evidence.

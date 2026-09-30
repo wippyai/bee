@@ -67,7 +67,8 @@ type Activity = "idle" | "working" | "blocked" | "stalled"
 type LastResult = {work: string, outcome: string, summary: string, at: string}
 type HistoryItem = {work: string, sequence: integer, input: unknown, created_at: string}
 type HistoryPage = {items: {HistoryItem}, next: integer?}
-type SessionSnapshot = {thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
+type Presentation = "headless" | "window"
+type SessionSnapshot = {presentation: Presentation?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type OperationReceipt = OpenReceipt | WorkReceipt | ControlReceipt
@@ -545,8 +546,11 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result"})
+        "activity", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation"})
     if not object then return nil, failure end
+    local presentation: Presentation = "headless"
+    if object.presentation == "window" then presentation = "window"
+    elseif object.presentation ~= nil and object.presentation ~= "headless" then return nil, "session presentation is invalid" end
     local extras: {[string]: string} = {}
     for _, name in ipairs({"thread_ref", "workspace", "driver", "provider", "definition"}) do
         if object[name] ~= nil then
@@ -600,7 +604,7 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     if continuity_mode == "provider_resume" then decoded_continuity = "provider_resume"
     elseif continuity_mode == "reconstructed" then decoded_continuity = "reconstructed"
     elseif continuity_mode == "fresh" then decoded_continuity = "fresh" end
-    return {thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
+    return {presentation = presentation, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
         definition = extras.definition, last_result = last_result,
         session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
         activity = decoded_activity,

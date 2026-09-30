@@ -144,3 +144,34 @@ entries:
     actions: [bee.sessions.attach]
     resources: '*'
     effect: allow
+
+- name: presentation_bridge_policy
+  kind: security.policy.expr
+  groups: [presentation_execution_scope]
+  policy:
+    actions: [process.spawn, process.host, process.send, process.registry.lookup, process.registry.register, process.registry.unregister, funcs.call, process.security, bee.apps.session_present]
+    resources: '*'
+    expression: '(action == "process.security" && resource == "security") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner") || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.sessions.binding:get", "bee.apps:open_call", "bee.harness.launch:setup", "bee.harness.service:open"])'
+    effect: allow
+- name: presentation_owner_policy
+  kind: security.policy.expr
+  groups: [presentation_execution_scope]
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.context, process.cancel, process.registry.register, process.registry.unregister, tty.create, tty.mount, tty.observe, tty.input, tty.resize]
+    resources: '*'
+    expression: '(action in ["process.spawn", "process.spawn.monitored"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"] || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")'
+    effect: allow
+- name: presentation_facade_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.security, funcs.call, security.policy_group.get]
+    resources: '*'
+    expression: '(action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource == "bee.harness.service:open") || (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope")'
+    effect: allow
+- name: presentation_viewer_policy
+  kind: security.policy.expr
+  policy:
+    actions: [process.registry.lookup, process.registry.register, process.registry.unregister]
+    resources: '*'
+    expression: '(action == "process.registry.lookup" && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$")'
+    effect: allow

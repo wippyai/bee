@@ -185,3 +185,10 @@ Run the relevant checks with:
     make gateway-check
     make managed-launch-fixture-check
     make app-journey-check
+
+Session open accepts `spec.presentation = "headless" | "window"`; omission
+selects headless. Window selects the host-admitted interactive profile. The
+session owns its terminal, while the Sessions app attaches a viewer. Closing
+that viewer detaches it; Sessions list Open reattaches to the same live terminal.
+Work arrives through driver hooks at a turn boundary. `session_close` seals
+intake and stops the placement with exit evidence.

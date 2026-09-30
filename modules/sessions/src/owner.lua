@@ -9,6 +9,7 @@ local hash = require("hash")
 local security = require("security")
 local funcs = require("funcs")
 local scheduler = require("scheduler")
+local cancellation = require("cancellation")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -76,13 +77,15 @@ local function snapshot(value: unknown): (Object?, string?)
     local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
     if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
     local route = object(row.route) or {}
-    return {session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
+    return {presentation = route.delivery == "hook" and "window" or "headless", session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
         driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
         revision = row.revision, incarnation = 1, title = row.title,
         lifecycle = lifecycle, activity = activity,
         execution = {state = active > 0 and "running" or "quiescent", evidence_at = at, stale = false},
         queue_count = queued, effective_limits = {}, continuity = {mode = "provider_resume"}, actions = {}}, nil
 end
+
+local finish_closing: (string, string) -> string?
 
 local function describe(session: string): (Object?, string?)
     local value, err = journal.invoke("session_describe", {session = session})
@@ -93,9 +96,11 @@ end
 local function open(request: Object): Reply
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
-    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace"}) then
+    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "presentation"}) then
         return fail("INVALID", "open requires a definition, optional profile/workdir, and operation_key", operation_key)
     end
+    local presentation = spec.presentation == nil and "headless" or spec.presentation
+    if presentation ~= "headless" and presentation ~= "window" then return fail("INVALID", "presentation must be headless or window", operation_key) end
     local definition = ref(spec.definition)
     if not definition then return fail("INVALID", "definition is not a ref", operation_key) end
     local profile = object(spec.profile)
@@ -124,12 +129,36 @@ local function open(request: Object): Reply
             local executor, executor_error = funcs.new():with_actor(actor)
             if not executor then return unavailable(tostring(executor_error), operation_key) end
             local raw, call_error = executor:call("bee.sessions.binding:open", {spec = {definition = definition,
-                profile = profile, workdir = workdir}, operation_key = operation_key})
+                profile = profile, workdir = workdir, presentation = presentation}, operation_key = operation_key})
             if call_error then return unavailable(tostring(call_error), operation_key) end
             local reply = object(raw)
             if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
             return reply :: Reply
         end
+    end
+    local prior_raw, prior_error = journal.invoke("operation_lookup", {operation_key = operation_key})
+    local prior = object(prior_raw)
+    if prior_error or not prior then return unavailable(prior_error or "open operation lookup unavailable", operation_key) end
+    if prior.found == true then
+        local receipt = object(prior.receipt)
+        if prior.operation ~= "session_create" or not receipt then return fail("CONFLICT", "open key belongs to another operation", operation_key) end
+        local previous, previous_error = describe(tostring(receipt.session))
+        if not previous then return unavailable(previous_error or "prior session unavailable", operation_key) end
+        if previous.presentation ~= presentation then return fail("CONFLICT", "open key belongs to another presentation", operation_key) end
+    end
+    if presentation == "window" then
+        local raw, call_error = funcs.call("bee.harness.launch:present", {spec = spec, operation_key = operation_key})
+        local reply = object(raw)
+        if call_error or not reply or reply.ok ~= true then
+            local fault = reply and object(reply.error)
+            return fail(fault and tostring(fault.code) or "UNAVAILABLE", tostring(call_error or (fault and fault.message) or "window owner unavailable"), operation_key)
+        end
+        local receipt = object(reply.value)
+        local session = receipt and ref(receipt.session)
+        if not session or not receipt then return unavailable("window owner omitted its session", operation_key) end
+        local current, err = describe(session)
+        if not current then return unavailable(err or "window snapshot unavailable", operation_key) end
+        return succeed({session = session, operation = receipt.operation, snapshot = current})
     end
     local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision, nil, nil, nil, true)
     if not plan then
@@ -488,6 +517,13 @@ operation_state = function(subject: string): (Object?, string?)
     elseif receipt.effect == "close" then
         local current, read_error = describe(target)
         if not current then return nil, read_error end
+        if current.lifecycle == "closing" then
+            local final_error = finish_closing(target, "observe-close:" .. subject)
+            if final_error then return nil, final_error end
+            local refreshed, refresh_error = describe(target)
+            if not refreshed then return nil, refresh_error end
+            current = refreshed
+        end
         if current.lifecycle == "closed" then
             observation = {subject_kind = "operation", subject = subject, cursor = "1", tag = "ready",
                 result = {kind = "control", value = {effect = "close", state = "closed", session = target, cleanup = "complete"}}}
@@ -539,9 +575,58 @@ local function cancel_settle_key(turn: string): string
     return "cancel-settle:" .. turn:sub(-72)
 end
 
-local function finish_closing(session: string, current: Object, operation_key: string): string?
-    if current.lifecycle ~= "closing" or current.queue_count > 0
-        or (object(current.execution) and (object(current.execution) :: Object).state == "running") then return nil end
+finish_closing = function(session: string, operation_key: string): string?
+    local current, current_error = describe(session)
+    if not current then return current_error or "closing session unavailable" end
+    if tostring(current.lifecycle) ~= "closing" then return nil end
+    local raw, read_error = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    local route = stored and object(stored.route)
+    if read_error then return read_error end
+    if route and route.delivery == "hook" and type(route.native_attempt_id) == "string" then
+        local stopped = cancellation.stop(route.placement_methods, route.native_attempt_id, route, true)
+        if stopped.state == "pending" then return nil end
+        if stopped.state ~= "stopped" then return stopped.evidence.summary end
+        local cursor: integer? = nil
+        repeat
+            local page_raw, history_error = journal.invoke("work_history", {session = session, cursor = cursor, limit = 64})
+            local page = object(page_raw)
+            local rows = page and bounds.array(page.items, 64)
+            if history_error or not page or not rows then return history_error or "window work history unavailable" end
+            for _, item_raw in ipairs(rows) do
+                local item = object(item_raw)
+                local work = item and ref(item.work)
+                if not work then return "window history omitted its WorkRef" end
+                local state_raw, state_error = journal.invoke("work_describe", {work = work})
+                local state = object(state_raw)
+                if state_error or not state then return state_error or "window work unavailable" end
+                if state.phase ~= "settled" then
+                    local cancel_key = assert(internal_key("window-close-cancel", work))
+                    local _, cancel_error = journal.invoke("work_cancel", {work = work, operation_key = cancel_key, reason = "session closed"})
+                    if cancel_error then return cancel_error end
+                    if (state.phase == "reserved" or state.phase == "accepted") and type(state.turn) == "string" and type(state.claim) == "string" then
+                        if state.phase == "reserved" then
+                            local pulled_raw, pull_error = journal.invoke("turn_pull", {turn = state.turn, claim = state.claim})
+                            local pulled = object(pulled_raw)
+                            if pull_error or not pulled then return pull_error or "closing window turn unavailable" end
+                            local _, accept_error = journal.invoke("turn_accept", {turn = state.turn, claim = state.claim,
+                                input_digest = pulled.input_digest, checkpoint = {attempt_id = route.native_attempt_id},
+                                operation_key = assert(internal_key("window-close-accept", state.turn))})
+                            if accept_error then return accept_error end
+                        end
+                        local _, settle_error = journal.invoke("work_settle", {turn = state.turn, claim = state.claim,
+                            result = {state = "cancelled", error = {code = "CANCELLED", message = "session closed"}, artifacts = stopped.evidence.artifacts},
+                            operation_key = cancel_settle_key(state.turn)})
+                        if settle_error then return settle_error end
+                    end
+                end
+            end
+            cursor = page.next == nil and nil or bounds.integer(page.next)
+        until cursor == nil
+        local next_snapshot, snapshot_error = describe(session)
+        if not next_snapshot then return snapshot_error end
+        current = next_snapshot
+    elseif current.queue_count > 0 or (object(current.execution) and (object(current.execution) :: Object).state == "running") then return nil end
     local close_key, key_error = internal_key("close-final", operation_key)
     if not close_key then return key_error or "cannot derive final close operation key" end
     local _, close_error = journal.invoke("session_transition", {session = session, state = "closed",
@@ -574,7 +659,7 @@ local function close(request: Object): Reply
     if not operation then return unavailable("Threads returned a malformed close receipt", operation_key) end
     current, current_error = describe(session)
     if not current then return unavailable(current_error or "cannot read the closing session", operation_key) end
-    local finish_error = finish_closing(session, current, operation_key)
+    local finish_error = finish_closing(session, operation_key)
     if finish_error then return unavailable(finish_error, operation_key) end
     return succeed(control_receipt(operation, session, "close"))
 end

@@ -190,3 +190,21 @@ entries:
   method: history
   meta: {type: test_support}
   modules: [security]
+
+- name: interactive_exited
+  kind: function.lua
+  source: file://interactive_placement.lua
+  method: exited
+  meta: {type: test_support}
+- name: interactive_running
+  kind: function.lua
+  source: file://interactive_placement.lua
+  method: running
+  meta: {type: test_support}
+- name: interactive_lifecycle_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call, bee.sessions.attach]
+    resources: ['*']
+    effect: allow

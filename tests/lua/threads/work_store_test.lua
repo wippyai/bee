@@ -76,6 +76,8 @@ local function define_tests()
             test.eq(turn.work, sent.work)
             local pulled = harness.value(node:call("turn_pull", {turn = turn.turn, claim = turn.claim}))
             harness.value(node:call("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = pulled.input_digest, checkpoint = {}, operation_key = harness.key()}))
+            harness.value(node:call("work_uncertain", {turn = turn.turn, claim = turn.claim,
+                evidence = {summary = "node uncertainty", artifacts = {}}, operation_key = harness.key()}))
             harness.value(node:call("work_settle", {turn = turn.turn, claim = turn.claim, result = result("succeeded"), operation_key = harness.key()}))
             test.eq(harness.value(sessions:call("work_describe", {work = sent.work})).phase, "settled")
         end)

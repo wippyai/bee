@@ -819,46 +819,6 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
     end)
 end
 
-function M.work_uncertain(db: sql.DB, actor: string, request: unknown): Result
-    local caller, workspace, denied = authenticated(actor, true)
-    if denied then return denied end
-    local input = object(request)
-    if not input or not has_only(input, {turn = true, claim = true, evidence = true, operation_key = true}) then return missing_request() end
-    local turn_ref, claim_token, operation_key = ref(input.turn), text(input.claim, 128), key(input.operation_key)
-    local evidence = object(input.evidence)
-    if not evidence or not text(evidence.summary, 16384) or type(evidence.artifacts) ~= "table" then
-        return failure("INVALID_ARGUMENT", "uncertainty evidence is malformed")
-    end
-    local evidence_json, evidence_error = encode(evidence)
-    if not turn_ref or not claim_token or not operation_key or not evidence_json then
-        return failure("INVALID_ARGUMENT", evidence_error or "uncertainty fields are invalid")
-    end
-    local arguments = {turn = turn_ref, claim = claim_token, evidence = evidence_json}
-    return transaction.write(db, function(tx: sql.Transaction): Result
-        local turn, work, session, claim_error = claimed_turn(tx, turn_ref :: string, claim_token :: string, workspace)
-        if claim_error then return claim_error end
-        if not turn or not work or not session then return failure("INTERNAL", "uncertain turn context is incomplete") end
-        if turn.phase ~= "accepted" or work.phase ~= "accepted" then return failure("CONFLICT", "only an accepted turn can be marked uncertain") end
-        local request_digest, replay, context_error = operation_context(tx, caller :: string, session.workspace_id,
-            operation_key, "work_uncertain", arguments)
-        if context_error then return failure("INTERNAL", context_error) end
-        if replay then return replay end
-        local now = transaction.now()
-        local node, op_ref, reference_error = node_and_operation(nil, session.workspace_id)
-        if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
-        local _, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.uncertain", work.work_ref,
-            work.revision + 1, evidence)
-        if not sequence then return failure("INTERNAL", event_error or "append uncertainty event") end
-        local update_error = execute(tx, "UPDATE bee_session_work SET uncertainty_json = ?, revision = revision + 1 " ..
-            "WHERE work_ref = ? AND phase = 'accepted'", {evidence_json, work.work_ref}, "mark work uncertain")
-        if update_error then return failure("CONFLICT", update_error) end
-        local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
-            state = "uncertain", evidence = evidence, operation = op_ref, committed_at = now, sequence = sequence}
-        return finish_operation(tx, caller :: string, session.workspace_id, operation_key, op_ref, "work_uncertain",
-            request_digest :: string, work.work_ref, receipt, now)
-    end)
-end
-
 function M.work_cancel(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor)
     if denied then return denied end
@@ -1152,6 +1112,46 @@ local function claimed_turn(tx: sql.Transaction, turn_ref: string, claim_token: 
     if work_error then return nil, nil, nil, transaction.storage_failure(work_error) end
     if not work then return nil, nil, nil, failure("NOT_FOUND", "turn work does not exist") end
     return turn, work, session, nil
+end
+
+function M.work_uncertain(db: sql.DB, actor: string, request: unknown): Result
+    local caller, workspace, denied = authenticated(actor, true)
+    if denied then return denied end
+    local input = object(request)
+    if not input or not has_only(input, {turn = true, claim = true, evidence = true, operation_key = true}) then return missing_request() end
+    local turn_ref, claim_token, operation_key = ref(input.turn), text(input.claim, 128), key(input.operation_key)
+    local evidence = object(input.evidence)
+    if not evidence or not text(evidence.summary, 16384) or type(evidence.artifacts) ~= "table" then
+        return failure("INVALID_ARGUMENT", "uncertainty evidence is malformed")
+    end
+    local evidence_json, evidence_error = encode(evidence)
+    if not turn_ref or not claim_token or not operation_key or not evidence_json then
+        return failure("INVALID_ARGUMENT", evidence_error or "uncertainty fields are invalid")
+    end
+    local arguments = {turn = turn_ref, claim = claim_token, evidence = evidence_json}
+    return transaction.write(db, function(tx: sql.Transaction): Result
+        local turn, work, session, claim_error = claimed_turn(tx, turn_ref :: string, claim_token :: string, workspace)
+        if claim_error then return claim_error end
+        if not turn or not work or not session then return failure("INTERNAL", "uncertain turn context is incomplete") end
+        if turn.phase ~= "accepted" or work.phase ~= "accepted" then return failure("CONFLICT", "only an accepted turn can be marked uncertain") end
+        local request_digest, replay, context_error = operation_context(tx, caller :: string, session.workspace_id,
+            operation_key, "work_uncertain", arguments)
+        if context_error then return failure("INTERNAL", context_error) end
+        if replay then return replay end
+        local now = transaction.now()
+        local node, op_ref, reference_error = node_and_operation(nil, session.workspace_id)
+        if not node or not op_ref then return failure("UNAVAILABLE", reference_error or "cannot allocate operation reference") end
+        local _, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "work.uncertain", work.work_ref,
+            work.revision + 1, evidence)
+        if not sequence then return failure("INTERNAL", event_error or "append uncertainty event") end
+        local update_error = execute(tx, "UPDATE bee_session_work SET uncertainty_json = ?, revision = revision + 1 " ..
+            "WHERE work_ref = ? AND phase = 'accepted'", {evidence_json, work.work_ref}, "mark work uncertain")
+        if update_error then return failure("CONFLICT", update_error) end
+        local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
+            state = "uncertain", evidence = evidence, operation = op_ref, committed_at = now, sequence = sequence}
+        return finish_operation(tx, caller :: string, session.workspace_id, operation_key, op_ref, "work_uncertain",
+            request_digest :: string, work.work_ref, receipt, now)
+    end)
 end
 
 function M.turn_pull(db: sql.DB, actor: string, request: unknown): Result

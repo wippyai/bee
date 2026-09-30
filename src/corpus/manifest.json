@@ -123,9 +123,9 @@
       "topic": "platform"
     },
     {
-      "bytes": 10440,
+      "bytes": 10465,
       "id": "docs/agent_guide",
-      "sha256": "47a6ed62bbb597b969c7e485b2466feaf77ccd902eface276d88670668882095",
+      "sha256": "09fafa8b726bc48dd2f8a68855ba78592ab2d45c76ef9699fd74174b64ad23cc",
       "source": "docs/development/agent-guide.md",
       "title": "Working on Bee",
       "topic": "platform"
@@ -475,9 +475,9 @@
       "topic": "component"
     },
     {
-      "bytes": 21964,
+      "bytes": 22159,
       "id": "component/placement:native",
-      "sha256": "6de1f003aa0a6b0a35b3442fa8f2d7cf5bb5452cdaceef75baf140e3ad3ca31c",
+      "sha256": "c502f01a06ae2771c70510a68ca3a7b34db21ccda27c689f15e4652afb60231d",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -491,9 +491,9 @@
       "topic": "component"
     },
     {
-      "bytes": 2473,
+      "bytes": 2661,
       "id": "component/sessions",
-      "sha256": "128205700431c65f11ddcbaa504b394689a854d818396f0bb98cab3ba2dee7ae",
+      "sha256": "63edb165f8520b20ab555c6ac4766867b330db2d33da6fb1110455e2291b101f",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -606,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 667228,
+    "bytes": 667636,
     "documents": 75
   }
 }

@@ -167,9 +167,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end)
     end
     local function idle(): boolean return not activating and not opening end
+    local queued_tasks: {(agents.Conversation) -> ()} = {}
+    local queued_text: string? = nil
     local function start_task(task: (agents.Conversation) -> ())
         local current = conversation
-        if not current or session_busy or opening then return end
+        if not current or opening then return end
+        if session_busy then queued_tasks[#queued_tasks + 1] = task; return end
         session_busy = true
         dirty = true
         coroutine.spawn(function()
@@ -180,6 +183,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local function leave_session()
         if ticker then ticker:stop(); ticker = nil end
         conversation, draft, status, session_busy = nil, "", "", false
+        queued_tasks, queued_text = {}, nil
         catalog_open = false
         client.title(launch, "Sessions")
         load()
@@ -188,8 +192,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local function submit()
         if conversation and conversation.lifecycle ~= "active" then status = "This session is closed to new work. Esc returns to Sessions."; dirty = true; return end
         local text = draft
-        if text == "" then return end
+        if text == "" or queued_text == text then return end
+        queued_text = text
         start_task(function(current: agents.Conversation)
+            queued_text = nil
             if agents.submit(current, text, function(): string return assert(uuid.v7()) end) then
                 if draft == text then draft = "" end
                 agents.refresh(current)
@@ -324,7 +330,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         elseif event.channel == progress then
             local result = event.value :: Progress
-            if result.conversation == conversation then session_busy = false; dirty = true end
+            if result.conversation == conversation then
+                session_busy = false; dirty = true
+                local next_task = table.remove(queued_tasks, 1)
+                if next_task then start_task(next_task) end
+            end
         elseif ticker and event.channel == ticker:channel() then
             local shown = conversation
             ticks = ticks + 1

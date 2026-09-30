@@ -98,8 +98,8 @@ picker to switch; see [the workspace catalog](../reference/workspace-catalog.md)
 ## Managed agent containment
 
 Managed CLIs run with the operating system user's authority. Every
-batch worker opened through a session uses a private attempt home containing only
-the login, configuration and state files its driver declares and the host
+batch worker opened through a session uses a private retained session home containing only
+the provider login, configuration and conversation state its driver declares and the host
 credential broker projects; the launch policy admits no host HOME inheritance
 and no prompt-free permission mode. When a person chooses a named Codex profile,
 the driver projects that one admitted profile file into the private home so

@@ -38,6 +38,8 @@ entries:
   meta:
     comment: Host-selected authority for the Sessions admission and journal boundary
   targets:
+  - entry: bee.sessions.binding:detach
+    path: .security.policies
   - entry: bee.sessions.binding:attach
     path: .security.policies
   - entry: bee.sessions.binding:hook_boundary
@@ -151,5 +153,13 @@ entries:
   kind: function.lua
   source: file://owner_method.lua
   method: hook_boundary
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
+
+- name: detach
+  kind: function.lua
+  source: file://owner_method.lua
+  method: detach
+  modules: [security]
   imports: {owner: bee.sessions:owner}
   security: {policies: []}

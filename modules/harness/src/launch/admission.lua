@@ -541,6 +541,9 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
     local ids = M.identities(request.request_id)
     if session_turn then ids = {action_id = session_turn.action_id, attempt_id = session_turn.attempt_id} end
     local previous = request.continuation
+    if previous and (#request.workspace_id ~= 32 or request.workspace_id:find("[^0-9a-f]")) then
+        return nil, fail("CONFLICT", "saved windows belong to their canonical home workspace")
+    end
     if previous and plan.mode ~= "window" then return nil, fail("INVALID", "launch continuation requires a window profile") end
     local thread_id = request.thread_id
     if session_turn then
@@ -580,7 +583,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
     if not session_turn and plan.mode == "window" and previous then
         local attached, attach_error = call("bee.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
             plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
-            attempt_id = ids.attempt_id, operation_key = "window-session:" .. (previous and previous.origin_request_id or request.request_id)})
+            attempt_id = previous.previous_attempt_id, operation_key = "window-session:" .. previous.origin_request_id})
         if not attached then return nil, attach_error end
         interactive_session = bounds.id(attached.session)
         if not interactive_session then return nil, fail("UNAVAILABLE", "interactive session owner omitted its ref") end
@@ -628,7 +631,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
         if not created then return nil, create_refused end
         thread_id = tostring(created.thread_id)
     end
-    if not session_turn and plan.mode == "window" and not previous then
+    if not session_turn and plan.mode == "window" then
         local attached, attach_error = call("bee.sessions.binding:attach", {definition = request.definition_ref, thread_id = thread_id,
             plan_digest = plan.plan_digest, saved_profile_id = request.saved_profile_id, saved_profile_revision = request.saved_profile_revision,
             attempt_id = ids.attempt_id, operation_key = "window-session:" .. (previous and previous.origin_request_id or request.request_id)})

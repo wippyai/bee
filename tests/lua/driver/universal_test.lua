@@ -55,6 +55,19 @@ local function define_tests()
             test.eq(terminal.resume_ref, "ses_universal")
         end)
 
+        test.it("settles Muse failure and cancellation terminal envelopes", function()
+            for _, outcome in ipairs({"failed", "cancelled"}) do
+                local handle = universal.normalize("bee.driver.muse.descriptor:cli")
+                local accepted = handle({index = 1, envelope = {payload_type = "runtime.command.accepted", stream = {id = "muse-session"}, payload = {}}}) :: {[string]: unknown}
+                local started = handle({state = accepted.state, index = 2, envelope = {payload_type = "run.lifecycle.started", payload = {}}}) :: {[string]: unknown}
+                local ended = handle({state = started.state, index = 3, envelope = {payload_type = "run.terminal." .. outcome,
+                    payload = {terminal = outcome, reason = "provider refused"}}}) :: {[string]: unknown}
+                local terminal = ended.terminal :: {[string]: unknown}
+                test.eq(terminal.outcome, outcome)
+                test.eq((terminal.error :: {[string]: unknown}).message, "provider refused")
+            end
+        end)
+
         test.it("returns decoded common fields with typed descriptor option values", function()
             local api = universal.launch("bee.driver.claude.descriptor:cli")
             local request, decode_error = api.decode({profile_id = "batch", brief = "summarize", permission_mode = "acceptEdits", turn_budget = 3})

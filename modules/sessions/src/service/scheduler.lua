@@ -211,7 +211,7 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
         add_issue(pass, due.work, "turn_input", "Threads returned an incomplete retained session admission route"); return
     end
     local invocation: Object = {attempt_id = turn.turn,
-        generation = turn.owner_epoch, prompt = input, sender = sender, admission = admission,
+        generation = turn.owner_epoch, recovery = due.state ~= "queued", prompt = input, sender = sender, admission = admission,
         driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id,
         driver_methods = route.driver_methods,
         placement_methods = route.placement_methods, checkpoint = context}
@@ -252,7 +252,7 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     local result: Object
     if outcome.outcome == "succeeded" then
         result = {state = "succeeded", schema = turn.output_schema, value = {text = outcome.answer or ""},
-            artifacts = {}, usage = outcome.usage or {}}
+            artifacts = {}, usage = outcome.usage}
     else
         local error_value = outcome.error or {code = "EXECUTOR_FAILED", message = "the external turn failed"}
         result = {state = outcome.outcome, error = {code = error_value.code or "EXECUTOR_FAILED",

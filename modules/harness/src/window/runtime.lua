@@ -844,6 +844,11 @@ local function main(value: unknown, constructors: {[string]: Open})
     local settled, settlement_error = receipt(admitted, prepared.epoch, outcome,
         reason, true)
     if not settled then error("Managed window receipt: " .. tostring(settlement_error)) end
+    if admitted.session_ref then
+        local detached, detach_error = call("bee.sessions.binding:detach", {session = admitted.session_ref,
+            attempt_id = admitted.attempt_id, operation_key = "window-detach:" .. admitted.attempt_id})
+        if not detached then error("Managed Session detach: " .. tostring(detach_error)) end
+    end
     process.unlisten(closes)
     process.unlisten(checkpoint_results)
     tty.stop()

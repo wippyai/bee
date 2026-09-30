@@ -100,6 +100,16 @@ end
 
 local function define_tests()
     test.describe("External executor turn", function()
+        test.it("reconciles a recovered current attempt before any plan or invocation", function()
+            local calls: {string} = {}
+            local io = success_io(calls)
+            local request = base_request()
+            request.recovery = true
+            local result = assert(turn.execute(io, request))
+            test.eq(result.state, "uncertain")
+            test.eq(#calls, 1)
+            test.eq(calls[1], "reconcile:" .. request.attempt_id)
+        end)
         test.it("persists a host planned placement intent and retains resume identity and usage", function()
             local calls: {string} = {}
             local result, err = turn.execute(success_io(calls), base_request())

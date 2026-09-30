@@ -60,6 +60,14 @@ local function define_tests()
                 test.eq(tostring(tool.name) .. " " .. encoded:sub(1, 1), tostring(tool.name) .. " {")
             end
         end)
+        test.it("publishes nested unconstrained session schemas as JSON objects", function()
+            local listed = mcp.list({"session_send", "session_run"}).tools :: {{[string]: unknown}}
+            for _, tool in ipairs(listed) do
+                local encoded = assert(json.encode(tool.inputSchema))
+                test.is_nil(encoded:find('"value":[]', 1, true))
+                test.is_true(encoded:find('"value":{}', 1, true) ~= nil)
+            end
+        end)
         test.it("discovers the production traits and overlay schema", function()
             for _, expected in ipairs({
                 {id = "bee.gov.traits:authoring_trait", tools = {"bee.gov.binding:overlay_call"}},

@@ -347,3 +347,7 @@ window retires its listener when finalization commits.
 Native PTY acceptance proves live reconciliation, raw-stop denial, admitted stop,
 input, resize, finalization and duplicate/foreign-owner refusal. A native Agent
 fixture also keeps its MCP binding live across the real 30-second sweep.
+
+Structured turns with a SessionRef and an admitted writable session home retain
+the driver-selected provider state across attempt cleanup. Ephemeral turns keep
+their attempt-local private home.

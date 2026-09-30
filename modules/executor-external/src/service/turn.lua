@@ -6,6 +6,7 @@ type Request = {
     claim: string,
     observation_target: string,
     generation: integer,
+    recovery: boolean?,
     prompt: string,
     sender: {kind: "session" | "principal", id: string},
     driver_binding_ref: string,
@@ -52,7 +53,7 @@ local function decode(value: unknown): (Request?, string?)
     local request = object(value)
     if not request then return nil, "turn request must be an object" end
     local allowed = {"attempt_id", "claim", "observation_target", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods",
-        "placement_methods", "admission", "previous_attempt_id", "checkpoint"}
+        "placement_methods", "admission", "previous_attempt_id", "checkpoint", "recovery"}
     local fields: {[string]: boolean} = {}
     for _, field in ipairs(allowed) do fields[field] = true end
     for field in pairs(request) do
@@ -69,6 +70,7 @@ local function decode(value: unknown): (Request?, string?)
         return nil, "generation must be a positive integer"
     end
     if type(request.prompt) ~= "string" or #request.prompt == 0 or #request.prompt > 16384 then return nil, "prompt must be nonempty bounded text" end
+    if request.recovery ~= nil and type(request.recovery) ~= "boolean" then return nil, "recovery must be boolean" end
     local sender = object(request.sender)
     if not sender or (sender.kind ~= "session" and sender.kind ~= "principal") or not id(sender.id) then
         return nil, "sender must be an authenticated session or principal identity"
@@ -110,7 +112,7 @@ local function decode(value: unknown): (Request?, string?)
     if #sender_label + #request.prompt > 16384 then return nil, "prompt and sender identity exceed 16384 bytes" end
     return {
         attempt_id = attempt_id, claim = claim, observation_target = request.observation_target :: string,
-        generation = request.generation :: integer, prompt = sender_label .. (request.prompt :: string),
+        generation = request.generation :: integer, recovery = request.recovery == true, prompt = sender_label .. (request.prompt :: string),
         sender = sender :: {kind: "session" | "principal", id: string},
         driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = driver_methods :: {[string]: string},
         placement_methods = placement_methods :: {[string]: string}, admission = admission,
@@ -170,6 +172,17 @@ end
 function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     local request, decode_error = decode(value)
     if not request then return nil, decode_error end
+
+    if request.recovery then
+        local recovered, recovery_error = io.reconcile(request.attempt_id)
+        if recovery_error then return uncertain(request, "current placement recovery cannot be proven: " .. recovery_error) end
+        local attempt, attempt_error = placement_attempt(recovered)
+        if not attempt or attempt.attempt_id ~= request.attempt_id then
+            return uncertain(request, "current placement recovery returned invalid evidence: " .. tostring(attempt_error), recovered)
+        end
+        if placement_pending(attempt) then return pending(request, "recovered placement is still active", attempt) end
+        return uncertain(request, "recovered placement has no durable terminal report", attempt)
+    end
 
     -- Recovery is a precondition for every new driver invocation.
     if request.previous_attempt_id then
@@ -276,7 +289,7 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         return uncertain(request, "driver terminal report has no resume identity", final_attempt)
     end
     local checkpoint = {resume_ref = resume_ref, attempt_id = request.attempt_id, terminal = terminal}
-    return {state = "settled", outcome = terminal.outcome, answer = terminal.answer, usage = terminal.usage,
+    return {state = "settled", outcome = terminal.outcome, answer = terminal.answer, error = terminal.error, usage = terminal.usage,
         attempt_id = request.attempt_id, checkpoint = checkpoint, observations = observation.observations or {}, evidence = final_attempt}, nil
 end
 

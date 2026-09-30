@@ -76,6 +76,14 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local stdout_eof, stderr_eof, exited = false, false, false
     local output_error: string? = nil
     local exit_uncertain = false
+    local stderr_bytes: integer = 0
+    local function completion_event(stage: string): string?
+        local _, err = service_call(tostring(request.observation_target), {turn = request.attempt_id, claim = request.claim,
+            operation_key = "executor-complete:" .. tostring(request.attempt_id):sub(-72) .. ":" .. stage,
+            observation = {type = "extension", event_key = "executor:" .. stage,
+                data = {type = "extension", event_name = "bee.executor." .. stage, event_revision = "1", payload_json = "{}"}}})
+        return err
+    end
     local function apply(reply_value: unknown): string?
         local reply = bounds.object(reply_value)
         if not reply then return "driver normalizer response must be an object" end
@@ -121,8 +129,8 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             return
         end
         if output.eof then
-            if output_stream == "stdout" and not stdout_eof then stdout_eof = true; finish_stdout() end
-            if output_stream == "stderr" then stderr_eof = true end
+            if output_stream == "stdout" and not stdout_eof then stdout_eof = true; finish_stdout(); output_error = output_error or completion_event("stdout_complete") end
+            if output_stream == "stderr" then stderr_eof = true; output_error = output_error or completion_event("stderr_complete") end
         elseif output_stream == "stdout" then
             if type(output.data) ~= "string" then output_error = output_error or "stdout chunk has no bytes"; return end
             local envelopes, feed_error = stream.feed(decoder, output.data)
@@ -133,6 +141,15 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                 local apply_error = apply(reply)
                 if apply_error then output_error = output_error or apply_error; break end
             end
+        end
+        if not output.eof and output_stream == "stderr" and type(output.data) == "string" and stderr_bytes < 4096 then
+            local text = output.data:sub(1, 4096 - stderr_bytes)
+            stderr_bytes = stderr_bytes + #text
+            local _, stderr_error = service_call(tostring(request.observation_target), {turn = request.attempt_id, claim = request.claim,
+                operation_key = "executor-stderr:" .. tostring(request.attempt_id):sub(-72) .. ":" .. tostring(sequence),
+                observation = {type = "text", event_key = "executor:stderr:" .. tostring(sequence),
+                    data = {type = "text", channel = "progress", segment_id = "executor-stderr", operation = "append", text = text}}})
+            output_error = output_error or stderr_error
         end
         process.send(sender, placement_protocol.TOPIC_ACK, {generation = generation, consumed_through = sequence})
     end
@@ -148,6 +165,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             if tostring(message:from()) == runner and exit and exit.attempt_id == attempt_id and exit.generation == generation then
                 exited = true
                 exit_uncertain = exit.uncertain == true
+                output_error = output_error or completion_event("process_exited")
             end
         else
             local event = selected.value

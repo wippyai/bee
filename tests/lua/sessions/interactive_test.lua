@@ -6,6 +6,30 @@ local security = require("security")
 local WORKSPACE = string.rep("a", 32)
 local function define_tests()
     test.describe("Interactive Sessions", function()
+        test.it("suspends only a proved exited attachment and preserves unfinished Work as uncertain", function()
+            for _, state in ipairs({"running", "exited"}) do
+                local journal = harness.session_owner(WORKSPACE)
+                local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook",
+                    definition = "interactive-fixture", placement_methods = {reconcile = "bee.tests.sessions:interactive_" .. state}}}))
+                harness.value(journal:call("session_attach", {session = opened.session, attempt_id = "interactive-lifecycle", operation_key = harness.key()}))
+                local work = harness.value(journal:call("work_send", {session = opened.session, input = "unfinished", operation_key = harness.key()}))
+                local turn = harness.value(journal:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+                local pulled = harness.value(journal:call("turn_pull", {turn = turn.turn, claim = turn.claim}))
+                harness.value(journal:call("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = pulled.input_digest,
+                    checkpoint = {attempt_id = "interactive-lifecycle"}, operation_key = harness.key()}))
+                local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
+                local policies = {assert(security.policy("bee.threads:session_owner_test_policy")), assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))}
+                local raw, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call("bee.sessions.binding:detach",
+                    {session = opened.session, attempt_id = "interactive-lifecycle", operation_key = harness.key()})
+                if err then error(tostring(err)) end
+                local reply = raw :: {[string]: any}
+                test.eq(reply.ok, state == "exited")
+                local current = harness.value(journal:call("session_describe", {session = opened.session}))
+                test.eq(current.state, state == "exited" and "suspended" or "active")
+                local pending = harness.value(journal:call("work_describe", {work = work.work}))
+                if state == "exited" then test.not_nil(pending.uncertainty) else test.is_nil(pending.uncertainty) end
+            end
+        end)
         test.it("delivers authenticated peer input once at a turn boundary and keeps busy input queued", function()
             local journal = harness.session_owner(WORKSPACE)
             local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {delivery = "hook"}}))

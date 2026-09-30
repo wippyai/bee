@@ -138,7 +138,7 @@ local function run_cancel(journal: Journal, pass: Pass, due: Due, run_id: string
         if mark_error then add_issue(pass, due.work, "cancel_uncertain", mark_error) end
         return
     end
-    local stopped = cancellation.stop(placement_methods, attempt_id)
+    local stopped = cancellation.stop(placement_methods, attempt_id, route)
     if stopped.state == "pending" then pass.running = pass.running + 1; return end
     if stopped.state == "uncertain" then
         local _, mark_error = journal.mark_uncertain({turn = turn.turn, claim = turn.claim,

@@ -620,7 +620,7 @@ local function cancel(request: Object): Reply
         if marker_error and marker == nil then return unavailable(marker_error, operation_key) end
         return succeed(raw)
     end
-    local result = cancellation.stop(placement_methods, attempt_id)
+    local result = cancellation.stop(placement_methods, attempt_id, route)
     if result.state == "uncertain" then
         local uncertain_key, uncertain_key_error = internal_key("cancel-uncertain", cancel_operation_key)
         if not uncertain_key then return unavailable(uncertain_key_error or "cannot derive cancellation evidence key", operation_key) end

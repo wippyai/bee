@@ -60,8 +60,6 @@ entries:
     path: .security.policies
   - entry: bee.sessions.binding:history
     path: .security.policies
-  - entry: bee.sessions.binding:cancel
-    path: .security.policies
   - entry: bee.sessions.binding:close
     path: .security.policies
   - entry: bee.sessions.binding:catalog
@@ -163,3 +161,14 @@ entries:
   modules: [security]
   imports: {owner: bee.sessions:owner}
   security: {policies: []}
+
+- name: target_control_policies
+  kind: ns.requirement
+  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_admission_policy,
+    bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy,
+    bee.sessions.security:scheduler_principal_policy]
+  meta:
+    comment: Cancellation restores only the persisted placement owner after Threads authorizes the caller
+  targets:
+  - entry: bee.sessions.binding:cancel
+    path: .security.policies

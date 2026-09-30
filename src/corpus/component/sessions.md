@@ -37,3 +37,5 @@ Work uncertain. Reattachment preserves the SessionRef and fences earlier hooks;
 accepted Work from a lost attachment is never replayed. Native crash/reattach
 acceptance remains outstanding.
 Gateway workspace catalog views project the public Sessions list.
+
+Cancellation first commits the authenticated caller’s authorized request in Threads, then restores the persisted workspace-bound execution owner for placement stop and reconciliation. Placement retains its owner checks; callers cannot supply the execution identity.

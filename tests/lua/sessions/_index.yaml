@@ -194,11 +194,13 @@ entries:
 - name: interactive_exited
   kind: function.lua
   source: file://interactive_placement.lua
+  modules: [security]
   method: exited
   meta: {type: test_support}
 - name: interactive_running
   kind: function.lua
   source: file://interactive_placement.lua
+  modules: [security]
   method: running
   meta: {type: test_support}
 - name: interactive_lifecycle_policy
@@ -208,3 +210,16 @@ entries:
     actions: [funcs.call, bee.sessions.attach]
     resources: ['*']
     effect: allow
+
+- name: cancellation_owner_running
+  kind: function.lua
+  source: file://interactive_placement.lua
+  method: owner_running
+  modules: [security]
+  meta: {type: test_support}
+- name: cancellation_owner_stop
+  kind: function.lua
+  source: file://interactive_placement.lua
+  method: owner_stop
+  modules: [security]
+  meta: {type: test_support}

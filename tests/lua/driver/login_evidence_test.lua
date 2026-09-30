@@ -15,11 +15,11 @@ local function define_tests()
     test.describe("Provider window login declarations", function()
         local cases = {
             {launch = codex.specification(assert(codex.decode({profile_id = "window", brief = ""}))), provider = "codex", command = "codex login", variable = "CODEX_HOME", directory = ".codex", path = "auth.json"},
-            {launch = claude.specification(assert(claude.decode({profile_id = "window", brief = ""}))), provider = "claude", command = "claude", variable = "CLAUDE_CONFIG_DIR", directory = ".claude", path = ".credentials.json"},
+            {launch = claude.specification(assert(claude.decode({profile_id = "window", brief = ""}))), provider = "claude", command = "claude auth login", variable = "CLAUDE_CONFIG_DIR", directory = ".claude", path = ".credentials.json"},
             {launch = agy.specification(assert(agy.decode({profile_id = "window", brief = ""}))), provider = "agy", command = "agy", variable = "HOME", path = ".gemini/antigravity-cli/antigravity-oauth-token"},
-            {launch = grok.specification(assert(grok.decode({profile_id = "window", brief = ""}))), provider = "grok", command = "grok", variable = "GROK_HOME", directory = ".grok", path = "auth.json"},
-            {launch = muse.specification(assert(muse.decode({profile_id = "window", brief = ""}))), provider = "muse", command = "muse", variable = "HOME", path = ".config/muse/auth.json"},
-            {launch = opencode.specification(assert(opencode.decode({profile_id = "window", brief = ""}))), provider = "opencode", command = "opencode auth login", variable = "HOME", path = ".local/share/opencode/auth.json"},
+            {launch = grok.specification(assert(grok.decode({profile_id = "window", brief = ""}))), provider = "grok", command = "grok login", variable = "GROK_HOME", directory = ".grok", path = "auth.json"},
+            {launch = muse.specification(assert(muse.decode({profile_id = "window", brief = ""}))), provider = "muse", command = "muse login", variable = "XDG_CONFIG_HOME", directory = ".config", path = "muse/auth.json"},
+            {launch = opencode.specification(assert(opencode.decode({profile_id = "window", brief = ""}))), provider = "opencode", command = "opencode auth login", variable = "XDG_DATA_HOME", directory = ".local/share", path = "opencode/auth.json"},
         }
         for _, case in ipairs(cases) do
             test.it(case.provider .. " declares its window login evidence", function()
@@ -44,13 +44,18 @@ local function define_tests()
                 end
                 test.eq(login.provider, case.provider)
                 test.eq(login.command, case.command)
-                test.eq(#login.files, 1)
+                test.is_true(#login.files >= 1)
+                test.not_nil(login.any_of)
                 test.eq(login.files[1].variable, case.variable)
                 test.eq(login.files[1].default_directory, case.directory)
                 test.eq(login.files[1].path, case.path)
                 local found = assert(universal.locate("bee.driver." .. case.provider .. ".descriptor:cli")({
                     profile_id = "window", configured = true, executable = {present = true, version = "1.2.3"},
-                    login_file_exists = true, platform = {os = "linux", arch = "x86_64", compatible = true}}))
+                    login_checks = (function(): {{present: boolean?, exit_code: integer?}}
+                        local checks: {{present: boolean?, exit_code: integer?}} = {}
+                        for index in ipairs(login.any_of or {}) do checks[index] = {present = index == 1 and true or nil} end
+                        return checks
+                    end)(), platform = {os = "linux", arch = "x86_64", compatible = true}}))
                 test.eq(found.status, "ready")
                 local request: placement_types.LaunchRequest = {
                     idempotency_key = "default-login", attempt_id = "default-login", action_id = "default-login",
@@ -76,7 +81,7 @@ local function define_tests()
                 local missing = materialization.login_notice(request, selected_home, function(_path: string): boolean
                     return false
                 end)
-                test.eq(missing and missing.code, "LOGIN_REQUIRED")
+                test.is_nil(missing, "unobserved environment/status alternatives cannot establish missing login")
             end)
         end
     end)

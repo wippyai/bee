@@ -68,6 +68,8 @@ entries:
   imports:
     test: wippy.test:test
     locate: bee.driver:locate
+    descriptor: bee.driver:descriptor
+    login_evidence: bee.driver:login_evidence
     claude: bee.driver.claude:locate
     codex: bee.driver.codex:locate
     opencode: bee.driver.opencode:locate
@@ -83,6 +85,7 @@ entries:
   imports:
     test: wippy.test:test
     descriptor: bee.driver:descriptor
+    login_evidence: bee.driver:login_evidence
 - name: universal_test
   kind: function.lua
   source: file://universal_test.lua

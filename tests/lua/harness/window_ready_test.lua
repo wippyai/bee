@@ -3,6 +3,7 @@
 -- native open are durable work of unbounded length; the broker's startup
 -- deadline bounds surface readiness only, so readiness never waits for them.
 local test = require("test")
+local registry = require("registry")
 local principals = require("principals")
 local process = require("process")
 local channel = require("channel")
@@ -14,9 +15,25 @@ local recovery = require("recovery")
 local WORKSPACE = string.rep("c", 32)
 local DEFINITION = "bee.harness.catalog:window_ready_definition"
 
+local function apply(entry: {[string]: unknown})
+    local changes = assert(registry.snapshot()):changes()
+    changes:update(entry)
+    assert(changes:apply())
+end
+
 local function define_tests()
     test.describe("Managed window readiness", function()
         test.it("announces a direct launch ready before its launch work reaches the native open", function()
+            local ref = "bee.driver.claude.descriptor:cli"
+            local original = assert(registry.get(ref))
+            local fixture = assert(registry.get(ref))
+            local data = fixture.data :: {[string]: unknown}
+            -- This fixture tests the file advisory and its Enter continuation,
+            -- independently from unobservable host environment/keychain login.
+            data.login_evidence = {command = "claude", any_of = {{kind = "file_exists",
+                paths = {".claude/.credentials.json"}, variable = "CLAUDE_CONFIG_DIR", directory = ".claude"}}}
+            apply(fixture)
+            local ok, failure = pcall(function()
             local view = assert(tty.viewport({width = 60, height = 16}))
             local grant = assert(view:grant())
             local events = assert(process.events())
@@ -87,6 +104,9 @@ local function define_tests()
             process.unlisten(ready)
             process.unlisten(opening)
             view:close()
+            end)
+            apply(original)
+            if not ok then error(tostring(failure)) end
         end)
     end)
 end

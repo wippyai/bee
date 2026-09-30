@@ -18,8 +18,11 @@ global config base, with its XDG config and data roots pointed into the attempt
 home.
 
 The normal window uses the user's existing OpenCode login (`opencode auth
-login` writes `~/.local/share/opencode/auth.json`). Its login hint checks that
-file's existence only. A private batch route receives the admitted login and
+login` writes `~/.local/share/opencode/auth.json`). Readiness also accepts global
+`opencode.json` or `opencode.jsonc` provider configuration and declared
+provider-key environment names, checking presence only. Config can reference
+provider key files; the authorized window HOME lets OpenCode resolve those
+references itself. A private batch route receives the admitted login and
 global config through the credential broker; placement reads only those
 declared files and returns only the login file after a token refresh.
 

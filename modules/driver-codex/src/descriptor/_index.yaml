@@ -7,11 +7,16 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Codex CLI command, JSONL codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@1
+    schema_revision: bee.driver.cli-descriptor@2
     provider: codex
     executable: codex
     version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
-    login_evidence: {path: .codex/auth.json, command: codex login, variable: CODEX_HOME, directory: .codex}
+    login_evidence:
+      command: codex login
+      any_of:
+      - {kind: file_exists, paths: [.codex/auth.json], variable: CODEX_HOME, directory: .codex}
+      - {kind: env_present, names: [OPENAI_API_KEY, CODEX_API_KEY]}
+      - {kind: auth_status, argv: [login, status], success_exit_code: 0, timeout_ms: 3000}
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: codex-jsonl
     json_paths:

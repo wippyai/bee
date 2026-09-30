@@ -12,7 +12,7 @@ local function gateway_delivery(gateway)
     -- none, since Claude reads a settings literal it cannot parse as a path.
     if #gateway.hooks == 0 then return {arguments = {"--mcp-config", mcp}, files = {}}, nil end
     local hook_url = "http://" .. gateway.endpoint .. "/hook/" .. gateway.action_id
-    local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. (gateway.hook_token_environment :: string) .. "}"}, allowedEnvVars = {gateway.hook_token_environment}, timeout = 2}
+    local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. (gateway.hook_token_environment) .. "}"}, allowedEnvVars = {gateway.hook_token_environment}, timeout = 2}
     local events = {}
     for _, event in ipairs(gateway.hooks) do events[event] = {{matcher = "", hooks = {handler}}} end
     local settings, settings_error = canonical.encode({hooks = events, allowedHttpHookUrls = {hook_url},

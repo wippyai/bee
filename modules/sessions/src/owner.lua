@@ -6,7 +6,6 @@ local admission = require("admission")
 local catalog_service = require("catalog_service")
 local driver_route = require("driver_route")
 local hash = require("hash")
-local registry = require("registry")
 local security = require("security")
 local M = {}
 
@@ -86,14 +85,6 @@ local function describe(session: string): (Object?, string?)
     return snapshot(value)
 end
 
-local function driver_options(policy_ref: string): (Object?, string?)
-    local entry, entry_error = registry.get(policy_ref)
-    local data = entry and object(entry.data)
-    local options = data and object(data.prepare_options)
-    if entry_error or not options then return nil, "launch policy omits driver preparation options" end
-    return options, nil
-end
-
 local function open(request: Object): Reply
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
@@ -116,8 +107,8 @@ local function open(request: Object): Reply
         workdir = ref(spec.workdir)
         if not workdir then return fail("INVALID", "workdir is not a resource ref", operation_key) end
     end
-    local _, workspace = identity()
-    if not workspace then return fail("DENIED", "the authenticated caller has no workspace", operation_key) end
+    local owner_id, workspace = identity()
+    if not owner_id or not workspace then return fail("DENIED", "the authenticated caller has no workspace identity", operation_key) end
     local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision)
     if not plan then
         local fault = object(refused)
@@ -131,18 +122,17 @@ local function open(request: Object): Reply
     if not plan_value or not driver_binding_ref or not profile_ref then
         return unavailable("admission returned an incomplete executor route", operation_key)
     end
+    if type(plan_value.session_resource) ~= "string" or plan_value.session_resource == "" then
+        return fail("UNAVAILABLE", "the selected definition has no retained session resource", operation_key)
+    end
     local methods, methods_error = driver_route.resolve(driver_binding_ref)
     if not methods then return unavailable(methods_error or "selected driver methods are unavailable", operation_key) end
-    local policy_ref = ref(plan_value.policy_ref)
-    if not policy_ref then return unavailable("admission omitted the selected launch policy", operation_key) end
-    local options, options_error = driver_options(policy_ref)
-    if not options then return unavailable(options_error or "launch policy is unavailable", operation_key) end
     local placement_methods = object(plan_value.placement_methods)
     if not placement_methods then return unavailable("admission omitted placement operations", operation_key) end
     local route: Object = {definition = definition, plan_digest = plan_value.plan_digest,
-        driver_binding_ref = driver_binding_ref, profile_id = profile_ref, driver_methods = methods, driver_options = options,
-        placement_methods = placement_methods, placement_request = {binding_ref = driver_binding_ref,
-            profile_id = profile_ref, workspace_id = workspace, workdir = workdir}}
+        saved_profile_id = profile_id, saved_profile_revision = profile_revision, workdir = workdir,
+        driver_binding_ref = driver_binding_ref, profile_id = profile_ref, driver_methods = methods,
+        placement_methods = placement_methods}
     local created, create_error = journal.invoke("session_create", {operation_key = operation_key,
         title = plan_value.title or definition, route = route})
     if create_error or not created then return unavailable(create_error or "Threads returned no open receipt", operation_key) end

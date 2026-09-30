@@ -340,7 +340,7 @@ function M.required_file_refusal(launch: driver_types.Launch, private_home: bool
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.
-function M.plan(io: IO, request: Request): (Plan?, string?)
+local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?): (Plan?, string?)
     local measured, measure_error = measure(request)
     if not measured then return nil, measure_error end
     local binding, profile, launch_policy, placement_binding, exchange, push, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.push, measured.configuration_digest, measured.gateway
@@ -354,7 +354,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if request.reauthorize == true and (not request.previous_attempt_id or profile.mode ~= "window") then
         return nil, "reauthorization requires a saved window"
     end
-    if request.previous_attempt_id then
+    if session_turn and session_resume_ref then
+        if not request.session_ref then return nil, "session continuation needs its retained session" end
+        resume_ref = session_resume_ref
+        previous_private_home = profile.private_home
+        local dispatch = binding.methods.dispatch
+        if not dispatch then return nil, "driver has no continuation method" end
+        prepare_target = dispatch
+    elseif request.previous_attempt_id and not session_turn then
         if not request.session_ref then return nil, "continuation needs a retained session" end
         if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
         local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
@@ -378,7 +385,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     -- carrying its oldest outstanding inbox item in the brief. The plan owns
     -- the request table from here; nothing downstream rereads the caller's
     -- brief, and the carry is idempotent across repeated plans.
-    request.brief = M.carry_brief(io, request, binding.driver_id, profile.mode)
+    if not session_turn then request.brief = M.carry_brief(io, request, binding.driver_id, profile.mode) end
     local prepare_request: {[string]: unknown} = {}
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id
@@ -387,7 +394,7 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     -- The host enabled an interactive permission exchange: the driver
     -- prepares the launch shape that keeps stdin open for the responses.
     if exchange then prepare_request.permission_exchange = true end
-    if launch_policy.inbox_push then
+    if launch_policy.inbox_push and not session_turn then
         if binding.driver_id ~= "claude" or profile.mode == "window" or profile.protocol ~= "stream-json" then
             return nil, "inbox push requires a Claude structured stream-json profile"
         end
@@ -550,6 +557,15 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
         placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, push = push, push_refusal = push_refusal, gateway = gateway}, nil
 end
+function M.plan(io: IO, request: Request): (Plan?, string?)
+    return build_plan(io, request, false, nil)
+end
+function M.session_plan(io: IO, request: Request, resume_ref: string?): (Plan?, string?)
+    if resume_ref ~= nil and (resume_ref == "" or #resume_ref > 256 or resume_ref:find("[%c%s]")) then
+        return nil, "session resume identity is invalid"
+    end
+    return build_plan(io, request, true, resume_ref)
+end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records
 -- instead of creating a second action, attempt or turn.
@@ -673,6 +689,15 @@ end
 local function gateway_revoke(io: IO, binding_id: string?)
     if not binding_id then return end
     io.call(M.GATEWAY .. ":revoke", {binding_id = binding_id})
+end
+function M.admit_gateway(io: IO, plan: Plan, epoch: integer): (string?, string?)
+    return gateway_admit(io, plan, epoch)
+end
+function M.gateway_ready(io: IO, binding_id: string): string?
+    return gateway_ready(io, binding_id)
+end
+function M.revoke_gateway(io: IO, binding_id: string?)
+    gateway_revoke(io, binding_id)
 end
 -- drain_hooks: claim what the gateway queued for this binding under this
 -- carrier's epoch, commit it through the carrier's own commit path, then

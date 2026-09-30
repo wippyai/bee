@@ -31,6 +31,14 @@ local function define_tests()
             test.eq(executor.launches, 1)
             local state = assert(owner.work_state(receipt.work))
             test.eq(state.phase, "settled")
+            test.eq((state.sender :: {[string]: unknown}).kind, receipt.sender.kind)
+            test.eq((state.sender :: {[string]: unknown}).id, receipt.sender.id)
+            local turn = assert(executor.last_turn)
+            test.eq((turn.sender :: {[string]: unknown}).kind, receipt.sender.kind)
+            test.eq((turn.sender :: {[string]: unknown}).id, receipt.sender.id)
+            local admission = turn.admission :: {[string]: unknown}
+            test.eq(admission.session_ref, receipt.session)
+            test.eq(admission.action_id, receipt.session)
             local result = state.result
             test.eq(type(result), "table")
             test.eq((result :: {[string]: unknown}).value and ((result :: {[string]: unknown}).value :: {[string]: unknown}).text,

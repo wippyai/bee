@@ -20,8 +20,8 @@ local function define_tests()
         test.it("creates sessions and immutable queued work with keyed replay and journal events", function()
             local sessions = harness.session_owner(WORKSPACE)
             local open_key = harness.key()
-            local open_request = {operation_key = open_key, title = "review", route = {placement_request = {
-                binding_ref = "driver", profile_id = "batch", workspace_id = WORKSPACE}}}
+            local open_request = {operation_key = open_key, title = "review", route = {
+                definition = "bee.test:definition", profile_id = "batch"}}
             local opened_reply = sessions:call("session_create", open_request)
             local opened = harness.value(opened_reply)
             local session_ref = opened.session
@@ -33,7 +33,11 @@ local function define_tests()
             local described = harness.value(sessions:call("session_describe", {session = session_ref}))
             test.eq(described.state, "active")
             test.eq(described.revision, 1)
-            test.eq(described.route.placement_request.session_ref, session_ref)
+            test.eq(described.route.session_ref, session_ref)
+            test.eq(described.route.action_id, session_ref)
+            test.eq(described.route.workspace_id, WORKSPACE)
+            test.eq(described.route.owner_id, "sessions-owner")
+            test.is_true(type(described.route.thread_id) == "string" and described.route.thread_id ~= "")
 
             local key = harness.key()
             local request = {session = session_ref, operation_key = key, input = {text = "inspect"}, output_schema = "bee:Text@1"}
@@ -196,6 +200,42 @@ local function define_tests()
             test.eq(harness.value(sessions:call("operation_describe", {operation = receipt.operation})).receipt.work, work.work)
             test.eq(harness.code(sessions:call("work_settle", {turn = reservation.turn, claim = reservation.claim,
                 result = result("failed"), operation_key = harness.key()})), "CONFLICT")
+        end)
+
+        test.it("appends normalized observations only while the current turn claim is accepted", function()
+            local sessions = harness.session_owner(WORKSPACE)
+            local opened = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
+            local work = harness.value(sessions:call("work_send", {session = opened.session,
+                operation_key = harness.key(), input = {text = "observe live output"}}))
+            local reservation = harness.value(sessions:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
+            local envelope = harness.value(sessions:call("turn_pull", {turn = reservation.turn, claim = reservation.claim}))
+            harness.value(sessions:call("turn_accept", {turn = reservation.turn, claim = reservation.claim,
+                input_digest = envelope.input_digest, checkpoint = {}, operation_key = harness.key()}))
+            local event = {type = "text", event_key = "claude:1:assistant", data = {type = "text", segment_id = "answer",
+                operation = "append", text = "live text", channel = "answer"}}
+            local operation_key = harness.key()
+            local request = {turn = reservation.turn, claim = reservation.claim, operation_key = operation_key, observation = event}
+            local appended = harness.value(sessions:call("turn_observation", request))
+            test.eq(appended.session, opened.session)
+            test.eq(appended.work, work.work)
+            test.eq(appended.event_key, event.event_key)
+            test.is_true(sessions:call("turn_observation", request).replayed)
+            local page = harness.value(sessions:call("feed_read", {session = opened.session, after_sequence = 0, limit = 64}))
+            local found = false
+            for _, row in ipairs(page.events) do
+                if row.kind == "turn.observation" then
+                    found = true
+                    test.eq(row.data.observation.event_key, event.event_key)
+                    test.eq(row.data.observation.data.text, "live text")
+                end
+            end
+            test.is_true(found)
+            test.eq(harness.code(sessions:call("turn_observation", {turn = reservation.turn, claim = "wrong-claim",
+                operation_key = harness.key(), observation = event})), "DENIED")
+            harness.value(sessions:call("work_settle", {turn = reservation.turn, claim = reservation.claim,
+                result = result("succeeded"), operation_key = harness.key()}))
+            test.eq(harness.code(sessions:call("turn_observation", {turn = reservation.turn, claim = reservation.claim,
+                operation_key = harness.key(), observation = event})), "CONFLICT")
         end)
 
         test.it("cancels queued work immediately and records active cancellation for the scheduler", function()

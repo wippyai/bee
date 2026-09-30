@@ -1,5 +1,6 @@
 -- MIT. Runtime ports for one fenced executor turn.
 local bounds = require("bounds")
+local hash = require("hash")
 local channel = require("channel")
 local funcs = require("funcs")
 local process = require("process")
@@ -7,6 +8,8 @@ local stream = require("stream")
 local placement_protocol = require("placement_protocol")
 local driver_types = require("driver_types")
 local turn = require("turn")
+local admission = require("admission")
+local machine = require("machine")
 
 type Listener = {outputs: unknown, exits: unknown, events: unknown}
 
@@ -55,7 +58,8 @@ local function normalizer_call(target: string, state: unknown, index: integer, e
     return reply, nil
 end
 
-local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean): (unknown, string?)
+local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean,
+    request: {[string]: unknown}): (unknown, string?)
     local listener = bounds.object(listener_value) :: Listener?
     local attempt, attempt_error = unwrap_attempt(attempt_value)
     if not listener or not attempt then return nil, attempt_error or "output listener or attempt is malformed" end
@@ -81,6 +85,14 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         for _, raw in ipairs(raw_events) do
             local event = bounds.object(raw)
             if not event then return "driver normalizer emitted a non-object observation" end
+            local event_key = bounds.id(event.event_key)
+            if not event_key then return "driver normalizer emitted an observation without a valid event key" end
+            local event_identity, hash_error = hash.sha256(tostring(request.attempt_id) .. "\n" .. event_key)
+            if hash_error or not event_identity then return "measure normalized event identity: " .. tostring(hash_error or "no digest") end
+            local _, append_error = service_call(tostring(request.observation_target), {
+                turn = request.attempt_id, claim = request.claim, operation_key = "turnobs:" .. event_identity, observation = event,
+            })
+            if append_error then return "append live turn observation: " .. append_error end
             observations[#observations + 1] = event
         end
         if reply.terminal ~= nil then
@@ -155,6 +167,19 @@ end
 local function handle(value: unknown): ({[string]: unknown}?, string?)
     local request = bounds.object(value)
     if not request then return nil, "turn request must be an object" end
+    local current_plan: machine.Plan? = nil
+    local function host_call(target: string, arguments: unknown): (unknown, string?)
+        local result, call_error = funcs.call(target, arguments)
+        if call_error then return nil, tostring(call_error) end
+        return result, nil
+    end
+    local host_io: machine.IO = {
+        call = host_call,
+        send = function(_: string, _: string, _: unknown) end,
+        self_pid = function(): string return process.pid() end,
+        now_ms = function(): integer return 0 end,
+        key = function(): string return tostring(request.attempt_id) end,
+    }
     local io: turn.IO = {
         reconcile = function(attempt_id: string)
             return service_call(placement_target(request, "reconcile"), {attempt_id = attempt_id})
@@ -162,10 +187,24 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
         cleanup = function(attempt_id: string)
             return service_call(placement_target(request, "cleanup"), {attempt_id = attempt_id})
         end,
-        driver = function(_method: string, target: string, arguments: unknown)
-            local value, call_error = funcs.call(target, arguments)
-            if call_error then return nil, tostring(call_error) end
-            return value, nil
+        plan = function(raw_request: unknown)
+            local turn_request = bounds.object(raw_request)
+            local source = turn_request and bounds.object(turn_request.admission)
+            if not turn_request or not source then return nil, "turn omitted its retained admission route" end
+            local session_request: {[string]: unknown} = {}
+            for name, field in pairs(source) do session_request[name] = field end
+            session_request.brief = turn_request.prompt
+            local admitted, refused = admission.admit_session_turn(session_request)
+            if not admitted then
+                local fault = refused and bounds.object(refused.error)
+                return nil, tostring(fault and fault.message or fault and fault.code or "host admission refused the turn")
+            end
+            local checkpoint = bounds.object(turn_request.checkpoint)
+            local resume_ref = checkpoint and bounds.id(checkpoint.resume_ref) or nil
+            local planned, plan_error = machine.session_plan(host_io, admitted.request, resume_ref)
+            if plan_error or not planned then return nil, "host launch plan: " .. tostring(plan_error or "no plan") end
+            current_plan = planned
+            return {placement_request = planned.placement_request, normalize_target = planned.normalize_target}, nil
         end,
         prepare = function(placement_request: unknown)
             return service_call(placement_target(request, "prepare"), placement_request)
@@ -177,11 +216,25 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
         attach = function(attempt_id: string, generation: integer)
             return service_call(placement_target(request, "attach"), {attempt_id = attempt_id, recipient = process.pid(), generation = generation})
         end,
-        start = function(attempt_id: string)
-            return service_call(placement_target(request, "start"), {attempt_id = attempt_id})
+        admit_gateway = function(generation: integer): (string?, string?)
+            if not current_plan then return nil, "host launch plan is unavailable" end
+            return machine.admit_gateway(host_io, current_plan, generation)
         end,
-        observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean, _checkpoint: unknown?)
-            return observe(listener, attempt, normalizer_target, resumed)
+        gateway_ready = function(binding_id: string): string?
+            if not current_plan then return "host launch plan is unavailable" end
+            return machine.gateway_ready(host_io, binding_id)
+        end,
+        revoke_gateway = function(binding_id: string)
+            machine.revoke_gateway(host_io, binding_id)
+        end,
+        start = function(attempt_id: string, gateway_binding: string?)
+            local request_value: {[string]: unknown} = {attempt_id = attempt_id}
+            if gateway_binding then request_value.gateway_binding = gateway_binding end
+            return service_call(placement_target(request, "start"), request_value)
+        end,
+        observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean,
+            _checkpoint: unknown?, turn_request: turn.Request)
+            return observe(listener, attempt, normalizer_target, resumed, turn_request :: {[string]: unknown})
         end,
         close = function(value: unknown)
             local listener = bounds.object(value)

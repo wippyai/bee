@@ -5,11 +5,13 @@ entries:
   kind: function.lua
   source: file://run_turn.lua
   method: handle
-  modules: [funcs, process, channel]
+  modules: [funcs, process, channel, hash]
   security:
     policies: [bee.executor.external.security:driver_placement_calls, bee.executor.external.security:placement_stream, bee.executor.external.security:runner_observation]
   imports:
+    admission: bee.harness.launch:admission
     bounds: bee.threads.records:bounds
+    machine: bee.harness.carrier:machine
     stream: bee.executor.external.service:stream
     placement_protocol: bee.placement.native:protocol
     driver_types: bee.driver:types

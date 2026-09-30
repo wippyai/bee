@@ -1,31 +1,35 @@
 -- MIT. One external CLI process belongs to one immutable pulled turn.
 local M = {}
 
-type IO = {
-    reconcile: (string) -> (unknown, string?),
-    cleanup: (string) -> (unknown, string?),
-    driver: (string, string, unknown) -> (unknown, string?),
-    prepare: (unknown) -> (unknown, string?),
-    listen: () -> (unknown, string?),
-    attach: (string, integer) -> (unknown, string?),
-    start: (string) -> (unknown, string?),
-    observe: (unknown, unknown, string, boolean, unknown) -> (unknown, string?),
-    close: (unknown) -> (),
-}
-
 type Request = {
     attempt_id: string,
+    claim: string,
+    observation_target: string,
     generation: integer,
     prompt: string,
     sender: {kind: "session" | "principal", id: string},
     driver_binding_ref: string,
     profile_id: string,
     driver_methods: {[string]: string},
-    driver_options: {[string]: unknown},
     placement_methods: {[string]: string},
-    placement_request: {[string]: unknown},
+    admission: {[string]: unknown},
     previous_attempt_id: string?,
     checkpoint: {[string]: unknown}?,
+}
+
+type IO = {
+    reconcile: (string) -> (unknown, string?),
+    cleanup: (string) -> (unknown, string?),
+    plan: (unknown) -> (unknown?, string?),
+    prepare: (unknown) -> (unknown, string?),
+    listen: () -> (unknown, string?),
+    attach: (string, integer) -> (unknown, string?),
+    admit_gateway: (integer) -> (string?, string?),
+    gateway_ready: (string) -> string?,
+    revoke_gateway: (string) -> (),
+    start: (string, string?) -> (unknown, string?),
+    observe: (unknown, unknown, string, boolean, unknown, Request) -> (unknown, string?),
+    close: (unknown) -> (),
 }
 
 local PLACEMENT_METHODS = {
@@ -47,8 +51,8 @@ end
 local function decode(value: unknown): (Request?, string?)
     local request = object(value)
     if not request then return nil, "turn request must be an object" end
-    local allowed = {"attempt_id", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods", "driver_options",
-        "placement_methods", "placement_request", "previous_attempt_id", "checkpoint"}
+    local allowed = {"attempt_id", "claim", "observation_target", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods",
+        "placement_methods", "admission", "previous_attempt_id", "checkpoint"}
     local fields: {[string]: boolean} = {}
     for _, field in ipairs(allowed) do fields[field] = true end
     for field in pairs(request) do
@@ -56,6 +60,11 @@ local function decode(value: unknown): (Request?, string?)
     end
     local attempt_id = id(request.attempt_id)
     if not attempt_id then return nil, "attempt_id is invalid" end
+    local claim = id(request.claim)
+    if not claim then return nil, "claim is invalid" end
+    if request.observation_target ~= "bee.threads.service:turn_observation" then
+        return nil, "observation_target is not the Threads turn observation operation"
+    end
     if type(request.generation) ~= "number" or math.floor(request.generation) ~= request.generation or request.generation < 1 then
         return nil, "generation must be a positive integer"
     end
@@ -78,12 +87,6 @@ local function decode(value: unknown): (Request?, string?)
             return nil, "driver_methods." .. method .. " is not an operation of the selected bee.driver binding"
         end
     end
-    local driver_options = object(request.driver_options or {})
-    if not driver_options then return nil, "driver_options must be an object" end
-    if driver_options.control_enabled ~= nil or driver_options.permission_exchange ~= nil
-        or driver_options.gateway_tools ~= nil or driver_options.gateway_hooks ~= nil then
-        return nil, "turn execution does not accept injected controls or driver frames"
-    end
     local placement_methods = object(request.placement_methods)
     if not placement_methods then return nil, "placement_methods must be an object" end
     for _, method in ipairs({"prepare", "attach", "start", "reconcile", "cleanup"}) do
@@ -91,13 +94,9 @@ local function decode(value: unknown): (Request?, string?)
             return nil, "placement_methods." .. method .. " is not the host-selected native binding"
         end
     end
-    local placement_request = object(request.placement_request)
-    if not placement_request then return nil, "placement_request must be an object" end
-    if placement_request.attempt_id ~= attempt_id then return nil, "placement request attempt_id differs from the turn" end
-    if placement_request.binding_ref ~= driver_binding_ref then
-        return nil, "placement request binding_ref differs from the selected driver"
-    end
-    if placement_request.profile_id ~= profile_id then return nil, "placement request profile_id differs from the selected profile" end
+    local admission = object(request.admission)
+    if not admission or admission.attempt_id ~= attempt_id then return nil, "session admission attempt differs from the turn" end
+    if admission.profile_id ~= profile_id then return nil, "session admission profile differs from the selected profile" end
     local previous_attempt_id: string? = nil
     if request.previous_attempt_id ~= nil then
         previous_attempt_id = id(request.previous_attempt_id)
@@ -110,11 +109,12 @@ local function decode(value: unknown): (Request?, string?)
     local sender_label = "[Bee sender " .. tostring(sender.kind) .. " " .. tostring(sender.id) .. "]\n"
     if #sender_label + #request.prompt > 16384 then return nil, "prompt and sender identity exceed 16384 bytes" end
     return {
-        attempt_id = attempt_id, generation = request.generation :: integer, prompt = sender_label .. (request.prompt :: string),
+        attempt_id = attempt_id, claim = claim, observation_target = request.observation_target :: string,
+        generation = request.generation :: integer, prompt = sender_label .. (request.prompt :: string),
         sender = sender :: {kind: "session" | "principal", id: string},
         driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = driver_methods :: {[string]: string},
-        driver_options = driver_options, placement_methods = placement_methods :: {[string]: string},
-        placement_request = placement_request, previous_attempt_id = previous_attempt_id, checkpoint = checkpoint,
+        placement_methods = placement_methods :: {[string]: string}, admission = admission,
+        previous_attempt_id = previous_attempt_id, checkpoint = checkpoint,
     }, nil
 end
 
@@ -162,24 +162,6 @@ local function call_previous(io: IO, attempt_id: string): (Recovery, string?, un
     return "ready", nil, cleanup_attempt
 end
 
-local function driver_call(io: IO, request: Request): (string?, unknown?, string?)
-    local resumed = request.checkpoint ~= nil and request.checkpoint.resume_ref ~= nil
-    local method = resumed and "dispatch" or "prepare"
-    local target = request.driver_methods[method]
-    local args: {[string]: unknown} = {}
-    for name, value in pairs(request.driver_options) do args[name] = value end
-    args.profile_id = request.profile_id
-    args.brief = request.prompt
-    if resumed then args.resume_ref = request.checkpoint and request.checkpoint.resume_ref end
-    local raw, call_error = io.driver(method, target, args)
-    if call_error then return nil, nil, "driver " .. method .. ": " .. call_error end
-    local reply = object(raw)
-    if not reply or reply.ok ~= true or type(reply.launch) ~= "table" then
-        return nil, nil, "driver " .. method .. " refused the turn"
-    end
-    return target, reply.launch, nil
-end
-
 local function uncertain(request: Request, reason: string, attempt: unknown?): {[string]: unknown}
     return {state = "uncertain", outcome = "uncertain", attempt_id = request.attempt_id,
         evidence = {code = "external_interruption", message = reason, placement = attempt}}
@@ -196,11 +178,16 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         if recovery == "uncertain" then return uncertain(request, recovery_error or "previous attempt did not reconcile", attempt) end
     end
 
-    local _, launch, driver_error = driver_call(io, request)
-    if not launch then return nil, driver_error end
-    local placement_request: {[string]: unknown} = {}
-    for name, field in pairs(request.placement_request) do placement_request[name] = field end
-    placement_request.launch = launch
+    local planned_value, plan_error = io.plan(request)
+    if plan_error then return nil, "admit external turn: " .. plan_error end
+    local planned = object(planned_value)
+    local placement_request = planned and object(planned.placement_request)
+    local normalize_target = planned and id(planned.normalize_target)
+    if not placement_request or not normalize_target then return nil, "admit external turn returned an incomplete placement plan" end
+    if placement_request.attempt_id ~= request.attempt_id then return nil, "placement plan names another attempt" end
+    if placement_request.binding_ref ~= request.driver_binding_ref or placement_request.profile_id ~= request.profile_id then
+        return nil, "placement plan differs from the selected driver route"
+    end
     local intent_value, intent_error = io.prepare(placement_request)
     if intent_error then return nil, "persist placement intent: " .. intent_error end
     local intent, intent_decode_error = placement_attempt(intent_value)
@@ -229,8 +216,24 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         io.close(listener)
         return nil, "attach placement output: " .. tostring(attach_decode_error or "placement returned another attempt")
     end
-    local started, start_error = io.start(request.attempt_id)
+    local gateway_binding: string? = nil
+    if placement_request.gateway ~= nil then
+        local admitted, gateway_error = io.admit_gateway(request.generation)
+        if gateway_error or not admitted then
+            io.close(listener)
+            return nil, "admit attempt gateway: " .. tostring(gateway_error or "gateway returned no binding")
+        end
+        gateway_binding = admitted
+        local ready_error = io.gateway_ready(gateway_binding)
+        if ready_error then
+            io.revoke_gateway(gateway_binding)
+            io.close(listener)
+            return nil, "wait for attempt gateway: " .. ready_error
+        end
+    end
+    local started, start_error = io.start(request.attempt_id, gateway_binding)
     if start_error then
+        if gateway_binding then io.revoke_gateway(gateway_binding) end
         io.close(listener)
         local reconciled, reconcile_error = io.reconcile(request.attempt_id)
         if reconcile_error then return uncertain(request, "start outcome cannot be reconciled: " .. reconcile_error) end
@@ -246,8 +249,8 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         return uncertain(request, "placement start returned malformed evidence: " .. tostring(started_decode_error))
     end
 
-    local observed, observe_error = io.observe(listener, started_attempt, request.driver_methods.normalize :: string,
-        request.checkpoint ~= nil and request.checkpoint.resume_ref ~= nil, request.checkpoint)
+    local observed, observe_error = io.observe(listener, started_attempt, normalize_target,
+        request.checkpoint ~= nil and request.checkpoint.resume_ref ~= nil, request.checkpoint, request)
     io.close(listener)
     local reconciled, reconcile_error = io.reconcile(request.attempt_id)
     if reconcile_error then return uncertain(request, "placement exit cannot be proven: " .. reconcile_error, observed) end

@@ -37,6 +37,9 @@ end
 function M.turn_accept(request: unknown): types.Reply
     return boundary.run(work_store.turn_accept, request, true)
 end
+function M.turn_observation(request: unknown): types.Reply
+    return boundary.run(work_store.turn_observation, request, true)
+end
 function M.work_settle(request: unknown): types.Reply
     return boundary.run(work_store.work_settle, request, true)
 end

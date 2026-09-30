@@ -3,7 +3,12 @@ local M = {}
 type Object = {[string]: unknown}
 type State = {stop_after_first: boolean?}
 type Executor = {run_turn: (Object) -> (Object?, string?), launches: integer, resumes: integer,
-    set_state: (string, "recoverable" | "unknown") -> boolean}
+    last_turn: Object?, set_state: (string, "recoverable" | "unknown") -> boolean}
+
+local function object(value: unknown): Object?
+    if type(value) ~= "table" then return nil end
+    return value :: Object
+end
 
 function M.new(config: State): Executor
     local calls: {[string]: integer} = {}
@@ -12,11 +17,18 @@ function M.new(config: State): Executor
     executor = {
         launches = 0,
         resumes = 0,
+        last_turn = nil,
         run_turn = function(turn: Object): (Object?, string?)
+            if turn.driver_options ~= nil then return nil, "turn request includes obsolete driver options" end
             local attempt = type(turn.attempt_id) == "string" and turn.attempt_id or ""
             local prompt = type(turn.prompt) == "string" and turn.prompt or ""
             local sender = type(turn.sender) == "table" and turn.sender or nil
             if attempt == "" or prompt == "" or not sender then return nil, "turn input is incomplete" end
+            local admission = object(turn.admission)
+            if not admission or admission.attempt_id ~= attempt or admission.session_ref ~= sender.id
+                or type(admission.owner_id) ~= "string" or type(admission.thread_id) ~= "string"
+                or type(admission.action_id) ~= "string" then return nil, "turn admission route is incomplete" end
+            executor.last_turn = turn
             local count = (calls[attempt] or 0) + 1
             calls[attempt] = count
             if count == 1 then executor.launches = executor.launches + 1 else executor.resumes = executor.resumes + 1 end

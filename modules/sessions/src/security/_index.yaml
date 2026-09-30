@@ -19,6 +19,7 @@ entries:
     - bee.threads.service:turn_recover
     - bee.threads.service:turn_pull
     - bee.threads.service:turn_accept
+    - bee.threads.service:turn_observation
     - bee.threads.service:work_settle
     - bee.threads.service:work_uncertain
     - bee.threads.service:work_cancel
@@ -53,6 +54,7 @@ entries:
     - bee.threads.service:turn_recover
     - bee.threads.service:turn_pull
     - bee.threads.service:turn_accept
+    - bee.threads.service:turn_observation
     - bee.threads.service:work_settle
     - bee.threads.service:work_uncertain
     - bee.threads.service:work_cancel

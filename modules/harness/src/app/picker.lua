@@ -176,8 +176,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         session_busy = true
         dirty = true
         coroutine.spawn(function()
-            task(current)
-            progress:send({conversation = current})
+            local ok, task_error = pcall(task, current)
+            progress:send({conversation = current, error = not ok and tostring(task_error) or nil})
         end)
     end
     local function leave_session()
@@ -214,7 +214,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     end
     local function stop_work()
         start_task(function(current: agents.Conversation)
-            agents.refresh(current)
             agents.stop(current, function(): string return assert(uuid.v7()) end)
         end)
     end
@@ -332,6 +331,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             local result = event.value :: Progress
             if result.conversation == conversation then
                 session_busy = false; dirty = true
+                if result.error then status = "Session operation failed: " .. result.error end
                 local next_task = table.remove(queued_tasks, 1)
                 if next_task then start_task(next_task) end
             end

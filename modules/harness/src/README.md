@@ -13,7 +13,7 @@ readiness descriptors.
 | `bee.harness.carrier` | Runs one admitted CLI attempt, persists its checkpoint and settles its thread receipt through the typed driver and placement contracts. |
 | `bee.harness.launch` | Decodes `bee.launch_definition` entries, measures admission plans, admits the authenticated caller, prepares declared workspace resources and resolves component-owned CLI command names. The `locate_probe` entry measures activated descriptor drivers for the Sessions catalog; it reads login-file existence only. |
 | `bee.harness.profiles` | Stores bounded workspace preferences in the node-owned profile feed. Reads and writes still require the caller's workspace authority. |
-| `bee.harness.window` | Runs the Sessions application. Its list reads the public sessions contract and reopens stable addresses, including closed sessions. Its new-session picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit native PTY attach path. |
+| `bee.harness.app` | Runs the Sessions application. Its list reads the public sessions contract and reopens stable addresses, including closed sessions. Its new-session picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit native PTY attach path. |
 
 ## Session catalog and readiness
 

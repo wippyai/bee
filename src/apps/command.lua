@@ -131,7 +131,7 @@ function M.resolve(name: string, tail: {string}): (Launch?, string?)
             if not cmd then return nil, "Invalid application command: " .. tostring(raw.id) end
             if cmd.name == name and admitted[cmd.definition_id] then
                 if selected then return nil, "Ambiguous Bee command: " .. name end
-                if cmd.definition_id == "bee.harness.window:app" and #tail > 0 then
+                if cmd.definition_id == "bee.harness.app:app" and #tail > 0 then
                     return nil, "Managed Bee command does not accept raw arguments: " .. name
                 end
                 local values: {string} = {}

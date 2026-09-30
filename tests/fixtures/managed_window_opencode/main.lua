@@ -68,7 +68,7 @@ local function run()
     -- A direct open names the thread on the broker request so the broker
     -- admits the host-issued application principal it starts.
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "opencode-open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", thread_id = thread, arguments = {request}}))
+        definition_id = "bee.harness.app:app", thread_id = thread, arguments = {request}}))
     local opened = receive_reply(replies, "opencode-open", "open")
     assert(opened.error_code == "", "managed OpenCode app did not become ready: " .. tostring(opened.error))
     local id = tostring(opened.id)

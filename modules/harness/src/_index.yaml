@@ -170,7 +170,7 @@ entries:
   meta:
     comment: The installed harness contributes the Agent application's reviewed host-selected policies
   default:
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     scope_management: true
     close_grace_ms: 60000
     policies:

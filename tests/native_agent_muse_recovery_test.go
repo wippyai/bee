@@ -655,7 +655,7 @@ func actualMuseColdRecovery(binary, executable, loginFile string) (result error)
 	app, saved, err := waitRecoveryWorkspace(state, func(snapshot recoveryWorkspace) (recoveryApplication, recoverySaved, bool) {
 		for _, candidate := range snapshot.Applications {
 			var decoded recoverySaved
-			if candidate.DefinitionID == "bee.harness.window:app" && candidate.ResumeState != "" && json.Unmarshal([]byte(candidate.ResumeState), &decoded) == nil && decoded.PreviousAttemptID != "" && decoded.ThreadID != "" {
+			if candidate.DefinitionID == "bee.harness.app:app" && candidate.ResumeState != "" && json.Unmarshal([]byte(candidate.ResumeState), &decoded) == nil && decoded.PreviousAttemptID != "" && decoded.ThreadID != "" {
 				return candidate, decoded, true
 			}
 		}

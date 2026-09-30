@@ -196,7 +196,7 @@ entries:
     comment: CLI command to launch OpenCode in the agent window
   data:
     name: opencode
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     arguments:
     - bee.driver.opencode:default_window
     fullscreen: true

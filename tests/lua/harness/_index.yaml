@@ -123,7 +123,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    hooks: bee.harness.window:hooks
+    hooks: bee.harness.app:hooks
     checkpoint: bee.harness.carrier:checkpoint
 - name: window_ready_policy
   kind: registry.entry
@@ -171,7 +171,7 @@ entries:
   meta: {type: test_support}
   modules: [process]
   imports:
-    runtime: bee.harness.window:runtime
+    runtime: bee.harness.app:runtime
 - name: window_ready_test
   kind: function.lua
   source: file://window_ready_test.lua
@@ -183,7 +183,7 @@ entries:
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
-    recovery: bee.harness.window:recovery
+    recovery: bee.harness.app:recovery
 - name: window_recovery_test
   kind: function.lua
   source: file://window_recovery_test.lua
@@ -192,8 +192,8 @@ entries:
   modules: [json, tty]
   imports:
     test: wippy.test:test
-    recovery: bee.harness.window:recovery
-    restore_view: bee.harness.window:restore_view
+    recovery: bee.harness.app:recovery
+    restore_view: bee.harness.app:restore_view
     appearance: bee.application:appearance
 - name: carrier_transport_test
   kind: function.lua
@@ -1373,8 +1373,8 @@ entries:
     claude: bee.driver.claude:launch
     machine: bee.harness.carrier:machine
     catalog: bee.harness.catalog:catalog
-    hooks: bee.harness.window:hooks
-    interrupted: bee.harness.window:interrupted
+    hooks: bee.harness.app:hooks
+    interrupted: bee.harness.app:interrupted
 - name: scope_probe_allow
   kind: security.policy
   meta: {type: test_support}

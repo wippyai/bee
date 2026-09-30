@@ -98,7 +98,7 @@ end
 -- Seals intake and lets accepted work finish. The key makes a retry resolve
 -- the same close.
 function M.close(conv: Conversation, key: string): boolean
-    local operation, fault = conv.session:close({mode = "drain", operation_key = key})
+    local operation, fault = conv.session:close({operation_key = key})
     if not operation then
         conv.notice = describe(fault)
         return false

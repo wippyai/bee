@@ -46,7 +46,7 @@ local function define_tests()
             local window, spawn_error = process.with_options({terminal = grant}):with_actor(principal):spawn_monitored(
                 "bee.harness.catalog:window_ready_probe", "bee:workers", {version = 1,
                     broker_pid = self, workspace_pid = self, workspace_id = WORKSPACE,
-                    instance_id = instance_id, view_id = instance_id, definition_id = "bee.harness.window:app",
+                    instance_id = instance_id, view_id = instance_id, definition_id = "bee.harness.app:app",
                     execution_generation = 1, definition_revision = "1", registry_revision = "1",
                     launch_token = uuid.v7(), resume_schema = recovery.SCHEMA, resume_state = "",
                     arguments = {DEFINITION}}, self)

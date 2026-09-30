@@ -422,7 +422,7 @@ local function configure_host(workspace_id: string, local_node: string)
     local policy_data = object(policy_entry.data)
     local policies = policy_data.policies :: {unknown}
     policies[#policies + 1] = {name = APPROVAL_POLICY,
-        approvers = {"bee.app_journey.operator", {definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}
+        approvers = {"bee.app_journey.operator", {definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}
     policy_data.policies = policies
     policy_entry.data = policy_data
 

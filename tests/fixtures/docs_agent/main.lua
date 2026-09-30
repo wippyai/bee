@@ -144,7 +144,7 @@ local function bounds_hold(token: string)
     local missing = tool(token, {operation = "read", id = "runtime/lua/core/nope"})
     assert(missing.ok == false and tostring(missing.code) == "NOT_FOUND", "an unknown document was not refused")
     local unknown = tool(token, {operation = "list", topic = "nope"})
-    assert(unknown.ok == false and tostring(unknown.code) == "INVALID", "an unknown topic was not refused")
+    assert(unknown.ok == false and tostring(unknown.code) == "INVALID_ARGUMENT", "an unknown topic was not refused")
 end
 local function main()
     ADDRESS = endpoint()

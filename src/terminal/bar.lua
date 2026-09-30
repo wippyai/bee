@@ -136,7 +136,8 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
         hits[#hits + 1] = {id = hit.id, x = hit.x + origin, width = hit.width}
     end
     if #strip.hits == 0 then
-        local empty = tty.text.truncate(" F1 Start", room)
+        local message = #scene.windows == 0 and room >= 33 and " No applications open · F1 Start" or " F1 Start"
+        local empty = tty.text.truncate(message, room)
         text = text .. muted .. empty
         position = tty.text.width(empty) + 1
     end

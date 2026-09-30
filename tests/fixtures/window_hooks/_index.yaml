@@ -53,6 +53,7 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: fixture-pty-1
+        hooks: {transports: [command, http], events: [PreToolUse, SessionStart]}
         answer_path: {strategy: none}
 - name: definition
   kind: registry.entry
@@ -142,7 +143,7 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [funcs.call, bee.gateway.manage, bee.threads.carrier, registry.get, registry.apply, bee.resources.manage, funcs.security, security.scope.create]
+    actions: [funcs.call, bee.gateway.manage, bee.threads.carrier, registry.get, registry.apply, bee.resources.manage, funcs.security, security.scope.create, security.actor.create]
     resources: ['*', custom, security]
     effect: allow
 - name: main

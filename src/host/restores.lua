@@ -26,8 +26,10 @@ function M.complete(state: State, request_id: string): boolean
     state.inflight[request_id] = nil
     return true
 end
-function M.pending(state: State): boolean
-    return #state.queue > 0 or next(state.inflight) ~= nil
+-- Deferred records wait for their definitions without holding readiness;
+-- only opens the broker has not answered do.
+function M.opening(state: State): boolean
+    return next(state.inflight) ~= nil
 end
 function M.reset(state: State, queue: {Record}): ()
     state.queue = queue

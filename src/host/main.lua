@@ -270,7 +270,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                 definition_id = record.definition_id, thread_id = record.thread_id, restore_instance_id = record.instance_id,
                 restore_view_id = record.id, resume_schema = record.resume_schema, resume_state = record.resume_state})
         end
-        if #selected == 0 and not restores.pending(restore_schedule) then
+        if #selected == 0 and not restores.opening(restore_schedule) then
             if not ready and broker_started then
                 resolve_prepared_intents()
                 resume_clients()
@@ -335,7 +335,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
         assert(process.send(broker, "bee.application.binding.result", reply))
     end
     local function broker_drained(): boolean
-        if restores.pending(restore_schedule) or next(pending_opens) ~= nil or next(pending_transfers) ~= nil
+        if restores.opening(restore_schedule) or next(pending_opens) ~= nil or next(pending_transfers) ~= nil
             or next(client_connections.changes) ~= nil or next(client_connections.appearance_routes) ~= nil then return false end
         for _, route in pairs(client_connections.routes) do if not route.completed then return false end end
         return true

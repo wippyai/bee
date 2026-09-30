@@ -109,7 +109,7 @@ local function open(request: Object): Reply
     end
     local owner_id, workspace = identity()
     if not owner_id or not workspace then return fail("DENIED", "the authenticated caller has no workspace identity", operation_key) end
-    local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision)
+    local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision, nil, nil, nil, true)
     if not plan then
         local fault = object(refused)
         local details = fault and object(fault.error)
@@ -340,7 +340,7 @@ local function catalog(request: Object): Reply
     local _, workspace = identity()
     if not workspace then return fail("DENIED", "the authenticated caller has no workspace", nil) end
     local page, catalog_error = catalog_service.list(request, workspace)
-    if not page then return fail("INVALID", catalog_error or "catalog request is invalid", nil) end
+    if not page then return fail(catalog_error and catalog_error.code or "INVALID", catalog_error and catalog_error.message or "catalog request is invalid", nil) end
     return succeed(page)
 end
 

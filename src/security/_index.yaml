@@ -18,6 +18,7 @@ entries:
     - bee.security.approvals:approval_decide_policy
     - bee.security.gov:governance_delivery_lease_policy
     - bee.approvals.inbox:client_policy
+    - bee.security.storage:workspace_catalog_read_policy
 - name: base_app_policy
   kind: security.policy
   policy:

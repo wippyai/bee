@@ -373,24 +373,5 @@ function M.close_exchanges(ctx: Context, io: IO, session: Session, drain_elapsed
     end
     return true, nil
 end
-function M.finish_push_turn(ctx: Context, io: IO, session: Session): (boolean, string?)
-    if not session.plan.policy.inbox_push or not session.turn_open or not session.terminal or session.stream_ended or session.exit then return false, nil end
-    if #session.checkpoint.pending_writes > 0 then return false, nil end
-    local result = session.terminal
-    if result.outcome ~= "succeeded" then return false, nil end
-    local closed, close_error = M.close_exchanges(ctx, io, session, false)
-    if close_error then return false, close_error end
-    if not closed then return false, nil end
-    local request = session.plan.request
-    local _, hooks_error = ctx.drain_hooks(io, session)
-    if hooks_error then return false, hooks_error end
-    local _, end_error = ctx.thread_call(io, request, "end_turn", {action_id = request.action_id, attempt_id = request.attempt_id,
-        turn_id = session.turn_id, carrier_epoch = session.epoch,
-        turn_end = {outcome = result.outcome, answer_message_ids = {}, evidence_refs = {}, usage = result.usage}}, "inbox-end:" .. session.turn_id)
-    if end_error then return false, end_error end
-    session.turn_open = false
-    ctx.step(io, "push_turn_ended")
-    return true, nil
-end
 
 return M

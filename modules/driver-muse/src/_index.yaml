@@ -53,12 +53,8 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    values: bee.threads.records:values
+    universal: bee.driver:universal
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -72,9 +68,13 @@ entries:
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    types: bee.driver:types
-    turn_budget: bee.driver:turn_budget
+    universal: bee.driver:universal
+
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -84,9 +84,13 @@ entries:
       dispatch: bee.driver.muse.binding:dispatch
       normalize: bee.driver.muse.binding:normalize
       configure: bee.driver.muse.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.muse.binding:locate
   meta:
     type: harness.driver
     driver_id: muse
+    descriptor_ref: bee.driver.muse.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.muse:profiles
 - name: profiles
@@ -169,6 +173,7 @@ entries:
     command_names: [muse]
     binding_ref: bee.driver.muse:binding
     profile_id: window
+    session_profile_id: session
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]
@@ -237,7 +242,7 @@ entries:
     executable_env: {muse: bee.driver.muse:executable}
     environment: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, overlay, delivery, docs, components, install_request, uninstall_request, install_status, session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close]
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     hook_command_ref: bee.gateway:hook_executable
     profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
@@ -262,28 +267,7 @@ entries:
       muse: bee.driver.muse:executable
     environment: {}
     allow_host_home: true
-    gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_notify
-    - overlay
-    - delivery
-    - docs
-    - components
-    - install_request
-    - uninstall_request
-    - install_status
-    - session_catalog
-    - session_open
-    - session_run
-    - session_send
-    - session_await
-    - session_join
-    - session_get
-    - session_list
-    - session_cancel
-    - session_close
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

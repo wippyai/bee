@@ -203,7 +203,11 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     end
     return {options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
-local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?): (Plan?, Reply?, placement_types.Preferences?)
+local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, session_route: boolean?): (Plan?, Reply?, placement_types.Preferences?)
+    if session_route and launch.session_profile_id then
+        launch.profile_id = launch.session_profile_id
+        launch.default_mode = "session"
+    end
     local definition_ref = launch.ref
     local chosen = launch.default_mode
     if mode and mode ~= chosen then
@@ -351,14 +355,14 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
 end
 -- A caller composing a larger host plan can retain the same snapshot for
 -- its other declarations; this read performs no registry mutation or admission.
-function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?): (Plan?, Reply?)
+function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?, session_route: boolean?): (Plan?, Reply?)
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode)
+    local plan, refused = resolve(pinned, launch, mode, nil, nil, nil, nil, session_route)
     if not plan then return nil, refused end
     return plan, nil
 end
-function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?): (Plan?, Reply?)
+function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?, session_route: boolean?): (Plan?, Reply?)
     local selected: Selected? = nil
     if saved_id or saved_revision then
         if not workspace or not saved_id or not saved_revision or saved_revision < 1 then return nil, fail("INVALID", "saved profile needs workspace, identity and revision") end
@@ -370,7 +374,7 @@ function M.resolve(definition_ref: string, mode: string?, workspace: string?, sa
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest)
+    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest, session_route)
     if not plan then return nil, refused end
     return plan, nil
 end
@@ -517,7 +521,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, request.definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest)
+    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest, session_turn ~= nil)
     if not plan then return nil, plan_refused end
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")

@@ -20,7 +20,7 @@ type ThreadRow = {thread_id: string?, title: string}
 type Threads = {items: {ThreadRow}, selected: integer, error: string?}
 type State = {form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     status: string, confirming_remove: boolean, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
-    thread_titles: {[string]: string}, list_offset: integer}
+    thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
 type Frame = {rows: {string}, hits: {frame.Hit}}
 
 function M.new(form: forms.Form, ask: Ask): State
@@ -33,7 +33,7 @@ function M.new(form: forms.Form, ask: Ask): State
     end
     return {form = form, title = form.draft.title, guidance = form.draft.instructions,
         option_text = option_text, selected = 1, status = "", confirming_remove = false, ask = ask,
-        browsing = nil, threads = nil, thread_titles = {}, list_offset = 0}
+        browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
 end
 local function folder_label(state: State): string
     local workdir = state.form.draft.workdir
@@ -46,19 +46,42 @@ local function thread_label(state: State): string
     if not thread then return "Thread: New thread" end
     return "Thread: " .. (state.thread_titles[thread.thread_id] or thread.thread_id)
 end
+local TOOL_NAMES = {
+    thread_read = "Read conversation history", thread_message = "Add conversation notes",
+    session_catalog = "Browse agents", session_open = "Open sessions", session_run = "Start work",
+    session_send = "Send work to sessions", session_await = "Read work results", session_join = "Wait for multiple results",
+    session_get = "Inspect sessions", session_list = "Find peer sessions", session_cancel = "Stop work", session_close = "Close sessions",
+    capabilities = "Read available permissions", request_capability = "Request permissions", capability_status = "Read permission decisions",
+    guide = "Read Bee help", preflight = "Check application changes", delivery = "Deliver application changes",
+    install_request = "Request app installation", uninstall_request = "Request app removal", install_status = "Read installation status",
+}
+local function human(name: string): string
+    local words = name:gsub("_", " ")
+    return words:sub(1, 1):upper() .. words:sub(2)
+end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"}}
-    if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "Instructions"} end
     if state.form.draft._allowed.workdir then result[#result + 1] = {kind = "workdir", name = "", label = folder_label(state)} end
-    if state.form.draft._allowed.thread then result[#result + 1] = {kind = "thread", name = "", label = thread_label(state)} end
     local options = editor.options(state.form.draft)
     for _, option in ipairs(options or {}) do
-        result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
-            max_bytes = option.max_bytes, label = option.name .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
+        if option.name == "model" then
+            result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
+                max_bytes = option.max_bytes, label = "Model: " .. (option.value == nil and "Default" or tostring(option.value))}
+        end
     end
-    local tools = editor.tools(state.form.draft)
-    for _, tool in ipairs(tools or {}) do
-        result[#result + 1] = {kind = "tool", name = tool.name, label = (tool.selected and "[x] " or "[ ] ") .. tool.name}
+    if state.advanced then
+        if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "Instructions"} end
+        if state.form.draft._allowed.thread then result[#result + 1] = {kind = "thread", name = "", label = thread_label(state)} end
+        for _, option in ipairs(options or {}) do
+            if option.name ~= "model" then
+                result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
+                    max_bytes = option.max_bytes, label = human(option.name) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
+            end
+        end
+        for _, tool in ipairs(editor.tools(state.form.draft) or {}) do
+            result[#result + 1] = {kind = "tool", name = tool.name,
+                label = (tool.selected and "[x] " or "[ ] ") .. (TOOL_NAMES[tool.name] or human(tool.name))}
+        end
     end
     return result
 end
@@ -72,6 +95,9 @@ local function erase(value: string): string
     return value:sub(1, index - 1)
 end
 function M.action(state: State, action: string): string?
+    if action == "advanced" and not state.form.pending then
+        state.advanced = not state.advanced; state.selected = 1; return nil
+    end
     if action == "cancel" then
         if state.confirming_remove then state.confirming_remove = false; return nil end
         return "cancel"
@@ -201,6 +227,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
             if event.key_type == "enter" then return M.action(state, "remove") end
             return nil
         end
+        if event.ctrl and event.key == "p" then return M.action(state, "advanced") end
         if event.ctrl and event.key == "s" then return M.action(state, "save") end
         if event.ctrl and event.key == "d" then return M.action(state, "remove") end
         if event.key_type == "tab" or event.key_type == "down" or event.key_type == "up" then
@@ -248,7 +275,8 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     return nil
 end
 
-local HINTS = frame.hints({{key = "Tab", verb = "fields"}, {key = "Ctrl+S", verb = "save"}, {key = "Ctrl+D", verb = "remove"}, {key = "Esc", verb = "cancel"}})
+local HINTS = frame.hints({{key = "Tab", verb = "fields"}, {key = "Ctrl+S", verb = "save"},
+    {key = "Ctrl+P", verb = "permissions"}, {key = "Esc", verb = "cancel"}})
 local FOLDER_HINTS = frame.hints({{key = "Enter", verb = "open"}, {key = "⌫", verb = "up"}, {key = "U", verb = "use this folder"},
     {key = "D", verb = "definition folder"}, {key = "Esc", verb = "back"}})
 local THREAD_HINTS = frame.hints({{key = "Enter", verb = "choose"}, {key = "Esc", verb = "back"}})
@@ -287,7 +315,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if picker then return draw_folders(painter, state, picker) end
     local threads = state.threads
     if threads then return draw_threads(painter, state, threads) end
-    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "NEW AGENT PROFILE")
+    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced permissions" or "Name · folder · model")
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))
     local window = frame.window(#listed, capacity, state.selected, 0)
@@ -298,7 +326,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local label = field.label
         if field.kind == "title" then label = label .. ": " .. state.title
         elseif field.kind == "option" and field.option_kind == "text" then
-            label = field.name .. ": " .. (state.option_text[field.name] or "Default")
+            label = human(field.name) .. ": " .. (state.option_text[field.name] or "Default")
         elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end
         frame.row(painter, slot + 2, text.bound(label, 4096), index == state.selected, "field", index, "")
     end
@@ -312,9 +340,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 enabled = state.form.pending ~= "save", primary = state.confirming_remove}
         end
         buttons[#buttons + 1] = {kind = "cancel", label = "Cancel", enabled = true}
+        buttons[#buttons + 1] = {kind = "advanced", label = state.advanced and "Basic fields" or "Advanced permissions", enabled = not state.form.pending}
         frame.actions(painter, height - 1, buttons)
     end
-    frame.footer(painter, text.bound(state.status, 4096), HINTS)
+    if state.status ~= "" and height >= 7 then frame.line(painter, height - 2, text.bound(state.status, 4096), painter.theme.text) end
+    frame.footer(painter, "", HINTS)
     return {rows = frame.rows(painter), hits = painter.hits}
 end
 return M

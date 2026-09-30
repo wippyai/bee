@@ -37,12 +37,10 @@ entries:
 - name: batch_policy
   kind: ns.requirement
   meta:
-    comment: Host policy for component-owned Claude batch and session routes
+    comment: Host policy for the component-owned Claude batch route
   default: bee.driver.claude:launch_policy_claude_batch
   targets:
   - entry: bee.driver.claude:research_batch
-    path: .data.policy_ref
-  - entry: bee.driver.claude:managed_session
     path: .data.policy_ref
 - name: executable
   kind: env.variable
@@ -69,19 +67,19 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    universal: bee.driver:universal
 - name: launch
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    types: bee.driver:types
-    turn_budget: bee.driver:turn_budget
+    universal: bee.driver:universal
+
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: permission_adapter
   kind: registry.entry
   meta:
@@ -120,9 +118,13 @@ entries:
       dispatch: bee.driver.claude.binding:dispatch
       normalize: bee.driver.claude.binding:normalize
       configure: bee.driver.claude.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.claude.binding:locate
   meta:
     type: harness.driver
     driver_id: claude
+    descriptor_ref: bee.driver.claude.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.claude:profiles
 - name: profiles
@@ -240,6 +242,7 @@ entries:
     command_names: [claude]
     binding_ref: bee.driver.claude:binding
     profile_id: window
+    session_profile_id: session
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]
@@ -265,26 +268,6 @@ entries:
     allowed_overrides: [thread, workdir]
     workdir_policy: {kind: declared_resource, resource_ref: project}
     thread_policy: {kind: caller}
-    session_resource: session
-    credentials: [claude_api_key, claude_login]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-- name: managed_session
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    comment: Claude Code session route for durable external turns
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: claude-managed-session
-    title: Claude Code session
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: session
-    policy_ref: ''
-    default_mode: session
-    allowed_overrides: [workdir]
-    workdir_policy: {kind: caller_workspace}
-    thread_policy: {kind: new}
     session_resource: session
     credentials: [claude_api_key, claude_login]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
@@ -333,7 +316,7 @@ entries:
     environment: {}
     environment_refs: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, overlay, delivery, docs, components, install_request, uninstall_request, install_status, session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close]
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
     profile_instructions: true
@@ -363,38 +346,7 @@ entries:
     environment_refs:
       CLAUDE_CONFIG_DIR: bee.driver.claude:config_home
     allow_host_home: true
-    gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_notify
-    - overlay
-    - delivery
-    - docs
-    - components
-    - install_request
-    - uninstall_request
-    - install_status
-    - capabilities
-    - session_catalog
-    - session_open
-    - session_run
-    - session_send
-    - session_await
-    - session_join
-    - session_get
-    - session_list
-    - session_cancel
-    - session_close
-    agent_launch:
-    - bee.driver.codex:research_batch
-    - bee.driver.codex:named_batch
-    - bee.driver.claude:research_batch
-    - bee.driver.muse:research_batch
-    - bee.driver.agy:research_batch
-    - bee.driver.grok:research_batch
-    agent_launch_unconfined:
-    - bee.driver.grok:research_batch
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

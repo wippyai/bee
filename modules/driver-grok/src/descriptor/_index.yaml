@@ -1,0 +1,86 @@
+version: '1.0'
+namespace: bee.driver.grok.descriptor
+entries:
+- name: cli
+  kind: registry.entry
+  meta:
+    type: bee.driver.cli_descriptor
+    comment: Grok CLI command, streaming-json codec, login evidence and version probe
+  data:
+    schema_revision: bee.driver.cli-descriptor@1
+    provider: grok
+    executable: grok
+    version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
+    login_evidence: {path: .grok/auth.json, command: grok, variable: GROK_HOME, directory: .grok}
+    platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
+    codec: grok-streaming-json
+    json_paths:
+      resume_id: [sessionId]
+      result_text: [data]
+      errors: [message]
+      usage: [usage]
+    configure: grok
+    options:
+      profiles: [window, session, batch]
+      unknown_prefix: 'launch request: '
+      fields:
+        permission_mode: {type: enum, values: [default, acceptEdits, auto, dontAsk, bypassPermissions, plan], default: default, invalid: 'permission_mode is not one Bee admits'}
+        turn_budget: {type: budget, max: 128, profiles: [session, batch], unsupported: 'turn_budget is only supported for structured turns'}
+        model: {type: model, invalid: 'model is not one bounded model identifier'}
+        effort: {type: enum, values: [none, minimal, low, medium, high, xhigh, max], invalid: 'effort is not one Bee admits'}
+        resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref must not be a command-line option'}
+        gateway_tools: {type: ids, pattern: '^[a-z_]+$', default: [], transform: sorted, invalid: 'gateway_tools names a tool that is not a plain identifier'}
+        gateway_hooks: {type: ids, default: []}
+      rules:
+      - {kind: profile_fields, profile: window, fields: [turn_budget], message: 'turn_budget is only supported for structured turns'}
+      - {kind: values, field: gateway_hooks, values: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop], message: 'unsupported gateway hook'}
+      - {kind: profile_fields, profile: batch, fields: [gateway_hooks], message: 'gateway hooks require the window profile'}
+      - {kind: profile_fields, profile: session, fields: [gateway_hooks], message: 'gateway hooks require the window profile'}
+    flags:
+      permission: {field: permission_mode, emit_default: true, argv: [--permission-mode, {field: permission_mode}]}
+      turn_budget: {field: turn_budget, emit_default: false, argv: [--max-turns, {field: turn_budget}]}
+    argv_templates:
+      window:
+        argv:
+        - {if: permission_mode, not_equals: default, then: [{option: permission}]}
+        - {if: model, then: [--model, {field: model}]}
+        - {if: effort, then: [--reasoning-effort, {field: effort}]}
+        - {if: resume_ref, then: [-r, {field: resume_ref}]}
+        - {if: gateway_tools, then: [--allow, 'MCPTool(bee__*)']}
+        - {if: brief, then: [--, {field: brief}]}
+        readiness: terminal:attached
+        provider_home_private: false
+        login: true
+      first_turn:
+        argv:
+        - {if: brief, starts_with: '-', then: [{format: '--single={brief}'}], else: [-p, {field: brief}]}
+        - --output-format
+        - streaming-json
+        - {option: permission}
+        - {option: turn_budget}
+        - {if: model, then: [--model, {field: model}]}
+        - {if: effort, then: [--reasoning-effort, {field: effort}]}
+        - {if: resume_ref, then: [-r, {field: resume_ref}]}
+        - {if: gateway_tools, then: [--allow, 'MCPTool(bee__*)']}
+        readiness: none
+        provider_home_private: true
+      resume:
+        argv:
+        - {if: brief, starts_with: '-', then: [{format: '--single={brief}'}], else: [-p, {field: brief}]}
+        - --output-format
+        - streaming-json
+        - {option: permission}
+        - {option: turn_budget}
+        - {if: model, then: [--model, {field: model}]}
+        - {if: effort, then: [--reasoning-effort, {field: effort}]}
+        - -r
+        - {field: resume_ref}
+        - {if: gateway_tools, then: [--allow, 'MCPTool(bee__*)']}
+        readiness: none
+        provider_home_private: true
+    provider_home:
+      variable: GROK_HOME
+      directory: .grok
+      files:
+      - {source_path: .grok/auth.json, path: .grok/auth.json, kind: login, optional: true, write_back: true}
+      - {source_path: .grok/config.toml, path: .grok/.bee-global-config.toml, kind: config, optional: true, write_back: false}

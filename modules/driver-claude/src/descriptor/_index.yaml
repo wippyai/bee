@@ -1,0 +1,99 @@
+version: '1.0'
+namespace: bee.driver.claude.descriptor
+entries:
+- name: cli
+  kind: registry.entry
+  meta:
+    type: bee.driver.cli_descriptor
+    comment: Claude Code command, stream-json codec, login evidence and version probe
+  data:
+    schema_revision: bee.driver.cli-descriptor@1
+    provider: claude
+    executable: claude
+    version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
+    login_evidence: {path: .claude/.credentials.json, command: claude, variable: CLAUDE_CONFIG_DIR, directory: .claude}
+    platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
+    codec: claude-stream-json
+    json_paths:
+      resume_id: [session_id]
+      result_text: [result]
+      errors: [terminal_reason]
+      usage: [usage]
+    configure: claude
+    options:
+      profiles: [session, batch, window]
+      fields:
+        permission_mode: {type: enum, values: [default, acceptEdits, plan, dontAsk], default: default, invalid: 'permission_mode is not one Bee admits'}
+        turn_budget: {type: budget, max: 128, profiles: [session, batch], unsupported: 'turn_budget is only supported for structured turns'}
+        model: {type: model, invalid: 'model is not one bounded model identifier'}
+        effort: {type: enum, values: [low, medium, high, xhigh, max], invalid: 'effort is not one Bee admits'}
+        permission_exchange: {type: boolean, default: false, profiles: [session, batch], unsupported: 'stdio permission exchange is only supported for structured turns'}
+        control_enabled: {type: boolean, default: false, profiles: [session, batch], unsupported: 'stream-json control is only supported for structured turns'}
+        resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref is not an identifier'}
+        gateway_tools: {type: ids, default: []}
+        gateway_hooks: {type: ids, default: []}
+      rules:
+      - {kind: profile_fields, profile: window, fields: [turn_budget, permission_exchange, control_enabled], message: 'structured-turn options are not supported for a window'}
+    flags:
+      permission: {field: permission_mode, emit_default: true, argv: [--permission-mode, {field: permission_mode}]}
+      turn_budget: {field: turn_budget, emit_default: false, argv: [--max-turns, {field: turn_budget}]}
+    argv_templates:
+      window:
+        argv:
+        - {option: permission}
+        - {if: model, then: [--model, {field: model}]}
+        - {if: effort, then: [--effort, {field: effort}]}
+        - {if: resume_ref, then: [-r, {field: resume_ref}]}
+        - {if: brief, then: [--, {field: brief}]}
+        readiness: terminal:attached
+        provider_home_private: false
+        login: true
+      first_turn:
+        argv:
+        - -p
+        - {if_any: [permission_exchange, control_enabled], then: [--input-format, stream-json]}
+        - --output-format
+        - stream-json
+        - --verbose
+        - --include-partial-messages
+        - {option: permission}
+        - {option: turn_budget}
+        - {if: model, then: [--model, {field: model}]}
+        - {if: effort, then: [--effort, {field: effort}]}
+        - {if: permission_exchange, then: [--permission-prompt-tool, stdio, --permission-prompts, host]}
+        - {if: gateway_tools, then: [--allowedTools, {join: {field: gateway_tools, separator: ',', prefix: 'mcp__bee__', always: [session], exclude: [session]}}]}
+        - {if_none: [permission_exchange, control_enabled], then: [--, {field: brief}]}
+        stdin_json: {type: user, message: {role: user, content: {field: brief}}}
+        stdin_when_any: [permission_exchange, control_enabled]
+        session_end: stdin_close
+        readiness: protocol:system.init
+        provider_home_private: true
+      resume:
+        argv:
+        - -p
+        - {if_any: [permission_exchange, control_enabled], then: [--input-format, stream-json]}
+        - --output-format
+        - stream-json
+        - --verbose
+        - --include-partial-messages
+        - {option: permission}
+        - {option: turn_budget}
+        - {if: model, then: [--model, {field: model}]}
+        - {if: effort, then: [--effort, {field: effort}]}
+        - {if: permission_exchange, then: [--permission-prompt-tool, stdio, --permission-prompts, host]}
+        - --resume
+        - {field: resume_ref}
+        - {if: gateway_tools, then: [--allowedTools, {join: {field: gateway_tools, separator: ',', prefix: 'mcp__bee__', always: [session], exclude: [session]}}]}
+        - {if_none: [permission_exchange, control_enabled], then: [--, {field: brief}]}
+        stdin_json: {type: user, message: {role: user, content: {field: brief}}}
+        stdin_when_any: [permission_exchange, control_enabled]
+        session_end: stdin_close
+        readiness: protocol:system.init
+        provider_home_private: true
+    provider_home:
+      variable: CLAUDE_CONFIG_DIR
+      directory: .claude
+      files:
+      - {source_path: .claude/.credentials.json, path: .claude/.credentials.json, kind: login, optional: true, write_back: true}
+      - {source_path: .claude/settings.json, path: .claude/settings.json, kind: config, optional: true, write_back: false}
+      - {path: .claude.json, kind: state, optional: true, write_back: false}

@@ -10,6 +10,11 @@ local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local session_tools = require("session_tools")
 local M = {}
+function M.is_retired_tool(name: string): boolean
+    return name == "thread_launch" or name == "run_status" or name == "run_wait" or name == "run_cancel"
+        or name == "session_directory" or name == "session_inbox" or name == "session_ack" or name == "session_reply"
+        or name == "thread_sessions" or name == "launch_definitions" or name == "thread_wait" or name == "thread_notify"
+end
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
 M.MAX_BODY_BYTES = 524288
@@ -46,42 +51,19 @@ local BUILTIN_POLICY_REFS: {[string]: boolean} = {}
 for _, reference in pairs(TOOL_POLICY_REFS) do BUILTIN_POLICY_REFS[reference] = true end
 M.TOOL_POLICY_REFS = TOOL_POLICY_REFS
 function M.is_tool_policy_reference(value: string): boolean return BUILTIN_POLICY_REFS[value] == true end
-local RETIRED_TOOLS: {[string]: boolean} = {
-    thread_launch = true, run_status = true, run_wait = true, run_cancel = true, thread_sessions = true,
-    session_directory = true, session_inbox_send = true, session_inbox = true, session_ack = true,
-    session_reply = true, launch_definitions = true,
-}
-function M.is_retired_tool(name: string): boolean return RETIRED_TOOLS[name] == true end
 local TOOLS: {Tool} = {
-    {name = "thread_read", description = "Read committed records of the bound thread after a cursor, or of a member_thread the caller belongs to. A member_thread is refused unless the caller is an active member; the thread owner checks it again.", operation = "bee.threads.service:read_after",
+    {name = "thread_read", description = "Read committed records of the bound thread after a cursor, or of a member_thread the caller belongs to, such as the thread of a session it opened. A member_thread is refused unless the caller is an active member; the thread owner checks it again.", operation = "bee.threads.service:read_after",
         policies = {TOOL_POLICY_REFS.read},
         schema = {type = "object", additionalProperties = false, properties = {cursor = {type = "integer", minimum = 0}, limit = {type = "integer", minimum = 1, maximum = 64},
-            member_thread = {type = "string", minLength = 1, maxLength = 160, description = "A thread the caller is an active member of; omit for the bound thread"}}}, annotations = READ_ANNOTATIONS},
-    {name = "thread_wait", description = "Wait, read-only and bounded, for the bound thread, or a member_thread the caller belongs to, to move past a cursor; claims nothing. A member_thread is refused unless the caller is an active member.", operation = "bee.threads.delivery:watch",
-        policies = {TOOL_POLICY_REFS.read},
-        schema = {type = "object", additionalProperties = false, properties = {after_sequence = {type = "integer", minimum = 0}, wait_ms = {type = "integer", minimum = 0},
-            member_thread = {type = "string", minLength = 1, maxLength = 160, description = "A thread the caller is a member of; omit for the bound thread"}}}, annotations = READ_ANNOTATIONS},
-    {name = "thread_message", description = "Append one transcript note as the authenticated subject: to the bound thread with recipient_ids, to a reachable session's thread addressed to it, or to a member_thread the caller belongs to. This does not give a session work; use session_send for that.", operation = "bee.threads.service:record",
+            member_thread = {type = "string", minLength = 1, maxLength = 160, description = "A thread the caller is a member of, such as the thread of a session it opened; omit for the bound thread"}}}, annotations = READ_ANNOTATIONS},
+    {name = "thread_message", description = "Record one note on the bound thread transcript as the authenticated subject. Recorded only; does not schedule execution. To give a session work call session_send.", operation = "bee.threads.service:record",
         policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
         schema = {type = "object", additionalProperties = false, required = {"idempotency_key", "message_id", "message_kind", "content"}, properties = {
             idempotency_key = {type = "string", minLength = 1, maxLength = 160}, message_id = {type = "string", minLength = 1, maxLength = 160},
-            session = {type = "string", minLength = 1, maxLength = 160},
-            member_thread = {type = "string", minLength = 1, maxLength = 160, description = "A thread the caller is an active member of; the message lands there, and the field is refused with session" },
-            message_kind = {type = "string", enum = {"request", "progress", "reply", "notification"}},
-            recipient_ids = {type = "array", maxItems = 64, items = {type = "string", minLength = 1, maxLength = 160}},
+            message_kind = {type = "string", enum = {"progress", "notification"}},
             content = {type = "object", additionalProperties = false, properties = {text = {type = "string", maxLength = 16384}, artifact_ref = {type = "string", minLength = 1, maxLength = 160}}},
-            in_reply_to = {type = "object", additionalProperties = false, required = {"thread_id", "record_id"}, properties = {thread_id = {type = "string", minLength = 1, maxLength = 160}, record_id = {type = "string", minLength = 1, maxLength = 160}}},
-            outcome = {type = "string", enum = {"succeeded", "failed", "cancelled", "uncertain"}},
         }}},
-    {name = "thread_notify", description = "Be told once when a reachable session ends its current turn or exits: a notification message lands on your own thread, where thread_wait wakes on it. The thread owner checks membership of the target thread; an ended attempt is reported at once.", operation = "bee.threads.service:notify",
-        policies = {TOOL_POLICY_REFS.message}, annotations = WRITE_ANNOTATIONS,
-        schema = {type = "object", additionalProperties = false, required = {"idempotency_key"}, properties = {
-            session = {type = "string", minLength = 1, maxLength = 160},
-            thread_id = {type = "string", minLength = 1, maxLength = 160, description = "A reachable session's thread"},
-            attempt_id = {type = "string", minLength = 1, maxLength = 160, description = "The current attempt in that session"},
-            idempotency_key = {type = "string", minLength = 1, maxLength = 160},
-        }}},
-    {name = "capabilities", description = "Read-only report of what this workspace's host admits for this agent: the admitted tool set with its policy, trait selections, bound workspace and thread, and the session tools available for durable agent work. Read it before authoring; it names no secret and grants nothing.",
+    {name = "capabilities", description = "Read-only report of what this workspace's host admits for this agent: the admitted tool set with the policy each tool runs under, the trait catalog with allowed, active and requestable traits, the bound workspace and thread, and the guide and preflight tools for authoring. Read it before authoring; it names no secret and grants nothing.",
         operation = "bee.gateway.binding:surface",
         policies = {TOOL_POLICY_REFS.capabilities},
         schema = {type = "object", additionalProperties = false, properties = table.create(0, 1),
@@ -211,6 +193,8 @@ local STRING_SCHEMA: Object = {type = "string"}
 local BOOLEAN_SCHEMA: Object = {type = "boolean"}
 local INTEGER_SCHEMA: Object = {type = "integer"}
 local STRING_ARRAY_SCHEMA = array_schema(STRING_SCHEMA)
+
+
 local CAPABILITY_TOOL_SCHEMA: Object = {type = "object", additionalProperties = false,
     required = {"name", "description", "policies", "annotations"},
     properties = {name = STRING_SCHEMA, description = STRING_SCHEMA, policies = STRING_ARRAY_SCHEMA,
@@ -220,6 +204,8 @@ local CAPABILITY_TOOL_SCHEMA: Object = {type = "object", additionalProperties = 
 local CAPABILITY_TRAIT_SCHEMA: Object = {type = "object", additionalProperties = false,
     required = {"id", "title", "tools"},
     properties = {id = STRING_SCHEMA, title = STRING_SCHEMA, tools = STRING_ARRAY_SCHEMA}}
+
+
 local DELIVERY_DIAGNOSTIC_SCHEMA: Object = {type = "object", additionalProperties = false,
     required = {"code", "target", "message", "remedy"},
     properties = {code = STRING_SCHEMA, target = STRING_SCHEMA, message = STRING_SCHEMA, remedy = STRING_SCHEMA}}
@@ -227,19 +213,16 @@ local OUTPUT_SCHEMAS: {[string]: Object} = {
     session = output_schema({type = "object"}),
     call_tool = output_schema({type = "object"}),
     thread_read = output_schema({type = "object"}),
-    thread_wait = output_schema({type = "object"}),
     thread_message = output_schema({type = "object"}),
-    thread_notify = output_schema({type = "object"}),
     capabilities = output_schema({type = "object", additionalProperties = false,
         required = {"thread_id", "action_id", "revision", "digest", "tools", "traits", "allowed_traits",
-            "active_traits", "session_tools", "thread_access", "authoring"},
+            "active_traits", "thread_access", "authoring"},
         properties = {workspace_id = STRING_SCHEMA, thread_id = STRING_SCHEMA, action_id = STRING_SCHEMA,
             revision = INTEGER_SCHEMA, digest = STRING_SCHEMA, tools = array_schema(CAPABILITY_TOOL_SCHEMA),
             traits = array_schema(CAPABILITY_TRAIT_SCHEMA), allowed_traits = STRING_ARRAY_SCHEMA,
             active_traits = STRING_ARRAY_SCHEMA,
             requestable_access = {type = "object", additionalProperties = false, required = {"policy", "traits"},
                 properties = {policy = STRING_SCHEMA, traits = STRING_ARRAY_SCHEMA}},
-            session_tools = STRING_ARRAY_SCHEMA,
             thread_access = {type = "object", additionalProperties = false, required = {"thread_id", "note"},
                 properties = {thread_id = STRING_SCHEMA, note = STRING_SCHEMA}},
             authoring = {type = "object", additionalProperties = false,
@@ -383,72 +366,26 @@ function M.read_arguments(params: Object): (Object?, string?)
     end
     return request, nil
 end
-M.TRANSPORT_BUDGET_MS = 5000
-function M.wait_arguments(params: Object): (Object?, string?)
-    local arguments: Object = {}
-    if params.arguments ~= nil then
-        local declared = bounds.object(params.arguments)
-        if not declared then return nil, "arguments must be an object" end
-        arguments = declared
-    end
-    local unknown_field = bounds.fields(arguments, {"after_sequence", "wait_ms", "member_thread"})
-    if unknown_field then return nil, unknown_field end
-    local after = bounds.cursor(arguments.after_sequence == nil and 0 or arguments.after_sequence)
-    if not after then return nil, "after_sequence is out of range" end
-    local wait_ms = bounds.integer(arguments.wait_ms == nil and M.TRANSPORT_BUDGET_MS or arguments.wait_ms)
-    if not wait_ms or wait_ms < 0 then return nil, "wait_ms must be a nonnegative integer" end
-    local request: Object = {after_sequence = after, wait_ms = wait_ms, transport_budget_ms = M.TRANSPORT_BUDGET_MS}
-    if arguments.member_thread ~= nil then
-        local thread_id = bounds.id(arguments.member_thread)
-        if not thread_id then return nil, "member_thread must be a thread identifier" end
-        request.member_thread = thread_id
-    end
-    -- The transport budget bounds every wait; the owner subtracts its margin.
-    return request, nil
-end
--- Message arguments are the public message shape without sender, thread or
--- lifecycle context. The full message decoder remains the authority for its
--- nested content, references and kind-specific invariants. A message to a
--- session names no recipients: the endpoint addresses the resolved session
--- and names the caller's own action as the sender's.
+-- Note arguments are the public message shape without sender, thread or
+-- lifecycle context. A note names no recipients: it is recorded on the bound
+-- thread and schedules nothing. The full message decoder remains the
+-- authority for content and kind invariants.
 function M.message_arguments(params: Object): (Object?, string?)
     local arguments = bounds.object(params.arguments)
     if not arguments then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(arguments, {"idempotency_key", "message_id", "message_kind", "recipient_ids", "session", "member_thread", "content", "in_reply_to", "outcome"})
+    local unknown_field = bounds.fields(arguments, {"idempotency_key", "message_id", "message_kind", "content"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(arguments.idempotency_key)
     if not key then return nil, "idempotency_key is required and must be an identifier" end
-    local session: string? = nil
-    if arguments.session ~= nil then
-        session = bounds.id(arguments.session)
-        if not session then return nil, "session must be an identifier" end
-        local named = arguments.recipient_ids
-        if named ~= nil and (type(named) ~= "table" or next(named :: {[unknown]: unknown}) ~= nil) then
-            return nil, "a message to a session names no recipient_ids; the session is the recipient"
-        end
-    end
-    local member_thread: string? = nil
-    if arguments.member_thread ~= nil then
-        member_thread = bounds.id(arguments.member_thread)
-        if not member_thread then return nil, "member_thread must be a thread identifier" end
-        if session then return nil, "a message names either a session or a member_thread, not both" end
-    end
-    local candidate: Object = {}
-    for _, name in ipairs({"message_id", "message_kind", "recipient_ids", "content", "in_reply_to", "outcome"}) do
-        if arguments[name] ~= nil then candidate[name] = arguments[name] end
-    end
-    if session then candidate.recipient_ids = {} end
+    local kind = bounds.member(arguments.message_kind, {"progress", "notification"})
+    if not kind then return nil, "message_kind is not progress or notification" end
     -- message.decode requires a sender; the endpoint strips this sentinel
     -- before calling the owner, which supplies the authenticated actor.
-    candidate.sender_id = "gateway-mcp-subject"
-    local decoded, decode_error = message.decode(candidate)
+    local decoded, decode_error = message.decode({message_id = arguments.message_id, message_kind = kind,
+        recipient_ids = {}, content = arguments.content, sender_id = "gateway-mcp-subject"})
     if not decoded then return nil, "message: " .. tostring(decode_error) end
     local body: Object = {message_id = decoded.message_id, message_kind = decoded.message_kind, recipient_ids = decoded.recipient_ids, content = decoded.content}
-    if decoded.in_reply_to then body.in_reply_to = decoded.in_reply_to end
-    if decoded.outcome then body.outcome = decoded.outcome end
-    local request: Object = {idempotency_key = key, body = body, session = session}
-    if member_thread then request.member_thread = member_thread end
-    return request, nil
+    return {idempotency_key = key, body = body}, nil
 end
 -- An elevation request names one catalog capability with its parameters
 -- and an optional TTL; the endpoint supplies the binding. Status polls
@@ -518,26 +455,6 @@ function M.capabilities_arguments(params: Object): (Object?, string?)
     if unknown_field then return nil, unknown_field end
     return {}, nil
 end
--- A notice names the watched session and a retry key; the endpoint supplies
--- the caller's own thread and action as where and to whom it is delivered.
-function M.notify_arguments(params: Object): (Object?, string?)
-    local arguments = bounds.object(params.arguments)
-    if not arguments then return nil, "arguments must be an object" end
-    local unknown_field = bounds.fields(arguments, {"session", "thread_id", "attempt_id", "idempotency_key"})
-    if unknown_field then return nil, unknown_field end
-    local key = bounds.id(arguments.idempotency_key)
-    if not key then return nil, "idempotency_key is required and must be an identifier" end
-    if arguments.session ~= nil then
-        if arguments.thread_id ~= nil or arguments.attempt_id ~= nil then return nil, "session cannot be combined with thread_id or attempt_id" end
-        local session = bounds.id(arguments.session)
-        if not session then return nil, "session must be an identifier" end
-        return {session = session, idempotency_key = key}, nil
-    end
-    local thread_id, attempt_id = bounds.id(arguments.thread_id), bounds.id(arguments.attempt_id)
-    if not thread_id or not attempt_id then return nil, "thread_id and attempt_id are required identifiers when session is omitted" end
-    return {thread_id = thread_id, attempt_id = attempt_id, idempotency_key = key}, nil
-end
-
 -- Delivery arguments use the governance delivery protocol's own allow-list;
 -- the publish tool admits only its three identity fields, and the facade
 -- supplies the operation so a caller cannot smuggle one through. An omitted

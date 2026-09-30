@@ -165,22 +165,22 @@ local function define_tests()
             local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
             test.eq((body.actions :: {string})[1], "funcs.call")
         end)
-        test.it("materializes managed agent launch on the exact definitions and the facade call", function()
+        test.it("materializes managed agent launch as the sessions contract on the exact definitions", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("agents.launch", {definitions = {"acme:research"}})}))
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "agents.launch")
+            test.eq(proposed.policies[1].kind, "security.policy.expr")
             local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
             local actions: {[string]: boolean} = {}
             for _, action in ipairs(body.actions :: {string}) do actions[action] = true end
-            -- The launch path first calls the facade, then checks the launch
-            -- action on the definition; one policy carries both pairings.
+            test.is_true(actions["contract.open"])
+            test.is_true(actions["contract.call"])
             test.is_true(actions["funcs.call"])
             test.is_true(actions["bee.harness.launch"])
-            local resources = body.resources :: {string}
-            test.eq(#resources, 2)
-            test.eq(resources[1], "acme:research")
-            test.eq(resources[2], "bee.harness.launch:agent_call")
+            local expression = body.expression :: string
+            test.is_true(expression:find('resource in ["acme:research"]', 1, true) ~= nil)
+            test.is_true(expression:find("agent_call", 1, true) == nil)
         end)
         test.it("grants scoped HTTP only through the host gateway", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,

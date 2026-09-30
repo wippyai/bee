@@ -7,13 +7,12 @@ production launch definition, admission, carrier, placement and gateway with
 the spec (tests/fixtures/workspace_app_delivery/SPEC.md) as its brief, authors
 the application using only its gateway tools: the overlay guide, its own
 overlay, freeze and a delivery request that names no workspace. The application
-requests threads.read, threads.message, workspace.files.read, app.database and
-agents.launch; the person then reviews the plan in Overlays and approves it in
+requests threads.read, workspace.files.read, app.database and agents.launch; the person then reviews the plan in Overlays and approves it in
 Approvals, the activation owner applies it with its host-created volume and
 isolated database, and the application opens from the Start menu and behaves as
 the spec says, including its saved count and its database rows after a restart.
 The installed app launches the shipped Claude batch definition, waits for the
-placed child to settle, reads its result and steers it once.
+placed child to settle, reads its result and sends it a second piece of work.
 
 The far end of the launch is the scripted protocol agent
 (tests/fixtures/harness/gateway_client.go, mode spec): it writes the answer a
@@ -118,10 +117,9 @@ def answer_entries():
     source = (FIXTURE / "tally.lua").read_text()
     return [{"id": DEFINITION_ID, "kind": "process.lua",
              "data": {"source": source, "method": "main",
-                      "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql", "hash"],
+                      "modules": ["tty", "process", "channel", "json", "funcs", "fs", "sql"],
                       "imports": {"client": "bee.application:client", "appearance": "bee.application:appearance",
-                                  "frame": "bee.application:frame", "agents": "bee.application:agents",
-                                  "canonical": "bee.threads.records:canonical"}},
+                                  "frame": "bee.application:frame", "sessions": "bee.application:sessions"}},
              "meta": {"type": "bee.application", "application": {
                  "api_version": 1, "lifetime": "view", "revision": "1", "title": TITLE,
                  "instance_policy": "singleton", "resume_schema": "tally.v1", "restart_policy": "automatic"}}},
@@ -141,11 +139,6 @@ def answer_entries():
              "meta": {"value_kind": "security.policy", "capability": "agents.launch",
                       "parameters": {"definitions": [CHILD_DEFINITION]},
                       "reason": "Launch the allow-listed workspace summarizer"},
-             "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}},
-            {"id": "app.tally:child_message", "kind": "ns.requirement",
-             "meta": {"value_kind": "security.policy", "capability": "threads.message",
-                      "parameters": {"scope": "children"},
-                      "reason": "Steer the child it launched"},
              "data": {"targets": [{"entry": DEFINITION_ID, "path": ".security.policies +="}]}}]
 
 
@@ -416,7 +409,6 @@ def exercise():
                            folder, expected_capability=["Read owned threads",
                                                         "Read workspace files under shared",
                                                         "Use an isolated application database named tally",
-                                                        "Message child threads",
                                                         "Launch managed agents from " + CHILD_DEFINITION])
         open_catalog_app(ui, TITLE, COLD_BOOT)
         ui.wait("TALLY", timeout=20)
@@ -441,9 +433,8 @@ def exercise():
                 ui.pump(.1)
             assert grant_evidence.exists(), "installed grant scope was not verified"
             grant = json.loads(grant_evidence.read_text())
-            assert grant["capabilities"] == ["agents.launch", "app.database", "threads.message", "threads.read",
-                                                    "workspace.files.read"], grant
-            assert len(grant["policies"]) == 6, grant
+            assert grant["capabilities"] == ["agents.launch", "app.database", "threads.read", "workspace.files.read"], grant
+            assert len(grant["policies"]) == 5, grant
             volume_id, database_id = grant_identities(classic_workspace(folder / "workspace.db"))
             assert grant["volume_id"] == volume_id, grant
             assert grant["database_id"] == database_id, grant
@@ -491,7 +482,7 @@ def exercise():
     assert rows == [(1, GREETING), (2, GREETING), (3, GREETING)], rows
     # The installed app launched the shipped Claude batch definition under its
     # generated agents.launch grant, waited for the placed child to
-    # settle, read its result and steered it once under threads.message.
+    # settle, read its result and sent it a second piece of work.
     assert runs, "the installed app recorded no agent launch"
     for attempt_id, definition_ref, state, outcome, steer in runs:
         assert definition_ref == CHILD_DEFINITION, runs
@@ -499,10 +490,6 @@ def exercise():
         assert state == "ended", runs
         assert outcome == "succeeded", runs
         assert steer == "sent", runs
-    with sqlite3.connect(f"file:{folder / 'threads.db'}?mode=ro", uri=True) as db:
-        steers = db.execute("SELECT thread_id FROM bee_thread_records WHERE kind = ? AND record_json LIKE ?",
-                            ("message", "%tally steer: keep counting%")).fetchall()
-    assert steers, "the installed app's steer is not durable on a child thread"
     if HIVE_SOURCE:
         with sqlite3.connect(f"file:{folder / 'governance.db'}?mode=ro", uri=True) as db:
             artifact_digest, source_node = db.execute(
@@ -514,12 +501,12 @@ def exercise():
             "admission": "rule", "source_workspace": SOURCE, "component": "app." + SOURCE,
             "definition_id": DEFINITION_ID, "workspace_id": workspace_id}, indent=2))
     print("Workspace application: a managed agent authored " + DEFINITION_ID + " from its written spec on the "
-          "shipped host profiles, the person saw the threads.read, threads.message, workspace.files.read, "
+          "shipped host profiles, the person saw the threads.read, workspace.files.read, "
           "app.database and agents.launch capabilities in Approvals, and the installed scope contained their "
           "generated policies; it called the Threads owner, read a workspace file through its confined volume, "
           "recorded its counts with the greeting in its isolated database, launched the shipped "
           "bee.driver.claude:research_batch child under its generated launch grant, waited for it to settle, read its "
-          "result, steered it once with a durable message, and restored its saved count with its rows intact")
+          "result, sent it a second piece of work, and restored its saved count with its rows intact")
 
 
 if __name__ == "__main__":

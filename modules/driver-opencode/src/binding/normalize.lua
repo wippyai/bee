@@ -1,4 +1,2 @@
-local protocol = require("protocol")
-local normalizer = require("normalizer")
-
-return {handle = normalizer.bind(protocol.new, protocol.decode_state, protocol.normalize, protocol.finish)}
+local universal = require("universal")
+return {handle = universal.normalize("bee.driver.opencode.descriptor:cli")}

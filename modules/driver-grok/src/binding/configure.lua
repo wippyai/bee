@@ -1,10 +1,9 @@
 -- MIT. Grok configuration delivers admitted MCP and command hooks.
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
+local universal = require("universal")
 
-local function handle(value: unknown): {[string]: unknown}
-    local request, request_error = configure_protocol.decode_request(value)
-    if not request then return {ok = false, error = request_error or "invalid configuration request"} end
+local function handle(request: configure_protocol.Request): {[string]: unknown}
 
     if request.provider_ref ~= nil or request.provider ~= nil then
         return {ok = false, error = "grok accepts no provider configuration"}
@@ -37,4 +36,4 @@ local function handle(value: unknown): {[string]: unknown}
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
 
-return {handle = handle}
+return {handle = universal.configure("grok", {grok = handle})}

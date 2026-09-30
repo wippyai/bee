@@ -16,6 +16,7 @@ M.MAX_ROWS = 256
 M.MAX_PAYLOAD_LINES = 24
 M.INBOX_PAGE = 64
 type Object = {[string]: unknown}
+type Workspace = {label: string, folder: string}
 type Decision = "approved" | "denied"
 type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
 type RequestKind = "permission" | "question"
@@ -84,6 +85,18 @@ function M.text(value: unknown, limit: integer?): string
 end
 local function object(value: unknown): Object?
     return bounds.object(value)
+end
+
+function M.workspace(value: unknown, id: string): Workspace?
+    local reply = caller.decode(value)
+    if not reply or not reply.ok then return nil end
+    local body = bounds.object(reply.value)
+    local row = body and bounds.object(body.workspace)
+    if not row or row.workspace_id ~= id then return nil end
+    local label = bounds.text(row.label, 240)
+    local path = bounds.subpath(row.subpath)
+    if not label or not path then return nil end
+    return {label = label ~= "" and label or "Workspace", folder = path ~= "" and path or "Workspace root"}
 end
 
 local function proposal_kind(value: unknown): ProposalKind?

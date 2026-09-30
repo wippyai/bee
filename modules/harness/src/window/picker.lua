@@ -3,6 +3,7 @@
 local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
+local time = require("time")
 local uuid = require("uuid")
 local funcs = require("funcs")
 local bounds = require("bounds")
@@ -10,9 +11,13 @@ local client = require("client")
 local caller = require("caller")
 local appearance = require("appearance")
 local input_event = require("input_event")
-local selection = require("selection")
+local sessions = require("sessions")
 local admission = require("admission")
+local agents = require("agents")
 local view = require("view")
+local session_view = require("session_view")
+local directory_view = require("directory_view")
+local sessions_protocol = require("sessions_protocol")
 local frame = require("frame")
 local forms = require("forms")
 local profile_view = require("profile_view")
@@ -25,7 +30,12 @@ local function ask(target: string, request: {[string]: unknown}): caller.Reply
     return caller.decode(raw) or caller.unknown()
 end
 type Activation = {serial: integer, admitted: admission.Admitted?, refused: admission.Reply?, error: string?, title: string?}
-type Setup = {serial: integer, request_id: string, choice: selection.Choice}
+-- A saved profile's launch choices resolved for a manual attach.
+type Choice = {definition_ref: string, title: string, plan_digest: string, saved_profile_id: string?,
+    saved_profile_revision: integer?, workdir: {root_ref: string, path: string}?, thread_id: string?}
+type Setup = {serial: integer, request_id: string, choice: Choice}
+type Opened = {serial: integer, conversation: agents.Conversation?, error: string?}
+type Progress = {conversation: agents.Conversation, error: string?}
 local function fault(reply: admission.Reply?): string
     local value = reply and reply.error
     if not value then return "Agent launch was not admitted" end
@@ -69,6 +79,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local setup_future: funcs.Future? = nil
     local setup_response: Channel<unknown>? = nil
     local setup_request: Setup? = nil
+    local ticker: time.Ticker? = nil
     -- The surface may close while setup or admission is executing. Setup can
     -- be cancelled before it acquires attempt authority; once admission has
     -- begun, hand its one completion channel to the runtime so it can revoke
@@ -79,6 +90,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         running = false
         load_serial = load_serial + 1
         process.unlisten(states)
+        if ticker then ticker:stop(); ticker = nil end
         local closed, close_error = output:close()
         local failure = not closed and ("Close profile screen: " .. tostring(close_error)) or err
         if setup_future then
@@ -96,10 +108,29 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     end
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
-    local listed: selection.Choices = {items = {}, unavailable = 0}
+    local function no_agents(): agents.Listing return {items = {}, unavailable = 0, notes = {}} end
+    local directory: {sessions_protocol.SessionSnapshot} = {}
+    local workspace_names: {[string]: agents.Workspace} = {}
+    local catalog_open = false
+    local filtered = false
+    local remembered: {[string]: agents.Conversation} = {}
+    local listed = no_agents()
     local selected: integer = 0
-    local status = "Loading profiles…"
+    local status = "Loading sessions…"
     local loading = false
+    local show_unavailable = false
+    local conversation: agents.Conversation? = nil
+    local draft = ""
+    local confirming = ""
+    local session_busy = false
+    local session_frame: {hits: {frame.Hit}} = {hits = {}}
+    local ticks = 0
+    local opening = false
+    local open_serial = 0
+    local opens = channel.new(1) :: Channel<Opened>
+    local progress = channel.new(1) :: Channel<Progress>
+    local open_key, open_target = "", ""
+    local close_key: string? = nil
     local reload_pending = false
     local request_id: string? = nil
     local request_definition, request_plan = "", ""
@@ -113,14 +144,87 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         load_serial = load_serial + 1
         local serial = load_serial
         loading = true
-        listed = {items = {}, unavailable = 0}
-        selected = 0
-        status = "Loading profiles…"
+        status = catalog_open and "Loading agents…" or "Loading sessions…"
+        dirty = true
+        local include = show_unavailable
+        local catalog_requested = catalog_open
+        local workspace_filter = filtered and launch.workspace_id or nil
+        coroutine.spawn(function()
+            if catalog_requested then
+                local found, load_error = agents.list(sessions.client(), include)
+                if running and serial == load_serial then loads:send({serial = serial, listing = found, error = load_error}) end
+            else
+                local rows, load_error = agents.directory(sessions.client(), workspace_filter)
+                local names: {[string]: agents.Workspace} = {}
+                local own = agents.workspace(launch.workspace_id, ask)
+                if own then names[launch.workspace_id] = own end
+                for _, row in ipairs(rows or {}) do
+                    local id = agents.home(row.session)
+                    if id and not names[id] then names[id] = agents.workspace(id, ask) end
+                end
+                if running and serial == load_serial then loads:send({serial = serial, directory = rows, workspaces = names, error = load_error}) end
+            end
+        end)
+    end
+    local function idle(): boolean return not activating and not opening end
+    local function start_task(task: (agents.Conversation) -> ())
+        local current = conversation
+        if not current or session_busy or opening then return end
+        session_busy = true
         dirty = true
         coroutine.spawn(function()
-            local choices, load_error = selection.snapshot(launch.workspace_id)
-            if running and serial == load_serial then
-                loads:send({serial = serial, choices = choices, error = load_error})
+            task(current)
+            progress:send({conversation = current})
+        end)
+    end
+    local function leave_session()
+        if ticker then ticker:stop(); ticker = nil end
+        conversation, draft, status, session_busy = nil, "", "", false
+        catalog_open = false
+        client.title(launch, "Sessions")
+        load()
+        dirty = true
+    end
+    local function submit()
+        if conversation and conversation.lifecycle ~= "active" then status = "This session is closed to new work. Esc returns to Sessions."; dirty = true; return end
+        local text = draft
+        if text == "" then return end
+        start_task(function(current: agents.Conversation)
+            if agents.submit(current, text, function(): string return assert(uuid.v7()) end) then
+                if draft == text then draft = "" end
+                agents.refresh(current)
+            end
+        end)
+    end
+    local function setup_agent()
+        local entry = listed.items[selected]
+        if entry and not entry.ready then status = "Setup: " .. entry.reason .. ". Install or sign in with the provider, then R refresh."; dirty = true end
+    end
+    local function close_session()
+        start_task(function(current: agents.Conversation)
+            close_key = close_key or assert(uuid.v7())
+            if agents.close(current, close_key) then agents.refresh(current) end
+        end)
+    end
+    local function stop_work()
+        start_task(function(current: agents.Conversation)
+            agents.refresh(current)
+            agents.stop(current, function(): string return assert(uuid.v7()) end)
+        end)
+    end
+    local function open_existing(index: integer)
+        local entry = directory[index]
+        if not entry or opening then return end
+        open_serial = open_serial + 1
+        local serial = open_serial
+        opening = true; status = "Opening session…"; dirty = true
+        coroutine.spawn(function()
+            local conv, err = agents.resume(sessions.client(), entry.session)
+            local saved = remembered[entry.session]
+            if conv and saved then conv = agents.remember(conv, saved) end
+            if running and serial == open_serial then
+                local reply: Opened = {serial = serial, conversation = conv, error = err}
+                opens:send(reply)
             end
         end)
     end
@@ -131,8 +235,16 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if editing then
                 edit_frame = profile_view.draw(width, height, preferences, editing)
                 rows = edit_frame.rows
+            elseif conversation then
+                local shown = session_view.draw(width, height, preferences, conversation, draft, status, directory)
+                session_frame = shown
+                rows = shown.rows
+            elseif not catalog_open then
+                local own = workspace_names[launch.workspace_id]
+                drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, own and (own.label .. " · " .. own.folder))
+                rows = drawn.rows
             else
-                drawn = view.draw(width, height, preferences, listed, selected, status, activating)
+                drawn = view.draw(width, height, preferences, listed, selected, status, activating or opening, show_unavailable)
                 rows = drawn.rows
             end
             assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -141,12 +253,15 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end
         if load_serial == 0 then load() end
         local cases = {input = input:case_receive(), lifecycle = lifecycle:case_receive(), closes = closes:case_receive(),
-            states = states:case_receive(), loads = loads:case_receive(), activations = activations:case_receive()}
+            states = states:case_receive(), loads = loads:case_receive(), activations = activations:case_receive(),
+            opens = opens:case_receive(), progress = progress:case_receive()}
+        if ticker then cases.ticks = ticker:channel():case_receive() end
         if setup_response then cases.setup = setup_response:case_receive() end
         local event = channel.select(cases)
         if not event.ok then return finish(nil, nil) end
-        local activate, refresh = false, false
+        local refresh = false
         local edit, duplicate = false, false
+        local open, attach = false, false
         if event.channel == lifecycle then
             if event.value.kind == process.event.CANCEL then return finish(nil, nil) end
         elseif event.channel == closes then
@@ -159,15 +274,50 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if decoded and type(payload) == "table" and payload.version == 1 then preferences = decoded; dirty = true end
             end
         elseif event.channel == loads then
-            local result = event.value :: {serial: integer, choices: selection.Choices?, error: string?}
+            local result = event.value :: {serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
             if result.serial == load_serial then
                 loading = false
-                listed = {items = {}, unavailable = 0}
-                if result.choices then listed = result.choices end
-                selected = #listed.items > 0 and 1 or 0
-                status = result.error or ""
+                listed = no_agents()
+                if result.listing then listed = result.listing end
+                directory = result.directory or directory
+                workspace_names = result.workspaces or workspace_names
+                local count = catalog_open and #listed.items or #directory
+                selected = math.floor(math.min(math.max(1, selected), count))
+                status = result.error or listed.notes[1] or ""
                 dirty = true
                 if reload_pending then reload_pending = false; load() end
+            end
+        elseif event.channel == opens then
+            local result = event.value :: Opened
+            if result.serial == open_serial then
+                opening = false
+                if result.conversation then
+                    open_target = ""
+                    conversation, draft, status, close_key, session_busy = result.conversation, "", "", nil, false
+                    local ref = result.conversation.session:ref()
+                    remembered[ref] = result.conversation
+                    local found = false
+                    for index, row in ipairs(directory) do
+                        if row.session == ref then directory[index] = result.conversation.session.snapshot; found = true; break end
+                    end
+                    if not found then directory[#directory + 1] = result.conversation.session.snapshot end
+                    ticks = 0
+                    if ticker then ticker:stop() end
+                    ticker = time.ticker("1s")
+                    client.title(launch, result.conversation.title)
+                else
+                    status = result.error or "Agent session did not open"
+                end
+                dirty = true
+            end
+        elseif event.channel == progress then
+            local result = event.value :: Progress
+            if result.conversation == conversation then session_busy = false; dirty = true end
+        elseif ticker and event.channel == ticker:channel() then
+            local shown = conversation
+            ticks = ticks + 1
+            if shown and not session_busy and (agents.pending(shown) or shown.activity ~= "idle" or ticks % 5 == 0) then
+                start_task(function(current: agents.Conversation) agents.refresh(current) end)
             end
         elseif event.channel == activations then
             local result = event.value :: Activation
@@ -183,7 +333,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     local denied = result.refused and result.refused.error
                     if denied and denied.code == "CONFLICT" then
                         status = "Profile changed. Refresh and select it again."
-                        listed = {items = {}, unavailable = 0}; selected = 0
+                        listed = no_agents(); selected = 0
                     else
                         status = denied and (denied.code .. ": " .. denied.message) or "Agent launch was not admitted"
                     end
@@ -223,7 +373,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             if data then
                 if data.type == "close" then return finish(nil, nil)
                 elseif data.type == "start" or data.type == "resize" then
-                    width, height = data.width, data.height; dirty = true
+                    width, height = assert(data.width), assert(data.height); dirty = true
                 elseif editing then
                     local action = profile_view.input(editing, data, edit_frame)
                     if action == "cancel" then editing = nil
@@ -236,47 +386,168 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         else editing.status = err or "Profile operation failed" end
                     end
                     dirty = true
+                elseif conversation then
+                    if data.type == "key" and data.action == "press" and (data.key_type == "escape" or data.key_type == "esc") then
+                        if confirming ~= "" then confirming = ""; status = ""; dirty = true else leave_session() end
+                    elseif data.type == "key" and data.action == "press" and data.key_type == "enter" then
+                        if confirming == "stop" then confirming = ""; status = ""; stop_work()
+                        elseif confirming == "close" then confirming = ""; status = ""; close_session()
+                        else submit() end
+                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then status = "Details · " .. conversation.session:ref(); dirty = true
+                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then confirming = "close"; status = "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it"; dirty = true
+                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "k" then confirming = "stop"; status = "Stop current work? Session stays available. Enter confirms · Esc keeps it"; dirty = true
+                    elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                        local hit = frame.hit(session_frame.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
+                        local kind = hit and hit.kind or ""
+                        if kind == "sidebar_session" and hit and not session_busy then
+                            selected = hit.index; open_existing(selected)
+                        elseif kind == "back" then leave_session()
+                        elseif kind == "send" then submit()
+                        elseif kind == "close_session" then confirming = "close"; status = "Close session? Enter confirms · Esc keeps it"; dirty = true
+                        elseif kind == "stop_work" then confirming = "stop"; status = "Stop current work? Enter confirms · Esc keeps it"; dirty = true end
+                    else
+                        local next_draft = session_view.edit(draft, data)
+                        if next_draft ~= draft then draft = next_draft; dirty = true end
+                    end
+                elseif not catalog_open then
+                    local kind = ""
+                    if data.type == "key" and data.action == "press" then
+                        local key = data.key:lower()
+                        if data.key_type == "up" then selected = math.floor(math.max(1, selected - 1)); dirty = true
+                        elseif data.key_type == "down" then selected = math.floor(math.min(#directory, selected + 1)); dirty = true
+                        elseif data.key_type == "enter" then open = true
+                        elseif key == "n" then kind = "new_session"
+                        elseif key == "w" then kind = "workspace"
+                        elseif key == "r" then refresh = true
+                        elseif key == "?" then status = "Choose a session, or N to start one. Esc closes the window; sessions remain available."; dirty = true
+                        elseif data.key_type == "esc" or data.key_type == "escape" then return finish(nil, nil) end
+                    elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                        local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
+                        kind = hit and hit.kind or ""
+                        if kind == "session" and hit then selected = hit.index; dirty = true
+                        elseif kind == "open" then open = true
+                        elseif kind == "refresh" then refresh = true end
+                    end
+                    if kind == "new_session" then catalog_open = true; selected = 0; refresh = true
+                    elseif kind == "workspace" then filtered = not filtered; refresh = true end
                 elseif data.type == "key" and data.action == "press" then
-                    if data.key_type == "escape" or data.key_type == "esc" then return finish(nil, nil)
-                    elseif data.key_type == "up" and selected > 0 and not activating then selected = math.floor(math.max(1, selected - 1)); dirty = true
-                    elseif data.key_type == "down" and selected > 0 and not activating then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
-                    elseif data.key_type == "enter" and not activating then activate = true
-                    elseif data.key == "r" and not data.ctrl and not data.alt and not activating then refresh = true
-                    elseif data.key == "e" and not data.ctrl and not data.alt and not activating then edit = true
-                    elseif data.key == "n" and not data.ctrl and not data.alt and not activating then edit = true; duplicate = true end
+                    if data.key_type == "escape" or data.key_type == "esc" then catalog_open = false; refresh = true
+                    elseif data.key_type == "up" and selected > 0 and idle() then selected = math.floor(math.max(1, selected - 1)); dirty = true
+                    elseif data.key_type == "down" and selected > 0 and idle() then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
+                    elseif data.key_type == "enter" and idle() then
+                        local entry = listed.items[selected]
+                        if entry and not entry.ready then setup_agent() else open = true end
+                    elseif data.ctrl or data.alt then
+                    elseif data.key:lower() == "m" and idle() then attach = true
+                    elseif data.key:lower() == "u" and idle() then show_unavailable = not show_unavailable; refresh = true
+                    elseif data.key == "?" then status = "M manual Terminal attach · E customize copy or edit · N new profile · S setup · Esc sessions"; dirty = true
+                    elseif data.key:lower() == "r" and idle() then refresh = true
+                    elseif data.key:lower() == "s" and idle() then setup_agent()
+                    elseif data.key:lower() == "e" and idle() then edit = true
+                    elseif data.key:lower() == "n" and idle() then edit = true; duplicate = true end
                 elseif data.type == "mouse" then
                     if data.action == "wheel" then
-                        if selected > 0 and not activating then
+                        if selected > 0 and idle() then
                             local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
                             selected = math.floor(math.max(1, math.min(#listed.items, selected + delta))); dirty = true
                         end
                     elseif data.action == "press" and data.button == "left" then
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         local kind = hit and hit.kind or ""
-                        if kind == "close" then return finish(nil, nil)
-                        elseif kind == "open" then activate = true
+                        if kind == "close" then catalog_open = false; refresh = true
+                        elseif kind == "setup" then setup_agent()
+                        elseif kind == "open" then open = true
+                        elseif kind == "attach" then attach = true
+                        elseif kind == "unavailable" and idle() then show_unavailable = not show_unavailable; refresh = true
                         elseif kind == "refresh" then refresh = true
                         elseif kind == "edit" then edit = true
                         elseif kind == "new" then edit = true; duplicate = true
-                        elseif hit and kind == "choice" and not activating and listed.items[hit.index] then
+                        elseif hit and kind == "choice" and idle() and listed.items[hit.index] then
                             selected = hit.index; dirty = true
                         end
                     end
                 end
             end
         end
-        if edit then
-            local choice = listed.items[selected]
-            if choice then
-                local opened, open_error = forms.load(launch.workspace_id, choice, duplicate)
+        if open and not catalog_open and not conversation and idle() and not loading then open_existing(selected) end
+        if edit and catalog_open and not conversation then
+            local entry = listed.items[selected]
+            if entry then
+                local subject: forms.Subject = {title = entry.title}
+                if entry.kind == "definition" then subject.definition_ref = entry.ref
+                else subject.saved_profile_id, subject.saved_profile_revision = entry.ref, entry.revision end
+                local opened, open_error = forms.load(launch.workspace_id, subject, duplicate)
                 if opened then editing = profile_view.new(opened, ask)
                 else status = open_error or "Profile could not be opened" end
                 dirty = true
             end
         end
-        if activate and not loading and not activating and drawn.capacity > 0 then
-            local choice = listed.items[selected]
-            if choice and not choice.unavailable then
+        if open and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
+            local entry = listed.items[selected]
+            if entry and entry.ready then
+                local target = entry.kind .. ":" .. entry.ref .. ":" .. tostring(entry.revision)
+                if open_target ~= target then open_key, open_target = assert(uuid.v7()), target end
+                open_serial = open_serial + 1
+                local serial = open_serial
+                local key = open_key
+                opening = true
+                status = "Opening session…"
+                dirty = true
+                coroutine.spawn(function()
+                    local definition = entry.ref
+                    local profile: {id: string, revision: integer}? = nil
+                    if entry.kind == "profile" then
+                        local revision = entry.revision or 0
+                        local saved, saved_error = forms.saved(launch.workspace_id, entry.ref, revision)
+                        if not saved then
+                            if running and serial == open_serial then
+                                local reply: Opened = {serial = serial, error = saved_error}
+                                opens:send(reply)
+                            end
+                            return
+                        end
+                        definition, profile = saved.definition_ref, {id = entry.ref, revision = revision}
+                    end
+                    local opened, open_error = agents.open(sessions.client(), definition, profile, key)
+                    if running and serial == open_serial then
+                        local reply: Opened = {serial = serial, conversation = opened, error = open_error}
+                        opens:send(reply)
+                    end
+                end)
+            end
+        end
+        if attach and catalog_open and not conversation and not loading and idle() and drawn.capacity > 0 then
+            local entry = listed.items[selected]
+            local choice: Choice? = nil
+            if entry and entry.ready then
+                local definition_ref, title = entry.ref, entry.title
+                local saved_id: string? = nil
+                local saved_revision: integer? = nil
+                local workdir: {root_ref: string, path: string}? = nil
+                local thread_id: string? = nil
+                local resolve_error: string? = nil
+                if entry.kind == "profile" then
+                    local revision = entry.revision or 0
+                    local saved, saved_error = forms.saved(launch.workspace_id, entry.ref, revision)
+                    if saved then
+                        definition_ref, title, saved_id, saved_revision = saved.definition_ref, saved.title, entry.ref, revision
+                        workdir, thread_id = saved.workdir, saved.thread and saved.thread.thread_id
+                    else
+                        resolve_error = saved_error
+                    end
+                end
+                if not resolve_error then
+                    local plan, refused = admission.resolve(definition_ref, "window", launch.workspace_id, saved_id, saved_revision)
+                    if plan then
+                        choice = {definition_ref = definition_ref, title = title, plan_digest = plan.plan_digest,
+                            saved_profile_id = saved_id, saved_profile_revision = saved_revision, workdir = workdir, thread_id = thread_id}
+                    else
+                        resolve_error = fault(refused)
+                    end
+                end
+                if resolve_error then status = resolve_error; dirty = true end
+            end
+            if choice then
                 if not request_id or request_definition ~= choice.definition_ref or request_plan ~= choice.plan_digest then
                     request_id = assert(uuid.v7())
                     request_definition, request_plan = choice.definition_ref, choice.plan_digest

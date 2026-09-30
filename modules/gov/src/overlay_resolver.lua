@@ -183,10 +183,8 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         return nil, "capability requirement metadata is incomplete"
     end
     -- An agent-launch request names the launch definitions the application may
-    -- start. The generated policy pairs the facade call with the launch action
-    -- on those names, so each name must be a real launch definition: a callable
-    -- or any other kind named here would widen the generated funcs.call grant
-    -- beyond the facade.
+    -- start. The generated policy pairs the sessions contract with the launch
+    -- action on those names, so each name must be a real launch definition.
     if capability == "agents.launch" and capability_request then
         local params = capability_request.parameters :: {[string]: unknown}
         local definitions = params.definitions

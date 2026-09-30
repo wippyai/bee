@@ -150,7 +150,10 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
                 if snapshot and table.concat(snapshot.rows):find(label, 1, true) then return end
                 time.sleep("25ms")
             end
-            error("Agent did not show " .. label)
+            view:send({type = "resize", width = 200, height = 12})
+            time.sleep("200ms")
+            local last = view:snapshot()
+            error("Agent did not show " .. label .. ": " .. (last and table.concat(last.rows, "|") or "no frame"))
         end
         local function wait_without(label: string)
             for _ = 1, 100 do
@@ -160,7 +163,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             end
             error("Agent did not clear " .. label)
         end
-        wait_for("No agent profiles")
+        wait_for("No agents are ready")
         -- An empty picker remains interactive and owns no attempt.
         apply(original_definition)
         assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
@@ -168,9 +171,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         if cancel_activation then
             local resource_state = reply(call("bee.resources.binding:list", {workspace_id = WORKSPACE}).value)
             local grants_before = #(resource_state.grants :: {{[string]: unknown}})
-            assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
+            assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
             wait_for("Starting Agent")
-            assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}), "duplicate Enter was not accepted as input")
+            assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}), "duplicate attach was not accepted as input")
             assert(view:send({type = "resize", width = 36, height = 12}))
             local resized = false
             for _ = 1, 40 do
@@ -232,21 +235,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         end
         local before = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
         assert(#(before.records :: {{[string]: unknown}}) == 0, "selector created work before selection")
-        -- Change the exact plan displayed, then prove Enter cannot use it.
-        local modified = changed(original_policy)
-        local modified_data = modified.data :: {[string]: unknown}
-        modified_data.start_ms = 11000
-        apply(modified)
-        assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
-        -- First-use setup now rejects the stale plan before admission. Its
-        -- full message is clipped at this deliberately narrow viewport.
-        wait_for("selected launch plan")
-        local refused = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
-        assert(#(refused.records :: {{[string]: unknown}}) == 0, "stale selection created work")
-        assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
-        wait_without("selected launch plan")
-        wait_for("Selected agent fixture")
-        assert(view:send({type = "mouse", x = 3, y = 9, button = "left", action = "press"}))
+        assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
     end
     if selected then
         local launched = false
@@ -716,4 +705,5 @@ M.retained = function()
     apply(mode)
     if not ok then error(tostring(failure)) end
 end
+
 return M

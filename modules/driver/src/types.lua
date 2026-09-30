@@ -60,6 +60,12 @@ type RequiredFile = {variable: string, path: string, default_directory: string?}
 -- Evidence is checked by placement in the selected provider home. Paths are
 -- alternatives: any existing file is enough. The command is display text.
 type LoginEvidence = {provider: string, command: string, files: {RequiredFile}}
+type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
+type LocatePlatform = {os: string?, arch: string?, compatible: boolean?}
+type LocateExecutable = {name: string, present: boolean?, version: string?}
+type LocateLogin = {evidence: "file_exists" | "not_required", path: string?, exists: boolean?}
+type LocateResult = {provider: string, status: LocateStatus, executable: LocateExecutable,
+    login: LocateLogin, platform: LocatePlatform, checked_at: string?, reason: string?}
 type ProviderHomeFile =
     {source_path: string, path: string, kind: "login", optional: boolean, write_back: boolean}
     | {source_path: string, path: string, kind: "config", optional: boolean, write_back: false}

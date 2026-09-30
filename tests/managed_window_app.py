@@ -35,6 +35,10 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
         '    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,\n',
         '    if request.workspace_id == string.rep("a", 32) then time.sleep("1s") end\n'
         '    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,\n'))
+    security_index = folder / "modules/harness/src/security/_index.yaml"
+    security_index.write_text(security_index.read_text().replace(
+        'resource == "bee.sessions.binding:catalog_binding"',
+        'resource == "bee.sessions.binding:catalog_binding" || resource == "bee.managed.window.fixture:catalog_owner"'))
     environment = workspace.database_environment(folder)
     # The product composition is linted by `make lint`; this proof lints its fixture
     # and the harness entries it rewrites.

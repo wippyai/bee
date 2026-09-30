@@ -5,6 +5,22 @@ presents them. The workspace host can run without a physical terminal. A
 desktop client can be replaced or detached while the host and its applications
 continue to run.
 
+## Primary places and layout
+
+Start groups the desktop into Sessions, Needs you, Apps and Settings/Help.
+The top bar keeps these destinations visible at 80 columns and wider. Apps
+contains installed applications with infrastructure tools under Advanced;
+History is not a primary place. Needs you opens the existing Approvals inbox;
+decisions remain recorded by its owner. The top-bar count shows unavailable
+(`—`) because the desktop has no eligible read-only attention contract. Source
+Session navigation also needs a public application navigation contract.
+
+New applications use the full pane below the top bar. F11 restores the saved
+floating bounds; the window menu labels this Advanced: floating layout.
+Existing saved layouts retain their geometry. Full-pane windows use the current
+display size after resizing. Snap and floating transforms retain their existing
+behavior.
+
 ## Owners and identities
 
 | Identity | Owner | Meaning |

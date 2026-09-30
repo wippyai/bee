@@ -115,7 +115,7 @@ local function association_of(db: sql.DB, workspace_id: string, name: string): (
     local rows, err = db:query("SELECT * FROM bee_resource_associations WHERE workspace_id = ? AND name = ?", {workspace_id, name})
     if err or not rows then return nil, "read association" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: Row, nil
+    return rows[1], nil
 end
 local function grantable_association(db: sql.DB, workspace_id: string, name: string,
     access: string): (Row?, Reply?)
@@ -139,13 +139,13 @@ local function association_in(tx: sql.Transaction, workspace_id: string, name: s
     local rows, err = tx:query("SELECT * FROM bee_resource_associations WHERE workspace_id = ? AND name = ?", {workspace_id, name})
     if err or not rows then return nil, "read association" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: Row, nil
+    return rows[1], nil
 end
 local function grant_of(db: sql.DB, grant_id: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_resource_grants WHERE grant_id = ?", {grant_id})
     if err or not rows then return nil, "read grant" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: Row, nil
+    return rows[1], nil
 end
 -- associate: a workspace manager binds a name to an admitted root; a
 -- second association under the same name replaces it at the next revision
@@ -185,47 +185,47 @@ function M.associate(value: unknown): Reply
     local root_digest, digest_error = digest_of(root)
     if not root_digest then return fail("INVALID", digest_error or "root is not measurable") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local result: TransactionResult = transaction.write(db, "associate", function(tx: sql.Transaction): TransactionResult
         local existing, existing_error = association_in(tx, workspace_id, name)
-        if existing_error then return transaction.failure("STORAGE", existing_error) :: TransactionResult end
+        if existing_error then return transaction.failure("STORAGE", existing_error) end
         local current_revision = 0
         if existing then
             current_revision = integer(existing.revision)
-            if not current_revision then return transaction.failure("STORAGE", "association revision is corrupt") :: TransactionResult end
+            if not current_revision then return transaction.failure("STORAGE", "association revision is corrupt") end
         end
         if expected_revision ~= nil and expected_revision ~= current_revision then
-            return transaction.failure("CONFLICT", "expected_revision does not match the association") :: TransactionResult
+            return transaction.failure("CONFLICT", "expected_revision does not match the association")
         end
         if existing and existing.root_ref == root_ref and existing.root_digest == root_digest
             and existing.subpath == subpath and existing.allowed_access == allowed then
             local view, view_error = association_view(existing)
-            if not view then return transaction.failure("STORAGE", view_error or "association is corrupt") :: TransactionResult end
-            return transaction.success(view, true) :: TransactionResult
+            if not view then return transaction.failure("STORAGE", view_error or "association is corrupt") end
+            return transaction.success(view, true)
         end
         local at = stamp(now_ms())
         local revision = current_revision + 1
         local association_id, id_error = uuid.v7()
-        if id_error or not association_id then return transaction.failure("STORAGE", "association id") :: TransactionResult end
+        if id_error or not association_id then return transaction.failure("STORAGE", "association id") end
         if existing then
             local _, update_error = tx:execute("UPDATE bee_resource_associations SET association_id = ?, revision = ?, root_ref = ?, root_digest = ?, subpath = ?, allowed_access = ?, owner_node = ?, updated_at = ? WHERE workspace_id = ? AND name = ?",
                 {association_id, revision, root_ref, root_digest, subpath, allowed, owner_node, at, workspace_id, name})
-            if update_error then return transaction.failure("STORAGE", "replace association") :: TransactionResult end
+            if update_error then return transaction.failure("STORAGE", "replace association") end
         else
             local _, insert_error = tx:execute("INSERT INTO bee_resource_associations (workspace_id, name, association_id, revision, root_ref, root_digest, subpath, allowed_access, owner_node, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(workspace_id, name) DO NOTHING",
                 {workspace_id, name, association_id, revision, root_ref, root_digest, subpath, allowed, owner_node, at, at})
-            if insert_error then return transaction.failure("STORAGE", "record association") :: TransactionResult end
+            if insert_error then return transaction.failure("STORAGE", "record association") end
         end
         local stored, stored_error = association_in(tx, workspace_id, name)
-        if stored_error or not stored then return transaction.failure("STORAGE", stored_error or "read association") :: TransactionResult end
+        if stored_error or not stored then return transaction.failure("STORAGE", stored_error or "read association") end
         if not existing and stored.association_id ~= association_id then
-            if expected_revision == 0 then return transaction.failure("CONFLICT", "association was created concurrently") :: TransactionResult end
-            return transaction.failure("STORAGE", "association changed during creation") :: TransactionResult
+            if expected_revision == 0 then return transaction.failure("CONFLICT", "association was created concurrently") end
+            return transaction.failure("STORAGE", "association changed during creation")
         end
         local view, view_error = association_view(stored)
-        if not view then return transaction.failure("STORAGE", view_error or "association is corrupt") :: TransactionResult end
-        return transaction.success(view, false) :: TransactionResult
-    end) :: TransactionResult
+        if not view then return transaction.failure("STORAGE", view_error or "association is corrupt") end
+        return transaction.success(view, false)
+    end)
     db:release()
     if not result.ok then return fail(result.code or "STORAGE", result.message or "associate failed") end
     return succeed(result.value)
@@ -291,7 +291,7 @@ function M.grant(value: unknown): Reply
     local request_digest, request_digest_error = digest_of(digest_input)
     if not request_digest then return fail("INVALID", request_digest_error or "request is not measurable") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     if idempotency_key then
         local replay, replay_error = db:query("SELECT * FROM bee_resource_grants WHERE subject = ? AND idempotency_key = ?", {subject, idempotency_key})
         if replay_error or not replay then
@@ -299,7 +299,7 @@ function M.grant(value: unknown): Reply
             return fail("STORAGE", "read grants")
         end
         if #replay == 1 then
-            local stored = replay[1] :: Row
+            local stored = replay[1]
             local view, view_error = grant_view(stored)
             db:release()
             if stored.request_digest ~= request_digest then return fail("CONFLICT", "idempotency key reused with a different request") end
@@ -310,7 +310,7 @@ function M.grant(value: unknown): Reply
     local association, refused = grantable_association(db, workspace_id, name, access)
     if not association then
         db:release()
-        return refused :: Reply
+        return refused
     end
     local epoch, epoch_error = epoch_of(db, workspace_id)
     if not epoch then
@@ -355,10 +355,10 @@ function M.check_grant(value: unknown): Reply
         return fail("DENIED", "caller may not validate thread-bound grants in workspace " .. workspace_id)
     end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local association, refused = grantable_association(db, workspace_id, name, access)
     db:release()
-    if not association then return refused :: Reply end
+    if not association then return refused end
     return succeed({allowed = true})
 end
 -- revoke: the subject or a manager ends a grant; the returned view names
@@ -376,7 +376,7 @@ function M.revoke(value: unknown): Reply
     local caller = actor()
     if not caller then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local grant, grant_error = grant_of(db, grant_id)
     if grant_error then
         db:release()
@@ -424,7 +424,7 @@ function M.revoke_all(value: unknown): Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, workspace_id) then return fail("DENIED", "caller does not manage workspace " .. workspace_id) end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local epoch, epoch_error = epoch_of(db, workspace_id)
     if not epoch then
         db:release()
@@ -438,7 +438,7 @@ function M.revoke_all(value: unknown): Reply
     end
     local fenced: {string} = {}
     for _, row in ipairs(live) do
-        local attempt = text((row :: Row).attempt_id)
+        local attempt = text((row).attempt_id)
         if attempt then fenced[#fenced + 1] = attempt end
     end
     local revocation, report_error = capability_model.revocation_report({}, fenced)
@@ -467,7 +467,7 @@ function M.resolve(value: unknown): Reply
     end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local grant, grant_error = grant_of(db, grant_id)
     if grant_error then
         db:release()
@@ -548,20 +548,20 @@ function M.list(value: unknown): Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, workspace_id) then return fail("DENIED", "caller does not manage workspace " .. workspace_id) end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local associations, associations_error = db:query("SELECT * FROM bee_resource_associations WHERE workspace_id = ? ORDER BY name LIMIT ?", {workspace_id, M.MAX_LIST})
     local grants, grants_error = db:query("SELECT * FROM bee_resource_grants WHERE workspace_id = ? AND revoked_at IS NULL AND expires_at > ? ORDER BY created_at LIMIT ?", {workspace_id, stamp(now_ms()), M.MAX_LIST})
     db:release()
     if associations_error or not associations or grants_error or not grants then return fail("STORAGE", "read workspace resources") end
     local association_views: {{[string]: unknown}} = {}
     for index, row in ipairs(associations) do
-        local view, view_error = association_view(row :: Row)
+        local view, view_error = association_view(row)
         if not view then return fail("STORAGE", view_error or "resource association is corrupt") end
         association_views[index] = view
     end
     local grant_views: {{[string]: unknown}} = {}
     for index, row in ipairs(grants) do
-        local view, view_error = grant_view(row :: Row)
+        local view, view_error = grant_view(row)
         if not view then return fail("STORAGE", view_error or "resource grant is corrupt") end
         grant_views[index] = view
     end
@@ -590,17 +590,17 @@ function M.describe(value: unknown): Reply
     local unknown_field = bounds.fields(object, {"workspace_id"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local workspace_id, refused = readable(object)
-    if not workspace_id then return refused :: Reply end
+    if not workspace_id then return refused end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local rows, rows_error = db:query("SELECT name, root_ref, subpath, allowed_access FROM bee_resource_associations WHERE workspace_id = ? ORDER BY name LIMIT ?",
         {workspace_id, M.MAX_DESCRIBED})
     local counted, count_error = db:query("SELECT COUNT(*) AS total FROM bee_resource_associations WHERE workspace_id = ?", {workspace_id})
     db:release()
     if rows_error or not rows or count_error or not counted then return fail("STORAGE", "read workspace resources") end
     local items: {{[string]: unknown}} = {}
-    for index, row in ipairs(rows) do items[index] = described(row :: Row) end
-    local total = integer((counted[1] :: Row).total)
+    for index, row in ipairs(rows) do items[index] = described(row) end
+    local total = integer((counted[1]).total)
     if not total or total < #items then return fail("STORAGE", "resource association count is corrupt") end
     return succeed({title = "Resources", items = items, total = total})
 end
@@ -618,9 +618,9 @@ function M.search(value: unknown): Reply
         limit = number
     end
     local workspace_id, refused = readable(object)
-    if not workspace_id then return refused :: Reply end
+    if not workspace_id then return refused end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     -- Names are identifiers without control bytes, so the successor of the
     -- prefix's last byte bounds the range of names that start with it.
     local upper = prefix:sub(1, #prefix - 1) .. string.char(prefix:byte(#prefix) + 1)
@@ -629,7 +629,7 @@ function M.search(value: unknown): Reply
     db:release()
     if rows_error or not rows then return fail("STORAGE", "search workspace resources") end
     local hits: {{[string]: unknown}} = {}
-    for index, row in ipairs(rows) do hits[index] = described(row :: Row) end
+    for index, row in ipairs(rows) do hits[index] = described(row) end
     return succeed({title = "Resources", hits = hits})
 end
 function M.capabilities(): Reply

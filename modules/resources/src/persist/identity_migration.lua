@@ -14,7 +14,7 @@ local function count(tx: sql.Transaction, statement: string, args: {unknown}): (
     if err or not rows or #rows ~= 1 or type(rows[1].count) ~= "number" then
         return nil, "read resource node identity migration count"
     end
-    local value = math.floor(rows[1].count :: number)
+    local value = math.floor(rows[1].count)
     if value < 0 or value ~= rows[1].count then return nil, "resource node identity migration count is invalid" end
     return value, nil
 end

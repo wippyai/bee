@@ -33,7 +33,8 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
     if not profile_id then return nil, "locate probe profile_id is invalid" end
     if type(object.configured) ~= "boolean" then return nil, "locate probe configured must be boolean" end
 
-    local executable: {[string]: unknown} = {}
+    local executable_present: boolean? = nil
+    local executable_version: string? = nil
     if object.executable ~= nil then
         local raw_executable = bounds.object(object.executable)
         if not raw_executable then return nil, "locate probe executable must be an object" end
@@ -45,12 +46,16 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
         if raw_executable.version ~= nil then
             local version = bounds.text(raw_executable.version, 128)
             if not version or version == "" or version:find("[%c]") then return nil, "locate probe executable.version is invalid" end
-            executable.version = version
+            executable_version = version
         end
-        executable.present = raw_executable.present
+        local present = raw_executable.present
+        if present ~= nil and type(present) ~= "boolean" then return nil, "locate probe executable.present must be boolean" end
+        executable_present = present
     end
 
-    local platform: {[string]: unknown} = {}
+    local platform_os: string? = nil
+    local platform_arch: string? = nil
+    local platform_compatible: boolean? = nil
     if object.platform ~= nil then
         local raw_platform = bounds.object(object.platform)
         if not raw_platform then return nil, "locate probe platform must be an object" end
@@ -60,15 +65,19 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
             if raw_platform[field] ~= nil then
                 local value = bounds.id(raw_platform[field])
                 if not value then return nil, "locate probe platform." .. field .. " is invalid" end
-                platform[field] = value
+                if field == "os" then platform_os = value else platform_arch = value end
             end
         end
         if raw_platform.compatible ~= nil and type(raw_platform.compatible) ~= "boolean" then
             return nil, "locate probe platform.compatible must be boolean"
         end
-        platform.compatible = raw_platform.compatible
+        local compatible = raw_platform.compatible
+        if compatible ~= nil and type(compatible) ~= "boolean" then return nil, "locate probe platform.compatible must be boolean" end
+        platform_compatible = compatible
     end
 
+    local executable = {present = executable_present, version = executable_version}
+    local platform = {os = platform_os, arch = platform_arch, compatible = platform_compatible}
     local checks: {login_evidence.Check} = {}
     local present: boolean? = true
     if spec.login_evidence then
@@ -105,15 +114,16 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
     local login: Login
     if spec.login_evidence then login = {evidence = "any_of", exists = present}
     else login = {evidence = "not_required", exists = true} end
-    local result_platform: Result["platform"] = {os = platform.os :: string?, arch = platform.arch :: string?, compatible = platform.compatible :: boolean?}
+    local result_platform: Result["platform"] = {os = platform.os, arch = platform.arch, compatible = platform.compatible}
     local result: Result = {provider = spec.provider, status = status,
         executable = {name = spec.executable, present = executable.present, version = executable.version},
-        login = login :: Login, platform = result_platform, checked_at = checked_at, reason = reason}
+        login = login, platform = result_platform, checked_at = checked_at, reason = reason}
     return result, nil
 end
 
-function M.status(value: unknown): string?
-    return bounds.member(value, STATUSES)
+function M.status(value: unknown): LocateStatus?
+    if value == "ready" or value == "missing" or value == "unconfigured" or value == "incompatible" or value == "unknown" then return value end
+    return nil
 end
 
 function M.decode(raw: unknown): (Result?, string?)
@@ -169,10 +179,13 @@ function M.decode(raw: unknown): (Result?, string?)
     local evidence_kind: "file_exists" | "any_of" | "not_required"
     if login_evidence == "file_exists" then evidence_kind = "file_exists"
     elseif login_evidence == "any_of" then evidence_kind = "any_of" else evidence_kind = "not_required" end
-    local decoded: Result = {provider = provider, status = status :: LocateStatus,
-        executable = {name = executable_name, present = raw_executable.present :: boolean?, version = executable_version},
-        login = {evidence = evidence_kind, path = login_path, exists = raw_login.exists :: boolean?},
-        platform = {os = platform_os, arch = platform_arch, compatible = raw_platform.compatible :: boolean?},
+    local present, exists, compatible = raw_executable.present, raw_login.exists, raw_platform.compatible
+    if (present ~= nil and type(present) ~= "boolean") or (exists ~= nil and type(exists) ~= "boolean")
+        or (compatible ~= nil and type(compatible) ~= "boolean") then return nil, "locate result boolean is invalid" end
+    local decoded: Result = {provider = provider, status = status,
+        executable = {name = executable_name, present = present, version = executable_version},
+        login = {evidence = evidence_kind, path = login_path, exists = exists},
+        platform = {os = platform_os, arch = platform_arch, compatible = compatible},
         checked_at = checked_at, reason = reason}
     return decoded, nil
 end

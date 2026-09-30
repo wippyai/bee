@@ -38,7 +38,7 @@ local function decode_fault(value: unknown, field: string): ({code: string, mess
     local message = bounds.text(object.message, bounds.MAX_FAULT_MESSAGE_BYTES)
     if not message then return nil, field .. ".message exceeds maximum fault message bytes" end
     if type(object.retryable) ~= "boolean" then return nil, field .. ".retryable must be a boolean" end
-    return {code = code, message = message, retryable = object.retryable :: boolean}, nil
+    return {code = code, message = message, retryable = object.retryable}, nil
 end
 
 local function decode_usage(value: unknown, field: string, provider_wire: boolean?): (types.Usage?, string?)
@@ -114,8 +114,8 @@ local function decode_terminal(value: unknown): (types.Terminal?, string?)
     local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
     if unknown_field then return nil, "state.terminal: " .. unknown_field end
     local declared_outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
-    if not declared_outcome then return nil, "state.terminal.outcome is not one outcome Bee admits" end
-    local outcome: types.Outcome = declared_outcome :: types.Outcome
+    if declared_outcome ~= "succeeded" and declared_outcome ~= "failed" and declared_outcome ~= "cancelled" and declared_outcome ~= "uncertain" then return nil, "state.terminal.outcome is not one outcome Bee admits" end
+    local outcome: types.Outcome = declared_outcome
 
     local answer: string? = nil
     if object.answer ~= nil then
@@ -191,11 +191,11 @@ function M.decode_state(value: unknown): (State?, string?)
 
     return {
         session_id = session_id,
-        started = object.started :: boolean,
-        resumed = object.resumed :: boolean,
+        started = object.started,
+        resumed = object.resumed,
         terminal = terminal,
         answer = answer,
-        answer_truncated = object.answer_truncated :: boolean,
+        answer_truncated = object.answer_truncated,
     }, nil
 end
 
@@ -214,7 +214,7 @@ end
 
 local function event_body(envelope: {[string]: unknown}, event_name: string): {[string]: unknown}
     local nested = envelope[event_name]
-    if type(nested) == "table" then return nested :: {[string]: unknown} end
+    if type(nested) == "table" then return nested end
     return envelope
 end
 
@@ -368,7 +368,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
                 local err_obj = body.error
                 if err_obj ~= nil or body.is_error == true then
                     outcome = "failed"
-                    local msg = type(err_obj) == "table" and tostring((err_obj :: {[string]: unknown}).message or (err_obj :: {[string]: unknown}).type or "tool error") or tostring(err_obj or "tool error")
+                    local msg = type(err_obj) == "table" and tostring((err_obj).message or (err_obj).type or "tool error") or tostring(err_obj or "tool error")
                     fault = events.fault("tool_error", msg, false)
                 end
                 local output_text = ""
@@ -445,8 +445,8 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         local answer: string? = nil
         if outcome == "succeeded" then
             if type(response) == "string" then
-                if #(response :: string) <= M.MAX_ANSWER_BYTES then
-                    answer = response :: string
+                if #(response) <= M.MAX_ANSWER_BYTES then
+                    answer = response
                 else
                     state.answer = nil
                     state.answer_truncated = true
@@ -458,7 +458,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         end
 
         state.terminal = {
-            outcome = outcome :: types.Outcome,
+            outcome = outcome,
             answer = answer,
             resume_ref = state.session_id,
             usage = usage,

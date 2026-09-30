@@ -53,7 +53,7 @@ function M.active(pinned: registry.Snapshot): ({[string]: boolean}?, string?)
 end
 local function array(value: unknown, maximum: integer, label: string): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
-    local list = value :: {unknown}
+    local list = value
     local count = 0
     for key in pairs(list) do
         if type(key) ~= "number" or key < 1 or math.floor(key) ~= key then return nil, label .. " must be a list" end

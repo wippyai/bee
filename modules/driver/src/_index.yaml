@@ -43,6 +43,8 @@ entries:
   kind: library.lua
   source: file://codec_registry.lua
   imports:
+    bounds: bee.threads.records:bounds
+    normalizer: bee.driver.kit:normalize
     claude_stream_json: bee.driver.codec:claude_stream_json
     codex_jsonl: bee.driver.codec:codex_jsonl
     opencode_json_events: bee.driver.codec:opencode_json_events

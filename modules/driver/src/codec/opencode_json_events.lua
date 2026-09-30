@@ -46,9 +46,9 @@ end
 -- optional prompt-cache read count. Steps accumulate across one run.
 local function accumulate_usage(state: State, value: unknown)
     if type(value) ~= "table" then return end
-    local tokens = value :: {[string]: unknown}
+    local tokens = value
     local cache: {[string]: unknown}? = nil
-    if type(tokens.cache) == "table" then cache = tokens.cache :: {[string]: unknown} end
+    if type(tokens.cache) == "table" then cache = tokens.cache end
     local usage = events.usage(tokens.input, tokens.output, cache and cache.read)
     if not usage then return end
     local total = state.usage or {}
@@ -85,30 +85,30 @@ local function retained_answer(state: State): string?
 end
 local function error_fault(message_value: unknown): Fault
     local message = "opencode reported an error"
-    if type(message_value) == "string" and #(message_value :: string) > 0 then
-        message = message_value :: string
+    if type(message_value) == "string" and #(message_value) > 0 then
+        message = message_value
     end
     return events.fault("run_error", message, false)
 end
 local function tool_observations(state: State, index: integer, envelope: {[string]: unknown}, out: {Observation})
     local part: unknown = envelope.part
     if type(part) ~= "table" then return end
-    local body = part :: {[string]: unknown}
+    local body = part
     local call_id = bounds.id(body.callID) or ("call-" .. tostring(index))
     local tool_name = bounds.id(body.tool) or "unknown"
     local detail: {[string]: unknown} = {}
-    if type(body.state) == "table" then detail = body.state :: {[string]: unknown} end
+    if type(body.state) == "table" then detail = body.state end
     local input = "{}"
     if detail.input ~= nil then
         if type(detail.input) == "string" then
-            input = detail.input :: string
+            input = detail.input
         else
             local encoded, err = json.encode(detail.input)
             if not err and encoded then input = encoded end
         end
     end
     out[#out + 1] = events.tool_call(key(index, "tool_call"), call_id, tool_name, input)
-    local status = type(detail.status) == "string" and (detail.status :: string):lower() or ""
+    local status = type(detail.status) == "string" and (detail.status):lower() or ""
     if status == "completed" then
         out[#out + 1] = events.tool_result(key(index, "tool_result"), call_id, "succeeded", text_of(detail.output), nil)
     elseif status == "error" then
@@ -158,7 +158,7 @@ function M.decode_state(value: unknown): (State?, string?)
         local code = bounds.id(error_object.code)
         local message = bounds.text(error_object.message, 4096)
         if not code or not message or type(error_object.retryable) ~= "boolean" then return nil, "state.error is invalid" end
-        fault = {code = code, message = message, retryable = error_object.retryable :: boolean}
+        fault = {code = code, message = message, retryable = error_object.retryable}
     end
     local terminal: types.Terminal? = nil
     if object.terminal ~= nil then
@@ -167,7 +167,8 @@ function M.decode_state(value: unknown): (State?, string?)
         local terminal_unknown = bounds.fields(terminal_object, {"outcome", "answer", "resume_ref", "usage", "error"})
         if terminal_unknown then return nil, "state.terminal: " .. terminal_unknown end
         local outcome = bounds.member(terminal_object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
-        if not outcome then return nil, "state.terminal.outcome is not one outcome Bee admits" end
+        if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "state.terminal.outcome is not one outcome Bee admits" end
+        local terminal_outcome: types.Outcome = outcome
         local terminal_answer: string? = nil
         if terminal_object.answer ~= nil then
             terminal_answer = bounds.text(terminal_object.answer, M.MAX_ANSWER_BYTES)
@@ -191,17 +192,17 @@ function M.decode_state(value: unknown): (State?, string?)
             local code = bounds.id(error_object.code)
             local message = bounds.text(error_object.message, 4096)
             if not code or not message or type(error_object.retryable) ~= "boolean" then return nil, "state.terminal.error is invalid" end
-            terminal_fault = {code = code, message = message, retryable = error_object.retryable :: boolean}
+            terminal_fault = {code = code, message = message, retryable = error_object.retryable}
         end
-        terminal = {outcome = outcome :: types.Outcome, answer = terminal_answer, resume_ref = resume_ref, usage = terminal_usage, error = terminal_fault}
+        terminal = {outcome = terminal_outcome, answer = terminal_answer, resume_ref = resume_ref, usage = terminal_usage, error = terminal_fault}
     end
-    return {session_id = session_id, started = object.started :: boolean, resumed = object.resumed :: boolean,
-        answer = answer, answer_truncated = object.answer_truncated :: boolean, usage = usage, error = fault,
+    return {session_id = session_id, started = object.started, resumed = object.resumed,
+        answer = answer, answer_truncated = object.answer_truncated, usage = usage, error = fault,
         terminal = terminal}, nil
 end
 function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
-    local kind = type(envelope.type) == "string" and envelope.type :: string or "unknown"
+    local kind = type(envelope.type) == "string" and envelope.type or "unknown"
     if state.terminal then
         out[#out + 1] = events.notice(key(index, "after-terminal"), "warning", "after_terminal", "envelope after the turn ended: " .. kind)
         return {observations = out}
@@ -212,7 +213,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     elseif kind == "text" then
         ensure_started(state, index, out)
         local selected_text = path_reader.read(envelope, paths, "result_text")
-        local text = type(selected_text) == "string" and selected_text :: string or ""
+        local text = type(selected_text) == "string" and selected_text or ""
         if #text > 0 then
             if not state.answer_truncated then
                 local answer = (state.answer or "") .. text

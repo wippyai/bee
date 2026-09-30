@@ -9,9 +9,7 @@ local frame = require("frame")
 local funcs = require("funcs")
 local fs = require("fs")
 local sql = require("sql")
-local hash = require("hash")
-local canonical = require("canonical")
-local agents = require("agents")
+local sessions = require("sessions")
 
 
 local HINTS = frame.hints({{key = "Enter", verb = "add one"}, {key = "r", verb = "reset"}, {key = "Esc", verb = "exit"}})
@@ -117,43 +115,43 @@ local function main(value: unknown)
         checkpoint()
     end
 
+    local function settle(work: sessions.Work, label: string): (string, string)
+        local awaited, await_fault = work:await({timeout_ms = 15000})
+        if not awaited then return label .. ":" .. tostring(await_fault and await_fault.code), "" end
+        if awaited.tag ~= "ready" then return awaited.tag, "" end
+        return "ended", awaited.result.outcome
+    end
+
     local function launch_child()
-        -- The installed agents.launch grant lets this app start exactly the
-        -- allow-listed shipped Claude batch definition. The app waits for the
-        -- placed child, reads its result and steers it through threads.message.
-        local run, launch_fault = agents.launch({definition_ref = "bee.driver.claude:research_batch",
-            brief = "summarize the workspace", idempotency_key = "tally-launch-" .. launch.launch_token,
-            thread = {title = "Tally workspace summary"}})
-        local run_state = run and "starting" or ("refused:" .. tostring(launch_fault and launch_fault.code))
-        local outcome: string? = nil
+        -- The installed agents.launch grant lets this app open a session on exactly the
+        -- allow-listed shipped Claude batch definition, send it work and read the
+        -- result, then send it a second piece of work on the same session.
+        local session, open_fault = sessions.open({definition = "bee.driver.claude:research_batch",
+            operation_key = "tally-open-" .. launch.launch_token})
+        local run_state = session and "starting" or ("refused:" .. tostring(open_fault and open_fault.code))
+        local outcome = ""
         local steer = "skipped"
-        if run then
-            local waited, wait_fault = agents.wait(run, 15000)
-            if waited then
-                run_state = waited.state
-                outcome = waited.outcome
-                local current, status_fault = agents.status(run)
-                if current and current.state == "ended" then run_state = current.state end
-                if status_fault then run_state = "status:" .. tostring(status_fault.code) end
+        local first_ref = ""
+        if session then
+            local first, first_fault = session:send({input = "summarize the workspace",
+                operation_key = "tally-work-" .. launch.launch_token})
+            if first then
+                first_ref = first:ref()
+                run_state, outcome = settle(first, "wait")
+                local second, second_fault = session:send({input = "tally steer: keep counting",
+                    operation_key = "tally-steer-" .. launch.launch_token})
+                if second then
+                    local second_state, second_outcome = settle(second, "steer")
+                    steer = (second_state == "ended" and second_outcome == "succeeded") and "sent" or second_state
+                else
+                    steer = "refused:" .. tostring(second_fault and second_fault.code)
+                end
             else
-                run_state = "wait:" .. tostring(wait_fault and wait_fault.code)
-            end
-            local message = {message_id = "tally-steer-" .. launch.launch_token, message_kind = "notification",
-                recipient_ids = {}, content = {text = "tally steer: keep counting"}}
-            local encoded, encode_error = canonical.encode(message)
-            local digest = encoded and hash.sha256(encoded) or nil
-            if not encode_error and digest then
-                local sent = funcs.call("bee.threads.service:send", {thread_id = run.thread_id,
-                    idempotency_key = "tally-steer-" .. launch.launch_token, caller_node_id = "node-tally",
-                    payload_digest = digest, message = message})
-                local reply = type(sent) == "table" and sent or nil
-                steer = (reply and reply.ok == true) and "sent" or "refused"
-            else
-                steer = "digest:unavailable"
+                run_state = "refused:" .. tostring(first_fault and first_fault.code)
             end
         end
         local _, run_row_error = db:execute("INSERT INTO tally_runs(attempt_id, definition_ref, state, outcome, steer) VALUES (?, ?, ?, ?, ?)",
-            {run and run.attempt_id or "", run and run.definition_ref or "", run_state, outcome or "", steer})
+            {first_ref, session and "bee.driver.claude:research_batch" or "", run_state, outcome, steer})
         if run_row_error then error("Application run record is unavailable") end
         status = "Agent " .. run_state
         paint()

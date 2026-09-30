@@ -121,6 +121,8 @@ rollback results stay in the receipt for review and recovery; no automatic
 retry is scheduled.
 
 Modules presents the same read, plan, review, confirmation and receipt flow.
+Replanning clears the previous measured plan before dispatch, so confirmation
+becomes available only after the fresh plan reply arrives.
 Its package contents browser is read-only and binds resource reads to the
 selected artifact digest.
 
@@ -160,8 +162,8 @@ approved digest through the Hub facade with management authority added to that
 one call; a changed registry base fails with `STALE` and needs a new request.
 `approved` means the apply outcome is unknown; the next poll repeats the same
 digest-bound apply, which replays its recorded receipt. The requesting attempt
-applies the request: the approval notice wakes its `thread_wait`, and a request
-whose attempt ended before polling stays unapplied.
+applies the request when it polls `install_status`, and a request whose attempt
+ended before polling stays unapplied.
 
 The host grants these tools per launch policy (`gateway_tools`) and links their
 MCP policy through the gateway's `target_tool_install_policy`; the shipped

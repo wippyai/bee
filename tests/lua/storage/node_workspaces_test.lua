@@ -227,9 +227,9 @@ local function define_tests()
             test.eq(kept[1].workspace_id, seeded[1].workspace_id)
             local saved = query(resource, "SELECT generation, value FROM workspace_state WHERE workspace_id = ?", {old_id})[1]
             test.eq(saved.generation, 2)
-            test.eq(saved.value, '{"version":1,"applications":[{"definition_id":"bee.approvals.inbox:app"}],"opaque":"bee.inbox:app"}')
+            test.eq(saved.value, '{"version":1,"applications":[{"definition_id":"bee.approvals.inbox.app:app"}],"opaque":"bee.inbox:app"}')
             test.eq(query(resource, "SELECT definition_id FROM workspace_application_thread_bindings WHERE workspace_id = ?", {old_id})[1].definition_id,
-                "bee.approvals.inbox:app")
+                "bee.approvals.inbox.app:app")
             local classic = open(resource, binding.classic())
             test.eq(assert(classic:identity()), seeded[1].workspace_id)
             assert(classic:close())

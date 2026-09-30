@@ -1651,6 +1651,24 @@ local function define_tests()
             test.eq(#receipt, 1)
             test.eq(receipt[1], "intent.recorded")
         end)
+        test.it("retains structured private provider state across cleaned turn attempts", function()
+            local session_ref = fresh("private-turn-session")
+            for _, marker in ipairs({"first", "second"}) do
+                local request = retained_launch(OWNER, session_ref, marker)
+                local declared = request.launch :: {[string]: unknown}
+                declared.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {{path = ".codex/history", kind = "state", optional = true, write_back = false}}}
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                test.is_true(wait_for(function()
+                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+                end, 8000))
+                attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+            end
+            local key = assert(homes.session_key(OWNER, session_ref))
+            local session_path = assert(homes.ensure_session(key))
+            local home_path = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("cat " .. quote.posix(home_path .. "/marker")), "first\nsecond\n")
+        end)
         test.it("retains a selected session home and publishes changed configuration", function()
             local session_ref = fresh("session")
             local first = retained_launch(OWNER, session_ref, "first")
@@ -2079,6 +2097,41 @@ local function define_tests()
                 test.is_true(has(kinds(prepared.attempt_id), "child.exited"))
             end
         end)
+        test.it("retains pipe data across post-exit consumer backpressure without false truncation", function()
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
+            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
+            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 100, retain_ms = 1500}
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            local end_deadline = time.after("10s")
+            while true do
+                local exited = channel.select({exits:case_receive(), end_deadline:case_receive()})
+                assert(exited.ok and exited.channel == exits, "producer did not exit with buffered output")
+                if exited.value:payload():data().attempt_id == prepared.attempt_id then break end
+            end
+            local hold = time.after("300ms")
+            channel.select({hold:case_receive()})
+            local received, eof, marked = 0, 0, false
+            local deadline = time.after("10s")
+            while eof < 2 do
+                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
+                assert(selected.ok and selected.channel == outputs, "buffered streams did not finish")
+                local data = selected.value:payload():data() :: {[string]: unknown}
+                if data.attempt_id == prepared.attempt_id then
+                received = received + #(type(data.data) == "string" and data.data :: string or "")
+                if data.eof == true then eof = eof + 1 end
+                if data.truncated == true then marked = true end
+                assert(process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
+                end
+            end
+            test.eq(received, 300000)
+            test.is_false(marked)
+            test.is_false(has(kinds(prepared.attempt_id), "output.drain_elapsed"))
+            process.unlisten(outputs)
+            process.unlisten(exits)
+        end)
         test.it("records unacknowledged output as lost once the retention deadline passes after exit", function()
             local request = launch({"sh", "-c", "echo one; echo two"}, "direct_process")
             request.timeouts = {start_ms = 10000, stop_grace_ms = 500, retain_ms = 300}
@@ -2098,6 +2151,19 @@ local function define_tests()
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                 if item.kind == "output.lost" then test.is_true(tostring(item.detail):find("unacknowledged chunks", 1, true) ~= nil) end
             end
+        end)
+        test.it("bounds post-exit retention when an unacknowledged burst fills the spool", function()
+            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
+            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 100, retain_ms = 300}
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            time.sleep("1500ms")
+            local recorded = kinds(prepared.attempt_id)
+            test.is_true(has(recorded, "child.exited"))
+            test.is_true(has(recorded, "output.lost"))
+            test.is_true(has(recorded, "runner.finished"))
+            test.is_false(has(recorded, "output.drain_elapsed"))
         end)
         test.it("keeps supervising a live attempt without an execution identity while its runner answers", function()
             local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
@@ -2291,10 +2357,8 @@ local function define_tests()
                 .. ' && printf projected-fixture-ok && printf %s ' .. quote.posix(refreshed_login) .. ' > "$CODEX_HOME/auth.json"'
             local request = launch({"sh", "-c", script}, "process_group")
             request.attempt_id = attempt_id
-            request.session_ref = fresh("private-provider-session")
             request.projections = {projection.projection_id}
             local declared_launch = request.launch :: {[string]: unknown}
-            declared_launch.home_ref = "session"
             declared_launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
                 files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
                     {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
@@ -3020,4 +3084,14 @@ local function define_tests()
         end
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local originals: {{[string]: unknown}} = {}
+    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots", "bee.resources:resource_roots", "bee.credentials:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+    local ok, result = pcall(cases, options)
+    local changes = assert(registry.snapshot()):changes()
+    for _, original in ipairs(originals) do changes:update(original) end
+    assert(changes:apply())
+    if not ok then error(tostring(result)) end
+    return result
+end}

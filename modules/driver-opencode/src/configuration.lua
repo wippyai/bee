@@ -50,4 +50,10 @@ function M.settings_file(gateway: Gateway): (Configuration?, string?)
         secret_fields = {{path = {"mcp", "bee", "headers", "Authorization"}, environment = gateway.token_environment, prefix = "Bearer "}}}
     return file, nil
 end
+function M.login_configuration(): (configure_protocol.Configuration?, string?)
+    local digest, digest_error = hash.sha256("")
+    if not digest then return nil, tostring(digest_error or "configuration digest failed") end
+    return {revision = M.REVISION, path = M.PATH, content = "", digest = digest,
+        provider_ref = configure_protocol.LOGIN_PROVIDER_REF, composition = {kind = "copy", base_path = M.BASE_PATH}}, nil
+end
 return M

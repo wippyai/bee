@@ -65,7 +65,6 @@ entries:
   imports:
     test: wippy.test:test
     hooks: bee.gateway:hooks
-    hook_inbox: bee.gateway:hook_inbox
     configuration: bee.driver:configuration
     codex_configuration: bee.driver.codex:configuration
 - name: mcp_test
@@ -165,6 +164,7 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.gateway:configuration
+    protocol: bee.gateway:protocol
 - name: policy_reference_admin
   kind: security.policy
   meta: {type: test_support}
@@ -194,12 +194,15 @@ entries:
   source: file://sessions_test.lua
   method: run
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, sessions: bee.gateway:sessions, mcp: bee.gateway:mcp}
-- name: remote_test
+  imports: {test: wippy.test:test, sessions: bee.gateway:sessions}
+- name: session_tools_test
   kind: function.lua
-  source: file://remote_test.lua
+  source: file://session_tools_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    remote: bee.gateway:remote
+    mcp: bee.gateway:mcp
+    catalog: bee.gateway:catalog
+    surface: bee.gateway:surface
+    session_tools: bee.gateway:session_tools

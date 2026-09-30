@@ -59,10 +59,8 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         if not ok then error("permission: " .. tostring(err)) end
     end
     advance(false)
-    local push_enabled = plan.policy.inbox_push == true and plan.push_refusal == nil
     local poll_ms = 0
     if plan.exchange then poll_ms = plan.exchange.poll_ms end
-    if push_enabled and poll_ms == 0 then poll_ms = 500 end
     local poll_timer = time.ticker(tostring(math.max(poll_ms, 50)) .. "ms")
     -- Wakeup hints: a private topic registered with the thread waiter, and
     -- the approval-transition subscription paged on every wake or tick.
@@ -71,7 +69,6 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local waiter_id = io.key()
     local hint_after = 0
     local registered_until = 0
-    local pending_offer: machine.Offer? = nil
     local function register_hints()
         local pid, lookup_error = process.registry.lookup(machine.WAITER_NAME)
         if lookup_error or not pid then return end
@@ -90,24 +87,16 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         local hinted, after, hints_error = machine.take_hints(io, session)
         if hints_error then error("hints: " .. hints_error) end
         if hinted or poll then advance(true) end
-        if push_enabled then
-            local offered, offer_error = machine.offer_inbox(io, session)
-            if offer_error then error("inbox offer: " .. offer_error) end
-            if offered and offered.state == "offered" and pending_offer and pending_offer.record_id == offered.record_id and pending_offer.dispatch then
-                offered.dispatch = true
-            end
-            pending_offer = offered
-        end
         local _, acknowledgment_error = machine.acknowledge_hints(io, session)
         if acknowledgment_error then error("hints: " .. acknowledgment_error) end
         if after then hint_after = after end
-        if poll and not session.checkpoint.hint_subscription and (plan.exchange or push_enabled) then
+        if poll and not session.checkpoint.hint_subscription and plan.exchange then
             local opened = machine.open_hints(io, session)
             if opened then hint_after = opened end
         end
         register_hints()
     end
-    if plan.exchange or push_enabled then
+    if plan.exchange then
         local opened, hints_error = machine.open_hints(io, session)
         if hints_error then error("hints: " .. tostring(hints_error)) end
         if opened then hint_after = opened end
@@ -221,40 +210,25 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             drain_elapsed = true
         elseif poll_ms > 0 and selected.channel == poll_timer:channel() then
             refresh(true)
-            if push_enabled and #session.checkpoint.pending_writes > 0 then
-                local reconciled, reconcile_error = machine.reconcile_writes(io, session)
-                if not reconciled then error("inbox write status: " .. tostring(reconcile_error)) end
-            end
         elseif poll_ms > 0 and selected.channel == hints then
             refresh(false)
         elseif selected.channel == events then
             if selected.value.kind == process.event.CANCEL then break end
         end
         if selected.channel ~= poll_timer:channel() and selected.channel ~= hints then advance(false) end
-        if push_enabled and not session.exit then
-            local finished, finish_error = machine.finish_push_turn(io, session)
-            if finish_error then error("push turn: " .. finish_error) end
-            if finished then refresh(true) end
-            if not session.turn_open and pending_offer and pending_offer.dispatch then
-                local write_id, push_error = machine.begin_push_turn(io, session, pending_offer)
-                if not write_id then error("push dispatch: " .. tostring(push_error)) end
-                pending_offer.dispatch = false
-            end
-        end
-        if not push_enabled and plan.launch.session_end == "stdin_close" and not session.exit and session.runner and not ended and machine.ready_to_settle(session, drain_elapsed) then
+        if plan.launch.session_end == "stdin_close" and not session.exit and session.runner and not ended and machine.ready_to_settle(session, drain_elapsed) then
             -- Every exchange is closed on record before input closes.
             local closed_all, close_error = machine.close_exchanges(io, session, drain_elapsed)
             if close_error then error("close exchanges: " .. tostring(close_error)) end
             if closed_all then end_session(true) end
         end
-        local push_waiting = push_enabled and not session.exit and (not session.terminal or session.terminal.outcome == "succeeded")
         local decision: unknown = nil
         local settle_error: string? = nil
         local hook_output_pending = session.runner ~= nil and session.plan.gateway ~= nil
             and #session.plan.gateway.hooks > 0 and session.terminal ~= nil and not machine.drained(session)
-        if not push_waiting and hook_output_pending then
+        if hook_output_pending then
             if not ended and machine.ready_to_settle(session, drain_elapsed) then end_session(false) end
-        elseif not push_waiting then
+        else
             decision, settle_error = machine.settle(io, session, drain_elapsed)
         end
         if settle_error then error("settle: " .. tostring(settle_error)) end
@@ -272,7 +246,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     process.unlisten(statuses)
     poll_timer:stop()
     hooks_ticker:stop()
-    if plan.exchange or push_enabled then
+    if plan.exchange then
         machine.close_hints(io, session)
         unregister_hints()
     end

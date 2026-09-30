@@ -48,8 +48,8 @@ or logs. Reissue is compare-and-set and invalidates the prior generation.
 Revocation, expiry, listener replacement and failed startup refuse later use.
 
 Readiness makes a loopback request with a fresh nonce and verifies the current
-listener generation. A drain rejects new admissions, releases waits with
-released/draining, and stops the listener at its recorded deadline.
+listener generation. A drain rejects new admissions and stops the listener at
+its recorded deadline.
 
 ## Gateway operations
 
@@ -69,12 +69,12 @@ authority.
 
 ## Agent tools
 
-The host may admit thread_read, thread_wait, thread_message, thread_sessions,
-thread_notify, session_directory, session_send, session_inbox, session_ack,
-session_reply, thread_launch, launch_definitions, capabilities, run_status,
-run_wait, run_cancel, Governance overlay, Hub components, Hub installation
-requests (install_request, uninstall_request, install_status), delivery and
-docs. Each tool receives only bounded
+The host may admit the ten session tools (session_catalog, session_open,
+session_run, session_send, session_await, session_join, session_get,
+session_list, session_cancel, session_close), thread_read, thread_message,
+capabilities, Governance overlay, Hub components, Hub installation requests
+(install_request, uninstall_request, install_status), delivery, publish, docs
+and application_open. Each tool receives only bounded
 arguments. The binding supplies thread, subject, action, attempt and context.
 Tool results carry the JSON reply as text and as structured content with an
 output schema; failures use one normalized error shape
@@ -85,96 +85,68 @@ re-list tools and read `session` after `select` before calling one.
 capabilities is the read-only report of what the host admits for the caller's
 workspace: the admitted tools with the policy each runs under, the trait
 catalog with allowed, active and requestable traits, the bound workspace and
-thread, launch rights with the launch policy reference, and the authoring
-path (overlay guide, delivery preflight). launch_definitions lists the
-definitions the caller's launch policy admits with placements, overrides and
-saved profile IDs and revisions; it starts nothing.
+thread, and the authoring path (overlay guide, delivery preflight).
 
-thread_message always writes a message record through the thread owner.
-Callers cannot choose sender, thread, record family or context. Without
-`session` or `member_thread` it writes to the bound thread; with `session` it
-writes to that running session's thread, addressed to its action and naming
-the caller's; with `member_thread` it writes to a thread the caller is an
-active member of, such as a child it launched on a new thread. thread_read and
-thread_wait take the same `member_thread`, so a launcher reaches a child on a
-thread of its own; the field defaults to the bound thread, the two are
-exclusive, and the thread owner checks membership again. An unrelated thread
-is refused as `NOT_FOUND`. thread_wait is read-only and does not create an
-obligation.
+### Sessions
+
+The ten session tools are the only way to start an agent, give it work and read
+its result. They project the `bee.sessions:contract` and `bee.sessions:catalog`
+owner contracts one method each; the gateway holds no session state. Arguments
+are the published closed schemas, every mutation requires `operation_key`, and
+caller identity travels only in the authenticated call context, never in a
+payload. The owner binding opens under the host-linked
+`target_tool_session_policy`, and each owner reply is held to the published
+output schema. A reply that violates it is an `UNAVAILABLE` owner fault.
+
+The flow is catalog, open, send, await, close:
+
+1. session_catalog lists the definitions and profiles whose executor is ready.
+   `include_unavailable` adds the rest with reasons. It starts nothing.
+2. session_open takes `spec` (`definition`, optional `profile`, `title`,
+   `workdir`) and returns a `SessionRef` that survives turns and owner
+   restarts. No process runs while the session is idle.
+3. session_send takes `session`, `input` and an optional `output` schema
+   reference. It commits one immutable unit of work and returns a `WorkReceipt`.
+   A receipt says the work is queued; it is not a result. A busy session queues
+   the work; nothing is injected into a running process. This is the only way
+   to give a session work.
+4. session_await takes a `WorkRef` (or an operation reference) and returns one
+   tagged observation: `ready` with the result, `pending`, `blocked` or
+   `uncertain`. A timeout never cancels the work. The same reference always
+   names the same work.
+5. session_close seals intake and drains by default, or requests cancellation
+   with `mode: cancel`. Await the returned operation for closure.
+
+session_run submits one job on a fresh session that closes after settlement and
+returns a `WorkReceipt`; await it. session_join observes an ordered set of
+`WorkRef` values under `all_success`, `all_settled`, `first_success` or
+`quorum`. session_get inspects one session, work or operation, or recovers an
+operation by its saved `operation_key`. session_list pages durable sessions
+with a stable snapshot and feed cursor. session_cancel requests cancellation of
+one work and keeps its session open; the receipt says `requested` and the
+operation observation reports `stopped`, `already_terminal` or `uncertain`.
+
+Reuse the same `operation_key` after a lost reply; changing the input under a
+key is a conflict.
+
+### Transcript
+
+thread_read reads committed records of the bound thread after a cursor. With
+`member_thread` it reads a thread the caller is an active member of, such as
+the thread of a session it opened; the field defaults to the bound thread and
+the thread owner checks membership again. An unrelated thread is refused as
+`NOT_FOUND`.
+
+thread_message records one note on the bound thread transcript as the
+authenticated subject: `message_id`, `message_kind` (`progress` or
+`notification`), bounded `content` and an idempotency key. Callers cannot
+choose sender, thread, recipients, record family or context. A note is
+recorded only; it does not schedule execution and does not wake a session. To
+give a session work call session_send.
 
 This gateway tool writes `record` under its own agent tool policy. It does
 not add `record` permission to a workspace application's generated
-`threads.message` grant; applications use `bee.threads.service:send` for a
-typed child request (see [Applications](../applications.md)).
-
-thread_sessions pages the live, unsealed bindings of the caller's workspace
-in stable action order, one per action under its newest carrier epoch, and
-keeps only those whose thread the bound subject can read, as answered by the
-thread owner's `get` run as the subject. The scan is complete; `cursor` and
-`limit` select a window and the reply names `next_cursor` (absent at the end)
-with `eof`. thread_notify resolves a session the same way and registers the
-thread owner's one-shot notice on the caller's own thread. It also accepts the
-`thread_id` and `attempt_id` returned by thread_launch, so the caller can
-register while the admitted attempt is still starting and before its gateway
-session binds. The thread owner holds that registration until the attempt is
-recorded, then delivers on its next turn end or exit; if the attempt has
-already ended, it reports the settlement at once. Both forms require active
-membership in the target thread, and the gateway hides an unreadable target as
-`NOT_FOUND`. A binding without a workspace has no peer sessions. See
-[Configurable managed MCP](../../guides/agents/mcp.md#coordinating-with-other-sessions). thread_launch starts only a
-definition named in the caller's launch-policy allow-list, in the binding's
-workspace or in a `workspace_id` the caller's scope may launch into; its child
-is admitted through the ordinary carrier path with its own policy. Unless the
-child definition sets `allow_wider_tools`, that child policy's gateway tools
-must be a subset of the launching policy's, so an agent cannot start a child
-with a wider gateway surface than its own; the refusal is
-`LAUNCH_TOOLS_EXCEED_PARENT`. Its
-optional `thread`, `workdir`, `placement` and saved profile choices decode
-with `bee.application:agent_protocol` and take effect only where the
-definition and its launch policy allow the override.
-
-run_status, run_wait and run_cancel follow a managed run the caller started.
-Each names the child thread and attempt a thread_launch returned. run_status
-reads the run's state (`starting`, `running`, `cancelling` or `ended`) and its
-settled outcome and answer; run_wait waits, read-only and bounded, for the run
-to end; run_cancel records a durable cancel intent through the thread owner,
-stops the admitted attempt and reports its resulting state, settling a run
-whose child never started directly. They map to the harness application
-facade's own run operation and cannot launch. The gateway refuses any run
-whose thread the caller is not an active member of - which is how a child
-thread_launch starts on a new thread belongs to its launcher - so a caller
-reaches only the runs it started. See
-[Coordinating with other sessions](../../guides/agents/mcp.md#coordinating-with-other-sessions).
-
-session_directory pages local live actions in the caller's workspace that the
-host grants `bee.sessions.discover` on, in stable name order with the same
-cursor paging. It returns a name and exact `{node_id, action_id}` address,
-grant epoch, current attempt state and latest inbox delivery state. The
-recipient thread owner supplies the epoch and states without granting access
-to its records. A send grant alone does not make a peer discoverable. If
-names collide in historical data, callers use the exact address; new live
-admissions reject a duplicate workspace name.
-
-session_send takes an exact address, current `grant_epoch`, retry key,
-`message_id` and bounded content. The gateway supplies the authenticated
-sender action and thread and computes the payload digest. The destination
-owner requires a host-selected `bee.sessions.send` policy for the exact
-`<workspace_id>/<node_id>/<action_id>` resource and its own acceptance rule.
-The bundled Bee host grants managed agents a send attempt to actions in their
-own workspace; the destination owner checks the authenticated workspace and
-recipient's acceptance. Another host may select the bundled deny policy or a
-narrower exact-address policy. session_inbox pages the bound
-action's items; session_ack marks one item acknowledged; session_reply commits
-a reply to the original sender's address with an explicit cross-thread
-`in_reply_to` reference and outcome. These tools commit durable records and
-receipts. A fixture-enabled Claude structured carrier can insert an identified
-item between turns through its fenced stdin controller. Shipped production
-policies leave that path disabled pending executable acceptance. The gateway
-does not type into a PTY or forward inbox messages across Hive.
-`session_send` and `session_inbox` expose the persisted `delivery_status`:
-`waiting_for_restart` when the target has no live attempt and `undeliverable`
-when its action has ended. These statuses do not change the item's receipt
-`state` or grant an automatic restart.
+`threads.message` grant (see [Applications](../applications.md)).
 
 delivery and publish take their destination `workspace_id` from the binding:
 an omitted `workspace_id` is the binding's own workspace, a request naming any
@@ -212,5 +184,4 @@ Run the relevant checks with:
 
     make gateway-check
     make managed-launch-fixture-check
-    make cross-session-check
     make app-journey-check

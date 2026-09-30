@@ -472,8 +472,10 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     end
     local function reopen(item: Instance, req: contract.Request)
         if #req.arguments > 0 then
-            local sent, err = process.send(item.execution_pid, item.descriptor.navigation_topic,
-                {version = 1, arguments = req.arguments})
+            local sent, err = process.send(item.execution_pid, "bee.application.navigate", {version = 1,
+                instance_id = item.instance_id, view_id = item.view_id,
+                execution_generation = item.producer_generation, launch_token = item.launch_token,
+                arguments = req.arguments})
             if not sent then
                 emit(contract.reply(req.request_id, "open", "navigation_failed", tostring(err)), true)
                 return
@@ -1548,10 +1550,15 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     else stop(item, waiter, data.op == "force_stop") end
                 end
             end
-        elseif selected.channel == requests and selected.value:from() == owner then
+        elseif selected.channel == requests then
             local raw_request: unknown = selected.value:payload():data()
             local req = contract.request(raw_request)
             local raw_object = type(raw_request) == "table" and raw_request :: {[string]: unknown} or nil
+            if tostring(selected.value:from()) ~= owner then
+                local source = find_pid(tostring(selected.value:from()))
+                req = source and contract.navigation(raw_request, source.instance_id, source.view_id,
+                    source.launch_token, workspace_id) or nil
+            end
             local runtime_provenance = raw_object and raw_object.runtime_provenance ~= nil
                 and open_protocol.provenance(raw_object.runtime_provenance) or nil
             if req and req.workspace_id ~= workspace_id then

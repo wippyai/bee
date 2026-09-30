@@ -158,4 +158,11 @@ function M.forget(tx: sql.Transaction, approval_id: string): string?
     return nil
 end
 
+function M.attention_count(tx: sql.Transaction, workspace: string, now: integer): (integer?, string?)
+    local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ?", {workspace, now})
+    if err or not rows or #rows ~= 1 then return nil, err or "count attention" end
+    local row = rows[1] :: {[string]: unknown}
+    if type(row.count) ~= "number" or row.count < 0 or row.count ~= math.floor(row.count) then return nil, "attention count is corrupt" end
+    return math.floor(row.count), nil
+end
 return M

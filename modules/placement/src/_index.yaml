@@ -39,6 +39,7 @@ entries:
     canonical: bee.threads.records:canonical
     types: bee.placement:types
     driver_types: bee.driver:types
+    login_evidence: bee.driver:login_evidence
     preferences: bee.driver:preferences
 - name: transitions
   kind: library.lua

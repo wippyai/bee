@@ -41,5 +41,7 @@ workspace:
     bee/driver-opencode: ./modules/driver-opencode
     bee/driver-wippy: ./modules/driver-wippy
     bee/git-worktree: ./modules/git-worktree
+    bee/executor-external: ./modules/executor-external
     bee/agents: ./modules/agents
     bee/files: ./modules/files
+    bee/sessions: ./modules/sessions

@@ -11,6 +11,7 @@ entries:
   - uuid
   - json
   - security
+  - contract
   - system
   - crypto
   - base64
@@ -328,6 +329,7 @@ entries:
     - bee.gateway.security:database_ref_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:directory_projection_policy
 - name: search
   kind: function.lua
   source: file://search_method.lua
@@ -341,3 +343,4 @@ entries:
     - bee.gateway.security:database_ref_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:directory_projection_policy

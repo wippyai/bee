@@ -3,7 +3,6 @@ local tty = require("tty")
 local process = require("process")
 local channel = require("channel")
 local client = require("client")
-local arguments = require("arguments")
 local function main(raw: unknown)
     local launch = assert(client.launch(raw))
     local navigation = assert(process.listen("bee.application.navigate", {message = true}))
@@ -22,10 +21,8 @@ local function main(raw: unknown)
         if not selected.ok or selected.channel == events then break end
         local sender = tostring(selected.value:from())
         local value: unknown = selected.value:payload():data()
-        if sender == launch.broker_pid and type(value) == "table" and value.version == 1 then
-            local args = arguments.decode(value.arguments)
-            if args then show(args) end
-        end
+        local args = client.navigation(launch, sender, value)
+        if args then show(args) end
     end
     process.unlisten(navigation)
     tty.stop()

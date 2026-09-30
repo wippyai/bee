@@ -204,7 +204,7 @@ func TestPlanRoutesOrdinaryLaunchThroughClientAndOwnerThroughPrepare(t *testing.
 	// An explicit application ID keeps the runtime's own entry for recovery and
 	// development launches, with the identity persisted for its selected state.
 	application, err := host.Plan(context.Background(), app.Launch{
-		Op: app.OpRun, Command: desktopCommand, Args: []string{"bee.harness.window:app"},
+		Op: app.OpRun, Command: desktopCommand, Args: []string{"bee.harness.app:app"},
 		State: state, Dir: project, Explicit: true,
 	})
 	if err != nil {

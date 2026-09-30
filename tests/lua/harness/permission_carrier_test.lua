@@ -678,4 +678,18 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local originals: {{[string]: unknown}} = {}
+    for _, ref in ipairs({ACCEPTANCE, POLICY, PRODUCTION_ACCEPTANCE, PRODUCTION_POLICY, UNPINNED_POLICY,
+        "bee.placement.native:placement_resource_mode", "bee:approver_policies",
+        "bee.placement.native:placement_admitted_roots"}) do
+        originals[#originals + 1] = assert(registry.get(ref))
+    end
+    local ok, result = pcall(cases, options)
+    local changes = assert(registry.snapshot()):changes()
+    for _, original in ipairs(originals) do changes:update(original) end
+    assert(changes:apply())
+    if not ok then error(tostring(result)) end
+    return result
+end}

@@ -29,14 +29,10 @@ here for my approval.
 - Request the host catalog capability `agents.launch` with
   `definitions: [bee.driver.claude:research_batch]` using a measured
   `ns.requirement` targeting `app.tally:app` at `.security.policies +=`. At
-  startup, call the application agents helper's `launch` with that definition and
-  a brief, then `wait` for the child to settle and `status` for its result;
-  record the attempt id, definition, settled state and outcome as a row in the
-  granted database. The same grant must refuse a definition it does not name.
-- Request the host catalog capability `threads.message` with
-  `scope: children` using a measured `ns.requirement` targeting
-  `app.tally:app` at `.security.policies +=`. After the wait, steer the child
-  once by sending its thread a notification through `bee.threads.service:send`
-  and record whether the steer landed in the same database row.
-- The application needs the `fs`, `sql`, `hash` and `agents` helpers alongside
+  startup, open a session on that definition with the application sessions
+  helper, `send` it a brief and wait for its result, then `send` it a second
+  piece of work and wait for that result; record the first work ref, definition,
+  settled state and outcome, and whether the second work succeeded, as a row in
+  the granted database. The same grant must refuse a definition it does not name.
+- The application needs the `fs`, `sql` and `sessions` helpers alongside
   the interface modules above.

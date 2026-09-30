@@ -214,7 +214,6 @@ function M.same(a: Selection, b: Selection): boolean
         if left.definition_id ~= right.definition_id or left.definition_revision ~= right.definition_revision
             or left.title ~= right.title or left.icon ~= right.icon or left.group ~= right.group
             or left.role ~= right.role or left.singleton ~= right.singleton
-            or left.navigation_topic ~= right.navigation_topic
             or left.resume_schema ~= right.resume_schema or left.restart_policy ~= right.restart_policy then return false end
     end
     return true

@@ -48,8 +48,7 @@ sandbox.
 
 Every tool call receives the reserved `bee.gateway.binding` context key with
 `binding_id`, `thread_id`, `action_id`, `attempt_id` and, when host-selected,
-`policy_ref`, `workspace_id` and `origin_view`. A thread-launched child inherits
-its origin view. Agents cannot add or replace this key. These IDs support
+`policy_ref`, `workspace_id` and `origin_view`. Agents cannot add or replace this key. These IDs support
 audit and destination attribution; they are not authority, and each owner still
 checks membership and permission.
 
@@ -96,47 +95,64 @@ replayed poll replays its receipt. They are admitted through the host's
 caller. See [agent installation requests](../hub.md#agent-installation-requests).
 
 Read `capabilities` before authoring: it reports the admitted tools with
-their policies, the trait catalog, the bound workspace and thread, and launch
-rights. `launch_definitions` lists the caller's admitted launch definitions
-with placements, overrides and saved profile IDs and revisions.
+their policies, the trait catalog, the bound workspace and thread, and the
+authoring path.
 
-`thread_launch` starts a definition from the caller's launch-policy allow-list
-in the caller's workspace or in an optional `workspace_id`. It accepts a
-definition reference, brief and retry key, and returns the child thread,
-action and attempt identity plus the admitted title. A workspace other than
-the binding's needs `bee.workspace.manager.launch` on it in the caller's own scope
-(the host attaches `bee.harness.security:workspace_launch_policy` only to agents it lets act
-across workspaces); the launch then runs as the same actor bound to that
-workspace. The child gets its own launch policy and tool scope and holds a
-host lease on its workspace while it runs.
+## Sessions
 
-The request may also choose, each only where the definition's
-`allowed_overrides` and its launch policy's `allowed_overrides` both name the
-override (`FORBIDDEN` otherwise):
+Ten tools are the only way to start an agent, give it work and read what it
+produced: `session_catalog`, `session_open`, `session_run`, `session_send`,
+`session_await`, `session_join`, `session_get`, `session_list`,
+`session_cancel` and `session_close`. The flow is catalog, open, send, await,
+close.
 
-| Field | Choice | Override |
-|---|---|---|
-| `thread` | `{thread_id}`: an existing thread the caller is an active member of; `{title}`: a new thread with that title | `thread` (a caller-thread definition joining the caller's own thread needs none) |
-| `workdir` | `{resource}`: a resource associated in the workspace; `{root_ref, path}`: a folder under a root the host admits, associated at setup | `workdir` |
-| `placement` | `native` or `docker`; a kind other than the host's placement binding is `PLACEMENT_UNAVAILABLE` | `placement` |
-| `saved_profile_id`, `saved_profile_revision` | a saved profile's preferences for the same definition | none |
+1. `session_catalog` lists the definitions and profiles whose executor is
+   ready: the driver is installed, logged in and supported on this platform.
+   `include_unavailable` adds the rest with the reason each is not ready.
+   Nothing else lists agents, and the call starts nothing.
+2. `session_open` takes `spec` (`definition`, optional `profile`, `title` and
+   `workdir`) and `operation_key`, and returns a `SessionRef`. The session is
+   durable: it survives turns, process exits and owner restarts, and no
+   process runs while it is idle. The host admits the definition against the
+   caller's policy before the session opens.
+3. `session_send` takes `session`, `input` (text, or `{schema, value}`), an
+   optional `output` schema reference and `operation_key`. It commits one
+   immutable unit of work and returns a `WorkReceipt`. A receipt says the work
+   is queued; it is not a result. A busy session queues the work, and nothing
+   is injected into a running process. `session_send` is the only way to give a
+   session work: a task, a follow-up or a correction.
+4. `session_await` takes the `WorkRef` (or an operation reference) and
+   `timeout_ms` (at most 60000) and returns one observation tagged `ready`
+   (with the result), `pending`, `blocked` (with what unblocks it) or
+   `uncertain`. Queued or accepted is not done, and a timeout never cancels
+   the work.
+5. `session_close` seals intake and drains by default (`mode: drain`), or
+   requests cancellation (`mode: cancel`). Await the returned operation for
+   the closure.
 
-Without `thread`, the child joins the caller's thread, so a definition that
-opens its own thread is refused with `LAUNCH_THREAD_UNSUPPORTED` rather than
-orphaned. Shipped driver definitions and their host policies allow the
-`thread` and `workdir` overrides; none allows `placement`, and no Docker
-placement binding is installed.
+`session_run` submits one job on a fresh session that closes after settlement;
+it returns a `WorkReceipt` to await. `session_join` observes an ordered set of
+`WorkRef` values under `all_success`, `all_settled`, `first_success` or
+`quorum`, and returns every child's observation; uncertain is not settled.
+`session_get` inspects an exact session, work or operation, or recovers an
+operation from its saved `operation_key`. `session_list` pages durable
+sessions, including idle and closed ones, with a stable snapshot and a feed
+cursor. `session_cancel` requests cancellation of one work and keeps its
+session open; the receipt says `requested`, and the operation's observation
+reports `stopped`, `already_terminal` or `uncertain`.
 
-The shipped Claude window policy is the orchestrator profile: select it as a
-saved profile in the Agent window (press `N` for a new profile, name it, and
-choose Claude Code). Its gateway tools include `thread_launch`,
-`launch_definitions`, `capabilities` and the managed-run tools, and its
-allow-list names the Codex batch and named_batch, Claude batch, Muse, agy and
-grok worker definitions. A child an orchestrator launches on a new thread is
-reachable through `thread_read`, `thread_wait` and `thread_message` with
-`member_thread` (see [Coordinating with other sessions](#coordinating-with-other-sessions)).
+Every mutation requires `operation_key`. Reuse the same key after a lost
+reply; changing the input under a key is a conflict, and `session_get` with
+the saved key recovers the operation. Caller identity travels only in the
+authenticated call context, never in a payload. Each tool is one method of the
+`bee.sessions` owner contract, and the gateway holds no session state; see
+[Gateway](../../reference/agents/gateway.md#sessions).
 
-Worker containment basis:
+After an owner restart the scheduler reconciles the last placement attempt
+before any new invocation. An outcome it cannot prove is reported as
+`uncertain`, never silently re-run.
+
+Worker definitions carry these containment bases:
 
 | Worker definition | Home | CLI control |
 |---|---|---|
@@ -145,122 +161,25 @@ Worker containment basis:
 | Claude batch | private, no host inheritance | default permission mode |
 | Muse batch | private, no host inheritance | `on-request` approval |
 | agy batch | private, no host inheritance | `--sandbox` |
-| Grok batch | private, no host inheritance | none provable: recorded `unconfined`, needs the explicit `agent_launch_unconfined` host flag |
-| OpenCode batch | private, no host inheritance | none exists: recorded `unconfined`, not in the orchestrator allow-list |
+| Grok batch | private, no host inheritance | none provable: recorded `unconfined` |
+| OpenCode batch | private, no host inheritance | none exists: recorded `unconfined` |
 
 These are CLI permission controls, not operating system confinement; see
 [Managed agent containment](../../development/agent-guide.md#managed-agent-containment).
 
-`workdir` with `{root_ref, path}` names a folder under a root the host admits.
-The shipped host admits the workspace folder (`bee.env:workspace_root`) and
-its children as a placement root, so an orchestrator can target a folder it
-chose, such as a git worktree inside the workspace, without a host step and
-without an environment variable. A folder outside every admitted root is
-refused at setup.
+## Transcript
 
-## Coordinating with other sessions
+`thread_read` reads the committed records of the bound thread after a cursor.
+`member_thread` names another thread the caller is an active member of, such as
+the thread of a session it opened; the field defaults to the bound thread, the
+thread owner checks membership again, and an unrelated thread is refused as
+`NOT_FOUND`. It never widens access beyond the caller's own membership.
 
-`thread_sessions`, `thread_message` with `session`, and `thread_notify` let one
-running agent coordinate with another the way two interactive coding sessions
-hand work to each other, for any harness:
-
-- `thread_sessions` pages the running sessions of the caller's workspace whose
-  threads the bound subject may read, the caller included (`self`), in stable
-  action order over a complete scan. A session is the live gateway binding of
-  an action; each entry has its address (`session`, the action ID), attempt,
-  thread and thread title. Pass `cursor`/`limit`; the reply names
-  `next_cursor` (absent at the end) with `eof`.
-- A session address is an action ID, an attempt ID, or a thread ID that holds
-  exactly one running session. An ambiguous thread is refused and lists the
-  actions to choose from.
-- `thread_message` with `session` and no `recipient_ids` records the message
-  on that session's thread as the caller's subject. It names the session's
-  subject as the recipient, its action in `recipient_action_ids` and the
-  caller's own action in `sender_action_id`, so sessions sharing one subject
-  can tell who is addressed and reply by address. A message to another thread
-  carries no action context there.
-- `thread_notify` with `session` and an idempotency key asks the thread owner
-  to tell the caller once when that session ends its current turn or exits.
-  The notice is a `notification` message on the caller's own thread, addressed
-  to its action and caused by the ending record; a waiting `thread_wait` there
-  wakes on it. A session that has already exited is reported at once. After
-  `thread_launch`, pass its `thread_id` and `attempt_id` with the key to
-  register before the child's gateway session binds; this route checks target
-  thread membership and needs no `thread_sessions` lookup.
-
-Reach through these older thread tools follows thread membership: a session on
-a thread the subject cannot read is neither listed nor addressable by
-`thread_sessions`, and the owner refuses the write if membership changed.
-Sessions started with `thread_launch` on the caller's thread share it and its
-subject and reach each other through these tools.
-
-A child `thread_launch` starts on a new thread does not share the caller's
-thread. The launcher registers its notice immediately from the returned child
-thread and attempt IDs, and reaches it by naming it as `member_thread` on
-`thread_read`, `thread_wait` and `thread_message`: the caller is an active
-member of the child thread because it created and admitted it, the field
-defaults to the bound thread, and the thread owner checks membership again.
-An unrelated thread is refused as `NOT_FOUND`, and no `member_thread` field
-ever widens access beyond the caller's own membership.
-
-`run_status`, `run_wait` and `run_cancel` follow a managed run the caller
-started, named by the child thread and attempt `thread_launch` returned.
-`run_status` reads the run's state and its settled outcome and answer;
-`run_wait` waits, read-only and bounded, for it to end; `run_cancel` records a
-durable cancel intent, stops the attempt and reports its resulting state. A
-run whose child never started is settled as cancelled directly. The gateway
-refuses any run whose thread the caller is not an active member of - which is
-how a child thread_launch starts on a new thread belongs to its launcher - so a
-caller reaches only the runs it started.
-
-## Between turns and push
-
-A running agent receives a report through `thread_notify` plus `thread_wait`:
-the child's ending record triggers the owner's one-shot notice on the caller's
-own thread, and a `thread_wait` there wakes on it. Steering is cooperative and
-between turns only: a `thread_message` written to a child's thread is read at
-that child's next `thread_read`, and its `thread_wait` wakes on the record. No
-tool types into a running turn. Between-turn push into a running model needs a
-pinned acceptance the host records for an exact executable measurement
-(`push_acceptance`); shipped production policies ship none, so they never
-weaken that rule and every push path stays read-at-next-`thread_read` unless a
-host opts in with a pinned acceptance.
-
-Independent Agent windows have separate application actors and threads. For
-them, `session_directory` pages only live workspace peers the host permits
-the caller to discover, with the same cursor paging, with a host-assigned
-name, exact `{node_id, action_id}` address, current `grant_epoch`, attempt
-state and latest inbox delivery state.
-The directory does not grant reading or sending. The names of newly admitted
-live actions are unique within a workspace; use the exact address for a send.
-
-`session_send` takes `{address, grant_epoch, idempotency_key, message_id,
-content}`. The host must grant `bee.sessions.send` on the exact
-`<workspace_id>/<node_id>/<action_id>` address, and the recipient's thread
-owner must accept the sender actor or class. The bundled host selects a
-same-workspace send policy for managed agents; another host may select the
-deny policy or a narrower address policy. A successful call means that the
-request and its ordered inbox item committed; replaying the same key and
-payload returns the same record ID.
-`session_inbox` pages the caller's own action inbox using `after_sequence` and
-`limit`. `session_ack` takes `{inbox_sequence, idempotency_key}`.
-`session_reply` takes the original sender's address and current epoch plus an
-`in_reply_to` reference `{thread_id, record_id}` from the request in the
-caller's inbox, an outcome, message ID, content and retry key. The reply lands
-in the original sender's own inbox, with correlation across the two threads.
-The recipient can acknowledge or reply without letting the sender read its
-thread. A stale grant epoch is refused.
-
-A harness can read records through `thread_read` and `thread_wait`, and page
-its inbox through `session_inbox`. A fixture-enabled Claude structured
-controller also wakes on an inbox commit and inserts an identified stream-json
-user message between turns. Shipped production policies currently leave that
-push path disabled pending executable acceptance. No inbox item is typed into
-a running PTY window. A window
-harness's `Stop` hook is recorded as a hook-sourced turn signal, so notices see
-window agents end turns the way stream agents report them. Inbox addresses on
-another Hive node cannot yet be sent to: Hive forwards only the thread owner's
-`send` and `send_status`, and bindings, reads and waits stay node-local.
+`thread_message` records one note on the bound thread transcript. Its
+arguments are `message_id`, `message_kind` (`progress` or `notification`),
+bounded `content` and an idempotency key; it names no recipient or session.
+A note is recorded only; it does not schedule execution and wakes nothing. To
+give a session work, call `session_send`.
 
 `delivery` checks a frozen artifact without staging it (`preflight`, which
 needs the frozen `snapshot_digest`), requests delivery of a frozen artifact
@@ -277,18 +196,18 @@ overlay or makes an approval decision.
 
 ## Trait configuration
 
-For example, a host may make coordination waiting selectable while keeping
-thread reads always available:
+For example, a host may make note recording selectable while keeping thread
+reads always available:
 
 ```yaml
-gateway_tools: [thread_read, thread_wait]
+gateway_tools: [thread_read, thread_message]
 gateway_surface:
   tools: []
   traits:
-    - id: research:coordination
-      title: Research coordination
-      prompt: Read the thread and wait for new results before continuing.
-      tools: [thread_wait]
+    - id: research:notes
+      title: Research notes
+      prompt: Record progress notes on the thread as you work.
+      tools: [thread_message]
   base_tools: [thread_read]
   active_traits: []
   fixed_context: {project: selected-project}

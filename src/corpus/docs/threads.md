@@ -211,26 +211,7 @@ the referenced request `replied` in the same local transaction. Its explicit
 verifies the two admitted actions and the request before accepting it. Ordinary
 `record` replies still settle only same-thread recipient obligations.
 
-The owner wakes the thread waiter on an inbox commit. A fixture-enabled
-Claude structured carrier checks the oldest item on wake and at a bounded
-poll interval, then writes its identified stream-json user message between
-turns. Its write journal and transport receipt survive carrier replacement;
-acknowledgment still requires the agent's own `inbox_ack` or reply. Shipped
-production launch policies do not enable this push path. A production policy
-enables it with `push_acceptance`: the carrier admits the push only where the
-pinned binding, profile, adapter and executable measurement still match the
-host's acceptance record, and refuses a swapped executable before any launch.
-
-A fresh attempt on a structured driver without a between-turns controller
-starts carrying its oldest outstanding inbox item in the brief: Codex, agy,
-Grok, Muse and OpenCode launches pass the brief as an argument and never read
-stdin, so the
-brief is the only channel. Claude keeps its controller push and windows keep
-their hook boundary; resumed attempts keep their provider session, since no
-fixture proves inbox-carry combined with those. A fresh sequential attempt on
-an already-admitted action attaches to its own action and chains the latest
-settled attempt; anything else fails closed with the admit refusal. PTY
-windows currently need an explicit `session_inbox` call. Cross-node sends
+The owner wakes the thread waiter on an inbox commit. Cross-node sends
 persist to the durable forwarding outbox addressed at their node instead of
 committing locally; the destination admits `inbox_describe` and `inbox_send`
 through the Hive principal mapping with re-authorization, below.
@@ -394,15 +375,7 @@ on the destination's own reply, so an unknown outcome settles nothing and
 the lease lapses. Its transport is host-selected through the `sender`
 requirement: the bundled host links `bee.hive.service:inbox_sender`, and a
 composition that links no sender leaves due rows queued and reports each
-delivery unknown. `session_send` and `session_reply` also
-accept a node-qualified remote address: the gateway asks a host-selected
-remote resolver (the bundled host links `bee.hive.service:remote_sessions`,
-which performs the destination owner's `inbox_resolve`) for the thread and
-workspace the address names, and sends there with the same body it would send
-locally. Resolution is discovery, not authority: the destination owner
-authenticates the forwarded principal and re-checks workspace, send grant,
-target action and epoch when the send arrives, and a composition that links no
-resolver answers a remote address as not found.
+delivery unknown.
 
 ## Carrier and projections
 

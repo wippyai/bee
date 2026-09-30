@@ -61,7 +61,7 @@ their entries keep empty underlays the host fills.
 
 `bee.harness.host:environment` is not composed: Bee's native host component
 registers it at boot (`native/launch/component.go`) with the `home`, `cwd`
-and `self` facts plus executable discovery, so module defaults may reference
+and `self` facts, environment-name presence metadata, and executable discovery, so module defaults may reference
 it in every composition, including isolated module tests.
 
 A module-owned `fs.directory` with a project-relative path must set

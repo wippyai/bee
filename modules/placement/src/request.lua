@@ -8,6 +8,7 @@ local canonical = require("canonical")
 local types = require("types")
 local driver_types = require("driver_types")
 local preferences = require("preferences")
+local login_evidence = require("login_evidence")
 local M = {}
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
@@ -152,7 +153,7 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     for index, raw in ipairs(raw_files) do
         local file = bounds.object(raw)
         if not file then return nil, "launch.provider_home.files[" .. tostring(index) .. "] must be an object" end
-        local file_unknown = bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back"})
+        local file_unknown = bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back", "container_content", "container_omit"})
         if file_unknown then return nil, "launch.provider_home.files[" .. tostring(index) .. "]: " .. file_unknown end
         local path = bounds.text(file.path, M.MAX_REQUIRED_PATH_BYTES)
         if not path or not safe_relative(path) then return nil, "launch.provider_home.files[" .. tostring(index) .. "].path must be a safe relative path" end
@@ -170,6 +171,16 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
             if type(file.optional) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].optional must be a boolean" end
             optional = file.optional
         end
+        local container_omit: {string}? = nil
+        if file.container_omit ~= nil then
+            container_omit = bounds.ids(file.container_omit, true)
+            if kind ~= "config" or not container_omit or #container_omit > 16 then return nil, "container_omit requires bounded config keys" end
+        end
+        local container_content: string? = nil
+        if file.container_content ~= nil then
+            container_content = bounds.text(file.container_content, 8192)
+            if kind ~= "config" or not container_content then return nil, "container_content requires bounded config text" end
+        end
         local write_back = false
         if file.write_back ~= nil then
             if type(file.write_back) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
@@ -181,7 +192,7 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
         elseif kind == "config" then
             if not source_path then return nil, "ambient provider files need a source path" end
             if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
-            files[index] = {source_path = source_path, path = path, kind = "config", optional = optional, write_back = false}
+            files[index] = {source_path = source_path, path = path, kind = "config", optional = optional, write_back = false, container_content = container_content, container_omit = container_omit}
         else
             if source_path ~= nil then return nil, "generated provider state cannot name a source file" end
             if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
@@ -246,15 +257,21 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     if object.login ~= nil then
         local declared = bounds.object(object.login)
         if not declared then return nil, "launch.login must be an object" end
-        local login_field = bounds.fields(declared, {"provider", "command", "files"})
+        local login_field = bounds.fields(declared, {"provider", "command", "files", "any_of"})
         if login_field then return nil, "launch.login: " .. login_field end
         local provider = bounds.id(declared.provider)
         if not provider then return nil, "launch.login.provider must be an identifier" end
         local command = bounds.line(declared.command, 128)
         if not command or command == "" then return nil, "launch.login.command must be a bounded single line" end
-        local files, files_error = decode_files(declared.files, "launch.login.files", true)
+        local files, files_error = decode_files(declared.files, "launch.login.files", declared.any_of == nil)
         if not files then return nil, files_error end
-        login = {provider = provider, command = command, files = files}
+        local alternatives: {login_evidence.Evidence}? = nil
+        if declared.any_of ~= nil then
+            local evidence, evidence_error = login_evidence.decode({command = command, any_of = declared.any_of})
+            if not evidence then return nil, evidence_error end
+            alternatives = evidence.any_of
+        end
+        login = {provider = provider, command = command, files = files, any_of = alternatives}
     end
     local provider_home: driver_types.ProviderHome? = nil
     if object.provider_home ~= nil then

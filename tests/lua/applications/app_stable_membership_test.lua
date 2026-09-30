@@ -1,6 +1,6 @@
--- MIT. An app follows the runs it launched across restarts: it launches a
--- run thread, closes, reopens as a new instance, reads the run status and
--- steers the run. Another app in the same workspace is refused, and after
+-- MIT. An app follows the threads it created across restarts: it creates a
+-- run thread, closes, reopens as a new instance, reads the thread and
+-- records on it. Another app in the same workspace is refused, and after
 -- the app is uninstalled its stable family is fenced out of every thread.
 local test = require("test")
 local process = require("process")
@@ -12,13 +12,11 @@ local registry = require("registry")
 local catalog = require("catalog")
 local appearance = require("appearance")
 local ADMISSION_ID = "bee.security:application_admission"
-local DEFINITION = "bee.harness.window:app"
+local DEFINITION = "bee.harness.app:app"
 local OTHER_DEFINITION = "bee.apps:welcome"
 local RUN_THREAD = "stable-run-thread"
 local BACKFILL_THREAD = "stable-backfill-run-thread"
 local ATTEMPT = "stable-run-attempt-1"
-local BACKEND = "bee.harness.launch:agent_call_backend"
-local LAUNCH_SCOPE = "bee.harness.launch:agent_launch_execution_scope"
 local THREADS_POLICY = "bee.security.threads:thread_authority_client_policy"
 local WORKSPACE = string.rep("a", 32)
 
@@ -42,15 +40,6 @@ local function as_app(instance_id: string, target: string, request: unknown): {[
     return unwrap(raw)
 end
 
-local function run_status(instance_id: string): {[string]: unknown}
-    local scope = assert(security.named_scope(LAUNCH_SCOPE))
-    local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
-    local executor = assert(funcs.new():with_actor(actor):with_scope(scope))
-    local raw, call_error = executor:call(BACKEND, {operation = "status", thread_id = RUN_THREAD, attempt_id = ATTEMPT})
-    if call_error then error("run status: " .. tostring(call_error)) end
-    return unwrap(raw)
-end
-
 local function app_code(instance_id: string, target: string, request: unknown): string
     local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
     local policy = assert(security.policy(THREADS_POLICY))
@@ -63,11 +52,11 @@ local function app_code(instance_id: string, target: string, request: unknown): 
 end
 
 local function run_code(instance_id: string, thread_id: string?): string?
-    local scope = assert(security.named_scope(LAUNCH_SCOPE))
     local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
-    local executor = assert(funcs.new():with_actor(actor):with_scope(scope))
-    local raw, call_error = executor:call(BACKEND, {operation = "status", thread_id = thread_id or RUN_THREAD, attempt_id = ATTEMPT})
-    if call_error then error("run status: " .. tostring(call_error)) end
+    local policy = assert(security.policy(THREADS_POLICY))
+    local executor = assert(funcs.new():with_actor(actor):with_scope(security.new_scope({policy})))
+    local raw, call_error = executor:call("bee.threads.service:get", {thread_id = thread_id or RUN_THREAD})
+    if call_error then error("run thread: " .. tostring(call_error)) end
     local reply = raw :: {[string]: unknown}
     if reply.ok == true then return nil end
     return tostring((reply.error :: {[string]: unknown}).code)
@@ -187,10 +176,10 @@ local function define_tests()
             local created = as_app(first, "bee.threads.service:create",
                 {thread_id = thread_id or RUN_THREAD, idempotency_key = RUN_THREAD .. "-create", title = "Stable run"})
             test.eq(created.thread_id, RUN_THREAD)
-            test.eq(run_status(first).state, "starting")
+            test.is_nil(run_code(first))
             close(first_view)
             local second, _ = open(DEFINITION, "stable-view-2")
-            test.eq(run_status(second).state, "starting")
+            test.is_nil(run_code(second))
             local steered = as_app(second, "bee.threads.service:record",
                 {thread_id = RUN_THREAD, idempotency_key = "stable-steer-1", kind = "message",
                     body = {message_id = "stable-steer-1", message_kind = "progress",

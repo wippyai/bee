@@ -22,7 +22,7 @@ local function main(value: unknown)
     local lifecycle = assert(process.events())
     local appearance_sub = assert(process.listen("bee.appearance.state", {message = true}))
     local close_sub = assert(process.listen("bee.application.close", {message = true}))
-    local nav_sub = assert(process.listen("bee.files.navigate", {message = true}))
+    local navigation_sub = assert(process.listen("bee.application.navigate", {message = true}))
 
     assert(tty.start())
     local output = assert(tty.surface())
@@ -89,7 +89,7 @@ local function main(value: unknown)
             lifecycle:case_receive(),
             appearance_sub:case_receive(),
             close_sub:case_receive(),
-            nav_sub:case_receive(),
+            navigation_sub:case_receive(),
         })
 
         if not selected.ok then
@@ -117,10 +117,9 @@ local function main(value: unknown)
                 preferences = updated
                 dirty = true
             end
-        elseif selected.channel == nav_sub then
-            local sender = tostring(selected.value:from())
-            local target = (sender == launch.workspace_pid or sender == launch.broker_pid)
-                and protocol.decode_navigation(selected.value:payload():data()) or nil
+        elseif selected.channel == navigation_sub then
+            local args = client.navigation(launch, tostring(selected.value:from()), selected.value:payload():data())
+            local target = args and protocol.decode_navigation(args) or nil
             if target then
                 local range = target.line and {start_line = target.line, end_line = target.end_line or target.line} or nil
                 if model.open_file(state, target.path, range) then

@@ -105,14 +105,6 @@ entries:
     test: wippy.test:test
     picker: bee.application:folder_picker
     caller: bee.application:caller
-- name: agents_receipt_test
-  kind: function.lua
-  source: file://agents_receipt_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    agents: bee.application:agents
 - name: thread_binding_test
   kind: function.lua
   source: file://thread_binding_test.lua

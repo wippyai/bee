@@ -14,7 +14,8 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return {ok = false, error = "request must be an object"} end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir"}) then return {ok = false, error = "unknown field"} end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir", "session_turn"}) then return {ok = false, error = "unknown field"} end
+    if request.session_turn ~= nil and type(request.session_turn) ~= "boolean" then return {ok = false, error = "session_turn must be boolean"} end
     local workspace, definition_ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace then return {ok = false, error = "workspace_id is not an identifier"} end
     if not definition_ref then return {ok = false, error = "definition_ref is not an identifier"} end
@@ -24,12 +25,12 @@ local function handle(raw: unknown): {[string]: unknown}
     if request.saved_profile_id ~= nil or request.saved_profile_revision ~= nil then
         if not saved_id or not saved_revision or saved_revision < 1 then return {ok = false, error = "saved profile needs identity and positive revision"} end
     end
-    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision)
+    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, request.session_turn == true)
     if not plan then return {ok = false, error = tostring(plan_error and plan_error.error and plan_error.error.message or "launch plan unavailable")} end
     if plan.plan_digest ~= request.expected_plan_digest then return {ok = false, error = "selected launch plan changed"} end
     -- A folder under an admitted root becomes the working directory only
     -- where the definition and its launch policy both allow the override.
-    local backend_request: {[string]: unknown} = {workspace_id = workspace, definition_ref = definition_ref, expected_definition_digest = plan.definition_digest}
+    local backend_request: {[string]: unknown} = {workspace_id = workspace, definition_ref = definition_ref, expected_definition_digest = plan.definition_digest, session_turn = request.session_turn}
     if request.workdir ~= nil then
         if not admission.overrides(plan, "workdir") then return {ok = false, error = "the launch does not allow a workdir override"} end
         backend_request.workdir = request.workdir

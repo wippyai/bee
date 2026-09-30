@@ -170,11 +170,12 @@ entries:
   meta:
     comment: The installed harness contributes the Agent application's reviewed host-selected policies
   default:
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     scope_management: true
     close_grace_ms: 60000
     policies:
     - bee.harness.security:carrier_policy
+    - bee.harness.security:interactive_session_policy
     - bee.harness.security:carrier_environment_policy
     - bee.harness.security:profile_workspace_policy
     - bee.harness.security:profile_context_boundary
@@ -190,6 +191,7 @@ entries:
     - bee.security.gateway:gateway_materialize_policy
     - bee.security.gateway:gateway_supervision_policy
     - bee.security.storage:workspace_folder_browse_policy
+    - bee.security.storage:workspace_catalog_read_policy
   targets:
   - entry: bee.security:application_admission
     path: .bindings +=

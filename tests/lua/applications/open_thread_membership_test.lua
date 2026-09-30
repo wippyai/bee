@@ -14,7 +14,7 @@ local appearance = require("appearance")
 
 local WORKSPACE = string.rep("a", 32)
 local THREAD = "open-membership-thread"
-local DEFINITION = "bee.harness.window:app"
+local DEFINITION = "bee.harness.app:app"
 
 -- The threads authority answers either a bounded reply envelope or the
 -- operation's own value; the probe reads both without inventing a result.

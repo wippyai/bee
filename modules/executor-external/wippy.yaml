@@ -1,0 +1,9 @@
+organization: bee
+module: executor-external
+type: library
+version: 0.1.0-dev
+description: External turn executor over admitted provider drivers and placement
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

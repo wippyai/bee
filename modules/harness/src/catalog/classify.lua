@@ -10,6 +10,7 @@ local permission = require("permission")
 local M = {}
 M.CONTRACT = "bee.driver:driver"
 M.METHODS = {"prepare", "dispatch", "normalize", "configure"}
+M.OPTIONAL_METHODS = {"locate"}
 type Entry = {[string]: unknown}
 type Digest = {entry: string, scope: "entry"}
 -- permission reports proof eligibility apart from compatibility: eligible
@@ -63,6 +64,7 @@ function M.binding(input: Input): Binding
     local data = bounds.object(entry.data) or {}
     local contracts: unknown = data.contracts
     local implements = false
+    local locate_contract = false
     local mapped: {[string]: string} = {}
     if type(contracts) == "table" then
         for _, item in ipairs(contracts :: {unknown}) do
@@ -74,11 +76,28 @@ function M.binding(input: Input): Binding
                     local target = bounds.id(methods[name])
                     if not target then fail("method " .. name .. " is not bound") else mapped[name] = target end
                 end
+                if methods.locate ~= nil then fail("method locate belongs to bee.driver:locate_facet, not bee.driver:driver") end
+            elseif declared and declared.contract == "bee.driver:locate_facet" then
+                if locate_contract then fail("binding declares bee.driver:locate_facet twice") end
+                locate_contract = true
+                local methods = bounds.object(declared.methods) or {}
+                local extra = bounds.fields(methods, {"locate"})
+                if extra then fail("locate methods: " .. extra) end
+                local target = bounds.id(methods.locate)
+                if not target then fail("locate method is not bound") else mapped.locate = target end
             end
         end
     end
     if not implements then fail("binding does not implement " .. M.CONTRACT) end
     for _, name in ipairs(M.METHODS) do
+        local target = mapped[name]
+        if target then
+            local method = input.methods[target]
+            if not method then fail("method " .. name .. " points at a missing entry " .. target)
+            elseif method.kind ~= "function.lua" then fail("method " .. name .. " points at " .. tostring(method.kind) .. ", not a function") end
+        end
+    end
+    for _, name in ipairs(M.OPTIONAL_METHODS) do
         local target = mapped[name]
         if target then
             local method = input.methods[target]

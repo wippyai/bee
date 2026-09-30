@@ -56,28 +56,25 @@ local function define_tests()
             test.eq(target.end_line, 30)
         end)
 
-        test.it("decodes bounded owner navigation and refuses malformed ranges", function()
-            local target = assert(protocol.decode_navigation({path = "src/main.lua", line = 2, end_line = 4}))
+        test.it("decodes bounded navigation arguments and refuses object payloads", function()
+            local target = assert(protocol.decode_navigation({"src/main.lua:2-4"}))
             test.eq(target.line, 2)
             test.eq(target.end_line, 4)
-            for _, raw in ipairs({{path = ".wippy/private.db"}, {path = "src/main.lua", line = 0},
-                {path = "src/main.lua", line = 1.5}, {path = "src/main.lua", line = 2, end_line = {}},
-                {path = "src/main.lua", end_line = 2}, {path = "src/main.lua", line = 3, end_line = 2}}) do
+            for _, raw in ipairs({{path = "src/main.lua", line = 2, end_line = 4},
+                {version = 1, arguments = {"src/main.lua:2-4"}}, {".wippy/private.db"},
+                {"src/main.lua:0"}, {"../outside.lua"}}) do
                 test.is_nil(protocol.decode_navigation(raw))
             end
         end)
 
-        test.it("decodes bounded reopen arguments on the existing navigation boundary", function()
-            local target = assert(protocol.decode_navigation({version = 1, arguments = {"src/main.lua:5-8"}}))
+        test.it("decodes bounded singleton reopen arguments from the shared client boundary", function()
+            local target = assert(protocol.decode_navigation({"src/main.lua:5-8"}))
             test.eq(target.path, "src/main.lua")
             test.eq(target.line, 5)
             test.eq(target.end_line, 8)
-            for _, raw in ipairs({{version = 2, arguments = {"src/main.lua:5-8"}},
-                {version = 1, arguments = "src/main.lua"}, {version = 1, arguments = {[2] = "src/main.lua"}},
-                {version = 1, arguments = {"../outside.lua:5-8"}}, {version = 1, arguments = {"/outside.lua:5-8"}},
-                {version = 1, arguments = {".wippy/private.db:5-8"}}, {version = 1, arguments = {"src/main.lua"}, path = "other.lua"},
-                {version = 1, arguments = {string.rep("x", 1025)}}, {version = 1, arguments = {"src/main.lua:0"}},
-                {version = 1, arguments = {"src/main.lua", "bad-range"}}}) do
+            for _, raw in ipairs({{}, {"../outside.lua:5-8"}, {"/outside.lua:5-8"},
+                {".wippy/private.db:5-8"}, {string.rep("x", 1025)}, {"src/main.lua:0"},
+                {"src/main.lua", "bad-range"}, {[2] = "src/main.lua"}}) do
                 test.is_nil(protocol.decode_navigation(raw))
             end
         end)

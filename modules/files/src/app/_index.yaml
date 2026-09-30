@@ -40,6 +40,5 @@ entries:
       lifetime: view
       revision: '2'
       instance_policy: singleton
-      navigation_topic: bee.files.navigate
       group: Tools
       role: inspection

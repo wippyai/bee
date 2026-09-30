@@ -74,3 +74,17 @@ entries:
     lease_grants: bee.gov.binding:lease_grants
     lease_store: bee.gov.persist:lease_store
     service: bee.approvals:service
+- name: attention_client_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.approvals.binding:attention_count, bee.approvals.binding:inbox]
+    effect: allow
+- name: attention_test
+  kind: function.lua
+  source: file://attention_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports: {test: wippy.test:test}

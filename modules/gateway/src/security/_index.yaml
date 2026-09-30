@@ -15,20 +15,6 @@ entries:
     actions: [system.read]
     resources: [node]
     effect: allow
-- name: inbox_call_policy
-  kind: security.policy
-  meta: {comment: Default owner method calls for action inbox tools; domain authority remains at the Threads owner}
-  policy:
-    actions: [funcs.call]
-    resources: [bee.threads.service:inbox_send, bee.threads.service:inbox_reply, bee.threads.service:inbox_list,
-      bee.threads.service:inbox_ack, bee.threads.service:inbox_describe]
-    effect: allow
-- name: discover_none_policy
-  kind: security.policy
-  policy: {actions: [bee.sessions.discover], resources: [unassigned-session-address], effect: allow}
-- name: send_none_policy
-  kind: security.policy
-  policy: {actions: [bee.sessions.send], resources: [unassigned-session-address], effect: allow}
 - name: database_ref_policy
   kind: security.policy
   meta: {comment: Gateway store resolution reads only its component-owned database reference}
@@ -72,13 +58,6 @@ entries:
     actions: [funcs.security, funcs.context, security.scope.create, security.actor.create]
     resources: [security, context, custom, '*']
     effect: allow
-- name: hook_inbox_policy
-  kind: security.policy
-  meta: {comment: Hook intake answers a supported boundary with the bound action's own outstanding inbox; the thread owner still checks the admitted principal and workspace, and the hook answers only where the binding admitted session_inbox}
-  policy:
-    actions: [funcs.call]
-    resources: [bee.threads.service:inbox_list]
-    effect: allow
 - name: tool_policy_read_policy
   kind: security.policy
   meta: {comment: target_tool_* requirements inject exactly the host-selected policies that the MCP adapter may resolve}
@@ -91,7 +70,14 @@ entries:
   meta: {comment: The MCP adapter reads only its component-owned links to the selected built-in tool policies}
   policy:
     actions: [registry.get]
-    resources: [bee.gateway:tool_read_policy_ref, bee.gateway:tool_message_policy_ref, bee.gateway:tool_inbox_policy_ref, bee.gateway:tool_discover_policy_ref, bee.gateway:tool_send_grant_policy_ref, bee.gateway:tool_launch_policy_ref, bee.gateway:tool_run_policy_ref, bee.gateway:tool_overlay_policy_ref, bee.gateway:tool_docs_policy_ref, bee.gateway:tool_components_policy_ref, bee.gateway:tool_delivery_policy_ref, bee.gateway:tool_publish_policy_ref, bee.gateway:tool_application_open_policy_ref, bee.gateway:tool_install_policy_ref]
+    resources: [bee.gateway:tool_read_policy_ref, bee.gateway:tool_message_policy_ref, bee.gateway:tool_overlay_policy_ref, bee.gateway:tool_docs_policy_ref, bee.gateway:tool_components_policy_ref, bee.gateway:tool_delivery_policy_ref, bee.gateway:tool_publish_policy_ref, bee.gateway:tool_application_open_policy_ref, bee.gateway:tool_install_policy_ref, bee.gateway:tool_session_policy_ref]
+    effect: allow
+- name: session_contract_policy
+  kind: security.policy
+  meta: {comment: The MCP adapter resolves the bee.sessions owner contracts it projects; the subject's own scope decides which bindings and methods open}
+  policy:
+    actions: [contract.get]
+    resources: [bee.sessions:contract, bee.sessions:catalog]
     effect: allow
 - name: access_call_policy
   kind: security.policy
@@ -118,7 +104,7 @@ entries:
 - name: subject_call
   kind: library.lua
   source: file://subject_call.lua
-  modules: [funcs, security, registry]
+  modules: [funcs, security, registry, contract]
   imports:
     bounds: bee.threads.records:bounds
     context: bee.gateway:context
@@ -207,3 +193,26 @@ entries:
     bounds: bee.threads.records:bounds
     installation: bee.hub:installation
     subject_call: bee.gateway.security:subject_call
+
+- name: session_boundary_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.call, bee.sessions.hook_boundary]
+    resources: '*'
+    expression: '(action == "funcs.call" && resource == "bee.sessions.binding:hook_boundary") || (action == "bee.sessions.hook_boundary" && resource == actor.id)'
+    effect: allow
+- name: session_boundary_resolver_policy
+  kind: security.policy
+  policy:
+    actions: [security.policy.get]
+    resources: [bee.gateway.security:session_boundary_policy]
+    effect: allow
+
+- name: directory_projection_policy
+  kind: security.policy.expr
+  meta: {comment: Workspace catalog projections read only the public Sessions list after reauthorizing the selected workspace}
+  policy:
+    actions: [contract.get, contract.open, contract.call, contract.security, security.actor.create, funcs.security]
+    resources: '*'
+    expression: '(action == "contract.get" && resource == "bee.sessions:contract") || (action == "contract.security" && resource == "security") || action == "contract.open" || (action == "contract.call" && resource == "list") || (action == "security.actor.create" && resource == actor.id) || action == "funcs.security"'
+    effect: allow

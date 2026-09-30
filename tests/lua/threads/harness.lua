@@ -69,6 +69,9 @@ function M.key(): string
     if err or not id then error("uuid: " .. tostring(err)) end
     return id
 end
+function M.session_owner(workspace_id: string?): Client
+    return M.principal("sessions-owner", {"bee.threads:session_owner_test_policy"}, workspace_id)
+end
 function M.value(reply: Reply): any
     if not reply.ok then error("expected success, got " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return reply.value

@@ -48,7 +48,8 @@ local function changed(entry: {[string]: unknown}): {[string]: unknown}
     return result
 end
 local function call(target: string, value: unknown): {[string]: unknown}
-    local raw, call_error = funcs.call(target, value)
+    local actor = assert(security.new_actor(assert(security.actor()):id(), {workspace_id = string.rep("a", 32)}))
+    local raw, call_error = funcs.new():with_actor(actor):call(target, value)
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
@@ -114,7 +115,7 @@ local function run()
     local plan, refused = admission.resolve("bee.managed.window.fixture:selector_definition", "window")
     assert(plan, tostring(refused and refused.error))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", arguments = {}}))
+        definition_id = "bee.harness.app:app", arguments = {}}))
     local opened
     local open_deadline = time.after("5s")
 	while not opened do
@@ -149,6 +150,7 @@ local function run()
     local view = assert(tty.attach(mounted))
     assert(view:send({type = "resize", width = 100, height = 10}))
     apply(selector)
+    assert(view:send({type = "key", key = "n", key_type = "rune", action = "press"}))
     assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
     local listed = false
     for _ = 1, 120 do
@@ -157,7 +159,7 @@ local function run()
         time.sleep("25ms")
     end
     assert(listed, "picker did not show fixture")
-    assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
+    assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
 	local failure, pending = nil, nil
 	for _ = 1, 160 do
 		local frame = view:snapshot()
@@ -171,7 +173,7 @@ local function run()
 		end
 		time.sleep("25ms")
 	end
-	assert(failure, "failure surface did not remain visible")
+	assert(failure, "failure surface did not remain visible: " .. tostring(view:snapshot() and table.concat(view:snapshot().rows, "|")))
     assert((pending ~= nil) == (not BEFORE_ADMISSION), "incorrect settlement scope")
     local failure_text = table.concat(failure.rows)
 	assert(failure_text:find(STAGE == "component" and "window component" or (STAGE == "generation" and "attachment generation" or "injected"), 1, true), "failure reason missing")
@@ -298,6 +300,36 @@ func run() error {
 	if err := copyTree(filepath.Join(dir, "modules"), filepath.Join(repo, "modules")); err != nil {
 		return err
 	}
+	bindingsPath := filepath.Join(dir, "modules", "sessions", "src", "binding", "_index.yaml")
+	bindingsData, err := os.ReadFile(bindingsPath)
+	if err != nil {
+		return err
+	}
+	var bindings fixtureIndex
+	if err := yaml.Unmarshal(bindingsData, &bindings); err != nil {
+		return err
+	}
+	for _, entry := range bindings.Entries {
+		if entry["name"] == "catalog_binding" {
+			entry["contracts"].([]interface{})[0].(map[string]interface{})["default"] = false
+		}
+	}
+	bindingsData, err = yaml.Marshal(bindings)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(bindingsPath, bindingsData, 0600); err != nil {
+		return err
+	}
+	securityPath := filepath.Join(dir, "modules", "harness", "src", "security", "_index.yaml")
+	securityData, err := os.ReadFile(securityPath)
+	if err != nil {
+		return err
+	}
+	securityData = []byte(strings.ReplaceAll(string(securityData), `resource == "bee.sessions.binding:catalog_binding"`, `resource == "bee.sessions.binding:catalog_binding" || resource == "bee.managed.window.fixture:catalog_owner"`))
+	if err := os.WriteFile(securityPath, securityData, 0600); err != nil {
+		return err
+	}
 	fixture := filepath.Join(dir, "src", "tests", "managed_window_app")
 	if err := copyTree(fixture, filepath.Join(repo, "tests", "fixtures", "managed_window_app")); err != nil {
 		return err
@@ -342,7 +374,8 @@ func run() error {
 		return err
 	}
 	hostPath := filepath.Join(dir, "src", "_index.yaml")
-	host, err := os.ReadFile(hostPath)
+	activationPath := filepath.Join(dir, "modules", "harness", "src", "_index.yaml")
+	host, err := os.ReadFile(activationPath)
 	if err != nil {
 		return err
 	}
@@ -351,7 +384,7 @@ func run() error {
 	if updated == string(host) {
 		return fmt.Errorf("host activation anchor missing")
 	}
-	if err := os.WriteFile(hostPath, []byte(updated), 0600); err != nil {
+	if err := os.WriteFile(activationPath, []byte(updated), 0600); err != nil {
 		return err
 	}
 	hostData, err := os.ReadFile(hostPath)
@@ -397,7 +430,7 @@ func run() error {
 	if *stage == "plan" {
 		machineText = strings.Replace(string(machine), "function M.plan(io: IO, request: Request): (Plan?, string?)\n", "function M.plan(io: IO, request: Request): (Plan?, string?)\n    if request.binding_ref == \"bee.managed.window.fixture:binding\" then return nil, \"injected planning failure\" end\n", 1)
 	} else if *stage == "placement" {
-		runtimePath := filepath.Join(dir, "modules", "harness", "src", "window", "runtime.lua")
+		runtimePath := filepath.Join(dir, "modules", "harness", "src", "app", "runtime.lua")
 		runtimeSource, readError := os.ReadFile(runtimePath)
 		if readError != nil {
 			return readError
@@ -412,7 +445,7 @@ func run() error {
 		machineText = string(machine)
 	}
 	if *stage == "generation" {
-		runtimePath := filepath.Join(dir, "modules", "harness", "src", "window", "runtime.lua")
+		runtimePath := filepath.Join(dir, "modules", "harness", "src", "app", "runtime.lua")
 		runtimeSource, err := os.ReadFile(runtimePath)
 		if err != nil {
 			return err
@@ -427,7 +460,7 @@ func run() error {
 		machineText = string(machine)
 	}
 	if *stage == "component" {
-		appPath := filepath.Join(dir, "modules", "harness", "src", "window", "app.lua")
+		appPath := filepath.Join(dir, "modules", "harness", "src", "app", "app.lua")
 		appSource, err := os.ReadFile(appPath)
 		if err != nil {
 			return err

@@ -59,6 +59,7 @@ def run_shard(index, folder, entries, timeout=None):
         # Installation tests drain the queue synchronously; avoid racing the worker.
         "--override", "bee:gateway_installation_service:lifecycle.auto_start=false",
         "--override", "bee:thread_outbox_pump_service:lifecycle.auto_start=false",
+        "--override", "bee.sessions.service:scheduler_service:lifecycle.auto_start=false",
         "test", *entries,
     ], cwd=folder, env=environment(folder), capture_output=True, text=True, timeout=timeout)
     output = result.stdout + result.stderr

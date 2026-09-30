@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.executor.external
+entries:
+- name: turn_test
+  kind: function.lua
+  source: file://turn_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    turn: bee.executor.external.service:turn
+    stream: bee.executor.external.service:stream

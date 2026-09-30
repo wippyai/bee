@@ -120,7 +120,8 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return fail("request must be an object") end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "workdir"}) then return fail("unknown field") end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_definition_digest", "workdir", "session_turn"}) then return fail("unknown field") end
+    if request.session_turn ~= nil and type(request.session_turn) ~= "boolean" then return fail("session_turn must be boolean") end
     local workspace, ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace or not ref then return fail("workspace_id and definition_ref are required") end
     if not security.can("bee.resources.manage", workspace) then return fail("resource management is not authorized") end
@@ -129,6 +130,7 @@ local function handle(raw: unknown): {[string]: unknown}
     local launch, launch_error = definition.load(ref)
     if not launch then return fail(tostring(launch_error)) end
     if launch.digest ~= expected then return fail("launch definition changed") end
+    if request.session_turn == true and launch.session_credentials then launch.credentials = launch.session_credentials end
     local names: {string} = {}
     if launch.workdir_policy.kind == "declared_resource" and launch.workdir_policy.resource_ref then names[#names + 1] = launch.workdir_policy.resource_ref end
     if launch.session_resource then names[#names + 1] = launch.session_resource end

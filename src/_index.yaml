@@ -292,15 +292,15 @@ entries:
   policies:
   - name: workspace-application-delivery
     approvers:
-    - definition_id: bee.approvals.inbox:app
+    - definition_id: bee.approvals.inbox.app:app
     max_ttl_ms: 600000
   - name: module-installation
     approvers:
-    - definition_id: bee.approvals.inbox:app
+    - definition_id: bee.approvals.inbox.app:app
     max_ttl_ms: 600000
   - name: super-edit-person
     approvers:
-    - definition_id: bee.approvals.inbox:app
+    - definition_id: bee.approvals.inbox.app:app
     confirm: explicit
     max_ttl_ms: 600000
 - name: module_installation

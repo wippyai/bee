@@ -196,7 +196,7 @@ entries:
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write runtime lock: %w", err)
 	}
-config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/capability: ./modules/capability\n    bee/gov: ./modules/gov\n    bee/hive: ./modules/hive\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/capability: ./modules/capability\n    bee/gov: ./modules/gov\n    bee/hive: ./modules/hive\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write bounded shutdown config: %w", err)
 	}
@@ -239,7 +239,8 @@ func migrationLedger(root string) (string, error) {
 		"governance_plan_approval_proposal", "governance_plan_approval_incarnation",
 		"governance_activation_intents", "governance_component_slots", "governance_activation_migrations",
 		"governance_activation_application_admission", "governance_workspace_append",
-		"governance_activation_grant_reuse", "governance_activation_rollback"}
+		"governance_activation_grant_reuse", "governance_activation_rollback",
+		"governance_node_identity_migration", "governance_plan_identity_digest", "governance_capability_leases", "governance_lease_receipt_result"}
 	rows := strings.Split(ledger, "\n")
 	if len(rows) != len(expected) {
 		return "", fmt.Errorf("unexpected governance migration ledger: %q", ledger)

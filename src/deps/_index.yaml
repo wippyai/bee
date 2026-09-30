@@ -70,16 +70,6 @@ entries:
     value: bee.security.gateway:gateway_tool_read_policy
   - name: target_tool_message_policy
     value: bee.security.gateway:gateway_tool_message_policy
-  - name: target_tool_inbox_policy
-    value: bee.security.gateway:gateway_tool_inbox_policy
-  - name: target_tool_discover_policy
-    value: bee.security.gateway:gateway_session_discover_policy
-  - name: target_tool_send_grant_policy
-    value: bee.security.gateway:gateway_session_send_workspace_policy
-  - name: target_tool_launch_policy
-    value: bee.security.gateway:gateway_tool_launch_policy
-  - name: target_tool_run_policy
-    value: bee.security.gateway:gateway_tool_run_policy
   - name: target_tool_overlay_policy
     value: bee.security.gateway:gateway_tool_overlay_policy
   - name: target_tool_docs_policy
@@ -94,10 +84,10 @@ entries:
     value: bee.security.gateway:gateway_tool_application_open_policy
   - name: target_tool_install_policy
     value: bee.security.gateway:gateway_tool_install_policy
+  - name: target_tool_session_policy
+    value: bee.security.gateway:gateway_tool_session_policy
   - name: target_install_configuration
     value: bee:module_installation
-  - name: target_remote_resolver
-    value: bee.hive.service:remote_sessions
 - name: hive
   kind: ns.dependency
   component: bee/hive

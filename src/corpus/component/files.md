@@ -23,9 +23,9 @@ An agent with approved `bee.application:runtime` access opens Files through
 `application_open`, with `definition_id: bee.files.app:app` and literal
 `arguments: ["src/clock.lua:2-4"]`. The preview marks the requested range.
 Files uses singleton admission; opening an existing instance with new arguments
-moves its retained preview to the requested file and range. Its declared
-`navigation_topic` is `bee.files.navigate`: the broker sends bounded
-`{version = 1, arguments = [...]}` through this same handler after admission
-and thread-owner checks. The owning workspace or broker may also send a
-bounded message with `path`, `line` and `end_line`; other senders, malformed
-ranges and unsafe paths are ignored. This message is not an agent tool.
+moves its retained preview to the requested file and range. The shared reopen
+navigation uses the `bee.application.navigate` topic. Files calls
+`client.navigation` to authenticate the broker, instance, view, execution
+generation and launch token before decoding its bounded arguments. Other
+senders, stale payloads and unsafe paths are ignored. This message is not an
+agent tool.

@@ -7,7 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee agents
-    comment: Default managed-agent kit for Bee, including the harness, credential and placement owners, and built-in drivers
+    comment: Default managed-agent kit for Bee, including durable sessions and the external executor
 - name: dependency_harness
   kind: ns.dependency
   component: bee/harness
@@ -63,4 +63,12 @@ entries:
 - name: dependency_git_worktree
   kind: ns.dependency
   component: bee/git-worktree
+  version: '*'
+- name: dependency_executor_external
+  kind: ns.dependency
+  component: bee/executor-external
+  version: '*'
+- name: dependency_sessions
+  kind: ns.dependency
+  component: bee/sessions
   version: '*'

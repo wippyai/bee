@@ -8,7 +8,7 @@ type Reply = {version: integer, request_id: string, op: ReplyOp, id: string, ins
 type RequestOp = "open" | "close" | "bind" | "unbind" | "shutdown"
 type Request = {version: integer, request_id: string, op: RequestOp, workspace_id: string?, id: string, instance_id: string, definition_id: string, thread_id: string?, recipient: string, restore_instance_id: string, restore_view_id: string, resume_schema: string, resume_state: string, arguments: {string}, observer: boolean?}
 type Descriptor = {definition_id: string, definition_revision: string, title: string, icon: string,
-    group: string, role: string, singleton: boolean, navigation_topic: string, resume_schema: string, restart_policy: string}
+    group: string, role: string, singleton: boolean, resume_schema: string, restart_policy: string}
 type ThreadAccess = "none" | "observe_post"
 type Binding = {definition_id: string, policies: {string}, appearance_write: boolean, application_stop: boolean, scope_management: boolean, close_grace_ms: integer, thread_access: ThreadAccess}
 local function request_op(value: unknown): RequestOp?
@@ -76,26 +76,18 @@ function M.reply(request_id: string, op: ReplyOp, code: string?, message: string
     return {version = 1, request_id = request_id, op = op, id = "", instance_id = "", title = "", mount = "",
         error_code = code or "", error = message or "", definition_id = "", thread_id = nil, resume_schema = "", restart_policy = "never", resume_state = ""}
 end
-function M.navigation_topic(value: unknown): string?
-    if value == nil then return "bee.application.navigate" end
-    local topic = M.text(value, 160)
-    if not topic or not topic:match("^[%w_]+[%.%w_%-]*%.navigate$") then return nil end
-    return topic
-end
 function M.descriptor(id: string, value: unknown): Descriptor?
     if type(value) ~= "table" or value.api_version ~= 1 or value.lifetime ~= "view" then return nil end
     local title, icon = M.text(value.title, 80), M.text(value.icon or "", 8)
     local revision, group, role = M.text(value.revision, 80), M.text(value.group or "", 160), M.text(value.role or "", 32)
     if not title or title == "" or not icon or not revision or revision == "" or not group or not role then return nil end
     if value.instance_policy ~= "singleton" and value.instance_policy ~= "multiple" then return nil end
-    local topic = M.navigation_topic(value.navigation_topic)
-    if not topic then return nil end
     local schema = M.text(value.resume_schema or "", 80)
     local restart = value.restart_policy or "never"
     if not schema or (restart ~= "never" and restart ~= "automatic" and restart ~= "manual") then return nil end
     if restart ~= "never" and schema == "" then return nil end
     return {definition_id = id, definition_revision = revision, title = title, icon = icon, group = group,
-        role = role, singleton = value.instance_policy == "singleton", navigation_topic = topic, resume_schema = schema, restart_policy = restart}
+        role = role, singleton = value.instance_policy == "singleton", resume_schema = schema, restart_policy = restart}
 end
 local function decode_thread_access(value: unknown): ThreadAccess?
     if value == nil or value == "none" then return "none" end
@@ -112,7 +104,7 @@ function M.binding(value: unknown): Binding?
     local policies: {string} = {}
     local count = 0
     for key in pairs(value.policies) do
-        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 16 then return nil end
+        if type(key) ~= "number" or key ~= math.floor(key) or key < 1 or key > 32 then return nil end
         count = count + 1
     end
     for i = 1, count do
@@ -131,5 +123,15 @@ function M.binding(value: unknown): Binding?
     return {definition_id = id, policies = policies, appearance_write = value.appearance_write == true,
         application_stop = value.application_stop == true, scope_management = value.scope_management == true,
         close_grace_ms = close_grace_ms == nil and 250 or math.floor(close_grace_ms), thread_access = thread_access}
+end
+function M.navigation(value: unknown, instance: string, view: string, token: string, workspace: string): Request?
+    if type(value) ~= "table" then return nil end
+    local request = M.request(value)
+    if not request or request.op ~= "open" or request.workspace_id ~= workspace
+        or value.source_instance_id ~= instance or value.source_view_id ~= view or value.launch_token ~= token
+        or request.restore_instance_id ~= "" or request.restore_view_id ~= "" or request.resume_state ~= ""
+        or request.resume_schema ~= "" or request.thread_id ~= nil or request.recipient ~= "" or request.id ~= ""
+        or value.runtime_provenance ~= nil or value.observer ~= nil then return nil end
+    return request
 end
 return M

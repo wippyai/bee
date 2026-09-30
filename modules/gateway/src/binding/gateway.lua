@@ -11,6 +11,7 @@ local time = require("time")
 local uuid = require("uuid")
 local json = require("json")
 local security = require("security")
+local contract = require("contract")
 local system = require("system")
 local crypto = require("crypto")
 local base64 = require("base64")
@@ -51,7 +52,6 @@ M.MAX_TTL_MS = 86400000
 M.DEFAULT_TTL_MS = 3600000
 M.MAX_DRAIN_MS = 600000
 M.DEFAULT_DRAIN_MS = 30000
-M.WAIT_SLICE_MS = 1000
 M.TOKEN_BYTES = 32
 M.MAX_RETAINED_HOOKS = 256
 M.MAX_RETAINED_HOOK_BYTES = 524288
@@ -458,8 +458,8 @@ function M.admit(value: unknown): Reply
     local unknown_field = bounds.fields(object, {"subject", "action_id", "attempt_id", "thread_id", "owner_incarnation", "carrier_epoch", "tools", "hooks", "ttl_ms", "idempotency_key", "surface", "policy_ref", "workspace_id", "workspace_name", "origin_view"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local subject, action_id, attempt_id, thread_id = bounds.id(object.subject), bounds.id(object.action_id), bounds.id(object.attempt_id), bounds.id(object.thread_id)
-    -- The launch policy the attempt ran under, recorded so a gateway tool can
-    -- read the caller's own agent-launch allow-list. It conveys no authority.
+    -- The launch policy the attempt ran under, recorded as attribution in the
+    -- tool call context. It conveys no authority.
     local policy_ref: string? = nil
     if object.policy_ref ~= nil then
         policy_ref = bounds.id(object.policy_ref)
@@ -480,7 +480,7 @@ function M.admit(value: unknown): Reply
     end
     if not subject then return fail("INVALID", "subject is not an identifier") end
     if not action_id then return fail("INVALID", "action_id is not an identifier") end
-    local workspace_name = action_id
+    local workspace_name = action_id:sub(-80)
     if object.workspace_name ~= nil then
         local named = bounds.line(object.workspace_name, 80)
         if not named or named:match("^%s*$") then return fail("INVALID", "workspace_name must be one printable line of at most 80 bytes") end
@@ -1346,85 +1346,59 @@ function M.authenticate(token: string, action_id: string, kind: string): (Bindin
     if count_error then return nil, fail("STORAGE", "count presentation") end
     return binding, nil
 end
--- The running sessions of the caller's workspace: bindings valid under the
--- current listener generation whose intake is not sealed, one per action.
--- This lists what runs; whether the caller may see or reach a session is
--- the thread owner's membership decision, taken as the caller. The scan is
--- complete and ordered by action, so cursor paging over it is stable;
--- sessions.latest reduces to one candidate per action in thread/action order.
--- A listener that was never opened has admitted no session, so a workspace
--- inspection sees none; a peer lookup still needs the live listener.
-local function running_sessions(workspace_id: string, unopened_is_empty: boolean): ({sessions.Candidate}?, Reply?)
-    local db, open_failure = open()
-    if not db then return nil, open_failure end
-    if unopened_is_empty then
-        local listener, listener_error = listener_of(db)
-        if listener_error then db:release(); return nil, fail("STORAGE", listener_error) end
-        if not listener then db:release(); return {}, nil end
-    end
-    local generation, generation_failure = M.generation(db)
-    if not generation then db:release(); return nil, generation_failure end
-    local rows, err = binding_store.workspace_bindings(db, workspace_id, generation.epoch)
-    db:release()
-    if err or not rows then return nil, fail("STORAGE", "read workspace bindings") end
-    local candidates: {sessions.Candidate} = {}
-    for _, row in ipairs(rows) do
-        local live, decode_error = binding_of(row :: Row)
-        if not live then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
-        if M.valid(live, generation) then
-            candidates[#candidates + 1] = {binding_id = live.binding_id, subject = live.subject, action_id = live.action_id, attempt_id = live.attempt_id,
-                thread_id = live.thread_id, carrier_epoch = live.carrier_epoch, name = live.workspace_name}
-        end
-    end
-    return sessions.latest(candidates), nil
-end
-function M.workspace_sessions(binding: Binding): ({sessions.Candidate}?, Reply?)
-    local workspace_id = binding.workspace_id
-    if not workspace_id then return nil, fail("UNAVAILABLE", "this binding names no workspace, so it has no peer sessions") end
-    return running_sessions(workspace_id, false)
-end
--- The workspace extension methods: the agent sessions running in one
--- workspace, for a caller the workspace catalog lets read that workspace.
 M.READ_WORKSPACE = "bee.workspace.manager.read"
 M.MAX_DESCRIBED = 50
-local function running(value: unknown, fields: {string}): ({sessions.Candidate}?, {[string]: unknown}?, Reply?)
-    local object = bounds.object(value)
-    if not object then return nil, nil, fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, fields)
-    if unknown_field then return nil, nil, fail("INVALID", unknown_field) end
-    local workspace_id = bounds.id(object.workspace_id)
-    if not workspace_id then return nil, nil, fail("INVALID", "workspace_id is not an identifier") end
-    if not actor() then return nil, nil, fail("UNAUTHENTICATED", "no actor") end
-    if not security.can(M.READ_WORKSPACE, workspace_id) then return nil, nil, fail("DENIED", "caller may not read workspace " .. workspace_id) end
-    local listed, refused = running_sessions(workspace_id, true)
-    if not listed then return nil, nil, refused end
-    return listed, object, nil
-end
-local function session_item(candidate: sessions.Candidate): {[string]: unknown}
-    return {label = candidate.subject, detail = "action " .. candidate.action_id .. " · thread " .. candidate.thread_id}
+local function directory(value: unknown, fields: {string}): ({Object}?, Object?, Reply?)
+    local request = bounds.object(value)
+    if not request or bounds.fields(request, fields) then return nil, nil, fail("INVALID", "invalid workspace directory request") end
+    local workspace = bounds.id(request.workspace_id)
+    if not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, nil, fail("INVALID", "canonical workspace_id required") end
+    local caller = security.actor()
+    if not caller or not security.can(M.READ_WORKSPACE, workspace) then return nil, nil, fail("DENIED", "caller may not read this workspace") end
+    local attributed, actor_error = security.new_actor(caller:id(), {workspace_id = workspace})
+    if not attributed then return nil, nil, fail("DENIED", tostring(actor_error)) end
+    local definition, contract_error = contract.get("bee.sessions:contract")
+    if not definition then return nil, nil, fail("UNAVAILABLE", tostring(contract_error)) end
+    local acted, acting_error = definition:with_actor(attributed)
+    if not acted then return nil, nil, fail("DENIED", tostring(acting_error)) end
+    local owner, open_error = acted:open()
+    if not owner then return nil, nil, fail("UNAVAILABLE", tostring(open_error)) end
+    local rows: {Object} = {}
+    local cursor: string? = nil
+    local seen: {[string]: boolean} = {}
+    for _ = 1, 64 do
+        local reply_raw, call_error = owner:list({filter = {workspace = workspace}, cursor = cursor})
+        local reply = bounds.object(reply_raw)
+        if call_error or not reply or reply.ok ~= true then return nil, nil, fail("UNAVAILABLE", tostring(call_error or "Sessions directory unavailable")) end
+        local items, decode_error = sessions.project(reply.value, workspace :: string)
+        if not items then return nil, nil, fail("UNAVAILABLE", decode_error or "invalid Sessions directory") end
+        for _, item in ipairs(items) do rows[#rows + 1] = item end
+        local page = bounds.object(reply.value)
+        cursor = page and bounds.id(page.next)
+        if not cursor then return rows, request, nil end
+        if seen[cursor] then return nil, nil, fail("UNAVAILABLE", "Sessions directory repeated its cursor") end
+        seen[cursor] = true
+    end
+    return nil, nil, fail("UNAVAILABLE", "Sessions directory exceeds the workspace projection bound")
 end
 function M.describe(value: unknown): Reply
-    local listed, _, refused = running(value, {"workspace_id"})
+    local listed, _, refused = directory(value, {"workspace_id"})
     if not listed then return refused :: Reply end
-    local items: {{[string]: unknown}} = {}
-    for index = 1, math.min(#listed, M.MAX_DESCRIBED) do items[index] = session_item(listed[index]) end
+    local items: {Object} = {}
+    for index = 1, math.min(#listed, M.MAX_DESCRIBED) do items[index] = listed[index] end
     return succeed({title = "Agent sessions", items = items, total = #listed})
 end
 function M.search(value: unknown): Reply
-    local listed, object, refused = running(value, {"workspace_id", "text", "limit"})
-    if not listed or not object then return refused :: Reply end
-    local wanted = bounds.line(object.text, 240)
+    local listed, request, refused = directory(value, {"workspace_id", "text", "limit"})
+    if not listed or not request then return refused :: Reply end
+    local wanted = bounds.line(request.text, 240)
     if not wanted then return fail("INVALID", "text must be one nonempty line") end
-    local limit = M.MAX_DESCRIBED
-    if object.limit ~= nil then
-        local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > M.MAX_DESCRIBED then return fail("INVALID", "limit must be between 1 and " .. tostring(M.MAX_DESCRIBED)) end
-        limit = number
-    end
-    local hits: {{[string]: unknown}} = {}
-    for _, candidate in ipairs(listed) do
+    local limit = request.limit == nil and M.MAX_DESCRIBED or bounds.integer(request.limit)
+    if not limit or limit < 1 or limit > M.MAX_DESCRIBED then return fail("INVALID", "limit must be between 1 and 50") end
+    local hits: {Object} = {}
+    for _, item in ipairs(listed) do
         if #hits >= limit then break end
-        if candidate.subject:sub(1, #wanted) == wanted or candidate.action_id:sub(1, #wanted) == wanted then hits[#hits + 1] = session_item(candidate) end
+        if tostring(item.label):lower():find(wanted:lower(), 1, true) or tostring(item.session):sub(1, #wanted) == wanted then hits[#hits + 1] = item end
     end
     return succeed({title = "Agent sessions", hits = hits})
 end
@@ -1478,7 +1452,7 @@ function M.submit_hook(binding: Binding, payload: Object, provenance: string): R
                 return done(fail("STORAGE", "hook occurrence row is corrupt"))
             end
             if stored_digest ~= submission.digest then return done(fail("CONFLICT", "occurrence " .. submission.occurrence .. " of " .. event .. " was already submitted with different content")) end
-            return done(succeed({event_id = stored_id, status = stored_status, replayed = true, ambiguous = false, rejected_reason = rejected_reason}))
+            return done(succeed({event = event, event_id = stored_id, status = stored_status, replayed = true, ambiguous = false, rejected_reason = rejected_reason}))
         end
     end
     if revoked_at ~= nil then return done(fail("DENIED", "intake is closed: binding revoked")) end
@@ -1508,7 +1482,7 @@ function M.submit_hook(binding: Binding, payload: Object, provenance: string): R
     local _, commit_error = tx:commit()
     db:release()
     if commit_error then return fail("STORAGE", "commit intake") end
-    return succeed({event_id = event_id, status = "queued", replayed = false, ambiguous = submission.ambiguous})
+    return succeed({event = event, event_id = event_id, status = "queued", replayed = false, ambiguous = submission.ambiguous})
 end
 -- hook_status: what became of one submission; unknown when nothing under
 -- that id exists for the binding, which after a loss permits a replay.

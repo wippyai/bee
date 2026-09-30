@@ -45,6 +45,13 @@ local function define_tests()
             test.eq(encoded, nil)
             test.eq(encode_error, "value exceeds the encoded byte bound")
         end)
+        test.it("preserves quoted text and turn-boundary newlines through a JSON decoder", function()
+            for _, value in ipairs({'sender\nreply with ok', '"quoted"', 'path\\file'}) do
+                local encoded = assert(canonical.encode({text = value}))
+                local decoded = assert(json.decode(encoded)) :: {[string]: unknown}
+                test.eq(decoded.text, value)
+            end
+        end)
         test.it("restores an encoded shape through a decode round trip", function()
             local bytes = assert(canonical.encode({modules = table.create(1, 0), imports = table.create(0, 1)}))
             local decoded = assert(json.decode(bytes))

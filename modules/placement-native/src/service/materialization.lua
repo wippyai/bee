@@ -22,6 +22,7 @@ local formats = require("formats")
 local configuration = require("configuration")
 local workdir_preparers = require("workdir_preparers")
 local writable_roots_adapter = require("writable_roots_adapter")
+local provider_projection = require("provider_projection")
 local M = {}
 type WriteBack = {projection_id: string, generation: integer, source_digest: string, path: string}
 type WriteBackResult = {projection_id: string, ok: boolean, code: string?, message: string?, written: boolean?}
@@ -149,6 +150,11 @@ function M.login_notice(request: types.LaunchRequest, selected_home: string,
         if path == projected_login_path then return nil end
         local present = is_file(path)
         if present == nil or present == true then return nil end
+    end
+    -- This advisory has no authority to execute a status command or inspect
+    -- environment credentials. Unobserved alternatives leave login unknown.
+    for _, evidence in ipairs(login.any_of or {}) do
+        if evidence.kind ~= "file_exists" then return nil end
     end
     return {code = "LOGIN_REQUIRED", provider = login.provider, command = login.command}
 end
@@ -338,7 +344,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local selected_home_path = home_path
     local retained_home = false
     local provider_home = request.launch.provider_home
-    if request.session_ref and (not provider_home or provider_home.private ~= true) then
+    if request.session_ref then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
         if not session_path then
@@ -463,6 +469,16 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 or not provider_home_matches(provider_home, projected.source_path, projected.format, projected.write_back)) then
                 evidence(db, attempt_id, "credential.refused", "provider login files do not match the driver declaration", {execution = "exited"})
                 return refused("provider login files do not match the driver declaration")
+            end
+            if provider_home and provider_home.private then
+                local machine_home, machine_home_error = env.get("bee.env:machine_home")
+                if type(machine_home) ~= "string" or machine_home_error then return refused("provider source home unavailable") end
+                local projected_format, format_error = provider_projection.native(provider_home, source.format, machine_home, home_os)
+                if not projected_format then
+                    evidence(db, attempt_id, "configuration.refused", format_error or "provider configuration projection refused", {execution = "exited"})
+                    return refused(format_error or "provider configuration projection refused")
+                end
+                source.format = projected_format
             end
             local login_path = source.path
             if not login_path then return refused("file login path unavailable") end

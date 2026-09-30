@@ -53,12 +53,8 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
-    values: bee.threads.records:values
+    universal: bee.driver:universal
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -70,8 +66,13 @@ entries:
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    types: bee.driver:types
+    universal: bee.driver:universal
+
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -81,9 +82,13 @@ entries:
       dispatch: bee.driver.opencode.binding:dispatch
       normalize: bee.driver.opencode.binding:normalize
       configure: bee.driver.opencode.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.opencode.binding:locate
   meta:
     type: harness.driver
     driver_id: opencode
+    descriptor_ref: bee.driver.opencode.descriptor:cli
     accepts_model: false
     profiles_ref: bee.driver.opencode:profiles
 - name: profiles
@@ -152,6 +157,9 @@ entries:
     command_names: [opencode]
     binding_ref: bee.driver.opencode:binding
     profile_id: window
+    session_profile_id: batch
+    session_credentials: [opencode_login]
+    session_mode: batch
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]
@@ -188,7 +196,7 @@ entries:
     comment: CLI command to launch OpenCode in the agent window
   data:
     name: opencode
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     arguments:
     - bee.driver.opencode:default_window
     fullscreen: true
@@ -221,7 +229,7 @@ entries:
     executable_env: {opencode: bee.driver.opencode:executable}
     environment: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components]
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: []
     profile_options: {}
     prepare_options: {}
@@ -245,21 +253,7 @@ entries:
       opencode: bee.driver.opencode:executable
     environment: {}
     allow_host_home: true
-    gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_sessions
-    - thread_notify
-    - session_directory
-    - session_send
-    - session_inbox
-    - session_ack
-    - session_reply
-    - overlay
-    - delivery
-    - docs
-    - components
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: []
     profile_options: {}
     prepare_options: {}

@@ -183,37 +183,11 @@ function M.format_target(target: Target): string
 end
 
 function M.decode_navigation(raw: unknown): Target?
-    if type(raw) ~= "table" then return nil end
-    if raw.arguments ~= nil then
-        for key in pairs(raw) do
-            if key ~= "version" and key ~= "arguments" then return nil end
-        end
-        if raw.version ~= 1 then return nil end
-        local args = arguments.decode(raw.arguments)
-        if not args then return nil end
-        local target = M.decode_target(args)
-        if not target or target.path == "" then return nil end
-        return M.decode_navigation({path = target.path, line = target.line, end_line = target.end_line})
-    end
-    for key in pairs(raw) do
-        if key ~= "path" and key ~= "line" and key ~= "end_line" then return nil end
-    end
-    local path = M.verify_path(raw.path)
-    if not path or path == "" then return nil end
-    local line: integer? = nil
-    local end_line: integer? = nil
-    local requested_line, requested_end = raw.line, raw.end_line
-    if requested_line ~= nil then
-        if type(requested_line) ~= "number" or requested_line ~= math.floor(requested_line)
-            or requested_line < 1 or requested_line > 1000000 then return nil end
-        line = math.floor(requested_line)
-    end
-    if requested_end ~= nil then
-        if not line or type(requested_end) ~= "number" or requested_end ~= math.floor(requested_end)
-            or requested_end < line or requested_end > 1000000 then return nil end
-        end_line = math.floor(requested_end)
-    end
-    return {path = path, line = line, end_line = end_line}
+    local args = arguments.decode(raw)
+    if not args then return nil end
+    local target = M.decode_target(args)
+    if not target or target.path == "" then return nil end
+    return target
 end
 
 return M

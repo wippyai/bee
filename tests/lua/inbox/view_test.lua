@@ -60,6 +60,22 @@ local function define_tests()
             for _, hit in ipairs(frame.hits) do if hit.kind == "approve" then approve = true end end
             test.is_true(approve)
         end)
+        test.it("shows saved workspace names and effect cards at both frame sizes", function()
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local state = model.new({"ws-1"})
+                local item = request("card-1", "pending", "Run the API checks?")
+                model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+                local shown = view.draw(size[1], size[2], appearance.defaults(), state, model.rows(state), 0, "Decision needed", leases.new(),
+                    {["ws-1"] = {label = "Bee", folder = "bee-uisessions"}})
+                test.eq(#shown.rows, size[2])
+                for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), size[1]) end
+                local plain = table.concat(shown.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+                test.is_true(plain:find("NEEDS YOU", 1, true) ~= nil)
+                test.is_true(plain:find("Bee / bee-uisessions", 1, true) ~= nil)
+                test.is_nil(plain:find("attempt-card-1", 1, true))
+                test.is_true(shown.rows[size[2]]:find("Enter open", 1, true) ~= nil)
+            end
+        end)
         test.it("shows catalog capability and delta on the ordinary approval screen", function()
             local state = model.new({"ws-1"})
             local item = request("grant-1", "pending", "Install Tally?")
@@ -118,9 +134,9 @@ local function define_tests()
             local empty = view.draw(100, 20, appearance.defaults(), state, model.rows(state), 0, "Refreshed", leases.new())
             local rows: {string} = {}
             for index, row in ipairs(empty.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
-            test.is_true(rows[3]:find("No requests", 1, true) ~= nil)
+            test.is_true(rows[3]:find("No decisions needed", 1, true) ~= nil)
             test.is_true(rows[4]:find("R refresh", 1, true) ~= nil)
-            test.is_true(rows[20]:find("Refreshed", 1, true) ~= nil)
+            test.is_true(rows[18]:find("Refreshed", 1, true) ~= nil)
             test.is_true(rows[20]:find("↑↓ select · Enter open", 1, true) ~= nil)
             local idle = view.draw(80, 20, appearance.defaults(), state, model.rows(state), 0, "", leases.new()).rows[20]:gsub("\27%[[0-9;]*m", "")
             test.is_true(idle:find("W withdraw · R refresh", 1, true) ~= nil)

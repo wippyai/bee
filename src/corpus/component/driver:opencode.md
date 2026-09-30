@@ -1,8 +1,8 @@
 # Bee OpenCode driver
 
 Install bee/driver-opencode with bee/driver and bee/threads. It supplies
-OpenCode profiles, stream normalization, launch declarations, and the
-configuration renderer for the shared driver contract.
+OpenCode profiles and a strict CLI descriptor selecting the universal launch
+layer and shared OpenCode JSON event codec, plus the configuration renderer.
 
 The host supplies a read-only executable environment and a launch policy for
 each route. Installing this component does not activate OpenCode, expose a
@@ -18,8 +18,11 @@ global config base, with its XDG config and data roots pointed into the attempt
 home.
 
 The normal window uses the user's existing OpenCode login (`opencode auth
-login` writes `~/.local/share/opencode/auth.json`). Its login hint checks that
-file's existence only. A private batch route receives the admitted login and
+login` writes `~/.local/share/opencode/auth.json`). Readiness also accepts global
+`opencode.json` or `opencode.jsonc` provider configuration and declared
+provider-key environment names, checking presence only. Config can reference
+provider key files; the authorized window HOME lets OpenCode resolve those
+references itself. A private batch route receives the admitted login and
 global config through the credential broker; placement reads only those
 declared files and returns only the login file after a token refresh.
 
@@ -51,3 +54,7 @@ OpenCode offers no hook transport: its plugin events are provider-owned
 JavaScript, not Bee's admitted hook handlers. Both profiles declare no hook
 transport, and any requested gateway hook event is refused at decode time
 rather than silently dropped.
+
+Headless first and resumed turns close an explicitly empty stdin after delivering
+the argv brief. OpenCode waits for pipe EOF before starting `run`; the universal
+driver emits the same declarative EOF delivery on native and Docker placement.

@@ -42,7 +42,7 @@ local function admitted_scope(): security.Scope
     for _, item in ipairs(BASE) do names[#names + 1] = item end
     local found = false
     for _, binding in ipairs((entry.data :: Object).bindings :: {Object}) do
-        if binding.definition_id == "bee.approvals.inbox:app" then
+        if binding.definition_id == "bee.approvals.inbox.app:app" then
             found = true
             for _, name in ipairs(binding.policies :: {string}) do names[#names + 1] = name end
         end
@@ -65,7 +65,7 @@ local function install_policy()
         policies[#policies + 1] = {name = POLICY, approvers = {ALICE, "bee.test.inbox_bob"}, max_ttl_ms = 60000}
     end
     if not found_selector then
-        policies[#policies + 1] = {name = SELECTOR_POLICY, approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 60000}
+        policies[#policies + 1] = {name = SELECTOR_POLICY, approvers = {{definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 60000}
     end
     local changes = registry.snapshot():changes()
     changes:update(entry)
@@ -144,7 +144,7 @@ local function define_tests()
             local approval_id = file(workspace, SELECTOR_POLICY)
             local workspace_id = string.rep("a", 32)
             local app_actor = "bee.application:" .. workspace_id .. ":inbox-instance"
-            local app_metadata = {workspace_id = workspace_id, definition_id = "bee.approvals.inbox:app",
+            local app_metadata = {workspace_id = workspace_id, definition_id = "bee.approvals.inbox.app:app",
                 definition_revision = "1", execution_generation = 1}
             local sibling = probe("bee.application:" .. workspace_id .. ":timeline-instance",
                 {workspace_id = workspace, approval_id = approval_id},

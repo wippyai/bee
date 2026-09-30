@@ -324,7 +324,7 @@ end
 -- Configuration inputs come from one host snapshot, not caller-authored
 -- files. The renderer receives the final owner-derived HOME only when a new
 -- intent is recorded; replay uses that intent's frozen delivery.
-local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest): (configuration_protocol.Request?, string?, string?, driver_types.GitWritableRootsAdapter?)
+local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest): (configuration_protocol.Request?, string?, string?, driver_types.GitWritableRootsAdapter?, string?)
     local policy_entry = resolver.entry(pinned, request.policy_ref)
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local data = policy_entry and bounds.object(policy_entry.data) or nil
@@ -349,6 +349,8 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if data.provider_ref ~= nil and not provider_ref then return nil, nil, "launch policy provider_ref is not an identifier" end
     local target, target_error = resolver.configure(pinned, request.binding_ref)
     if not target then return nil, nil, target_error or "binding is not activated" end
+    local configure_renderer, configure_renderer_error = resolver.configure_renderer(pinned, request.binding_ref, target)
+    if configure_renderer_error then return nil, nil, configure_renderer_error end
     local selected_profile, profile_error = resolver.profile(pinned, request.binding_ref, request.profile_id)
     if profile_error then return nil, nil, profile_error end
     local provider: {[string]: unknown}? = nil
@@ -360,21 +362,24 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if not tools then return nil, nil, "launch policy gateway_tools: " .. tostring(tools_error) end
     local hooks, hooks_error = bounds.ids(data.gateway_hooks == nil and {} or data.gateway_hooks, true)
     if not hooks then return nil, nil, "launch policy gateway_hooks: " .. tostring(hooks_error) end
-    table.sort(tools); table.sort(hooks)
+    hooks = resolver.select_hooks(selected_profile, hooks)
+    table.sort(tools)
     local gateway: configuration_protocol.GatewayInput? = nil
     if #tools > 0 or #hooks > 0 then
         local endpoint, endpoint_error = gateway_configuration.endpoint()
         if not endpoint then return nil, nil, endpoint_error or "gateway endpoint" end
         local command_ref = data.hook_command_ref == nil and nil or bounds.id(data.hook_command_ref)
-        if data.hook_command_ref ~= nil and (not command_ref or #hooks == 0) then return nil, nil, "hook_command_ref requires hooks and an env.variable identifier" end
-        local hook_command, command_error = gateway_configuration.hook_command(command_ref)
+        if data.hook_command_ref ~= nil and not command_ref then return nil, nil, "hook_command_ref requires hooks and an env.variable identifier" end
+        local hook_command: string? = nil
+        local command_error: string? = nil
+        if #hooks > 0 then hook_command, command_error = gateway_configuration.hook_command(command_ref) end
         if command_error then return nil, nil, command_error end
         gateway = {hook_command = hook_command, endpoint = endpoint, action_id = request.action_id, tools = tools, hooks = hooks,
             token_environment = gateway_configuration.DESTINATION,
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     end
     return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
-        selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil
+        selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil, configure_renderer
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
     local path: string? = nil
@@ -437,7 +442,7 @@ function M.prepare(value: unknown): Reply
     if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
         return fail("CONFLICT", "native placement binding changed since admission")
     end
-    local configuration, configure_target, configuration_error, git_writable_roots_adapter = configuration_input(prepare_pinned, request)
+    local configuration, configure_target, configuration_error, git_writable_roots_adapter, configure_renderer = configuration_input(prepare_pinned, request)
     if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
     local home_authorization_error = host_home_authorization(prepare_pinned, request)
     if home_authorization_error then return fail("DENIED", home_authorization_error) end
@@ -451,7 +456,7 @@ function M.prepare(value: unknown): Reply
     if request.launch.stdin_eof == true and not measured.stdin_close then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime cannot close a child's stdin; the launch reads its input until end of file")
     end
-    local selected_digest, selected_error = configuration_protocol.digest(configuration, configure_target)
+    local selected_digest, selected_error = configuration_protocol.digest(configuration, configure_target, configure_renderer)
     if not selected_digest then return fail("DENIED", selected_error or "configuration inputs are not measurable") end
     if request.configuration_digest then
         if request.configuration_digest ~= selected_digest then return fail("CONFLICT", "host configuration inputs changed since the launch plan") end
@@ -519,12 +524,13 @@ function M.prepare(value: unknown): Reply
         if attempt then attempt.notice = login_notice end
         return succeed(attempt)
     end
+    configuration.private_home = context ~= nil or (request.launch.provider_home ~= nil and request.launch.provider_home.private == true)
     configuration.home_directory = home_directory
     -- Placement supplies the measured attempt identity only while rendering
     -- private delivery. It is excluded from the host configuration digest and
     -- cannot be selected by the caller or saved profile.
     configuration.attempt_id = request.attempt_id
-    local delivery, delivery_error = configuration_protocol.call(configure_target, configuration)
+    local delivery, delivery_error = configuration_protocol.call(configure_target, configuration, configure_renderer)
     if not delivery then db:release(); return fail("DENIED", delivery_error or "configuration rendering failed") end
     delivery.git_writable_roots_adapter = git_writable_roots_adapter
     -- Keep the admitted request unchanged: its digest excludes this private

@@ -76,11 +76,8 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    universal: bee.driver:universal
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
@@ -94,8 +91,13 @@ entries:
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    types: bee.driver:types
+    universal: bee.driver:universal
+
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -105,9 +107,13 @@ entries:
       dispatch: bee.driver.codex.binding:dispatch
       normalize: bee.driver.codex.binding:normalize
       configure: bee.driver.codex.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.codex.binding:locate
   meta:
     type: harness.driver
     driver_id: codex
+    descriptor_ref: bee.driver.codex.descriptor:cli
     accepts_model: false
     profiles_ref: bee.driver.codex:profiles
 - name: profiles
@@ -206,6 +212,10 @@ entries:
           git_writable_roots_adapter: codex_workspace_write
       - id: window
         mode: window
+        hooks:
+          transports: [command, mcp_tool]
+          events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SessionEnd]
+          adapter_ref: bee.driver.codex:protocol
         protocol: pty
         protocol_revision: native-window-1
         answer_path: {strategy: none}
@@ -232,6 +242,9 @@ entries:
     command_names: [codex]
     binding_ref: bee.driver.codex:binding
     profile_id: window
+    session_profile_id: batch
+    session_credentials: [codex_login]
+    session_mode: batch
     policy_ref: ''
     default_mode: window
     allowed_overrides: [thread, workdir]
@@ -300,7 +313,7 @@ entries:
     comment: CLI command to launch Codex CLI in the agent window
   data:
     name: codex
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     arguments:
     - bee.driver.codex:default_window
     fullscreen: true
@@ -324,7 +337,7 @@ entries:
     environment: {}
     environment_refs: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
@@ -348,7 +361,7 @@ entries:
     environment: {}
     environment_refs: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     profile_instructions: true
     profile_options: {effort: [low, medium, high], config_profile: {kind: text, max_bytes: 64}}
@@ -375,24 +388,7 @@ entries:
     environment_refs:
       CODEX_HOME: bee.driver.codex:config_home
     allow_host_home: true
-    gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_sessions
-    - thread_notify
-    - session_directory
-    - session_send
-    - session_inbox
-    - session_ack
-    - session_reply
-    - overlay
-    - delivery
-    - docs
-    - components
-    - install_request
-    - uninstall_request
-    - install_status
+    gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

@@ -98,8 +98,8 @@ picker to switch; see [the workspace catalog](../reference/workspace-catalog.md)
 ## Managed agent containment
 
 Managed CLIs run with the operating system user's authority. Every
-orchestrator-launched batch worker uses a private attempt home containing only
-the login, configuration and state files its driver declares and the host
+batch worker opened through a session uses a private retained session home containing only
+the provider login, configuration and conversation state its driver declares and the host
 credential broker projects; the launch policy admits no host HOME inheritance
 and no prompt-free permission mode. When a person chooses a named Codex profile,
 the driver projects that one admitted profile file into the private home so
@@ -108,9 +108,7 @@ own permission control where one exists and is proven: Codex
 `--sandbox workspace-write`, Claude Code and Grok default permission
 modes, Muse `on-request` approval, agy `--sandbox`. Grok and OpenCode
 offer no workdir confinement Bee can select, so the host records those
-batch routes as `unconfined`: the orchestrator launches them only where
-its own launch policy names them in `agent_launch_unconfined`, and
-`launch_definitions` reports the mark.
+batch routes as `unconfined`.
 
 For an edit-capable profile with a write-granted workdir, the host-selected
 Git worktree plugin resolves the repository's Git directory and shared common
@@ -137,6 +135,16 @@ provider's own sign-in flow, and the title keeps a login hint. This is a
 helpful observation, not an authentication decision: Bee checks existence
 only and leaves sign-in to the provider.
 
+The built-in window profiles select the machine home under their existing
+host-selected `allow_host_home` policies, including Muse. Grok keeps its private
+window home and declares `grok_login` for the host's first-use setup and broker
+projection. Its selected retained session home holds login and conversation
+state across turns, with `GROK_HOME` pointing into the same home on resume.
+These selections keep catalog login evidence and the CLI's launch
+home aligned: a saved machine login needs no second sign-in. A driver's window
+descriptor and profile agree on the home selection. Batch profiles keep their
+declared private homes and receive only broker-admitted login files.
+
 Confined batch workers receive only their driver's declared files from the
 machine home:
 
@@ -147,7 +155,7 @@ machine home:
 | Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` | private `HOME` |
 | Grok | `.grok/auth.json` | `.grok/config.toml` | `GROK_HOME` points inside the attempt home |
 | Muse | `.config/muse/auth.json` | `.config/muse/settings.json` | private `HOME` |
-| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json` | XDG config and data roots point inside the attempt home |
+| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`; declared `.config/opencode/towers.key` dependency | XDG config and data roots point inside the attempt home |
 
 Only a provider's login file may be returned to its original path after the
 child exits. The broker requires the active attempt projection and unchanged

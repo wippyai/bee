@@ -133,6 +133,10 @@ broker supplies bounded bytes only for source paths admitted by the host;
 placement compares every returned login and setup path with the driver
 declaration before creating files. It never scans the source home or copies
 unlisted files. Optional absent logins leave the token destination absent.
+An admitted launch with a SessionRef and writable home resource uses that
+Session’s retained home, including private provider homes. Login, configuration
+and conversation state remain there across turns. Launches without a selected
+session home use separate attempt homes.
 
 `homes.project_attempt_login` writes only the broker's primary login file and
 its admitted setup initializers into a newly created attempt home. Claude's
@@ -178,14 +182,13 @@ absent file or one created by interactive sign-in; later machine credentials
 never replace either choice. Required sources refuse a missing login. Changing
 the optional policy changes the retained binding and refuses reuse. Empty
 provided login bytes remain an error. Default provider windows use the
-explicitly authorized host HOME and select no login projection; private batch
-profiles project their declared files into attempt homes. Fixture unit tests
+explicitly authorized host HOME and select no login projection, except Grok,
+whose private window projects `grok_login` into its selected retained session
+home. Private batch launches without a retained home selection project their
+declared files into attempt homes. Fixture unit tests
 cover all six driver declarations and placement paths, and the confined Codex
 fixture worker verifies that unrelated machine-home files stay outside its
-attempt home. `thread-launch-check` uses fixture CLIs only. The opt-in
-`thread-launch-live-check` uses an installed Claude or Codex CLI with its local
-login file, passes no provider API key variables, and withholds runtime output.
-Standard gates never run the live smoke.
+attempt home. `managed-launch-fixture-check` uses fixture CLIs only.
 
 ## Capability
 
@@ -342,7 +345,8 @@ periodic sweep therefore rechecks grants without marking a live Agent uncertain
 merely because a PTY exposes no host execution identity. This reply proves live
 supervision, not post-crash execution absence or cleanup.
 
-Stop notifications are acted on only after the placement store records `stopping`
+The window registers the same private per-attempt control token as the streamed runner.
+Stop notifications require that token and are acted on only after the placement store records `stopping`
 for the exact attempt, owner and runner. An arbitrary process message cannot
 stop the window. The listener is installed before publishing `running`; publication compares the
 recorded state with `starting`, so a concurrent stop cannot be overwritten. The
@@ -350,3 +354,23 @@ window retires its listener when finalization commits.
 Native PTY acceptance proves live reconciliation, raw-stop denial, admitted stop,
 input, resize, finalization and duplicate/foreign-owner refusal. A native Agent
 fixture also keeps its MCP binding live across the real 30-second sweep.
+
+Structured turns with a SessionRef and an admitted writable session home retain
+the driver-selected provider state across attempt cleanup. Ephemeral turns keep
+their attempt-local private home.
+
+Private provider configuration uses the shared provider projection scanner from
+the Docker placement lane. It bounds nesting and resolves `{file:...}` references
+only to driver-declared files materialized by the credential broker. Both
+absolute host-home paths and `~/` references become paths under the private
+home. Undeclared, absent, traversing or unresolved dependencies refuse before
+child creation; refusal evidence contains no configuration values. Native
+descriptive text containing a home path remains text. Docker projection retains
+its stricter host-command and path checks and declared portable configuration.
+
+After an independently observed child exit, pipe draining has a bounded read
+budget. Time spent with reads paused at the output spool limit does not consume
+that budget. After child exit, the retention deadline bounds each continuous wait at the
+spool limit; acknowledged progress that resumes reads ends that wait. Once both
+streams end, one retention deadline bounds the remaining unacknowledged output. Drain expiration records forced
+truncation; retention expiration records output loss rather than consumption.

@@ -10,6 +10,7 @@ local sql = require("sql")
 local json = require("json")
 local time = require("time")
 local configuration = require("configuration")
+local protocol = require("protocol")
 
 local ENDPOINT_REF = "bee.gateway:endpoint_ref"
 local ENDPOINT = "bee.gateway:native_admission_endpoint"
@@ -151,6 +152,15 @@ local function define_tests()
                 local selected = wait_for_listener()
                 local admitted = raw_call(caller(true, false), "bee.gateway.binding:admit", admit_request("authorized"))
                 if not admitted.ok then error("authorized admission: " .. tostring(admitted.error and (admitted.error :: Object).message)) end
+                local session_request = admit_request("session-ref")
+                local canonical_ref = "bs:" .. string.rep("n", 36) .. ":" .. string.rep("a", 32) .. ":" .. string.rep("s", 36)
+                session_request.subject, session_request.action_id = canonical_ref, canonical_ref
+                local long = raw_call(caller(true, false), "bee.gateway.binding:admit", session_request)
+                if not long.ok then error("SessionRef admission refused") end
+                local decoded, decode_error = protocol.admitted_binding(long.value)
+                if not decoded then error(tostring(decode_error)) end
+                test.eq(decoded.subject, canonical_ref)
+                test.is_true(#decoded.workspace_name <= 80)
                 local first_name = admit_request("named-one")
                 first_name.workspace_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 first_name.workspace_name = "Builder"
@@ -239,6 +249,7 @@ local function define_tests()
                 local stale_key = "previous-native-listener-execution"
                 local _, stale_error = db:execute("UPDATE bee_gateway_listener SET native_key = ? WHERE singleton = 1", {stale_key})
                 if stale_error then error("mark previous listener execution: " .. tostring(stale_error)) end
+                raw_call(caller(true, false), "bee.gateway.binding:check", {attempt_id = first_name.attempt_id, carrier_epoch = 1})
                 local described = raw_call(caller(true, false, true), "bee.gateway.binding:describe", {workspace_id = first_name.workspace_id})
                 if not described.ok then error("describe after listener restart: " .. tostring(described.error and described.error.message)) end
                 test.eq((described.value :: Object).title, "Agent sessions")

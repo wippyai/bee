@@ -31,11 +31,10 @@ HOST_ENTRIES = {
     "src/security/gateway/_index.yaml": {
         "gateway_admit_policy", "gateway_materialize_policy", "gateway_supervision_policy",
         "gateway_manage_policy", "gateway_tool_read_policy", "gateway_tool_message_policy",
-        "gateway_tool_inbox_policy", "gateway_session_discover_policy",
-        "gateway_tool_launch_policy", "gateway_tool_run_policy", "gateway_tool_overlay_policy", "gateway_tool_docs_policy",
+        "gateway_tool_overlay_policy", "gateway_tool_docs_policy",
         "gateway_tool_components_policy", "gateway_tool_delivery_policy",
         "gateway_tool_publish_policy", "gateway_tool_application_open_policy",
-        "gateway_tool_install_policy",
+        "gateway_tool_install_policy", "gateway_tool_session_policy",
     },
     "src/security/approvals/_index.yaml": {
         "approval_store_policy", "approval_owner_policy", "approval_request_policy",
@@ -93,12 +92,6 @@ def gateway_parameters(listener):
         ("target_approval_consume_policy", "bee.security.approvals:approval_consume_policy"),
         ("target_tool_read_policy", "bee.security.gateway:gateway_tool_read_policy"),
         ("target_tool_message_policy", "bee.security.gateway:gateway_tool_message_policy"),
-        ("target_tool_inbox_policy", "bee.security.gateway:gateway_tool_inbox_policy"),
-        ("target_tool_discover_policy", "bee.security.gateway:gateway_session_discover_policy"),
-        ("target_tool_send_grant_policy", "bee.gateway.probe:remote_send_grant_policy"),
-        ("target_remote_resolver", "bee.gateway.probe:remote_sessions"),
-        ("target_tool_launch_policy", "bee.security.gateway:gateway_tool_launch_policy"),
-        ("target_tool_run_policy", "bee.security.gateway:gateway_tool_run_policy"),
         ("target_tool_overlay_policy", "bee.security.gateway:gateway_tool_overlay_policy"),
         ("target_tool_docs_policy", "bee.security.gateway:gateway_tool_docs_policy"),
         ("target_tool_components_policy", "bee.security.gateway:gateway_tool_components_policy"),
@@ -106,6 +99,7 @@ def gateway_parameters(listener):
         ("target_tool_publish_policy", "bee.security.gateway:gateway_tool_publish_policy"),
         ("target_tool_application_open_policy", "bee.security.gateway:gateway_tool_application_open_policy"),
         ("target_tool_install_policy", "bee.security.gateway:gateway_tool_install_policy"),
+        ("target_tool_session_policy", "bee.security.gateway:gateway_tool_session_policy"),
         ("target_install_configuration", "bee:module_installation"),
     )
 
@@ -311,10 +305,10 @@ def main():
                     except subprocess.TimeoutExpired:
                         run.kill()
                         run.wait()
-    print("Gateway slices 1, 2 and hook endpoints: agent-requested access through the durable approval inbox, consumed-effect handoff recovery, binding-isolated grants, request/status replay, denied decisions and preserved deselection; configurable traits with stable dispatch, fixed/dynamic native context, binding isolation, concurrent selection CAS and revocation; authenticated caller-owned workspace create/edit/freeze with idempotent replay and cross-actor denial; explicitly admitted thread_message append with bound context, idempotent replay and conflict, default read-tool profile preservation; thread_sessions paging only the workspace's running sessions the subject reads over a complete stable scan, a host-resolved remote session_send carrying the destination's current grant epoch under the selected send grant, session_directory item schemas, thread_message to a session by action, attempt or thread addressed to its action and naming the sender's, unreachable sessions refused as not found, and thread_notify registering once and telling the caller on its own thread when the session's turn ends; the MCP contract of listChanged with re-list after select, tools/list input/output schemas and annotations, schema-valid calls, cursor paging, structured results with the normalized error shape, and the authoring path of guide index, section, example, bounded docs windows, non-staging delivery preflight and the capability report; hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
+    print("Gateway slices 1, 2 and hook endpoints: agent-requested access through the durable approval inbox, consumed-effect handoff recovery, binding-isolated grants, request/status replay, denied decisions and preserved deselection; configurable traits with stable dispatch, fixed/dynamic native context, binding isolation, concurrent selection CAS and revocation; authenticated caller-owned workspace create/edit/freeze with idempotent replay and cross-actor denial; explicitly admitted thread_message append with bound context, idempotent replay and conflict, default read-tool profile preservation; thread_message refusing session, recipient and reply fields as a recipient-free note; the MCP contract of listChanged with re-list after select, tools/list input/output schemas and annotations, schema-valid calls, cursor paging, structured results with the normalized error shape, and the authoring path of guide index, section, example, bounded docs windows, non-staging delivery preflight and the capability report; hook credentials separate from tool credentials, empty-body answers, occurrence identity with replay and conflict, "
           "ambiguity per delivery, allowlisted queue fields, Codex metadata classification, payload and queue bounds; authenticated loopback readiness with epoch and restart generation, admission without bytes, materialize once per credential generation, "
           "reissue as compare-and-set, supersession and revoke_attempt fenced by carrier epoch, cross-attempt and expiry and revocation refused, thread_read as the bound subject, "
-          "bounded read-only thread_wait with no delivery mark, drain releasing an in-flight wait with an explicit outcome and refusing admissions, a new epoch fencing earlier bindings, and a real funcs.new():with_scope configuration renderer whose callee is denied placement store, executor, policy lookup and scope creation; ambient actor/context inheritance remains outside that separate renderer scope-only proof")
+          "reads writing no delivery mark, drain refusing admissions while a bounded read finishes, a new epoch fencing earlier bindings, and a real funcs.new():with_scope configuration renderer whose callee is denied placement store, executor, policy lookup and scope creation; ambient actor/context inheritance remains outside that separate renderer scope-only proof")
 
 
 if __name__ == "__main__":

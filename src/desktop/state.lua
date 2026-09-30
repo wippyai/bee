@@ -48,7 +48,7 @@ function M.reduce(value: State, command: commands.Command): State
         return next_state(value, scene)
     elseif command.op == "add" then
         if #value.scene.windows >= MAX_WINDOWS then return value end
-        local scene = model.add(value.scene, command.id, command.instance_id, command.title, command.icon, command.workspace_id)
+        local scene = model.add_fullpane(value.scene, command.id, command.instance_id, command.title, command.icon, command.workspace_id)
         if scene == value.scene then return value end
         local tabs = copy_tabs(value.tabs)
         tabs[#tabs + 1] = command.id

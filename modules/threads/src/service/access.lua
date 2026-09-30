@@ -11,6 +11,7 @@ M.CARRIER = "bee.threads.carrier"
 M.APPROVAL = "bee.threads.approval"
 M.APP_ALIAS = "bee.threads.app_alias"
 M.WORKSPACE = "bee.threads.workspace"
+M.SESSIONS_OWNER = "bee.threads.sessions_owner"
 M.INBOX_SEND = "bee.sessions.send"
 M.INBOX_DISCOVER = "bee.sessions.discover"
 -- The authenticated actor; a payload never selects it.
@@ -28,6 +29,9 @@ function M.workspace(): string?
     local value: unknown = actor:meta().workspace_id
     if type(value) ~= "string" or #value ~= 32 or value:find("[^0-9a-f]") then return nil end
     return tostring(value)
+end
+function M.may_use_sessions_workspace(workspace_id: string, operation: string): boolean
+    return security.can("bee.sessions.workspace." .. operation, workspace_id)
 end
 function M.may_list_workspace(workspace_id: string): boolean
     return security.can(M.WORKSPACE, workspace_id)
@@ -54,6 +58,9 @@ function M.may_direct_lifecycle(thread_id: string): boolean
 end
 function M.may_carry(thread_id: string): boolean
     return security.can(M.CARRIER, thread_id)
+end
+function M.may_manage_sessions(): boolean
+    return security.can(M.SESSIONS_OWNER, "*")
 end
 function M.may_project_approvals(thread_id: string): boolean
     return security.can(M.APPROVAL, thread_id)

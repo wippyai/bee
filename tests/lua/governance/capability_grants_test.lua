@@ -36,6 +36,23 @@ local function define_tests()
             test.eq(proposed.bindings[1].policy_id, proposed.policies[1].id)
             test.eq(proposed.thread_access, "none")
         end)
+        test.it("rejects capability request identities before catalog resolution", function()
+            local malformed: {unknown} = {false, 17, {}, "", "Threads.read", "threads.read\n", string.rep("a", 161)}
+            for _, capability in ipairs(malformed) do
+                local item = request("threads.read", {scope = "owned"})
+                item.capability_request = {capability = capability, parameters = {scope = "owned"},
+                    catalog_revision = 1, template_revision = 1, target = APP, path = ".security.policies +="}
+                local proposed, err = grants.propose(vocabulary(), OWNER, APP, {item})
+                test.is_nil(proposed)
+                test.eq(err, "capability request identity is invalid")
+            end
+            local missing = request("threads.read", {scope = "owned"})
+            missing.capability_request = {parameters = {scope = "owned"}, catalog_revision = 1,
+                template_revision = 1, target = APP, path = ".security.policies +="}
+            local proposed, err = grants.propose(vocabulary(), OWNER, APP, {missing})
+            test.is_nil(proposed)
+            test.eq(err, "capability request identity is invalid")
+        end)
         test.it("reuses only a live grant record containing the resolved set", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("threads.read", {scope = "owned"})}))

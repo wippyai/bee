@@ -43,12 +43,14 @@ local function granted(): (unknown?, Object?, boolean, Reply?)
         return nil, nil, false, fail("DENIED", "the caller holds no installed application grants")
     end
     local owner = identity.overlay_owner
-    local raw = registry.get(grants.record_id(owner) :: string)
+    local grant_id = grants.record_id(owner)
+    if not grant_id then return nil, nil, false, fail("DENIED", "the caller holds no installed application grants") end
+    local raw = registry.get(grant_id)
     if not raw then
         local prior_owner = workspace_applications.prior_owner(caller.workspace_id, name)
         local prior_id = prior_owner and grants.prior_record_id(prior_owner) or nil
         raw = prior_id and registry.get(prior_id) or nil
-        if raw then owner = prior_owner :: string end
+        if raw then owner = prior_owner end
     end
     if not raw then return nil, nil, false, fail("DENIED", "the caller holds no installed application grants") end
     local raw_catalog = registry.get("bee:capability_catalog")
@@ -69,24 +71,26 @@ local function contract_call(request_raw: unknown): Reply
         return fail("INVALID", "contract call request is malformed")
     end
     local arguments = request.arguments or {}
-    if type(arguments) ~= "table" or #(arguments :: {unknown}) > 16 then
+    if type(arguments) ~= "table" or #(arguments) > 16 then
         return fail("INVALID", "contract call arguments are malformed")
     end
     local caller, record, live, refusal = granted()
     if refusal then return refusal end
     local allowed, denied = gateway.contract(record, caller, request.binding, request.method, live)
     if not allowed then return fail("DENIED", tostring(denied)) end
-    local binding_id = request.binding :: string
-    local method = request.method :: string
+    local binding_id = bounds.id(request.binding)
+    local method = request.method
+    if not binding_id or type(method) ~= "string" then return fail("DENIED", "contract call is malformed") end
     local binding = registry.get(binding_id)
     local data = binding and bounds.object(binding.data) or nil
     local implemented = data and data.contracts or nil
     local contract_id: string? = nil
     if binding and binding.kind == "contract.binding" and type(implemented) == "table" then
-        for _, raw in ipairs(implemented :: {unknown}) do
+        for _, raw in ipairs(implemented) do
             local item = bounds.object(raw)
             local methods = item and bounds.object(item.methods) or nil
-            if methods and methods[method] ~= nil and bounds.id(item.contract) then contract_id = item.contract :: string end
+            local implemented_contract = item and bounds.id(item.contract) or nil
+            if methods and methods[method] ~= nil and implemented_contract then contract_id = implemented_contract end
         end
     end
     if not contract_id then return fail("NOT_FOUND", "binding " .. binding_id .. " implements no method " .. method) end
@@ -99,10 +103,10 @@ local function contract_call(request_raw: unknown): Reply
     if not confined then return fail("UNAVAILABLE", tostring(scope_error)) end
     local instance, open_error = confined:open(binding_id)
     if not instance then return fail("UNAVAILABLE", tostring(open_error)) end
-    local call = (instance :: {[string]: unknown})[method]
+    local call = (instance)[method]
     if type(call) ~= "function" then return fail("NOT_FOUND", "binding " .. binding_id .. " has no method " .. method) end
-    local result, call_error = (call :: (unknown, ...unknown) -> (unknown, unknown))(instance,
-        table.unpack(arguments :: {unknown}))
+    local result, call_error = (call)(instance,
+        table.unpack(arguments))
     if call_error ~= nil then return fail("FAILED", tostring(call_error)) end
     return succeed(result)
 end
@@ -142,7 +146,9 @@ local function http_request(request_raw: unknown): Reply
     if refusal then return refusal end
     local allowed, denied = gateway.http(record, caller, request.method, request.url, live)
     if not allowed then return fail("DENIED", tostring(denied)) end
-    local response, request_error = http_client.request((request.method :: string):upper(), request.url :: string,
+    local method, url = request.method, request.url
+    if type(method) ~= "string" or type(url) ~= "string" then return fail("DENIED", "HTTP request target is malformed") end
+    local response, request_error = http_client.request(method:upper(), url,
         {headers = headers, body = body, timeout = timeout, max_response_body = MAX_RESPONSE})
     if not response then return fail("FAILED", tostring(request_error)) end
     local arrived = response.url or request.url
@@ -161,17 +167,17 @@ local function granted_resources(_request: unknown): Reply
     if not live or not record then return fail("DENIED", "the caller holds no live application grants") end
     local volumes: {[string]: string} = {}
     local databases: {[string]: string} = {}
-    for _, raw_grant in ipairs((record.capabilities or {}) :: {unknown}) do
+    for _, raw_grant in ipairs((record.capabilities or {})) do
         local grant = bounds.object(raw_grant)
         local scope = grant and bounds.object(grant.scope) or nil
         if grant and scope and (grant.capability == "workspace.files.read" or grant.capability == "workspace.files.write") then
             local id, id_error = files.volume_id(record.overlay_owner, record.folder, scope.subpath)
             if not id then return fail("UNAVAILABLE", tostring(id_error)) end
-            volumes[scope.subpath :: string] = id
+            volumes[scope.subpath] = id
         elseif grant and scope and grant.capability == "app.database" then
             local id, id_error = files.database_id(record.overlay_owner, scope.name)
             if not id then return fail("UNAVAILABLE", tostring(id_error)) end
-            databases[scope.name :: string] = id
+            databases[scope.name] = id
         end
     end
     return succeed({volumes = volumes, databases = databases})

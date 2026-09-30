@@ -218,14 +218,14 @@ local function define_tests()
             test.eq((capability.parameters :: Object).mode, "open")
             request_data.targets = {{entry = "private.app:extra", path = ".security.policies +="}}
             changes(spec, {op, other, request})
-            test.is_nil(resolver.resolve_with(deps, spec))
+            test.is_nil((resolver.resolve_with(deps, spec)))
             request_data.targets = {{entry = "private.app:telemetry", path = ".security.policies +="}}
             request_meta.parameters = {operations = {"private.app:telemetry"}, mode = "policy", audiences = {"node-1"}}
             changes(spec, {op, other, request})
-            test.is_nil(resolver.resolve_with(deps, spec))
+            test.is_nil((resolver.resolve_with(deps, spec)))
             request_meta.parameters = {operations = {"bee.host:db"}, mode = "open", audiences = {"node-1"}}
             changes(spec, {op, other, request})
-            test.is_nil(resolver.resolve_with(deps, spec))
+            test.is_nil((resolver.resolve_with(deps, spec)))
         end)
         test.it("requires every agents.launch definition to be a launch definition", function()
             local deps, spec = fixture(nil)
@@ -253,12 +253,12 @@ local function define_tests()
                 data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
             local request_meta = request.meta :: Object
             changes(spec, {app, request})
-            test.not_nil(resolver.resolve_with(deps, spec))
+            test.not_nil((resolver.resolve_with(deps, spec)))
             -- A callable entry named as a definition would widen the generated
             -- funcs.call grant beyond the launch facade, so it is refused.
             request_meta.parameters = {definitions = {"bee.host:private_callable"}}
             changes(spec, {app, request})
-            test.is_nil(resolver.resolve_with(deps, spec))
+            test.is_nil((resolver.resolve_with(deps, spec)))
         end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)
@@ -419,7 +419,7 @@ local function define_tests()
                     data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}})
             local unrooted, _, unrooted_error = resolver.resolve_with(deps, spec)
             test.is_nil(unrooted)
-            test.not_nil(string.find(tostring(unrooted_error), "workspace folder", 1, true))
+            test.not_nil((string.find(tostring(unrooted_error), "workspace folder", 1, true)))
             deps.folder = function(): (unknown?, string?)
                 return {root_ref = "bee.env:workspace_root", directory = ".", base = "project",
                     subpath = "projects/alpha"}, nil
@@ -541,7 +541,7 @@ local function define_tests()
             captured.entries[#captured.entries] = nil
             local missing, _, missing_error = resolver.resolve_with(deps, spec)
             test.is_nil(missing)
-            test.not_nil(string.find(tostring(missing_error), "protected kernel", 1, true))
+            test.not_nil((string.find(tostring(missing_error), "protected kernel", 1, true)))
         end)
 
         test.it("returns selected overlay entries without including them in the base", function()

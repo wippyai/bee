@@ -74,7 +74,7 @@ local function forward(target: string, request: unknown): (Object?, Result?)
         local message = bounds.text(fault.message, 2048) or bounds.text(reply.message, 2048) or "delivery operation failed"
         -- The destination's own refusal value carries a remedy; keep it.
         local value = object(reply.value)
-        return nil, transaction.failure(code :: string, message :: string,
+        return nil, transaction.failure(code, message,
             value and value.remedy ~= nil and {remedy = value.remedy} or value)
     end
     local value = object(reply.value)
@@ -86,7 +86,7 @@ local function diagnostic_rows(report: Object): {unknown}
     local rows: {unknown} = {}
     local reported = report.diagnostics
     if type(reported) ~= "table" then return rows end
-    for _, raw in ipairs(reported :: {unknown}) do
+    for _, raw in ipairs(reported) do
         local item = object(raw)
         if item then
             rows[#rows + 1] = {code = item.code, target = item.target, message = item.message, remedy = item.remedy}
@@ -101,20 +101,20 @@ end
 local function request_operation(workspace_id: string, source_workspace: string,
     version: string, snapshot_digest: string): Result
     local profile, profile_error = profile_for(workspace_id, source_workspace)
-    if not profile then return profile_error :: Result end
+    if not profile then return profile_error end
     local component = bounds.text(profile.component, 160)
     if not component or component == "" then return failure("BLOCKED", "publication profile names no component") end
 
     local prepared, prepare_error = forward(PUBLICATION, {operation = "prepare", workspace_id = workspace_id,
         component = component, version = version, snapshot_digest = snapshot_digest})
-    if not prepared then return prepare_error :: Result end
+    if not prepared then return prepare_error end
     local descriptor = object(prepared.descriptor)
     if not descriptor then return failure("INTERNAL", "publication returned no descriptor") end
 
     local available, available_error = forward(DESTINATION, {operation = "available", workspace_id = workspace_id})
-    if not available then return available_error :: Result end
+    if not available then return available_error end
     local found = false
-    for _, raw in ipairs((available.versions or {}) :: {unknown}) do
+    for _, raw in ipairs((available.versions or {})) do
         local item = object(raw)
         if item and item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
@@ -123,12 +123,12 @@ local function request_operation(workspace_id: string, source_workspace: string,
     local staged, stage_error = forward(DESTINATION, {operation = "stage", workspace_id = workspace_id,
         source_owner = descriptor.owner_id, feed = descriptor.feed, version_key = descriptor.key,
         descriptor_digest = descriptor.digest, idempotency_key = "deliver-" .. source_workspace .. "-" .. version})
-    if not staged then return stage_error :: Result end
+    if not staged then return stage_error end
     if staged.status ~= "staged" then return failure("BLOCKED", "the version did not stage at this destination") end
 
     local plan, plan_error = forward(DESTINATION, {operation = "get", workspace_id = workspace_id,
         source_node = descriptor.owner_id, source_workspace = source_workspace, version = version})
-    if not plan then return plan_error :: Result end
+    if not plan then return plan_error end
     local report, report_error = preflight.decode_report(plan.preflight_bytes, plan.preflight_digest)
     if not report then return failure("INTERNAL", "staged preflight report: " .. tostring(report_error)) end
     local ready = report.ready == true and #report.diagnostics == 0 and #report.pending_migrations == 0
@@ -149,12 +149,12 @@ end
 local function preflight_operation(workspace_id: string, source_workspace: string,
     version: string, snapshot_digest: string): Result
     local profile, profile_error = profile_for(workspace_id, source_workspace)
-    if not profile then return profile_error :: Result end
+    if not profile then return profile_error end
     local component = bounds.text(profile.component, 160)
     if not component or component == "" then return failure("BLOCKED", "publication profile names no component") end
     local prepared, prepare_error = forward(PUBLICATION, {operation = "prepare", workspace_id = workspace_id,
         component = component, version = version, snapshot_digest = snapshot_digest})
-    if not prepared then return prepare_error :: Result end
+    if not prepared then return prepare_error end
     local descriptor = object(prepared.descriptor)
     if not descriptor then return failure("INTERNAL", "publication returned no descriptor") end
     return transaction.success({staged = false, version = version, source_overlay_id = source_workspace,
@@ -171,19 +171,19 @@ local function status_operation(workspace_id: string, source_workspace: string, 
     local node = source_node
     if not node then
         local profile, profile_error = profile_for(workspace_id, source_workspace)
-        if not profile then return profile_error :: Result end
+        if not profile then return profile_error end
         node = system.node.id()
     end
     local plan, plan_error = forward(DESTINATION, {operation = "get", workspace_id = workspace_id,
         source_node = node, source_workspace = source_workspace, version = version})
-    if not plan then return plan_error :: Result end
+    if not plan then return plan_error end
     local value: Object = {version = version, source_overlay_id = source_workspace, plan_digest = plan.plan_digest,
         artifact_digest = plan.artifact_digest, plan_status = plan.status,
         review_status = plan.review_status, selected = plan.selected}
     if intent_id then
         local intent, intent_error = forward(DESTINATION, {operation = "status", workspace_id = workspace_id,
             intent_id = intent_id})
-        if not intent then return intent_error :: Result end
+        if not intent then return intent_error end
         value.activation = {phase = intent.phase, outcome = intent.outcome, plan_digest = intent.plan_digest}
     end
     return transaction.success(value, false)
@@ -193,12 +193,12 @@ end
 -- refuses anything else, so the agent cannot publish around the person.
 local function publish_operation(workspace_id: string, source_workspace: string, version: string): Result
     local profile, profile_error = profile_for(workspace_id, source_workspace)
-    if not profile then return profile_error :: Result end
+    if not profile then return profile_error end
     local component = bounds.text(profile.component, 160)
     if not component or component == "" then return failure("BLOCKED", "publication profile names no component") end
     local published, publish_error = forward(PUBLICATION, {operation = "publish", workspace_id = workspace_id,
         component = component, version = version})
-    if not published then return publish_error :: Result end
+    if not published then return publish_error end
     return transaction.success({version = version, component = component, published = true,
         sequence = published.sequence, descriptor = published.descriptor,
         human_steps = guide.delivery_steps()}, false)
@@ -215,10 +215,10 @@ function M.call(raw: unknown): Result
         return failure("DENIED", "delivery operation is not authorized")
     end
     if operation == "request" then
-        return request_operation(workspace_id, source_workspace, version, request.snapshot_digest :: string)
+        return request_operation(workspace_id, source_workspace, version, assert(request.snapshot_digest))
     end
     if operation == "preflight" then
-        return preflight_operation(workspace_id, source_workspace, version, request.snapshot_digest :: string)
+        return preflight_operation(workspace_id, source_workspace, version, assert(request.snapshot_digest))
     end
     if operation == "status" then
         return status_operation(workspace_id, source_workspace, version,

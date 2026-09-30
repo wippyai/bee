@@ -13,20 +13,20 @@ local function define_tests()
             local value = guide.value()
             test.eq(value.revision, guide.REVISION)
             local document = guide.document()
-            test.not_nil(string.find(document, "entries.json", 1, true))
-            test.not_nil(string.find(document, "process.lua", 1, true))
-            test.not_nil(string.find(document, "bee.application", 1, true))
-            test.not_nil(string.find(document, "freeze", 1, true))
-            test.not_nil(string.find(document, "Overlays", 1, true))
-            test.not_nil(string.find(document, "Approvals", 1, true))
-            test.not_nil(string.find(document, "append migration functions", 1, true))
-            test.not_nil(string.find(document, "existing host-admitted database", 1, true))
+            test.not_nil((string.find(document, "entries.json", 1, true)))
+            test.not_nil((string.find(document, "process.lua", 1, true)))
+            test.not_nil((string.find(document, "bee.application", 1, true)))
+            test.not_nil((string.find(document, "freeze", 1, true)))
+            test.not_nil((string.find(document, "Overlays", 1, true)))
+            test.not_nil((string.find(document, "Approvals", 1, true)))
+            test.not_nil((string.find(document, "append migration functions", 1, true)))
+            test.not_nil((string.find(document, "existing host-admitted database", 1, true)))
         end)
         test.it("names the workspace delivery rule and follows it in its example", function()
             local document = guide.document()
-            test.not_nil(string.find(document, naming.RULE, 1, true))
-            test.not_nil(string.find(document, "workspace_id defaults to your own workspace", 1, true))
-            test.not_nil(string.find(document, "create overlay " .. guide.OVERLAY_ID, 1, true))
+            test.not_nil((string.find(document, naming.RULE, 1, true)))
+            test.not_nil((string.find(document, "workspace_id defaults to your own workspace", 1, true)))
+            test.not_nil((string.find(document, "create overlay " .. guide.OVERLAY_ID, 1, true)))
             local identity = assert(naming.identity(string.rep("a", 32), guide.OVERLAY_ID))
             test.eq(guide.DEFINITION_ID, identity.definition_id)
             test.eq(guide.NAMESPACE, identity.namespace)
@@ -36,22 +36,22 @@ local function define_tests()
             local document = guide.document()
             -- An agent that reads the application contract must be told where
             -- the platform documentation is and how to look things up.
-            test.not_nil(string.find(document, "docs tool", 1, true))
-            test.not_nil(string.find(document, guide.DOCS_REVISION, 1, true))
-            test.not_nil(string.find(document, "list, search and read", 1, true))
+            test.not_nil((string.find(document, "docs tool", 1, true)))
+            test.not_nil((string.find(document, guide.DOCS_REVISION, 1, true)))
+            test.not_nil((string.find(document, "list, search and read", 1, true)))
             -- The topics for cross-node applications and for terminal UIs are
             -- named by their corpus names, which the corpus manifest carries.
             for _, topic in ipairs(guide.CROSS_NODE_TOPICS) do
-                test.not_nil(string.find(document, topic, 1, true))
+                test.not_nil((string.find(document, topic, 1, true)))
             end
             for _, topic in ipairs(guide.TERMINAL_TOPICS) do
-                test.not_nil(string.find(document, topic, 1, true))
+                test.not_nil((string.find(document, topic, 1, true)))
             end
-            test.not_nil(string.find(document, "hive", 1, true))
-            test.not_nil(string.find(document, "toolkit", 1, true))
-            test.not_nil(string.find(document, "docs/guides/ui.md", 1, true))
-            test.not_nil(string.find(document, "compact examples", 1, true))
-            test.is_nil(string.find(document, "src/apps/stylebook/", 1, true))
+            test.not_nil((string.find(document, "hive", 1, true)))
+            test.not_nil((string.find(document, "toolkit", 1, true)))
+            test.not_nil((string.find(document, "docs/guides/ui.md", 1, true)))
+            test.not_nil((string.find(document, "compact examples", 1, true)))
+            test.is_nil((string.find(document, "src/apps/stylebook/", 1, true)))
         end)
         test.it("routes every application request to its archetype, the style rules and the kit", function()
             local document = guide.document()
@@ -61,7 +61,7 @@ local function define_tests()
             end
             test.eq(#guide.ARCHETYPES, 6)
             for _, archetype in ipairs(guide.ARCHETYPES) do
-                test.not_nil(string.find(document, archetype.name .. ": " .. archetype.request, 1, true))
+                test.not_nil((string.find(document, archetype.name .. ": " .. archetype.request, 1, true)))
                 for _, call in ipairs(archetype.calls) do
                     test.eq(archetype.name .. " " .. call .. (string.find(document, call, 1, true) and "" or " missing"),
                         archetype.name .. " " .. call)
@@ -72,15 +72,15 @@ local function define_tests()
             local rule = guide.config_shape_rule()
             for kind, fields in pairs(preflight.CONFIG_LISTS) do
                 for field in pairs(fields) do
-                    test.not_nil(string.find(rule, kind .. " reads " .. field .. " as a list", 1, true))
+                    test.not_nil((string.find(rule, kind .. " reads " .. field .. " as a list", 1, true)))
                 end
             end
             for kind, fields in pairs(preflight.CONFIG_OBJECTS) do
                 for field in pairs(fields) do
-                    test.not_nil(string.find(rule, kind .. " reads " .. field .. " as a named object", 1, true))
+                    test.not_nil((string.find(rule, kind .. " reads " .. field .. " as a named object", 1, true)))
                 end
             end
-            test.not_nil(string.find(guide.document(), rule, 1, true))
+            test.not_nil((string.find(guide.document(), rule, 1, true)))
         end)
         test.it("returns a short index first, sections on request and the example separately", function()
             local index = guide.value()
@@ -88,11 +88,11 @@ local function define_tests()
             local short = index.document :: string
             test.is_true(#short < 1500)
             test.is_nil((index :: {[string]: unknown}).example)
-            test.not_nil(string.find(short, "entries.json", 1, true))
+            test.not_nil((string.find(short, "entries.json", 1, true)))
             local sections = index.sections :: {{[string]: string}}
             test.is_true(#sections >= 8)
             for _, section in ipairs(guide.section_list()) do
-                test.not_nil(string.find(short, section.id, 1, true))
+                test.not_nil((string.find(short, section.id, 1, true)))
                 local read = guide.value({section = section.id})
                 test.eq(read.section, section.id)
                 test.eq(read.text, guide.section_text(section.id))
@@ -103,7 +103,7 @@ local function define_tests()
             local example = guide.value({include_example = true})
             local entry = (example :: {[string]: unknown}).example :: {[string]: unknown}
             test.eq(entry.definition_id, guide.DEFINITION_ID)
-            test.not_nil(string.find(entry.entries_json :: string, "process.lua", 1, true))
+            test.not_nil((string.find(entry.entries_json :: string, "process.lua", 1, true)))
         end)
         test.it("carries one measurable example entry with inline source", function()
             local encoded = guide.example_json()
@@ -140,16 +140,16 @@ local function define_tests()
                 "status = \"Save failed\"", "data.key_type == \"enter\"",
                 "data.key_type == \"escape\"", "data.type == \"mouse\"",
             }) do
-                test.not_nil(string.find(source, fragment, 1, true))
+                test.not_nil((string.find(source, fragment, 1, true)))
             end
-            test.is_nil(string.find(source, "file://", 1, true))
+            test.is_nil((string.find(source, "file://", 1, true)))
             -- The example's modules are a list and its imports an object, so the
             -- guide's own example satisfies the rule the guide states.
             local objects, lists, empty = artifact.config_shapes(data)
             test.is_true(#empty == 0 and #lists == 1 and #objects == 1)
             test.eq(lists[1], "modules")
             test.eq(objects[1], "imports")
-            test.not_nil(string.find(source, "client.checkpoint", 1, true))
+            test.not_nil((string.find(source, "client.checkpoint", 1, true)))
             local application = (measured.entries[1].meta :: {[string]: unknown}).application :: {[string]: unknown}
             test.eq(application.resume_schema, "guide-counter.v1")
             test.eq(application.restart_policy, "automatic")

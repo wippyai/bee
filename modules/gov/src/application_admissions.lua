@@ -8,6 +8,7 @@ local capability_grants = require("capability_grants")
 local capability_model = require("capability_model")
 local workspace_applications = require("workspace_applications")
 local governed_admission = require("governed_admission")
+local bounds = require("bounds")
 
 local M = {}
 local log = logger:named("bee.gov.application_admission")
@@ -44,7 +45,7 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
     local by_owner: {[string]: Measurement} = {}
     for _, namespace in ipairs({governed_admission.NAMESPACE, "bee.governance"}) do
         for _, raw_entry in ipairs(pinned:find({[".kind"] = "registry.entry", [".ns"] = namespace})) do
-            local entry = raw_entry :: Entry
+            local entry = raw_entry
             if governed_admission.reserved(entry.id) then
                 local measured, measured_error = governed_admission.measure(entry.data)
                 if not measured or (measured.id ~= entry.id
@@ -112,10 +113,11 @@ local function governed(pinned: registry.Snapshot, lookup: Lookup,
             local policy_ids: {[string]: boolean} = {}
             local complete = true
             for _, binding in ipairs(profile.applications) do
-                local definition = lookup(binding.definition_id :: string)
+                local definition_id = bounds.id(binding.definition_id)
+                local definition = definition_id and lookup(definition_id) or nil
                 if not definition then complete = false; break end
                 artifacts[#artifacts + 1] = definition
-                for _, policy_id in ipairs(binding.policies :: {string}) do policy_ids[policy_id] = true end
+                for _, policy_id in ipairs(binding.policies) do policy_ids[policy_id] = true end
             end
             if complete then
                 for policy_id in pairs(policy_ids) do
@@ -184,7 +186,7 @@ function M.revision(workspace_id: string, node_id: string): string
     if not value or type(value.revision) ~= "string" then return "unavailable" end
     if type(value.overlay_owners) ~= "table" then return "unavailable" end
     local overlays: {string} = {}
-    for _, raw_owner in ipairs(value.overlay_owners :: {unknown}) do
+    for _, raw_owner in ipairs(value.overlay_owners) do
         local owner = bounds.id(raw_owner)
         local admission_id = owner and governed_admission.id(owner) or nil
         if not owner or not admission_id then return "unavailable" end
@@ -199,7 +201,7 @@ function M.revision(workspace_id: string, node_id: string): string
         end
         local fingerprint = "absent"
         if entry then
-            local measured = governed_admission.measure((entry :: Entry).data)
+            local measured = governed_admission.measure((entry).data)
             fingerprint = measured and measured.digest or "invalid"
         end
         overlays[#overlays + 1] = owner .. "=" .. fingerprint
@@ -213,7 +215,10 @@ function M.read(pinned: registry.Snapshot, revision: string, workspace_id: strin
     node_id: string): (Selection?, string?)
     local function lookup(id: string): Entry?
         local entry = pinned:get(id)
-        return entry and entry :: Entry or nil
+        if not entry then return nil end
+        local data = bounds.object(entry.data)
+        if not data then return nil end
+        return {id = entry.id, kind = entry.kind, meta = bounds.object(entry.meta), data = data}
     end
     local profile_entry = lookup("bee.env:gov_activation_profiles")
     if not profile_entry or profile_entry.kind ~= "registry.entry" then return nil, "Invalid activation profiles" end

@@ -46,7 +46,7 @@ type Configuration = {node_id: string, profiles: {Profile}, workspace_applicatio
 
 local function list(raw: unknown, label: string): ({unknown}?, string?)
     if type(raw) ~= "table" then return nil, label .. " must be a list" end
-    local source = raw :: table
+    local source = raw
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, label .. " must be a dense list" end
@@ -208,7 +208,7 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
     if value.applications ~= nil then
         local decoded, applications_error = application_admission.bindings(value.applications)
         if not decoded then return nil, nil, applications_error end
-        if #decoded > 0 then applications = decoded :: {Object} end
+        if #decoded > 0 then applications = decoded end
     end
     local policy: Object = {schema_revision = "bee.governance-activation-policy@1",
         workspace_id = workspace_id, source_node = source_node,
@@ -220,12 +220,12 @@ local function profile(raw: unknown): (DecodedProfile?, Object?, string?)
     if applications then policy.applications = applications end
     return {workspace_id = workspace_id, source_node = source_node, source_workspace = source_workspace,
         component = component, overlay_owner = overlay_owner, approval_policy = approval_policy,
-        resolver = resolver_kind :: string,
+        resolver = resolver_kind,
         parameters = parameters, packages = packages, namespaces = namespaces, kinds = kinds,
         databases = databases, grants = grants, modules = modules,
         database_bindings = bindings, migration_policies = migration_policies,
         applications = applications, auto_start = auto_start, super_edit = super_edit,
-        expires_at = expires_at :: string}, policy, nil
+        expires_at = expires_at}, policy, nil
 end
 
 local function sorted_set(raw: unknown, label: string): ({string}?, string?)
@@ -349,14 +349,14 @@ local function instantiate(rule: Template, workspace_id: string, source_node: st
         local installed, installed_error = capability_grants.decode(installed_raw,
             identity.overlay_owner, workspace_id, identity.definition_id, vocabulary)
         if not installed then return nil, nil, installed_error end
-        for _, raw_policy in ipairs(installed.policies :: {unknown}) do
+        for _, raw_policy in ipairs(installed.policies) do
             local entry = bounds.object(raw_policy)
             local id = entry and bounds.id(entry.id) or nil
             if not id then return nil, nil, "installed grant policy is invalid" end
             allowed[#allowed + 1] = id
             policies[#policies + 1] = id
         end
-        access = installed.thread_access :: string
+        access = installed.thread_access
     end
     return profile({workspace_id = workspace_id, source_node = source_node, source_workspace = identity.name,
         component = identity.component, overlay_owner = identity.overlay_owner,
@@ -413,14 +413,14 @@ local function instantiate_package(rule: Template, entry: PackageApplication, wo
         local installed, installed_error = capability_grants.decode(installed_raw,
             owner, workspace_id, entry.definition_id, vocabulary)
         if not installed then return nil, nil, installed_error end
-        for _, raw_policy in ipairs(installed.policies :: {unknown}) do
+        for _, raw_policy in ipairs(installed.policies) do
             local item = bounds.object(raw_policy)
             local id = item and bounds.id(item.id) or nil
             if not id then return nil, nil, "installed grant policy is invalid" end
             allowed[#allowed + 1] = id
             admit_policy(id)
         end
-        access = installed.thread_access :: string
+        access = installed.thread_access
     end
     return profile({workspace_id = workspace_id, source_node = source_node,
         source_workspace = entry.component, component = entry.component, overlay_owner = owner,
@@ -619,7 +619,7 @@ function M.package_admissions(configuration: DecodedConfiguration, workspace_id:
                 owner, workspace_id, entry.definition_id, vocabulary)
             if not installed then return nil, installed_error end
             generated = {}
-            for _, raw_policy in ipairs(installed.policies :: {unknown}) do
+            for _, raw_policy in ipairs(installed.policies) do
                 local item = bounds.object(raw_policy)
                 if not item then return nil, "installed grant policy is invalid" end
                 generated[#generated + 1] = item
@@ -644,8 +644,8 @@ function M.package_admissions(configuration: DecodedConfiguration, workspace_id:
             if not candidate or type(policy_ids) ~= "table" then
                 return nil, "package application admission is invalid"
             end
-            for _, policy_id in ipairs(policy_ids :: {unknown}) do
-                local policy_entry = bounds.object(lookup(policy_id :: string))
+            for _, policy_id in ipairs(policy_ids) do
+                local policy_entry = bounds.object(lookup(policy_id))
                 if not policy_entry then
                     return nil, "package application policy is unavailable: " .. tostring(policy_id)
                 end

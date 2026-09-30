@@ -21,40 +21,54 @@ local function copy(value: unknown): unknown
     return result
 end
 
-local function api(state: State): ((string) -> (unknown?, unknown?))
-    return function(owner: string): (unknown?, unknown?)
+local function api(state: State): materializer.Open
+    return function(_owner: string): (materializer.Snapshot?, unknown?)
         local observed = state.generation
-        local snapshot = {}
-        function snapshot:entries(): ({unknown}?, unknown?)
-            local result: {unknown} = {}
-            for _, entry in pairs(state.entries) do result[#result + 1] = copy(entry) end
-            return result, nil
-        end
-        function snapshot:changes(): unknown
-            local operations: {unknown} = {}
-            local changes = {}
-            function changes:create(entry: Entry): (unknown?, unknown?) operations[#operations + 1] = {"create", copy(entry)}; return true, nil end
-            function changes:update(entry: Entry): (unknown?, unknown?) operations[#operations + 1] = {"update", copy(entry)}; return true, nil end
-            function changes:delete(id: string): (unknown?, unknown?) operations[#operations + 1] = {"delete", id}; return true, nil end
-            function changes:apply(): (unknown?, unknown?)
-                if state.conflicts > 0 then state.conflicts = state.conflicts - 1; state.generation = state.generation + 1; return nil, {conflict = true} end
-                if observed ~= state.generation then return nil, {conflict = true} end
-                for _, raw in ipairs(operations) do
-                    local operation = raw :: {unknown}
-                    local verb = operation[1] :: string
-                    if verb == "delete" then state.entries[operation[2] :: string] = nil
-                    else
-                        local entry = operation[2] :: Entry
-                        if entry.meta == nil then entry.meta = {} end
-                        state.entries[entry.id :: string] = entry
-                    end
-                end
-                state.generation = state.generation + 1
-                return true, nil
-            end
-            return changes
-        end
-        return snapshot, nil
+        return {
+            entries = function(_self: materializer.Snapshot): ({unknown}?, unknown?)
+                local result: {unknown} = {}
+                for _, entry in pairs(state.entries) do result[#result + 1] = copy(entry) end
+                return result, nil
+            end,
+            changes = function(_self: materializer.Snapshot): materializer.Changes
+                local operations: {{verb: string, entry: Entry?, id: string?}} = {}
+                return {
+                    create = function(_changes: materializer.Changes, entry: Entry): (unknown?, unknown?)
+                        local cloned = copy(entry)
+                        assert(type(cloned) == "table")
+                        operations[#operations + 1] = {verb = "create", entry = cloned}
+                        return true, nil
+                    end,
+                    update = function(_changes: materializer.Changes, entry: Entry): (unknown?, unknown?)
+                        local cloned = copy(entry)
+                        assert(type(cloned) == "table")
+                        operations[#operations + 1] = {verb = "update", entry = cloned}
+                        return true, nil
+                    end,
+                    delete = function(_changes: materializer.Changes, id: string): (unknown?, unknown?)
+                        operations[#operations + 1] = {verb = "delete", id = id}
+                        return true, nil
+                    end,
+                    apply = function(_changes: materializer.Changes): (unknown?, unknown?)
+                        if state.conflicts > 0 then state.conflicts = state.conflicts - 1; state.generation = state.generation + 1; return nil, {conflict = true} end
+                        if observed ~= state.generation then return nil, {conflict = true} end
+                        for _, operation in ipairs(operations) do
+                            if operation.verb == "delete" then
+                                state.entries[assert(operation.id)] = nil
+                            else
+                                local entry = assert(operation.entry)
+                                if entry.meta == nil then entry.meta = {} end
+                                local id = entry.id
+                                assert(type(id) == "string")
+                                state.entries[id] = entry
+                            end
+                        end
+                        state.generation = state.generation + 1
+                        return true, nil
+                    end,
+                }
+            end,
+        }, nil
     end
 end
 

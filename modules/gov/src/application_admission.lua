@@ -45,17 +45,17 @@ end
 local function dense(raw: unknown, label: string, maximum: integer): (table?, integer?, string?)
     if type(raw) ~= "table" then return nil, nil, label .. " must be a list" end
     local count = 0
-    for key in pairs(raw :: table) do
-        if type(key) ~= "number" or key ~= math.floor(key :: number) or (key :: number) < 1 then
+    for key in pairs(raw) do
+        if type(key) ~= "number" or key ~= math.floor(key) or (key) < 1 then
             return nil, nil, label .. " must be a dense list"
         end
         count = count + 1
     end
     if count > maximum then return nil, nil, label .. " exceeds its bound" end
     for index = 1, count do
-        if (raw :: table)[index] == nil then return nil, nil, label .. " must be a dense list" end
+        if (raw)[index] == nil then return nil, nil, label .. " must be a dense list" end
     end
-    return raw :: table, count, nil
+    return raw, count, nil
 end
 
 local function thread_access(raw: unknown): ThreadAccess?
@@ -180,10 +180,10 @@ end
 -- whole prefix as reserved, including malformed suffixes: a portable artifact
 -- must never get to claim a present or future admission identity.
 function M.reserved(raw: unknown): boolean
-    return type(raw) == "string" and ((raw :: string):sub(1, #M.RESERVED_PREFIX) == M.RESERVED_PREFIX
-        or (raw :: string):sub(1, #"bee.gov.grants:") == "bee.gov.grants:"
-        or (raw :: string):sub(1, #PRIOR_ADMISSION_PREFIX) == PRIOR_ADMISSION_PREFIX
-        or (raw :: string):sub(1, #PRIOR_GRANTS_PREFIX) == PRIOR_GRANTS_PREFIX)
+    return type(raw) == "string" and ((raw):sub(1, #M.RESERVED_PREFIX) == M.RESERVED_PREFIX
+        or (raw):sub(1, #"bee.gov.grants:") == "bee.gov.grants:"
+        or (raw):sub(1, #PRIOR_ADMISSION_PREFIX) == PRIOR_ADMISSION_PREFIX
+        or (raw):sub(1, #PRIOR_GRANTS_PREFIX) == PRIOR_GRANTS_PREFIX)
 end
 
 -- Decode the immutable byte handoff exactly as it was measured.  JSON only
@@ -249,7 +249,7 @@ function M.project(raw: unknown): (Measurement?, string?)
     if value.overlay_ids ~= nil and type(value.overlay_ids) ~= "table" then
         return nil, "application overlay identities are malformed"
     end
-    local overlay_ids = type(value.overlay_ids) == "table" and value.overlay_ids :: table or {}
+    local overlay_ids = type(value.overlay_ids) == "table" and value.overlay_ids or {}
     local artifacts: {[string]: Object} = {}
     for index = 1, artifact_count do
         local entry = bounds.object(artifact_rows[index])
@@ -308,7 +308,7 @@ function M.project(raw: unknown): (Measurement?, string?)
         end
         local clean: Object = {}
         for field, item in pairs(definition) do if field ~= "registry" then clean[field] = item end end
-        if clean.meta == nil or (type(clean.meta) == "table" and next(clean.meta :: table) == nil) then
+        if clean.meta == nil or (type(clean.meta) == "table" and next(clean.meta) == nil) then
             clean.meta = table.create(0, 1)
         end
         policies[#policies + 1] = clean

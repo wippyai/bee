@@ -44,7 +44,7 @@ end
 
 function M.prior_owner(workspace_raw: unknown, source_workspace: unknown): string?
     local identity = M.identity(workspace_raw, source_workspace)
-    return identity and PRIOR_OWNER_PREFIX .. (workspace_raw :: string) .. "." .. identity.name or nil
+    return identity and PRIOR_OWNER_PREFIX .. (workspace_raw) .. "." .. identity.name or nil
 end
 
 -- The overlay a workspace-application component was published from.

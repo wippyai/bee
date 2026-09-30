@@ -30,7 +30,9 @@ local function identity(raw: unknown): (Object?, string?)
     local extra = bounds.fields(value, {"source_node", "source_workspace", "version"})
     if extra then return nil, extra end
     local source_node, source_workspace, version = bounds.id(value.source_node), bounds.id(value.source_workspace), bounds.id(value.version)
-    if not source_node or not source_workspace or not version then return nil, "plan identity is invalid" end
+    if not source_node then return nil, "plan identity is invalid" end
+    if not source_workspace then return nil, "plan identity is invalid" end
+    if not version then return nil, "plan identity is invalid" end
     return {operation = "get", source_node = source_node, source_workspace = source_workspace, version = version}, nil
 end
 
@@ -42,14 +44,16 @@ local function replica_identity(raw: unknown): (ReplicaIdentity?, string?)
     local source_owner, feed = bounds.id(value.source_owner), bounds.id(value.feed)
     local version_key, idempotency_key = bounds.id(value.version_key), bounds.id(value.idempotency_key)
     local descriptor_digest = value.descriptor_digest
-    if not source_owner or not feed or not version_key or not idempotency_key
-        or type(descriptor_digest) ~= "string" or #descriptor_digest ~= 64
-        or not descriptor_digest:match("^[0-9a-f]+$") then
-        return nil, "replica identity is invalid"
-    end
-    return {source_owner = source_owner :: string, feed = feed :: string,
-        version_key = version_key :: string, descriptor_digest = descriptor_digest :: string,
-        idempotency_key = idempotency_key :: string}, nil
+    if not source_owner then return nil, "replica identity is invalid" end
+    if not feed then return nil, "replica identity is invalid" end
+    if not version_key then return nil, "replica identity is invalid" end
+    if not idempotency_key then return nil, "replica identity is invalid" end
+    if type(descriptor_digest) ~= "string" then return nil, "replica identity is invalid" end
+    if #descriptor_digest ~= 64 then return nil, "replica identity is invalid" end
+    if not descriptor_digest:match("^[0-9a-f]+$") then return nil, "replica identity is invalid" end
+    return {source_owner = source_owner, feed = feed,
+        version_key = version_key, descriptor_digest = descriptor_digest,
+        idempotency_key = idempotency_key}, nil
 end
 
 -- A caller names only a locally replicated immutable version. The destination
@@ -64,32 +68,36 @@ function M.stage_replica(target: Store, replica_store: ReplicaStore, actor: unkn
     local replicated = replicas.read(replica_store, input)
     if not replicated.ok then return replicated end
     local received = bounds.object(replicated.value)
-    if not received or type(received.content) ~= "string" then return failure("INTERNAL", "replica store returned invalid content") end
+    if not received then return failure("INTERNAL", "replica store returned invalid content") end
+    if type(received.content) ~= "string" then return failure("INTERNAL", "replica store returned invalid content") end
     local descriptor = bounds.object(received.descriptor)
-    if not descriptor or type(descriptor.content_digest) ~= "string" then return failure("INTERNAL", "replica store returned invalid descriptor") end
+    if not descriptor then return failure("INTERNAL", "replica store returned invalid descriptor") end
+    if type(descriptor.content_digest) ~= "string" then return failure("INTERNAL", "replica store returned invalid descriptor") end
     local application, decode_error = delivery.decode(received.content, descriptor.content_digest)
     if not application then return failure("INVALID", decode_error or "replica is not an application version") end
     local verified, descriptor_error = delivery.verify_descriptor(descriptor, application)
     if not verified then return failure("INVALID", descriptor_error or "replica descriptor does not match application version") end
     local component = bounds.text(component_raw, 160)
-    if not component or component == "" or component ~= application.value.component then
-        return failure("DENIED", "application version does not match the destination application slot")
-    end
-    if type(resolver) ~= "table" or type(resolver.resolve) ~= "function" then
-        return failure("UNAVAILABLE", "destination resolver is unavailable")
-    end
+    if not component then return failure("DENIED", "application version does not match the destination application slot") end
+    if component == "" then return failure("DENIED", "application version does not match the destination application slot") end
+    if component ~= application.value.component then return failure("DENIED", "application version does not match the destination application slot") end
+    if type(resolver) ~= "table" then return failure("UNAVAILABLE", "destination resolver is unavailable") end
+    if type(resolver.resolve) ~= "function" then return failure("UNAVAILABLE", "destination resolver is unavailable") end
     local candidate, context, resolve_error = resolver:resolve({owner_node = target.node,
         workspace_id = target.workspace, source_node = application.value.source_node,
         source_workspace = application.value.source_workspace, version = application.value.version,
         artifact_bytes = application.value.artifact.bytes, artifact_digest = application.value.artifact.digest})
-    if not candidate or not context then return failure("BLOCKED", tostring(resolve_error or "resolve destination plan")) end
+    if not candidate then return failure("BLOCKED", tostring(resolve_error or "resolve destination plan")) end
+    if not context then return failure("BLOCKED", tostring(resolve_error or "resolve destination plan")) end
     local candidate_bytes, candidate_error = canonical.encode(candidate, 1048576)
     local candidate_digest = candidate_bytes and hash.sha256(candidate_bytes) or nil
-    if not candidate_bytes or not candidate_digest then return failure("INTERNAL", tostring(candidate_error or "measure destination candidate")) end
+    if not candidate_bytes then return failure("INTERNAL", tostring(candidate_error or "measure destination candidate")) end
+    if not candidate_digest then return failure("INTERNAL", tostring(candidate_error or "measure destination candidate")) end
     local report, report_error = preflight.check(candidate, context)
     if not report then return failure("BLOCKED", tostring(report_error or "measure destination preflight")) end
     local report_bytes, report_digest, report_encode_error = preflight.encode_report(report)
-    if not report_bytes or not report_digest then return failure("INTERNAL", tostring(report_encode_error or "encode destination preflight")) end
+    if not report_bytes then return failure("INTERNAL", tostring(report_encode_error or "encode destination preflight")) end
+    if not report_digest then return failure("INTERNAL", tostring(report_encode_error or "encode destination preflight")) end
     return store.call(target, admitted_actor, {operation = "stage", expected_revision = 0,
         idempotency_key = input.idempotency_key, source_node = application.value.source_node,
         source_workspace = application.value.source_workspace, version = application.value.version,
@@ -103,16 +111,18 @@ function M.request_approval(target: Store, actor_raw: unknown, executor: Executo
     local actor, policy = bounds.id(actor_raw), bounds.id(policy_raw)
     local request_key, bind_key = bounds.id(request_key_raw), bounds.id(bind_key_raw)
     local selected, identity_error = identity(identity_raw)
-    if not actor or not policy or not request_key or not bind_key or not selected then
-        return failure("INVALID", identity_error or "approval request identity is invalid")
-    end
+    if not actor then return failure("INVALID", identity_error or "approval request identity is invalid") end
+    if not policy then return failure("INVALID", identity_error or "approval request identity is invalid") end
+    if not request_key then return failure("INVALID", identity_error or "approval request identity is invalid") end
+    if not bind_key then return failure("INVALID", identity_error or "approval request identity is invalid") end
+    if not selected then return failure("INVALID", identity_error or "approval request identity is invalid") end
     local found = store.call(target, actor, selected)
     if not found.ok then return found end
     local plan = bounds.object(found.value)
     if not plan then return failure("INTERNAL", "plan store returned no plan") end
-    if plan.selected ~= true or plan.status ~= "reviewed" or plan.review_status ~= "accepted" then
-        return failure("CONFLICT", "plan must be selected after an accepted review")
-    end
+    if plan.selected ~= true then return failure("CONFLICT", "plan must be selected after an accepted review") end
+    if plan.status ~= "reviewed" then return failure("CONFLICT", "plan must be selected after an accepted review") end
+    if plan.review_status ~= "accepted" then return failure("CONFLICT", "plan must be selected after an accepted review") end
     local bound, approval_error = approval.request(executor, plan, policy, request_key)
     if not bound then return failure("APPROVAL", approval_error or "request local approval") end
     local request: Object = {operation = "bind_approval", source_node = plan.source_node,

@@ -64,7 +64,7 @@ local function define_tests()
             local listed = mcp.list({"session_send", "session_run"}).tools :: {{[string]: unknown}}
             for _, tool in ipairs(listed) do
                 local encoded = assert(json.encode(tool.inputSchema))
-                test.is_nil(encoded:find('"value":[]', 1, true))
+                test.is_nil((encoded:find('"value":[]', 1, true)))
                 test.is_true(encoded:find('"value":{}', 1, true) ~= nil)
             end
         end)
@@ -232,7 +232,7 @@ local function define_tests()
             local generation = {epoch = 3, restarts = 1}
             local proof = gateway.proof("listener-secret", generation, "nonce-1")
             if not proof then error("proof") end
-            test.is_true(gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 1, proof = proof}))
+            test.is_true((gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 1, proof = proof})))
             local _, other_nonce = gateway.verify("listener-secret", generation, "nonce-2", {epoch = 3, restarts = 1, proof = proof})
             test.eq((other_nonce :: {error: {code: string}}).error.code, "DENIED")
             local _, other_restart = gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 2, proof = proof})

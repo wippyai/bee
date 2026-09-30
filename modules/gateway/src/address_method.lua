@@ -14,7 +14,7 @@ local function handle(value: unknown): (configuration.Listener?, string?)
     if entry_error or not entry then return nil, "gateway listener is not linked" end
     local data = entry.data
     if type(data) ~= "table" then return nil, "gateway listener is not linked" end
-    local reference = (data :: {[string]: unknown}).resource_ref
+    local reference = (data).resource_ref
     if type(reference) ~= "string" or reference == "" then return nil, "gateway listener is not linked" end
     local state, state_error = system.supervisor.state(reference)
     if state_error or not state or state.id ~= reference then return nil, "gateway listener state is unavailable" end

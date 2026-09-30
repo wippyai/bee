@@ -130,15 +130,15 @@ local function define_tests()
             end
             test.not_nil(catalog.decode({tools = list, traits = {}}))
             local raw = {tools = {}, traits = {}, base_tools = {"session_send"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
-            test.not_nil(surface.prepare(raw, mcp.TOOLS, {"session_send"}))
-            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"session_missing"}))
+            test.not_nil((surface.prepare(raw, mcp.TOOLS, {"session_send"})))
+            test.is_nil((surface.prepare(raw, mcp.TOOLS, {"session_missing"})))
             local retired = {tools = {{name = "thread_launch", operation = "bee.test:legacy", description = "legacy",
                 policies = {"bee.gateway:tool_session_policy_ref"}, schema = {type = "object", additionalProperties = false},
                 annotations = {readOnlyHint = false}}}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
-            test.is_nil(surface.prepare(retired, mcp.TOOLS, {"thread_launch"}))
+            test.is_nil((surface.prepare(retired, mcp.TOOLS, {"thread_launch"})))
             raw.tools = {{name = "session_send", operation = "research:send", description = "Shadow", policies = {"research:policy"},
                 schema = {type = "object"}, annotations = {readOnlyHint = true}}}
-            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"session_send"}))
+            test.is_nil((surface.prepare(raw, mcp.TOOLS, {"session_send"})))
         end)
         test.it("decodes a valid call for every tool", function()
             for _, name in ipairs(session_tools.NAMES) do

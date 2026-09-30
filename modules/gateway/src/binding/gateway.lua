@@ -95,7 +95,7 @@ local function actor(): string?
 end
 local function text(value: unknown): string?
     if type(value) ~= "string" then return nil end
-    return value :: string
+    return value
 end
 local function integer(value: unknown): integer?
     return bounds.integer(value)
@@ -105,9 +105,9 @@ local function reference(id: string, field: string, what: string): (string?, str
     if err or not entry then return nil, what .. " reference is not in the registry" end
     local data = entry.data
     if type(data) ~= "table" then return nil, what .. " reference has no data" end
-    local target = (data :: Object)[field]
+    local target = (data)[field]
     if type(target) ~= "string" or target == "" then return nil, what .. " reference is not linked" end
-    return target :: string, nil
+    return target, nil
 end
 function M.database(): (string?, string?)
     return reference(M.DATABASE_REF, "resource_ref", "gateway database")
@@ -322,7 +322,7 @@ local function binding_by_id(db: sql.DB, binding_id: string): (Binding?, Reply?)
     local rows, err = binding_store.by_id(db, binding_id)
     if err or not rows then return nil, fail("STORAGE", "read binding") end
     if #rows == 0 then return nil, fail("NOT_FOUND", "binding does not exist") end
-    local binding, decode_error = binding_of(rows[1] :: Row)
+    local binding, decode_error = binding_of(rows[1])
     if not binding then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
     return binding, nil
 end
@@ -424,7 +424,7 @@ function M.open(value: unknown): Reply
     local secret, secret_error = random_text()
     if not secret then return fail("STORAGE", secret_error or "listener secret") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local current_epoch: integer = 0
     local rows, read_error = listener_store.read(db)
     if read_error or not rows then db:release(); return fail("STORAGE", "read listener for recovery") end
@@ -535,7 +535,7 @@ function M.admit(value: unknown): Reply
     local request_digest, digest_error = digest_of({subject = subject, action_id = action_id, attempt_id = attempt_id, thread_id = thread_id, owner_incarnation = incarnation, carrier_epoch = carrier_epoch, tools = tools, hooks = admitted_hooks, surface = selected_surface, policy_ref = policy_ref, workspace_id = workspace_id, workspace_name = workspace_name, origin_view = origin_view})
     if not request_digest then return fail("INVALID", digest_error or "request is not measurable") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local synchronized, synchronization_error = synchronize_native_listener(db)
     if not synchronized then db:release(); return fail("UNAVAILABLE", synchronization_error or "native listener unavailable") end
     local listener, listener_error = listener_of(db)
@@ -550,7 +550,7 @@ function M.admit(value: unknown): Reply
         local replay, replay_error = binding_store.by_idempotency_key(db, caller, idempotency_key)
         if replay_error or not replay then db:release(); return fail("STORAGE", "read bindings") end
         if #replay == 1 then
-            local stored = replay[1] :: Row
+            local stored = replay[1]
             db:release()
             local binding, decode_error = binding_of(stored)
             if not binding then return fail("STORAGE", decode_error or "binding is corrupt") end
@@ -583,7 +583,7 @@ function M.admit(value: unknown): Reply
     local live, live_error = binding_store.live_at_carrier_epoch(tx, attempt_id, carrier_epoch)
     if live_error or not live then tx:rollback(); db:release(); return fail("STORAGE", "read bindings") end
     if #live > 0 then
-        local stored = live[1] :: Row
+        local stored = live[1]
         tx:rollback()
         db:release()
         local binding, decode_error = binding_of(stored)
@@ -627,7 +627,7 @@ local function binding_by_carrier(db: sql.DB, attempt_id: string, carrier_epoch:
     local rows, err = binding_store.by_carrier(db, attempt_id, carrier_epoch, live)
     if err or not rows then return nil, fail("STORAGE", "read binding") end
     if #rows == 0 then return nil, fail("NOT_FOUND", "no " .. (live and "live " or "") .. "binding for attempt " .. attempt_id .. " under carrier epoch " .. tostring(carrier_epoch)) end
-    local binding, decode_error = binding_of(rows[1] :: Row)
+    local binding, decode_error = binding_of(rows[1])
     if not binding then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
     return binding, nil
 end
@@ -672,9 +672,9 @@ function M.materialize(value: unknown): Reply
     if not runner then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MATERIALIZE, attempt_id) then return fail("DENIED", "caller is not a materializer admitted for attempt " .. attempt_id) end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local binding, missing = binding_by_carrier(db, attempt_id, carrier_epoch, true)
-    if not binding then db:release(); return missing :: Reply end
+    if not binding then db:release(); return missing end
     if expected_binding and binding.binding_id ~= expected_binding then
         db:release()
         return fail("CONFLICT", "the binding under carrier epoch " .. tostring(carrier_epoch) .. " is not the one the carrier recorded")
@@ -706,7 +706,7 @@ function M.materialize(value: unknown): Reply
     if window_error or not window then db:release(); return fail("STORAGE", "materialization expiry is corrupt") end
     if not time.now():before(window) then db:release(); return fail("DENIED", "the materialization authorization has expired") end
     local generation, generation_failure = M.generation(db)
-    if not generation then db:release(); return generation_failure :: Reply end
+    if not generation then db:release(); return assert(generation_failure) end
     local ok, reason = M.valid(binding, generation)
     if not ok then db:release(); return fail("DENIED", reason) end
     -- The first materialization opens generation 1; a single writer wins.
@@ -718,7 +718,7 @@ function M.materialize(value: unknown): Reply
         if not affected or affected > 1 then db:release(); return fail("STORAGE", "credential generation result is corrupt") end
         if affected == 1 then current = 1 else
             local again, again_missing = binding_by_id(db, binding.binding_id)
-            if not again then db:release(); return again_missing :: Reply end
+            if not again then db:release(); return again_missing end
             current = again.credential_generation
         end
     end
@@ -768,12 +768,12 @@ function M.authorize_materialization(value: unknown): Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, "bindings") then return fail("DENIED", "caller does not manage gateway bindings") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local binding, missing = binding_by_carrier(db, attempt_id, carrier_epoch, true)
-    if not binding then db:release(); return missing :: Reply end
+    if not binding then db:release(); return missing end
     if binding.binding_id ~= binding_id then db:release(); return fail("CONFLICT", "the binding under carrier epoch " .. tostring(carrier_epoch) .. " is not the one the carrier recorded") end
     local generation, generation_failure = M.generation(db)
-    if not generation then db:release(); return generation_failure :: Reply end
+    if not generation then db:release(); return assert(generation_failure) end
     local ok, reason = M.valid(binding, generation)
     if not ok then db:release(); return fail("DENIED", reason) end
     local key, key_error = random_text()
@@ -801,12 +801,12 @@ function M.reissue(value: unknown): Reply
     if expected < 0 then return fail("INVALID", "expected_generation must be a nonnegative integer") end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local binding, missing = binding_by_id(db, binding_id)
-    if not binding then db:release(); return missing :: Reply end
+    if not binding then db:release(); return missing end
     if not security.can(M.ADMIT, binding.action_id) then db:release(); return fail("DENIED", "caller may not reissue credentials for action " .. binding.action_id) end
     local generation, generation_failure = M.generation(db)
-    if not generation then db:release(); return generation_failure :: Reply end
+    if not generation then db:release(); return assert(generation_failure) end
     local ok, reason = M.valid(binding, generation)
     if not ok then db:release(); return fail("DENIED", reason) end
     local advanced, advance_error = binding_store.advance_credential_generation(db, binding_id, expected)
@@ -834,9 +834,9 @@ function M.revoke(value: unknown): Reply
     if not binding_id then return fail("INVALID", "binding_id is not an identifier") end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local binding, missing = binding_by_id(db, binding_id)
-    if not binding then db:release(); return missing :: Reply end
+    if not binding then db:release(); return missing end
     if not security.can(M.ADMIT, binding.action_id) and not security.can(M.MANAGE, "bindings") and not security.can(M.MATERIALIZE, binding.attempt_id) then
         db:release()
         return fail("DENIED", "caller may not revoke bindings for action " .. binding.action_id)
@@ -872,9 +872,9 @@ function M.seal(value: unknown): Reply
     if not binding_id then return fail("INVALID", "binding_id is not an identifier") end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local binding, missing = binding_by_id(db, binding_id)
-    if not binding then db:release(); return missing :: Reply end
+    if not binding then db:release(); return missing end
     if not security.can(M.ADMIT, binding.action_id) and not security.can(M.MANAGE, "bindings") and not security.can(M.MATERIALIZE, binding.attempt_id) then
         db:release()
         return fail("DENIED", "caller may not seal this binding")
@@ -903,7 +903,7 @@ function M.revoke_attempt(value: unknown): Reply
     local revocation = capability_model.revocation_report({}, {attempt_id})
     if not revocation then return fail("INVALID", "report attempt revocation") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local at = stamp(now_ms())
     local result, write_error = binding_store.revoke_attempt(db, attempt_id, carrier_epoch, at)
     if write_error then db:release(); return fail("STORAGE", "revoke attempt bindings") end
@@ -924,16 +924,16 @@ function M.check(value: unknown): Reply
     if unknown_field then return fail("INVALID", unknown_field) end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local binding, missing = binding_named(db, object)
-    if not binding then db:release(); return missing :: Reply end
+    if not binding then db:release(); return missing end
     if not security.can(M.MATERIALIZE, binding.attempt_id) and not security.can(M.ADMIT, binding.action_id) and not security.can(M.MANAGE, "bindings") then
         db:release()
         return fail("DENIED", "caller may not check this binding")
     end
     local generation, generation_failure = M.generation(db)
     db:release()
-    if not generation then return generation_failure :: Reply end
+    if not generation then return assert(generation_failure) end
     local ok, reason = M.valid(binding, generation)
     local result = view(binding)
     result.valid = ok
@@ -942,7 +942,7 @@ function M.check(value: unknown): Reply
     result.presented_count = 0
     if binding.credential_generation > 0 then
         local db_again, again_failure = open()
-        if not db_again then return again_failure :: Reply end
+        if not db_again then return again_failure end
         local presented, presented_error = binding_store.credential_presentation(db_again, binding.binding_id, binding.credential_generation)
         db_again:release()
         if presented_error or not presented or #presented ~= 1 then return fail("STORAGE", "read credential") end
@@ -974,7 +974,7 @@ function M.drain(value: unknown): Reply
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     if not security.can(M.MANAGE, "listener") then return fail("DENIED", "caller does not manage the gateway listener") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local deadline_at = stamp(now_ms() + deadline)
     local _, write_error = listener_store.start_drain(db, deadline_at)
     db:release()
@@ -1030,11 +1030,11 @@ function M.ready(value: unknown): Reply
     if unknown_field then return fail("INVALID", unknown_field) end
     if not actor() then return fail("UNAUTHENTICATED", "no actor") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local listener, listener_error = listener_of(db)
     if listener_error or not listener then db:release(); return fail("UNAVAILABLE", listener_error or "the gateway listener has not been opened") end
     local generation, generation_failure = M.generation(db)
-    if not generation then db:release(); return generation_failure :: Reply end
+    if not generation then db:release(); return assert(generation_failure) end
     local reconciled_listener, reconcile_error = listener_of(db)
     if reconcile_error or not reconciled_listener then
         db:release()
@@ -1046,7 +1046,7 @@ function M.ready(value: unknown): Reply
         local binding_id = bounds.id(object.binding_id)
         if not binding_id then db:release(); return fail("INVALID", "binding_id is not an identifier") end
         local found, missing = binding_by_id(db, binding_id)
-        if not found then db:release(); return missing :: Reply end
+        if not found then db:release(); return missing end
         binding = found
     end
     db:release()
@@ -1072,9 +1072,9 @@ function M.ready(value: unknown): Reply
     end
     local answered: unknown, decode_error = json.decode(tostring(response.body))
     if decode_error or type(answered) ~= "table" then return fail("UNAVAILABLE", "the listener answered unreadably") end
-    local reported = answered :: Object
+    local reported = answered
     local verified, verify_failure = M.verify(secret, generation, nonce, reported)
-    if not verified then return verify_failure :: Reply end
+    if not verified then return assert(verify_failure) end
     local result: Object = {generation = generation, address = address, listening = true}
     if binding then
         local ok, reason = M.valid(binding, generation)
@@ -1294,17 +1294,17 @@ local function installation_call(value: unknown, fields: {string}): (Binding?, s
 end
 function M.install_request(value: unknown): Reply
     local binding, policy_name, request, refusal = installation_call(value, {"component", "version"})
-    if not binding or not policy_name then return refusal :: Reply end
+    if not binding or not policy_name then return assert(refusal) end
     return installation.request(installation.port(binding), binding, policy_name, "install", request)
 end
 function M.uninstall_request(value: unknown): Reply
     local binding, policy_name, request, refusal = installation_call(value, {"component"})
-    if not binding or not policy_name then return refusal :: Reply end
+    if not binding or not policy_name then return assert(refusal) end
     return installation.request(installation.port(binding), binding, policy_name, "uninstall", request)
 end
 function M.install_status(value: unknown): Reply
     local binding, policy_name, request, refusal = installation_call(value, {"request_id"})
-    if not binding or not policy_name then return refusal :: Reply end
+    if not binding or not policy_name then return assert(refusal) end
     return installation.status(installation.port(binding), binding, policy_name, request)
 end
 -- A credential is valid only for its action, kind, current generation and expiry.
@@ -1370,7 +1370,7 @@ local function directory(value: unknown, fields: {string}): ({Object}?, Object?,
         local reply_raw, call_error = owner:list({filter = {workspace = workspace}, cursor = cursor})
         local reply = bounds.object(reply_raw)
         if call_error or not reply or reply.ok ~= true then return nil, nil, fail("UNAVAILABLE", tostring(call_error or "Sessions directory unavailable")) end
-        local items, decode_error = sessions.project(reply.value, workspace :: string)
+        local items, decode_error = sessions.project(reply.value, workspace)
         if not items then return nil, nil, fail("UNAVAILABLE", decode_error or "invalid Sessions directory") end
         for _, item in ipairs(items) do rows[#rows + 1] = item end
         local page = bounds.object(reply.value)
@@ -1383,14 +1383,14 @@ local function directory(value: unknown, fields: {string}): ({Object}?, Object?,
 end
 function M.describe(value: unknown): Reply
     local listed, _, refused = directory(value, {"workspace_id"})
-    if not listed then return refused :: Reply end
+    if not listed then return assert(refused) end
     local items: {Object} = {}
     for index = 1, math.min(#listed, M.MAX_DESCRIBED) do items[index] = listed[index] end
     return succeed({title = "Agent sessions", items = items, total = #listed})
 end
 function M.search(value: unknown): Reply
     local listed, request, refused = directory(value, {"workspace_id", "text", "limit"})
-    if not listed or not request then return refused :: Reply end
+    if not listed or not request then return assert(refused) end
     local wanted = bounds.line(request.text, 240)
     if not wanted then return fail("INVALID", "text must be one nonempty line") end
     local limit = request.limit == nil and M.MAX_DESCRIBED or bounds.integer(request.limit)
@@ -1421,7 +1421,7 @@ function M.submit_hook(binding: Binding, payload: Object, provenance: string): R
     local submission, normalize_error = hooks.normalize(event, cleaned)
     if not submission then return fail("INVALID", normalize_error or "hook") end
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     -- The seal check, the replay check, the bound and the insert are one
     -- transaction, so no submission is accepted after the seal's point.
     local tx, begin_error = db:begin()
@@ -1488,7 +1488,7 @@ end
 -- that id exists for the binding, which after a loss permits a replay.
 function M.hook_status(binding: Binding, event_id: string): Reply
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local rows, err = hook_store.status(db, event_id, binding.binding_id)
     db:release()
     if err or not rows then return fail("STORAGE", "read hook") end
@@ -1502,7 +1502,7 @@ end
 -- for the carrier that will commit them and for proofs. Fields only.
 function M.hook_queue(binding: Binding): Reply
     local db, open_failure = open()
-    if not db then return open_failure :: Reply end
+    if not db then return open_failure end
     local rows, err = hook_store.queue(db, binding.binding_id)
     db:release()
     if err or not rows then return fail("STORAGE", "read hooks") end
@@ -1542,7 +1542,7 @@ local function intake_binding(tx: sql.Transaction, binding_id: string): (Binding
     local rows, err = binding_store.intake_binding(tx, binding_id)
     if err or not rows then return nil, fail("STORAGE", "read binding") end
     if #rows == 0 then return nil, fail("NOT_FOUND", "binding does not exist") end
-    local binding, decode_error = binding_of(rows[1] :: Row)
+    local binding, decode_error = binding_of(rows[1])
     if not binding then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
     return binding, nil
 end
@@ -1591,7 +1591,7 @@ end
 -- the acknowledgement was lost.
 function M.hook_claim(value: unknown): Reply
     local object, binding, db, carrier_epoch, refusal = intake_request(value, {"limit"})
-    if not object or not binding or not db or not carrier_epoch then return refusal :: Reply end
+    if not object or not binding or not db or not carrier_epoch then return assert(refusal) end
     local limit = M.MAX_HOOK_CLAIM
     if object.limit ~= nil then
         local declared = bounds.integer(object.limit)
@@ -1601,9 +1601,9 @@ function M.hook_claim(value: unknown): Reply
     local tx, begin_error = db:begin()
     if not tx then db:release(); return fail("STORAGE", "begin hook claim") end
     local current_binding, binding_failure = intake_binding(tx, binding.binding_id)
-    if not current_binding then tx:rollback(); db:release(); return binding_failure :: Reply end
+    if not current_binding then tx:rollback(); db:release(); return binding_failure end
     local generation, generation_failure = intake_generation(tx)
-    if not generation then tx:rollback(); db:release(); return generation_failure :: Reply end
+    if not generation then tx:rollback(); db:release(); return generation_failure end
     local epoch_refusal = intake_epoch(tx, current_binding.attempt_id, carrier_epoch)
     if epoch_refusal then tx:rollback(); db:release(); return epoch_refusal end
     local at = stamp(now_ms())
@@ -1622,7 +1622,7 @@ function M.hook_claim(value: unknown): Reply
     if err or not rows then tx:rollback(); db:release(); return fail("STORAGE", "read queued hooks") end
     local claimed: {HookRecord} = {}
     for _, row in ipairs(rows) do
-        local event_id = bounds.id((row :: Row).event_id)
+        local event_id = bounds.id((row).event_id)
         if not event_id then tx:rollback(); db:release(); return fail("STORAGE", "queued hook identity is corrupt") end
         local result, claim_error = hook_store.claim(tx, event_id, carrier_epoch, at)
         if claim_error then tx:rollback(); db:release(); return fail("STORAGE", "claim hook") end
@@ -1669,7 +1669,7 @@ end
 -- thread records; only the epoch that claimed them may say so.
 function M.hook_ack(value: unknown): Reply
     local object, binding, db, carrier_epoch, refusal = intake_request(value, {"event_ids"})
-    if not object or not binding or not db or not carrier_epoch then return refusal :: Reply end
+    if not object or not binding or not db or not carrier_epoch then return assert(refusal) end
     local event_ids, ids_error = bounds.ids(object.event_ids, true)
     if not event_ids then db:release(); return fail("INVALID", "event_ids: " .. tostring(ids_error)) end
     if #event_ids > M.MAX_HOOK_CLAIM then db:release(); return fail("INVALID", "event_ids exceeds " .. tostring(M.MAX_HOOK_CLAIM)) end
@@ -1700,7 +1700,7 @@ end
 -- reconciliation rather than being falsely called rejected.
 function M.hook_reject(value: unknown): Reply
     local object, binding, db, carrier_epoch, refusal = intake_request(value, {"reason"})
-    if not object or not binding or not db or not carrier_epoch then return refusal :: Reply end
+    if not object or not binding or not db or not carrier_epoch then return assert(refusal) end
     local reason = bounds.line(object.reason, 120)
     if not reason or reason == "" then db:release(); return fail("INVALID", "reason is required") end
     local tx, begin_error = db:begin()

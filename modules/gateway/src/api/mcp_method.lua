@@ -210,11 +210,11 @@ end
 local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
     if session_tools.is_session_tool(tool.name) then return session_projection(binding, tool, request, values) end
     local executor, failure = subject_executor(binding, tool, values, runtime)
-    if not executor then return failure :: Object end
+    if not executor then return failure end
     if tool.name == "capabilities" then return capabilities(binding) end
     if tool.name == "thread_read" then
         local selected, missing = member_thread(executor, request, binding.thread_id)
-        if not selected then return missing :: Object end
+        if not selected then return missing end
         request.thread_id = selected
     end
     if tool.name == "request_capability" or tool.name == "capability_status" or tool.name == "install_request"

@@ -241,6 +241,7 @@ entries:
   kind: library.lua
   source: file://json_schema.lua
   modules: [json]
+  imports: {bounds: bee.threads.records:bounds}
 - name: session_bundle
   kind: library.lua
   source: file://session_bundle.lua
@@ -249,6 +250,7 @@ entries:
   source: file://session_tools.lua
   modules: [json]
   imports:
+    bounds: bee.threads.records:bounds
     json_schema: bee.gateway:json_schema
     session_bundle: bee.gateway:session_bundle
 - name: mcp

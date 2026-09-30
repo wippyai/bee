@@ -67,7 +67,7 @@ function M.grants(tx: sql.Transaction, binding_id: string): ({string}?, Fault?)
         local encoded = row and bounds.text(row.traits_json, 8192)
         if not encoded then return nil, fault("STORAGE", "invalid grant receipt") end
         local traits, invalid = decode_traits(binding_id, encoded, "STORAGE", "invalid grant traits")
-        if not traits then return nil, invalid :: Fault end
+        if not traits then return nil, invalid end
         for _, id in ipairs(traits) do
             if not seen[id] then seen[id] = true; result[#result + 1] = id end
         end
@@ -97,9 +97,9 @@ function M.runtime_grant(tx: sql.Transaction, binding_id: string, trait_id: stri
             return nil, fault("STORAGE", "invalid application runtime access receipt")
         end
         local traits, invalid = decode_traits(binding_id, encoded, "STORAGE", "invalid application runtime access receipt")
-        if not traits then return nil, invalid :: Fault end
+        if not traits then return nil, invalid end
         for _, id in ipairs(traits) do
-            if id == trait_id then return {approval_id = approval_id :: string, proposal_digest = proposal_digest :: string, traits = traits}, nil end
+            if id == trait_id then return {approval_id = approval_id, proposal_digest = proposal_digest, traits = traits}, nil end
         end
     end
     return nil, nil
@@ -108,7 +108,7 @@ function M.grant(tx: sql.Transaction, binding_id: string, approval_id: string, d
     if not bounds.id(binding_id) or not bounds.id(approval_id) or #digest ~= 64 or not digest:match("^%x+$")
         or not text(traits_json, 8192) then return nil, fault("INVALID", "invalid grant receipt") end
     local added, traits_fault = decode_traits(binding_id, traits_json, "INVALID", "invalid grant receipt")
-    if not added then return nil, traits_fault :: Fault end
+    if not added then return nil, traits_fault end
     local rows, err = tx:query("SELECT proposal_digest, traits_json FROM bee_gateway_access_grants WHERE binding_id = ? AND approval_id = ?", {binding_id, approval_id})
     if not rows or err then return nil, fault("STORAGE", "read grant receipt") end
     if #rows > 0 then

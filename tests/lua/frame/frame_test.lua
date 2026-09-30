@@ -154,20 +154,165 @@ local function define_tests()
             test.not_nil(cell)
             test.eq(cell and cell.fg or "", rgb(theme.muted))
         end)
-        test.it("keeps key hints beside a status when both fit and lets the status win otherwise", function()
-            local hints = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}})
-            test.eq(hints, "↑↓ select · Enter open")
-            local wide = frame.new(80, 4, appearance.defaults())
-            frame.footer(wide, "Saved count 2", hints)
-            local row = text(wide)[4]
-            test.eq(row:sub(1, 15), " Saved count 2 ")
-            test.eq(row:sub(-(#hints + 1)), hints .. " ")
-            local narrow = frame.new(24, 4, appearance.defaults())
-            frame.footer(narrow, "Saved count 2", hints)
-            test.eq(text(narrow)[4], " Saved count 2          ")
-            local idle = frame.new(40, 4, appearance.defaults())
-            frame.footer(idle, "", hints)
-            test.eq(text(idle)[4]:sub(1, #hints + 1), " " .. hints)
+        test.it("reserves hints and help while a long status is shown at both frame sizes", function()
+            local sizes: {{integer}} = {{80, 24}, {120, 36}}
+            for _, size in ipairs(sizes) do
+                local painter = frame.new(size[1], size[2], appearance.defaults())
+                frame.footer(painter, string.rep("Starting Agent… ", 12), "↑↓ select · Enter open · N new · E edit · R refresh · Esc close")
+                local rendered = text(painter)
+                local row = rendered[size[2]]
+                test.is_true(row:find("Starting Agent", 1, true) ~= nil)
+                test.is_true(row:find("Enter open", 1, true) ~= nil)
+                test.is_true(row:find("? help", 1, true) ~= nil)
+                sized(painter)
+            end
+        end)
+        test.it("keeps primary actions and exposes overflowing actions through More", function()
+            for _, size in ipairs({{80, 24}, {120, 36}}) do
+                local painter = frame.new(size[1], size[2], appearance.defaults())
+                local buttons: {frame.Button} = {}
+                for index = 1, 12 do buttons[index] = {kind = "action" .. tostring(index), label = "Action " .. tostring(index), enabled = true} end
+                buttons[12].primary = true
+                frame.actions(painter, size[2] - 1, buttons)
+                local row = text(painter)[size[2] - 1]
+                test.is_true(row:find("Action 12", 1, true) ~= nil)
+                test.is_true(row:find("F10 More", 1, true) ~= nil)
+                local more = false
+                for _, hit in ipairs(painter.hits) do if hit.kind == "frame_more" then more = true end end
+                test.is_true(more)
+                sized(painter)
+            end
+        end)
+        test.it("opens shared More and Help with keyboard and mouse and shields the screen", function()
+            for _, size in ipairs({{80, 24}, {120, 36}}) do
+                local menu = frame.menu()
+                local function draw(): frame.View
+                    local painter = frame.new(size[1], size[2], appearance.defaults())
+                    local buttons: {frame.Button} = {}
+                    for index = 1, 14 do buttons[index] = {kind = "action" .. tostring(index), label = "Action " .. tostring(index), enabled = index ~= 14} end
+                    buttons[13] = {kind = "leases", label = "Leases", key = "V", enabled = true}
+                    frame.actions(painter, size[2] - 1, buttons)
+                    frame.footer(painter, "Waiting for a decision", "↑↓ select · Enter open · Esc back")
+                    local drawn: frame.View = {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+                    frame.render(drawn, menu, appearance.defaults())
+                    for _, row in ipairs(drawn.rows) do test.eq(tty.text.width(row), size[1]) end
+                    return drawn
+                end
+                draw()
+                local routed, changed = frame.route(menu, {type = "key", action = "press", key_type = "f10"})
+                test.is_nil(routed); test.is_true(changed)
+                local more = draw()
+                test.is_true(plain(more.rows[1]):find("MORE ACTIONS", 1, true) ~= nil)
+                test.is_true(table.concat(more.rows):find("Leases", 1, true) ~= nil)
+                routed, changed = frame.route(menu, {type = "key", action = "press", key_type = "runes", key = "v"})
+                test.eq(routed and routed.type, "mouse")
+                local hit = routed and frame.hit(more.hits, routed.x or 0, routed.y or 0)
+                test.eq(hit and hit.kind, "leases")
+                draw()
+                routed = frame.route(menu, {type = "key", action = "press", key_type = "runes", key = "?"})
+                test.is_nil(routed)
+                local help = draw()
+                test.is_true(plain(help.rows[1]):find("HELP", 1, true) ~= nil)
+                test.is_true(table.concat(help.rows):find("Action 14", 1, true) ~= nil)
+                test.is_true(table.concat(help.rows):find("unavailable", 1, true) ~= nil)
+                routed = frame.route(menu, {type = "mouse", action = "press", button = "left", x = 1, y = 5})
+                test.is_nil(routed)
+                routed = frame.route(menu, {type = "key", action = "press", key_type = "esc"})
+                test.is_nil(routed); test.eq(menu.mode, "")
+                local screen = draw()
+                for _, target in ipairs(screen.hits) do
+                    if target.kind == "frame_more" then
+                        routed = frame.route(menu, {type = "mouse", action = "press", button = "left", x = target.x, y = target.y})
+                        test.is_nil(routed); test.eq(menu.mode, "more")
+                    end
+                end
+            end
+        end)
+        test.it("normalizes shortcuts while preserving typed text and ignores releases", function()
+            local menu = frame.menu()
+            local key = {type = "key", action = "press", key_type = "runes", key = "R"}
+            local routed = frame.route(menu, key)
+            test.eq(routed and routed.key, "r")
+            routed = frame.route(menu, {type = "key", action = "press", key_type = "runes", key = "R"}, true)
+            test.eq(routed and routed.key, "R")
+            routed = frame.route(menu, {type = "key", action = "press", key_type = "runes", key = "?"}, true)
+            test.eq(routed and routed.key, "?")
+            routed = frame.route(menu, {type = "key", action = "release", key_type = "runes", key = "?"})
+            test.not_nil(routed); test.eq(menu.mode, "")
+        end)
+        test.it("collects individually drawn buttons into the shared overflow bar", function()
+            for _, size in ipairs({{80, 24}, {120, 36}}) do
+                local painter = frame.new(size[1], size[2], appearance.defaults())
+                local x = 2
+                for index = 1, 15 do
+                    x = frame.button(painter, x, size[2] - 1, {kind = "choice" .. tostring(index), label = "Choice " .. tostring(index), enabled = true})
+                end
+                local rows = text(painter)
+                test.is_true(rows[size[2] - 1]:find("F10 More", 1, true) ~= nil)
+                test.eq(#frame.controls(painter).buttons, 15)
+                test.is_true(#frame.controls(painter).overflow > 0)
+                sized(painter)
+                test.eq(#frame.controls(painter).buttons, 15)
+            end
+        end)
+        test.it("selects More with the mouse, refuses disabled choices and closes Help with the mouse", function()
+            for _, size in ipairs({{80, 24}, {120, 36}}) do
+                local menu = frame.menu()
+                local function draw(): frame.View
+                    local painter = frame.new(size[1], size[2], appearance.defaults())
+                    local buttons: {frame.Button} = {}
+                    for index = 1, 10 do buttons[index] = {kind = "choice" .. tostring(index), label = "Long action " .. tostring(index), enabled = true} end
+                    buttons[9].enabled = false
+                    frame.actions(painter, size[2] - 1, buttons)
+                    frame.footer(painter, string.rep("Status message ", 20), "Enter choose · Esc close")
+                    local view: frame.View = {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
+                    frame.render(view, menu, appearance.defaults())
+                    return view
+                end
+                draw()
+                frame.route(menu, {type = "key", action = "press", key_type = "f10"})
+                local more = draw()
+                local unavailable: frame.Hit? = nil
+                local enabled: frame.Hit? = nil
+                for _, hit in ipairs(more.hits) do
+                    if hit.kind == "frame_choice" then
+                        local button = menu.controls.overflow[hit.index]
+                        if button.enabled then enabled = hit else unavailable = hit end
+                    end
+                end
+                test.not_nil(unavailable); test.not_nil(enabled)
+                if unavailable then
+                    local result = frame.route(menu, {type = "mouse", action = "press", button = "left", x = unavailable.x, y = unavailable.y})
+                    test.is_nil(result); test.eq(menu.mode, "more")
+                end
+                if enabled then
+                    local expected = menu.controls.overflow[enabled.index].kind
+                    local result = frame.route(menu, {type = "mouse", action = "press", button = "left", x = enabled.x, y = enabled.y})
+                    local selected = result and frame.hit(more.hits, result.x or 0, result.y or 0)
+                    test.eq(selected and selected.kind, expected)
+                    test.eq(menu.mode, "")
+                end
+                draw()
+                frame.route(menu, {type = "key", action = "press", key_type = "runes", key = "?"})
+                local help = draw()
+                for _, hit in ipairs(help.hits) do
+                    if hit.kind == "frame_back" then
+                        local result = frame.route(menu, {type = "mouse", action = "press", button = "left", x = hit.x, y = hit.y})
+                        test.is_nil(result)
+                        test.eq(menu.mode, "")
+                    end
+                end
+            end
+        end)
+        test.it("rejects malformed input before changing overlay state", function()
+            local menu = frame.menu()
+            local result = frame.route(menu, {type = "key", action = "press", key_type = "f10", ctrl = "yes"})
+            test.is_nil(result)
+            result = frame.route(menu, {type = "mouse", action = "press", button = "left", x = -1, y = 1})
+            test.is_nil(result)
+            result = frame.route(menu, {type = "resize", width = 80, height = "24"})
+            test.is_nil(result)
+            test.eq(menu.mode, "")
         end)
         test.it("marks the selected row in column 1 and keeps its text", function()
             local painter = frame.new(60, 8, appearance.defaults())

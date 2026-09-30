@@ -67,6 +67,14 @@ function M.label(item: Item): string
     if item.label ~= "" then return item.label end
     return names.label(item.workspace_id)
 end
+-- The saved label for one workspace on the loaded page, if the page holds it
+-- with a label; the header shows it instead of the generated identity name.
+function M.current_label(menu: Menu, workspace_id: string): string?
+    for _, item in ipairs(menu.items) do
+        if item.workspace_id == workspace_id and item.label ~= "" then return item.label end
+    end
+    return nil
+end
 local function move(menu: Menu, step: integer)
     if #menu.items == 0 then return end
     menu.selected = math.floor(math.max(1, math.min(#menu.items, menu.selected + step)))
@@ -148,7 +156,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         local item = menu.items[index]
         if item then
             local marker = item.workspace_id == menu.current and "● " or "  "
-            local text = marker .. M.label(item) .. "  " .. item.workspace_id:sub(1, 8)
+            local text = marker .. M.label(item)
             put(2 + row, text, index == menu.selected and chosen or normal)
         end
     end

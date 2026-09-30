@@ -90,7 +90,9 @@ local function define_tests()
             for _, row in ipairs(plain) do if row:sub(1, #"›") == "›" then marked = marked + 1; test.is_true(row:find("0x00018", 1, true) ~= nil) end end
             test.eq(marked, 1)
             local confirming = view.draw(80, 24, sample, history, appearance.defaults(), rows[2].pid, 0, false, "", true, false, rows, false)
-            test.is_true(confirming.rows[24]:find("Stop selected app? Enter confirms · Esc cancels", 1, true) ~= nil)
+            test.is_true(confirming.rows[24]:find("Stop selected app?", 1, true) ~= nil)
+            test.is_true(confirming.rows[24]:find("Enter confirms · Esc cancels", 1, true) ~= nil)
+            test.is_true(confirming.rows[24]:find("? help", 1, true) ~= nil)
         end)
     end)
 end

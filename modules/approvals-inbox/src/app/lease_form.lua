@@ -10,7 +10,7 @@ local model = require("model")
 local leases = require("leases")
 local M = {}
 M.EXTRAS = 3
-type Frame = {rows: {string}, hits: {frame.Hit}}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 type State = {form: forms.Form, view: model.ApprovalView, status: string}
 
 local DURATIONS = {{label = "30 minutes", value = "1800"}, {label = "1 hour", value = "3600"},
@@ -101,7 +101,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         })
     end
     frame.footer(painter, state.status, frame.hints({{key = "Tab", verb = "next"}, {key = "Ctrl+S", verb = "request"}, {key = "Esc", verb = "cancel"}}))
-    return {rows = frame.rows(painter), hits = painter.hits}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 
 -- input: one key or mouse event; "submit" and "cancel" come back for the app

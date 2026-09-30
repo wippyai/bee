@@ -5,13 +5,13 @@ local frame = require("frame")
 local model = require("model")
 local text = require("text")
 
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 type Action = {kind: string, label: string}
 local M = {}
 local PANES: {frame.Tab} = {{kind = "pane_available", label = "Available", short = "A"},
     {kind = "pane_plans", label = "Staged", short = "S"}, {kind = "pane_review", label = "Review", short = "R"}}
 local HINTS = frame.hints({{key = "Tab", verb = "view"}, {key = "↑↓", verb = "choose"}, {key = "Enter", verb = "next"},
-    {key = "T", verb = "details"}, {key = "F", verb = "refresh"}, {key = "Esc", verb = "close"}})
+    {key = "T", verb = "details"}, {key = "R", verb = "refresh"}, {key = "Esc", verb = "close"}})
 local TECHNICAL_HINTS = frame.hints({{key = "N", verb = "reject"}, {key = "I", verb = "status"}, {key = "G", verb = "recover"},
     {key = "X", verb = "apply"}, {key = "Enter", verb = "next"}})
 
@@ -130,7 +130,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if count == 0 and capacity > 0 then
             if state.pane == "available" then
                 frame.empty(painter, list_first, "No overlay versions are available",
-                    capacity > 1 and "Versions an agent delivers to this workspace appear here · F refresh" or nil)
+                    capacity > 1 and "Versions an agent delivers to this workspace appear here · R refresh" or nil)
             else
                 frame.empty(painter, list_first, "No overlay versions are staged",
                     capacity > 1 and "Stage one from Available · Tab change view" or nil)
@@ -168,8 +168,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     if height >= 4 then
         local primary_kind, primary_label, primary_enabled = M.primary(state)
-        local buttons: {frame.Button} = {{kind = primary_kind, label = bare(primary_label), enabled = primary_enabled, primary = true},
-            {kind = "details", label = state.technical and "Hide details" or "Details", enabled = true}}
+        local buttons: {frame.Button} = {{kind = primary_kind, key = "Enter", label = bare(primary_label), enabled = primary_enabled, primary = true},
+            {kind = "details", key = "T", label = state.technical and "Hide details" or "Details", enabled = true}}
         if state.technical then
             for _, action in ipairs(advanced(state)) do
                 buttons[#buttons + 1] = {kind = action.kind, label = bare(action.label), enabled = true}
@@ -179,8 +179,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local status = state.notice
     if status == "" and state.intent and state.intent.phase == "approval_bound" then status = "Waiting for the approval decision in Approvals" end
-    frame.footer(painter, text.bound(status, 8192), state.technical and TECHNICAL_HINTS or HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset}
+    frame.footer(painter, text.bound(status, 8192), HINTS .. " · " .. TECHNICAL_HINTS .. " · A accept · S select · P prepare")
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset}
 end
 
 return M

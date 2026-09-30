@@ -136,6 +136,28 @@ local function define_tests()
             end
             test.is_true(sidebar and send)
         end)
+        test.it("declares shared frame controls with shortcuts on every agent screen", function()
+            local listing: any = {items = {{ref = "f:a", kind = "definition", title = "Alpha", status = "ready", ready = true, reason = ""}}, unavailable = 0, notes = {}}
+            local sessions: any = {{session = "bs:n:w:s", title = "Fix API", lifecycle = "active", activity = "idle", queue_count = 0}}
+            local conv = conversation("working", {{input = "fix", state = "working", text = ""}}, "bs:n:w:s")
+            local screens = {
+                picker_view.draw(80, 24, appearance.defaults(), listing_of(listing), 1, "", false, false),
+                directory_view.draw(80, 24, appearance.defaults(), sessions :: {protocol.SessionSnapshot}, 1, "", false),
+                session_view.draw(80, 24, appearance.defaults(), conv, "draft", ""),
+                session_view.draw(120, 24, appearance.defaults(), conv, "draft", "", sessions :: {protocol.SessionSnapshot}),
+            }
+            for _, shown in ipairs(screens) do
+                local controls = assert(shown.controls)
+                test.is_true(#controls.buttons > 0)
+                for _, button in ipairs(controls.buttons) do test.not_nil(button.key) end
+                local footer = shown.rows[#shown.rows]:gsub("\27%[[0-9;]*m", "")
+                local _, helps = footer:gsub("%? help", "")
+                test.eq(helps, 1)
+            end
+            local hinted: {[string]: boolean} = {}
+            for _, hint in ipairs(assert(screens[1].controls).hints) do hinted[hint.key] = true end
+            test.is_true(hinted.M and hinted.E and hinted.N and hinted.S)
+        end)
         test.it("labels blocked results", function()
             local lines = session_view.lines(conversation("blocked", {{input = "b", state = "blocked", text = "budget spent"}}), 40)
             test.eq(lines[2].text, "  blocked: budget spent")

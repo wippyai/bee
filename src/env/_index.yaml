@@ -45,6 +45,12 @@ entries:
   storage: bee.env:workspace_environment
   variable: HOME
   readonly: true
+- name: no_color
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: NO_COLOR
+  default: ""
+  readonly: true
 - name: machine_login_source
   kind: fs.directory
   directory: ${env:bee.env:machine_home}
@@ -88,7 +94,8 @@ entries:
       - component: bee.threads.timeline
         definition_id: bee.threads.timeline:app
         capabilities: [threads.read]
-        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline:client_policy]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline:client_policy,
+          bee.security.threads:thread_workspace_list_policy]
         thread_access: none
       - component: bee.workspace.manager
         definition_id: bee.workspace.manager:app

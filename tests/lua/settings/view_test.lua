@@ -3,6 +3,7 @@ local tty = require("tty")
 local view = require("view")
 local frames = require("frames")
 local appearance = require("appearance")
+local interaction = require("interaction")
 local function define_tests()
     test.describe("Appearance chooser", function()
         test.it("shows errors in compact settings without losing selection controls", function()
@@ -36,7 +37,7 @@ local function define_tests()
             local rows: {string} = {}
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
             test.is_true(rows[23]:find("‹ 1–9/16 ›", 1, true) ~= nil)
-            test.is_true(rows[24]:find("Theme: Honey  Background: dots", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Theme: Honey", 1, true) ~= nil)
             test.is_true(rows[24]:find("Tab switch", 1, true) ~= nil)
             test.is_true(rows[1]:find("Use node default (D)", 1, true) ~= nil)
             local pages = 0
@@ -44,7 +45,7 @@ local function define_tests()
             test.eq(pages, 1)
             for _, pane in ipairs({"theme", "background"}) do
                 for _, row in ipairs(view.draw(80, 24, appearance.defaults(), pane, 0).rows) do
-                    test.is_nil(row:find("…", 1, true))
+                    test.eq(tty.text.width(row), 80)
                 end
             end
             local about = view.draw(80, 12, appearance.defaults(), "about", 0)
@@ -101,6 +102,14 @@ local function define_tests()
             local has_edit_tab = false
             for _, hit in ipairs(tabs) do if hit.kind == "edit_mode" then has_edit_tab = true end end
             test.is_true(has_edit_tab)
+        end)
+        test.it("builds a decoder-valid single-line edit-mode confirmation", function()
+            local message = view.confirm_message("bee.ux_demo --for 1m")
+            test.is_nil(message:find("%c"))
+            local spec = interaction.spec({version = 1, request_id = "r-1", id = "bee.settings:edit",
+                instance_id = "settings", kind = "confirm", title = "Confirm edit mode",
+                message = message, accept = "Enable", initial = ""})
+            test.not_nil(spec)
         end)
     end)
 end

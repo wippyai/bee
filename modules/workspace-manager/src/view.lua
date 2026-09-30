@@ -8,15 +8,15 @@ local frame = require("frame")
 local model = require("model")
 local creation = require("creation")
 local folder_picker = require("folder_picker")
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
 
 -- Every action's key, in bar order; wider canvases also name the tab switch.
-local HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "N", verb = "new"}, {key = "/", verb = "search"},
-    {key = "S", verb = "serve"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
+local HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "I", verb = "inspect"},
+    {key = "N", verb = "new"}, {key = "/", verb = "search"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
 local WIDE_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "PgUp PgDn", verb = "page"}, {key = "Enter", verb = "open"},
-    {key = "N", verb = "new"}, {key = "/", verb = "search"}, {key = "Tab", verb = "switch"}, {key = "R", verb = "refresh"},
-    {key = "S", verb = "serve"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
+    {key = "I", verb = "inspect"}, {key = "N", verb = "new"}, {key = "/", verb = "search"}, {key = "Tab", verb = "switch"},
+    {key = "R", verb = "refresh"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
 local EDIT_HINTS = frame.hints({{key = "Enter", verb = "search"}, {key = "Esc", verb = "stop editing"}})
 local FOLDER_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "U", verb = "use folder"},
     {key = "⌫", verb = "up"}, {key = "Esc", verb = "cancel"}})
@@ -71,7 +71,7 @@ local function detail(painter: frame.Painter, rect: frame.Rect, state: model.Sta
     local shown = state.detail
     local live = shown and shown.workspace_id == selected.workspace_id and shown.live
     local state_word = selected.state == "archived" and "Archived" or (live and "Served" or "Not served")
-    local body = frame.panel(painter, rect, selected.label ~= "" and selected.label or "Unnamed workspace", state_word)
+    local body = frame.panel(painter, rect, model.display_label(selected), state_word)
     local last = body.y + body.height - 1
     local y = body.y
     local function field(label: string, value: string)
@@ -111,14 +111,14 @@ local function list(painter: frame.Painter, rect: frame.Rect, state: model.State
     if #state.items == 0 then
         local title = state.query ~= "" and "No workspace matches " .. state.query or
             (state.tab == "archived" and "No archived workspaces" or "No workspaces yet")
-        frame.empty(painter, rect.y, title, state.query ~= "" and "/ change the search" or "Tab switch", rect)
+        frame.empty(painter, rect.y, title, state.query ~= "" and "/ change the search" or (state.tab == "archived" and "Tab active workspaces" or "N create a workspace"), rect)
         return {offset = 0, capacity = 0}
     end
     local cells: {{string}} = {}
     local keys: {string} = {}
     local selected_index = 0
     for index, item in ipairs(state.items) do
-        cells[index] = {item.label ~= "" and item.label or "Unnamed", model.folder(item), item.last_used_at:sub(1, 10)}
+        cells[index] = {model.display_label(item), model.folder(item), item.last_used_at:sub(1, 10)}
         keys[index] = item.workspace_id
         if item.workspace_id == state.selected then selected_index = index end
     end
@@ -197,7 +197,7 @@ local function draw_create(painter: frame.Painter, form: creation.Form, offset: 
     end
     local status = form.failure or ""
     frame.footer(painter, status, form.step == "details" and DETAIL_HINTS or FOLDER_HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 
 -- form: the create flow while it is open; it replaces the catalog screen.
@@ -234,11 +234,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local archived = state.tab == "archived"
         frame.actions(painter, layout.actions, {
             {kind = "open", label = state.showing and "Back" or "Open", key = state.showing and "Esc" or "Enter", enabled = selected, primary = not state.confirming},
+            {kind = "inspect", label = "Inspect", key = "I", enabled = selected},
             {kind = "new", label = "New", key = "N", enabled = true},
             {kind = "search", label = "Search", key = "/", enabled = true},
             {kind = "refresh", label = "Refresh", key = "R", enabled = true},
-            {kind = "serve", label = state.served and "Release" or "Serve", key = "S", enabled = (selected and not archived) or state.served ~= nil,
-                active = state.served ~= nil},
             {kind = "change", label = archived and "Restore" or "Archive", key = "A", enabled = selected, primary = state.confirming},
         })
     end
@@ -246,11 +245,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local hints = state.editing and EDIT_HINTS or (width >= 110 and WIDE_HINTS or HINTS)
     if state.confirming then
         local selected = model.selected(state)
-        status = "Archive " .. (selected and (selected.label ~= "" and selected.label or selected.workspace_id) or "") .. "? Enter confirms · Esc cancels"
-        hints = ""
+        status = "Archive " .. (selected and model.display_label(selected) or "") .. "?"
+        hints = "Enter confirms · Esc cancels"
     end
     frame.footer(painter, status, hints)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 
 return M

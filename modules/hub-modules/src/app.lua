@@ -58,6 +58,7 @@ local function main(value: unknown)
     if not launch then error("Invalid application launch") end
     local broker = launch.broker_pid
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     assert(tty.start())
@@ -488,6 +489,7 @@ local function main(value: unknown)
         if dirty then
             local display_status = editor and status or (status ~= "" and status or state.notice)
             local drawn = view.draw(width, height, preferences, state, offset, display_status, reading_readme, editor, content)
+            frame.render(drawn, menu, preferences)
             hits, offset = drawn.hits, drawn.offset
             model.set_operation_detail_offset(state, drawn.operation_detail_offset)
             visible_rows = math.floor(math.max(1, drawn.capacity))
@@ -537,93 +539,99 @@ local function main(value: unknown)
                 end
                 changed()
                 else
-                local data = event.value
-                if data.type == "close" then running = false
-                elseif data.type == "resize" then width, height = data.width, data.height; changed()
-                elseif data.type == "key" and data.action ~= "release" then
-                    local key, letter = data.key_type, tostring(data.key or "")
-                    if key == "space" then letter = " " end
-                    if editor then
-                        if key == "esc" or key == "escape" then editor = nil; status = "Cancelled"; changed()
-                        elseif key == "enter" then finish_editor()
-                        elseif key == "backspace" then editor.buffer = previous(editor.buffer); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed()
-                        elseif (key == "runes" or #letter == 1) and #letter > 0 and not data.ctrl and not data.alt and not letter:find("%c") then editor.buffer = editable(editor.buffer .. letter); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed() end
-                    else
-                        status = ""
-                        if state.phase == "details" and content.open and (key == "up" or key == "down" or key == "pgup" or key == "pgdown") then
-                            local delta = (key == "up" or key == "pgup") and -1 or 1
-                            if #content.rows > 0 then contents.move(content, delta)
-                            else offset = math.floor(math.max(0, offset + delta * ((key == "pgup" or key == "pgdown") and 5 or 1))) end
-                            changed()
-                        elseif state.phase == "details" and content.open and key == "enter" then handle_hit("content_row", "")
-                        elseif state.phase == "details" and content.open and (key == "backspace" or key == "esc" or key == "escape") then handle_hit("content_back", "")
-                        elseif state.phase == "details" and content.open and letter == "n" then handle_hit("content_next", "")
-                        elseif letter == "c" and state.phase == "details" then handle_hit("contents", "")
-                        elseif key == "up" or letter == "k" then
-                            if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset - 1)); changed()
-                            elseif state.phase == "operations" then operation_relative(-1)
-                            elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement - 1); changed()
-                            elseif state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
-                        elseif key == "down" or (letter == "j" and state.phase ~= "details") then
-                            if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = offset + 1; changed()
-                            elseif state.phase == "operations" then operation_relative(1)
-                            elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + 1); changed()
-                            elseif state.phase == "details" then version_relative(1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(1) end
-                        elseif (key == "pgup" or key == "pgdown") and state.phase == "operations" then
-                            model.set_operation_detail_offset(state, state.operation_detail_offset + (key == "pgup" and -3 or 3)); changed()
-                        elseif key == "left" and state.phase == "operations" then handle_hit("operations_previous", "")
-                        elseif key == "right" and state.phase == "operations" then handle_hit("operations_next", "")
-                        elseif key == "left" and state.phase == "catalog" then model.set_page(state, state.page - 1); invalidate(); catalog()
-                        elseif key == "right" and state.phase == "catalog" then model.set_page(state, state.page + 1); invalidate(); catalog()
-                        elseif key == "left" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page - 1); invalidate(); details()
-                        elseif key == "right" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page + 1); invalidate(); details()
-                        elseif key == "enter" then
-                            if state.phase == "details" and state.requirements_open then edit_requirement()
-                            elseif state.phase == "catalog" or state.phase == "installed" then details()
-                            elseif state.phase == "operations" then handle_hit("recover", "")
-                            elseif state.phase == "plan" then handle_hit("review", "")
-                            elseif state.phase == "confirm" then confirm() end
-                        elseif letter == "o" or letter == "O" then operation_history()
-                        elseif key == "delete" and state.phase == "details" and state.requirements_open then handle_hit("reset_requirement", "")
-                        elseif letter == "e" and state.phase == "plan" then handle_hit("missing", "")
-                        elseif letter == "e" and state.phase == "details" then requirements()
-                        elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
-                        elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")
-                        elseif letter == "/" then begin_editor("query")
-                        elseif letter == "K" then begin_editor("keyword")
-                        elseif letter == "j" and state.phase == "details" then begin_editor("parameter_name")
-                        elseif letter == "a" then handle_hit("authoring", "")
-                        elseif letter == "c" and state.phase == "authoring" then begin_editor("publication_component")
-                        elseif letter == "v" and state.phase == "authoring" then begin_editor("publication_version")
-                        elseif letter == "s" and state.phase == "authoring" then begin_editor("publication_snapshot_digest")
-                        elseif letter == "i" and state.phase == "details" then handle_hit("install", "")
-                        elseif letter == "u" and state.phase == "details" then handle_hit("update", "")
-                        elseif letter == "x" and state.phase == "details" then handle_hit("uninstall", "")
-                        elseif letter == "p" and state.phase == "details" then plan()
-                        elseif letter == "p" and state.phase == "authoring" then prepare_publication()
-                        elseif letter == "u" and state.phase == "authoring" then publish_publication()
-                        elseif letter == "r" then if state.phase == "operations" then operation_history() elseif state.phase == "result" then check_status() elseif state.phase == "plan" then plan() elseif state.phase == "installed" then invalidate(); installed() else invalidate(); catalog() end
-                        elseif key == "esc" or key == "escape" then
-                            if state.phase == "confirm" then cancel_confirmation()
-                            elseif state.phase == "details" then model.show(state, "catalog"); changed()
-                            elseif state.phase == "result" then model.show(state, "catalog"); changed()
-                            elseif state.phase == "authoring" then model.show(state, "catalog"); changed()
-                            else running = false end
+                local data, handled = frame.route(menu, event.value, editor ~= nil)
+                if handled then changed() end
+                if data then
+                    if data.type == "close" then running = false
+                    elseif data.type == "resize" then width, height = data.width, data.height; changed()
+                    elseif data.type == "key" and data.action ~= "release" then
+                        local key, letter = data.key_type, tostring(data.key or "")
+                        if key == "space" then letter = " " end
+                        if editor then
+                            if key == "esc" or key == "escape" then editor = nil; status = "Cancelled"; changed()
+                            elseif key == "enter" then finish_editor()
+                            elseif key == "backspace" then editor.buffer = previous(editor.buffer); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed()
+                            elseif (key == "runes" or #letter == 1) and #letter > 0 and not data.ctrl and not data.alt and not letter:find("%c") then editor.buffer = editable(editor.buffer .. letter); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed() end
+                        else
+                            status = ""
+                            -- The frame delivers shortcut letters in lowercase; k
+                            -- keeps its advertised keyword meaning on the catalog
+                            -- phase and moves the selection elsewhere.
+                            if state.phase == "details" and content.open and (key == "up" or key == "down" or key == "pgup" or key == "pgdown") then
+                                local delta = (key == "up" or key == "pgup") and -1 or 1
+                                if #content.rows > 0 then contents.move(content, delta)
+                                else offset = math.floor(math.max(0, offset + delta * ((key == "pgup" or key == "pgdown") and 5 or 1))) end
+                                changed()
+                            elseif state.phase == "details" and content.open and key == "enter" then handle_hit("content_row", "")
+                            elseif state.phase == "details" and content.open and (key == "backspace" or key == "esc" or key == "escape") then handle_hit("content_back", "")
+                            elseif state.phase == "details" and content.open and letter == "n" then handle_hit("content_next", "")
+                            elseif letter == "c" and state.phase == "details" then handle_hit("contents", "")
+                            elseif letter == "k" and model.keyword_phase(state.phase) then begin_editor("keyword")
+                            elseif key == "up" or letter == "k" then
+                                if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset - 1)); changed()
+                                elseif state.phase == "operations" then operation_relative(-1)
+                                elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement - 1); changed()
+                                elseif state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
+                            elseif key == "down" or (letter == "j" and state.phase ~= "details") then
+                                if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = offset + 1; changed()
+                                elseif state.phase == "operations" then operation_relative(1)
+                                elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + 1); changed()
+                                elseif state.phase == "details" then version_relative(1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(1) end
+                            elseif (key == "pgup" or key == "pgdown") and state.phase == "operations" then
+                                model.set_operation_detail_offset(state, state.operation_detail_offset + (key == "pgup" and -3 or 3)); changed()
+                            elseif key == "left" and state.phase == "operations" then handle_hit("operations_previous", "")
+                            elseif key == "right" and state.phase == "operations" then handle_hit("operations_next", "")
+                            elseif key == "left" and state.phase == "catalog" then model.set_page(state, state.page - 1); invalidate(); catalog()
+                            elseif key == "right" and state.phase == "catalog" then model.set_page(state, state.page + 1); invalidate(); catalog()
+                            elseif key == "left" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page - 1); invalidate(); details()
+                            elseif key == "right" and state.phase == "details" and state.detail then model.set_detail_page(state, state.detail.page + 1); invalidate(); details()
+                            elseif key == "enter" then
+                                if state.phase == "details" and state.requirements_open then edit_requirement()
+                                elseif state.phase == "catalog" or state.phase == "installed" then details()
+                                elseif state.phase == "operations" then handle_hit("recover", "")
+                                elseif state.phase == "plan" then handle_hit("review", "")
+                                elseif state.phase == "confirm" then confirm() end
+                            elseif letter == "o" then operation_history()
+                            elseif key == "delete" and state.phase == "details" and state.requirements_open then handle_hit("reset_requirement", "")
+                            elseif letter == "e" and state.phase == "plan" then handle_hit("missing", "")
+                            elseif letter == "e" and state.phase == "details" then requirements()
+                            elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
+                            elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")
+                            elseif letter == "/" then begin_editor("query")
+                            elseif letter == "j" and state.phase == "details" then begin_editor("parameter_name")
+                            elseif letter == "a" then handle_hit("authoring", "")
+                            elseif letter == "c" and state.phase == "authoring" then begin_editor("publication_component")
+                            elseif letter == "v" and state.phase == "authoring" then begin_editor("publication_version")
+                            elseif letter == "s" and state.phase == "authoring" then begin_editor("publication_snapshot_digest")
+                            elseif letter == "i" and state.phase == "details" then handle_hit("install", "")
+                            elseif letter == "u" and state.phase == "details" then handle_hit("update", "")
+                            elseif letter == "x" and state.phase == "details" then handle_hit("uninstall", "")
+                            elseif letter == "p" and state.phase == "details" then plan()
+                            elseif letter == "p" and state.phase == "authoring" then prepare_publication()
+                            elseif letter == "u" and state.phase == "authoring" then publish_publication()
+                            elseif letter == "r" then if state.phase == "operations" then operation_history() elseif state.phase == "result" then check_status() elseif state.phase == "plan" then plan() elseif state.phase == "installed" then invalidate(); installed() else invalidate(); catalog() end
+                            elseif key == "esc" or key == "escape" then
+                                if state.phase == "confirm" then cancel_confirmation()
+                                elseif state.phase == "details" then model.show(state, "catalog"); changed()
+                                elseif state.phase == "result" then model.show(state, "catalog"); changed()
+                                elseif state.phase == "authoring" then model.show(state, "catalog"); changed()
+                                else running = false end
+                            end
                         end
+                    elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                        local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                        if hit then handle_hit(hit.kind, hit.key) end
+                    elseif data.type == "mouse" and data.action == "wheel" then
+                        if state.phase == "details" and content.open then
+                            local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                            if #content.rows > 0 then contents.move(content, delta) else offset = math.floor(math.max(0, offset + delta * 3)) end
+                            changed()
+                        elseif (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
+                        elseif state.phase == "operations" then operation_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                        elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)); changed()
+                        elseif state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
+                        elseif state.phase == "catalog" or state.phase == "installed" then choose_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1) end
                     end
-                elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                    local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
-                    if hit then handle_hit(hit.kind, hit.key) end
-                elseif data.type == "mouse" and data.action == "wheel" then
-                    if state.phase == "details" and content.open then
-                        local delta = (data.button == "wheel_up" or data.button == "up") and -1 or 1
-                        if #content.rows > 0 then contents.move(content, delta) else offset = math.floor(math.max(0, offset + delta * 3)) end
-                        changed()
-                    elseif (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset + ((data.button == "wheel_up" or data.button == "up") and -3 or 3))); changed()
-                    elseif state.phase == "operations" then operation_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
-                    elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + ((data.button == "wheel_up" or data.button == "up") and -1 or 1)); changed()
-                    elseif state.phase == "details" then version_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1)
-                    elseif state.phase == "catalog" or state.phase == "installed" then choose_relative((data.button == "wheel_up" or data.button == "up") and -1 or 1) end
                 end
                 end
             end

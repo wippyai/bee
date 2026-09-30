@@ -163,13 +163,20 @@ local function define_tests()
             model.apply_presence(state, "display", types.reply_error("r", types.fault("UNAVAILABLE", "destination node is not configured")))
             local drawn = view.draw(180, 30, appearance.defaults(), state, 0, "").rows
             local text = table.concat(drawn, "\n")
-            test.is_true(text:find("MEMBERSHIP", 1, true) ~= nil)
-            test.is_true(text:find("BEE SERVICE", 1, true) ~= nil)
-            test.eq(cell(drawn, "local · this node", "MEMBERSHIP", 10), "present")
-            test.eq(cell(drawn, "display ", "MEMBERSHIP", 10), "present")
+            test.is_true(text:find("COMPUTER", 1, true) ~= nil)
+            test.is_true(text:find("STATE", 1, true) ~= nil)
+            test.is_nil(text:find("MEMBERSHIP", 1, true))
+            test.is_nil(text:find("BEE SERVICE", 1, true))
+            test.eq(cell(drawn, "local · this computer", "STATE", 10), "online")
+            test.eq(cell(drawn, "display ", "STATE", 10), "offline")
             test.is_nil(text:find("non-member", 1, true))
             model.toggle_technical(state)
-            text = table.concat(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "\n")
+            local tech_drawn = view.draw(180, 30, appearance.defaults(), state, 0, "").rows
+            text = table.concat(tech_drawn, "\n")
+            test.is_true(text:find("MEMBERSHIP", 1, true) ~= nil)
+            test.is_true(text:find("BEE SERVICE", 1, true) ~= nil)
+            test.eq(cell(tech_drawn, "local · this node", "MEMBERSHIP", 10), "present")
+            test.eq(cell(tech_drawn, "display ", "MEMBERSHIP", 10), "present")
             test.is_true(text:find("Raft role non-member", 1, true) ~= nil)
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}})
             test.eq(cell(view.draw(180, 30, appearance.defaults(), state, 0, "").rows, "display ", "MEMBERSHIP", 10), "left")
@@ -180,18 +187,19 @@ local function define_tests()
             model.apply_members(state, {{node_id = "local", is_local = true, addr = ""}})
             local rows: {string} = {}
             for index, row in ipairs(view.draw(160, 48, appearance.defaults(), state, 0, "").rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
-            test.is_true(rows[4]:find("local · this node", 1, true) ~= nil)
+            test.is_true(rows[4]:find("local · this computer", 1, true) ~= nil)
             test.eq(rows[5], string.rep("─", 160))
-            test.is_true(rows[6]:find("Node local", 1, true) ~= nil)
-            test.is_true(rows[7]:find("Open the node to list its workspaces", 1, true) ~= nil)
+            test.is_true(rows[6]:find("local", 1, true) ~= nil)
+            test.is_true(rows[7]:find("Open the computer to list its workspaces", 1, true) ~= nil)
             local empty = model.new({})
             model.set_supervisor(empty, true, "")
             local lonely = table.concat(view.draw(100, 20, appearance.defaults(), empty, 0, "").rows, "\n")
-            test.is_true(lonely:find("No nodes reported", 1, true) ~= nil)
-            test.is_true(lonely:find("Nodes appear here when they join this hive · R refresh", 1, true) ~= nil)
+            test.is_true(lonely:find("No computers connected", 1, true) ~= nil)
+            test.is_true(lonely:find("Computers appear here when they join your hive · R refresh", 1, true) ~= nil)
             local footer = view.draw(80, 24, appearance.defaults(), state, 0, "").rows[24]:gsub("\27%[[0-9;]*m", "")
-            test.is_true(footer:find("O observe · R refresh", 1, true) ~= nil)
-            test.is_nil(footer:find("…", 1, true))
+            test.is_true(footer:find("Enter open", 1, true) ~= nil)
+            test.is_true(footer:find("? help", 1, true) ~= nil)
+            test.eq(tty.text.width(footer), 80)
         end)
         test.it("shows a unavailable supervisor and an absent membership without inventing nodes", function()
             local state = model.new({})
@@ -208,6 +216,71 @@ local function define_tests()
             local rows = 0
             for _, hit in ipairs(frame.hits) do if hit.kind == "node" then rows = rows + 1 end end
             test.eq(rows, 1)
+        end)
+        test.it("renders default named computers view and details view at 120x36 and 80x24", function()
+            local uuid_node = "bcc35ad9-330b-5d50-846a-a24873771ac6"
+            local display_id = "17d52a44-0000-0000-0000-00000017d52a"
+            local state = model.new({})
+            model.set_supervisor(state, true, "")
+            model.apply_members(state, {
+                {node_id = uuid_node, is_local = true, addr = "192.168.1.10:7946"},
+                {node_id = display_id, is_local = false, addr = "192.168.1.20:7946", client_only = true},
+            })
+            model.apply_presence(state, uuid_node, presence(uuid_node, "leader", 2))
+            model.apply_stats(state, uuid_node, stats(2097152, 24))
+            model.apply_catalog(state, uuid_node, {available = true, reason = "", workspaces = {
+                {workspace_id = "ws-work", label = "primary work", served = true},
+            }, next_after = nil})
+
+            -- 1. Default View at 120x36
+            local f120 = view.draw(120, 36, appearance.defaults(), state, 0, "")
+            test.eq(#f120.rows, 36)
+            for _, row in ipairs(f120.rows) do test.eq(tty.text.width(row), 120) end
+            local text120 = table.concat(f120.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+            if not text120:find("HIVE MANAGER", 1, true) then error("missing HIVE MANAGER in text120:\n" .. text120) end
+            if not text120:find("COMPUTER", 1, true) then error("missing COMPUTER in text120:\n" .. text120) end
+            if not text120:find("STATE", 1, true) then error("missing STATE in text120:\n" .. text120) end
+            if text120:find("MEMBERSHIP", 1, true) then error("MEMBERSHIP should not be in text120") end
+            if text120:find("BEE SERVICE", 1, true) then error("BEE SERVICE should not be in text120") end
+            if text120:find("bcc35ad9-330b-5d50-846a-a24873771ac6", 1, true) then error("UUID should not be in text120") end
+            if text120:find("Raft role", 1, true) then error("Raft role should not be in text120") end
+            if not text120:find("online", 1, true) then error("missing online in text120:\n" .. text120) end
+            if not text120:find("◫ Display 17d52a", 1, true) then error("missing ◫ Display 17d52a in text120:\n" .. text120) end
+            if not text120:find("display", 1, true) then error("missing display in text120:\n" .. text120) end
+            if not text120:find("primary work  served", 1, true) then error("missing primary work  served in text120:\n" .. text120) end
+
+            -- 2. Default View at 80x24
+            local f80 = view.draw(80, 24, appearance.defaults(), state, 0, "")
+            test.eq(#f80.rows, 24)
+            for _, row in ipairs(f80.rows) do test.eq(tty.text.width(row), 80) end
+            local text80 = table.concat(f80.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+            if not text80:find("HIVE MANAGER", 1, true) then error("missing HIVE MANAGER in text80") end
+            if not text80:find("COMPUTER", 1, true) then error("missing COMPUTER in text80") end
+            if not text80:find("online", 1, true) then error("missing online in text80") end
+            if not text80:find("◫ Display 17d52a", 1, true) then error("missing ◫ Display 17d52a in text80:\n" .. text80) end
+            if text80:find("bcc35ad9-330b-5d50-846a-a24873771ac6", 1, true) then error("UUID should not be in text80") end
+
+            -- 3. Details View at 120x36
+            model.toggle_technical(state)
+            local tech120 = view.draw(120, 36, appearance.defaults(), state, 0, "")
+            test.eq(#tech120.rows, 36)
+            for _, row in ipairs(tech120.rows) do test.eq(tty.text.width(row), 120) end
+            local tech_text120 = table.concat(tech120.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+            if not tech_text120:find("MEMBERSHIP", 1, true) then error("missing MEMBERSHIP in tech120") end
+            if not tech_text120:find("BEE SERVICE", 1, true) then error("missing BEE SERVICE in tech120") end
+            if not tech_text120:find(uuid_node, 1, true) then error("missing UUID in tech120") end
+            if not tech_text120:find("Raft role leader", 1, true) then error("missing Raft role leader in tech120:\n" .. tech_text120) end
+            if not tech_text120:find("present", 1, true) then error("missing present in tech120") end
+            if not tech_text120:find("ready", 1, true) then error("missing ready in tech120") end
+
+            -- 4. Details View at 80x24
+            local tech80 = view.draw(80, 24, appearance.defaults(), state, 0, "")
+            test.eq(#tech80.rows, 24)
+            for _, row in ipairs(tech80.rows) do test.eq(tty.text.width(row), 80) end
+            local tech_text80 = table.concat(tech80.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+            if not tech_text80:find("MEMBERSHIP", 1, true) then error("missing MEMBERSHIP in tech80") end
+            if not tech_text80:find("BEE SERVICE", 1, true) then error("missing BEE SERVICE in tech80") end
+            if not tech_text80:find("Raft role", 1, true) then error("missing Raft role in tech80") end
         end)
     end)
 end

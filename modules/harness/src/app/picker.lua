@@ -123,7 +123,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local draft = ""
     local confirming = ""
     local session_busy = false
-    local session_frame: {hits: {frame.Hit}} = {hits = {}}
+    local session_frame: session_view.Frame = {rows = {}, hits = {}}
+    local menu = frame.menu()
     local ticks = 0
     local opening = false
     local open_serial = 0
@@ -251,17 +252,20 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             local rows: {string}
             if editing then
                 edit_frame = profile_view.draw(width, height, preferences, editing)
+                frame.render(edit_frame, menu, preferences)
                 rows = edit_frame.rows
             elseif conversation then
-                local shown = session_view.draw(width, height, preferences, conversation, draft, status, directory)
-                session_frame = shown
-                rows = shown.rows
+                session_frame = session_view.draw(width, height, preferences, conversation, draft, status, directory)
+                frame.render(session_frame, menu, preferences)
+                rows = session_frame.rows
             elseif not catalog_open then
                 local own = workspace_names[launch.workspace_id]
                 drawn = directory_view.draw(width, height, preferences, directory, selected, status, filtered, workspace_names, own and (own.label .. " · " .. own.folder))
+                frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             else
                 drawn = view.draw(width, height, preferences, listed, selected, status, activating or opening, show_unavailable)
+                frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             end
             assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -393,6 +397,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         else
             local data = input_event.decode(event.value)
             if data then
+                local routed, handled = frame.route(menu, data, editing ~= nil or conversation ~= nil)
+                if handled then dirty = true end
+                data = routed
+            end
+            if data then
                 if data.type == "close" then return finish(nil, nil)
                 elseif data.type == "start" or data.type == "resize" then
                     width, height = assert(data.width), assert(data.height); dirty = true
@@ -441,7 +450,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif key == "n" then kind = "new_session"
                         elseif key == "w" then kind = "workspace"
                         elseif key == "r" then refresh = true
-                        elseif key == "?" then status = "Choose a session, or N to start one. Esc closes the window; sessions remain available."; dirty = true
                         elseif data.key_type == "esc" or data.key_type == "escape" then return finish(nil, nil) end
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
@@ -462,7 +470,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.ctrl or data.alt then
                     elseif data.key:lower() == "m" and idle() then attach = true
                     elseif data.key:lower() == "u" and idle() then show_unavailable = not show_unavailable; refresh = true
-                    elseif data.key == "?" then status = "M manual Terminal attach · E customize copy or edit · N new profile · S setup · Esc sessions"; dirty = true
                     elseif data.key:lower() == "r" and idle() then refresh = true
                     elseif data.key:lower() == "s" and idle() then setup_agent()
                     elseif data.key:lower() == "e" and idle() then edit = true

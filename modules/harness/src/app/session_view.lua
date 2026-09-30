@@ -7,7 +7,7 @@ local text = require("text")
 local agents = require("agents")
 local protocol = require("protocol")
 local M = {}
-type Frame = {rows: {string}, hits: {frame.Hit}}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 local HINTS = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
     {key = "Ctrl+X", verb = "close session"}, {key = "Esc", verb = "sessions"}})
 local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "error"}
@@ -91,7 +91,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             local item = sidebar[index]
             if item then frame.row(rail, slot + 2, text.bound(item.title, 128), index == selected, "sidebar_session", index, "") end
         end
-        frame.footer(rail, "", "Esc sessions")
+        frame.fill(rail, height)
+        frame.put(rail, 2, height, "Esc sessions", rail_width - 2, rail.theme.muted)
         local body = M.draw(width - rail_width, height, preferences, conv, draft, status)
         local rail_rows = frame.rows(rail)
         local rows: {string} = {}
@@ -101,7 +102,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for _, hit in ipairs(body.hits) do
             hits[#hits + 1] = {kind = hit.kind, index = hit.index, key = hit.key, x = hit.x + rail_width, y = hit.y, width = hit.width, height = hit.height}
         end
-        return {rows = rows, hits = hits}
+        return {rows = rows, hits = hits, controls = body.controls}
     end
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
@@ -124,15 +125,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if height >= 5 then
         frame.line(painter, input_row, "> " .. text.bound(draft, 512) .. "▏", theme.text)
         frame.actions(painter, height - 1, {
-            {kind = "send", label = "Send", enabled = draft ~= "" and conv.lifecycle == "active", primary = true},
-            {kind = "back", label = "Sessions", enabled = true},
-            {kind = "stop_work", label = "Stop current work", enabled = agents.pending(conv)},
-            {kind = "close_session", label = "Close session", enabled = conv.lifecycle == "active"},
+            {kind = "send", key = "Enter", label = "Send", enabled = draft ~= "" and conv.lifecycle == "active", primary = true},
+            {kind = "back", key = "Esc", label = "Sessions", enabled = true},
+            {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = agents.pending(conv)},
+            {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = conv.lifecycle == "active"},
         })
     end
     local message = status ~= "" and status or conv.notice
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
     if height >= 2 then frame.footer(painter, "", HINTS) end
-    return {rows = frame.rows(painter), hits = painter.hits}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

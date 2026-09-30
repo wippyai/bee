@@ -26,6 +26,7 @@ local function main(value: unknown)
     local requested = launch.arguments[1]
     if #launch.arguments > 1 then error("Expected an optional thread id") end
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     assert(tty.start())
@@ -35,7 +36,7 @@ local function main(value: unknown)
     local owner = caller.new(function(target: string, request: unknown): (unknown, string?)
         return funcs.new():call(target, request)
     end)
-    local state: model.State = model.new("bee.threads.timeline." .. launch.instance_id)
+    local state: model.State = model.new("bee.threads.timeline." .. launch.instance_id, launch.workspace_id)
     if launch.resume_state ~= "" and not model.restore(state, launch.resume_state) then error("Invalid timeline checkpoint") end
     if requested then
         if type(requested) ~= "string" or requested == "" or #requested > 200 or requested:find("%c") then error("Invalid thread id") end
@@ -135,6 +136,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local drawn = view.draw(width, height, preferences, state, offset, status)
+            frame.render(drawn, menu, preferences)
             hits = drawn.hits
             offset = drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -173,42 +175,47 @@ local function main(value: unknown)
                 if next_preferences and type(payload) == "table" and payload.version == 1 then preferences = next_preferences; dirty = true end
             end
         else
-            local data = event.value
-            if data.type == "close" then running = false
-            elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
-            elseif data.type == "key" and data.action ~= "release" then
-                local pressed = data.key_type
-                local letter = tostring(data.key or "")
-                status = ""
-                if pressed == "up" or letter == "k" then model.move(state, -1); dirty = true
-                elseif pressed == "down" or letter == "j" then model.move(state, 1); dirty = true
-                elseif pressed == "pgup" then model.move(state, -8); dirty = true
-                elseif pressed == "pgdown" then model.move(state, 8); dirty = true
-                elseif pressed == "enter" then
-                    if state.phase == "picking" then open_picked() else model.toggle_technical(state); dirty = true end
-                elseif letter == "f" and state.phase ~= "picking" then model.toggle_follow(state); dirty = true
-                elseif letter == "m" and state.phase == "picking" then more()
-                elseif letter == "b" and state.phase ~= "picking" then back()
-                elseif letter == "r" then
-                    if state.phase == "picking" then list() else attach(); if state.phase == "attached" then drain(); arm_wait() end end
-                elseif letter == "t" then model.toggle_technical(state); dirty = true
-                elseif pressed == "esc" or pressed == "escape" then running = false end
-            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
-                if hit then
+            local data, handled = frame.route(menu, event.value, false)
+            if handled then dirty = true end
+            if data then
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+                elseif data.type == "key" and data.action ~= "release" then
+                    local pressed = data.key_type
+                    local letter = tostring(data.key or "")
                     status = ""
-                    if hit.kind == "thread" then model.pick(state, hit.key); dirty = true
-                    elseif hit.kind == "row" then model.select(state, math.floor(tonumber(hit.key) or 0)); dirty = true
-                    elseif hit.kind == "open" then open_picked()
-                    elseif hit.kind == "more" then more()
-                    elseif hit.kind == "follow" then model.toggle_follow(state); dirty = true
-                    elseif hit.kind == "threads" then back()
-                    elseif hit.kind == "refresh" then
+                    if pressed == "up" or letter == "k" then model.move(state, -1); dirty = true
+                    elseif pressed == "down" or letter == "j" then model.move(state, 1); dirty = true
+                    elseif pressed == "pgup" then model.move(state, -8); dirty = true
+                    elseif pressed == "pgdown" then model.move(state, 8); dirty = true
+                    elseif pressed == "enter" then
+                        if state.phase == "picking" then open_picked() else model.toggle_technical(state); dirty = true end
+                    elseif letter == "f" and state.phase ~= "picking" then model.toggle_follow(state); dirty = true
+                    elseif letter == "m" and state.phase == "picking" then more()
+                    elseif letter == "b" and state.phase ~= "picking" then back()
+                    elseif letter == "r" then
                         if state.phase == "picking" then list() else attach(); if state.phase == "attached" then drain(); arm_wait() end end
-                    elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
+                    elseif letter == "t" then model.toggle_technical(state); dirty = true
+                    elseif pressed == "esc" or pressed == "escape" then
+                        if state.phase == "picking" then running = false else back() end
+                    end
+                elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                    local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                    if hit then
+                        status = ""
+                        if hit.kind == "thread" then model.pick(state, hit.key); dirty = true
+                        elseif hit.kind == "row" then model.select(state, math.floor(tonumber(hit.key) or 0)); dirty = true
+                        elseif hit.kind == "open" then open_picked()
+                        elseif hit.kind == "more" then more()
+                        elseif hit.kind == "follow" then model.toggle_follow(state); dirty = true
+                        elseif hit.kind == "threads" then back()
+                        elseif hit.kind == "refresh" then
+                            if state.phase == "picking" then list() else attach(); if state.phase == "attached" then drain(); arm_wait() end end
+                        elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
+                    end
+                elseif data.type == "mouse" and data.action == "wheel" then
+                    model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1); dirty = true
                 end
-            elseif data.type == "mouse" and data.action == "wheel" then
-                model.move(state, (data.button == "wheel_up" or data.button == "up") and -1 or 1); dirty = true
             end
         end
     end

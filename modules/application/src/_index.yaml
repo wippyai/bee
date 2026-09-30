@@ -86,6 +86,7 @@ entries:
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
+  modules: [env]
 - name: frame
   kind: library.lua
   source: file://frame.lua

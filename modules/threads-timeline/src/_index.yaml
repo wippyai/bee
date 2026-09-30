@@ -69,9 +69,9 @@ entries:
 - name: client_policy
   kind: security.policy
   meta:
-    comment: The timeline lists and reads threads the process actor is a member of, holds its own subscription cursor and waits without claiming; it can acknowledge no delivery and settle nothing
+    comment: The timeline lists its workspace's threads and reads threads the process actor is a member of, holds its own subscription cursor and waits without claiming; it can acknowledge no delivery and settle nothing
   policy:
     actions: [funcs.call]
-    resources: [bee.threads.service:list, bee.threads.service:get, bee.threads.delivery:subscribe, bee.threads.delivery:page, bee.threads.delivery:ack_page,
+    resources: [bee.threads.service:list, bee.threads.service:list_workspace, bee.threads.service:get, bee.threads.delivery:subscribe, bee.threads.delivery:page, bee.threads.delivery:ack_page,
       bee.threads.delivery:resume, bee.threads.delivery:wait, bee.threads.delivery:watch, bee.threads.projection:recap_read]
     effect: allow

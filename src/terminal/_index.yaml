@@ -18,6 +18,7 @@ entries:
   modules: [tty]
   imports:
     chrome: bee.terminal:chrome
+    appearance: bee.application:appearance
 - name: delivery
   kind: library.lua
   source: file://delivery.lua

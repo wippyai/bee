@@ -22,7 +22,8 @@ local function reply(value: unknown): {[string]: unknown}
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
-    local raw, call_error = funcs.call(target, value)
+    local actor = assert(security.new_actor("bee.test.gateway", {workspace_id = WORKSPACE}))
+    local raw, call_error = funcs.new():with_actor(actor):call(target, value)
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
@@ -160,20 +161,6 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     end
     assert(opened.error_code == "", "managed window app did not become ready: " .. tostring(opened.error))
 
-    local checkpoint_deadline = time.after("3s")
-    local checkpoint_event = channel.select({checkpoints:case_receive(), checkpoint_deadline:case_receive()})
-    assert(checkpoint_event.channel ~= checkpoint_deadline and checkpoint_event.ok, "window checkpoint was not delivered: " .. placement_report())
-    local checkpoint_message = checkpoint_event.value
-    assert(tostring(checkpoint_message:from()) == broker, "window checkpoint came from an unauthenticated sender")
-    local checkpoint_data = checkpoint_message:payload():data()
-    assert(type(checkpoint_data) == "table" and checkpoint_data.version == 1
-        and checkpoint_data.resume_schema == "bee.agent.window@1" and type(checkpoint_data.resume_state) == "string",
-        "window checkpoint has an invalid persisted state")
-    local saved_state = checkpoint_data.resume_state :: string
-    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = checkpoint_data.request_id,
-        error_code = "", error = ""}))
-
-
     -- 5. Bind PTY viewport
     assert(process.send(broker, "bee.app.request", {
         version = 1,
@@ -196,7 +183,26 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     end
 
     local view = assert(tty.attach(mounted))
+    assert(view:send({type = "resize", width = 240, height = 24}))
+
+    local checkpoint_deadline = time.after("3s")
+    local checkpoint_event = channel.select({checkpoints:case_receive(), checkpoint_deadline:case_receive()})
+    if checkpoint_event.channel == checkpoint_deadline or not checkpoint_event.ok then
+        local frame = view:snapshot()
+        local diagnosis = frame and table.concat(frame.rows, "\n"):match("Managed window[^\n]*") or ""
+        error("window checkpoint was not delivered: " .. diagnosis .. " " .. placement_report())
+    end
+    local checkpoint_message = checkpoint_event.value
+    assert(tostring(checkpoint_message:from()) == broker, "window checkpoint came from an unauthenticated sender")
+    local checkpoint_data = checkpoint_message:payload():data()
+    assert(type(checkpoint_data) == "table" and checkpoint_data.version == 1
+        and checkpoint_data.resume_schema == "bee.agent.window@1" and type(checkpoint_data.resume_state) == "string",
+        "window checkpoint has an invalid persisted state")
     assert(view:send({type = "resize", width = 80, height = 24}))
+    local saved_state = checkpoint_data.resume_state :: string
+    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = checkpoint_data.request_id,
+        error_code = "", error = ""}))
+
 
     -- 6. Verify child submitted hook and the real gateway accepted it
     local hook_submitted = false

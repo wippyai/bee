@@ -1694,7 +1694,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                         elseif existing then
                             if req.thread_id ~= nil and req.thread_id ~= existing.thread_id then
                                 emit(contract.reply(req.request_id, "open", "thread_conflict", "Singleton application is associated with another thread"), true)
-                            elseif existing.state.phase == "ready" then emit(identified(existing, "focus", req.request_id), true)
+                            elseif existing.state.phase == "ready" then
+                                if #req.arguments > 0 then process.send(existing.execution_pid, "bee.application.navigate", {version = 1,
+                                    instance_id = existing.instance_id, view_id = existing.view_id,
+                                    execution_generation = existing.producer_generation, launch_token = existing.launch_token, arguments = req.arguments}) end
+                                emit(identified(existing, "focus", req.request_id), true)
                             else emit(contract.reply(req.request_id, "open", "busy", "Application is changing state"), true) end
                         elseif req.restore_instance_id ~= "" and (req.resume_schema ~= descriptor.resume_schema or descriptor.restart_policy == "never") then
                             emit(contract.reply(req.request_id, "open", "incompatible_checkpoint", "Application checkpoint schema is incompatible"), true)

@@ -151,4 +151,10 @@ function M.navigate(launch: Launch, definition_id: string, target: {string}?): (
     if not sent then return nil, tostring(err) end
     return request_id, nil
 end
+function M.navigation(launch: Launch, sender: string, value: unknown): {string}?
+    if sender ~= launch.broker_pid or type(value) ~= "table" or value.version ~= 1
+        or value.instance_id ~= launch.instance_id or value.view_id ~= launch.view_id
+        or value.execution_generation ~= launch.execution_generation or value.launch_token ~= launch.launch_token then return nil end
+    return arguments.decode(value.arguments)
+end
 return M

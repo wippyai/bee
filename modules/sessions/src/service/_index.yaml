@@ -13,7 +13,7 @@ entries:
   kind: ns.requirement
   default: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy,
     bee.security.threads:thread_node_policy, bee.security.threads:thread_sessions_owner_policy,
-    bee.sessions.security:scheduler_policy]
+    bee.sessions.security:scheduler_policy, bee.sessions.security:scheduler_principal_policy]
   meta:
     comment: Host-selected policy allowlist for the scheduler actor
   targets:

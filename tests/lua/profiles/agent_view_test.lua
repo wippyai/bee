@@ -12,8 +12,8 @@ local function listing_of(value: unknown): agents.Listing return value :: agents
 local function conversation_of(value: unknown): agents.Conversation return value :: agents.Conversation end
 local function screen(rows: {string}): string return table.concat(rows, "\n") end
 local function conversation(activity: string, turns: {Object}, ref: string?): agents.Conversation
-    local session_ref = ref or ""
-    return conversation_of({session = ref and {ref = function(): string return session_ref end} or nil, title = "Worker", lifecycle = "active", activity = activity, queued = 1, turns = turns, notice = ""})
+    local session_ref = ref or "bs:n:w:worker"
+    return conversation_of({session = {ref = function(): string return session_ref end, snapshot = {provider = "claude"}}, title = "Worker", lifecycle = "active", activity = activity, queued = 1, turns = turns, notice = ""})
 end
 local function define_tests()
     test.describe("Agent picker screen", function()

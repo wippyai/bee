@@ -174,6 +174,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             {kind = "approve", label = "Approve", enabled = pending_detail and idle, primary = true},
             {kind = "deny", label = "Deny", enabled = pending_detail and idle},
             {kind = "withdraw", label = "Withdraw", enabled = pending_detail and idle},
+            {kind = "source", label = detail and detail.state == "pending" and "Source" or "Return to source", enabled = detail ~= nil and detail.requesting_session ~= nil},
             {kind = "refresh", label = "Refresh", enabled = idle},
             {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = detail ~= nil},
             {kind = "mark", label = "Mark", enabled = selected ~= nil and selected.state == "pending"},

@@ -61,7 +61,7 @@ entries:
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua
-  modules: [registry, funcs]
+  modules: [registry, funcs, security]
   imports:
     scheduler: bee.sessions.service:scheduler
 - name: contract

@@ -5,6 +5,34 @@ local funcs = require("funcs")
 local security = require("security")
 local WORKSPACE = string.rep("a", 32)
 local function define_tests()
+    test.describe("Sessions owner control boundary", function()
+        test.it("accepts cancel, close and filtered list fields through the real owner", function()
+            local journal = harness.session_owner(WORKSPACE)
+            local opened = harness.value(journal:call("session_create", {operation_key = harness.key(), route = {}}))
+            local work = harness.value(journal:call("work_send", {session = opened.session, input = "queued", operation_key = harness.key()}))
+            local actor = assert(security.new_actor("sessions-owner", {workspace_id = WORKSPACE}))
+            local scope = security.new_scope({assert(security.policy("bee.threads:session_owner_test_policy")),
+                assert(security.policy("bee.tests.sessions:interactive_lifecycle_policy"))})
+            local function call(method: string, request: unknown): {[string]: any}
+                local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.sessions.binding:" .. method, request)
+                if err then error(tostring(err)) end
+                local reply = raw :: {[string]: any}
+                if not reply.ok then error(tostring(reply.error and reply.error.message)) end
+                return reply.value :: {[string]: any}
+            end
+            local cancelled = call("cancel", {work = work.work, reason = "regression", expected_incarnation = 1, operation_key = harness.key()})
+            test.eq(cancelled.effect, "cancel")
+            test.eq(harness.value(journal:call("work_describe", {work = work.work})).result.state, "cancelled")
+            local page = call("list", {filter = {workspace = WORKSPACE, activity = "idle"}})
+            local found = false
+            for _, row in ipairs(page.items) do if row.session == opened.session then found = true end end
+            test.is_true(found)
+            local joined = call("join", {works = {work.work}, policy = "all_settled", operation_key = harness.key()})
+            test.eq(joined.tag, "ready")
+            test.eq(call("close", {session = opened.session, expected_incarnation = 1, operation_key = harness.key()}).effect, "close")
+            test.eq(harness.value(journal:call("session_describe", {session = opened.session})).state, "closed")
+        end)
+    end)
     test.describe("Interactive Sessions", function()
         test.it("suspends only a proved exited attachment and preserves unfinished Work as uncertain", function()
             for _, state in ipairs({"running", "exited"}) do

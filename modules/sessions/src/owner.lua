@@ -557,7 +557,7 @@ local function close(request: Object): Reply
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
     if not operation_key or not session
-        or bounds.fields(request, {session = true, expected_incarnation = true, operation_key = true}) then
+        or bounds.fields(request, {"session", "expected_incarnation", "operation_key"}) then
         return fail("INVALID", "close requires a session and operation_key", operation_key)
     end
     if request.expected_incarnation ~= nil and request.expected_incarnation ~= 1 then
@@ -585,7 +585,7 @@ local function cancel(request: Object): Reply
     local reason = request.reason == nil and nil or bounds.text(request.reason, 16384)
     if not operation_key or not work or work:sub(1, 3) ~= "bw:"
         or (request.reason ~= nil and not reason)
-        or bounds.fields(request, {work = true, reason = true, expected_incarnation = true, operation_key = true}) then
+        or bounds.fields(request, {"work", "reason", "expected_incarnation", "operation_key"}) then
         return fail("INVALID", "cancel requires a work ref, optional reason, and operation_key", operation_key)
     end
     local cancel_operation_key = operation_key :: string
@@ -644,8 +644,7 @@ end
 
 local function join(request: Object): Reply
     local operation_key = key(request.operation_key)
-    if not operation_key or bounds.fields(request, {works = true, policy = true, quorum = true,
-        timeout_ms = true, operation_key = true}) then
+    if not operation_key or bounds.fields(request, {"works", "policy", "quorum", "timeout_ms", "operation_key"}) then
         return fail("INVALID", "join requires works and operation_key", operation_key)
     end
     local raw_works = bounds.array(request.works, 64)
@@ -725,9 +724,9 @@ local function join(request: Object): Reply
 end
 
 local function list(request: Object): Reply
-    if bounds.fields(request, {filter = true, cursor = true}) then return fail("INVALID", "list accepts only filter and cursor") end
+    if bounds.fields(request, {"filter", "cursor"}) then return fail("INVALID", "list accepts only filter and cursor") end
     local filter = object(request.filter)
-    if request.filter ~= nil and (not filter or bounds.fields(filter, {lifecycle = true, activity = true, workspace = true, definition = true})) then
+    if request.filter ~= nil and (not filter or bounds.fields(filter, {"lifecycle", "activity", "workspace", "definition"})) then
         return fail("INVALID", "session filter is malformed")
     end
     local lifecycle = filter and filter.lifecycle or nil

@@ -36,10 +36,10 @@ local function define_tests()
             if not manifest then error(tostring(manifest_error)) end
             test.eq(manifest.schema, corpus.SCHEMA)
             local rule = string.lower(manifest.selection_rule)
-            test.not_nil(string.find(rule, "runtime", 1, true))
-            test.not_nil(string.find(rule, "component", 1, true))
-            test.not_nil(string.find(rule, "toolkit", 1, true))
-            test.not_nil(string.find(rule, "sql.builder", 1, true))
+            test.not_nil((string.find(rule, "runtime", 1, true)))
+            test.not_nil((string.find(rule, "component", 1, true)))
+            test.not_nil((string.find(rule, "toolkit", 1, true)))
+            test.not_nil((string.find(rule, "sql.builder", 1, true)))
             local runtime_count = 0
             local runtime_ids: {[string]: boolean} = {}
             -- Every declared document exists with the declared bytes, so the
@@ -51,12 +51,12 @@ local function define_tests()
                 if string.sub(document.id, 1, 8) == "runtime/" then
                     runtime_count = runtime_count + 1
                     runtime_ids[document.id] = true
-                    test.is_nil(string.find(document.id, "runtime/tutorials/", 1, true))
-                    test.is_nil(string.find(document.id, "runtime/internals/", 1, true))
-                    test.is_nil(string.find(document.id, "runtime/guides/", 1, true))
-                    test.is_nil(string.find(document.id, "runtime/concepts/", 1, true))
-                    test.is_nil(string.find(document.id, "runtime/http/", 1, true))
-                    test.is_nil(string.find(document.id, "runtime/system/", 1, true))
+                    test.is_nil((string.find(document.id, "runtime/tutorials/", 1, true)))
+                    test.is_nil((string.find(document.id, "runtime/internals/", 1, true)))
+                    test.is_nil((string.find(document.id, "runtime/guides/", 1, true)))
+                    test.is_nil((string.find(document.id, "runtime/concepts/", 1, true)))
+                    test.is_nil((string.find(document.id, "runtime/http/", 1, true)))
+                    test.is_nil((string.find(document.id, "runtime/system/", 1, true)))
                 end
             end
             test.eq(runtime_count, 14)
@@ -111,7 +111,7 @@ local function define_tests()
             for _, result in ipairs(results) do
                 test.eq(type(result.section), "string")
                 test.eq(type(result.line), "number")
-                test.not_nil(string.find(string.lower(result.text :: string), "tty.canvas", 1, true))
+                test.not_nil((string.find(string.lower(result.text :: string), "tty.canvas", 1, true)))
                 ids[tostring(result.id)] = true
             end
             -- The terminal toolkit is reachable from a bare search, so an agent

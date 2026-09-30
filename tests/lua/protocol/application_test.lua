@@ -7,11 +7,11 @@ local function define_tests()
     test.describe("Application launch arguments", function()
         test.it("bounds host policy composition and rejects sparse policy lists", function()
             local policies: {string} = {}
-            for index = 1, 16 do policies[index] = "test:policy" .. tostring(index) end
+            for index = 1, 32 do policies[index] = "test:policy" .. tostring(index) end
             local binding = contract.binding({definition_id = "test:app", policies = policies})
             if not binding then error("valid host policy composition was refused") end
-            test.eq(#binding.policies, 16)
-            policies[17] = "test:extra"
+            test.eq(#binding.policies, 32)
+            policies[33] = "test:extra"
             test.is_nil(contract.binding({definition_id = "test:app", policies = policies}))
             test.is_nil(contract.binding({definition_id = "test:app", policies = {[1] = "test:one", [3] = "test:three"}}))
         end)

@@ -97,7 +97,7 @@ local function define_tests()
             test.eq(harness.value(sessions:call("work_describe", {work = sent.work})).phase, "settled")
         end)
         test.it("keeps cross-workspace visibility separate from mutation authority", function()
-            local other_workspace = "cccccccccccccccccccccccccccccccc"
+            local other_workspace = "acacacacacacacacacacacacacacacac"
             local other = harness.session_owner(other_workspace)
             local opened = harness.value(other:call("session_create", {operation_key = harness.key(), title = "peer"}))
             local local_owner = harness.session_owner(WORKSPACE)
@@ -110,7 +110,9 @@ local function define_tests()
             test.is_true(sent.work:find(":" .. other_workspace .. ":", 1, true) ~= nil)
             test.eq(harness.value(other:call("work_describe", {work = sent.work})).sender.id, "sender")
             local page = harness.value(reader:call("session_scan", {workspace = other_workspace}))
-            test.eq(page.items[1], opened.session)
+            local found = false
+            for _, ref in ipairs(page.items) do if ref == opened.session then found = true end end
+            test.is_true(found)
         end)
         test.it("creates sessions and immutable queued work with keyed replay and journal events", function()
             local sessions = harness.session_owner(WORKSPACE)

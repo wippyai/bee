@@ -102,7 +102,7 @@ local function valid_blob(value: unknown, limit: integer): boolean
 end
 local function dense(value: unknown, maximum: integer): {unknown}?
     if type(value) ~= "table" then return nil end
-    local source = value :: table
+    local source = value
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil end
@@ -127,10 +127,10 @@ local function plan(raw: unknown, workspace_id: string): (Plan?, string?)
     local plan_digest, candidate_digest = digest(value.plan_digest), digest(value.candidate_digest)
     local artifact_digest, preflight_digest = digest(value.artifact_digest), digest(value.preflight_digest)
     local revision = bounds.count(value.revision)
-    local status: string? = nil
+    local status: Status? = nil
     if type(value.status) == "string" then
-        local candidate = value.status :: string
-        if STATUSES[candidate] then status = candidate end
+        local candidate = value.status
+        if candidate == "staged" or candidate == "reviewed" or candidate == "rejected" or candidate == "approval_bound" then status = candidate end
     end
     local selected = value.selected
     if not owner_node or workspace ~= workspace_id or not source_node or not source_workspace or not version
@@ -153,14 +153,15 @@ local function plan(raw: unknown, workspace_id: string): (Plan?, string?)
         or not optional_count_valid(value.approval_owner_incarnation, true)
         or not valid_blob(value.candidate_bytes, 262144) or not valid_blob(value.artifact_bytes, 262144)
         or not valid_blob(value.preflight_bytes, 131072) then return nil, "plan evidence is malformed" end
-    return {owner_node = owner_node, workspace_id = workspace, source_node = source_node,
+    local decoded: Plan = {owner_node = owner_node, workspace_id = workspace, source_node = source_node,
         source_workspace = source_workspace, version = version, plan_digest = plan_digest,
         candidate_digest = candidate_digest, artifact_digest = artifact_digest, preflight_digest = preflight_digest,
-        revision = revision, status = status :: Status, review_status = review_status,
+        revision = revision, status = status, review_status = review_status,
         review_reason = review_reason, reviewer_id = reviewer_id, approval_id = approval_id,
-        approval_proposal_digest = value.approval_proposal_digest :: string?,
+        approval_proposal_digest = digest(value.approval_proposal_digest),
         selected = selected, selection_revision = selection_revision,
-        preflight_bytes = value.preflight_bytes :: string?}, nil
+        preflight_bytes = optional_text(value.preflight_bytes, 131072)}
+    return decoded, nil
 end
 local function available(raw: unknown): (Available?, string?)
     local value = object(raw)
@@ -208,7 +209,7 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
     local revision = bounds.count(value.revision)
     local phase: string? = nil
     if type(value.phase) == "string" then
-        local candidate = value.phase :: string
+        local candidate = value.phase
         if PHASES[candidate] then phase = candidate end
     end
     local outcome = optional_id(value.outcome)
@@ -240,10 +241,10 @@ local function intent(raw: unknown, workspace_id: string): (Intent?, string?)
     return {owner_node = owner_node, workspace_id = workspace, intent_id = intent_id, overlay_owner = overlay_owner,
         source_node = source_node, source_workspace = source_workspace, version = version,
         revision = revision, phase = phase, outcome = outcome, diagnostics = diagnostics, approval_id = approval_id,
-        approval_proposal_digest = value.approval_proposal_digest :: string?,
-        consumed_proposal_digest = value.consumed_proposal_digest :: string?,
+        approval_proposal_digest = digest(value.approval_proposal_digest),
+        consumed_proposal_digest = digest(value.consumed_proposal_digest),
         observed_intent_id = optional_id(value.observed_intent_id),
-        observed_artifact_digest = value.observed_artifact_digest :: string?,
+        observed_artifact_digest = digest(value.observed_artifact_digest),
         observed_outcome = observed}, nil
 end
 local function entry_change(raw: unknown): (EntryChange?, string?)
@@ -408,7 +409,7 @@ function M.apply_list(state: State, reply: caller.Reply?)
     end
     if state.detail then
         local found = false
-        for _, item in ipairs(decoded) do if M.key(item) == M.key(state.detail :: Plan) then found = true end end
+        for _, item in ipairs(decoded) do if M.key(item) == M.key(state.detail) then found = true end end
         if not found then state.detail = nil end
     end
     if state.review_key and state.review_key ~= state.selected_key then M.forget_review(state) end

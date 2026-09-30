@@ -38,7 +38,7 @@ local function define_tests()
             test.is_true(rows[4]:find("No overlay versions are available", 1, true) ~= nil)
             test.is_true(rows[5]:find("F refresh", 1, true) ~= nil)
             test.is_true(rows[24]:find("Tab view · ↑↓ choose · Enter next · T details · F refresh · Esc close", 1, true) ~= nil)
-            test.is_nil(rows[24]:find("…", 1, true))
+            test.is_nil((rows[24]:find("…", 1, true)))
             test.is_true(rows[23]:find("Details", 1, true) ~= nil)
             local panes = 0
             for _, hit in ipairs(drawn.hits) do if view.pane_of(hit.kind) then panes = panes + 1 end end
@@ -111,8 +111,8 @@ local function define_tests()
                     test.eq(#frame.rows, height)
                     for _, row in ipairs(frame.rows) do
                         test.eq(tty.text.width(row), width)
-                        test.is_nil(row:find("\27[31m", 1, true))
-                        test.is_nil(row:find("\7", 1, true))
+                        test.is_nil((row:find("\27[31m", 1, true)))
+                        test.is_nil((row:find("\7", 1, true)))
                     end
                     for _, hit in ipairs(frame.hits) do
                         test.is_true(hit.x >= 1 and hit.y >= 1)

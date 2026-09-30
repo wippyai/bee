@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8337,
+      "bytes": 8576,
       "id": "component/driver",
-      "sha256": "8910deb143adc7b6dceb48bb853da584b5745b7e69e8eec0a6eda09ce25c6fa7",
+      "sha256": "542f8ffa65cdc3a8e4ffc7297357e6b851984dce6987110055725f8e5357efe8",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
@@ -491,9 +491,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3249,
+      "bytes": 3446,
       "id": "component/sessions",
-      "sha256": "9c984b179ad0893bdd419f5b3c9293103ded078ae12e8c960c2e98184647eeb9",
+      "sha256": "10aa0771156bfe6b4059861a1bef8dfad434693ba1fbf59693b77ec67b1d5bbf",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -606,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 671799,
+    "bytes": 672235,
     "documents": 75
   }
 }

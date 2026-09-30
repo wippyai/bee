@@ -282,6 +282,8 @@ entries:
     quote: bee.driver.kit:quote
     grok_launch: bee.driver.grok:launch
     grok_configuration: bee.driver.grok:configuration
+    placement_service: bee.placement.native.service:service
+    protocol: bee.placement.native:protocol
     materialization: bee.placement.native.service:materialization
     homes: bee.placement.native.service:homes
     store: bee.placement.native.persist:store

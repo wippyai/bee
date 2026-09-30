@@ -30,8 +30,8 @@ type AwaitOptions = {timeout_ms: integer?}
 type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
 type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string}
 type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
-type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, operation_key: string}
-type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, input: Input, output: string?,
+type OpenOptions = {presentation: protocol.Presentation?, definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, operation_key: string}
+type CallOptions = {presentation: protocol.Presentation?, definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, input: Input, output: string?,
     timeout_ms: integer?, operation_key: string}
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
@@ -168,7 +168,7 @@ local function output_of(value: unknown): (string?, Fault?)
     return output, nil
 end
 
-local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown): ({[string]: unknown}?, Fault?)
+local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown, presentation: unknown): ({[string]: unknown}?, Fault?)
     local ref = protocol.any_ref(definition)
     if not ref then return nil, invalid("definition must be a ref") end
     local spec: {[string]: unknown} = {definition = ref}
@@ -189,6 +189,10 @@ local function spec_of(definition: unknown, profile: unknown, workdir: unknown, 
     if workspace ~= nil then
         if type(workspace) ~= "string" or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, invalid("workspace must be a canonical workspace ID") end
         spec.workspace = workspace
+    end
+    if presentation ~= nil then
+        if presentation ~= "headless" and presentation ~= "window" then return nil, invalid("presentation must be headless or window") end
+        spec.presentation = presentation
     end
     return spec, nil
 end
@@ -291,7 +295,7 @@ local function new_client(): Client
 
     -- Opens a session with its first work in one owner operation.
     local function run(options: CallOptions): (Work?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.presentation)
         if not spec then return nil, spec_fault end
         local input, input_fault = input_of(options.input)
         if input == nil then return nil, input_fault end
@@ -309,7 +313,7 @@ local function new_client(): Client
     end
 
     client.open = function(_: Client, options: OpenOptions): (Session?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.presentation)
         if not spec then return nil, spec_fault end
         local request: {[string]: unknown} = {spec = spec}
         local key, key_fault = operation_key(options.operation_key)

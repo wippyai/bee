@@ -46,7 +46,7 @@ local function evidence(summary: string, attempt_id: string, state: string?, exi
     return {summary = summary, artifacts = artifacts}
 end
 
-function M.stop(methods: unknown, attempt_id: string, stored_route: unknown): Result
+function M.stop(methods: unknown, attempt_id: string, stored_route: unknown, allow_exited: boolean?): Result
     local placement = object(methods)
     if not placement then return {state = "uncertain", evidence = evidence("session route has no placement operations", attempt_id, nil, nil)} end
     local route = object(stored_route)
@@ -67,6 +67,10 @@ function M.stop(methods: unknown, attempt_id: string, stored_route: unknown): Re
     local before_attempt = attempt_value(before)
     local before_state = before_attempt and bounds.text(before_attempt.execution_state, 32) or nil
     if before_state == "exited" then
+        local source = before_attempt and bounds.text(before_attempt.exit_source, 128)
+        if allow_exited and source then
+            return {state = "stopped", evidence = evidence("placement proved the process exited", attempt_id, before_state, source)}
+        end
         return {state = "uncertain", evidence = evidence("placement had already exited before cancellation", attempt_id, before_state,
             before_attempt and bounds.text(before_attempt.exit_source, 128) or nil)}
     end

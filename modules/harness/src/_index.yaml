@@ -176,6 +176,7 @@ entries:
     policies:
     - bee.harness.security:carrier_policy
     - bee.harness.security:interactive_session_policy
+    - bee.harness.security:presentation_viewer_policy
     - bee.harness.security:carrier_environment_policy
     - bee.harness.security:profile_workspace_policy
     - bee.harness.security:profile_context_boundary

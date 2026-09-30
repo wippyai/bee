@@ -147,6 +147,21 @@ local function define_tests()
                 test.not_nil(request)
             end
         end)
+        test.it("admits headless and window presentation and rejects other values", function()
+            for _, name in ipairs({"session_open", "session_run"}) do
+                for _, mode in ipairs({"headless", "window"}) do
+                    local request = valid(name)
+                    local spec = request.spec :: Object
+                    spec.presentation = mode
+                    test.not_nil(session_tools.decode(name, {arguments = request}))
+                end
+                local request = valid(name)
+                local spec = request.spec :: Object
+                spec.presentation = "screen"
+                test.is_nil(session_tools.decode(name, {arguments = request}))
+            end
+        end)
+
         test.it("refuses a mutation without its operation_key", function()
             for _, name in ipairs(MUTATIONS) do
                 local arguments = valid(name)

@@ -566,12 +566,21 @@ local function main(owner: string, workspace: unknown, database_resource: string
                                 origin_error = assignment_error or "Origin view has no settled display assignment"
                             else display_id = assigned.assignment.display_id end
                         end
+                        if registered_caller and tostring(registered_caller) == caller and request.presentation then
+                            for _, client in pairs(client_connections.admitted) do
+                                if not client.detaching and client.permissions.open and client.permissions.control and client.renderer ~= "" then
+                                    if not display_id or client.display_id < display_id then display_id = client.display_id end
+                                end
+                            end
+                        end
                         if not registered_caller or tostring(registered_caller) ~= caller then
                             send_open(caller, contract.reply(request.request_id, "open", "permission_denied", "Open caller is not admitted to this workspace host"))
                         elseif origin_error then
                             send_open(caller, contract.reply(request.request_id, "open", "unavailable", origin_error))
                         elseif not ready or stopping then
                             send_open(caller, contract.reply(request.request_id, "open", "unavailable", "Workspace host is not ready"))
+                        elseif request.presentation and not display_id then
+                            send_open(caller, contract.reply(request.request_id, "open", "unavailable", "No controlling person is attached"))
                         elseif pending_opens[request.request_id] then
                             -- The original broker request owns the reply. A
                             -- duplicate caller waits for that exact result.
@@ -597,7 +606,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                                     expires = clock.epoch_seconds(time.now()) + 30, display_id = display_id}
                                 local sent, send_error = process.send(broker, "bee.app.request", {version = 1, request_id = request.request_id, op = "open",
                                     workspace_id = workspace_id, id = "", instance_id = "", definition_id = request.definition_id,
-                                    thread_id = request.provenance.thread_id, runtime_provenance = request.provenance,
+                                    thread_id = request.provenance and request.provenance.thread_id or nil, runtime_provenance = request.provenance,
                                     recipient = "", restore_instance_id = "", restore_view_id = "", resume_schema = "",
                                     resume_state = "", arguments = request.arguments})
                                 if not sent then

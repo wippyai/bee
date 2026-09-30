@@ -153,3 +153,13 @@ entries:
   storage: bee.harness.host:environment
   variable: environment_names
   readonly: true
+
+- name: present
+  kind: function.lua
+  source: file://presentation_method.lua
+  method: open
+  modules: [funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
+  security:
+    policies: [bee.harness.security:presentation_facade_policy]

@@ -50,17 +50,11 @@ entries:
     path: .security.policies
   - entry: bee.sessions.binding:send
     path: .security.policies
-  - entry: bee.sessions.binding:await
-    path: .security.policies
   - entry: bee.sessions.binding:join
-    path: .security.policies
-  - entry: bee.sessions.binding:get
     path: .security.policies
   - entry: bee.sessions.binding:list
     path: .security.policies
   - entry: bee.sessions.binding:history
-    path: .security.policies
-  - entry: bee.sessions.binding:close
     path: .security.policies
   - entry: bee.sessions.binding:catalog
     path: .security.policies
@@ -171,4 +165,10 @@ entries:
     comment: Cancellation restores only the persisted placement owner after Threads authorizes the caller
   targets:
   - entry: bee.sessions.binding:cancel
+    path: .security.policies
+  - entry: bee.sessions.binding:close
+    path: .security.policies
+  - entry: bee.sessions.binding:await
+    path: .security.policies
+  - entry: bee.sessions.binding:get
     path: .security.policies

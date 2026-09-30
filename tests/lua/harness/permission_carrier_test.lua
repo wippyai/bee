@@ -678,4 +678,11 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+    local ok, result = pcall(cases, options)
+    apply(mode)
+    if not ok then error(tostring(result)) end
+    return result
+end}

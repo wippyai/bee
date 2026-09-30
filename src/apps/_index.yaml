@@ -96,7 +96,7 @@ entries:
   kind: function.lua
   source: file://open_method.lua
   method: handle
-  modules: [process, security, channel, time, ctx, hash, uuid]
+  modules: [process, security, channel, time, ctx, hash, uuid, registry]
   imports:
     bounds: bee.threads.records:bounds
     arguments: bee.application:arguments

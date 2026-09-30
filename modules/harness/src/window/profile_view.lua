@@ -21,7 +21,7 @@ type Threads = {items: {ThreadRow}, selected: integer, error: string?}
 type State = {form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     status: string, confirming_remove: boolean, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer}
-type Frame = {rows: {string}, hits: {frame.Hit}}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 
 function M.new(form: forms.Form, ask: Ask): State
     local option_text: {[string]: string} = {}
@@ -265,7 +265,7 @@ local function draw_folders(painter: frame.Painter, state: State, picker: folder
     local window = folder_picker.draw(painter, body, picker, state.list_offset, "U use this folder")
     state.list_offset = window.offset
     frame.footer(painter, text.bound(state.status, 4096), FOLDER_HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 local function draw_threads(painter: frame.Painter, state: State, threads: Threads): Frame
     local layout = frame.layout(painter, false, false)
@@ -279,7 +279,7 @@ local function draw_threads(painter: frame.Painter, state: State, threads: Threa
         state.list_offset = window.offset
     end
     frame.footer(painter, text.bound(threads.error or state.status, 4096), THREAD_HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: State): Frame
     local painter = frame.new(width, height, preferences)
@@ -306,15 +306,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         (state.form.pending and "Request submitted. Retry uses the same values." or "Instructions append to the harness. Saving does not launch."),
         state.confirming_remove and painter.theme.text or painter.theme.muted)
     if height >= 3 then
-        local buttons: {frame.Button} = {{kind = "save", label = "Save", enabled = not state.confirming_remove and state.form.pending ~= "remove", primary = true}}
+        local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not state.confirming_remove and state.form.pending ~= "remove", primary = true}}
         if state.form.revision > 0 then
-            buttons[#buttons + 1] = {kind = "remove", label = state.confirming_remove and "Confirm" or "Remove",
+            buttons[#buttons + 1] = {kind = "remove", key = "Ctrl+D", label = state.confirming_remove and "Confirm" or "Remove",
                 enabled = state.form.pending ~= "save", primary = state.confirming_remove}
         end
-        buttons[#buttons + 1] = {kind = "cancel", label = "Cancel", enabled = true}
+        buttons[#buttons + 1] = {kind = "cancel", key = "Esc", label = "Cancel", enabled = true}
         frame.actions(painter, height - 1, buttons)
     end
     frame.footer(painter, text.bound(state.status, 4096), HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

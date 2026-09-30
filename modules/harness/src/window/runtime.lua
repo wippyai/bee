@@ -24,6 +24,7 @@ local delivery = require("delivery")
 local records = require("records")
 local appearance = require("appearance")
 local restore_view = require("restore_view")
+local frame_ui = require("frame")
 
 local THREADS = "bee.threads.service"
 type Fault = {code: string, message: string}
@@ -219,6 +220,7 @@ local function main(value: unknown, constructors: {[string]: Open})
         local preferences: appearance.Preferences = appearance.defaults()
         local states = assert(process.listen("bee.appearance.state", {message = true}))
         local dirty = true
+        local menu = frame_ui.menu()
         local dismissed = false
         local settlement = settle and channel.new(1) or nil
         local settlement_done = false
@@ -233,6 +235,7 @@ local function main(value: unknown, constructors: {[string]: Open})
             if not dirty then return end
             local hint = settlement and not settlement_done and "Cleanup pending; Esc closes without waiting" or "Esc or Ctrl+Q closes"
             local frame = restore_view.draw(width, height, preferences, status, "Agent launch failed", hint)
+            frame_ui.render(frame, menu, preferences)
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
         end
@@ -272,6 +275,11 @@ local function main(value: unknown, constructors: {[string]: Open})
             else
                 local data = input_event.decode(event.value)
                 if data then
+                    local routed, handled = frame_ui.route(menu, data)
+                    if handled then dirty = true end
+                    data = routed
+                end
+                if data then
                     if data.type == "close" then
                         dismissed = true
                     elseif data.type == "resize" or data.type == "start" then
@@ -293,11 +301,13 @@ local function main(value: unknown, constructors: {[string]: Open})
         local preferences = appearance.defaults()
         local states = assert(process.listen("bee.appearance.state", {message = true}))
         local dirty = true
+        local menu = frame_ui.menu()
         client.title(launch, notice.provider .. " · Login needed")
         process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
         while true do
             if dirty then
                 local frame = restore_view.login(width, height, preferences, notice)
+                frame_ui.render(frame, menu, preferences)
                 assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
                 dirty = false
             end
@@ -322,6 +332,11 @@ local function main(value: unknown, constructors: {[string]: Open})
                 end
             else
                 local data = input_event.decode(event.value)
+                if data then
+                    local routed, handled = frame_ui.route(menu, data)
+                    if handled then dirty = true end
+                    data = routed
+                end
                 if data then
                     if data.type == "close" then break end
                     if data.type == "resize" or data.type == "start" then
@@ -399,6 +414,7 @@ local function main(value: unknown, constructors: {[string]: Open})
         local preferences: appearance.Preferences = appearance.defaults()
         local status = "Restoring Agent…"
         local dirty = true
+        local menu = frame_ui.menu()
         local cancelled = false
         local states = assert(process.listen("bee.appearance.state", {message = true}))
         local completed = channel.new(1)
@@ -416,6 +432,7 @@ local function main(value: unknown, constructors: {[string]: Open})
             else
                 frame = restore_view.draw(width, height, preferences, status)
             end
+            frame_ui.render(frame, menu, preferences)
             assert(output:present(frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             dirty = false
         end
@@ -534,6 +551,11 @@ local function main(value: unknown, constructors: {[string]: Open})
                 end
             else
                 local data = input_event.decode(event.value)
+                if data then
+                    local routed, handled = frame_ui.route(menu, data)
+                    if handled then dirty = true end
+                    data = routed
+                end
                 if data then
                     if data.type == "close" then
                         cancel_restore()

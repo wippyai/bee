@@ -39,6 +39,7 @@ local function main(value: unknown)
     if not launch then error("Invalid application launch") end
     local broker = launch.broker_pid
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local answers = assert(process.listen("bee.application.query.result", {message = true}))
@@ -251,9 +252,11 @@ local function main(value: unknown)
             local open_form = request_form
             if open_form then
                 form_frame = lease_form.draw(width, height, preferences, open_form)
+                frame.render(form_frame, menu, preferences)
                 assert(output:present(form_frame.rows, {cursor = {x = 1, y = 1, visible = false}}))
             else
                 local drawn = view.draw(width, height, preferences, state, rows, offset, status, slice)
+                frame.render(drawn, menu, preferences)
                 hits = drawn.hits
                 offset = drawn.offset
                 assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -305,90 +308,93 @@ local function main(value: unknown)
                 end) end
             end
         else
-            local data = event.value
-            if data.type == "close" then running = false
-            elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
-            elseif request_form and (data.type == "key" or data.type == "mouse") then
-                local open_form = request_form
-                local outcome = lease_form.input(open_form, data, form_frame)
-                if outcome == "cancel" then request_form = nil; status = "Cancelled"
-                elseif outcome == "submit" then
-                    local spec = lease_form.submit(open_form)
-                    if spec then
-                        local view = open_form.view
-                        request_form = nil
-                        perform(function() lease_answer("lease_propose", leases.propose_intent(view, spec, uuid.v7())) end)
+            local data, handled = frame.route(menu, event.value, request_form ~= nil)
+            if handled then dirty = true end
+            if data then
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then width, height = data.width, data.height; dirty = true
+                elseif request_form and (data.type == "key" or data.type == "mouse") then
+                    local open_form = request_form
+                    local outcome = lease_form.input(open_form, data, form_frame)
+                    if outcome == "cancel" then request_form = nil; status = "Cancelled"
+                    elseif outcome == "submit" then
+                        local spec = lease_form.submit(open_form)
+                        if spec then
+                            local view = open_form.view
+                            request_form = nil
+                            perform(function() lease_answer("lease_propose", leases.propose_intent(view, spec, uuid.v7())) end)
+                        end
                     end
-                end
-                dirty = true
-            elseif data.type == "key" and data.action ~= "release" then
-                local key = data.key_type
-                local text = tostring(data.key or "")
-                status = ""
-                leases.say(slice, "")
-                if text == "v" then
-                    leases.show_leases(slice, not slice.leases_view); offset = 0
-                    perform(refresh); dirty = true
-                elseif slice.leases_view then
-                    if key == "up" or text == "k" then leases.move(slice, -1); dirty = true
-                    elseif key == "down" or text == "j" then leases.move(slice, 1); dirty = true
-                    elseif text == "x" then ask_revoke()
-                    elseif text == "r" then perform(refresh)
-                    elseif key == "esc" or key == "escape" then leases.show_leases(slice, false); dirty = true end
-                elseif leases.is_review(state.detail) and state.selected ~= nil and (key == "up" or key == "down" or key == "pgup" or key == "pgdown" or text == "j" or text == "k") then
-                    leases.review_scroll(slice, (key == "up" or text == "k") and -1 or (key == "pgup" and -8 or (key == "pgdown" and 8 or 1)))
                     dirty = true
-                elseif key == "up" or text == "k" then model.move(state, -1); dirty = true
-                elseif key == "down" or text == "j" then model.move(state, 1); dirty = true
-                elseif key == "pgup" then model.move(state, -8); dirty = true
-                elseif key == "pgdown" then model.move(state, 8); dirty = true
-                elseif text == "m" then
-                    local selected = model.selected_row(state)
-                    local refused = selected and leases.toggle_mark(slice, state.rows, selected.approval_id) or "Select a request first"
-                    status = refused or ""; dirty = true
-                elseif text == "b" then ask_batch("approved")
-                elseif text == "n" then ask_batch("denied")
-                elseif text == "l" then ask_lease("lease_propose")
-                elseif text == "g" then ask_lease("lease_grant")
-                elseif key == "enter" or text == "o" then perform(open_selected)
-                elseif text == "a" then ask("approve")
-                elseif text == "d" then ask("deny")
-                elseif text == "w" then ask("withdraw")
-                elseif text == "r" then perform(function() if state.pending then recover() else refresh() end end)
-                elseif text == "t" then model.toggle_technical(state); dirty = true
-                elseif key == "esc" or key == "escape" then
-                    if leases.is_review(state.detail) then model.select(state, nil); dirty = true else running = false end
-                end
-            elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
-                local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
-                if hit then
+                elseif data.type == "key" and data.action ~= "release" then
+                    local key = data.key_type
+                    local text = tostring(data.key or "")
                     status = ""
-                    if hit.kind == "lease_row" then
-                        local row = leases.rows(slice)[hit.index]
-                        if row then leases.select(slice, row); dirty = true end
-                    elseif hit.kind == "revoke" then ask_revoke()
-                    elseif hit.kind == "requests" or hit.kind == "leases" then
-                        leases.show_leases(slice, hit.kind == "leases"); offset = 0; perform(refresh); dirty = true
-                    elseif hit.kind == "mark" then
+                    leases.say(slice, "")
+                    if text == "v" then
+                        leases.show_leases(slice, not slice.leases_view); offset = 0
+                        perform(refresh); dirty = true
+                    elseif slice.leases_view then
+                        if key == "up" or text == "k" then leases.move(slice, -1); dirty = true
+                        elseif key == "down" or text == "j" then leases.move(slice, 1); dirty = true
+                        elseif text == "x" then ask_revoke()
+                        elseif text == "r" then perform(refresh)
+                        elseif key == "esc" or key == "escape" then leases.show_leases(slice, false); dirty = true end
+                    elseif leases.is_review(state.detail) and state.selected ~= nil and (key == "up" or key == "down" or key == "pgup" or key == "pgdown" or text == "j" or text == "k") then
+                        leases.review_scroll(slice, (key == "up" or text == "k") and -1 or (key == "pgup" and -8 or (key == "pgdown" and 8 or 1)))
+                        dirty = true
+                    elseif key == "up" or text == "k" then model.move(state, -1); dirty = true
+                    elseif key == "down" or text == "j" then model.move(state, 1); dirty = true
+                    elseif key == "pgup" then model.move(state, -8); dirty = true
+                    elseif key == "pgdown" then model.move(state, 8); dirty = true
+                    elseif text == "m" then
                         local selected = model.selected_row(state)
                         local refused = selected and leases.toggle_mark(slice, state.rows, selected.approval_id) or "Select a request first"
                         status = refused or ""; dirty = true
-                    elseif hit.kind == "batch_approve" then ask_batch("approved")
-                    elseif hit.kind == "batch_deny" then ask_batch("denied")
-                    elseif hit.kind == "lease" then ask_lease("lease_propose")
-                    elseif hit.kind == "grant" then ask_lease("lease_grant")
-                    elseif hit.kind == "row" then
-                        local row = rows[hit.index]
-                        if row then model.select(state, row.approval_id); dirty = true end
-                    elseif hit.kind == "open" then perform(open_selected)
-                    elseif hit.kind == "approve" or hit.kind == "deny" or hit.kind == "withdraw" then ask(hit.kind)
-                    elseif hit.kind == "refresh" then perform(function() if state.pending then recover() else refresh() end end)
-                    elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
+                    elseif text == "b" then ask_batch("approved")
+                    elseif text == "n" then ask_batch("denied")
+                    elseif text == "l" then ask_lease("lease_propose")
+                    elseif text == "g" then ask_lease("lease_grant")
+                    elseif key == "enter" or text == "o" then perform(open_selected)
+                    elseif text == "a" then ask("approve")
+                    elseif text == "d" then ask("deny")
+                    elseif text == "w" then ask("withdraw")
+                    elseif text == "r" then perform(function() if state.pending then recover() else refresh() end end)
+                    elseif text == "t" then model.toggle_technical(state); dirty = true
+                    elseif key == "esc" or key == "escape" then
+                        if leases.is_review(state.detail) then model.select(state, nil); dirty = true else running = false end
+                    end
+                elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
+                    local hit = frame.hit(hits, math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1))
+                    if hit then
+                        status = ""
+                        if hit.kind == "lease_row" then
+                            local row = leases.rows(slice)[hit.index]
+                            if row then leases.select(slice, row); dirty = true end
+                        elseif hit.kind == "revoke" then ask_revoke()
+                        elseif hit.kind == "requests" or hit.kind == "leases" then
+                            leases.show_leases(slice, hit.kind == "leases"); offset = 0; perform(refresh); dirty = true
+                        elseif hit.kind == "mark" then
+                            local selected = model.selected_row(state)
+                            local refused = selected and leases.toggle_mark(slice, state.rows, selected.approval_id) or "Select a request first"
+                            status = refused or ""; dirty = true
+                        elseif hit.kind == "batch_approve" then ask_batch("approved")
+                        elseif hit.kind == "batch_deny" then ask_batch("denied")
+                        elseif hit.kind == "lease" then ask_lease("lease_propose")
+                        elseif hit.kind == "grant" then ask_lease("lease_grant")
+                        elseif hit.kind == "row" then
+                            local row = rows[hit.index]
+                            if row then model.select(state, row.approval_id); dirty = true end
+                        elseif hit.kind == "open" then perform(open_selected)
+                        elseif hit.kind == "approve" or hit.kind == "deny" or hit.kind == "withdraw" then ask(hit.kind)
+                        elseif hit.kind == "refresh" then perform(function() if state.pending then recover() else refresh() end end)
+                        elseif hit.kind == "technical" then model.toggle_technical(state); dirty = true end
+                    end
+                elseif data.type == "mouse" and data.action == "wheel" then
+                    local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                    if leases.is_review(state.detail) then leases.review_scroll(slice, step) else model.move(state, step) end
+                    dirty = true
                 end
-            elseif data.type == "mouse" and data.action == "wheel" then
-                local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
-                if leases.is_review(state.detail) then leases.review_scroll(slice, step) else model.move(state, step) end
-                dirty = true
             end
         end
     end

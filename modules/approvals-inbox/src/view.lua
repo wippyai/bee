@@ -7,7 +7,7 @@ local frame = require("frame")
 local model = require("model")
 local leases = require("leases")
 local names = require("names")
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
 local function state_label(row: model.Row): string
     if row.state == "decided" then return row.decision or "decided" end
@@ -60,13 +60,13 @@ local function draw_leases(width: integer, height: integer, preferences: appeara
     end
     if height >= 4 then
         frame.actions(painter, height - 1, {
-            {kind = "revoke", label = "Revoke", enabled = selected ~= nil and leases.revocable(selected), primary = true},
-            {kind = "refresh", label = "Refresh", enabled = true},
-            {kind = "requests", label = "Requests", enabled = true},
+            {kind = "revoke", key = "X", label = "Revoke", enabled = selected ~= nil and leases.revocable(selected), primary = true},
+            {kind = "refresh", key = "R", label = "Refresh", enabled = true},
+            {kind = "requests", key = "V", label = "Requests", enabled = true},
         })
     end
     frame.footer(painter, status ~= "" and status or notice, LEASE_HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 local REVIEW_HINTS = frame.hints({{key = "↑↓ PgUp PgDn", verb = "scroll"}, {key = "A", verb = "approve at the end"}, {key = "D", verb = "deny"}, {key = "Esc", verb = "back"}})
 local function draw_review(width: integer, height: integer, preferences: appearance.Preferences, state: model.State,
@@ -85,16 +85,16 @@ local function draw_review(width: integer, height: integer, preferences: appeara
     if height >= 4 then
         local idle = state.pending == nil
         frame.actions(painter, height - 1, {
-            {kind = "approve", label = "Approve", enabled = complete and idle, primary = true},
-            {kind = "deny", label = "Deny", enabled = idle},
-            {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = true},
+            {kind = "approve", key = "A", label = "Approve", enabled = complete and idle, primary = true},
+            {kind = "deny", key = "D", label = "Deny", enabled = idle},
+            {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true},
         })
     end
     local message = status
     if message == "" then message = state.notice end
     if message == "" and not complete then message = "Scroll to the end of the terms to approve" end
     frame.footer(painter, message, REVIEW_HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = visible, offset = 0}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = visible, offset = 0}
 end
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice): Frame
     if slice.leases_view then return draw_leases(width, height, preferences, slice, offset, status, slice.notice) end
@@ -166,18 +166,18 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if height >= 4 then
         local can_open = selected ~= nil and detail == nil
         frame.actions(painter, height - 1, {
-            {kind = "open", label = "Open", enabled = can_open, primary = true},
-            {kind = "approve", label = "Approve", enabled = pending_detail and idle, primary = true},
-            {kind = "deny", label = "Deny", enabled = pending_detail and idle},
-            {kind = "withdraw", label = "Withdraw", enabled = pending_detail and idle},
-            {kind = "refresh", label = "Refresh", enabled = idle},
-            {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = detail ~= nil},
-            {kind = "mark", label = "Mark", enabled = selected ~= nil and selected.state == "pending"},
-            {kind = "batch_approve", label = "Approve " .. tostring(marked), enabled = marked > 0 and idle},
-            {kind = "batch_deny", label = "Deny " .. tostring(marked), enabled = marked > 0 and idle},
-            {kind = "lease", label = "Lease", enabled = can_lease and idle},
-            {kind = "grant", label = "Grant", enabled = can_grant and idle},
-            {kind = "leases", label = "Leases", enabled = true},
+            {kind = "open", key = "Enter", label = "Open", enabled = can_open, primary = true},
+            {kind = "approve", key = "A", label = "Approve", enabled = pending_detail and idle, primary = true},
+            {kind = "deny", key = "D", label = "Deny", enabled = pending_detail and idle},
+            {kind = "withdraw", key = "W", label = "Withdraw", enabled = pending_detail and idle},
+            {kind = "refresh", key = "R", label = "Refresh", enabled = idle},
+            {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = detail ~= nil},
+            {kind = "mark", key = "M", label = "Mark", enabled = selected ~= nil and selected.state == "pending"},
+            {kind = "batch_approve", key = "B", label = "Approve " .. tostring(marked), enabled = marked > 0 and idle},
+            {kind = "batch_deny", key = "N", label = "Deny " .. tostring(marked), enabled = marked > 0 and idle},
+            {kind = "lease", key = "L", label = "Lease", enabled = can_lease and idle},
+            {kind = "grant", key = "G", label = "Grant", enabled = can_grant and idle},
+            {kind = "leases", key = "V", label = "Leases", enabled = true},
         })
     end
     local message = status
@@ -193,6 +193,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         end
     end
     frame.footer(painter, message, width >= 130 and WIDE_HINTS or HINTS)
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

@@ -4,7 +4,7 @@ local frame = require("frame")
 local text = require("text")
 local selection = require("selection")
 local M = {}
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "N", verb = "new"},
     {key = "E", verb = "edit"}, {key = "R", verb = "refresh"}, {key = "Esc", verb = "close"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
@@ -33,17 +33,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if height >= 3 then
         local chosen = choice ~= nil and window.capacity > 0
         frame.actions(painter, height - 1, {
-            {kind = "open", label = "Open", enabled = not busy and chosen and choice ~= nil and not choice.unavailable, primary = true},
-            {kind = "new", label = "New", enabled = not busy and chosen},
-            {kind = "edit", label = "Edit", enabled = not busy and chosen},
-            {kind = "refresh", label = "Refresh", enabled = not busy},
-            {kind = "close", label = "Close", enabled = true},
+            {kind = "open", key = "Enter", label = "Open", enabled = not busy and chosen and choice ~= nil and not choice.unavailable, primary = true},
+            {kind = "new", key = "N", label = "New", enabled = not busy and chosen},
+            {kind = "edit", key = "E", label = "Edit", enabled = not busy and chosen},
+            {kind = "refresh", key = "R", label = "Refresh", enabled = not busy},
+            {kind = "close", key = "Esc", label = "Close", enabled = true},
         })
     end
     local message = status
     if message == "" and choice and choice.unavailable then message = choice.unavailable end
     if message == "" and choices.unavailable > 0 then message = tostring(choices.unavailable) .. " profiles unavailable" end
     if height >= 2 then frame.footer(painter, text.bound(message, 512), HINTS) end
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

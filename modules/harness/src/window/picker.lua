@@ -125,14 +125,17 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end)
     end
     process.send(launch.broker_pid, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"})
+    local menu = frame.menu()
     while true do
         if dirty then
             local rows: {string}
             if editing then
                 edit_frame = profile_view.draw(width, height, preferences, editing)
+                frame.render(edit_frame, menu, preferences)
                 rows = edit_frame.rows
             else
                 drawn = view.draw(width, height, preferences, listed, selected, status, activating)
+                frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             end
             assert(output:present(rows, {cursor = {x = 1, y = 1, visible = false}}))
@@ -220,6 +223,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         else
             local data = input_event.decode(event.value)
+            if data then
+                local routed, handled = frame.route(menu, data, editing ~= nil)
+                if handled then dirty = true end
+                data = routed
+            end
             if data then
                 if data.type == "close" then return finish(nil, nil)
                 elseif data.type == "start" or data.type == "resize" then

@@ -123,6 +123,18 @@ local function isolated_it(name: string, body: () -> ())
 end
 local function define_tests()
     test.describe("Window launch selection", function()
+        isolated_it("keeps Agent hints visible while starting at both frame sizes", function()
+            local listed: selection.Choices = {items = {{definition_ref = "fixture:a", title = "Alpha", launch_id = "a", plan_digest = string.rep("a", 64)}}, unavailable = 0}
+            for _, size in ipairs({{80, 24}, {120, 36}}) do
+                local drawn = view.draw(size[1], size[2], appearance.defaults(), listed, 1, "Starting Agent…", true)
+                test.is_true(drawn.rows[size[2]]:find("Starting Agent", 1, true) ~= nil)
+                test.is_true(drawn.rows[size[2]]:find("Enter open", 1, true) ~= nil)
+                test.is_true(drawn.rows[size[2]]:find("? help", 1, true) ~= nil)
+                local controls = assert(drawn.controls)
+                test.eq(#controls.buttons, 5)
+                test.eq(controls.buttons[5].key, "Esc")
+            end
+        end)
         isolated_it("renders bounded profiles without terminal controls and disables invisible launch", function()
             local listed: selection.Choices = {items = {{definition_ref = "fixture:profile", title = "Profile\27]52;injected", launch_id = "profile", plan_digest = string.rep("a", 64)}}, unavailable = 0}
             local frame = view.draw(40, 10, appearance.defaults(), listed, 1, "")
@@ -306,7 +318,8 @@ local function define_tests()
                 has_only_choice_fields(item)
                 local frame = view.draw(100, 10, appearance.defaults(), result, 1, "")
                 test.is_true(table.concat(frame.rows):find("Inactive Claude window", 1, true) ~= nil)
-                test.is_true(table.concat(frame.rows):find("not usable on this host", 1, true) ~= nil)
+                test.is_true((assert(frame.controls).status or ""):find("not usable on this host", 1, true) ~= nil)
+                test.is_true(frame.rows[10]:find("? help", 1, true) ~= nil)
                 for _, hit in ipairs(frame.hits) do test.is_true(hit.kind ~= "open") end
             end)
             local activation_restored, activation_error = pcall(function()

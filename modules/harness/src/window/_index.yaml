@@ -64,6 +64,7 @@ entries:
     records: bee.harness.carrier:hook_records
     appearance: bee.application:appearance
     restore_view: bee.harness.window:restore_view
+    frame: bee.application:frame
 - name: app
   kind: process.lua
   source: file://app.lua

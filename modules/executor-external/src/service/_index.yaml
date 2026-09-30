@@ -11,3 +11,11 @@ entries:
   source: file://stream.lua
   imports:
     stream_json: bee.driver.transport:stream_json
+- name: permissions
+  kind: library.lua
+  source: file://permissions.lua
+  modules: [hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    permission: bee.harness.permission:adapter

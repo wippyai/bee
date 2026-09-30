@@ -10,8 +10,17 @@ local driver_types = require("driver_types")
 local turn = require("turn")
 local admission = require("admission")
 local machine = require("machine")
+local canonical = require("canonical")
+local clock = require("clock")
+local time = require("time")
+local permission = require("permission")
+local permissions = require("permissions")
 
 type Listener = {outputs: unknown, exits: unknown, events: unknown}
+type Object = {[string]: unknown}
+type Drive = permissions.Drive
+type Answered = {ask: permissions.Pending, outcome: string}
+local MAX_ASKS = 4
 
 local function error_text(value: unknown): string
     if type(value) == "table" then
@@ -59,7 +68,7 @@ local function normalizer_call(target: string, state: unknown, index: integer, e
 end
 
 local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean,
-    request: {[string]: unknown}): (unknown, string?)
+    request: {[string]: unknown}, drive: Drive?): (unknown, string?)
     local listener = bounds.object(listener_value) :: Listener?
     local attempt, attempt_error = unwrap_attempt(attempt_value)
     if not listener or not attempt then return nil, attempt_error or "output listener or attempt is malformed" end
@@ -68,6 +77,25 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local runner = bounds.id(attempt_object.runner)
     local generation = bounds.integer(attempt_object.attachment_generation)
     if not runner or not generation then return nil, "placement start omitted runner attachment identity" end
+    local observation_target = tostring(request.observation_target)
+    local claim = tostring(request.claim)
+    local acks = assert(process.listen(placement_protocol.TOPIC_ACK, {message = true}))
+    local pendings: {permissions.Pending} = {}
+    local seen: {[string]: boolean} = {}
+    local unacked: {[string]: boolean} = {}
+    local answered: {Answered} = {}
+    local poller = nil
+    if drive and drive.exchange then poller = time.ticker(tostring(drive.exchange.poll_ms) .. "ms") end
+    local function note(phase: string, ask: permissions.Pending, outcome: string?)
+        local payload = canonical.encode({approval_id = ask.approval_id, outcome = outcome}) or "{}"
+        local key, key_error = hash.sha256(attempt_id .. "\n" .. ask.request.permission_request_id .. "\n" .. phase)
+        if key_error or not key then return "measure permission note identity" end
+        local _, append_error = service_call(observation_target, {turn = attempt_id, claim = claim,
+            operation_key = "perm:" .. phase .. ":" .. key,
+            observation = {type = "extension", event_key = "permission:" .. ask.request.permission_request_id .. ":" .. phase,
+                data = {type = "extension", event_name = "bee.executor.permission", event_revision = "1", payload_json = payload}}})
+        return append_error
+    end
     local monitored = process.monitor(runner)
     local decoder = stream.new()
     local state: unknown = nil
@@ -119,6 +147,135 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         local apply_error = apply(reply)
         if apply_error then output_error = output_error or apply_error end
     end
+    local function owner_value(target: string, fields: Object): (Object?, string?)
+        local raw, call_error = funcs.call(target, fields)
+        if call_error then return nil, tostring(call_error) end
+        local reply = bounds.object(raw)
+        if not reply then return nil, target .. " returned a malformed reply" end
+        if reply.ok == true then
+            local value = bounds.object(reply.value)
+            if not value then return nil, target .. " returned no value" end
+            return value, nil
+        end
+        local fault = bounds.object(reply.error)
+        local code = fault and bounds.id(fault.code) or "UNKNOWN"
+        local message = fault and bounds.text(fault.message, 512) or "unknown"
+        return nil, tostring(code) .. ": " .. tostring(message)
+    end
+    local function consume_call(approval_id: string, proposal_digest: string, effect_key: string,
+        incarnation: integer): (boolean, string?, integer?)
+        local raw, call_error = funcs.call("bee.approvals.binding:consume",
+            {approval_id = approval_id, proposal_digest = proposal_digest, effect_key = effect_key,
+                owner_incarnation = incarnation})
+        if call_error then return false, tostring(call_error), nil end
+        local reply = bounds.object(raw)
+        if not reply then return false, "approvals consume returned a malformed reply", nil end
+        if reply.ok == true then return true, nil, nil end
+        local fault = bounds.object(reply.error)
+        local code = fault and bounds.id(fault.code) or "UNKNOWN"
+        local message = fault and bounds.text(fault.message, 512) or "unknown"
+        if code == "REVALIDATE" then
+            local detail = bounds.object(reply.value)
+            local current = detail and bounds.count(detail.current_incarnation) or nil
+            if current then return false, "REVALIDATE", current end
+        end
+        return false, tostring(code) .. ": " .. tostring(message), nil
+    end
+    local exchange_io: permissions.IO = {
+        request_approval = function(fields: Object): (Object?, string?)
+            return owner_value("bee.approvals.binding:request", fields)
+        end,
+        read_approval = function(approval_id: string): (Object?, string?)
+            return owner_value("bee.approvals.binding:read", {approval_id = approval_id})
+        end,
+        consume = consume_call,
+        revalidate = function(approval_id: string, proposal_digest: string, incarnation: integer): (boolean, string?)
+            local _, revalidate_error = owner_value("bee.approvals.binding:revalidate",
+                {approval_id = approval_id, proposal_digest = proposal_digest, owner_incarnation = incarnation})
+            if revalidate_error then return false, revalidate_error end
+            return true, nil
+        end,
+        write_stdin = function(write_id: string, data: string): (boolean, string?)
+            process.send(runner, placement_protocol.TOPIC_INPUT,
+                {write_id = write_id, generation = generation, data = data})
+            unacked[write_id] = true
+            return true, nil
+        end,
+        wait_ms = function(_: integer) end,
+        now_ms = function(): integer return clock.milliseconds() end,
+        waiting = function(): boolean return runner ~= nil and not exited and not stopped end,
+    }
+    local function track_answer(ask: permissions.Pending, outcome: string)
+        answered[#answered + 1] = {ask = ask, outcome = outcome}
+        output_error = output_error or note("answered", ask, outcome)
+    end
+    local function ask_new(fresh: {unknown})
+        if not drive then return end
+        local found, scan_error = permissions.scan(drive.adapter, fresh)
+        if scan_error then output_error = output_error or scan_error; return end
+        for _, item in ipairs(found) do
+            if not seen[item.permission_request_id] then
+                seen[item.permission_request_id] = true
+                if drive.broken or not drive.exchange or not drive.labels then
+                    output_error = output_error or (drive.broken or "permission exchange is not enabled for this turn")
+                elseif #pendings >= MAX_ASKS then
+                    output_error = output_error or "too many permission questions in one turn"
+                else
+                    local ask, ask_error = permissions.request(exchange_io, drive.exchange, drive.labels, item)
+                    if not ask then
+                        output_error = output_error or ask_error
+                    else
+                        pendings[#pendings + 1] = ask
+                        output_error = output_error or note("requested", ask, nil)
+                    end
+                end
+            end
+        end
+    end
+    local function poll_asks()
+        if not drive or not drive.exchange then return end
+        for index = #pendings, 1, -1 do
+            local outcome, poll_error = permissions.poll(exchange_io, drive.exchange, pendings[index])
+            if not outcome then
+                output_error = output_error or poll_error
+                table.remove(pendings, index)
+            elseif outcome == "allowed" or outcome == "denied" then
+                track_answer(pendings[index], outcome)
+                table.remove(pendings, index)
+            elseif outcome == "closed" then
+                table.remove(pendings, index)
+            end
+        end
+    end
+    local function track_echo(fresh: {unknown})
+        if not drive or #answered == 0 then return end
+        for _, raw in ipairs(fresh) do
+            for index = #answered, 1, -1 do
+                local entry = answered[index]
+                local echoed = false
+                if entry.outcome == "allowed" then
+                    echoed = permission.acknowledged(drive.adapter, entry.ask.request, raw)
+                else
+                    echoed = permission.deny_acknowledged(drive.adapter, entry.ask.request, raw)
+                end
+                if echoed then
+                    output_error = output_error or note("acknowledged", entry.ask, entry.outcome)
+                    table.remove(answered, index)
+                end
+            end
+        end
+    end
+    local function answer_acks(raw: unknown)
+        local data = bounds.object(raw)
+        if not data or data.attempt_id ~= attempt_id then return end
+        local write_id = bounds.id(data.write_id)
+        if not write_id or not unacked[write_id] then return end
+        if data.accepted == true then
+            unacked[write_id] = nil
+        else
+            output_error = output_error or "stdin refused the permission response: " .. tostring(data.reason or "unknown")
+        end
+    end
     local function accept_output(sender: string, raw: unknown)
         local output = bounds.object(raw)
         if not output or output.attempt_id ~= attempt_id or output.generation ~= generation then return end
@@ -134,6 +291,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             if output_stream == "stderr" then stderr_eof = true; output_error = output_error or completion_event("stderr_complete") end
         elseif output_stream == "stdout" then
             if type(output.data) ~= "string" then output_error = output_error or "stdout chunk has no bytes"; return end
+            local base = #observations
             local envelopes, feed_error = stream.feed(decoder, output.data)
             if feed_error then output_error = output_error or feed_error end
             for _, envelope in ipairs(envelopes) do
@@ -141,6 +299,12 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                 if normalize_error then output_error = output_error or normalize_error; break end
                 local apply_error = apply(reply)
                 if apply_error then output_error = output_error or apply_error; break end
+            end
+            if #observations > base then
+                local fresh: {unknown} = {}
+                for index = base + 1, #observations do fresh[#fresh + 1] = observations[index] end
+                ask_new(fresh)
+                track_echo(fresh)
             end
         end
         if not output.eof and output_stream == "stderr" and type(output.data) == "string" and stderr_bytes < 4096 then
@@ -155,7 +319,10 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         process.send(sender, placement_protocol.TOPIC_ACK, {generation = generation, consumed_through = sequence})
     end
     while not (stdout_eof and stderr_eof and exited) do
-        local selected = channel.select({listener.outputs:case_receive(), listener.exits:case_receive(), listener.events:case_receive()})
+        local cases = {listener.outputs:case_receive(), listener.exits:case_receive(), listener.events:case_receive(),
+            acks:case_receive()}
+        if poller then cases[#cases + 1] = poller:channel():case_receive() end
+        local selected = channel.select(cases)
         if not selected.ok then output_error = output_error or "placement output observation was interrupted"; break end
         if selected.channel == listener.outputs then
             local message = selected.value
@@ -169,6 +336,11 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                 exit_uncertain = exit.uncertain == true
                 output_error = output_error or completion_event("process_exited")
             end
+        elseif poller and selected.channel == poller:channel() then
+            poll_asks()
+        elseif selected.channel == acks then
+            local message = selected.value
+            answer_acks(message:payload():data())
         else
             local event = selected.value
             if event.kind == process.event.CANCEL then output_error = output_error or "executor worker was interrupted"; break end
@@ -179,6 +351,11 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         end
     end
     if monitored then process.unmonitor(runner) end
+    process.unlisten(acks)
+    if poller then poller:stop() end
+    for _, entry in ipairs(answered) do
+        if entry.outcome == "denied" then note("unproven", entry.ask, entry.outcome) end
+    end
     if output_error then return {terminal = terminal, observations = observations, stopped = stopped}, output_error end
     if exit_uncertain then return {terminal = terminal, observations = observations, stopped = stopped}, "placement runner did not prove process exit" end
     return {terminal = terminal, observations = observations, stopped = stopped}, nil
@@ -269,7 +446,8 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
         end,
         observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean,
             _checkpoint: unknown?, turn_request: turn.Request)
-            return observe(listener, attempt, normalizer_target, resumed, turn_request :: {[string]: unknown})
+            return observe(listener, attempt, normalizer_target, resumed, turn_request :: {[string]: unknown},
+                permissions.drive(current_plan))
         end,
         close = function(value: unknown)
             local listener = bounds.object(value)

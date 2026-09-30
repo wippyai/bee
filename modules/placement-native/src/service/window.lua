@@ -185,6 +185,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
     for _, argument in ipairs(prepared.arguments) do argv[#argv + 1] = argument end
 
     local closed = false
+    local stop_requested = false
     local finished = false
     -- The handle exists only once executor:terminal() has returned. Until
     -- then the listener answers supervision as starting and leaves a stop to
@@ -230,8 +231,8 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
                     local current = store.row(db, attempt_id)
                     if current and current.owner_id == owner and current.runner_pid == process.pid()
                         and current.execution_state == "stopping" then
-                        closed = true
-                        if current_terminal then current_terminal:close() end
+                        stop_requested = true
+                        if current_terminal and current_terminal:close() then closed = true end
                     end
                 end
             end
@@ -261,7 +262,7 @@ function M.open(attempt_id: string, value: unknown): (Window?, string?)
         return fail(db, "start terminal: " .. tostring(start_error), gateway_binding, attempt_id)
     end
     terminal = started
-    if closed then started:close() end
+    if stop_requested and started:close() then closed = true end
 
     local fields: {[string]: unknown} = {}
     local identity_detail = "execution identity unavailable"

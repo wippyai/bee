@@ -151,7 +151,8 @@ class Desktop:
         self.mouse(0, x, y, True)
 
     def settings_frame_colors(self):
-        y, title = next((y, line) for y, line in enumerate(self.screen.display) if "Settings" in line and "×" in line)
+        y, title = next((y, line) for y, line in enumerate(self.screen.display)
+                        if "Settings" in line and "×" in line and "╭" in line and "╮" in line)
         left, right = title.index("╭"), title.index("╮")
         bottom = next(row for row in range(y + 1, self.height)
                       if self.screen.display[row][left] == "╰" and self.screen.display[row][right] == "╯")
@@ -551,7 +552,8 @@ def process_manager(packed):
             ui.open_start()
             assert "Minimize" not in ui.text() and "Reload desktop" not in ui.text()
             assert "Enter Choose" not in ui.text() and "Applications" not in ui.text()
-            ui.choose("Apps"); ui.choose("Advanced")
+            ui.choose("Apps")
+            ui.choose("Advanced")
             line = next(y for y, text in enumerate(ui.screen.display, 1) if "Process Manager" in text)
             ui.mouse(35, 5, line)  # SGR motion with no button: hover only.
             hover_bg = ui.screen.buffer[line - 1][4].bg

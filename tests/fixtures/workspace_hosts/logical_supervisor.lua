@@ -176,7 +176,10 @@ local function main()
     -- A workspace has one host: a second host for the same row is fenced.
     local duplicate = spawn(hosts, left)
     local fenced = tostring(await_exit(hosts, duplicate))
-    if not fenced:find("Register workspace host", 1, true) then error("second host was not fenced: " .. fenced) end
+    if not fenced:find("Workspace host name belongs to another process", 1, true)
+        and not fenced:find("Register workspace host", 1, true) then
+        error("second host was not fenced: " .. fenced)
+    end
 
     -- An application opened in the left workspace is checkpointed into the
     -- left row only.
@@ -233,4 +236,10 @@ local function main()
     logger:info("ACCEPTANCE VERIFIED: two logical workspaces served from one node database in one runtime")
 end
 
-return {main = main}
+return {main = function()
+    local ok, failure = pcall(main)
+    if not ok then
+        logger:error("ACCEPTANCE FAILED", {error = tostring(failure)})
+        error(failure)
+    end
+end}

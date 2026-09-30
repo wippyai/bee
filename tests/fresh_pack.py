@@ -71,11 +71,13 @@ def menu_and_terminal(directory):
         for title in ("Timeline", "Hive Manager", "Process Manager"):
             assert title in text, (title, text)
         assert "Test Status" not in text, text
-        ui.key(b"\x1b" * 3)
+        for _ in range(3):
+            ui.key(b"\x1b")
         ui.open_start()
         ui.choose("Settings/Help")
         assert "Settings" in ui.text(), ui.text()
-        ui.key(b"\x1b" * 2)
+        for _ in range(2):
+            ui.key(b"\x1b")
         ui.open_start()
         ui.choose("Terminal")
         ui.wait("$ ", timeout=10)
@@ -128,7 +130,7 @@ def main():
         session = menu_and_terminal(directory)
     with tempfile.TemporaryDirectory(prefix="bee-fresh-settings-") as directory:
         settings_persist(directory)
-    print(f"Fresh pack: literal launch boots (exit {literal:.3f}s); Start menu has Approvals, Timeline, Hive Manager, Process Manager, Settings and no Test Status; "
+    print(f"Fresh pack: literal launch boots (exit {literal:.3f}s); Sessions and Needs you, Apps/Advanced tools, Settings/Help and no Test Status; "
           f"Terminal input, resize and F12; clean exit {session:.3f}s; Settings theme persists across relaunch")
 
 

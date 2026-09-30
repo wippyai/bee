@@ -39,7 +39,7 @@ def begin(ui, marker, *, title=False):
     ui.mouse(2, menu_x, menu_y, True)
     ui.wait('Select text')
     ui.choose('Select text')
-    ui.wait('drag to select')
+    ui.wait('Select text: drag')
     return x, y
 
 

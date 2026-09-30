@@ -10,6 +10,16 @@ and manifest. Wippy owns application deployment, Hub resolution, command
 dispatch, state opening and shutdown; Bee registers its native components
 through Wippy boot.
 
+## Toolchain currency
+
+The binary at `.wippy/bin/bee-wippy` derives from `wippy.build.json`; its
+provenance records the manifest it was built from. `make lint`, `make test`,
+`make fixture-lint` and `make check` run `build/verify_cached_toolchain.py
+current` first and rebuild through `make native-tools` when the recorded
+manifest inputs differ or the provenance is missing. The comparison uses file
+content, not modification times. An explicit caller `WIPPY` override runs as
+is with no rebuild.
+
 ## Update procedure
 
 1. Select an upstream commit that contains the required runtime APIs.

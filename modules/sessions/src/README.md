@@ -28,7 +28,8 @@ The scheduler runs independent Sessions concurrently through asynchronous turn
 workers, with at most one worker per Session. Executor errors become durable
 uncertainty and do not trigger a blind retry.
 
-Native interactive admission attaches a Session to the caller-owned thread.
+Native interactive admission attaches a Session to its workspace thread when
+the authenticated application has active owner or participant membership.
 Its route uses hook delivery, so the managed scheduler does not execute it.
 Authenticated UserPromptSubmit hooks deliver one queued Work with its sender;
 Stop/StopFailure records completion. The current attachment fences stale hooks.

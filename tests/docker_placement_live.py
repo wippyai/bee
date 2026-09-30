@@ -52,11 +52,13 @@ def main():
             doc = yaml.safe_load(index.read_text())
             by_name = {e['name']: e for e in doc['entries']}
             profile = by_name['profile']['data']
+            profile_ref = 'bee.docker.proof:profile'
             if args.image == 'auto':
-                profile.pop('image_ref', None)
-                profile.pop('interactive_route_ref', None)
-                profile.update(image_recipe_ref='bee.placement.docker:coding_recipe', network=network)
-                doc['entries'] = [e for e in doc['entries'] if e['name'] not in ('executor', 'interactive')]
+                profile_ref = 'bee.placement.docker:coding'
+                edit('modules/placement-docker/src/_index.yaml', 'coding', lambda e: e['data'].update(network=network))
+                main = folder / 'src/docker_proof/main.lua'
+                main.write_text(main.read_text().replace('bee.docker.proof:profile', profile_ref))
+                doc['entries'] = [e for e in doc['entries'] if e['name'] not in ('profile', 'executor', 'interactive')]
             else:
                 profile.update(image_ref=args.image, network=network)
                 by_name['executor'].update(image=args.image, network_mode=network)
@@ -81,7 +83,7 @@ def main():
                         data = e['data']
                         data['executables'] = {provider: executable}
                         data.pop('executable_env', None)
-                        data['placement_profiles'] = ['bee.docker.proof:profile']
+                        data['placement_profiles'] = [profile_ref]
                         data['required_cleanup'] = 'contained_tree'
                         data['required_exit_observation'] = 'independent'
                         data.pop('permission_exchange', None)

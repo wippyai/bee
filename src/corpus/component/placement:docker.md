@@ -19,7 +19,7 @@ Private provider homes come from the existing credential broker. Declared
 copied JSON/TOML config is decoded and refused before child creation if it has
 commands, includes, plugins, host paths or unresolved file/environment references.
 Login bytes remain broker-owned and are never inspected by these config checks.
-Codex uses its own auth.json with a clean config. OpenCode can receive the
+Claude and Codex use their own login files with clean container settings. OpenCode can receive the
 host-admitted OPENAI_API_KEY by name with a clean config; its CLI selects the
 provider. Private Grok/OpenCode turns publish their admitted config even without
 gateway tools. Docker mounts

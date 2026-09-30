@@ -110,6 +110,12 @@ local function define_tests()
             test.is_nil(state.requirements_digest)
             test.eq(#state.requirements, 0)
         end)
+        test.it("opens the keyword filter on the catalog phase, where the footer advertises it", function()
+            test.is_true(model.keyword_phase("catalog"))
+            for _, phase in ipairs({"installed", "details", "operations", "plan", "confirm", "result", "authoring"}) do
+                test.is_false(model.keyword_phase(phase))
+            end
+        end)
         test.it("keeps keyword browsing separate from text search and emits only facade intents", function()
             local state = model.new()
             local catalog = model.catalog_intent(state)

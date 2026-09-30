@@ -3,6 +3,7 @@ local tty = require("tty")
 local view = require("view")
 local frames = require("frames")
 local appearance = require("appearance")
+local interaction = require("interaction")
 local function define_tests()
     test.describe("Appearance chooser", function()
         test.it("shows errors in compact settings without losing selection controls", function()
@@ -101,6 +102,14 @@ local function define_tests()
             local has_edit_tab = false
             for _, hit in ipairs(tabs) do if hit.kind == "edit_mode" then has_edit_tab = true end end
             test.is_true(has_edit_tab)
+        end)
+        test.it("builds a decoder-valid single-line edit-mode confirmation", function()
+            local message = view.confirm_message("bee.ux_demo --for 1m")
+            test.is_nil(message:find("%c"))
+            local spec = interaction.spec({version = 1, request_id = "r-1", id = "bee.settings:edit",
+                instance_id = "settings", kind = "confirm", title = "Confirm edit mode",
+                message = message, accept = "Enable", initial = ""})
+            test.not_nil(spec)
         end)
     end)
 end

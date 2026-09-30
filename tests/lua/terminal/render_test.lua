@@ -53,6 +53,19 @@ local function define_tests()
             test.is_true(card(17):find("Details [D]", 1, true) == nil)
             test.is_true(card(18):find("Details [D]", 1, true) ~= nil)
         end)
+        test.it("shows the saved workspace label with the identity behind Details", function()
+            local workspace = string.rep("c", 32)
+            local info = connection.new("{Antares@bee.client:main|one}", workspace,
+                string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
+            connection.set_workspace_label(info, "ux-demo")
+            local canvas = tty.canvas(100, 18)
+            canvas:clear(" ")
+            info.details = true
+            connection.draw(canvas, 100, 18, appearance.defaults(), info, true)
+            local text = plain_text(table.concat(canvas:rows(), "\n"))
+            test.is_true(text:find("ux-demo", 1, true) ~= nil)
+            test.is_true(text:find(workspace, 1, true) ~= nil)
+        end)
         test.it("keeps Classic terminals dark without changing application panels", function()
             local theme = appearance.theme("classic")
             local terminal = appearance.page(theme, true)
@@ -202,6 +215,47 @@ local function define_tests()
             local items = menu.items(false, false, false, catalog)
             test.eq(#items, 3)
             for _, item in ipairs(items) do test.is_true(item.enabled) end
+        end)
+        test.it("honors NO_COLOR centrally without losing the selection", function()
+            test.is_false(appearance.no_color())
+            appearance.set_no_color(true)
+            local ok, failure = pcall(function()
+                test.is_true(appearance.no_color())
+                test.eq(appearance.style("#d8e2ef", "#17202c"), "")
+                local scene = model.add(model.new(80, 24), "one", "app", "One")
+                scene = model.add(scene, "two", "app", "Two")
+                scene = model.place(scene, "one", {x = 5, y = 4, width = 20, height = 8})
+                scene = model.place(scene, "two", {x = 35, y = 4, width = 20, height = 8})
+                local first = scene.windows[1]
+                local body = layout.interior(first, model.bounds(scene, first))
+                local frozen: {string} = {}
+                for row = 1, body.height do frozen[row] = "row " .. row end
+                local active, err = selection.capture({view_id = "one", attachment = "mount-one", mount_generation = 1,
+                    width = body.width, height = body.height}, frozen)
+                test.is_nil(err)
+                test.not_nil(active)
+                if not active then error("selection capture failed") end
+                active = selection.drag(selection.press(active, 1, 1), 9, 2)
+                local contents: {[string]: render.Content} = {}
+                contents.one = {rows = {"changed live content"}}
+                contents.two = {rows = {"neighbor stays live"}}
+                local frame = render.draw(scene, {"one", "two"}, contents, nil, nil, "", "workspace", nil, nil, false,
+                    nil, nil, nil, nil, active)
+                for _, row in ipairs(frame.rows) do
+                    test.is_nil(row:find("38;2", 1, true))
+                    test.is_nil(row:find("48;2", 1, true))
+                end
+                local marked = false
+                for _, row in ipairs(frame.rows) do
+                    if row:find("\27[7m", 1, true) ~= nil then marked = true end
+                end
+                test.is_true(marked)
+                local text = plain_text(table.concat(frame.rows, "\n"))
+                test.is_true(text:find("neighbor stays", 1, true) ~= nil)
+            end)
+            appearance.set_no_color(nil)
+            test.is_false(appearance.no_color())
+            if not ok then error(failure) end
         end)
         test.it("keeps Start small with apps open and anchors contextual actions", function()
             local scene = model.add(model.new(80, 24), "one", "app", "One")

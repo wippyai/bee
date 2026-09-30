@@ -76,25 +76,20 @@ local function main(value: unknown)
         lease = nil
         model.serve(state, nil)
     end
-    local function serve()
-        if lease then
-            release()
-            model.say(state, "Released the workspace host")
-            if standard() or state.showing then inspect() end
-            return
-        end
+    -- The host lease stays internal: opening a workspace holds it while the
+    -- viewer is open, inspecting alone never does.
+    local function hold()
         local selected = model.selected(state)
         if not selected or state.tab == "archived" then return end
+        if lease and state.served == selected.workspace_id then return end
+        release()
         local held, refusal = leases.acquire(selected.workspace_id, "30s")
         if not held then
-            model.say(state, "Could not serve " .. model.label(state, selected.workspace_id) .. ": " .. tostring(refusal))
+            model.say(state, "Could not open " .. model.label(state, selected.workspace_id) .. ": " .. tostring(refusal))
             return
         end
         lease = held
         model.serve(state, selected.workspace_id)
-        model.say(state, held.managed and "Serving " .. model.label(state, selected.workspace_id) .. " while this view is open"
-            or model.label(state, selected.workspace_id) .. " is already served by its own host")
-        inspect()
     end
     local function change()
         local intent = model.change_intent(state)
@@ -105,6 +100,12 @@ local function main(value: unknown)
         if standard() then inspect() end
     end
     local function open()
+        if state.selected == "" then return end
+        if not standard() then model.show(state, true) end
+        hold()
+        inspect()
+    end
+    local function peek()
         if state.selected == "" then return end
         if not standard() then model.show(state, true) end
         inspect()
@@ -134,6 +135,7 @@ local function main(value: unknown)
         form = nil
         model.created(state, created)
         page()
+        if model.pin(state, created.workspace_id) then open() end
     end
     local function create_act(current: creation.Form, kind: string, index: integer)
         if kind == "folder" then
@@ -171,10 +173,10 @@ local function main(value: unknown)
     end
     local function act(kind: string, key: string)
         if kind == "open" then if state.showing then back() else open() end
+        elseif kind == "inspect" then peek()
         elseif kind == "search" or kind == "field" then model.edit(state, true)
         elseif kind == "new" then begin_create()
         elseif kind == "refresh" then page()
-        elseif kind == "serve" then serve()
         elseif kind == "change" then change()
         elseif kind == "active" or kind == "archived" then model.switch(state, kind); page()
         elseif kind == "workspace" then model.select(state, key); selected_changed() end
@@ -233,7 +235,7 @@ local function main(value: unknown)
                 elseif data.key == "/" then model.edit(state, true)
                 elseif data.key == "r" then page()
                 elseif data.key == "n" then begin_create()
-                elseif data.key == "s" then serve()
+                elseif data.key == "i" then peek()
                 elseif data.key == "a" then change() end
             elseif data.type == "mouse" then
                 local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)

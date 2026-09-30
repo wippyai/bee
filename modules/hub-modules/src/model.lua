@@ -525,6 +525,11 @@ function M.set_keyword(state: State, value: unknown)
     local selected = M.text(value, 160)
     if selected ~= state.keyword then state.keyword, state.page = selected, 1; reset_plan(state) end
 end
+-- The keyword filter opens on the catalog phase, where the footer advertises
+-- it; on other phases the same key keeps its selection meaning.
+function M.keyword_phase(phase: string): boolean
+    return phase == "catalog"
+end
 
 local update_catalog_visibility: ((State) -> ())? = nil
 

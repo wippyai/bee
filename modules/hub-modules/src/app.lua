@@ -550,6 +550,10 @@ local function main(value: unknown)
                         elseif (key == "runes" or #letter == 1) and #letter > 0 and not data.ctrl and not data.alt and not letter:find("%c") then editor.buffer = editable(editor.buffer .. letter); status = (editor.field == "parameter_value" and "Parameter JSON value: " or "Edit: ") .. editor.buffer; changed() end
                     else
                         status = ""
+                        -- Displayed capitals accept lowercase, as in the other
+                        -- applications; k keeps its advertised keyword meaning
+                        -- on the catalog phase and moves elsewhere.
+                        local lowered = letter:lower()
                         if state.phase == "details" and content.open and (key == "up" or key == "down" or key == "pgup" or key == "pgdown") then
                             local delta = (key == "up" or key == "pgup") and -1 or 1
                             if #content.rows > 0 then contents.move(content, delta)
@@ -557,14 +561,15 @@ local function main(value: unknown)
                             changed()
                         elseif state.phase == "details" and content.open and key == "enter" then handle_hit("content_row", "")
                         elseif state.phase == "details" and content.open and (key == "backspace" or key == "esc" or key == "escape") then handle_hit("content_back", "")
-                        elseif state.phase == "details" and content.open and letter == "n" then handle_hit("content_next", "")
-                        elseif letter == "c" and state.phase == "details" then handle_hit("contents", "")
-                        elseif key == "up" or letter == "k" then
+                        elseif state.phase == "details" and content.open and lowered == "n" then handle_hit("content_next", "")
+                        elseif lowered == "c" and state.phase == "details" then handle_hit("contents", "")
+                        elseif letter == "K" or (lowered == "k" and model.keyword_phase(state.phase)) then begin_editor("keyword")
+                        elseif key == "up" or lowered == "k" then
                             if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = math.floor(math.max(0, offset - 1)); changed()
                             elseif state.phase == "operations" then operation_relative(-1)
                             elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement - 1); changed()
                             elseif state.phase == "details" then version_relative(-1) elseif state.phase == "catalog" or state.phase == "installed" then choose_relative(-1) end
-                        elseif key == "down" or (letter == "j" and state.phase ~= "details") then
+                        elseif key == "down" or (lowered == "j" and state.phase ~= "details") then
                             if (state.phase == "details" and reading_readme) or state.phase == "plan" or state.phase == "confirm" then offset = offset + 1; changed()
                             elseif state.phase == "operations" then operation_relative(1)
                             elseif state.phase == "details" and state.requirements_open then model.select_requirement(state, state.selected_requirement + 1); changed()
@@ -583,26 +588,25 @@ local function main(value: unknown)
                             elseif state.phase == "operations" then handle_hit("recover", "")
                             elseif state.phase == "plan" then handle_hit("review", "")
                             elseif state.phase == "confirm" then confirm() end
-                        elseif letter == "o" or letter == "O" then operation_history()
+                        elseif lowered == "o" then operation_history()
                         elseif key == "delete" and state.phase == "details" and state.requirements_open then handle_hit("reset_requirement", "")
-                        elseif letter == "e" and state.phase == "plan" then handle_hit("missing", "")
-                        elseif letter == "e" and state.phase == "details" then requirements()
-                        elseif letter == "h" and state.phase == "details" then handle_hit("readme", "")
-                        elseif letter == "v" and state.phase == "details" then handle_hit("versions", "")
-                        elseif letter == "/" then begin_editor("query")
-                        elseif letter == "K" then begin_editor("keyword")
-                        elseif letter == "j" and state.phase == "details" then begin_editor("parameter_name")
-                        elseif letter == "a" then handle_hit("authoring", "")
-                        elseif letter == "c" and state.phase == "authoring" then begin_editor("publication_component")
-                        elseif letter == "v" and state.phase == "authoring" then begin_editor("publication_version")
-                        elseif letter == "s" and state.phase == "authoring" then begin_editor("publication_snapshot_digest")
-                        elseif letter == "i" and state.phase == "details" then handle_hit("install", "")
-                        elseif letter == "u" and state.phase == "details" then handle_hit("update", "")
-                        elseif letter == "x" and state.phase == "details" then handle_hit("uninstall", "")
-                        elseif letter == "p" and state.phase == "details" then plan()
-                        elseif letter == "p" and state.phase == "authoring" then prepare_publication()
-                        elseif letter == "u" and state.phase == "authoring" then publish_publication()
-                        elseif letter == "r" then if state.phase == "operations" then operation_history() elseif state.phase == "result" then check_status() elseif state.phase == "plan" then plan() elseif state.phase == "installed" then invalidate(); installed() else invalidate(); catalog() end
+                        elseif lowered == "e" and state.phase == "plan" then handle_hit("missing", "")
+                        elseif lowered == "e" and state.phase == "details" then requirements()
+                        elseif lowered == "h" and state.phase == "details" then handle_hit("readme", "")
+                        elseif lowered == "v" and state.phase == "details" then handle_hit("versions", "")
+                        elseif lowered == "/" then begin_editor("query")
+                        elseif lowered == "j" and state.phase == "details" then begin_editor("parameter_name")
+                        elseif lowered == "a" then handle_hit("authoring", "")
+                        elseif lowered == "c" and state.phase == "authoring" then begin_editor("publication_component")
+                        elseif lowered == "v" and state.phase == "authoring" then begin_editor("publication_version")
+                        elseif lowered == "s" and state.phase == "authoring" then begin_editor("publication_snapshot_digest")
+                        elseif lowered == "i" and state.phase == "details" then handle_hit("install", "")
+                        elseif lowered == "u" and state.phase == "details" then handle_hit("update", "")
+                        elseif lowered == "x" and state.phase == "details" then handle_hit("uninstall", "")
+                        elseif lowered == "p" and state.phase == "details" then plan()
+                        elseif lowered == "p" and state.phase == "authoring" then prepare_publication()
+                        elseif lowered == "u" and state.phase == "authoring" then publish_publication()
+                        elseif lowered == "r" then if state.phase == "operations" then operation_history() elseif state.phase == "result" then check_status() elseif state.phase == "plan" then plan() elseif state.phase == "installed" then invalidate(); installed() else invalidate(); catalog() end
                         elseif key == "esc" or key == "escape" then
                             if state.phase == "confirm" then cancel_confirmation()
                             elseif state.phase == "details" then model.show(state, "catalog"); changed()

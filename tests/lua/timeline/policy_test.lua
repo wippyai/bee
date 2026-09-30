@@ -14,7 +14,7 @@ local function define_tests()
             local scope = security.new_scope({policy})
             local actor = security.actor()
             if not actor then error("test actor is unavailable") end
-            local targets = {model.LIST, model.GET, model.SUBSCRIBE, model.PAGE, model.ACK_PAGE, model.RESUME, model.WATCH, model.RECAP}
+            local targets = {model.LIST, model.LIST_WORKSPACE, model.GET, model.SUBSCRIBE, model.PAGE, model.ACK_PAGE, model.RESUME, model.WATCH, model.RECAP}
             for _, target in ipairs(targets) do
                 test.eq(scope:evaluate(actor, "funcs.call", target), "allow")
             end

@@ -5,7 +5,9 @@ local tty = require("tty")
 local appearance = require("appearance")
 local names = require("names")
 -- switchable: a desktop bridge serves this display, so it can show another workspace.
-type Info = {node: string, workspace: string, display: string, hive: string, attachments: string, details: boolean?, switchable: boolean}
+-- label: the workspace's saved label once a catalog page names it; the
+-- generated identity name otherwise, with the full identity behind Details.
+type Info = {node: string, workspace: string, display: string, hive: string, attachments: string, details: boolean?, switchable: boolean, label: string?}
 local M = {}
 local function line(value: unknown, limit: integer): string?
     if type(value) ~= "string" or value == "" or #value > limit or value:find("%c") then return nil end
@@ -33,6 +35,13 @@ function M.observe(info: Info, value: unknown): boolean
     return true
 end
 function M.switchable(info: Info): boolean return info.switchable end
+function M.set_workspace_label(info: Info, label: string)
+    info.label = label ~= "" and label or nil
+end
+local function workspace_label(info: Info): string
+    if info.label ~= nil and info.label ~= "" then return info.label end
+    return names.label(info.workspace)
+end
 function M.toggle_details(info: Info): ()
     info.details = not info.details
 end
@@ -92,7 +101,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         pair(2, "HIVE", info.hive)
         pair(3, "NODE", info.node)
         pair(4, "CONTROL", info.attachments)
-        put(5, "WORKSPACE  " .. names.label(info.workspace), normal)
+        put(5, "WORKSPACE  " .. workspace_label(info), normal)
         put(6, "DISPLAY    " .. names.label(info.display), normal)
         put(7, tostring(width) .. " × " .. tostring(height) .. "  ·  " .. (ready and "Ready" or "Loading"), muted)
     else
@@ -101,7 +110,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         pair(4, "CONTROL", info.attachments)
         rule(5)
         pair(6, "WORKSPACE", ready and "Ready" or "Loading")
-        put(7, names.label(info.workspace), normal)
+        put(7, workspace_label(info), normal)
         local shift = 0
         if info.details and rows >= 16 then
             put(8, info.workspace, muted)

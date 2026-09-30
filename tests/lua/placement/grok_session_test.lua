@@ -105,7 +105,6 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
         resume_ref = resume and "fixture-conversation" or nil, gateway_tools = {}, gateway_hooks = {}}))
     local selected = launch.specification(decoded)
     test.eq(selected.provider_home and selected.provider_home.private, true)
-    test.eq(selected.provider_home and selected.provider_home.retain_session, true)
     local argv: {string} = {"-c", FIXTURE, "bee-grok-fixture"}
     for _, argument in ipairs(selected.argv) do argv[#argv + 1] = argument end
     selected.executable, selected.argv, selected.readiness = "sh", argv, "none"
@@ -128,7 +127,6 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
     }
     request = assert(request_codec.decode(request))
     request.delivery = {arguments = {}, files = {file}}
-    test.eq(request.launch.provider_home and request.launch.provider_home.retain_session, true)
     local intended = store.intend(db, request, assert(request_codec.digest(request)), assert(json.encode(request)),
         {capability = "direct_process", exit_observation = "eof_gated"})
     test.is_true(intended.ok)

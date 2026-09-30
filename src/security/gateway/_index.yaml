@@ -55,12 +55,13 @@ entries:
 - name: gateway_tool_read_policy
   kind: security.policy
   meta:
-    comment: The scope a bound subject runs thread_read and capability elevation under; membership is still checked by the thread owner and elevation writes only through a thread-bound approval
+    comment: The scope a bound subject runs thread_read, thread_wait, thread_sessions and capability elevation under; membership is still checked by the thread owner and elevation writes only through a thread-bound approval
   policy:
     actions:
     - funcs.call
     resources:
     - bee.threads.service:read_after
+    - bee.threads.delivery:watch
     - bee.threads.service:get
     - bee.gateway.binding:request_capability
     - bee.gateway.binding:capability_status
@@ -68,33 +69,24 @@ entries:
 - name: gateway_tool_message_policy
   kind: security.policy
   meta:
-    comment: The bound MCP subject may record a decoded note on its own thread through the thread authority; the endpoint supplies thread and action/attempt context
+    comment: The bound MCP subject may append only a decoded message through the thread authority and register a one-shot
+      notice on its own thread; the endpoint supplies thread, action/attempt context and the addressed session, and reads
+      membership through get so an unreadable session is never reached
   policy:
     actions:
     - funcs.call
     resources:
     - bee.threads.service:record
+    - bee.threads.service:notify
+    - bee.threads.service:get
     effect: allow
-- name: gateway_session_discover_policy
+- name: gateway_tool_inbox_policy
   kind: security.policy
-  meta: {comment: Workspace peers may discover local action addresses through the owner; the owner checks the caller workspace}
+  meta: {comment: Bound agents call only action inbox owner methods; each method checks its own action, workspace and acceptance}
   policy:
-    actions: [bee.sessions.discover]
-    resources: '*'
-    effect: allow
-- name: gateway_session_send_denied_policy
-  kind: security.policy
-  meta: {comment: No session send grant until the host selects an exact address policy}
-  policy:
-    actions: [bee.sessions.send]
-    resources: [unassigned-session-address]
-    effect: allow
-- name: gateway_session_send_workspace_policy
-  kind: security.policy
-  meta: {comment: Bundled host grants local workspace agents a send attempt; the Threads owner checks authenticated workspace, target address, recipient acceptance and current grant epoch}
-  policy:
-    actions: [bee.sessions.send]
-    resources: '*'
+    actions: [funcs.call]
+    resources: [bee.threads.service:inbox_send, bee.threads.service:inbox_reply, bee.threads.service:inbox_list,
+      bee.threads.service:inbox_ack, bee.threads.service:inbox_describe]
     effect: allow
 - name: gateway_tool_overlay_policy
   kind: security.policy.expr
@@ -157,10 +149,10 @@ entries:
 - name: gateway_tool_session_policy
   kind: security.policy.expr
   meta:
-    comment: A bound MCP subject opens the bee.sessions owner contracts and calls their methods for the default session tools; owners authorize every operation against the authenticated subject again
+    comment: A bound MCP subject supplies its authenticated context and scope to the bee.sessions owner contracts for the default session tools; owners authorize every operation against that subject again
   policy:
-    expression: '(action == "contract.open" && resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$") || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
-    actions: [contract.open, contract.call, funcs.call]
+    expression: '(action == "contract.context" && resource == "context") || (action == "contract.security" && resource == "security") || (action == "contract.open" && (resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$" || resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")) || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
+    actions: [contract.context, contract.security, contract.open, contract.call, funcs.call]
     resources: ['*']
     effect: allow
 - name: gateway_tool_install_policy

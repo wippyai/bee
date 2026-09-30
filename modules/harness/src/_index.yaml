@@ -163,7 +163,9 @@ entries:
         optional: true
       opencode_api_key:
         provider: opencode
-        source: {kind: env_variable, ref: bee.driver.opencode:api_key}
+        source:
+          kind: env_variable
+          ref: bee.driver.opencode:api_key
         optional: true
       opencode_login:
         provider: opencode
@@ -182,6 +184,7 @@ entries:
     close_grace_ms: 60000
     policies:
     - bee.harness.security:carrier_policy
+    - bee.harness.security:interactive_session_policy
     - bee.harness.security:carrier_environment_policy
     - bee.harness.security:profile_workspace_policy
     - bee.harness.security:profile_context_boundary
@@ -200,6 +203,8 @@ entries:
     - bee.placement.docker.security:docker_policy
     - bee.placement.docker.security:docker_socket_policy
     - bee.placement.docker.security:image_client_policy
+    - bee.security.storage:workspace_catalog_read_policy
+    - bee.placement.docker.security:environment_revoke_policy
   targets:
   - entry: bee.security:application_admission
     path: .bindings +=

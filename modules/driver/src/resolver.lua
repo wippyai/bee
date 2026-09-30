@@ -89,7 +89,7 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
             if target then return nil, "binding " .. binding_ref .. " declares the driver contract twice", nil end
             local methods = bounds.object(contract.methods)
             if not methods then return nil, "binding " .. binding_ref .. " driver methods must be an object", nil end
-            local method_extra = bounds.fields(methods, {"prepare", "dispatch", "normalize", "configure"})
+            local method_extra = bounds.fields(methods, {"prepare", "dispatch", "normalize", "configure", "locate"})
             if method_extra then return nil, "binding " .. binding_ref .. " driver methods: " .. method_extra, nil end
             for _, name in ipairs({"prepare", "dispatch", "normalize", "configure"}) do
                 local method = bounds.id(methods[name])
@@ -161,4 +161,17 @@ function M.profile(pinned: registry.Snapshot, binding_ref: string, profile_id: s
     if not selected then return nil, "binding " .. binding_ref .. " has no profile " .. profile_id end
     return selected, nil
 end
+function M.select_hooks(profile: driver_types.Profile?, requested: {string}): {string}
+    local supported: {[string]: boolean} = {}
+    if profile and profile.hooks then
+        for _, event in ipairs(profile.hooks.events) do supported[event] = true end
+    end
+    local selected: {string} = {}
+    for _, event in ipairs(requested) do
+        if supported[event] then selected[#selected + 1] = event end
+    end
+    table.sort(selected)
+    return selected
+end
+
 return M

@@ -280,11 +280,73 @@ local function recover()
     call(target .. "cleanup", {attempt_id = attempt})
     save("evidence.json", assert(json.encode(call(target .. "evidence", {attempt_id = attempt, limit = 128}).value)))
 end
+local function scheduled(mode: string)
+    local tools = {"session_catalog", "session_open", "session_run", "session_send", "session_await", "session_join", "session_get", "session_list", "session_cancel", "session_close", "thread_read", "thread_message"}
+    for _, provider in ipairs({"claude", "codex"}) do
+        local id = provider .. "-docker-scheduler"
+        call("bee.harness.profiles:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
+            expected_revision = 0, idempotency_key = id, profile = {title = id, definition_ref = "bee.driver." .. provider .. ":default_window",
+                placement_profile_ref = "bee.docker.proof:profile", options = {}, mcp_tools = tools, instructions = ""}})
+    end
+    local function open(provider: string): Object
+        return object(call("bee.sessions.binding:open", {spec = {definition = "bee.driver." .. provider .. ":default_window",
+            profile = {id = provider .. "-docker-scheduler", revision = 1}}, operation_key = "open-" .. provider}).value)
+    end
+    local function wait(work: string): Object
+        local deadline = time.after("5m")
+        while true do
+            local result = object(call("bee.sessions.binding:await", {subject = work}).value)
+            if result.tag == "ready" then
+                local outcome = object(result.result)
+                assert(outcome.outcome == "succeeded", tostring(json.encode(outcome)))
+                return result
+            end
+            assert(result.tag == "pending", tostring(json.encode(result)))
+            local selected = channel.select({time.after("100ms"):case_receive(), deadline:case_receive()})
+            assert(selected.ok and selected.channel ~= deadline, "scheduled Docker turn timed out")
+        end
+        error("scheduled turn unavailable")
+    end
+    local claude = open("claude")
+    save("claude-open.json", assert(json.encode(claude)))
+    local prompt = "Reply only with docker-claude-scheduler-ok."
+    if mode == "child" then
+        prompt = 'Use the Bee session_open MCP tool with spec {definition="bee.driver.codex:default_window",profile={id="codex-docker-scheduler",revision=1}} and operation_key "docker-child-open". Then session_send to that child with operation_key "docker-child-send" and input "Reply only with docker-child-codex-result-731.". Poll session_await on its returned work until ready, then return that exact child result. Use the Bee tools directly; do not invoke a local CLI.'
+    end
+    local sent = object(call("bee.sessions.binding:send", {session = claude.session, input = prompt, operation_key = "claude-work"}).value)
+    save("claude-work.json", assert(json.encode(sent)))
+    local result = wait(tostring(sent.work))
+    save("claude-result.json", assert(json.encode(result)))
+    if mode == "child" then
+        assert(assert(json.encode(result)):find("docker%-child%-codex%-result%-731"), "Claude did not return its Codex child result")
+    else
+        local codex = open("codex")
+        save("codex-open.json", assert(json.encode(codex)))
+        local work = object(call("bee.sessions.binding:send", {session = codex.session, input = "Reply only with docker-codex-scheduler-ok.", operation_key = "codex-work"}).value)
+        save("codex-work.json", assert(json.encode(work)))
+        save("codex-result.json", assert(json.encode(wait(tostring(work.work)))))
+    end
+    save("sessions.json", assert(json.encode(call("bee.sessions.binding:list", {}).value)))
+    local deadline = time.after("35s")
+    while true do
+        local db = assert(placement_store.open())
+        local rows = assert(db:query("SELECT attempt_id, execution_state, cleanup_state FROM bee_placement_attempts WHERE placement_kind = 'docker'", {}))
+        db:release()
+        local complete = #rows > 0
+        for _, row in ipairs(rows) do
+            if row.execution_state ~= "exited" or row.cleanup_state ~= "complete" then complete = false end
+        end
+        if complete then save("cleanup.json", assert(json.encode(rows))); break end
+        local event = channel.select({time.after("100ms"):case_receive(), deadline:case_receive()})
+        assert(event.ok and event.channel ~= deadline, "Docker runner and sweeper did not complete container cleanup")
+    end
+end
 function M.proof()
-    local endpoint = object(assert(registry.get("bee:gateway_endpoint")).data)
+    local endpoint = object(assert(funcs.call("bee.gateway:address", {})))
     call("bee.gateway.binding:open", {address = endpoint.address})
     local expected = object(assert(registry.get("bee.docker.proof:expectation")).data)
     local provider, mode = tostring(expected.provider), tostring(expected.mode)
+    if mode == "scheduler" or mode == "child" then scheduled(mode); return end
     if mode == "crash-recover" then recover(); return end
     save("image-readiness.json", assert(json.encode(call("bee.placement.docker.binding:capabilities", {placement_profile_ref = "bee.docker.proof:profile", runtime_name = provider}).value)))
     local definition, id, plan = profile(provider, mode == "window" and "window" or "session")

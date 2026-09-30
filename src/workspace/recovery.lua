@@ -14,7 +14,7 @@ local M = {}
 -- rewritten or interpreted as a Bee-owned identifier.
 local prior_definitions: {[string]: string} = {
     ["bee.hive_manager:app"] = "bee.hive.manager:app",
-    ["bee.inbox:app"] = "bee.approvals.inbox:app",
+    ["bee.inbox:app"] = "bee.approvals.inbox.app:app",
     ["bee.modules:app"] = "bee.hub.modules:app",
     ["bee.overlays:app"] = "bee.gov.overlays:app",
     ["bee.workspaces:app"] = "bee.workspace.manager:app",

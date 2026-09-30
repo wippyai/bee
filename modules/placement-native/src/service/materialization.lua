@@ -344,7 +344,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local selected_home_path = home_path
     local retained_home = false
     local provider_home = request.launch.provider_home
-    if request.session_ref and (not provider_home or provider_home.private ~= true or provider_home.retain_session == true) then
+    if request.session_ref then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
         if not session_path then
@@ -483,6 +483,15 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                     return refused(format_error or "container projection refused")
                 end
                 source.format = format
+            elseif provider_home and provider_home.private then
+                local machine_home, machine_home_error = env.get("bee.env:machine_home")
+                if type(machine_home) ~= "string" or machine_home_error then return refused("provider source home unavailable") end
+                local projected_format, format_error = provider_projection.native(provider_home, source.format, machine_home, home_os)
+                if not projected_format then
+                    evidence(db, attempt_id, "configuration.refused", format_error or "provider configuration projection refused", {execution = "exited"})
+                    return refused(format_error or "provider configuration projection refused")
+                end
+                source.format = projected_format
             end
             local login_path = source.path
             if not login_path then return refused("file login path unavailable") end

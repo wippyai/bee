@@ -340,14 +340,20 @@ entries:
   methods:
   - name: session_create
     description: Create a durable session in the canonical thread journal
+  - name: session_attach
+    description: Attach the admitted native attempt to its durable interactive session
   - name: session_describe
     description: Read a session and its current work summary
+  - name: session_scan
+    description: Scan durable session references in a workspace
   - name: session_transition
     description: Change session lifecycle at a durable revision
   - name: work_send
     description: Commit immutable work with owner-set sender identity
   - name: work_describe
     description: Read a work phase and its result when settled
+  - name: work_history
+    description: Page immutable work inputs for a session
   - name: work_scan
     description: Scan the next queued work and unsettled turn for the Sessions scheduler
   - name: turn_reserve
@@ -358,12 +364,18 @@ entries:
     description: Pull the exact immutable envelope for a reserved turn
   - name: turn_accept
     description: Commit acceptance of the reserved input checkpoint
+  - name: turn_observation
+    description: Append one normalized event from the current fenced turn
   - name: work_settle
     description: Settle one accepted turn with its per-work result
   - name: work_uncertain
     description: Persist uncertainty without retrying a turn whose outcome cannot be proven
+  - name: work_cancel
+    description: Cancel queued work or request a placement stop for an unsettled turn
   - name: operation_lookup
     description: Recover a caller-scoped operation receipt by key
+  - name: operation_describe
+    description: Read an exact caller-scoped operation receipt
   - name: feed_read
     description: Read canonical session events after an owner-local sequence
 - name: journal_local
@@ -372,18 +384,24 @@ entries:
   - contract: bee.threads:journal
     methods:
       session_create: bee.threads.service:session_create
+      session_attach: bee.threads.service:session_attach
       session_describe: bee.threads.service:session_describe
+      session_scan: bee.threads.service:session_scan
       session_transition: bee.threads.service:session_transition
       work_send: bee.threads.service:work_send
       work_describe: bee.threads.service:work_describe
+      work_history: bee.threads.service:work_history
       work_scan: bee.threads.service:work_scan
       turn_reserve: bee.threads.service:turn_reserve
       turn_recover: bee.threads.service:turn_recover
       turn_pull: bee.threads.service:turn_pull
       turn_accept: bee.threads.service:turn_accept
+      turn_observation: bee.threads.service:turn_observation
       work_settle: bee.threads.service:work_settle
       work_uncertain: bee.threads.service:work_uncertain
+      work_cancel: bee.threads.service:work_cancel
       operation_lookup: bee.threads.service:operation_lookup
+      operation_describe: bee.threads.service:operation_describe
       feed_read: bee.threads.service:feed_read
 - name: owner
   kind: process.lua

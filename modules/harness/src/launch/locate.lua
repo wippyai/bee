@@ -210,7 +210,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             local value = reply and reply.ok == true and bounds.object(reply.value) or nil
             local image = value and bounds.object(value.image_readiness) or nil
             local network = value and bounds.object(value.network_readiness) or nil
-            if network and network.present ~= true then
+            if network and network.present ~= true and network.provisionable ~= true then
                 local result = unknown(provider, bounds.line(network.reason, 1024) or "Docker network readiness is unavailable")
                 return result
             end
@@ -223,6 +223,9 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
                 cache.drivers[cache_key] = result; return result
             end
             executable_present = true
+            if placement_profile and placement_profile.profile.image_recipe_ref then
+                version = executable_version(executable_path, bounds.object(selected.version_probe) or {})
+            end
             platform = {os = bounds.line(image.os, 32), arch = bounds.line(image.arch, 32)}
             compatible = platform.os ~= nil and platform.arch ~= nil and bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
         end

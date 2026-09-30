@@ -1,5 +1,5 @@
 -- MIT. Muse CLI exec --json (protocol revision msp-exec-1) into thread
--- observations. Only run.terminal.completed reports the turn; the answer
+-- observations. The run.terminal envelopes report the turn; the answer
 -- accumulates from run.output.delta text, and the exit code never decides.
 local json = require("json")
 local events = require("events")
@@ -271,7 +271,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         -- has no proved tool-call identity, so keep it provider-specific; only
         -- explicit tool.result envelopes become shared tool observations.
         extension(state, index, tostring(kind), envelope, out)
-    elseif kind == "run.terminal.completed" then
+    elseif kind == "run.terminal.completed" or kind == "run.terminal.failed" or kind == "run.terminal.cancelled" then
         local terminal: unknown = payload.terminal
         local outcome: types.Outcome
         local fault: Fault? = nil
@@ -309,7 +309,7 @@ function M.finish(state: State, index: integer): Step
         return quiet
     end
     local out: {Observation} = {events.turn(key(index, "eof"), "ended", "uncertain", nil)}
-    local terminal: types.Terminal = {outcome = "uncertain", answer = retained_answer(state), resume_ref = state.session_id, error = events.fault("stream_ended", "the stream ended without run.terminal.completed", false)}
+    local terminal: types.Terminal = {outcome = "uncertain", answer = retained_answer(state), resume_ref = state.session_id, error = events.fault("stream_ended", "the stream ended without a run terminal", false)}
     state.terminal = terminal
     return {observations = out, terminal = terminal}
 end

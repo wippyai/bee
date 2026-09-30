@@ -67,11 +67,34 @@ excluded from the stored launch identity. Image-owner loss or reply timeout
 returns an unknown outcome, with no automatic retry. Owner cancellation closes
 the active build process and removes its context.
 
-The coding profile names `bee-coding`; the host must admit that network and bind
-the gateway to a restricted interface reachable from it. Network readiness is
-reported before launch, and preparation refuses host-loopback gateway addresses.
-Automatic network/gateway provisioning remains a proposal. The default native
-loopback gateway does not make this Docker profile ready by itself.
+The coding profile names `bee-coding`. The host's `environment_provisioning`
+requirement selects that network, the existing gateway endpoint/listener and
+readiness policy, and a person approval policy. `image_owner_policies`
+selects the owner's grants. Its module default grants image preparation; the host
+adds approval, gateway overlay and supervisor lifecycle authority. Selecting the profile opens one
+recorded approval in Needs you before provisioning. Approval authorizes the
+existing image owner to create an owned private bridge and move the existing
+restricted gateway listener onto its host address through supervisor stop,
+overlay update and restart. No additional listener or runtime owner is created.
+The approval is consumed before provisioning; a protected environment receipt
+binds reuse to the selected profile and host configuration. Pending, declined,
+expired and revoked admissions report distinct reasons without launching.
+
+`bee.placement.docker.binding:prepare_environment` takes
+`placement_profile_ref`, `workspace_id`, optional `progress_recipient` and
+optional `revoke`. The existing host admission invokes it before gateway
+projection. Sessions runs Docker turns through the same external executor and
+scheduler as native turns; restricted MCP can open/send Docker child Sessions,
+and both transcripts belong to Threads. The Agent conversation shows launch
+progress and directs the person to the approval inbox. The profile editor's
+Ctrl+R, followed by Enter, revokes the receipt and restores the host gateway
+configuration; Escape cancels. Revocation requires the host's person-only
+`bee.placement.environment.revoke` grant. The sweeper stops admitted containers
+when their environment is revoked. The owned network remains a host cache.
+
+`capabilities.network_readiness.provisionable` reports whether the host selects
+this first-use admission path. Existing manually admitted reachable networks
+remain usable. Docker preparation refuses host-loopback gateway addresses.
 
 For explicit registry images, first launch fetches the admitted digest with
 `docker.image_fetching` and `docker.image_ready` evidence. A missing local image
@@ -82,5 +105,7 @@ Validation covers real start/replay, foreign-owner denial, quoted stdin and EOF,
 owner SIGKILL/restart, exact-ID cancellation and evidence-before-removal. Live
 provider probes use `make docker-placement-live-check` with an explicit image,
 provider, mode and evidence directory; the probe removes its containers/network.
-Each provider result and remaining scheduler dependency belongs in the lane's
-acceptance report.
+Scheduler and child probes audit retained Sessions, successful Work results,
+both Threads transcripts, immutable container identities and completed cleanup.
+`tests/docker_environment_live.py --evidence PATH` exercises the native desktop
+first-use approval. Each provider result belongs in the lane's acceptance report.

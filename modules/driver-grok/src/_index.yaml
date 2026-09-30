@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Grok driver
-    comment: Declarative Grok CLI driver; placement owns process, credentials, and private-home materialization
+    comment: Declarative Grok CLI driver; placement owns process, credentials, and
+      private-home materialization
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -186,7 +187,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Grok window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Grok window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: grok-window
@@ -195,6 +197,9 @@ entries:
     - grok
     binding_ref: bee.driver.grok:binding
     profile_id: window
+    session_profile_id: session
+    session_credentials:
+    - grok_login
     policy_ref: ''
     default_mode: window
     allowed_overrides:
@@ -212,14 +217,13 @@ entries:
       start_menu: true
       fullscreen: true
       reuse: never
-    private_credentials:
-    - grok_login
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Grok batch route for a host-selected coordinator and caller-owned shared thread; the CLI offers no provable
-      workdir confinement, so the host records it as unconfined
+    comment: Component-owned bounded Grok batch route for a host-selected coordinator
+      and caller-owned shared thread; the CLI offers no provable workdir confinement,
+      so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: grok-research-batch
@@ -270,7 +274,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Grok turn budget for agentic research actions on a caller-owned thread
+    comment: Host-selected Grok turn budget for agentic research actions on a caller-owned
+      thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -321,7 +326,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Grok window; missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Grok window;
+      missing host executable leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:

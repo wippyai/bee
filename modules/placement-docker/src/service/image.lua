@@ -286,8 +286,9 @@ end
 M.OWNER = "bee.placement.docker/image"
 M.REQUEST = "bee.placement.image_request"
 M.REPLY = "bee.placement.image_reply"
-function M.resolve(profile: profiles.Resolved, progress_recipient: string?): (string?, string?, string?)
-    if not profile.profile.image_recipe_ref then return profile.profile.image_ref, profile.profile.interactive_route_ref, nil end
+M.command = command
+function M.resolve(profile: profiles.Resolved, progress_recipient: string?, operation: string?, workspace: string?): (string?, string?, string?)
+    if not operation and not profile.profile.image_recipe_ref then return profile.profile.image_ref, profile.profile.interactive_route_ref, nil end
     if not security.can("bee.placement.image", profile.ref) then return nil, nil, "runtime image preparation is not authorized" end
     local owner = process.registry.lookup(M.OWNER)
     if not owner then return nil, nil, "runtime image owner is unavailable" end
@@ -302,7 +303,7 @@ function M.resolve(profile: profiles.Resolved, progress_recipient: string?): (st
     local id = uuid.v7()
     local path = parent .. "/" .. id .. ".json"
     local encoded = json.encode({version = 1, request_id = id, profile_ref = profile.ref, profile_digest = profile.digest,
-        sender = tostring(process.pid()), progress_recipient = progress_recipient})
+        sender = tostring(process.pid()), progress_recipient = progress_recipient, operation = operation, workspace = workspace})
     if not encoded then return nil, nil, "image request encoding failed" end
     local written, write_error = volume:writefile(path, encoded, {atomic = true})
     if not written then return nil, nil, tostring(write_error) end
@@ -332,11 +333,12 @@ function M.resolve(profile: profiles.Resolved, progress_recipient: string?): (st
     process.unlisten(replies)
     volume:remove(path)
     if not result then return nil, nil, "image preparation outcome is unknown; inspect image readiness and its receipt before another launch" end
+    if operation then return bounds.line(result.image,128), nil, bounds.line(result.error,4096) end
     if result.error == nil and not image_id({Id = result.image}) then return nil, nil, "image owner returned no immutable image ID" end
     if result.error == nil and not bounds.id(result.route) then return nil, nil, "image owner returned no interactive route" end
     return bounds.line(result.image, 512), bounds.id(result.route), bounds.line(result.error, 4096)
 end
-function M.authorized_request(id: string, sender: string): (profiles.Resolved?, string?, string?)
+function M.authorized_request(id: string, sender: string): (profiles.Resolved?, string?, string?, string?, string?)
     local root_ref = resources.root()
     local volume = root_ref and fs.get(root_ref) or nil
     if not volume then return nil, "image request root unavailable" end
@@ -344,7 +346,7 @@ function M.authorized_request(id: string, sender: string): (profiles.Resolved?, 
     if not content or #content > 4096 then return nil, "image request is not recorded" end
     local decoded = json.decode(content)
     local request = bounds.object(decoded)
-    if not request or bounds.fields(request, {"version", "request_id", "profile_ref", "profile_digest", "sender", "progress_recipient"})
+    if not request or bounds.fields(request, {"version", "request_id", "profile_ref", "profile_digest", "sender", "progress_recipient", "operation", "workspace"})
         or request.version ~= 1 or request.request_id ~= id or request.sender ~= sender then return nil, "image request belongs to another sender" end
     local ref = bounds.id(request.profile_ref)
     if not ref then return nil, "image request profile is invalid" end
@@ -353,6 +355,9 @@ function M.authorized_request(id: string, sender: string): (profiles.Resolved?, 
     if not profile or profile.digest ~= request.profile_digest then return nil, "image request profile changed" end
     local recipient = request.progress_recipient == nil and sender or bounds.line(request.progress_recipient, 512)
     if not recipient then return nil, "image progress recipient is invalid" end
-    return profile, nil, recipient
+    local operation = request.operation == nil and nil or bounds.member(request.operation, {"environment", "revoke"})
+    local workspace = request.workspace == nil and nil or bounds.id(request.workspace)
+    if request.operation ~= nil and (not operation or not workspace) then return nil, "environment request is invalid" end
+    return profile, nil, recipient, operation, workspace
 end
 return M

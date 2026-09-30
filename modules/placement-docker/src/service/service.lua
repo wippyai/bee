@@ -17,6 +17,7 @@ local docker_client = require("docker_client")
 local paths = require("paths")
 local resources = require("resources")
 local image_service = require("image")
+local environment = require("environment")
 local M = {}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
@@ -77,7 +78,7 @@ local function provider_home(loaded: Loaded): (string?, string?)
     local request = loaded.request
     local key, key_error = homes.attempt_key(request.owner_id, request.attempt_id)
     local parent = homes.ATTEMPTS
-    if request.session_ref and request.launch.home_ref and (not request.launch.provider_home or request.launch.provider_home.private ~= true or request.launch.provider_home.retain_session == true) then
+    if request.session_ref and request.launch.home_ref then
         key, key_error = homes.session_key(request.owner_id, request.session_ref)
         parent = homes.SESSIONS
     end
@@ -159,6 +160,7 @@ function M.prepare(value: unknown): Reply
     end
     local launch: {[string]: unknown} = {}
     for key, item in pairs(input) do if key ~= "progress_recipient" then launch[key] = item end end
+    if environment.revoked() then return fail("DENIED", "Docker network and gateway admission was revoked") end
     local request, decode_error = request_codec.decode(launch)
     if not request then return fail("INVALID", decode_error or "invalid launch request") end
     if request.owner_id ~= actor() then return fail("DENIED", "Docker request belongs to another actor") end
@@ -187,6 +189,32 @@ function M.prepare(value: unknown): Reply
     return local_attempts.prepare_local(request, {binding = spec_codec.BINDING, kind = "docker", spec_json = encoded,
         home_directory = spec_codec.HOME, capability = "contained_tree", exit_observation = "independent", stdin_close = true})
 end
+function M.prepare_environment(value: unknown): Reply
+    local input = bounds.object(value)
+    if not input or bounds.fields(input, {"placement_profile_ref", "workspace_id", "progress_recipient", "revoke"}) then return fail("INVALID", "invalid Docker environment request") end
+    local ref, workspace = bounds.id(input.placement_profile_ref), bounds.id(input.workspace_id)
+    if not ref or not workspace then return fail("INVALID", "Docker environment requires a host profile and workspace") end
+    if input.revoke ~= nil and type(input.revoke) ~= "boolean" then return fail("INVALID", "revoke must be boolean") end
+    if input.revoke == true and not security.can("bee.placement.environment.revoke", ref) then return fail("DENIED", "only the person may revoke Docker environment admission") end
+    local pinned = registry.snapshot()
+    local profile = pinned and profiles.resolve(pinned, ref)
+    if not profile or profile.profile.placement_binding ~= spec_codec.BINDING then return fail("DENIED", "profile does not select Docker") end
+    if input.revoke ~= true then
+        if profile.profile.network == "none" then return succeed({}) end
+        local client = docker_client.new("/var/run/docker.sock")
+        local existing = client and client:inspect_network(profile.profile.network or "")
+        local raw = funcs.call("bee.gateway:address", {})
+        local endpoint = bounds.object(raw)
+        if existing and endpoint and type(endpoint.address) == "string" and not endpoint.address:match("^127%.") then
+            if not environment.recorded() then return succeed({address = endpoint.address}) end
+        end
+    end
+    local recipient = input.progress_recipient == nil and tostring(process.pid()) or bounds.line(input.progress_recipient,512)
+    if not recipient then return fail("INVALID", "invalid environment progress recipient") end
+    local address, _, error = image_service.resolve(profile, recipient, input.revoke == true and "revoke" or "environment", workspace)
+    if error then return fail("UNAVAILABLE", error) end
+    return succeed({address = address})
+end
 function M.start(value: unknown): Reply
     local loaded, load_error = M.load(value)
     if not loaded then return fail("DENIED", load_error or "attempt unavailable") end
@@ -199,6 +227,11 @@ function M.reconcile(value: unknown): Reply
 end
 function M.reconcile_loaded(loaded: Loaded): Reply
     if loaded.attempt.execution_state == "intended" then return succeed(loaded.attempt) end
+    if loaded.attempt.execution_state == "starting" then
+        local present, presence_error = local_attempts.runner_present(loaded.row)
+        if present == true then return succeed(loaded.attempt) end
+        if present == nil then return fail("UNAVAILABLE", presence_error or "Docker creator presence is unknown") end
+    end
     local found, find_error, absent = M.find(loaded)
     if find_error then
         if loaded.attempt.execution_state == "exited" then return fail("UNAVAILABLE", find_error) end
@@ -220,7 +253,7 @@ function M.reconcile_loaded(loaded: Loaded): Reply
             evidence = {kind = "docker.exited", detail = "container " .. found.backend_ref .. " is " .. found.state .. "; exit result may be unknown"}})
     end
     local refused, subject = local_attempts.check_grants(loaded.row, loaded.request)
-    if refused then
+    if refused or environment.revoked() then
         local noted = M.change(loaded.attempt.attempt_id, {evidence = {kind = tostring(subject) .. ".revoked", detail = "recorded authorization no longer holds; stopping container"}})
         if not noted.ok then return noted end
         return M.stop_loaded(loaded, {mode = "forced"})
@@ -380,7 +413,11 @@ function M.capabilities(value: unknown): Reply
         if not client then return fail("UNAVAILABLE", "Docker connection unavailable") end
         local network = selected.profile.network
         local present = network == "none" or (network ~= nil and client:inspect_network(network) ~= nil)
-        report.network_readiness = {present = present, reason = present and "host-selected Docker network is available"
+        local config_entry = registry.get("bee.placement.docker:environment_configuration")
+        local config_record = config_entry and bounds.object(config_entry.data)
+        local config = config_record and bounds.object(config_record.value)
+        local provisionable = config ~= nil and config.network == network and not environment.revoked()
+        report.network_readiness = {present = present, provisionable = provisionable, reason = present and "host-selected Docker network is available"
             or "host-selected Docker network is missing; admit its restricted gateway interface before use: " .. (network or "")}
         local image_ref = selected.profile.image_ref
         if selected.profile.image_recipe_ref then

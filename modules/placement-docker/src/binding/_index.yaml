@@ -24,9 +24,9 @@ entries:
   kind: function.lua
   source: file://methods.lua
   method: prepare
-  imports:
+  imports: &id001
     service: bee.placement.docker.service:service
-  security:
+  security: &id002
     policies:
     - bee.placement.native.security:placement_store_policy
     - bee.placement.native.security:placement_exec_policy
@@ -197,3 +197,9 @@ entries:
     - bee.security.gateway:gateway_supervision_policy
     - bee.placement.docker.security:docker_policy
     - bee.placement.docker.security:docker_socket_policy
+- name: prepare_environment
+  kind: function.lua
+  source: file://methods.lua
+  method: prepare_environment
+  imports: *id001
+  security: *id002

@@ -96,8 +96,11 @@ function M.new(): Owner
     journal.pull_turn = function(request: {turn: string, claim: string}): (Object?, string?)
         local row = by_turn(request.turn)
         if not row or row.claim ~= request.claim then return nil, "stale claim" end
-        local route: Object = {driver_binding_ref = "bee.fake.driver:binding", profile_id = "batch",
-            driver_methods = {}, driver_options = {}, placement_methods = {}, placement_request = {}}
+        local route: Object = {definition = "bee.test:definition", plan_digest = string.rep("a", 64),
+            workspace_id = "workspace", owner_id = "principal:test", thread_id = "thread-test",
+            session_ref = row.session, action_id = row.session,
+            driver_binding_ref = "bee.fake.driver:binding", profile_id = "batch",
+            driver_methods = {}, driver_options = {}, placement_methods = {}}
         return {work = row.work, session = row.session, turn = request.turn, claim = request.claim,
             owner_epoch = row.owner_epoch, input = row.input, input_digest = row.input_digest,
             output_schema = row.output_schema, sender = row.sender, route = route,
@@ -133,6 +136,12 @@ function M.new(): Owner
         if not row then return nil, "turn not found" end
         row.uncertainty = object(request.evidence) or {summary = "turn outcome is uncertain", artifacts = {}}
         return {state = "uncertain"}, nil
+    end
+    journal.describe_session = function(_request: {session: string}): (Object?, string?)
+        return {state = "active", queued = 0, active = 0}, nil
+    end
+    journal.transition_session = function(_request: Object): (Object?, string?)
+        return {state = "active"}, nil
     end
 
     local owner: Owner = {

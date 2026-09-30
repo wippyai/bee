@@ -3,6 +3,7 @@ local process = require("process")
 local bounds = require("bounds")
 local image = require("image")
 local channel = require("channel")
+local environment = require("environment")
 local M = {}
 function M.main()
     local requests = assert(process.listen(image.REQUEST, {message = true}))
@@ -21,13 +22,18 @@ function M.main()
             if value and value.version == 1 and id and id:match("^[0-9a-f-]+$")
                 and not bounds.fields(value, {"version", "request_id"}) then
                 local sender = tostring(message:from())
-                local profile, reason, recipient = image.authorized_request(id, sender)
+                local profile, reason, recipient, operation, workspace = image.authorized_request(id, sender)
                 local digest, route, failure = nil, nil, reason
                 if profile then
                     local completed = channel.new(1)
                     local cancel = channel.new(1)
                     coroutine.spawn(function()
-                        local built, interactive, problem = image.build(profile, recipient, cancel)
+                        local built: string? = nil
+                        local interactive: string? = nil
+                        local problem: string? = nil
+                        if operation and workspace then
+                            built, problem = environment.run(profile.ref, profile.digest, profile.profile.network or "none", workspace, recipient, cancel, operation == "revoke")
+                        else built, interactive, problem = image.build(profile, recipient, cancel) end
                         completed:send({image = built, route = interactive, error = problem})
                     end)
                     while true do

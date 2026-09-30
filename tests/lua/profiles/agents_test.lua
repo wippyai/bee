@@ -101,6 +101,43 @@ local function define_tests()
             test.eq(err, "DENIED: no")
         end)
     end)
+    test.describe("Sessions directory and work control", function()
+        test.it("pages every visible session and filters by its public workspace address", function()
+            local asked: {Object} = {}
+            local first = snapshot("working", 2)
+            local second = snapshot("idle", 0)
+            second.session, second.lifecycle = "bs:n:other:s2", "closed"
+            local client: any = {list = function(_: any, options: Object): (unknown, nil)
+                asked[#asked + 1] = options
+                if options.cursor then return {items = {second}}, nil end
+                return {items = {first}, next = "next"}, nil
+            end}
+            local rows = agents.directory(client_of(client), nil)
+            test.eq(rows and #rows, 2)
+            test.eq(rows and rows[2].lifecycle, "closed")
+            test.eq(at(asked, 2).cursor, "next")
+            rows = agents.directory(client_of(client), "w")
+            test.eq(rows and #rows, 1)
+        end)
+        test.it("keeps uncertain work observable without offering it as current work", function()
+            local conv: any = {turns = {{state = "uncertain", input = "fix", text = "Outcome unknown"}}}
+            test.is_false(agents.pending(conv :: agents.Conversation))
+        end)
+        test.it("cancels working Work with a stable key and leaves the session open", function()
+            local keys: {string} = {}
+            local current: any = {state = "working", input = "fix", text = "", work = {
+                cancel = function(_: any, options: Object): (nil, Object)
+                    keys[#keys + 1] = tostring(options.operation_key)
+                    return nil, {code = "UNKNOWN_OUTCOME", message = "lost reply", retry = "same_key"}
+                end}}
+            local conv: any = {turns = {{state = "queued", work = {}}, current}, lifecycle = "active", notice = ""}
+            local source = key_source()
+            test.is_false(agents.stop(conv :: agents.Conversation, source))
+            test.is_false(agents.stop(conv :: agents.Conversation, source))
+            test.eq(keys[1], keys[2])
+            test.eq(conv.lifecycle, "active")
+        end)
+    end)
     test.describe("Agent window session conversation", function()
         test.it("opens a session under an operation key and profile", function()
             local seen: Object = {}

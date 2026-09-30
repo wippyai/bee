@@ -99,7 +99,6 @@ entries:
       variable: CLAUDE_CONFIG_DIR
       directory: .claude
       files:
-      - {path: .claude/.claude.json, kind: state, optional: true, write_back: false}
       - {source_path: .claude/.credentials.json, path: .claude/.credentials.json, kind: login, optional: true, write_back: true}
       - {source_path: .claude/settings.json, path: .claude/settings.json, kind: config, optional: true, write_back: false, container_content: '{}'}
       - {path: .claude.json, kind: state, optional: true, write_back: false}

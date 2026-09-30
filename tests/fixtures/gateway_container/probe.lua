@@ -38,7 +38,7 @@ local function main()
     end
     call("bee.threads.service:create", {thread_id = "container-thread", idempotency_key = "create", title = "Container gateway proof"})
     local admitted = call("bee.gateway.binding:admit", {subject = "bee.test.container", action_id = "container-action", attempt_id = "container-attempt",
-        thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_message"}, hooks = {"SessionStart"}, ttl_ms = 120000})
+        thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "capabilities"}, hooks = {"SessionStart"}, ttl_ms = 120000})
     local binding = admitted.binding :: Object
     local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = "container-attempt", carrier_epoch = 1, binding_id = binding.binding_id})
     local materialized = call("bee.gateway.binding:materialize", {attempt_id = "container-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key})

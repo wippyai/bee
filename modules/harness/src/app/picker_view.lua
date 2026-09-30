@@ -6,18 +6,17 @@ local text = require("text")
 local agents = require("agents")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer}
-local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "M", verb = "attach"},
-    {key = "U", verb = "unavailable"}, {key = "R", verb = "re-probe"}, {key = "N", verb = "new"}, {key = "E", verb = "edit"},
-    {key = "Esc", verb = "close"}})
+local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "U", verb = "unavailable"},
+    {key = "R", verb = "refresh"}, {key = "?", verb = "more"}, {key = "Esc", verb = "back"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
     local count = #listing.items
-    frame.header(painter, "AGENT", count > 0 and (tostring(count) .. " agents") or nil)
-    if height >= 5 then frame.line(painter, 2, "Choose an agent", theme.muted) end
+    frame.header(painter, "NEW SESSION", count > 0 and (tostring(count) .. " agents") or nil)
+    if height >= 5 then frame.line(painter, 2, "Choose a ready agent", theme.muted) end
     local show_summary = height >= 10
-    local last = height - (show_summary and 4 or 3)
+    local last = height - (show_summary and 5 or 3)
     local capacity = math.floor(math.max(0, last - 2))
     if width <= 2 then capacity = 0 end
     local window = frame.window(count, capacity, selected, 0)
@@ -34,20 +33,18 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local item = listing.items[selected]
     if show_summary and item then
-        local summary = item.kind .. " " .. item.ref
+        local summary = item.ready and "Ready · opening a session starts no work" or "Unavailable"
         if item.reason ~= "" then summary = summary .. " · " .. item.reason end
-        frame.line(painter, height - 3, text.bound(summary, 512), theme.muted)
+        frame.line(painter, height - 4, text.bound(summary, 512), theme.muted)
     end
     if height >= 3 then
         local chosen = item ~= nil and window.capacity > 0
         frame.actions(painter, height - 1, {
-            {kind = "open", label = "Open", enabled = not busy and chosen and item ~= nil and item.ready, primary = true},
-            {kind = "attach", label = "Attach", enabled = not busy and chosen and item ~= nil and item.ready},
-            {kind = "new", label = "New", enabled = not busy and chosen},
-            {kind = "edit", label = "Edit", enabled = not busy and chosen},
+            {kind = item and not item.ready and "setup" or "open", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
             {kind = "unavailable", label = show_unavailable and "Hide unavailable" or "Show unavailable", enabled = not busy},
-            {kind = "refresh", label = "Re-probe", enabled = not busy},
-            {kind = "close", label = "Close", enabled = true},
+            {kind = "refresh", label = "Refresh", enabled = not busy},
+            {kind = "edit", label = item and item.kind == "profile" and "Edit" or "Customize copy", enabled = not busy and chosen},
+            {kind = "close", label = "Back", enabled = true},
         })
     end
     local message = status
@@ -55,7 +52,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if message == "" and not show_unavailable and listing.unavailable > 0 then
         message = tostring(listing.unavailable) .. " unavailable"
     end
-    if height >= 2 then frame.footer(painter, text.bound(message, 512), HINTS) end
+    if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
+    if height >= 2 then frame.footer(painter, "", HINTS) end
     return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
 end
 return M

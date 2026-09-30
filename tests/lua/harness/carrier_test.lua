@@ -509,7 +509,7 @@ local function define_tests()
                 "open", nil, nil, nil, 40, 150000)
             if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end
             local settlement = outcome.value.settlement :: {[string]: unknown}
-            test.eq(settlement.outcome, "succeeded")
+            test.eq(settlement.outcome, "succeeded", require("json").encode(settlement))
             test.eq(settlement.answer, "flood-complete")
             local _, records = kinds(thread_id)
             local deltas = 0
@@ -604,4 +604,14 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local originals: {{[string]: unknown}} = {}
+    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+    local ok, result = pcall(cases, options)
+    local changes = assert(registry.snapshot()):changes()
+    for _, original in ipairs(originals) do changes:update(original) end
+    assert(changes:apply())
+    if not ok then error(tostring(result)) end
+    return result
+end}

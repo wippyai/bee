@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Muse driver
-    comment: Optional harness binding; host activation and launch policies authorize its use
+    comment: Optional harness binding; host activation and launch policies authorize
+      its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -172,7 +173,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Muse window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Muse window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: muse-window
@@ -181,6 +183,10 @@ entries:
     - muse
     binding_ref: bee.driver.muse:binding
     profile_id: window
+    session_profile_id: batch
+    session_credentials:
+    - muse_login
+    session_mode: batch
     policy_ref: ''
     default_mode: window
     allowed_overrides:
@@ -197,13 +203,12 @@ entries:
       start_menu: true
       fullscreen: true
       reuse: never
-    private_credentials:
-    - muse_login
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Muse batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned bounded Muse batch route for a host-selected coordinator
+      and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: muse-research-batch
@@ -253,7 +258,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Muse turn budget for agentic research actions on a caller-owned thread
+    comment: Host-selected Muse turn budget for agentic research actions on a caller-owned
+      thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -310,7 +316,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Muse window; missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Muse window;
+      missing host executable leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:

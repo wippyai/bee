@@ -81,9 +81,9 @@ attachments carry recipient-bound observation, input and resize authority.
 Detaching a client does not stop admitted applications. A stale attachment
 loses its authority. The public client, local host and explicit Hive invite
 join are implemented; remote workspace composition, automatic Hive enrollment
-and discovery, destination Hub transfer/install, managed headless launch and
-end-to-end Docker Sessions scheduling remain unfinished. Host-admitted Docker
-PTY and streamed placement are implemented; see
+and discovery and destination Hub transfer/install remain unfinished. Managed
+headless turns and Docker Sessions use the external executor and pull scheduler.
+Docker first-use network/gateway admission uses one person approval; see
 [Docker placement](../../modules/placement-docker/src/README.md).
 Keep those operations labeled as proposals until their acceptance contracts
 exist.
@@ -100,8 +100,8 @@ picker to switch; see [the workspace catalog](../reference/workspace-catalog.md)
 ## Managed agent containment
 
 Managed CLIs run with the operating system user's authority. Every
-batch worker opened through a session uses a private attempt home containing only
-the login, configuration and state files its driver declares and the host
+batch worker opened through a session uses a private retained session home containing only
+the provider login, configuration and conversation state its driver declares and the host
 credential broker projects; the launch policy admits no host HOME inheritance
 and no prompt-free permission mode. When a person chooses a named Codex profile,
 the driver projects that one admitted profile file into the private home so
@@ -157,7 +157,7 @@ machine home:
 | Agy | `.gemini/antigravity-cli/antigravity-oauth-token` | `.gemini/antigravity-cli/cache/onboarding.json` | private `HOME` |
 | Grok | `.grok/auth.json` | `.grok/config.toml` | `GROK_HOME` points inside the attempt home |
 | Muse | `.config/muse/auth.json` | `.config/muse/settings.json` | private `HOME` |
-| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json` | XDG config and data roots point inside the attempt home |
+| OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`; declared `.config/opencode/towers.key` dependency | XDG config and data roots point inside the attempt home |
 
 Only a provider's login file may be returned to its original path after the
 child exits. The broker requires the active attempt projection and unchanged

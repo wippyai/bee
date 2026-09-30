@@ -70,7 +70,7 @@ type Row = {
     expires_ms: integer, expires_at: string, created_at: string, updated_at: string?,
     effect_completed_at: string?, effect_result_json: string?, effect_result: unknown,
 }
-type ApprovalView = {
+type ApprovalView = {requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, request_kind: RequestKind, policy: string, proposal: Object,
     proposal_digest: string, prompt: Object, response_schema: Object, thread_id: string?,
@@ -217,6 +217,7 @@ local function run(request: unknown, name: string): Reply
 end
 function M.view(row: Row): ApprovalView
     return {approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
+        requesting_session = row.requester_id:match("^bs:") and row.requester_id or nil,
         requester_id = row.requester_id, request_kind = row.request_kind, policy = row.policy, proposal = row.proposal, proposal_digest = row.proposal_digest,
         prompt = row.prompt, response_schema = row.response_schema, thread_id = row.thread_id, binding = row.binding, revision = row.revision, state = row.state,
         decision = row.decision, decider_id = row.decider_id, decided_at = row.decided_at, response = row.response, validated_incarnation = row.validated_incarnation,
@@ -1157,6 +1158,15 @@ end
 function M.node(): (string?, string?)
     return node()
 end
+local function op_attention_count(tx: sql.Transaction, actor: string, object: Object, now: integer, _: Object?): Result
+    local workspace = bounds.id(object.workspace_id)
+    if not workspace or bounds.fields(object, {"workspace_id"}) then return failure("INVALID_ARGUMENT", "attention count needs one workspace") end
+    if not security.can("bee.approvals.attention", workspace) then return failure("DENIED", "caller may not count this workspace's attention") end
+    local count, count_error = store.attention_count(tx, workspace, now)
+    if count_error or count == nil then return storage(count_error or "count attention") end
+    return success({count = count}, false)
+end
+operations.attention_count = op_attention_count
 operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
@@ -1172,6 +1182,7 @@ function M.installation_effects(value: unknown): Reply return run(value, "instal
 function M.complete_installation_effect(value: unknown): Reply return run(value, "complete_installation_effect") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
+function M.attention_count(value: unknown): Reply return run(value, "attention_count") end
 function M.inbox(value: unknown): Reply return run(value, "inbox") end
 function M.feed_snapshot(value: unknown): Reply return run(value, "feed_snapshot") end
 function M.feed_read_after(value: unknown): Reply return run(value, "feed_read_after") end

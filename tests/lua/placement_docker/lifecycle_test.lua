@@ -71,9 +71,26 @@ local function request(id: string): types.LaunchRequest
         timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000}}
     return assert(request_codec.decode(raw))
 end
+local function creator()
+    local events = assert(process.events())
+    events:receive()
+end
 local function run()
     test.describe("Real Docker placement lifecycle", function()
         configure()
+        test.it("keeps a live runner's creation phase when no container exists yet", function()
+            local id = "docker-creating-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
+            value(call("prepare", request(id)))
+            local creator = assert(process.spawn("bee.placement.docker.tests:creator", "bee:workers"))
+            assert(service.change(id, {execution = "starting", fields = {runner_pid = tostring(creator)},
+                evidence = {kind = "test.creating", detail = "live creator before daemon dispatch"}}).ok)
+            local result = call("reconcile", {attempt_id = id})
+            process.terminate(creator)
+            test.is_true(result.ok)
+            test.eq((result.value :: types.Attempt).execution_state, "starting")
+            assert(service.change(id, {execution = "exited", fields = {exit_source = "runner"},
+                evidence = {kind = "test.finished", detail = "fixture has no dispatched container"}}).ok)
+        end)
         test.it("retains one environment-identified realization, fences foreign stop and proves cancellation before removal", function()
             local id = "docker-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
             local prepared = value(call("prepare", request(id)))
@@ -187,4 +204,4 @@ local function run()
         end)
     end)
 end
-return test.run_cases(run)
+return {run = test.run_cases(run), creator = creator}

@@ -143,7 +143,7 @@ func stage(root string, broken bool) (string, error) {
 	selected := make(map[string]bool)
 	queue := make([]string, 0)
 	for identity, item := range entries {
-		if isHarnessNamespace(item.namespace) {
+		if isHarnessNamespace(item.namespace) && item.entry["kind"] != "http.endpoint" {
 			queue = append(queue, identity)
 		}
 	}
@@ -244,10 +244,6 @@ func stage(root string, broken bool) (string, error) {
 	}
 	if err := os.CopyFS(filepath.Join(folder, "src", "host"), os.DirFS(filepath.Join(root, "tests", "fixtures", "modules", "harness", "src"))); err != nil {
 		return "", fmt.Errorf("stage host fixture: %w", err)
-	}
-	// The staged entries attach the production app policies.
-	if err := os.CopyFS(filepath.Join(folder, "src", "security", "harness"), os.DirFS(filepath.Join(root, "src", "security", "harness"))); err != nil {
-		return "", fmt.Errorf("stage harness policies: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(folder, "wippy.lock"), []byte("directories:\n  src: ./src\n"), 0600); err != nil {
 		return "", err

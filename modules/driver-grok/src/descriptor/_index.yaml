@@ -14,7 +14,7 @@ entries:
     login_evidence:
       command: grok login
       any_of:
-      - {kind: file_exists, paths: [.grok/auth.json, .grok/config.toml], variable: GROK_HOME, directory: .grok}
+      - {kind: file_exists, paths: [.grok/auth.json], variable: GROK_HOME, directory: .grok}
       - {kind: env_present, names: [XAI_API_KEY, GROK_CODE_XAI_API_KEY]}
     platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
     codec: grok-streaming-json
@@ -83,7 +83,6 @@ entries:
         readiness: none
         provider_home_private: true
     provider_home:
-      retain_session: true
       variable: GROK_HOME
       directory: .grok
       files:

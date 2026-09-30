@@ -35,7 +35,7 @@ local declared = bundle.tools :: {Object}
 
 local function copy(value: unknown): unknown
     if type(value) ~= "table" then return value end
-    local result: Object = {}
+    local result: Object = table.create(0, 1)
     for key, child in pairs(value :: Object) do result[key] = copy(child) end
     return result
 end
@@ -53,7 +53,7 @@ local function dereference(value: unknown): unknown
     local node = value :: Object
     local name = reference_name(node)
     if name then return dereference(defs[name]) end
-    local result: Object = {}
+    local result: Object = table.create(0, 1)
     for key, child in pairs(node) do result[key] = dereference(child) end
     return result
 end

@@ -830,6 +830,14 @@ ALTER TABLE bee_sessions ADD COLUMN context_json TEXT NOT NULL DEFAULT '{}';
 local SESSION_WORK_UNCERTAINTY_SQL = [[
 ALTER TABLE bee_session_work ADD COLUMN uncertainty_json TEXT;
 ]]
+local SESSION_WORK_CANCELLATION_SQL = [[
+CREATE TABLE bee_session_work_cancellations (
+  work_ref TEXT PRIMARY KEY REFERENCES bee_session_work(work_ref),
+  operation_ref TEXT NOT NULL UNIQUE,
+  reason TEXT,
+  requested_at TEXT NOT NULL
+);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -855,6 +863,7 @@ local list: {Migration} = {
     {id = 22, name = "sessions_work_sender", sql = SESSION_WORK_SENDER_SQL, rebuild = false},
     {id = 23, name = "sessions_turn_context", sql = SESSION_CONTEXT_SQL, rebuild = false},
     {id = 24, name = "sessions_work_uncertainty", sql = SESSION_WORK_UNCERTAINTY_SQL, rebuild = false},
+    {id = 25, name = "sessions_work_cancellation", sql = SESSION_WORK_CANCELLATION_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

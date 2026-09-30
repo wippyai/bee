@@ -7,8 +7,14 @@ local M = {}
 function M.session_create(request: unknown): types.Reply
     return boundary.run(work_store.session_create, request, true)
 end
+function M.session_attach(request: unknown): types.Reply
+    return boundary.run(work_store.session_attach, request, true)
+end
 function M.session_describe(request: unknown): types.Reply
     return boundary.run(work_store.session_describe, request, false)
+end
+function M.session_scan(request: unknown): types.Reply
+    return boundary.run(work_store.session_scan, request, false)
 end
 function M.session_transition(request: unknown): types.Reply
     return boundary.run(work_store.session_transition, request, true)
@@ -34,16 +40,28 @@ end
 function M.turn_accept(request: unknown): types.Reply
     return boundary.run(work_store.turn_accept, request, true)
 end
+function M.turn_observation(request: unknown): types.Reply
+    return boundary.run(work_store.turn_observation, request, true)
+end
 function M.work_settle(request: unknown): types.Reply
     return boundary.run(work_store.work_settle, request, true)
 end
 function M.work_uncertain(request: unknown): types.Reply
     return boundary.run(work_store.work_uncertain, request, true)
 end
+function M.work_cancel(request: unknown): types.Reply
+    return boundary.run(work_store.work_cancel, request, true)
+end
 function M.operation_lookup(request: unknown): types.Reply
     return boundary.run(work_store.operation_lookup, request, false)
 end
+function M.operation_describe(request: unknown): types.Reply
+    return boundary.run(work_store.operation_describe, request, false)
+end
 function M.feed_read(request: unknown): types.Reply
     return boundary.run(work_store.feed_read, request, false)
+end
+function M.work_history(request: unknown): types.Reply
+    return boundary.run(work_store.work_history, request, false)
 end
 return M

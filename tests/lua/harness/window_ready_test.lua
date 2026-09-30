@@ -36,7 +36,7 @@ local function define_tests()
                 paths = {".claude/.credentials.json"}, variable = "CLAUDE_CONFIG_DIR", directory = ".claude"}}}
             apply(fixture)
             local ok, failure = pcall(function()
-            local view = assert(tty.viewport({width = 60, height = 16}))
+            local view = assert(tty.viewport({width = 160, height = 16}))
             local grant = assert(view:grant())
             local events = assert(process.events())
             local ready = assert(process.listen("bee.application.ready", {message = true}))

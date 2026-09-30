@@ -237,7 +237,7 @@ local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAc
     if mismatch then return nil, label .. " acceptance: " .. mismatch end
     return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
 end
-local function measure(request: Request): (Measured?, string?)
+local function measure(request: Request, session_turn: boolean?): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
     local snapshot, snapshot_error = catalog.read(pinned, nil)
@@ -289,14 +289,19 @@ local function measure(request: Request): (Measured?, string?)
     -- renders and freezes the driver's final delivery with its own HOME path.
     local gateway: placement_types.Gateway? = nil
     local gateway_input: configuration_protocol.GatewayInput? = nil
-    if #launch_policy.gateway_tools > 0 or #launch_policy.gateway_hooks > 0 then
+    local selected, selected_error = driver_resolver.profile(pinned, request.binding_ref, request.profile_id)
+    if selected_error then return nil, selected_error end
+    local selected_hooks = driver_resolver.select_hooks(selected, launch_policy.gateway_hooks)
+    if #launch_policy.gateway_tools > 0 or #selected_hooks > 0 then
         local address, endpoint_error = gateway_configuration.endpoint()
         if not address then return nil, "gateway: " .. tostring(endpoint_error) end
         local hook_destination: string? = nil
-        if #launch_policy.gateway_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
+        if #selected_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
         gateway = {endpoint = address, tools = launch_policy.gateway_tools, destination = gateway_configuration.DESTINATION,
-            hooks = launch_policy.gateway_hooks, hook_destination = hook_destination}
-        local hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref)
+            hooks = selected_hooks, hook_destination = hook_destination}
+        local hook_command: string? = nil
+        local command_error: string? = nil
+        if #selected_hooks > 0 then hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref) end
         if command_error then return nil, command_error end
         gateway_input = {hook_command = hook_command, endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
             token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
@@ -331,8 +336,8 @@ function M.required_file_refusal(launch: driver_types.Launch, private_home: bool
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.
-function M.plan(io: IO, request: Request): (Plan?, string?)
-    local measured, measure_error = measure(request)
+local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?): (Plan?, string?)
+    local measured, measure_error = measure(request, session_turn)
     if not measured then return nil, measure_error end
     local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then
@@ -345,7 +350,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if request.reauthorize == true and (not request.previous_attempt_id or profile.mode ~= "window") then
         return nil, "reauthorization requires a saved window"
     end
-    if request.previous_attempt_id then
+    if session_turn and session_resume_ref then
+        if not request.session_ref then return nil, "session continuation needs its retained session" end
+        resume_ref = session_resume_ref
+        previous_private_home = profile.private_home
+        local dispatch = binding.methods.dispatch
+        if not dispatch then return nil, "driver has no continuation method" end
+        prepare_target = dispatch
+    elseif request.previous_attempt_id and not session_turn then
         if not request.session_ref then return nil, "continuation needs a retained session" end
         if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
         local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
@@ -520,6 +532,15 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
         placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
 end
+function M.plan(io: IO, request: Request): (Plan?, string?)
+    return build_plan(io, request, false, nil)
+end
+function M.session_plan(io: IO, request: Request, resume_ref: string?): (Plan?, string?)
+    if resume_ref ~= nil and (resume_ref == "" or #resume_ref > 256 or resume_ref:find("[%c%s]")) then
+        return nil, "session resume identity is invalid"
+    end
+    return build_plan(io, request, true, resume_ref)
+end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records
 -- instead of creating a second action, attempt or turn.
@@ -618,7 +639,7 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
         surface_value = policy.with_workspace(surface_value, request.workspace_id)
         if not surface_value then return nil, "gateway admit: cannot compose the launch workspace" end
     end
-    local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
+    local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.session_ref and request.session_ref:match("^bs:") and request.session_ref or request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
         owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = surface_value,
         policy_ref = plan.policy.ref, workspace_id = request.workspace_id, origin_view = request.origin_view})
     if admit_error then return nil, "gateway admit: " .. admit_error end
@@ -643,6 +664,15 @@ end
 local function gateway_revoke(io: IO, binding_id: string?)
     if not binding_id then return end
     io.call(M.GATEWAY .. ":revoke", {binding_id = binding_id})
+end
+function M.admit_gateway(io: IO, plan: Plan, epoch: integer): (string?, string?)
+    return gateway_admit(io, plan, epoch)
+end
+function M.gateway_ready(io: IO, binding_id: string): string?
+    return gateway_ready(io, binding_id)
+end
+function M.revoke_gateway(io: IO, binding_id: string?)
+    gateway_revoke(io, binding_id)
 end
 -- drain_hooks: claim what the gateway queued for this binding under this
 -- carrier's epoch, commit it through the carrier's own commit path, then

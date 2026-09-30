@@ -611,7 +611,7 @@ def assert_inbox_decider(root, workspace_id, policy="local-app-journey"):
     assert row and re.fullmatch(
         rf"bee\.application:{re.escape(workspace_id)}:[0-9a-f-]+", row[0]), row
     checkpoint = saved_application(root, row[0].rsplit(":", 1)[1])
-    assert checkpoint["definition_id"] == "bee.approvals.inbox:app", checkpoint
+    assert checkpoint["definition_id"] == "bee.approvals.inbox.app:app", checkpoint
 
 
 def activation_evidence(root):

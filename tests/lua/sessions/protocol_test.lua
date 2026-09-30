@@ -16,6 +16,34 @@ end
 
 local function define_tests()
     test.describe("Sessions protocol decoders", function()
+        test.it("decodes ordered history and rejects mixed refs, cursors and unknown fields", function()
+            local row: {[string]: unknown} = {work = "bw:n:w:one", sequence = 1, input = "hello", created_at = "2026-09-30T12:00:00.000Z"}
+            local page: {[string]: unknown} = {items = {row}, next = 1}
+            local decoded = assert(protocol.decode_history(page))
+            test.eq(decoded.items[1].input, "hello")
+            page.next = 2
+            test.is_nil(protocol.decode_history(page))
+            page.next = 1
+            row.work = "bs:n:w:one"
+            test.is_nil(protocol.decode_history(page))
+            row.work = "bw:n:w:one"
+            row.sender = "forged"
+            test.is_nil(protocol.decode_history(page))
+            row.sender = nil
+            page.items = {row, row}
+            test.is_nil(protocol.decode_history(page))
+        end)
+
+        test.it("decodes provider usage counts and rejects malformed usage", function()
+            local result = succeeded()
+            result.usage = {input_tokens = 2, output_tokens = 4, cached_tokens = 10}
+            local decoded = assert(protocol.decode_result(result))
+            test.eq(decoded.usage.output_tokens, 4)
+            result.usage = {input_tokens = -1}
+            test.is_nil(protocol.decode_result(result))
+            result.usage = {cost_decimal = "1.2"}
+            test.is_nil(protocol.decode_result(result))
+        end)
         test.it("accepts exactly the four await branches for a work", function()
             for _, tag in ipairs({"ready", "pending", "blocked", "uncertain"}) do
                 local decoded, failure = protocol.decode_work_await(work_await(tag))

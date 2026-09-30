@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee OpenCode driver
-    comment: Optional harness binding; host activation and launch policies authorize its use
+    comment: Optional harness binding; host activation and launch policies authorize
+      its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -157,7 +158,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned OpenCode window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned OpenCode window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-window
@@ -166,6 +168,10 @@ entries:
     - opencode
     binding_ref: bee.driver.opencode:binding
     profile_id: window
+    session_profile_id: batch
+    session_credentials:
+    - opencode_login
+    session_mode: batch
     policy_ref: ''
     default_mode: window
     allowed_overrides:
@@ -182,15 +188,13 @@ entries:
       start_menu: true
       fullscreen: true
       reuse: never
-    private_credentials:
-    - opencode_login
-    - opencode_api_key
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator and caller-owned shared thread; the CLI offers no sandbox
-      or permission flag Bee can select, so the host records it as unconfined
+    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator
+      and caller-owned shared thread; the CLI offers no sandbox or permission flag
+      Bee can select, so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-research-batch
@@ -211,7 +215,6 @@ entries:
     session_resource: session
     credentials:
     - opencode_login
-    - opencode_api_key
     presentation:
       start_menu: false
       fullscreen: false
@@ -234,7 +237,6 @@ entries:
     type: bee.credential_format
   data:
     schema_revision: bee.credential-format@1
-    environment_destination: OPENAI_API_KEY
     file:
       path: .local/share/opencode/auth.json
       content_format: json
@@ -243,7 +245,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected non-interactive OpenCode batch policy for bounded research actions on a caller-owned thread
+    comment: Host-selected non-interactive OpenCode batch policy for bounded research
+      actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -283,7 +286,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned OpenCode window; missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned OpenCode window;
+      missing host executable leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -319,8 +323,3 @@ entries:
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
-- name: api_key
-  kind: env.variable
-  storage: bee.driver.opencode:environment
-  variable: OPENAI_API_KEY
-  readonly: true

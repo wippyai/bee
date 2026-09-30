@@ -125,7 +125,7 @@ entries:
       name: docker-proof
       security:
         actor:
-          id: bee.docker.proof
+          id: bee.application:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bee.docker.proof
           meta:
             workspace_id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         policies: *id001

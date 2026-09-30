@@ -54,3 +54,7 @@ OpenCode offers no hook transport: its plugin events are provider-owned
 JavaScript, not Bee's admitted hook handlers. Both profiles declare no hook
 transport, and any requested gateway hook event is refused at decode time
 rather than silently dropped.
+
+Headless first and resumed turns close an explicitly empty stdin after delivering
+the argv brief. OpenCode waits for pipe EOF before starting `run`; the universal
+driver emits the same declarative EOF delivery on native and Docker placement.

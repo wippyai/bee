@@ -12,6 +12,36 @@ end
 
 local function define_tests()
     test.describe("Session scheduler", function()
+        test.it("persists an executor failure as uncertainty without repeating the invocation", function()
+            local owner = threads.new()
+            local calls = 0
+            local registry: scheduler.Registry = {get = function(_: string): (scheduler.Executor?, string?)
+                return {run_turn = function(_: {[string]: unknown}): (scheduler.Execution?, string?)
+                    calls = calls + 1
+                    return nil, "executor ended without an outcome"
+                end}, nil
+            end}
+            local service = assert(scheduler.create(owner.journal, registry, nil, "failed-worker"))
+            local work = assert(service.send(request("failed-executor")))
+            test.eq(assert(service.run_pass()).uncertain, 1)
+            test.not_nil(assert(owner.work_state(work.work)).uncertainty)
+            service.run_pass()
+            test.eq(calls, 1)
+        end)
+        test.it("runs only the Work selected by an independent session worker", function()
+            local owner = threads.new()
+            local executor = fake_executor.new({})
+            local service = assert(scheduler.create(owner.journal, fake_executor.registry("external", executor), nil, "selected-worker"))
+            local first = assert(service.send(request("first-session")))
+            local second_request = request("second-session")
+            second_request.session = "bs:node:workspace:s2"
+            local second = assert(service.send(second_request))
+            local report = assert(service.run_pass(second.work))
+            test.eq(report.activated, 1)
+            test.eq(executor.launches, 1)
+            test.eq(assert(owner.work_state(first.work)).phase, "queued")
+            test.eq(assert(owner.work_state(second.work)).phase, "settled")
+        end)
         test.it("wakes queued work, keeps owner-set sender identity and settles the turn", function()
             local owner = threads.new()
             local executor = fake_executor.new({})
@@ -31,6 +61,14 @@ local function define_tests()
             test.eq(executor.launches, 1)
             local state = assert(owner.work_state(receipt.work))
             test.eq(state.phase, "settled")
+            test.eq((state.sender :: {[string]: unknown}).kind, receipt.sender.kind)
+            test.eq((state.sender :: {[string]: unknown}).id, receipt.sender.id)
+            local turn = assert(executor.last_turn)
+            test.eq((turn.sender :: {[string]: unknown}).kind, receipt.sender.kind)
+            test.eq((turn.sender :: {[string]: unknown}).id, receipt.sender.id)
+            local admission = turn.admission :: {[string]: unknown}
+            test.eq(admission.session_ref, receipt.session)
+            test.eq(admission.action_id, receipt.session)
             local result = state.result
             test.eq(type(result), "table")
             test.eq((result :: {[string]: unknown}).value and ((result :: {[string]: unknown}).value :: {[string]: unknown}).text,

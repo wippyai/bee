@@ -22,6 +22,7 @@ entries:
       join: bee.sessions.binding:join
       get: bee.sessions.binding:get
       list: bee.sessions.binding:list
+      history: bee.sessions.binding:history
       cancel: bee.sessions.binding:cancel
       close: bee.sessions.binding:close
 - name: catalog_binding
@@ -33,10 +34,16 @@ entries:
     methods: {list: bee.sessions.binding:catalog}
 - name: target_owner_policies
   kind: ns.requirement
-  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_admission_policy]
+  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_registry_read_policy, bee.harness.security:carrier_environment_policy, bee.sessions.security:owner_admission_policy, bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy, bee.harness.security:profile_workspace_policy]
   meta:
     comment: Host-selected authority for the Sessions admission and journal boundary
   targets:
+  - entry: bee.sessions.binding:detach
+    path: .security.policies
+  - entry: bee.sessions.binding:attach
+    path: .security.policies
+  - entry: bee.sessions.binding:hook_boundary
+    path: .security.policies
   - entry: bee.sessions.binding:open
     path: .security.policies
   - entry: bee.sessions.binding:run
@@ -51,7 +58,7 @@ entries:
     path: .security.policies
   - entry: bee.sessions.binding:list
     path: .security.policies
-  - entry: bee.sessions.binding:cancel
+  - entry: bee.sessions.binding:history
     path: .security.policies
   - entry: bee.sessions.binding:close
     path: .security.policies
@@ -106,6 +113,13 @@ entries:
   modules: [security]
   imports: {owner: bee.sessions:owner}
   security: {policies: []}
+- name: history
+  kind: function.lua
+  source: file://owner_method.lua
+  method: history
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
 - name: cancel
   kind: function.lua
   source: file://owner_method.lua
@@ -127,3 +141,34 @@ entries:
   modules: [security]
   imports: {owner: bee.sessions:owner}
   security: {policies: []}
+- name: attach
+  kind: function.lua
+  source: file://owner_method.lua
+  method: attach
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
+- name: hook_boundary
+  kind: function.lua
+  source: file://owner_method.lua
+  method: hook_boundary
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
+
+- name: detach
+  kind: function.lua
+  source: file://owner_method.lua
+  method: detach
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}
+
+- name: target_control_policies
+  kind: ns.requirement
+  default: [bee.security.threads:thread_sessions_owner_policy, bee.sessions.security:owner_registry_read_policy, bee.harness.security:carrier_environment_policy, bee.sessions.security:owner_admission_policy,
+    bee.sessions.security:owner_setup_policy, bee.sessions.security:owner_workspace_identity_policy,
+    bee.sessions.security:scheduler_principal_policy]
+  meta:
+    comment: Cancellation restores only the persisted placement owner after Threads authorizes the caller
+  targets:
+  - entry: bee.sessions.binding:cancel
+    path: .security.policies

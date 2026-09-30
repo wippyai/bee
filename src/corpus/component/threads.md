@@ -18,7 +18,7 @@ delivery contract and does not schedule work.
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (21 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
+| `bee.threads.persist` | The owned store: checked migration ledger (25 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
 
 ## Dependency interface
 
@@ -133,10 +133,17 @@ behind reopened-instance membership), and 19 `app_alias_live_authorization`
 (broker-managed live authorization for family inheritance; historical aliases
 continue to identify app-owned threads), 20 `unbounded_journal` (rebuild the
 sequence-bearing indexes without changing retained records), and 21
-`sessions_work_store` (canonical sessions, work, turns and operation receipts).
+`sessions_work_store` (canonical sessions, work, turns and operation receipts), 22
+`sessions_work_sender` (owner-stamped sender identity), 23 `sessions_turn_context`
+(resumable executor context), 24 `sessions_work_uncertainty` (uncertain work evidence),
+and 25 `sessions_work_cancellation` (durable cancellation requests).
 Records are stored
 as their canonical envelope; extracted columns mirror it. Every mutation
 commits its membership checks, retry lookup, head increment, record and
 indexes in one transaction; identical retries replay the stored reply and
 changed requests conflict. Capacity for the terminal records still owed is
 reserved before new work is admitted.
+
+An interactive Session may use an existing workspace thread only when its authenticated application has active owner or participant membership, including a live broker-attested application family. Observer membership and workspace visibility alone do not authorize attachment.
+
+Pull scans exclude settled Work, including Work with retained cancellation records, so cancellation does not block later intake.

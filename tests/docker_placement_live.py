@@ -15,17 +15,41 @@ ROOT = Path(__file__).resolve().parents[1]
 PROVIDERS = ('claude', 'codex', 'agy', 'grok', 'muse', 'opencode')
 
 
+def audit_scheduler(state, evidence, mode):
+    with sqlite3.connect("file:" + str(state / "threads.db") + "?mode=ro", uri=True) as database:
+        database.row_factory = sqlite3.Row
+        sessions = [dict(row) for row in database.execute("SELECT session_ref, thread_id, title, route_json FROM bee_sessions")]
+        works = [dict(row) for row in database.execute("SELECT session_ref, sender_kind, sender_id, phase, result_json FROM bee_session_work")]
+        records = [dict(row) for row in database.execute("SELECT thread_id, sequence, kind, record_json FROM bee_thread_records ORDER BY thread_id, sequence")]
+    assert len(sessions) == 2, "acceptance must retain exactly two provider sessions"
+    assert len(works) == 2 and all(row["phase"] == "settled" and json.loads(row["result_json"])["state"] == "succeeded" for row in works)
+    assert {json.loads(row["route_json"])["saved_profile_id"] for row in sessions} == {"claude-docker-scheduler", "codex-docker-scheduler"}
+    for session in sessions:
+        transcript = [row for row in records if row["thread_id"] == session["thread_id"]]
+        assert transcript and any("docker-" in row["record_json"] for row in transcript), "provider transcript is absent from Threads"
+        (evidence / (json.loads(session["route_json"])["saved_profile_id"] + "-transcript.json")).write_text(json.dumps(transcript, indent=2) + "\n")
+    with sqlite3.connect("file:" + str(state / "placement.db") + "?mode=ro", uri=True) as database:
+        database.row_factory = sqlite3.Row
+        placements = [dict(row) for row in database.execute("SELECT attempt_id, placement_kind, execution_state, cleanup_state, placement_identity_json FROM bee_placement_attempts")]
+        effects = [dict(row) for row in database.execute("SELECT attempt_id, kind, detail FROM bee_placement_evidence")]
+    assert len(placements) == 2 and all(row["placement_kind"] == "docker" and row["execution_state"] == "exited" and row["cleanup_state"] == "complete" for row in placements)
+    assert len({json.loads(row["placement_identity_json"])["backend_ref"] for row in placements}) == 2
+    (evidence / "scheduler-audit.json").write_text(json.dumps({"mode": mode, "sessions": sessions, "works": works, "placements": placements, "effects": effects}, indent=2) + "\n")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--image', required=True)
     parser.add_argument('--provider', choices=PROVIDERS, default='claude')
-    parser.add_argument('--mode', choices=('window', 'session', 'restart'), default='window')
+    parser.add_argument('--mode', choices=('window', 'session', 'restart', 'scheduler', 'child'), default='window')
     parser.add_argument('--standalone', type=Path)
     parser.add_argument('--opencode-model', help='Host-selected provider/model for real OpenCode login evidence')
     args = parser.parse_args()
     args.evidence = args.evidence.resolve()
     args.evidence.mkdir(parents=True, exist_ok=True)
+    state = args.evidence.parent / "state" / args.evidence.name
+    assert not state.exists(), "Provider acceptance requires fresh state; preserve earlier evidence"
     network = 'bee-docker-proof-' + str(os.getpid())
     subprocess.run(['docker', 'network', 'create', '--label', 'bee.actor_ref=bee.docker-proof', network], check=True)
     try:
@@ -67,7 +91,7 @@ def main():
             index.write_text(yaml.safe_dump(doc, sort_keys=False))
             def trust_project(e):
                 for item in e['data']['file']['initialize']:
-                    if item['path'] == '.claude/.claude.json':
+                    if item['path'] == '.claude.json':
                         item['content'] = json.dumps({'hasCompletedOnboarding': True, 'projects': {'/workspace': {'hasTrustDialogAccepted': True}}})
             edit('modules/driver-claude/src/_index.yaml', 'credential_format', trust_project)
             if args.provider == 'opencode' and args.opencode_model:
@@ -88,7 +112,7 @@ def main():
                         data['required_exit_observation'] = 'independent'
                         data.pop('permission_exchange', None)
                         data['gateway_hooks'] = [] if args.mode != 'window' else data.get('gateway_hooks', [])
-                        if args.mode != 'window':
+                        if args.mode not in ('window', 'scheduler', 'child'):
                             data['gateway_tools'] = []
                         data.pop('hook_command_ref', None)
                         data.pop('environment_refs', None)
@@ -98,7 +122,6 @@ def main():
                             data.setdefault('environment', {})['GROK_FOLDER_TRUST'] = '0'
                     edit(file, name, policy)
             # Real HOME is only a broker source. Placement never inherits it.
-            state = args.evidence.parent / 'state' / args.evidence.name
             state.mkdir(mode=0o700, exist_ok=True)
             placement = state / 'placement'
             placement.mkdir(mode=0o700, exist_ok=True)
@@ -165,6 +188,8 @@ def main():
                 assert not subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split(), 'cancel/cleanup left a container'
             if result.returncode:
                 raise RuntimeError('Docker provider acceptance failed; see ' + str(args.evidence / 'runtime.log'))
+            if args.mode in ('scheduler', 'child'):
+                audit_scheduler(state, args.evidence, args.mode)
             assert not subprocess.check_output(['docker', 'ps', '-aq', '--filter', 'network=' + network], text=True).split(), 'provider acceptance left a container before fixture cleanup'
             print(args.provider + ' Docker ' + args.mode + ' passed', flush=True)
     finally:

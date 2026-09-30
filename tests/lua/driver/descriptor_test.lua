@@ -12,23 +12,6 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
-        test.it("admits explicit session retention only as a boolean provider-home declaration", function()
-            local loaded = assert(descriptor.load("bee.driver.grok.descriptor:cli")) :: Object
-            local changed = copy_object(loaded)
-            local home = copy_object(loaded.provider_home :: Object)
-            test.eq(home.retain_session, true)
-            changed.provider_home = home
-            for _, value in ipairs({"true", 1, {}}) do
-                home.retain_session = value
-                local decoded, err = descriptor.decode(changed)
-                test.is_nil(decoded)
-                test.eq(err, "CLI descriptor.provider_home.retain_session must be boolean")
-            end
-            home.retain_session = false
-            test.not_nil(descriptor.decode(changed))
-            home.retain_session = nil
-            test.not_nil(descriptor.decode(changed))
-        end)
         test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()
             local loaded = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
             local changed = copy_object(loaded)
@@ -64,7 +47,7 @@ local function define_tests()
                 {provider = "claude", path = ".claude/.credentials.json", variable = "ANTHROPIC_API_KEY", status = "auth"},
                 {provider = "codex", path = ".codex/auth.json", variable = "CODEX_API_KEY", status = "login"},
                 {provider = "agy", path = ".gemini/antigravity-cli/antigravity-oauth-token", variable = "GEMINI_API_KEY"},
-                {provider = "grok", path = ".grok/config.toml", variable = "XAI_API_KEY"},
+                {provider = "grok", path = ".grok/auth.json", variable = "XAI_API_KEY"},
                 {provider = "muse", path = ".config/muse/auth.json", variable = "META_API_KEY"},
                 {provider = "opencode", path = ".config/opencode/opencode.jsonc", variable = "OPENCODE_API_KEY"},
             }
@@ -90,6 +73,22 @@ local function define_tests()
             end
         end)
 
+        test.it("does not treat Grok configuration alone as a signed-in login", function()
+            local selected = assert(descriptor.load("bee.driver.grok.descriptor:cli"))
+            local declaration = assert(login_evidence.decode(selected.login_evidence))
+            local config_only = login_evidence.probe(declaration, {
+                file = function(path, _variable, _directory) return path == ".grok/config.toml" end,
+                environment = function(_name) return false end,
+                status = function(_argv, _timeout) return nil end,
+            })
+            test.eq(login_evidence.present(declaration, config_only), false)
+            local signed_in = login_evidence.probe(declaration, {
+                file = function(path, _variable, _directory) return path == ".grok/auth.json" end,
+                environment = function(_name) return false end,
+                status = function(_argv, _timeout) return nil end,
+            })
+            test.eq(login_evidence.present(declaration, signed_in), true)
+        end)
         test.it("probes file alternatives, environment names and bounded status without values", function()
             local declaration = assert(login_evidence.decode({command = "fixture login", any_of = {
                 {kind = "file_exists", paths = {".fixture/missing", ".fixture/config.jsonc"}},

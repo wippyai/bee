@@ -26,7 +26,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [tty, process, channel, time, uuid, ctx, logger]
+  modules: [funcs, tty, process, channel, time, uuid, ctx, logger]
   imports:
     connection: bee.terminal:connection
     workspace_menu: bee.terminal:workspace_menu

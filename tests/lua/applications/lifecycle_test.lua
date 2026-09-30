@@ -4,6 +4,21 @@ local contract = require("contract")
 local catalog = require("catalog")
 local function define_tests()
     test.describe("Application ownership boundaries", function()
+        test.it("admits app navigation only from its current execution without restore authority", function()
+            local workspace = string.rep("a", 32)
+            local request: {[string]: unknown} = {version = 1, op = "open", request_id = "n1", definition_id = "bee.test:app",
+                workspace_id = workspace, source_instance_id = "instance", source_view_id = "view", launch_token = "token",
+                arguments = {"--session", "bs:n:w:peer"}}
+            test.not_nil(contract.navigation(request, "instance", "view", "token", workspace))
+            test.is_nil(contract.navigation(request, "instance", "view", "stale", workspace))
+            test.is_nil(contract.navigation(request, "other", "view", "token", workspace))
+            request.runtime_provenance = {}
+            test.is_nil(contract.navigation(request, "instance", "view", "token", workspace))
+            request.runtime_provenance = nil
+            request.restore_instance_id = "retained"
+            test.is_nil(contract.navigation(request, "instance", "view", "token", workspace))
+        end)
+
         test.it("does not publish open before ready or close before EXIT", function()
             local state = lifecycle.start(10)
             local next_state, effect = lifecycle.reduce(state, "tick", 12)
@@ -163,6 +178,11 @@ local function define_tests()
             test.is_nil(contract.request({version = 1, op = "open", request_id = "", definition_id = "test:app"}))
             test.is_nil(contract.request({version = 1, op = "open", request_id = "1", definition_id = "test:\27app"}))
             test.is_nil(contract.binding({definition_id = "test:app", policies = {[2] = "test:policy"}}))
+            local shipped_policies: {string} = {}
+            for index = 1, 19 do shipped_policies[index] = "host:policy" .. tostring(index) end
+            test.not_nil(contract.binding({definition_id = "test:app", policies = shipped_policies}))
+            for index = 20, 33 do shipped_policies[index] = "host:policy" .. tostring(index) end
+            test.is_nil(contract.binding({definition_id = "test:app", policies = shipped_policies}))
             test.is_nil(contract.binding({definition_id = "test:app", policies = {}, appearance_write = "true"}))
             local descriptor = contract.descriptor("test:app", {api_version = 1, lifetime = "view", title = "Test",
                 revision = "1", instance_policy = "multiple", policies = {"root"}, appearance_write = true})

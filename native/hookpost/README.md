@@ -18,8 +18,10 @@ It reads one JSON object, adds the selected `hook_event_name`, and submits once
 to the existing loopback hook endpoint. Input and encoded output are limited to
 32 KiB. A two-second deadline includes stdin and HTTP. Redirects and proxies are
 disabled. Only HTTP 200/202 succeed; intake acceptance is not thread commitment.
-The response body is never forwarded, stdout stays empty, and errors contain no
-payload, credentials or gateway body. The helper never retries an uncertain
+Only a bounded, typed `hookSpecificOutput` containing the selected event and
+`additionalContext` is forwarded to stdout. Decision fields, unknown fields,
+multiple JSON documents and oversized responses are rejected. Empty success
+responses keep stdout empty; errors contain no payload, credentials or gateway body. The helper never retries an uncertain
 submission and never returns a harness permission decision.
 
 The `bee.harness.host:environment` storage exposes `self`, the executing Bee's

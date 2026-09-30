@@ -13,6 +13,7 @@ local registry = require("registry")
 local env = require("env")
 local exec = require("exec")
 local time = require("time")
+local hash = require("hash")
 local admission = require("admission")
 local definitions = require("definitions")
 local launch_policy = require("launch_policy")
@@ -43,9 +44,12 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
+local function workspace_id(prefix: string): string
+    return assert(hash.sha256(fresh(prefix))):sub(1, 32)
+end
 local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
-    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
+    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.security:interactive_session_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(extra: {string}?): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -130,7 +134,7 @@ local function refusal_message(reply: admission.Reply): string
 end
 local function carrier_io(): machine.IO
     return {
-        call = function(target: string, input: unknown): (unknown, string?) return call(target, input), nil end,
+        call = function(target: string, input: unknown): (unknown, string?) return call_as_bound(REQUESTER, target, input, workspace), nil end,
         send = function(target: string, topic: string, input: unknown) end,
         self_pid = function(): string return process.pid() end,
         now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
@@ -326,7 +330,15 @@ local function count(list: {string}, wanted: string): integer
 end
 local function define_tests()
     test.describe("Launch admission", function()
-        local workspace = fresh("ws")
+        local roots_entry = assert(registry.get("bee.resources:resource_roots"))
+        roots_entry.data.roots[#roots_entry.data.roots + 1] = {root_ref = ROOT, access = "write"}
+        apply(roots_entry)
+        local catalog_scope = security.new_scope({assert(security.policy("bee.workspace.catalog:call_test_policy")),
+            assert(security.policy("bee.security.storage:workspace_catalog_manage_policy"))})
+        local catalog_reply, catalog_error = funcs.new():with_actor(assert(security.new_actor(REQUESTER))):with_scope(catalog_scope)
+            :call("bee.workspace.catalog:create", {label = fresh("launch"), root_ref = "bee.harness.catalog:project_fixture", subpath = fresh("launch-home"), create_directory = true})
+        if catalog_error then error(tostring(catalog_error)) end
+        local workspace = tostring(value(catalog_reply :: admission.Reply).workspace_id)
         prepare_host(workspace)
         test.it("decodes dedicated worktrees without mutable or untyped definition options", function()
             local entry = assert(registry.get(DEFINITION))
@@ -658,6 +670,26 @@ local function define_tests()
                 local _, invalid = admission.decode_request(request)
                 test.eq(invalid == nil, false)
             end
+        end)
+        test.it("pins explicit machine-login projections for structured default sessions", function()
+            for _, provider in ipairs({"claude", "codex", "agy", "muse", "grok", "opencode"}) do
+                local ref = "bee.driver." .. provider .. ":default_window"
+                local entry = assert(registry.get(ref))
+                local decoded = assert(definitions.decode(ref, entry))
+                test.not_nil(decoded.session_credentials)
+                local found = false
+                for _, name in ipairs(decoded.session_credentials or {}) do
+                    if name == provider .. "_login" then found = true end
+                end
+                test.is_true(found)
+            end
+            local entry = assert(registry.get("bee.driver.claude:default_window"))
+            local changed = {data = {}}
+            for name, value in pairs(entry.data) do changed.data[name] = value end
+            changed.data.session_credentials = {false}
+            local invalid, err = definitions.decode("bee.driver.claude:default_window", changed)
+            test.is_nil(invalid)
+            test.not_nil(err)
         end)
         test.it("ships hidden research routes for every batch driver with bounded policies", function()
             local cases = {
@@ -1171,6 +1203,7 @@ local function define_tests()
             changed_definition.binding_ref = "bee.driver.codex:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
+            changed_definition.session_resource = "session"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
             changed_policy.prepare_options = {sandbox = "read-only"}
@@ -1245,6 +1278,7 @@ local function define_tests()
             changed_definition.binding_ref = "bee.driver.codex:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
+            changed_definition.session_resource = "session"
             changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
@@ -1334,6 +1368,7 @@ local function define_tests()
             changed_definition.binding_ref = "bee.driver.codex:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
+            changed_definition.session_resource = "session"
             changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
@@ -1833,7 +1868,7 @@ local function define_tests()
             local first = value(call("bee.harness.launch:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
                 workspace_id = workspace, brief = ""})) :: admission.Admitted
             local transport: machine.IO = {
-                call = function(target: string, input: unknown): (unknown, string?) return call(target, input), nil end,
+                call = function(target: string, input: unknown): (unknown, string?) return call_as_bound(REQUESTER, target, input, workspace), nil end,
                 send = function(target: string, topic: string, input: unknown) end,
                 self_pid = function(): string return process.pid() end,
                 now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
@@ -1855,16 +1890,19 @@ local function define_tests()
             local request: admission.Request = {request_id = fresh("resume"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace,
                 brief = "", expected_plan_digest = first.plan.plan_digest,
                 continuation = {origin_request_id = origin, previous_attempt_id = first.attempt_id, thread_id = first.thread_id}}
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             value(call("bee.threads.service:receipt", {thread_id = first.thread_id, action_id = first.action_id, attempt_id = first.attempt_id,
                 idempotency_key = fresh("receipt"), carrier_epoch = prepared.epoch, receipt = {scope = "attempt", outcome = "cancelled", evidence_refs = {},
                     error = {code = "fixture_closed", message = "predecessor fixture closed", retryable = false}}}))
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local db, db_error = placement_store.open()
             if not db then error(tostring(db_error)) end
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "starting", evidence = {kind = "fixture", detail = "no process started"}}).ok)
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "exited", evidence = {kind = "fixture", detail = "no process exists"}}).ok)
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             test.is_true(placement_store.transition(db, first.attempt_id, {cleanup = "complete", evidence = {kind = "fixture", detail = "no home materialized"}}).ok)
             db:release()
             local resumed = value(call("bee.harness.launch:admit", request)) :: admission.Admitted
@@ -1890,7 +1928,8 @@ local function define_tests()
             apply(policy_entry)
             request.request_id = fresh("reviewed-resume")
             request.continuation.reauthorize = true
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local current, current_error = admission.resolve(RETAINED_DEFINITION, "window")
             if not current then error(tostring(current_error)) end
             request.expected_plan_digest = current.plan_digest
@@ -1910,10 +1949,12 @@ local function define_tests()
             -- Mutated saved references and changed host plans cannot select
             -- another session or silently replay under new configuration.
             request.workspace_id = fresh("foreign-workspace")
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.workspace_id = workspace
             request.expected_plan_digest = string.rep("0", 64)
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.continuation.reauthorize = true
             test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT", "review never bypasses the current plan fence")
             request.continuation.reauthorize = false

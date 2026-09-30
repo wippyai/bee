@@ -96,7 +96,7 @@ local function draw_review(width: integer, height: integer, preferences: appeara
     frame.footer(painter, message, REVIEW_HINTS)
     return {rows = frame.rows(painter), hits = painter.hits, capacity = visible, offset = 0}
 end
-function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice): Frame
+function M.draw(width: integer, height: integer, preferences: appearance.Preferences, state: model.State, rows: {model.Row}, offset: integer, status: string, slice: leases.Slice, workspace_names: {[string]: model.Workspace}?): Frame
     if slice.leases_view then return draw_leases(width, height, preferences, slice, offset, status, slice.notice) end
     local open = state.detail
     local chosen = model.selected_row(state)
@@ -105,9 +105,10 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
+    local locations: {[string]: model.Workspace} = workspace_names or {}
     local pending_total = 0
     for _, row in ipairs(rows) do if row.state == "pending" then pending_total = pending_total + 1 end end
-    frame.header(painter, "APPROVALS", #rows == 0 and "" or (tostring(pending_total) .. " pending · " .. tostring(#rows) .. " shown"))
+    frame.header(painter, "NEEDS YOU", #rows == 0 and "" or (tostring(pending_total) .. " pending · " .. tostring(#rows) .. " shown"))
     local detail = state.detail
     local selected = model.selected_row(state)
     local detail_rows = 0
@@ -119,20 +120,23 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         detail_rows = math.floor(math.max(6, math.min(height - 5, needed)))
     end
     local list_first = 3
-    local list_last = height - 2 - detail_rows
+    local list_last = height - 3 - detail_rows
     local selected_index = 0
     if selected then
         for index, row in ipairs(rows) do if row.approval_id == selected.approval_id then selected_index = index end end
     end
     local window = frame.window(#rows, list_last - list_first + 1, selected_index, offset)
     if #rows == 0 and list_last >= list_first then
-        frame.empty(painter, list_first, "No requests", list_last > list_first and "Requests that need your decision appear here · R refresh" or nil)
+        frame.empty(painter, list_first, "No decisions needed", list_last > list_first and "Requests that need your decision appear here · R refresh" or nil)
     end
     for slot = 1, window.capacity do
         local row = rows[window.offset + slot]
         if not row then break end
-        local label = string.format("%s%-9s %s %s", slice.marked[row.approval_id] and "[x] " or "", state_label(row), row.effect, row.target)
-        if width >= 60 then label = label .. "  from " .. row.requester_id .. "  until " .. row.expires_at end
+        local label = string.format("%s%-9s %s %s", slice.marked[row.approval_id] and "[x] " or "", state_label(row), row.effect, model.text(row.prompt, 256))
+        if width >= 60 then
+            local workspace = locations[row.workspace_id]
+            label = label .. " · " .. (workspace and (workspace.label .. " / " .. workspace.folder) or "Workspace unavailable")
+        end
         frame.row(painter, list_first + slot - 1, label, window.offset + slot == selected_index, "row", window.offset + slot, row.approval_id)
     end
     if detail and selected and detail_rows > 0 then
@@ -170,6 +174,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             {kind = "approve", label = "Approve", enabled = pending_detail and idle, primary = true},
             {kind = "deny", label = "Deny", enabled = pending_detail and idle},
             {kind = "withdraw", label = "Withdraw", enabled = pending_detail and idle},
+            {kind = "source", label = detail and detail.state == "pending" and "Source" or "Return to source", enabled = detail ~= nil and detail.requesting_session ~= nil},
             {kind = "refresh", label = "Refresh", enabled = idle},
             {kind = "technical", label = state.technical and "Hide details" or "Details", enabled = detail ~= nil},
             {kind = "mark", label = "Mark", enabled = selected ~= nil and selected.state == "pending"},
@@ -192,7 +197,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             message = "Workspace " .. label .. " unavailable: " .. unavailable
         end
     end
-    frame.footer(painter, message, width >= 130 and WIDE_HINTS or HINTS)
+    if height >= 6 then frame.line(painter, height - 2, message, theme.text) end
+    frame.footer(painter, "", width >= 130 and WIDE_HINTS or HINTS)
     return {rows = frame.rows(painter), hits = painter.hits, capacity = window.capacity, offset = window.offset}
 end
 return M

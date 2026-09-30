@@ -164,6 +164,7 @@ entries:
   imports:
     test: wippy.test:test
     configuration: bee.gateway:configuration
+    protocol: bee.gateway:protocol
 - name: policy_reference_admin
   kind: security.policy
   meta: {type: test_support}

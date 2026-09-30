@@ -75,10 +75,9 @@ type ProviderHomeEnvironment = {variable: string, directory: string}
 -- A private managed home receives only these provider-owned files from the
 -- machine login source. `variable` and `directory` select the child CLI's
 -- provider home; files stay relative to HOME so the projection is auditable.
--- `retain_session` opts into an admitted session home instead of an attempt home.
 type ProviderHome =
-    {provider: string, private: boolean, retain_session: boolean?, variable: string, directory: string, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
-    | {provider: string, private: boolean, retain_session: boolean?, variable: nil, directory: nil, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
+    {provider: string, private: boolean, variable: string, directory: string, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
+    | {provider: string, private: boolean, variable: nil, directory: nil, extra_variables: {ProviderHomeEnvironment}?, files: {ProviderHomeFile}}
 type Launch = {
     executable: string,
     -- Arguments only. Placement prepends the separately selected executable.

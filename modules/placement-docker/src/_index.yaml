@@ -111,22 +111,64 @@ entries:
     image_recipe_ref: bee.placement.docker:coding_recipe
     user: 1000:1000
     network: bee-coding
-    limits: {memory: 4294967296, cpu: 200000, pids: 256}
-    mounts: [{resource: project, target: /workspace, access: write}]
+    limits:
+      memory: 4294967296
+      cpu: 200000
+      pids: 256
+    mounts:
+    - resource: project
+      target: /workspace
+      access: write
 - name: coding_recipe
   kind: registry.entry
-  meta: {type: bee.runtime_recipe}
+  meta:
+    type: bee.runtime_recipe
   data:
     schema_revision: bee.runtime-recipe@1
     base: node@sha256:be23f54a88d34e8824c741b19b91064094f92c1c97b194144bfc8b50d67258e2
     artifacts:
-    - {name: claude, executable_ref: bee.driver.claude:executable}
+    - name: claude
+      executable_ref: bee.driver.claude:executable
     - name: codex
       executable_ref: bee.driver.codex:executable
       candidates:
       - ../node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
       - ../node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
-    - {name: agy, executable_ref: bee.driver.agy:executable}
-    - {name: grok, executable_ref: bee.driver.grok:executable}
-    - {name: muse, executable_ref: bee.driver.muse:executable, sibling_prefix: muse-bin-}
-    - {name: opencode, executable_ref: bee.driver.opencode:executable}
+    - name: agy
+      executable_ref: bee.driver.agy:executable
+    - name: grok
+      executable_ref: bee.driver.grok:executable
+    - name: muse
+      executable_ref: bee.driver.muse:executable
+      sibling_prefix: muse-bin-
+    - name: opencode
+      executable_ref: bee.driver.opencode:executable
+- name: environment
+  kind: library.lua
+  source: file://environment.lua
+- name: environment_configuration
+  kind: registry.entry
+  meta:
+    type: bee.docker_environment
+  data:
+    value: {}
+- name: environment_provisioning
+  kind: ns.requirement
+  targets:
+  - entry: bee.placement.docker:environment_configuration
+    path: .data.value
+- name: image_owner_policies
+  kind: ns.requirement
+  default:
+  - bee.placement.native.security:placement_store_policy
+  - bee.placement.native.security:placement_exec_policy
+  - bee.placement.native.security:placement_runner_policy
+  - bee.placement.docker.security:docker_policy
+  - bee.placement.docker.security:docker_socket_policy
+  - bee.placement.docker.security:image_policy
+  - bee.placement.docker.security:image_client_policy
+  meta:
+    comment: Host-selected approval, overlay and listener lifecycle authority for first-use provisioning
+  targets:
+  - entry: bee.placement.docker.service:image_owner_service
+    path: .lifecycle.security.policies

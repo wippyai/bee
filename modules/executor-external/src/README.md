@@ -1,15 +1,20 @@
 # Bee external executor
 
 The external executor handles one pulled turn with one admitted CLI launch.
-It calls the provider's `prepare` for the first turn and `dispatch` with the
-stored provider resume identity on later turns. Native placement persists the
+It calls the selected driver's `prepare` for the first turn and `dispatch` with
+the stored opaque resume identity on later turns. Native placement persists the
 launch intent before start and owns process observation, reconciliation and
-cleanup. A turn is settled only after the provider codec reports a terminal
-result and placement proves the process exited. The returned provider
+cleanup. A turn is settled only after the driver normalizer reports a terminal
+result and placement proves the process exited. The returned driver
 checkpoint is ready for the authenticated Sessions worker to commit. Missing
 terminal or exit proof is uncertain.
 
-The initial adapters are Claude Code and Codex CLI. Their existing launch and
-normalization codecs define prompts, resume identity, events and usage. The
-executor does not write to a live provider session; Codex's initial prompt
-uses the launch's admitted stdin input.
+The driver's launch and normalization operations define prompts,
+resume identity, events and usage. The executor does not write to a live
+CLI session; each turn uses only the launch defined by the selected
+driver contract.
+
+Each attempt records progress before prepare, gateway admission and CLI start.
+Normalized assistant text, tool events and usage are appended live through the
+fenced Threads observation operation. Caller identity comes from the canonical
+Session route, under host-selected admission policies.

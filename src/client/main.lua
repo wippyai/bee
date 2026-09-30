@@ -460,7 +460,8 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
             waiting_presenter = true
             presenter_deadline = time.after("3s")
             local grant = assert(display.view:grant())
-            presenter = tostring(assert(process.with_options({terminal = grant}):with_context({["bee.workspace_owner"] = self,
+            local presenter_actor = assert(security.new_actor("bee.desktop/" .. workspace_id, {workspace_id = workspace_id}))
+            presenter = tostring(assert(process.with_options({terminal = grant}):with_actor(presenter_actor):with_context({["bee.workspace_owner"] = self,
                 ["bee.workspace_id"] = workspace_id, ["bee.display_id"] = database.client_id,
                 ["bee.hive_supervisor"] = bootstrap.hive_supervisor}):with_scope(scope("bee.security.desktop:presenter_policy")):spawn_monitored(
                     "bee.terminal:main", "bee:workers", self, initial_application, bootstrap.secondary_application)))
@@ -1060,6 +1061,7 @@ local function run_client(owner: string, host: string, workspace_id: string, dat
         run()
     end
     local completed, err = pcall(boot)
+    if not completed then log:error("Desktop client failed", {cause = tostring(err), workspace_id = workspace_id}) end
     if defaults_timer then defaults_timer:stop() end
     node_appearance.close(defaults_reader)
     workspace_pages.close(page_reader)

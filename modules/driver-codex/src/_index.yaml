@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Codex driver
-    comment: Optional harness binding; host activation and launch policies authorize its use
+    comment: Optional harness binding; host activation and launch policies authorize
+      its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -52,7 +53,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.codex_provider
-    comment: Built-in account login with Codex's default model; host policy selects this configuration
+    comment: Built-in account login with Codex's default model; host policy selects
+      this configuration
   data:
     schema_revision: bee.codex-provider@1
     name: openai
@@ -212,6 +214,18 @@ entries:
           git_writable_roots_adapter: codex_workspace_write
       - id: window
         mode: window
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.codex:protocol
         protocol: pty
         protocol_revision: native-window-1
         answer_path:
@@ -238,7 +252,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Codex window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Codex window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: codex-window
@@ -247,6 +262,10 @@ entries:
     - codex
     binding_ref: bee.driver.codex:binding
     profile_id: window
+    session_profile_id: batch
+    session_credentials:
+    - codex_login
+    session_mode: batch
     policy_ref: ''
     default_mode: window
     allowed_overrides:
@@ -263,13 +282,12 @@ entries:
       start_menu: true
       fullscreen: true
       reuse: never
-    private_credentials:
-    - codex_login
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Codex batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned bounded Codex batch route for a host-selected coordinator
+      and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: codex-research-batch
@@ -298,8 +316,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned structured Codex route that projects its selected named profile, login and required configuration into a private
-      home
+    comment: Component-owned structured Codex route that projects its selected named
+      profile, login and required configuration into a private home
   data:
     schema_revision: bee.launch-definition@1
     launch_id: codex-named-batch
@@ -350,8 +368,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Codex batch policy for bounded research actions on a caller-owned thread; private home with no host inheritance, workspace-write
-      CLI sandbox
+    comment: Host-selected Codex batch policy for bounded research actions on a caller-owned
+      thread; private home with no host inheritance, workspace-write CLI sandbox
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -406,8 +424,9 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected structured Codex route that projects one admitted named Codex profile into its private home; read-only, one bounded
-      turn on a caller-owned thread
+    comment: Host-selected structured Codex route that projects one admitted named
+      Codex profile into its private home; read-only, one bounded turn on a caller-owned
+      thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -462,7 +481,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Codex window; missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Codex window;
+      missing host executable leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:

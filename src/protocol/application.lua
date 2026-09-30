@@ -124,4 +124,14 @@ function M.binding(value: unknown): Binding?
         application_stop = value.application_stop == true, scope_management = value.scope_management == true,
         close_grace_ms = close_grace_ms == nil and 250 or math.floor(close_grace_ms), thread_access = thread_access}
 end
+function M.navigation(value: unknown, instance: string, view: string, token: string, workspace: string): Request?
+    if type(value) ~= "table" then return nil end
+    local request = M.request(value)
+    if not request or request.op ~= "open" or request.workspace_id ~= workspace
+        or value.source_instance_id ~= instance or value.source_view_id ~= view or value.launch_token ~= token
+        or request.restore_instance_id ~= "" or request.restore_view_id ~= "" or request.resume_state ~= ""
+        or request.resume_schema ~= "" or request.thread_id ~= nil or request.recipient ~= "" or request.id ~= ""
+        or value.runtime_provenance ~= nil or value.observer ~= nil then return nil end
+    return request
+end
 return M

@@ -147,7 +147,7 @@ local function configure(workspace_id: string, local_node: string)
     local approver_data = object(approvers.data)
     local policies = approver_data.policies :: {unknown}
     policies[#policies + 1] = {name = APPROVAL_POLICY,
-        approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}
+        approvers = {{definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}
     approver_data.policies = policies
     approvers.data = approver_data
 

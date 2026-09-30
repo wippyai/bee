@@ -121,6 +121,8 @@ rollback results stay in the receipt for review and recovery; no automatic
 retry is scheduled.
 
 Modules presents the same read, plan, review, confirmation and receipt flow.
+Replanning clears the previous measured plan before dispatch, so confirmation
+becomes available only after the fresh plan reply arrives.
 Its package contents browser is read-only and binds resource reads to the
 selected artifact digest.
 

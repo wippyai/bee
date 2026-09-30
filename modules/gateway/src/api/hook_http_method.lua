@@ -3,6 +3,7 @@ local json = require("json")
 local gateway = require("gateway")
 local hooks = require("hooks")
 local transport_admission = require("admission")
+local boundary = require("session_boundary")
 type Object = {[string]: unknown}
 local function refuse(response: http.Response, status: number, message: string): nil
     response:set_content_type("text/plain; charset=utf-8")
@@ -44,6 +45,9 @@ local function submit(): nil
     -- A replay of a terminally rejected occurrence is told so with a status
     -- and plain text, never a body a harness could act on.
     if outcome.status == "rejected" then return refuse(response, http.STATUS.GONE, "rejected: " .. tostring(outcome.rejected_reason or "no reason")) end
+    local context, boundary_error = boundary.deliver(binding, outcome)
+    if not context then return refuse(response, http.STATUS.INTERNAL_ERROR, boundary_error or "session boundary failed") end
+    if context.hookSpecificOutput ~= nil then response:set_content_type(http.CONTENT.JSON); response:write_json(context) end
     if outcome.status == "committed" then response:set_status(http.STATUS.OK) else response:set_status(http.STATUS.ACCEPTED) end
     return nil
 end

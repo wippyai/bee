@@ -13,12 +13,11 @@ readiness descriptors.
 | `bee.harness.carrier` | Runs one admitted CLI attempt, persists its checkpoint and settles its thread receipt through the typed driver and placement contracts. |
 | `bee.harness.launch` | Decodes `bee.launch_definition` entries, measures admission plans, admits the authenticated caller, prepares declared workspace resources and resolves component-owned CLI command names. The `locate_probe` entry measures activated descriptor drivers for the Sessions catalog; it reads login-file existence only. |
 | `bee.harness.profiles` | Stores bounded workspace preferences in the node-owned profile feed. Reads and writes still require the caller's workspace authority. |
-| `bee.harness.app` | Runs the Agent application. Its picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit PTY attach path for the selected placement. |
-| `bee.harness.window` | Owns PTY request, recovery and hook-delivery values. |
+| `bee.harness.app` | Runs the Sessions application. Its list reads the public sessions contract and reopens stable addresses, including closed sessions. Its new-session picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit PTY attach path. |
 
 ## Session catalog and readiness
 
-The Agent picker calls `bee.sessions:catalog.list`. The Sessions owner lists
+The new-session picker calls `bee.sessions:catalog.list`. The Sessions owner lists
 registered definitions and saved profiles, checks each route with launch
 admission, then asks the host locator to measure the driver's executable,
 version, platform and login-file presence. Ready entries appear by default;
@@ -56,3 +55,37 @@ means work is queued; it does not mean a CLI is running or a result is ready.
 The external executor starts one CLI invocation per reserved turn and leaves
 the session active after that invocation exits. Native Terminal continues to
 run with the operating system user's authority.
+
+## Sessions application
+
+Sessions is the primary desktop destination for agent work. The list shows
+activity separately from session lifecycle and offers all permitted sessions or
+a current-workspace filter. Saved workspace labels and relative folders come
+from the public workspace catalog. Unreadable metadata says unavailable.
+Opening an existing row uses `get`; opening a ready catalog choice uses `open`.
+Enter sends Work; Ctrl+K asks to cancel current Work; Ctrl+X asks to close intake
+and drain accepted Work. Escape returns to the list. Closing the window leaves
+its sessions addressable. At 120 columns the conversation shows a session rail;
+compact screens use Escape to return to the list. Ctrl+D shows the session ref.
+
+The conversation currently retains only Work submitted by this window and its
+observed results. The public session snapshot exposes neither thread identity
+nor Work history, so reopening after window loss cannot reconstruct the Work
+queue or read live turn events. Durable history, provider metadata, last result
+and interactive Terminal switching need those public associations; they are
+proposals until the owner exposes them. Manual `M` attach remains in the catalog.
+The unavailable Setup action explains the owner-reported reason and the
+install/sign-in/refresh steps; it executes no provider commands.
+
+Stock definitions offer Customize copy. Name, admitted folder and model are
+basic fields. Ctrl+P opens Advanced permissions for instructions, conversation
+selection, other options and tool grants with human-readable names. Saving uses
+the existing profile revision and operation keys and grants no new authority.
+
+Docker profiles with host-selected environment provisioning can be ready before
+the network exists. The Sessions turn admission requests the existing person
+approval, provisions the owned bridge and reachable restricted gateway, and then
+uses the same external executor. The Agent conversation shows preparation
+progress. In a Docker profile editor, Ctrl+R and Enter revoke this admission;
+Escape cancels. This control belongs to the app namespace and requires the
+host's person-only revocation grant.

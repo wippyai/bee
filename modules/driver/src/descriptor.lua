@@ -494,8 +494,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
 
     local home, home_error = object(item.provider_home, "CLI descriptor.provider_home")
     if not home then return nil, home_error end
-    if bounds.fields(home, {"variable", "directory", "extra_variables", "files", "required_profile_file", "retain_session"}) then return nil, "CLI descriptor.provider_home has unknown fields" end
-    if home.retain_session ~= nil and type(home.retain_session) ~= "boolean" then return nil, "CLI descriptor.provider_home.retain_session must be boolean" end
+    if bounds.fields(home, {"variable", "directory", "extra_variables", "files", "required_profile_file"}) then return nil, "CLI descriptor.provider_home has unknown fields" end
     if home.variable ~= nil and not bounds.id(home.variable) then return nil, "CLI descriptor.provider_home.variable is invalid" end
     if home.directory ~= nil and (not bounds.text(home.directory, 128) or not safe_relative(home.directory)) then return nil, "CLI descriptor.provider_home.directory is invalid" end
     local extra_variables, extra_error = sequence(home.extra_variables or {}, "CLI descriptor.provider_home.extra_variables", 8)

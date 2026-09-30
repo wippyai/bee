@@ -217,19 +217,24 @@ end
 local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: string, entry: Object,
     kind: Kind, title: string, revision: integer?, profile_id: string?, workspace: string,
     cache: locate.Cache, readiness_cache: readiness.Cache, generation: integer): (locate.Candidate?, string?)
+    local candidate_ref = ref
+    if kind == "profile" then
+        if not profile_id then return nil, "saved profile identity is missing" end
+        candidate_ref = profile_id
+    end
     local decoded, decode_error = definition.decode(ref, entry)
     if not decoded then
-        return unavailable_candidate(cache, kind, ref, title, revision, "incompatible",
+        return unavailable_candidate(cache, kind, candidate_ref, title, revision, "incompatible",
             decode_error or "The launch definition is invalid.", generation)
     end
     local plan: unknown = nil
     local refused: unknown = nil
     if kind == "profile" and profile_id and revision then
-        plan, refused = admission.resolve(ref, nil, workspace, profile_id, revision)
+        plan, refused = admission.resolve(ref, nil, workspace, profile_id, revision, nil, nil, nil, true)
     else
-        plan, refused = admission.read(pinned, ref, nil)
+        plan, refused = admission.read(pinned, ref, nil, true)
     end
-    return measured_candidate(cache, readiness_cache, kind, ref, title, revision, decoded, plan, refused, generation)
+    return measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
 end
 
 local function valid_cursor(value: unknown): integer?

@@ -10,6 +10,11 @@ local delivery_protocol = require("delivery_protocol")
 local arguments = require("arguments")
 local session_tools = require("session_tools")
 local M = {}
+function M.is_retired_tool(name: string): boolean
+    return name == "thread_launch" or name == "run_status" or name == "run_wait" or name == "run_cancel"
+        or name == "session_directory" or name == "session_inbox" or name == "session_ack" or name == "session_reply"
+        or name == "thread_sessions" or name == "launch_definitions" or name == "thread_wait" or name == "thread_notify"
+end
 M.PROTOCOL = "2025-06-18"
 M.SERVER = {name = "bee", version = "1"}
 M.MAX_BODY_BYTES = 524288

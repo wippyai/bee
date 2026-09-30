@@ -106,6 +106,7 @@ entries:
   security:
     policies:
     - bee.placement.native:apply_test_policy
+    - bee.placement.docker.tests:creator_policy
 - name: projection_test
   kind: function.lua
   source: file://projection_test.lua
@@ -124,3 +125,37 @@ entries:
   imports:
     test: wippy.test:test
     image: bee.placement.docker.service:image
+
+- name: environment_test
+  kind: function.lua
+  source: file://environment_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    environment: bee.placement.docker:environment
+
+- name: creator_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [process.spawn]
+    resources: [bee.placement.docker.tests:creator, bee:workers]
+    effect: allow
+- name: creator
+  kind: process.lua
+  source: file://lifecycle_test.lua
+  method: creator
+  meta: {type: test_support}
+  modules: [process, channel, funcs, registry, security, time]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    profiles: bee.placement:profiles
+    request_codec: bee.placement:request
+    store: bee.placement.native.persist:store
+    spec: bee.placement.docker:spec
+    types: bee.placement:types
+    service: bee.placement.docker.service:service
+    placement_resolver: bee.placement:resolver
+    protocol: bee.placement.native:protocol

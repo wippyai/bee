@@ -5,6 +5,7 @@
 -- consumes the current actor's grant and cannot be performed through a
 -- funcs.call boundary. The caller keeps the application lifecycle loop and
 -- uses this value only as a process-local facade.
+local uuid = require("uuid")
 local exec = require("exec")
 local tty = require("tty")
 local process = require("process")
@@ -145,6 +146,11 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     end
     if row.execution_state ~= "intended" then return fail(db, backend, "attempt is already in use or has settled", nil) end
 
+    local issued_authority, authority_error = uuid.v4()
+    if not issued_authority then return fail(db, backend, tostring(authority_error or "runner authority"), nil) end
+    local control_token, control_error = store.runner_authority(db, attempt_id, issued_authority)
+    if not control_token then return fail(db, backend, control_error or "runner authority unavailable", nil) end
+
     local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "window.started", detail = "managed window owner " .. process.pid()}})
     if not starting.ok then return fail(db, backend, starting.message or "attempt is no longer intended", nil) end
 
@@ -196,6 +202,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     if not executor then return fail(db, backend, "placement executor unavailable", gateway_binding, attempt_id) end
 
     local closed = false
+    local stop_requested = false
     local finished = false
     -- The handle exists only once executor:terminal() has returned. Until
     -- then the listener answers supervision as starting and leaves a stop to
@@ -218,6 +225,9 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
             local raw: unknown = message:payload():data()
             if type(raw) == "table" then
                 local data = raw :: {[string]: unknown}
+                local authorized = data.control_token == control_token
+                    or (tostring(message:from()) == tostring(process.pid()) and data.command == "status")
+                if not authorized then goto next_control end
                 local current_terminal = terminal
                 if data.command == "status" and data.attempt_id == attempt_id and bounds.id(data.probe) then
                     local current = store.row(db, attempt_id)
@@ -234,15 +244,16 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
                         execution = execution,
                         eof_seen = 0, pending_outputs = 0, remembered_writes = 0, truncated = false,
                     })
-                elseif data.command == "stop" and current_terminal then
+                elseif data.command == "stop" then
                     local current = store.row(db, attempt_id)
                     if current and current.owner_id == owner and current.runner_pid == process.pid()
                         and current.execution_state == "stopping" then
-                        local stopped = current_terminal:close()
-                        if stopped then closed = true end
+                        stop_requested = true
+                        if current_terminal and current_terminal:close() then closed = true end
                     end
                 end
             end
+            ::next_control::
         end
     end)
 
@@ -253,7 +264,10 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
     if not creating.ok then
         process.unlisten(controls)
         executor:release()
-        return fail(db, backend, creating.message or "attempt stopped before terminal start", gateway_binding, attempt_id)
+        local current = store.row(db, attempt_id)
+        local reason = current and current.execution_state == "stopping" and "window stopped during startup"
+            or creating.message or "attempt stopped before terminal start"
+        return fail(db, backend, reason, gateway_binding, attempt_id)
     end
     local started, start_error = executor:terminal(quote.line(argv), {work_dir = execution_options.work_dir, env = execution_options.env, mounts = execution_options.mounts,
         pty = {width = chosen.width, height = chosen.height, term = chosen.term}, process_group = execution_options.process_group})
@@ -265,6 +279,7 @@ function M.open_local(attempt_id: string, value: unknown, backend: process_backe
         return fail(db, backend, "start terminal: " .. tostring(start_error), gateway_binding, attempt_id)
     end
     terminal = started
+    if stop_requested and started:close() then closed = true end
 
     local fields: {[string]: unknown} = {}
     local identity_detail = "execution identity unavailable"

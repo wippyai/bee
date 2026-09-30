@@ -102,7 +102,7 @@ end
 local function decode_provider_home(value: unknown): (driver_types.ProviderHome?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch.provider_home must be an object" end
-    local unknown = bounds.fields(object, {"provider", "private", "retain_session", "variable", "directory", "extra_variables", "files"})
+    local unknown = bounds.fields(object, {"provider", "private", "variable", "directory", "extra_variables", "files"})
     if unknown then return nil, "launch.provider_home: " .. unknown end
     local provider = bounds.id(object.provider)
     if not provider then return nil, "launch.provider_home.provider is not an identifier" end
@@ -110,11 +110,6 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     if object.private == true then private = true
     elseif object.private == false then private = false
     else return nil, "launch.provider_home.private must be a boolean" end
-    local retain_session: boolean? = nil
-    if object.retain_session ~= nil then
-        if type(object.retain_session) ~= "boolean" then return nil, "launch.provider_home.retain_session must be a boolean" end
-        retain_session = object.retain_session
-    end
     local variable: string? = nil
     if object.variable ~= nil then
         variable = bounds.id(object.variable)
@@ -205,10 +200,10 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
         end
     end
     if variable and directory then
-        return {provider = provider, private = private, retain_session = retain_session, variable = variable, directory = directory,
+        return {provider = provider, private = private, variable = variable, directory = directory,
             extra_variables = extra_variables, files = files}, nil
     end
-    return {provider = provider, private = private, retain_session = retain_session, variable = nil, directory = nil,
+    return {provider = provider, private = private, variable = nil, directory = nil,
         extra_variables = extra_variables, files = files}, nil
 end
 function M.launch(value: unknown): (driver_types.Launch?, string?)

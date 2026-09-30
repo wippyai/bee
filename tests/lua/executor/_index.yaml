@@ -10,7 +10,3 @@ entries:
     test: wippy.test:test
     turn: bee.executor.external.service:turn
     stream: bee.executor.external.service:stream
-    claude_launch: bee.driver.claude:launch
-    codex_launch: bee.driver.codex:launch
-    claude_protocol: bee.driver.claude:protocol
-    codex_protocol: bee.driver.codex:protocol

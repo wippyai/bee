@@ -24,6 +24,7 @@ entries:
     paths: bee.placement:paths
     resources: bee.placement.native:resources
     image: bee.placement.docker.service:image
+    environment: bee.placement.docker.service:environment
 - name: execution
   kind: library.lua
   source: file://execution.lua
@@ -87,7 +88,18 @@ entries:
 - name: image
   kind: library.lua
   source: file://image.lua
-  modules: [exec, env, fs, json, hash, registry, process, channel, uuid, security, time]
+  modules:
+  - exec
+  - env
+  - fs
+  - json
+  - hash
+  - registry
+  - process
+  - channel
+  - uuid
+  - security
+  - time
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -100,22 +112,40 @@ entries:
   kind: process.lua
   source: file://image_owner.lua
   method: main
-  modules: [process, channel]
+  modules:
+  - process
+  - channel
   imports:
     bounds: bee.threads.records:bounds
     image: bee.placement.docker.service:image
+    environment: bee.placement.docker.service:environment
 - name: image_owner_service
   kind: process.service
   process: bee.placement.docker.service:image_owner
   lifecycle:
     auto_start: true
     security:
-      actor: {id: bee.placement.docker.image}
-      policies:
-      - bee.placement.native.security:placement_store_policy
-      - bee.placement.native.security:placement_exec_policy
-      - bee.placement.native.security:placement_runner_policy
-      - bee.placement.docker.security:docker_policy
-      - bee.placement.docker.security:docker_socket_policy
-      - bee.placement.docker.security:image_policy
-      - bee.placement.docker.security:image_client_policy
+      actor:
+        id: bee.placement.docker.image
+      policies: []
+- name: environment
+  kind: library.lua
+  source: file://environment.lua
+  modules:
+  - registry
+  - hash
+  - funcs
+  - fs
+  - json
+  - process
+  - channel
+  - time
+  - system
+  - events
+  imports:
+    canonical: bee.threads.records:canonical
+    bounds: bee.threads.records:bounds
+    environment: bee.placement.docker:environment
+    resources: bee.placement.native:resources
+    image: bee.placement.docker.service:image
+    docker_client: userspace.docker:docker_client

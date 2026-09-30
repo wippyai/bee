@@ -16,6 +16,7 @@ M.MAX_ROWS = 256
 M.MAX_PAYLOAD_LINES = 24
 M.INBOX_PAGE = 64
 type Object = {[string]: unknown}
+type Workspace = {label: string, folder: string}
 type Decision = "approved" | "denied"
 type ApprovalState = "pending" | "decided" | "expired" | "withdrawn"
 type RequestKind = "permission" | "question"
@@ -24,7 +25,7 @@ type Prompt = {text: string, artifact_ref: nil} | {text: nil, artifact_ref: stri
 type OperationProposal = {kind: "operation", ref: string, revision: string, action_id: nil, input_digest: string?, payload: Object}
 type AttemptProposal = {kind: "attempt", ref: string, revision: string, action_id: string?, input_digest: string?, payload: Object}
 type Proposal = OperationProposal | AttemptProposal
-type ApprovalView = {
+type ApprovalView = {requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, request_kind: RequestKind, policy: string, proposal: Proposal,
     proposal_digest: string, prompt: Prompt, revision: integer, state: ApprovalState,
@@ -84,6 +85,18 @@ function M.text(value: unknown, limit: integer?): string
 end
 local function object(value: unknown): Object?
     return bounds.object(value)
+end
+
+function M.workspace(value: unknown, id: string): Workspace?
+    local reply = caller.decode(value)
+    if not reply or not reply.ok then return nil end
+    local body = bounds.object(reply.value)
+    local row = body and bounds.object(body.workspace)
+    if not row or row.workspace_id ~= id then return nil end
+    local label = bounds.text(row.label, 240)
+    local path = bounds.subpath(row.subpath)
+    if not label or not path then return nil end
+    return {label = label ~= "" and label or "Workspace", folder = path ~= "" and path or "Workspace root"}
 end
 
 local function proposal_kind(value: unknown): ProposalKind?
@@ -164,7 +177,7 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     local extra = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "request_kind", "policy",
         "proposal", "proposal_digest", "prompt", "response_schema", "thread_id", "binding", "revision", "state", "decision", "decider_id",
         "decided_at", "response", "validated_incarnation", "validated_by", "validated_at", "consumer_id", "consumed_effect", "consumed_at",
-        "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at", "source_approval_id", "source_workspace_id"})
+        "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at", "source_approval_id", "source_workspace_id", "requesting_session"})
     if extra then return nil, extra end
     local approval_id, owner_node, workspace_id = bounds.id(view.approval_id), bounds.id(view.owner_node), bounds.id(view.workspace_id)
     local requester_id, policy = bounds.id(view.requester_id), bounds.id(view.policy)
@@ -232,7 +245,9 @@ function M.decode_view(value: unknown): (ApprovalView?, string?)
     if (view.decided_at ~= nil and not decided_at) or (view.validated_at ~= nil and not validated_at)
         or (view.consumed_at ~= nil and not consumed_at) or (view.effect_completed_at ~= nil and not effect_completed_at)
         or (view.updated_at ~= nil and not updated_at) then return nil, "approval view has invalid timestamps" end
-    local decoded_view: ApprovalView = {approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
+    local requesting_session = view.requesting_session == nil and nil or bounds.id(view.requesting_session)
+    if view.requesting_session ~= nil and (not requesting_session or not requesting_session:match("^bs:[^:]+:[^:]+:[^:]+$")) then return nil, "requesting session is invalid" end
+    local decoded_view: ApprovalView = {requesting_session = requesting_session, approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation, workspace_id = workspace_id,
         requester_id = requester_id, request_kind = request_kind_value, policy = policy, proposal = proposal, proposal_digest = proposal_digest,
         prompt = prompt, revision = revision, state = state, decision = approval_decision, decider_id = decider_id,
         expires_at = expires_at, created_at = created_at, response_schema = response_schema, thread_id = thread_id, binding = binding,

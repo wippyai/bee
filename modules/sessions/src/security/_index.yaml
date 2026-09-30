@@ -8,10 +8,43 @@ entries:
   policy:
     actions: [registry.get, registry.snapshot, funcs.call]
     resources:
+    - bee.sessions.binding:open
+    - bee.sessions:threads_journal_ref
+    - bee.threads:journal_local
+    - bee.threads.service:session_create
+    - bee.threads.service:session_attach
+    - bee.threads.service:session_describe
+    - bee.threads.service:session_scan
+    - bee.threads.service:session_transition
+    - bee.threads.service:work_send
+    - bee.threads.service:work_describe
+    - bee.threads.service:work_history
+    - bee.threads.service:work_scan
+    - bee.threads.service:turn_reserve
+    - bee.threads.service:turn_recover
+    - bee.threads.service:turn_pull
+    - bee.threads.service:turn_accept
+    - bee.threads.service:turn_observation
+    - bee.threads.service:work_settle
+    - bee.threads.service:work_uncertain
+    - bee.threads.service:work_cancel
+    - bee.threads.service:operation_lookup
+    - bee.threads.service:operation_describe
+    - bee.threads.service:feed_read
+    - bee.placement.native.binding:stop
+    - bee.placement.native.binding:reconcile
     - bee.harness.profiles:contract
     - bee.harness.profiles:call
     - bee.harness.launch:admission
+    - bee.harness.launch:setup
     - bee.harness.launch:locate_probe
+    effect: allow
+- name: owner_setup_policy
+  kind: security.policy.expr
+  policy:
+    actions: [bee.harness.setup]
+    resources: '*'
+    expression: 'resource == actor.meta.workspace_id && resource != ""'
     effect: allow
 - name: scheduler_policy
   kind: security.policy
@@ -22,21 +55,57 @@ entries:
     resources:
     - bee.sessions.scheduler
     - bee.sessions.scheduler.wake
+    - bee.sessions.service:turn_run
     - bee.sessions:threads_journal_ref
     - bee.sessions:executor_selection
+    - bee.sessions.binding:external_executor_binding
+    - bee.threads:journal_local
     - bee.executor.external.binding:run_turn
+    - bee.threads.service:session_scan
     - bee.threads.service:session_create
+    - bee.threads.service:session_attach
     - bee.threads.service:session_describe
     - bee.threads.service:session_transition
     - bee.threads.service:work_send
     - bee.threads.service:work_describe
+    - bee.threads.service:work_history
     - bee.threads.service:work_scan
     - bee.threads.service:turn_reserve
     - bee.threads.service:turn_recover
     - bee.threads.service:turn_pull
     - bee.threads.service:turn_accept
+    - bee.threads.service:turn_observation
     - bee.threads.service:work_settle
     - bee.threads.service:work_uncertain
+    - bee.threads.service:work_cancel
     - bee.threads.service:operation_lookup
+    - bee.threads.service:operation_describe
     - bee.threads.service:feed_read
+    - bee.placement.native.binding:stop
+    - bee.placement.native.binding:reconcile
+    effect: allow
+- name: scheduler_principal_policy
+  kind: security.policy.expr
+  meta: {comment: The scheduler restores only the owner identity carried by the canonical workspace-homed turn}
+  policy:
+    actions: [security.actor.create, funcs.security, funcs.context]
+    expression: 'action in ["funcs.security", "funcs.context"] || resource matches "^bee[.]application:[0-9a-f]{32}:[A-Za-z0-9_.:-]+$" || resource matches "^bs:[A-Za-z0-9_.-]+:[0-9a-f]{32}:[A-Za-z0-9_.-]+$"'
+    resources: '*'
+    effect: allow
+
+- name: owner_workspace_identity_policy
+  kind: security.policy.expr
+  policy:
+    actions: [security.actor.create, funcs.security]
+    resources: '*'
+    expression: 'action == "funcs.security" || resource == actor.id'
+    effect: allow
+
+- name: owner_registry_read_policy
+  kind: security.policy
+  meta:
+    comment: The Sessions owner reads admitted driver, definition and launch policy metadata from one pinned catalog; this grants no registry mutation or launch permission
+  policy:
+    actions: [registry.get, registry.snapshot]
+    resources: ['*']
     effect: allow

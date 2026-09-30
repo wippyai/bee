@@ -5,6 +5,8 @@ local canonical = require("canonical")
 local hash = require("hash")
 local graph = require("graph")
 local inventory = require("inventory")
+local binary_identity = require("binary_identity")
+local native_compat = require("native_compat")
 local requirements = require("requirements")
 local semver = require("semver")
 local M = {}
@@ -74,7 +76,8 @@ function M.root_id(component: string): (string?, string?)
     return "bee.hub.deps:" .. digest, nil
 end
 
-function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source): (Prepared?, string?)
+function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source,
+	 baked_identity: binary_identity.Baked?): (Prepared?, string?)
     local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, inventory_error end
     local self_update = request.component == "bee/bee"
@@ -146,6 +149,10 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     end
     local resolved, graph_error = graph.resolve(roots, source)
     if not resolved then return nil, graph_error end
+    if self_update then
+        local compatibility_error = native_compat.check(resolved.packages, baked_identity)
+        if compatibility_error then return nil, compatibility_error end
+    end
     local owners: {[string]: string} = {}
     for _, raw_entry in ipairs(raw_state.entries) do
         local entry = bounds.object(raw_entry)

@@ -15,7 +15,7 @@ local function handle(raw: unknown): Result
     if not value then return transaction.failure("INVALID", "Hub request must be an object") end
     local extra = bounds.fields(value, {"operation", "request", "expected_digest"})
     if extra then return transaction.failure("INVALID", extra) end
-    local operation = bounds.member(value.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "plan", "apply", "status"})
+    local operation = bounds.member(value.operation, {"catalog", "details", "inspect", "state", "files", "read_file", "installed", "installed_source", "updates", "plan", "apply", "status"})
     if not operation then return transaction.failure("INVALID", "unknown Hub operation") end
     local resource = "catalog"
     local self_update = false
@@ -61,6 +61,8 @@ local function handle(raw: unknown): Result
                 end
             end
         end
+    elseif operation == "updates" then
+        resource = "updates"
     elseif value.request ~= nil then return transaction.failure("INVALID", "operation takes no request body") end
     if operation == "apply" or (operation == "status" and value.expected_digest ~= nil) then
         local digest = value.expected_digest

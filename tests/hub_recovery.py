@@ -254,7 +254,24 @@ def command_environment(folder):
 
 def prepare_fixture(folder):
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
-    for module in ("hub", "persist", "sync", "threads"):
+    shutil.copy2(ROOT / "src/clock.lua", folder / "src/clock.lua")
+    root_index = folder / "src/_index.yaml"
+    root_index.write_text(root_index.read_text() +
+                          "\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")
+    shutil.copytree(ROOT / "src/protocol", folder / "src/protocol")
+    (folder / "src/protocol/_index.yaml").write_text("""version: '1.0'
+namespace: bee.protocol
+entries:
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+  imports: {clock: bee:clock}
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+  modules: [json]
+""")
+    for module in ("hub", "hive", "persist", "sync", "threads"):
         shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
     (folder / "src/hubrecoveryprobe").mkdir()
     (folder / "src/hubrecoveryprobe/main.lua").write_text(PROBE)
@@ -262,6 +279,7 @@ def prepare_fixture(folder):
     (folder / "wippy.lock").write_text(
         "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
         "- name: bee/hub\n  version: 0.1.0-dev\n"
+        "- name: bee/hive\n  version: 0.1.0-dev\n"
         "- name: bee/persist\n  version: 0.1.0-dev\n"
         "- name: bee/sync\n  version: 0.1.0-dev\n"
         "- name: bee/threads\n  version: 0.1.0-dev\n"
@@ -270,7 +288,7 @@ def prepare_fixture(folder):
         "version: '1.0'\nregistry:\n  enable_history: true\n"
         "  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"
         "workspace:\n  replacements:\n"
-        "    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n"
+        "    bee/hub: ./modules/hub\n    bee/hive: ./modules/hive\n    bee/persist: ./modules/persist\n"
         "    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
     )
 

@@ -44,6 +44,15 @@ entries:
 - name: semver
   kind: library.lua
   source: file://semver.lua
+- name: binary_identity
+  kind: library.lua
+  source: file://binary_identity.lua
+  modules: [json]
+  imports: {bounds: bee.threads.records:bounds, semver: bee.hub:semver}
+- name: native_compat
+  kind: library.lua
+  source: file://native_compat.lua
+  imports: {bounds: bee.threads.records:bounds, binary_identity: bee.hub:binary_identity, semver: bee.hub:semver}
 - name: graph
   kind: library.lua
   source: file://graph.lua
@@ -52,7 +61,7 @@ entries:
   kind: library.lua
   source: file://plan.lua
   modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, graph: bee.hub:graph, inventory: bee.hub:inventory, requirements: bee.hub:requirements, semver: bee.hub:semver}
+  imports: {bounds: bee.threads.records:bounds, binary_identity: bee.hub:binary_identity, canonical: bee.sync:canonical, graph: bee.hub:graph, inventory: bee.hub:inventory, native_compat: bee.hub:native_compat, requirements: bee.hub:requirements, semver: bee.hub:semver}
 - name: migrations
   kind: library.lua
   source: file://migrations.lua

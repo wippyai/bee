@@ -178,7 +178,7 @@ local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed
         return failure("INTERNAL", "profile snapshot envelope is malformed")
     end
     local decoded: {{[string]: unknown}} = {}
-    for _, value in ipairs(items :: {unknown}) do
+    for _, value in ipairs(items) do
         local item, item_error = projection(value)
         if not item then return item_error or failure("INTERNAL", "decode profile snapshot") end
         decoded[#decoded + 1] = reply(input, item.profile_id, item.revision, item.profile, item.tombstone)

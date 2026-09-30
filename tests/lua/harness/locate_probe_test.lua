@@ -27,7 +27,7 @@ local function define_tests()
             for _, name in ipairs(decoded :: {unknown}) do
                 test.eq(type(name), "string")
                 if name == "PATH" then found = true end
-                test.is_nil((name :: string):find("=", 1, true))
+                test.is_nil(((name :: string):find("=", 1, true)))
             end
             test.is_true(found)
         end)

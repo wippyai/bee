@@ -134,7 +134,7 @@ function M.decode(value: unknown): (Request?, string?)
         if object.expected_cursor ~= nil and not cursor then return nil, "expected_cursor must be a nonnegative safe integer" end
         if after_key ~= "" and not cursor then return nil, "continuation requires expected_cursor" end
         if not limit or limit < 1 or limit > 64 then return nil, "limit must be between 1 and 64" end
-        request.after_key = after_key :: string
+        request.after_key = after_key
         request.expected_cursor = cursor
         request.limit = limit
         return request, nil

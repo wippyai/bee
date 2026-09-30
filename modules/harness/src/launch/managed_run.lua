@@ -446,7 +446,7 @@ function M.execute(request: ExecutionRequest, adapter: Adapter): {[string]: unkn
 
     -- Preserve the provider adapter's own checkpoint format while the shared
     -- lifecycle owns every carrier write and terminal receipt.
-    local result = adapter(context, request :: {[string]: unknown})
+    local result = adapter(context, request)
     if result.settle == false then return failed(result.error or "the in-process adapter refused the run") end
     local outcome = bounds.member(result.outcome, {"succeeded", "failed", "cancelled", "uncertain"}) or "failed"
     local terminal_checkpoint = result.checkpoint or bounds.object(context.checkpoint) or {}

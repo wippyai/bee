@@ -203,7 +203,7 @@ local function define_tests()
                 local recorded = shell("cat " .. record)
                 if not recorded:find('"x_api_key":"' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no api key") end
                 for _, observation in ipairs(session.run.observations) do
-                    test.is_nil(json.encode(observation):find(SENTINEL, 1, true))
+                    test.is_nil((json.encode(observation):find(SENTINEL, 1, true)))
                 end
             end
             case("allow", function(session: Session, work: string)

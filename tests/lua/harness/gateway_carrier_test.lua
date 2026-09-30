@@ -354,7 +354,7 @@ local function define_tests()
             test.eq(seen.initialize, 200)
             test.eq(seen.protocol, "2025-06-18")
             test.eq(seen.list, 200)
-            test.eq(json.encode(seen.tools), json.encode({"call_tool", "capabilities", "session", "thread_read"}))
+            test.eq(json.encode(seen.tools), (json.encode({"call_tool", "capabilities", "session", "thread_read"})))
             test.eq(seen.read, 200)
             test.eq(seen.read_ok, true)
             local names, details = evidence_kinds(attempt_id)
@@ -376,12 +376,12 @@ local function define_tests()
             if not result.value then error("configured carrier failed: " .. tostring(result.error)) end
             test.eq((result.value.settlement :: Object).outcome, "succeeded")
             local seen = report(thread_id)
-            test.eq(json.encode(seen.tools), json.encode({"call_tool", "session", "thread_read"}))
+            test.eq(json.encode(seen.tools), (json.encode({"call_tool", "session", "thread_read"})))
             test.eq((seen.surface_inactive :: Object).code, -32602)
             test.eq((seen.surface_selected :: Object).ok, true)
             local current = (seen.surface_after :: Object).value :: Object
             test.eq(current.revision, 2)
-            test.eq(json.encode(current.active_traits), json.encode({"research:read", "research:inspect"}))
+            test.eq(json.encode(current.active_traits), (json.encode({"research:read", "research:inspect"})))
             test.eq((current.context :: Object).experiment, "managed-one")
             test.eq((seen.surface_dispatch :: Object).ok, true)
             test.eq((seen.surface_overwrite :: Object).ok, false)
@@ -626,7 +626,7 @@ local function define_tests()
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
             test.eq((outcome.value.settlement :: Object).outcome, "succeeded")
             local reported = hook_report(thread_id)
-            test.eq(json.encode(reported.statuses), json.encode({202, 202, 202, 202, 202}))
+            test.eq(json.encode(reported.statuses), (json.encode({202, 202, 202, 202, 202})))
             -- The carrier can commit the first occurrence before the child
             -- replays it: queued replay is 202, committed replay is 200.
             -- The records and final queue below still prove exactly one commit.
@@ -639,9 +639,9 @@ local function define_tests()
                 if by_event[event] ~= 1 then error("hook " .. event .. " committed " .. tostring(by_event[event]) .. " times") end
             end
             local text = json.encode(committed) or ""
-            test.is_nil(text:find("sk-fixture", 1, true))
-            test.is_nil(text:find("the brief", 1, true))
-            test.is_nil(text:find("decision", 1, true))
+            test.is_nil((text:find("sk-fixture", 1, true)))
+            test.is_nil((text:find("the brief", 1, true)))
+            test.is_nil((text:find("decision", 1, true)))
             test.is_true(text:find("content_digests", 1, true) ~= nil)
             local binding = binding_of(attempt_id, 1)
             test.eq(binding.reason, "binding is revoked")

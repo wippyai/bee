@@ -221,7 +221,7 @@ local function define_tests()
             local prepared, err = machine.prepare_attempt(io, selected)
             if not prepared then error(tostring(err)) end
             test.eq(calls[#calls], "example.placement:prepare")
-            test.is_nil(table.concat(calls, ","):find("bee.placement.native.binding:prepare", 1, true))
+            test.is_nil((table.concat(calls, ","):find("bee.placement.native.binding:prepare", 1, true)))
         end)
         test.it("attaches a fresh sequential attempt to its own admitted action and chains the settled attempt", function()
             local selected = plan("session", "stream-json")

@@ -39,7 +39,7 @@ local function define_tests()
                 ready = true, reason = ""}}, unavailable = 0, notes = {}}
             local shown = picker_view.draw(40, 10, appearance.defaults(), listing_of(hostile), 1, "", false, false)
             test.eq(#shown.rows, 10)
-            test.is_nil(table.concat(shown.rows):find("\27]52", 1, true))
+            test.is_nil((table.concat(shown.rows):find("\27]52", 1, true)))
             for _, size in ipairs({{20, 3}, {2, 10}}) do
                 local small = picker_view.draw(size[1], size[2], appearance.defaults(), listing_of(hostile), 1, "", false, false)
                 test.eq(small.capacity, 0)
@@ -91,7 +91,7 @@ local function define_tests()
                 local plain = screen(shown.rows):gsub("\27%[[0-9;]*m", "")
                 test.is_true(plain:find("Fix API", 1, true) ~= nil)
                 test.is_true(plain:find("closed", 1, true) ~= nil)
-                test.is_nil(plain:find("bs:n:w:s", 1, true))
+                test.is_nil((plain:find("bs:n:w:s", 1, true)))
                 test.is_true(shown.rows[size[2]]:find("Enter open", 1, true) ~= nil)
             end
         end)

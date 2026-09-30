@@ -23,6 +23,20 @@ local ALPHA_POLICY = "bee.harness.catalog:profile_alpha_policy"
 local BETA_POLICY = "bee.harness.catalog:profile_beta_policy"
 local counter = 0
 
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
@@ -51,7 +65,7 @@ end
 
 local function apply(entry: {[string]: unknown})
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("apply " .. tostring(entry.id) .. ": " .. tostring(err)) end
 end

@@ -78,7 +78,7 @@ local function decode_allowed(value: unknown): (Allowed?, string?)
     local decoded_options, decoded_options_error = preferences.decode_profile_options(raw.options)
     if not decoded_options then return nil, decoded_options_error or "editor options are invalid" end
     local options: {[string]: Option} = {}
-    local raw_options = raw.options :: {[string]: unknown}
+    local raw_options = raw.options
     for name in pairs(raw_options) do
         local declared = decoded_options[name]
         if not declared then return nil, "editor option declaration is missing" end
@@ -91,8 +91,8 @@ local function decode_allowed(value: unknown): (Allowed?, string?)
         end
     end
     local tools: {string} = {}
-    for index, tool in ipairs(raw.mcp_tools :: {unknown}) do tools[index] = tool :: string end
-    return {options = options, mcp_tools = tools, instructions = raw.instructions :: boolean,
+    for index, tool in ipairs(raw.mcp_tools) do tools[index] = tool end
+    return {options = options, mcp_tools = tools, instructions = raw.instructions,
         workdir = raw.workdir == true, thread = raw.thread == true}, nil
 end
 
@@ -273,6 +273,11 @@ function M.toggle_tool(draft: Draft, raw_tool: unknown): (boolean, string?)
     return true, nil
 end
 
+type OptionSortKey = {name: string}
+local function option_order(left: OptionSortKey, right: OptionSortKey): boolean
+    return left.name < right.name
+end
+
 function M.options(draft: Draft): ({OptionRow}?, string?)
     local base, base_error = current(draft)
     if not base then return nil, base_error end
@@ -286,7 +291,7 @@ function M.options(draft: Draft): ({OptionRow}?, string?)
             rows[#rows + 1] = {name = name, kind = "text", values = nil, max_bytes = declared.max_bytes, value = base.options[name]}
         end
     end
-    table.sort(rows, function(left: OptionRow, right: OptionRow): boolean return left.name < right.name end)
+    table.sort(rows, option_order)
     return rows, nil
 end
 

@@ -67,7 +67,7 @@ function M.binding(input: Input): Binding
     local locate_contract = false
     local mapped: {[string]: string} = {}
     if type(contracts) == "table" then
-        for _, item in ipairs(contracts :: {unknown}) do
+        for _, item in ipairs(contracts) do
             local declared = bounds.object(item)
             if declared and declared.contract == M.CONTRACT then
                 implements = true

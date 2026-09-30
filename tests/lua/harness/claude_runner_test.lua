@@ -309,13 +309,13 @@ local function define_tests()
             local materialized = false
             for _, item in ipairs(evidence) do
                 if item.kind == "credential.materialized" then materialized = true end
-                test.is_nil(json.encode(item):find(SENTINEL, 1, true))
+                test.is_nil((json.encode(item):find(SENTINEL, 1, true)))
             end
             test.is_true(materialized)
             for _, item in ipairs(records_of(thread_id)) do
-                test.is_nil(json.encode(item):find(SENTINEL, 1, true))
+                test.is_nil((json.encode(item):find(SENTINEL, 1, true)))
             end
-            test.is_nil(json.encode(outcome.value):find(SENTINEL, 1, true))
+            test.is_nil((json.encode(outcome.value):find(SENTINEL, 1, true)))
             stop_endpoint()
             shell("rm -rf " .. root)
         end)

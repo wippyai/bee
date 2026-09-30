@@ -28,9 +28,9 @@ local function read_stream(stream: Stream): (string?, string?)
         if read_error ~= nil then return nil, tostring(read_error) end
         if chunk == nil or chunk == "" then break end
         if type(chunk) ~= "string" then return nil, "host probe stream returned invalid data" end
-        size = size + #(chunk :: string)
+        size = size + #(chunk)
         if size > M.MAX_OUTPUT_BYTES then return nil, "host probe output exceeds its bound" end
-        chunks[#chunks + 1] = chunk :: string
+        chunks[#chunks + 1] = chunk
     end
     return table.concat(chunks), nil
 end
@@ -47,10 +47,18 @@ function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Relea
         release()
     end
     local results = channel.new(3)
+    local next_result: integer = 0
+    local results_pending: {[integer]: Result} = {}
+    local function send_results(value: Result)
+        next_result = next_result + 1
+        results_pending[next_result] = value
+        results:send(next_result)
+    end
     local function pump(name: "stdout" | "stderr", stream: Stream)
         coroutine.spawn(function()
             local output, read_error = read_stream(stream)
-            results:send({kind = "stream", name = name, output = output, error = read_error})
+            local sent: Result = {kind = "stream", name = name, output = output, error = read_error}
+            send_results(sent)
         end)
     end
     pump("stdout", stdout)
@@ -68,24 +76,28 @@ function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Relea
             cleanup(true)
             return nil, nil, "host probe timed out"
         end
-        local result = selected.value :: Result
+        local serial = selected.value
+        if type(serial) ~= "number" then error("invalid completion identity") end
+        local result = assert(results_pending[math.floor(serial)], "missing completion")
+        results_pending[math.floor(serial)] = nil
         if result.kind == "stream" then
             streams_received = streams_received + 1
             if result.error then
                 cleanup(true)
                 return nil, nil, result.error
             end
-            outputs[result.name] = result.output or ""
+            outputs[assert(result.name)] = result.output or ""
             if streams_received == 2 and not waiter_started then
                 waiter_started = true
                 coroutine.spawn(function()
                     local raw_code, wait_error = proc:wait()
                     local code = type(raw_code) == "number" and raw_code == math.floor(raw_code) and math.floor(raw_code) or nil
-                    results:send({kind = "exit", code = code, error = wait_error and tostring(wait_error) or nil})
+                    local sent: Result = {kind = "exit", code = code, error = wait_error and tostring(wait_error) or nil}
+                    send_results(sent)
                 end)
             end
         else
-            exit = result
+            exit = {kind = "exit", code = result.code, error = result.error}
             exit_received = true
             if result.error then
                 cleanup(true)

@@ -139,16 +139,16 @@ local function choose_thread(state: State)
     local items: {ThreadRow} = {{thread_id = nil, title = "New thread"}}
     local reply = state.ask(M.THREADS, {limit = M.THREAD_PAGE})
     local listed: Threads = {items = items, selected = 1, error = nil}
-    local value = reply.ok and type(reply.value) == "table" and reply.value :: {[string]: unknown} or nil
+    local value = reply.ok and type(reply.value) == "table" and reply.value or nil
     local threads = value and value.threads
     if not value or type(threads) ~= "table" then
         listed.error = reply.error and text.bound(reply.error.code .. ": " .. reply.error.message, 200) or "Threads could not be read"
     else
-        for _, raw in ipairs(threads :: {unknown}) do
-            local row = type(raw) == "table" and raw :: {[string]: unknown} or nil
+        for _, raw in ipairs(threads) do
+            local row = type(raw) == "table" and raw or nil
             local id = row and row.thread_id
             if type(id) == "string" and id ~= "" and not id:find("%c") then
-                local title = row and type(row.title) == "string" and text.bound(row.title :: string, 200) or id
+                local title = row and type(row.title) == "string" and text.bound(row.title, 200) or id
                 state.thread_titles[id] = title
                 items[#items + 1] = {thread_id = id, title = title}
             end

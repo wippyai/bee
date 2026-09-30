@@ -115,11 +115,16 @@ end
 local function call(target: string, request: unknown): ({[string]: unknown}?, Reply?)
     local raw, err = funcs.call(target, request)
     if err or type(raw) ~= "table" then return nil, fail("UNAVAILABLE", target .. " did not answer") end
-    local reply = raw :: Reply
-    if not reply.ok then return nil, fail(reply.error and reply.error.code or "DENIED", target .. ": " .. tostring(reply.error and reply.error.message)) end
+    local reply = bounds.object(raw)
+    if not reply then return nil, fail("UNAVAILABLE", target .. " did not answer") end
+    if not reply.ok then
+        local fault = bounds.object(reply.error)
+        local code = fault and bounds.id(fault.code) or "DENIED"
+        return nil, fail(code or "DENIED", target .. ": " .. tostring(fault and fault.message))
+    end
     local value = reply.value
     if type(value) ~= "table" then return {}, nil end
-    return value :: {[string]: unknown}, nil
+    return value, nil
 end
 local function digest_of(value: unknown): (string?, string?)
     local encoded, encode_error = canonical.encode(value)
@@ -603,7 +608,7 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?):
             -- cleanup before this request obtains any fresh grants.
             local recovery_request: continuation.Request = {thread_id = previous.thread_id,
                 action_id = ids.action_id, attempt_id = ids.attempt_id, previous_attempt_id = previous.previous_attempt_id,
-                owner_id = requester, session_ref = session_ref :: string, binding_ref = plan.binding_ref,
+                owner_id = requester, session_ref = assert(session_ref), binding_ref = plan.binding_ref,
                 binding_digest = plan.binding_digest, profile_id = plan.profile_id, profile_digest = plan.profile_digest,
                 placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest,
                 placement_methods = plan.placement_methods, reauthorize = previous.reauthorize}
@@ -701,8 +706,8 @@ function M.admit_session_turn(value: unknown): (Admitted?, Reply?)
     if input.saved_profile_id ~= nil then request.saved_profile_id = input.saved_profile_id end
     if input.saved_profile_revision ~= nil then request.saved_profile_revision = input.saved_profile_revision end
     if workdir then request.workdir = workdir end
-    local context: SessionTurnContext = {owner_id = owner_id :: string, session_ref = session_ref :: string,
-        action_id = action_id :: string, attempt_id = attempt_id :: string}
+    local context: SessionTurnContext = {owner_id = owner_id, session_ref = session_ref,
+        action_id = action_id, attempt_id = attempt_id}
     local admitted, refused = admit_request(request, context)
     if not admitted then return nil, refused end
     if admitted.plan.profile_id ~= profile_id then

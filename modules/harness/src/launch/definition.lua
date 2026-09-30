@@ -52,14 +52,14 @@ local function decode_workdir(value: unknown): (WorkdirPolicy?, string?)
     local unknown_field = bounds.fields(object, {"kind", "resource_ref"})
     if unknown_field then return nil, "workdir_policy: " .. unknown_field end
     local kind = bounds.member(object.kind, {"caller_workspace", "declared_resource", "required"})
-    if not kind then return nil, "workdir_policy.kind is not caller_workspace, declared_resource or required" end
+    if kind ~= "caller_workspace" and kind ~= "declared_resource" and kind ~= "required" then return nil, "workdir_policy.kind is not caller_workspace, declared_resource or required" end
     local resource_ref: string? = nil
     if object.resource_ref ~= nil then
         resource_ref = bounds.id(object.resource_ref)
         if not resource_ref then return nil, "workdir_policy.resource_ref is not an identifier" end
     end
     if kind == "declared_resource" and not resource_ref then return nil, "workdir_policy.declared_resource names a resource_ref" end
-    local workdir_kind = kind :: WorkdirKind
+    local workdir_kind: "caller_workspace" | "declared_resource" | "required" = kind
     return {kind = workdir_kind, resource_ref = resource_ref}, nil
 end
 local function decode_thread(value: unknown): (ThreadPolicy?, string?)
@@ -68,14 +68,14 @@ local function decode_thread(value: unknown): (ThreadPolicy?, string?)
     local unknown_field = bounds.fields(object, {"kind", "thread_ref"})
     if unknown_field then return nil, "thread_policy: " .. unknown_field end
     local kind = bounds.member(object.kind, {"new", "caller", "named"})
-    if not kind then return nil, "thread_policy.kind is not new, caller or named" end
+    if kind ~= "new" and kind ~= "caller" and kind ~= "named" then return nil, "thread_policy.kind is not new, caller or named" end
     local thread_ref: string? = nil
     if object.thread_ref ~= nil then
         thread_ref = bounds.id(object.thread_ref)
         if not thread_ref then return nil, "thread_policy.thread_ref is not an identifier" end
     end
     if kind == "named" and not thread_ref then return nil, "thread_policy.named names a thread_ref" end
-    local thread_kind = kind :: ThreadKind
+    local thread_kind: "new" | "caller" | "named" = kind
     return {kind = thread_kind, thread_ref = thread_ref}, nil
 end
 function M.decode(ref: string, entry: {[string]: unknown}): (Definition?, string?)

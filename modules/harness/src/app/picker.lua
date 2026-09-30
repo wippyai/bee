@@ -33,6 +33,7 @@ type Activation = {serial: integer, admitted: admission.Admitted?, refused: admi
 -- A saved profile's launch choices resolved for a manual attach.
 type Choice = {definition_ref: string, title: string, plan_digest: string, saved_profile_id: string?,
     saved_profile_revision: integer?, workdir: {root_ref: string, path: string}?, thread_id: string?}
+type Loaded = {serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
 type Setup = {serial: integer, request_id: string, choice: Choice}
 type Opened = {serial: integer, conversation: agents.Conversation?, error: string?}
 type Progress = {conversation: agents.Conversation, error: string?}
@@ -73,8 +74,16 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local running = true
     local load_serial = 0
     local loads = channel.new(1)
+    local loads_pending: {[integer]: Loaded} = {}
+    local function send_loads(value: Loaded)
+        loads_pending[value.serial] = value
+        loads:send(value.serial)
+    end
     local activation_serial = 0
-    local activations = channel.new(1) :: Channel<Activation>
+    local activations = channel.new(1)
+    local function send_activations(value: Activation): Activation
+        return {serial = value.serial, admitted = value.admitted, refused = value.refused, error = value.error, title = value.title}
+    end
     local activating = false
     local setup_future: funcs.Future? = nil
     local setup_response: Channel<unknown>? = nil
@@ -127,8 +136,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local ticks = 0
     local opening = false
     local open_serial = 0
-    local opens = channel.new(1) :: Channel<Opened>
-    local progress = channel.new(1) :: Channel<Progress>
+    local opens = channel.new(1)
+    local progress = channel.new(1)
     local open_key, open_target = "", ""
     local close_key: string? = nil
     local reload_pending = false
@@ -152,7 +161,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         coroutine.spawn(function()
             if catalog_requested then
                 local found, load_error = agents.list(sessions.client(), include)
-                if running and serial == load_serial then loads:send({serial = serial, listing = found, error = load_error}) end
+                if running and serial == load_serial then
+                    local sent: Loaded = {serial = serial, listing = found, error = load_error}
+                    send_loads(sent)
+                end
             else
                 local rows, load_error = agents.directory(sessions.client(), workspace_filter)
                 local names: {[string]: agents.Workspace} = {}
@@ -162,7 +174,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     local id = agents.home(row.session)
                     if id and not names[id] then names[id] = agents.workspace(id, ask) end
                 end
-                if running and serial == load_serial then loads:send({serial = serial, directory = rows, workspaces = names, error = load_error}) end
+                if running and serial == load_serial then
+                    local sent: Loaded = {serial = serial, directory = rows, workspaces = names, error = load_error}
+                    send_loads(sent)
+                end
             end
         end)
     end
@@ -291,7 +306,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if decoded and type(payload) == "table" and payload.version == 1 then preferences = decoded; dirty = true end
             end
         elseif event.channel == loads then
-            local result = event.value :: {serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
+            local serial = event.value
+            if type(serial) ~= "number" then error("invalid completion identity") end
+            local result = assert(loads_pending[math.floor(serial)], "missing completion")
+            loads_pending[math.floor(serial)] = nil
             if result.serial == load_serial then
                 loading = false
                 listed = no_agents()
@@ -305,7 +323,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if reload_pending then reload_pending = false; load() end
             end
         elseif event.channel == opens then
-            local result = event.value :: Opened
+            local result = event.value
             if result.serial == open_serial then
                 opening = false
                 if result.conversation then
@@ -328,7 +346,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             end
         elseif event.channel == progress then
-            local result = event.value :: Progress
+            local result = event.value
             if result.conversation == conversation then
                 session_busy = false; dirty = true
                 if result.error then status = "Session operation failed: " .. result.error end
@@ -342,7 +360,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 start_task(function(current: agents.Conversation) agents.refresh(current) end)
             end
         elseif event.channel == activations then
-            local result = event.value :: Activation
+            local result = event.value
             if result.serial == activation_serial then
                 activating = false
                 if result.admitted then
@@ -371,8 +389,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if result then setup = result:data() end
                 local prepared = bounds.object(setup)
                 if setup_error or not prepared or prepared.ok ~= true then
-                    activations:send({serial = request.serial, error = setup_error and tostring(setup_error) or
-                        (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")})
+                    local sent: Activation = {serial = request.serial, error = setup_error and tostring(setup_error) or
+                        (prepared and type(prepared.error) == "string" and prepared.error or "Agent resource setup failed")}
+                    activations:send(send_activations(sent))
                 elseif running and request.serial == activation_serial then
                     coroutine.spawn(function()
                         local choice = request.choice
@@ -386,7 +405,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                             workspace_id = launch.workspace_id, thread_id = choice.thread_id or launch.thread_id, workdir = workdir,
                             brief = "", mode = "window",
                             origin_view = {view_id = launch.view_id, instance_id = launch.instance_id}})
-                        activations:send({serial = request.serial, admitted = admitted, refused = refused, title = choice.title})
+                        local sent: Activation = {serial = request.serial, admitted = admitted, refused = refused, title = choice.title}
+                        activations:send(send_activations(sent))
                     end)
                 end
             end
@@ -576,7 +596,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 end
                 activation_serial = activation_serial + 1
                 local serial = activation_serial
-                local id = request_id :: string
+                local id = request_id
                 activating = true
                 status = "Starting Agent…"
                 dirty = true
@@ -585,12 +605,14 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     saved_profile_id = choice.saved_profile_id, saved_profile_revision = choice.saved_profile_revision,
                     expected_plan_digest = choice.plan_digest, workdir = choice.workdir})
                 if not future then
-                    activations:send({serial = serial, error = tostring(future_error)})
+                    local sent: Activation = {serial = serial, error = tostring(future_error)}
+                    activations:send(send_activations(sent))
                 else
-                    local response = future:response() :: Channel<unknown>
+                    local response = future:response()
                     if not response then
                         future:cancel()
-                        activations:send({serial = serial, error = "Agent resource setup did not return a response"})
+                        local sent: Activation = {serial = serial, error = "Agent resource setup did not return a response"}
+                        activations:send(send_activations(sent))
                     else
                         setup_future, setup_response = future, response
                         setup_request = {serial = serial, request_id = id, choice = choice}

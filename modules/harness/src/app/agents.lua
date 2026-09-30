@@ -20,6 +20,7 @@ M.MAX_TURNS = 64
 type Fault = {code: string, message: string, retry: string, operation_key: string?}
 type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, title: string,
     status: string, ready: boolean, reason: string}
+type EntrySortKey = {ref: string, title: string, ready: boolean}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain"
 type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?}
@@ -54,7 +55,7 @@ function M.list(client: sessions.Client, include_unavailable: boolean): (Listing
         if not page.next then break end
         cursor = page.next
     end
-    table.sort(listing.items, function(left: Entry, right: Entry): boolean
+    table.sort(listing.items, function(left: EntrySortKey, right: EntrySortKey): boolean
         if left.ready ~= right.ready then return left.ready end
         if left.title ~= right.title then return left.title < right.title end
         return left.ref < right.ref
@@ -114,20 +115,20 @@ local function render(value: unknown): string
 end
 
 local function settle(turn: Turn, observed: unknown)
-    local await = observed :: {[string]: unknown}
+    local await = observed
     if await.tag == "ready" then
-        local result = await.result :: {[string]: unknown}
+        local result = await.result
         if result.outcome == "succeeded" then
             turn.state, turn.text = "ready", render(result.value)
         else
-            local fault = result.error :: Fault
+            local fault = result.error
             turn.state, turn.text = "failed", tostring(result.outcome) .. ": " .. describe(fault)
         end
     elseif await.tag == "blocked" then
-        local blocker = await.blocker :: {[string]: unknown}
+        local blocker = await.blocker
         turn.state, turn.text = "blocked", tostring(blocker.message)
     elseif await.tag == "uncertain" then
-        local evidence = await.evidence :: {[string]: unknown}
+        local evidence = await.evidence
         turn.state, turn.text = "uncertain", tostring(evidence.summary)
     end
 end
@@ -158,7 +159,7 @@ local function observe_thread(conv: Conversation)
                             if observation.type == "text" and type(data.text) == "string" and #data.text <= 65536 then
                                 local segment = bounds.id(data.segment_id) or "answer"
                                 turn.segments = turn.segments or {}
-                                local pieces = turn.segments :: {[string]: string}
+                                local pieces = turn.segments
                                 pieces[segment] = data.operation == "append" and ((pieces[segment] or "") .. data.text) or data.text
                                 local keys: {string} = {}
                                 for key in pairs(pieces) do keys[#keys + 1] = key end
@@ -213,6 +214,7 @@ function M.resume(client: sessions.Client, ref: string): (Conversation?, string?
     local session, fault = client:get(ref)
     if not session then return nil, describe(fault) end
     local conv = conversation(session)
+    local turns = conv.turns
     local cursor: integer? = nil
     for _ = 1, M.MAX_PAGES do
         local page, history_fault = session:history({cursor = cursor})
@@ -220,8 +222,9 @@ function M.resume(client: sessions.Client, ref: string): (Conversation?, string?
         for _, item in ipairs(page.items) do
             local work, work_fault = client:work(item.work)
             if not work then return nil, describe(work_fault) end
-            conv.turns[#conv.turns + 1] = {work = work, input = render(item.input), state = "queued", text = ""}
-            if #conv.turns > M.MAX_TURNS then table.remove(conv.turns, 1) end
+            local turn: Turn = {work = work, input = render(item.input), state = "queued", text = ""}
+            turns[#turns + 1] = turn
+            if #turns > M.MAX_TURNS then table.remove(turns, 1) end
         end
         cursor = page.next
         if not cursor then break end

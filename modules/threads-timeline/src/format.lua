@@ -39,30 +39,30 @@ end
 local function observation(body: record_types.Observation): (string, string, string)
     local data = body.data
     if data.type == "session.state" then
-        local state = data :: record_types.SessionState
+        local state = data
         return M.GLYPHS.record, "session " .. state.state .. (state.resume_ref and (" resume " .. state.resume_ref) or ""), ""
     elseif data.type == "turn.signal" then
-        local signal = data :: record_types.TurnSignal
+        local signal = data
         local glyph = signal.phase == "ended" and (signal.reported_outcome and outcome_glyph(signal.reported_outcome) or M.GLYPHS.uncertain) or M.GLYPHS.busy
         return glyph, "turn " .. signal.phase .. (signal.reported_outcome and (" reported " .. signal.reported_outcome) or ""), signal.reported_outcome or ""
     elseif data.type == "text" then
-        local segment = data :: record_types.Text
+        local segment = data
         return M.GLYPHS.record, segment.channel .. " " .. segment.operation .. ": " .. segment.text, ""
     elseif data.type == "tool.call" then
-        local call = data :: record_types.ToolCall
+        local call = data
         return M.GLYPHS.busy, "tool " .. call.tool_name .. " " .. content_text(call.input), ""
     elseif data.type == "tool.result" then
-        local result = data :: record_types.ToolResult
+        local result = data
         return outcome_glyph(result.outcome), "tool result " .. result.outcome .. " " .. content_text(result.output) .. fault_text(result.error), result.outcome
     elseif data.type == "notice" then
-        local notice = data :: record_types.Notice
+        local notice = data
         return notice.level == "error" and M.GLYPHS.failed or M.GLYPHS.record, "notice " .. notice.level .. " " .. notice.code .. " " .. content_text(notice.content), ""
     elseif data.type == "execution.exit" then
-        local exit = data :: record_types.ExecutionExit
+        local exit = data
         -- An exit is evidence the process ended, not an outcome.
         return M.GLYPHS.record, "execution exit" .. (exit.exit_code ~= nil and (" code " .. tostring(exit.exit_code)) or "") .. (exit.signal and (" signal " .. exit.signal) or ""), ""
     end
-    local extension = data :: record_types.Extension
+    local extension = data
     return M.GLYPHS.record, "extension " .. extension.event_name .. " " .. extension.event_revision, ""
 end
 function M.row(entry: Record): Row
@@ -70,41 +70,41 @@ function M.row(entry: Record): Row
     local approval_id: string? = nil
     local parent_action_id: string? = nil
     local kind = entry.kind
-    if kind == "observation" then
-        glyph, summary, outcome = observation(entry.body :: record_types.Observation)
-        local observation_body = entry.body :: record_types.Observation
+    if entry.kind == "observation" then
+        glyph, summary, outcome = observation(entry.body)
+        local observation_body = entry.body
         local data = observation_body.data
         if data.type == "text" then
-            local segment = data :: record_types.Text
+            local segment = data
             activity, state_label = segment.text, segment.operation
         elseif data.type == "tool.call" then
-            local call = data :: record_types.ToolCall
+            local call = data
             activity, state_label = call.tool_name .. (content_text(call.input) ~= "" and (" " .. content_text(call.input)) or ""), "tool"
         elseif data.type == "tool.result" then
-            local result = data :: record_types.ToolResult
+            local result = data
             activity, state_label = content_text(result.output), result.outcome
         elseif data.type == "notice" then
-            local notice = data :: record_types.Notice
+            local notice = data
             activity, state_label = content_text(notice.content), "notice " .. notice.level
         elseif data.type == "turn.signal" then
-            local signal = data :: record_types.TurnSignal
+            local signal = data
             activity, state_label = "turn", signal.phase
         elseif data.type == "session.state" then
-            local session_state = data :: record_types.SessionState
+            local session_state = data
             activity, state_label = "session", session_state.state
         elseif data.type == "execution.exit" then
-            local exit = data :: record_types.ExecutionExit
+            local exit = data
             activity, state_label = exit.exit_code ~= nil and ("code " .. tostring(exit.exit_code)) or (exit.signal or "ended"), "exited"
         end
-    elseif kind == "message" then
-        local message = entry.body :: record_types.Message
+    elseif entry.kind == "message" then
+        local message = entry.body
         local recipients = #message.recipient_ids > 0 and (" to " .. table.concat(message.recipient_ids, ", ")) or ""
         summary = message.message_kind .. " from " .. message.sender_id .. recipients .. ": " .. content_text(message.content)
         activity, state_label = content_text(message.content), message.message_kind
         if activity == "" then activity = "from " .. message.sender_id end
         if message.outcome then glyph = outcome_glyph(message.outcome); outcome = message.outcome end
-    elseif kind == "action.admitted" then
-        local admitted = entry.body :: record_types.Admitted
+    elseif entry.kind == "action.admitted" then
+        local admitted = entry.body
         glyph = M.GLYPHS.busy
         parent_action_id = admitted.parent_action_id
         local brief = content_text(admitted.input)
@@ -117,48 +117,48 @@ function M.row(entry: Record): Row
             summary = "admitted " .. admitted.binding_ref .. " for " .. admitted.principal_id .. " " .. brief
             activity, state_label = brief ~= "" and brief or admitted.principal_id, "admitted"
         end
-    elseif kind == "attempt.prepared" then
+    elseif entry.kind == "attempt.prepared" then
         summary = "attempt prepared"
         activity, state_label = "attempt", "prepared"
-    elseif kind == "attempt.started" then
-        local started = entry.body :: record_types.Started
+    elseif entry.kind == "attempt.started" then
+        local started = entry.body
         glyph = M.GLYPHS.busy
         summary = "attempt started " .. started.execution_kind .. " " .. started.execution_ref .. " epoch " .. tostring(started.owner_epoch)
         activity, state_label = started.execution_kind, "started"
-    elseif kind == "turn.request" then
-        local request = entry.body :: record_types.TurnRequest
+    elseif entry.kind == "turn.request" then
+        local request = entry.body
         glyph = M.GLYPHS.busy
         summary = "turn requested: " .. content_text(request.input)
         activity, state_label = content_text(request.input), "requested"
-    elseif kind == "turn.end" then
-        local finished = entry.body :: record_types.TurnEnd
+    elseif entry.kind == "turn.end" then
+        local finished = entry.body
         glyph = outcome_glyph(finished.outcome); outcome = finished.outcome
         summary = "turn " .. finished.outcome .. fault_text(finished.error)
         activity, state_label = finished.error and finished.error.message or "turn", finished.outcome
-    elseif kind == "receipt" then
-        local receipt = entry.body :: record_types.Receipt
+    elseif entry.kind == "receipt" then
+        local receipt = entry.body
         glyph = outcome_glyph(receipt.outcome); outcome = receipt.outcome
         summary = receipt.scope .. " receipt " .. receipt.outcome .. fault_text(receipt.error)
         activity, state_label = receipt.scope .. " receipt", receipt.outcome
-    elseif kind == "delivery.mark" then
-        local mark = entry.body :: record_types.DeliveryMark
+    elseif entry.kind == "delivery.mark" then
+        local mark = entry.body
         glyph = mark.state == "uncertain" and M.GLYPHS.uncertain or M.GLYPHS.record
         summary = "delivery " .. mark.state .. " to " .. mark.recipient_id
         activity, state_label = "delivery", mark.state
         if mark.state == "uncertain" then outcome = "uncertain" end
-    elseif kind == "request.answered" then
-        local answered = entry.body :: record_types.Answered
+    elseif entry.kind == "request.answered" then
+        local answered = entry.body
         glyph = outcome_glyph(answered.outcome); outcome = answered.outcome
         summary = "request answered " .. answered.outcome .. " by " .. answered.recipient_id
         activity, state_label = "request", answered.outcome
-    elseif kind == "approval.request" then
-        local request = entry.body :: record_types.ApprovalRequest
+    elseif entry.kind == "approval.request" then
+        local request = entry.body
         glyph = M.GLYPHS.waiting_viewer
         approval_id = request.approval_id
         summary = "approval " .. request.request_kind .. " asked by " .. request.requester_id .. "; decide in Approvals"
         activity, state_label = request.request_kind, "approval"
-    elseif kind == "approval.transition" then
-        local transition = entry.body :: record_types.ApprovalTransition
+    elseif entry.kind == "approval.transition" then
+        local transition = entry.body
         glyph = transition.state == "approved" and M.GLYPHS.succeeded or (transition.state == "denied" and M.GLYPHS.failed or M.GLYPHS.cancelled)
         approval_id = transition.approval_id
         summary = "approval " .. transition.state

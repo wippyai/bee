@@ -64,7 +64,7 @@ M.INVOKE = "hive.invoke"
 -- an empty table is the unconstrained object, and the decoded schema says so.
 local function schema_objects(value: unknown, depth: integer): unknown
     if type(value) ~= "table" or depth > 16 then return value end
-    local source = value :: {[unknown]: unknown}
+    local source = value
     if next(source) == nil then return table.create(0, 1) end
     local result: {[unknown]: unknown} = {}
     for key, item in pairs(source) do result[key] = schema_objects(item, depth + 1) end
@@ -99,7 +99,8 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
     for _, candidate in ipairs(types.MODES) do
         if candidate == mode then supported = true end
     end
-    if not supported then return nil, entry_id .. ": meta.hive must be open, approval or policy" end
+    if mode ~= "open" and mode ~= "approval" and mode ~= "policy" then return nil, entry_id .. ": meta.hive must be open, approval or policy" end
+    local exposure_mode: types.Mode = mode
     local declaration = bounds.object(meta.hive_operation)
     if not declaration then return nil, entry_id .. ": meta.hive_operation is required" end
     local unknown_field = bounds.fields(declaration, {"revision", "title", "input", "output", "limits"})
@@ -130,7 +131,7 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
         end
     end
     local data: unknown = entry.data
-    local security_config = bounds.object(data) and bounds.object((data :: {[string]: unknown}).security) or nil
+    local security_config = bounds.object(data) and bounds.object((data).security) or nil
     if security_config and bounds.object(security_config.actor) then
         return nil, entry_id .. ": an exposed operation cannot replace the caller's actor"
     end
@@ -138,7 +139,7 @@ local function decode_operation(entry: {[string]: unknown}): (Operation?, string
     if not material then return nil, entry_id .. ": entry is not measurable: " .. tostring(encode_error) end
     local measured, hash_error = hash.sha256(material)
     if hash_error or not measured then return nil, entry_id .. ": entry is not measurable" end
-    return {operation_ref = entry_id, mode = mode :: types.Mode, revision = revision, input_schema = input, output_schema = output,
+    return {operation_ref = entry_id, mode = exposure_mode, revision = revision, input_schema = input, output_schema = output,
         limits = limits, measured = measured, title = title}, nil
 end
 function M.decode_operation(entry: {[string]: unknown}): (Operation?, string?)
@@ -182,7 +183,7 @@ local function decode_interface(entry: {[string]: unknown}, operations: {[string
         end
         allow = list
     end
-    return {interface_ref = entry_id, kind = kind :: InterfaceKind, operation_ref = operation_ref, title = title, fixed = fixed, allow = allow}, nil
+    return {interface_ref = entry_id, kind = kind, operation_ref = operation_ref, title = title, fixed = fixed, allow = allow}, nil
 end
 function M.decode_interface(entry: {[string]: unknown}, operations: {[string]: Operation}): (Interface?, string?)
     return decode_interface(entry, operations)

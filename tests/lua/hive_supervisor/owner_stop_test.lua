@@ -16,7 +16,7 @@ end
 local function define_tests()
     test.describe("owner stop", function()
         test.it("decodes a stop of this node's owner and nothing else", function()
-            local request = assert(owner_stop.decode(call({alone = true}), NODE))
+            local request = assert((owner_stop.decode(call({alone = true}), NODE)))
             test.is_true(request.alone)
             test.is_false(assert(owner_stop.decode(call({alone = false}), NODE)).alone)
             local _, foreign = owner_stop.decode(call({alone = false}, nil, {node_id = "other-node", service_id = owner_stop.SERVICE}), NODE)

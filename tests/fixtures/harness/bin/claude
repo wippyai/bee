@@ -125,7 +125,7 @@ elif [ -n "${BEE_FIXTURE_FLOOD:-}" ]; then
   i=0
   while [ "$i" -lt "$count" ]; do
     printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}}\n'
-    sleep "$pace"
+    if [ "$pace" != "0" ]; then sleep "$pace"; fi
     i=$((i + 1))
   done
   printf '{"type":"result","subtype":"success","is_error":false,"result":"flood-complete","session_id":"fixture","num_turns":1}\n'

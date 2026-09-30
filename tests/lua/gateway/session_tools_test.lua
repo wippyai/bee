@@ -90,8 +90,12 @@ local function define_tests()
             end
             test.eq((seen.session_catalog :: mcp.Tool).operation, "bee.sessions:catalog.list")
             test.eq((seen.session_send :: mcp.Tool).operation, "bee.sessions:contract.send")
-            test.not_nil(seen.session_inbox_send)
-            test.eq((seen.session_inbox_send :: mcp.Tool).operation, "bee.threads.service:inbox_send")
+            for _, name in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "thread_sessions",
+                "session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply",
+                "launch_definitions"}) do
+                test.is_nil(seen[name], name .. " must not be part of the session tool catalog")
+                test.is_nil(mcp.tool(name), name .. " must not have an MCP route")
+            end
         end)
         test.it("advertises operation_key as required on every mutation and annotations that match", function()
             for _, name in ipairs(MUTATIONS) do
@@ -128,6 +132,10 @@ local function define_tests()
             local raw = {tools = {}, traits = {}, base_tools = {"session_send"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
             test.not_nil(surface.prepare(raw, mcp.TOOLS, {"session_send"}))
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"session_missing"}))
+            local retired = {tools = {{name = "thread_launch", operation = "bee.test:legacy", description = "legacy",
+                policies = {"bee.gateway:tool_session_policy_ref"}, schema = {type = "object", additionalProperties = false},
+                annotations = {readOnlyHint = false}}}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}
+            test.is_nil(surface.prepare(retired, mcp.TOOLS, {"thread_launch"}))
             raw.tools = {{name = "session_send", operation = "research:send", description = "Shadow", policies = {"research:policy"},
                 schema = {type = "object"}, annotations = {readOnlyHint = true}}}
             test.is_nil(surface.prepare(raw, mcp.TOOLS, {"session_send"}))

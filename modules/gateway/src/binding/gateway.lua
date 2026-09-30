@@ -1373,7 +1373,7 @@ local function running_sessions(workspace_id: string, unopened_is_empty: boolean
         if not live then return nil, fail("STORAGE", decode_error or "binding is corrupt") end
         if M.valid(live, generation) then
             candidates[#candidates + 1] = {binding_id = live.binding_id, subject = live.subject, action_id = live.action_id, attempt_id = live.attempt_id,
-                thread_id = live.thread_id, carrier_epoch = live.carrier_epoch, name = live.workspace_name}
+                thread_id = live.thread_id, carrier_epoch = live.carrier_epoch}
         end
     end
     return sessions.latest(candidates), nil

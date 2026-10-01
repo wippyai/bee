@@ -10,6 +10,7 @@ local application_admission = require("application_admission")
 local protected_kernel = require("protected_kernel")
 local preflight = require("preflight")
 local lists = require("lists")
+local resolution = require("resolution")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -30,7 +31,8 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
     applications: {Object}?, workspace_id: string?, overlay_owner: string?, source_node: string?, source_workspace: string?}
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?)}
-type Resolver = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+type Resolver = resolution.Resolver
+type Instance = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, unknown, unknown) -> (Policy?, string?),
     revision: (Resolver) -> (integer?, string?),
     resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
@@ -587,10 +589,11 @@ function M.new(config: Config): Resolver
             end}
         return captured, nil
     end
-    local value: Resolver = {capture = capture, root = config.root, policy = config.policy,
+    local value: Instance
+    value = {capture = capture, root = config.root, policy = config.policy,
         revision = function(_: Resolver): (integer?, string?) return current_revision() end,
-        resolve = function(self: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
-            return M.resolve_with(self, spec)
+        resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
+            return M.resolve_with(value, spec)
         end}
     return value
 end

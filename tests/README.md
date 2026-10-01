@@ -16,6 +16,5 @@ Session and Work constructors), and `tests/lua/harness/carrier_faulted.lua`
 (carrier request fixtures). List decoders return new lists: write a modified
 list back to its fixture field. Object guards retain the original record.
 
-The acceptance resolver in `fixtures/hive_replica/coordinator.lua` retains one
-cast between recursive resolver receiver types that go-lua 1.6.2 cannot assign.
-Its minimal reproduction and diagnostic are recorded in the lane report.
+Governance staging and activation share `bee.gov:resolver.Resolver`; the Hub
+and overlay implementations and typed fixtures use the same receiver interface.

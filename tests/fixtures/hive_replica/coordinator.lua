@@ -233,7 +233,7 @@ local function stage_resolver(): destination.Resolver
                 applied = applied, migration_barrier = false, auto_start = false}
             return host_policy, nil
         end})
-    return resolved :: destination.Resolver
+    return resolved
 end
 local function required(result: {[string]: unknown}, operation: string): {[string]: unknown}
     if result.ok ~= true then error(operation .. ": " .. tostring(result.code) .. ": " .. tostring(result.message)) end

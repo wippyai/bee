@@ -122,6 +122,7 @@ entries:
   source: file://destination.lua
   modules: [hash]
   imports:
+    resolution: bee.gov:resolver
     bounds: bee.threads.records:bounds
     canonical: bee.sync:canonical
     approval: bee.gov.binding:approval
@@ -164,6 +165,7 @@ entries:
   source: file://activation_owner.lua
   modules: [json]
   imports:
+    resolution: bee.gov:resolver
     bounds: bee.threads.records:bounds
     transaction: bee.persist:transaction
     plan_store: bee.gov.persist:plan_store

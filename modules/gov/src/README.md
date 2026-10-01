@@ -5,6 +5,11 @@ Internal typed checks over a destination-host-resolved package closure. The
 library has no publication, SQL, network, approval or process permissions. It
 is not a public install/update API.
 
+`bee.gov:resolver` owns the shared `Resolver` interface for staging and
+activation: `resolve` returns the measured candidate and destination context,
+and optional `revision` observes the current registry revision. Hub and overlay
+resolvers implement this interface with the same method receiver type.
+
 The primary planned consumer activates internal packs/changes in service-owned
 ephemeral overlays, without durable registry publication. Agents call a scoped
 headless governance trait; they do not receive the owner's writer permissions.

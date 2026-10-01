@@ -181,23 +181,24 @@ local function define_tests()
             test.is_nil(problem); test.not_nil(result); test.eq(calls, 0)
             if result then test.eq(result.packages[1].version, "1.0.0") end
         end)
-        test.it("stops paging when a compatible candidate succeeds", function()
+        test.it("selects the highest compatible candidate across the complete catalog", function()
             local calls = 0
             local result, problem = graph.resolve({edge("acme/app", "^1.0.0")}, {
                 versions = function(name: string, page: integer): ({string}?, boolean?, string?)
                     calls = calls + 1
                     if page == 1 then return {"2.0.0"}, true, nil end
                     if page == 2 then return {"1.9.0", "1.8.0"}, true, nil end
-                    return nil, nil, "must not fetch the rest of history"
+                    if page == 3 then return {"1.10.0", "1.7.0"}, false, nil end
+                    return nil, nil, "must not fetch beyond the complete catalog"
                 end,
                 artifact = function(name: string, version: string): (inspect.Inspection?, string?)
                     return artifact(name, version, {}), nil
                 end,
             })
-            test.is_nil(problem); test.not_nil(result); test.eq(calls, 2)
-            if result then test.eq(result.packages[1].version, "1.9.0") end
+            test.is_nil(problem); test.not_nil(result); test.eq(calls, 3)
+            if result then test.eq(result.packages[1].version, "1.10.0") end
         end)
-        test.it("backtracks a diamond and discards dependencies of the rejected version", function()
+        test.it("reselects a diamond and discards dependencies of the rejected version", function()
             local result, problem = graph.resolve({edge("acme/root", "1.0.0")}, {
                 versions = function(name: string, page: integer): ({string}?, boolean?, string?)
                     if name == "acme/shared" then return {"2.0.0", "1.0.0"}, false, nil end

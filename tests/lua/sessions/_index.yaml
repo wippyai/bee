@@ -17,6 +17,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     registry: bee.sessions:executor_registry
 - name: locate_test
@@ -25,6 +27,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     locate: bee.sessions.service:locate
 - name: catalog_service_test_policy
@@ -43,6 +46,7 @@ entries:
   security:
     policies: [bee.tests.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     catalog: bee.sessions.service:catalog
     machine: bee.harness.carrier:machine
@@ -89,66 +93,87 @@ entries:
   method: open
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_run
   kind: function.lua
   source: file://fake_owner.lua
   method: run
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_send
   kind: function.lua
   source: file://fake_owner.lua
   method: send
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_await
   kind: function.lua
   source: file://fake_owner.lua
   method: await
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_join
   kind: function.lua
   source: file://fake_owner.lua
   method: join
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_get
   kind: function.lua
   source: file://fake_owner.lua
   method: get
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_cancel
   kind: function.lua
   source: file://fake_owner.lua
   method: cancel
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_close
   kind: function.lua
   source: file://fake_owner.lua
   method: close
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_list
   kind: function.lua
   source: file://fake_owner.lua
   method: list
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: fake_catalog
   kind: function.lua
   source: file://fake_owner.lua
   method: catalog
   meta: {type: test_support}
   modules: [security]
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: probe
   kind: function.lua
   source: file://probe.lua
   method: run
   meta: {type: test_support}
   imports:
+    bounds: bee.protocol:bounds
     sessions: bee.app:sessions
 - name: probe_policy
   kind: security.policy
@@ -172,6 +197,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     sessions: bee.app:sessions
     protocol: bee.app:sessions_protocol
@@ -192,6 +218,8 @@ entries:
   method: history
   meta: {type: test_support}
   modules: [security]
+
+  imports: {protocol: bee.app:sessions_protocol, sessions: bee.app:sessions, principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
 
 - name: interactive_exited
   kind: function.lua
@@ -246,3 +274,9 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.threads:harness
+
+- name: fixtures
+  kind: library.lua
+  source: file://fake_owner.lua
+  meta: {type: test_support}
+  imports: {bounds: bee.protocol:bounds, principals: bee.test.principals:bound, sessions: bee.app:sessions, protocol: bee.app:sessions_protocol}

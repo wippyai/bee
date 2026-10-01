@@ -1,5 +1,6 @@
 -- MIT. Runs the ambient client inside an application handler scope.
 local sessions = require("sessions")
+local bounds = require("bounds")
 local M = {}
 
 local function code(fault: {code: string}?): string return fault and fault.code or "" end
@@ -12,9 +13,11 @@ function M.run(input: {scenario: string}): {[string]: unknown}
             operation = result.work.receipt and result.work.receipt.operation or ""}
     end
     if input.scenario == "context" then
-        local open = sessions.open :: (unknown) -> (unknown, unknown)
+        local api = assert(bounds.object(sessions))
+            local open = api.open
+            assert(type(open) == "function")
         local session, raw_fault = open({definition = "research:worker"})
-        local fault = type(raw_fault) == "table" and raw_fault :: {code: string} or nil
+        local fault = type(raw_fault) == "table" and raw_fault or nil
         return {code = code(fault), session = session and session:ref() or ""}
     end
     if input.scenario == "keys" then

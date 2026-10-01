@@ -40,7 +40,7 @@ local function define_tests()
 
         test.it("refuses missing contract methods", function()
             local broken = methods()
-            broken.normalize = nil :: any
+            broken.normalize = nil
             local binding = {kind = "contract.binding", data = {contracts = {{contract = "bee.driver:driver", methods = broken}}}}
             local resolved, failure = route.decode(BINDING, binding, function(_: string): (unknown?, string?) return {kind = "function.lua"}, nil end)
             test.is_nil(resolved)

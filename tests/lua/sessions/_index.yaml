@@ -46,6 +46,7 @@ entries:
   security:
     policies: [bee.tests.sessions:catalog_service_test_policy, bee.harness.security:launch_locate_probe_policy, bee.harness.profiles:test_read, bee.harness.profiles:test_write]
   imports:
+    principals: bee.test.principals:bound
     bounds: bee.protocol:bounds
     test: wippy.test:test
     catalog: bee.sessions.service:catalog

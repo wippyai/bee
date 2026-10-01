@@ -1,5 +1,6 @@
 -- MIT. The Sessions catalog delegates route availability to host driver locate.
 local test = require("test")
+local principals = require("principals")
 local bounds = require("bounds")
 local catalog = require("catalog")
 local registry = require("registry")

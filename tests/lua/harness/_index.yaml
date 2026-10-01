@@ -1554,10 +1554,11 @@ entries:
   source: file://permission_exchange_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [json, hash]
+  modules: [json, hash, funcs, security]
   imports:
     test: wippy.test:test
     exchange: bee.harness.permission:exchange
     adapter: bee.harness.permission:adapter
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    harness: bee.threads:harness

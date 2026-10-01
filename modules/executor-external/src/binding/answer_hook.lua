@@ -122,7 +122,7 @@ local function handle(raw: unknown): Reply
         point = recovered
     end
     local state: exchange.State = {request = {owner_id = session, session_ref = session, workspace_id = workspace, thread_id = thread_id,
-            action_id = action_id, attempt_id = attempt_id}, plan_digest = plan_digest, epoch = 1, permissions = point.permissions,
+            action_id = action_id, attempt_id = attempt_id}, plan_digest = plan_digest, epoch = 1, permissions = point.permissions, proposal_kind = "operation",
         exchange = {adapter = accepted.adapter, approver_policy = declaration.approver_policy, poll_ms = declaration.poll_ms,
             ttl_ms = declaration.ttl_ms, answer_mode = pinned.permission_answers}}
     local response: string? = nil

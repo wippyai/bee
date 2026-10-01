@@ -41,6 +41,10 @@ select an adapter, executable-bound acceptance record and approver policy.
 Saved preferences may select `bee.permission_answers`: `provider` leaves the
 provider in charge, `ask` waits for Needs you, and `deny` answers denied directly.
 Ask and deny require a host-accepted transport; unsupported routes reject them.
+Carrier requests bind an existing prepared attempt. Session turns use the
+approval owner's operation proposal, pinned to the native attempt, session,
+plan and permission input digest; their canonical turn journal supplies the
+execution checkpoint. The requester must be a participant in the bound thread.
 Allow is consumed against the exact proposal before dispatch. Denial, expiry,
 withdrawal and timeout never consume an effect or grant consent. Permission
 intent, decision and response progress are checkpointed with thread observations.

@@ -13,7 +13,7 @@ type Request = {owner_id: string, attempt_id: string, action_id: string, thread_
     workspace_id: string?, session_ref: string?}
 type Exchange = {answer_mode: string?, adapter: permission.Adapter, approver_policy: string, poll_ms: integer, ttl_ms: integer}
 type State = {request: Request, plan_digest: string, exchange: Exchange?, permissions: {checkpoint.Permission},
-    epoch: integer, turn_id: string?}
+    epoch: integer, turn_id: string?, proposal_kind: "operation" | "attempt"?}
 type PermissionEventPhase = "refused" | "intended" | "acknowledged" | "requested" | "decided" | "revalidated" | "consumed" | "declined" | "closed"
 type Context = {state: State, recovered: boolean?, now_ms: () -> integer, approvals: string, max_consume_attempts: integer,
     commit: ({Object}) -> (boolean, string?), call: (string, unknown) -> (unknown, string?),
@@ -52,9 +52,18 @@ local function request_of(state: checkpoint.Permission): permission.Request
     return {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id, acknowledgment_id = state.acknowledgment_id or state.correlation_id, tool_name = state.tool_name,
         input_digest = state.input_digest, input = {}, prompt = state.prompt}
 end
-local function proposal_of(session: State, exchange: Exchange, state: checkpoint.Permission): {[string]: unknown}
+local function proposal_of(session: State, exchange: Exchange, found: permission.Request): {[string]: unknown}
     local request = session.request
-    return permission.proposal(exchange.adapter, {action_id = request.action_id, attempt_id = request.attempt_id, plan_digest = session.plan_digest}, request_of(state))
+    local proposal = permission.proposal(exchange.adapter, {action_id = request.action_id, attempt_id = request.attempt_id, plan_digest = session.plan_digest}, found)
+    if session.proposal_kind == "operation" then
+        proposal.kind = "operation"
+        proposal.action_id = nil
+        local payload = bounds.object(proposal.payload) or {}
+        payload.action_id = request.action_id
+        payload.session_ref = request.session_ref
+        proposal.payload = payload
+    end
+    return proposal
 end
 local function ctx_input(value: unknown): string?
     local text = canonical.encode(value)
@@ -89,7 +98,8 @@ function M.detect(ctx: Context, records: {{[string]: unknown}}): (integer, strin
             if not known then
                 local admitted, ambiguity = permission.admit_pending(live_permissions(session), found)
                 local identity = permission.identity(session.request.owner_id, session.request.attempt_id, found.permission_request_id)
-                local proposal_digest = ctx.digest_of(permission.proposal(exchange.adapter, {action_id = session.request.action_id, attempt_id = session.request.attempt_id, plan_digest = session.plan_digest}, found)) or ""
+                local proposal_digest, digest_error = ctx.digest_of(proposal_of(session, exchange, found))
+                if not proposal_digest then return added, digest_error or "permission proposal is not measurable" end
                 local state: checkpoint.Permission = {permission_request_id = found.permission_request_id, correlation_id = found.correlation_id, acknowledgment_id = found.acknowledgment_id, tool_name = found.tool_name, input_digest = found.input_digest,
                     prompt = "Session " .. (session.request.session_ref or session.request.action_id) .. " in workspace " .. (session.request.workspace_id or "unknown")
                         .. " asks " .. found.tool_name .. " " .. ((ctx_input(found.input)) or "{}") .. " (" .. found.prompt .. ")", proposal_digest = proposal_digest, idempotency_key = permission.idempotency_key(identity), effect_key = permission.effect_key(identity),
@@ -143,11 +153,12 @@ type ApprovalView =
 local function approval_view(value: unknown): (ApprovalView?, string?)
     local view = bounds.object(value)
     if not view then return nil, "approval must be an object" end
-    local unknown_field = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "request_kind", "policy",
+    local unknown_field = bounds.fields(view, {"approval_id", "owner_node", "owner_incarnation", "workspace_id", "requester_id", "requesting_session", "request_kind", "policy",
         "proposal", "proposal_digest", "prompt", "response_schema", "thread_id", "binding", "revision", "state", "decision", "decider_id",
         "decided_at", "response", "validated_incarnation", "validated_by", "validated_at", "consumer_id", "consumed_effect", "consumed_at",
         "effect_completed_at", "effect_result", "expires_at", "created_at", "updated_at"})
     if unknown_field then return nil, "approval: " .. unknown_field end
+    if view.requesting_session ~= nil and not bounds.id(view.requesting_session) then return nil, "approval requesting session is malformed" end
     local approval_id, workspace_id = bounds.id(view.approval_id), bounds.id(view.workspace_id)
     local proposal_digest = bounds.text(view.proposal_digest, 64)
     local incarnation, state = bounds.count(view.owner_incarnation), bounds.member(view.state, {"pending", "decided", "expired", "withdrawn"})
@@ -192,7 +203,7 @@ end
 local function request_approval(ctx: Context, session: State, exchange: Exchange, state: checkpoint.Permission): (boolean, string?)
     local request = session.request
     local value, err = must(ctx, ctx.approvals .. ":request", {workspace_id = request.workspace_id, idempotency_key = state.idempotency_key, request_kind = "permission", policy = exchange.approver_policy,
-        proposal = proposal_of(session, exchange, state), prompt = {text = state.prompt}, thread_id = request.thread_id, ttl_ms = exchange.ttl_ms})
+        proposal = proposal_of(session, exchange, request_of(state)), prompt = {text = state.prompt}, thread_id = request.thread_id, ttl_ms = exchange.ttl_ms})
     if err then return false, err end
     ctx.step( "approval_created")
     local view, view_error = approval_view(value)

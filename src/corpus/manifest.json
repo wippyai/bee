@@ -211,9 +211,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 5558,
+      "bytes": 5863,
       "id": "docs/gateway_hooks",
-      "sha256": "0cd36a3ed46db24088d136ec7fb7b1718ec665014e38c244588b0618a7bfd0e2",
+      "sha256": "228997bc25a5c4ee2f7ea2de63f1f82cc5aa2106c74d2f2178786b66af1735df",
       "source": "docs/reference/agents/hooks.md",
       "title": "Gateway hooks",
       "topic": "gateway"
@@ -606,7 +606,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 673831,
+    "bytes": 674136,
     "documents": 75
   }
 }

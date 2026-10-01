@@ -153,7 +153,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         local point = permission_point
         local planned = plan
         local permission_state: exchange.State = {request = planned.request, plan_digest = planned.plan_digest,
-            exchange = planned.exchange, permissions = point.permissions, epoch = generation}
+            exchange = planned.exchange, permissions = point.permissions, epoch = generation, proposal_kind = "operation"}
         permission_context = {state = permission_state, now_ms = clock.milliseconds, approvals = "bee.approvals.binding", max_consume_attempts = exchange.MAX_CONSUME_ATTEMPTS,
             commit = commit_permissions,
             call = function(target: string, fields: unknown): (unknown, string?)

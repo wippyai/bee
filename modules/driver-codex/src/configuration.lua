@@ -133,6 +133,13 @@ function M.projection(provider: Provider, gateway_section: string?, instructions
     if hash_error or not digest then return nil, "configuration digest failed" end
     return {revision = M.REVISION, path = M.PATH, content = content, digest = digest, provider_ref = provider.ref, provider_digest = provider.digest}, nil
 end
+function M.login_configuration(): (shared_configuration.Configuration?, string?)
+    local digest, err = hash.sha256("")
+    if not digest then return nil, tostring(err or "Login configuration digest failed") end
+    return {revision = "bee.codex-login-config@1", path = M.PATH, content = "", digest = digest,
+        provider_ref = shared_configuration.LOGIN_PROVIDER_REF,
+        composition = {kind = "copy", base_path = ".codex/.bee-user-config.toml"}}, nil
+end
 -- The gateway descriptor is already selected and validated by the host. This
 -- driver owns the Codex syntax that consumes it; it never performs endpoint
 -- lookup or receives token bytes.
@@ -149,22 +156,23 @@ function M.gateway_section(gateway: Gateway): string
     end
     return table.concat(lines, "\n")
 end
-local HOOK_LABELS = {SessionStart = "session_start", UserPromptSubmit = "user_prompt_submit", PreToolUse = "pre_tool_use", PostToolUse = "post_tool_use", Stop = "stop"}
+local HOOK_LABELS = {SessionStart = "session_start", UserPromptSubmit = "user_prompt_submit", PreToolUse = "pre_tool_use", PostToolUse = "post_tool_use", Stop = "stop", PermissionRequest = "permission_request"}
 local HOOK_TEMPLATES = {
     SessionStart = {event = "${hook_event_name}", session_id = "${session_id}", source = "${source}"},
     UserPromptSubmit = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", prompt = "${prompt}"},
     PreToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_input = "${tool_input}"},
+    PermissionRequest = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_input = "${tool_input}"},
     PostToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_response = "${tool_response}"},
     Stop = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", last_assistant_message = "${last_assistant_message}"},
 }
-type HookHandler = {type: "mcp_tool", server: "bee_hooks", tool: "hook", input: {[string]: string}, timeout: 2}
+type HookHandler = {type: "mcp_tool", server: "bee_hooks", tool: "hook", input: {[string]: string}, timeout: integer}
 type ProjectedHook = {event: string, label: string, handler: HookHandler, trusted_hash: string}
 local function hook_projection(events: {string}): ({ProjectedHook}?, string?)
     local result: {ProjectedHook} = {}
     for index, event in ipairs(events) do
         local template, label = HOOK_TEMPLATES[event], HOOK_LABELS[event]
         if not template or not label then return nil, "Codex does not support gateway hook event " .. event end
-        local handler: HookHandler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = 2}
+        local handler: HookHandler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = event == "PermissionRequest" and 650 or 2}
         local identity, identity_error = canonical.encode({event_name = label, hooks = {handler}})
         if not identity then return nil, identity_error end
         local digest, digest_error = hash.sha256(identity)
@@ -206,13 +214,12 @@ function M.hook_files(gateway: Gateway, home_directory: string): ({Projection}?,
 end
 -- Session flags add Bee integration to Codex's ordinary user configuration.
 -- No user config, hook file, login file or named profile is replaced.
-function M.session_arguments(gateway: Gateway?, instructions: string?): ({string}?, string?)
+function M.session_arguments(gateway: Gateway?): ({string}?, string?)
     local arguments: {string} = {}
     local function option(value: string)
         arguments[#arguments + 1] = "-c"
         arguments[#arguments + 1] = value
     end
-    if instructions then option("developer_instructions=" .. toml.string(instructions)) end
     if not gateway then return arguments, nil end
     local function server(name: string, path: string, token: string, hidden: boolean)
         local value = "mcp_servers." .. name .. "={url=" .. toml.string("http://" .. gateway.endpoint .. path)
@@ -233,7 +240,7 @@ function M.session_arguments(gateway: Gateway?, instructions: string?): ({string
         table.sort(names)
         local input: {string} = {}
         for _, name in ipairs(names) do input[#input + 1] = toml.string(name) .. "=" .. toml.string(hook.handler.input[name]) end
-        option("hooks." .. hook.event .. '=[{hooks=[{type="mcp_tool",server="bee_hooks",tool="hook",timeout=2,input={'
+        option("hooks." .. hook.event .. '=[{hooks=[{type="mcp_tool",server="bee_hooks",tool="hook",timeout=' .. tostring(hook.handler.timeout) .. ',input={'
             .. table.concat(input, ",") .. "}}]}]")
         -- Supply the whole table: CLI dotted-key parsing does not preserve
         -- dots within a quoted source-path key.

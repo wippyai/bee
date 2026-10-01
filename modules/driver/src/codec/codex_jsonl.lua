@@ -78,7 +78,7 @@ local function item_observations(state: State, index: integer, phase: string, it
         out[#out + 1] = events.extension(key(index, "item"), "codex.item." .. tostring(kind), M.PROTOCOL_REVISION, (not err and encoded) or "{}")
     end
 end
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local kind: unknown = envelope.type
     if state.terminal then

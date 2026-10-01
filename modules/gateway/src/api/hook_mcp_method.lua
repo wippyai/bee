@@ -5,13 +5,14 @@ local mcp = require("mcp")
 local hooks = require("hooks")
 local transport_admission = require("admission")
 local boundary = require("session_boundary")
+local bounds = require("bounds")
 type Object = {[string]: unknown}
 local function answer(response: http.Response, status: number, body: Object)
     response:set_status(status)
     response:set_content_type(http.CONTENT.JSON)
     response:write_json(body)
 end
-local HOOK_TOOL = {name = "hook", description = "Submit one hook observation about this attempt; it is recorded, never answered with a decision. "
+local HOOK_TOOL = {name = "hook", description = "Submit one hook observation about this attempt; it is recorded; a host-accepted PermissionRequest receives the person’s decision. "
     .. "event names the closed hook catalog event; identity fields correlate the occurrence; "
     .. "content fields keep only sizes and digests, never text",
     inputSchema = hooks.schema(), annotations = mcp.WRITE_ANNOTATIONS,
@@ -45,7 +46,7 @@ local function handle(): nil
     if class ~= "hook_engine" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "request metadata is not a hook-engine call (" .. class .. "): " .. reason)); return nil end
     local arguments = call.params.arguments
     if type(arguments) ~= "table" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "arguments must be an object")); return nil end
-    local reply = gateway.submit_hook(binding, arguments, "codex:" .. class)
+    local reply = gateway.submit_hook(binding, bounds.object(arguments) or {}, "codex:" .. class)
     if not reply.ok then
         local fault = reply.error or {code = "STORAGE", message = "hook"}
         answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, fault.code .. ": " .. fault.message)); return nil
@@ -53,7 +54,7 @@ local function handle(): nil
     -- Codex reads a hook tool's text content as hook stdout: Stop requires
     -- JSON there, so an empty content list is the proven answer.
     local outcome = reply.value
-    local context, boundary_error = boundary.deliver(binding, outcome)
+    local context, boundary_error = boundary.deliver(binding, outcome, bounds.object(arguments), "hook_mcp")
     if not context then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, boundary_error or "session boundary failed")); return nil end
     local content: {Object} = {}
     if context.hookSpecificOutput ~= nil then

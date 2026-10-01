@@ -77,6 +77,68 @@ function M.decode(value: unknown): (Profile?, string?)
     return {placement_binding = binding, image_ref = image, image_recipe_ref = recipe, user = user, network = network,
         limits = {memory = memory, cpu = cpu, pids = pids}, interactive_route_ref = route, mounts = mounts}, nil
 end
+function M.tune(resolved: Resolved, value: unknown): (Resolved?, string?)
+    if value == nil then return resolved, nil end
+    local raw = bounds.object(value)
+    if not raw or bounds.fields(raw, {"image", "user", "network_policy_ref", "limits", "mounts", "tmpfs", "working_directory", "environment_policy_ref"}) then return nil, "Docker overrides are malformed" end
+    local base = resolved.profile
+    if base.placement_binding ~= "bee.placement.docker.binding:binding" or not base.limits then return nil, "Docker overrides require a Docker profile" end
+    if raw.image ~= nil then
+        local image = bounds.object(raw.image)
+        if not image or bounds.fields(image, {"kind", "ref"}) or not
+            ((image.kind == "digest" and image.ref == base.image_ref) or (image.kind == "recipe" and image.ref == base.image_recipe_ref)) then
+            return nil, "Image override is outside the host template"
+        end
+    end
+    if raw.user ~= nil and raw.user ~= base.user then return nil, "User override is outside the host template" end
+    if raw.network_policy_ref ~= nil or raw.tmpfs ~= nil or raw.working_directory ~= nil or raw.environment_policy_ref ~= nil then return nil, "This host template admits no network, tmpfs, directory or environment overrides" end
+    local limits: Limits = {memory = base.limits.memory, cpu = base.limits.cpu, pids = base.limits.pids}
+    if raw.limits ~= nil then
+        local requested = bounds.object(raw.limits)
+        if not requested or bounds.fields(requested, {"memory_bytes", "cpu_millicpus", "pids"}) then return nil, "Docker override limits are malformed" end
+        for _, field in ipairs({"memory_bytes", "cpu_millicpus", "pids"}) do
+            if requested[field] ~= nil then
+                local amount = bounds.count(requested[field])
+                if not amount or amount < 1 then return nil, "Docker " .. field .. " override must be positive" end
+                if field == "memory_bytes" then
+                    if amount < 16777216 or amount > base.limits.memory then return nil, "Docker memory override exceeds the host ceiling" end
+                    limits.memory = amount
+                elseif field == "cpu_millicpus" then
+                    -- The Docker template uses quota microseconds in a 100ms period.
+                    if amount < 10 or amount > math.floor(base.limits.cpu / 100) then return nil, "Docker CPU override exceeds the host ceiling" end
+                    limits.cpu = amount * 100
+                else
+                    if amount > base.limits.pids then return nil, "Docker pid override exceeds the host ceiling" end
+                    limits.pids = amount
+                end
+            end
+        end
+    end
+    local mounts = base.mounts
+    if raw.mounts ~= nil then
+        local rows = bounds.array(raw.mounts, 16)
+        if not rows then return nil, "Docker override mounts must be bounded" end
+        local selected: {Mount} = {}
+        for _, value in ipairs(rows) do
+            local item = bounds.object(value)
+            local found: Mount? = nil
+            if not item or bounds.fields(item, {"resource", "subpath", "target", "access"}) or (item.subpath ~= nil and item.subpath ~= "") then return nil, "Docker override mount is malformed" end
+            for _, admitted in ipairs(base.mounts) do
+                if item.resource == admitted.resource and item.target == admitted.target and (item.access == "read" or item.access == admitted.access) then
+                    found = {resource = admitted.resource, target = admitted.target, access = item.access == "read" and "read" or admitted.access}
+                end
+            end
+            if not found then return nil, "Docker override mount is outside the host template" end
+            selected[#selected + 1] = found
+        end
+        mounts = selected
+    end
+    local profile, err = M.decode({schema_revision = M.SCHEMA, placement_binding = base.placement_binding, image_ref = base.image_ref,
+        image_recipe_ref = base.image_recipe_ref, user = base.user, network = base.network, limits = limits,
+        interactive_route_ref = base.interactive_route_ref, mounts = mounts})
+    if not profile then return nil, err end
+    return {ref = resolved.ref, digest = resolved.digest, profile = profile}, nil
+end
 function M.resolve(pinned: registry.Snapshot, requested: string?): (Resolved?, string?)
     local ref = requested or M.DEFAULT
     if not bounds.id(ref) then return nil, "placement profile ref must be an identifier" end

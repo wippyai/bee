@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee driver contract
-    comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement owns execution
+    comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement
+      owns execution
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -25,14 +26,29 @@ entries:
   source: file://login_evidence.lua
   imports:
     bounds: bee.threads.records:bounds
+- name: probe_capture
+  kind: library.lua
+  source: file://probe_capture.lua
+  modules: [channel, time]
+- name: profile_access
+  kind: library.lua
+  source: file://profile_access.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: schema_values
+  kind: library.lua
+  source: file://schema_values.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: descriptor
   kind: library.lua
   source: file://descriptor.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
-    turn_budget: bee.driver:turn_budget
     login_evidence: bee.driver:login_evidence
+    schema_values: bee.driver:schema_values
 - name: locate
   kind: library.lua
   source: file://locate.lua
@@ -51,19 +67,28 @@ entries:
     agy_stream_json: bee.driver.codec:agy_stream_json
     grok_streaming_json: bee.driver.codec:grok_streaming_json
     muse_record_jsonl: bee.driver.codec:muse_record_jsonl
+- name: option_render
+  kind: library.lua
+  source: file://option_render.lua
+  modules: [json, toml, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    configuration: bee.driver:configuration
 - name: universal
   kind: library.lua
   source: file://universal.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     descriptor: bee.driver:descriptor
     configuration: bee.driver:configuration
-    turn_budget: bee.driver:turn_budget
     types: bee.driver:types
     locate: bee.driver:locate
     codec_registry: bee.driver:codec_registry
+    option_render: bee.driver:option_render
     normalizer: bee.driver.kit:normalize
 - name: instructions
   kind: library.lua
@@ -79,7 +104,8 @@ entries:
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     profile: bee.driver:profile
@@ -88,7 +114,13 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash, funcs, security, registry]
+  modules:
+  - hash
+  - funcs
+  - security
+  - registry
+  - json
+  - toml
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -99,14 +131,10 @@ entries:
   kind: library.lua
   source: file://preferences.lua
   imports:
+    profile_access: bee.driver:profile_access
+    canonical: bee.threads.records:canonical
     bounds: bee.threads.records:bounds
     instructions: bee.driver:instructions
-    turn_budget: bee.driver:turn_budget
-- name: turn_budget
-  kind: library.lua
-  source: file://turn_budget.lua
-  imports:
-    bounds: bee.threads.records:bounds
 - name: driver
   kind: contract.definition
   methods:
@@ -123,3 +151,32 @@ entries:
   methods:
   - name: locate
     description: Locate an admitted external driver profile from host-probed executable, login evidence, and platform evidence
+- name: permission_request_hook
+  kind: registry.entry
+  meta:
+    type: harness.permission_adapter
+    comment: Claude and Codex PermissionRequest hook response protocol; host acceptance separately authorizes answers
+  data:
+    adapter:
+      schema_revision: bee.permission-adapter@2
+      event_name: permission.hook
+      event_revision: '1'
+      request:
+        correlation: event_id
+        tool: tool_name
+        input: tool_input
+      response:
+        mode: hook
+        envelope:
+          hookSpecificOutput:
+            hookEventName: PermissionRequest
+        decision_field: hookSpecificOutput.decision.behavior
+        allow_value: allow
+        deny_value: deny
+        reason_field: hookSpecificOutput.decision.message
+      acknowledgment:
+        mode: continued_output
+      deny_acknowledgment:
+        mode: unproven
+      cancellation: deny_before_close
+      proof_fixture: permission_request_hook

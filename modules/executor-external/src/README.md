@@ -10,11 +10,22 @@ checkpoint is ready for the authenticated Sessions worker to commit. Missing
 terminal or exit proof is uncertain.
 
 The driver's launch and normalization operations define prompts,
-resume identity, events and usage. The executor does not write to a live
-CLI session; each turn uses only the launch defined by the selected
-driver contract.
+resume identity, events and usage. Each turn uses the launch defined by the selected
+driver contract. When the descriptor declares an answer transport, the shared
+Harness permission exchange sends durable Allow/Deny decisions to the waiting
+CLI. A terminal result closes stdin when the launch selects `stdin_close`,
+after pending permission responses are acknowledged. The executor records the
+closure intent before calling placement and still waits for process exit.
 
 Each attempt records progress before prepare, gateway admission and CLI start.
 Normalized assistant text, tool events and usage are appended live through the
 fenced Threads observation operation. Caller identity comes from the canonical
 Session route, under host-selected admission policies.
+
+There is no default work ceiling. A Session or one Work may opt into
+`Budget = {provider_steps?, tool_calls?, tokens?, wall_time_ms?, cost_usd?}`. The executor counts normalized
+turn signals and usage from the selected driver's codec, and checks elapsed
+wall time while observing the process. When a field is exceeded, it requests a
+placement stop and settles `budget_exceeded` only after placement proves exit;
+the result carries `BUDGET_EXCEEDED` and placement evidence. Start and stop
+grace timeouts remain placement safety controls.

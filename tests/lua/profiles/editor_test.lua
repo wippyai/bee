@@ -4,9 +4,7 @@ local editor = require("profile_editor")
 local protocol = require("protocol")
 
 local function profile(): protocol.Profile
-    local value, err = protocol.profile({title = "Original", definition_ref = "bee:codex",
-        options = {model = "small", enabled = false, note = "initial"}, mcp_tools = {"thread_read"},
-        instructions = "Keep changes small."})
+    local value, err = protocol.profile({schema_revision = "bee.agent-profile@2", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex:binding", provider = {model = "small", options = {enabled = false, note = "initial"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}})
     if not value then error(tostring(err)) end
     return value
 end
@@ -17,8 +15,7 @@ local function allowed(): {[string]: unknown}
 end
 
 local function profile_without_model(): protocol.Profile
-    local value, err = protocol.profile({title = "Original", definition_ref = "bee:codex",
-        options = {enabled = false}, mcp_tools = {"thread_read"}, instructions = "Keep changes small."})
+    local value, err = protocol.profile({schema_revision = "bee.agent-profile@2", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex:binding", provider = {options = {enabled = false}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}})
     if not value then error(tostring(err)) end
     return value
 end
@@ -31,18 +28,36 @@ end
 
 local function define_tests()
     test.describe("Saved profile editor", function()
+        test.it("requires host authority for machine home and preserves native selection", function()
+            local host = allowed()
+            host.placements = {"bee.placement:native"}
+            local closed = assert(editor.new(profile(), host))
+            test.is_false(editor.cycle_home(closed))
+            test.is_nil(closed.placement)
+            host.host_home = true
+            local admitted = assert(editor.new(profile(), host))
+            test.is_true(editor.cycle_home(admitted))
+            test.eq(admitted.placement and admitted.placement.kind, "native")
+            test.eq(admitted.placement and admitted.placement.home, "machine")
+            test.is_true(editor.cycle_home(admitted))
+            test.eq(admitted.placement and admitted.placement.home, "private")
+            local saved = assert(editor.result(admitted))
+            saved.placement = {kind = "native", home = "machine"}
+            host.host_home = false
+            test.is_nil(editor.new(saved, host))
+        end)
         test.it("preserves the initial profile, including a false scalar", function()
             local value = draft()
-            test.eq(value.title, "Original")
+            test.eq(value.name, "Original")
             test.eq(value.definition_ref, "bee:codex")
-            test.eq(value.options.model, "small")
-            test.is_false(value.options.enabled)
-            test.eq(value.mcp_tools[1], "thread_read")
-            test.eq(value.instructions, "Keep changes small.")
-            test.eq(value.options.note, "initial")
+            test.eq(value.provider.model, "small")
+            test.is_false(value.provider.options.enabled)
+            test.eq(value.bee.mcp[1].tool, "thread_read")
+            test.eq(value.provider.system_prompt_append, "Keep changes small.")
+            test.eq(value.provider.options.note, "initial")
             local result, err = editor.result(value)
             if not result then error(tostring(err)) end
-            test.is_false(result.options.enabled)
+            test.is_false(result.provider.options.enabled)
         end)
 
         test.it("keeps a folder and a thread choice only where the launch allows the override", function()
@@ -65,12 +80,11 @@ local function define_tests()
             test.eq(refusal, "this launch does not allow choosing a folder")
             test.is_false(editor.set_thread(closed, "thread-1"))
             -- A saved choice the launch no longer allows is refused, not dropped.
-            local saved = protocol.profile({title = "Original", definition_ref = "bee:codex", options = {}, mcp_tools = {},
-                instructions = "", workdir = {root_ref = "bee.env:workspace_root", path = "legacy"}})
+            local saved = protocol.profile({schema_revision = "bee.agent-profile@2", name = "Original", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}} , workdir = {root_ref = "bee.env:workspace_root", path = "legacy"}})
             if not saved then error("saved profile with a folder") end
             test.is_nil(editor.new(saved, {options = {}, mcp_tools = {}, instructions = false}))
-            test.is_nil(protocol.profile({title = "T", definition_ref = "bee:codex", workdir = {root_ref = "r", path = "/abs"}}))
-            test.is_nil(protocol.profile({title = "T", definition_ref = "bee:codex", thread = {thread_id = "t", title = "x"}}))
+            test.is_nil(protocol.profile({schema_revision = "bee.agent-profile@2", name = "T", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex:binding", provider = {}, bee = {mcp = {}} , workdir = {root_ref = "r", path = "/abs"}}))
+            test.is_nil(protocol.profile({schema_revision = "bee.agent-profile@2", name = "T", definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex:binding", provider = {}, bee = {mcp = {}} , thread = {thread_id = "t", title = "x"}}))
         end)
 
         test.it("edits bounded titles and appends multiline guidance", function()
@@ -79,8 +93,8 @@ local function define_tests()
             if not changed then error(tostring(err)) end
             changed, err = editor.append_guidance(value, "Review each change.\nRun tests.")
             if not changed then error(tostring(err)) end
-            test.eq(value.title, "Edited")
-            test.eq(value.instructions, "Keep changes small.\n\nReview each change.\nRun tests.")
+            test.eq(value.name, "Edited")
+            test.eq(value.provider.system_prompt_append, "Keep changes small.\n\nReview each change.\nRun tests.")
             changed = editor.set_title(value, string.rep("x", 81))
             test.is_false(changed)
             changed = editor.append_guidance(value, "bad\27value")
@@ -89,23 +103,23 @@ local function define_tests()
             test.is_false(changed)
             local result, result_error = editor.result(value)
             if not result then error(tostring(result_error)) end
-            test.eq(result.instructions, "Keep changes small.\n\nReview each change.\nRun tests.")
+            test.eq(result.provider.system_prompt_append, "Keep changes small.\n\nReview each change.\nRun tests.")
             changed, err = editor.set_guidance(value, "Replacement\nwith two lines.")
             if not changed then error(tostring(err)) end
-            test.eq(value.instructions, "Replacement\nwith two lines.")
+            test.eq(value.provider.system_prompt_append, "Replacement\nwith two lines.")
         end)
 
         test.it("cycles only through host allowed values, retaining false", function()
             local value = draft()
             local changed, err = editor.cycle_option(value, "model")
             if not changed then error(tostring(err)) end
-            test.eq(value.options.model, "large")
+            test.eq(value.provider.model, "large")
             changed, err = editor.cycle_option(value, "model")
             if not changed then error(tostring(err)) end
-            test.eq(value.options.model, "small")
+            test.eq(value.provider.model, "small")
             changed, err = editor.cycle_option(value, "enabled")
             if not changed then error(tostring(err)) end
-            test.is_true(value.options.enabled)
+            test.is_true(value.provider.options.enabled)
             changed, err = editor.cycle_option(value, "foreign")
             test.is_false(changed)
             test.not_nil(err)
@@ -122,17 +136,17 @@ local function define_tests()
             if not value then error(tostring(err)) end
             local changed, changed_error = editor.cycle_option(value, "model")
             if not changed then error(tostring(changed_error)) end
-            test.eq(value.options.model, "small")
+            test.eq(value.provider.model, "small")
         end)
 
         test.it("toggles a host tool and refuses tool widening", function()
             local value = draft()
             local changed, err = editor.toggle_tool(value, "thread_wait")
             if not changed then error(tostring(err)) end
-            test.eq(value.mcp_tools[2], "thread_wait")
+            test.eq(value.bee.mcp[2].tool, "thread_wait")
             changed, err = editor.toggle_tool(value, "thread_wait")
             if not changed then error(tostring(err)) end
-            test.eq(#value.mcp_tools, 1)
+            test.eq(#(value.bee.mcp or {}), 1)
             changed, err = editor.toggle_tool(value, "outside")
             test.is_false(changed)
             test.not_nil(err)
@@ -142,7 +156,7 @@ local function define_tests()
             test.is_true(rows[1].selected)
             test.eq(rows[2].name, "thread_wait")
             test.is_false(rows[2].selected)
-            value.mcp_tools[#value.mcp_tools + 1] = "outside"
+            table.insert(value.bee.mcp or {}, {tool = "outside", scope = {}})
             local result = editor.result(value)
             test.is_nil(result)
         end)
@@ -159,12 +173,12 @@ local function define_tests()
             local value = draft()
             local changed, err = editor.set_text_option(value, "note", "updated")
             if not changed then error(tostring(err)) end
-            test.eq(value.options.note, "updated")
+            test.eq(value.provider.options.note, "updated")
             changed = editor.cycle_option(value, "note")
             test.is_false(changed)
             changed = editor.set_text_option(value, "note", "")
             test.is_true(changed)
-            test.is_nil(value.options.note)
+            test.is_nil(value.provider.options.note)
             changed = editor.set_text_option(value, "note", "bad\27value")
             test.is_false(changed)
             changed = editor.set_text_option(value, "note", "restored")
@@ -175,7 +189,7 @@ local function define_tests()
             test.is_false(changed)
             local result, result_error = editor.result(value)
             if not result then error(tostring(result_error)) end
-            test.eq(result.options.note, "restored")
+            test.eq(result.provider.options.note, "restored")
         end)
     end)
 end

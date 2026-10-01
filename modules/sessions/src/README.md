@@ -17,7 +17,13 @@ is an observation and the provider owns authentication.
 
 Session reads and list pagination include home-workspace sessions plus workspaces explicitly admitted by `bee.threads.workspace`. Cross-workspace mutations require separate exact host grants: `bee.sessions.workspace.open`, `bee.sessions.workspace.send`, `bee.sessions.workspace.cancel`, and `bee.sessions.workspace.close`. Visibility alone grants no mutation authority. List filters accept workspace, definition, lifecycle and activity.
 
-Snapshots expose `presentation` and the canonical `thread_ref`, driver/provider, definition, workspace
+`open` accepts `budgets = {turn?: Budget, session?: Budget}` and `supervision = {quiet_period_ms?, on_stall?: "report"|"cancel_work"}`. `Budget` has positive `provider_steps`, `tool_calls`, `tokens`, `wall_time_ms` and `cost_usd` fields. Limits are opt-in. Turn limits combine with each Work's `budgets.turn` using the tighter value. Session counters survive restart and include settled turns; replayed observations do not spend twice. Session wall time starts with the first accepted turn and includes idle time. Descriptors declare provider-step units and accounting coverage. Token limits require declared trustworthy accounting; cost limits and window budgets currently reject as unsupported. Token limits can overshoot within one provider step before usage is reported. Exceeding a limit settles `budget_exceeded` only after placement proves exit. The quiet period defaults to 60000 ms; report leaves stalled work running, while cancel_work requests a placement stop. Known approval waits pause stall cancellation.
+
+An accepted turn becomes `stalled` when its thread has no new live observation for the session's quiet period. `activity_evidence` identifies the turn, last progress time, quiet period and elapsed quiet time. `get` and `list` derive this view from the stored progress timestamp; `on_stall="report"` leaves stalled work running; `cancel_work` asks placement to prove a stop.
+
+Managed open/call and MCP open/run accept an optional canonical `placement` override. Both the definition and host policy must admit that override; Docker template selection and native machine-home access retain their existing ceilings. The override persists in the Threads route and the scheduler reuses it for every turn. Window placement overrides require a saved profile.
+
+Snapshots carry the resolved `effective_profile`, including presentation, budgets and supervision, and its canonical SHA-256 `profile_digest`. They expose `presentation` and the canonical `thread_ref`, driver/provider, definition, workspace
 and last result summary. `history{session,cursor?}` pages immutable Work inputs;
 clients observe results with `get` or `await`. SDK open/call and MCP open/run accept
 an optional canonical `workspace`; opening outside the current workspace requires

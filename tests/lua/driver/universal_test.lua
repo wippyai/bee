@@ -19,7 +19,7 @@ local function define_tests()
                     error("descriptor-selected renderer was bypassed")
                 end,
             }
-            local handle = universal.configure("claude", renderers)
+            local handle = universal.configure("claude", renderers, "bee.driver.claude.descriptor:cli")
             local invalid = handle({configure_renderer = "claude", fixture = "false"})
             test.eq(invalid.ok, false)
             test.is_false(called)
@@ -36,7 +36,7 @@ local function define_tests()
                     called = true
                     return {ok = true, delivery = {arguments = {}, files = {}}}
                 end,
-            })
+            }, "bee.driver.claude.descriptor:cli")
             test.eq(handle("invalid").ok, false)
             test.eq(handle({configure_renderer = "not a renderer"}).ok, false)
             test.is_false(called)
@@ -76,13 +76,15 @@ local function define_tests()
 
         test.it("returns decoded common fields with typed descriptor option values", function()
             local api = universal.launch("bee.driver.claude.descriptor:cli")
-            local request, decode_error = api.decode({profile_id = "batch", brief = "summarize", permission_mode = "acceptEdits", turn_budget = 3})
+            local request, decode_error = api.decode({profile_id = "batch", brief = "summarize", permission_mode = "acceptEdits"})
             if not request then error(tostring(decode_error)) end
             test.eq(request.profile_id, "batch")
             test.eq(request.brief, "summarize")
             test.eq(request.permission_mode, "acceptEdits")
-            test.eq(request.turn_budget, 3)
+            test.is_nil(request.turn_budget)
             test.eq(request.permission_exchange, false)
+            local _, removed_budget_error = api.decode({profile_id = "batch", brief = "summarize", turn_budget = 3})
+            test.eq(removed_budget_error, "unknown field turn_budget")
         end)
 
         test.it("uses descriptor JSON paths to extract protocol fields", function()
@@ -106,11 +108,11 @@ local function define_tests()
 
         test.it("refuses recursive flag rendering and oversized argv expansion", function()
             local recursive: {[string]: unknown} = {
-                flags = {turn_budget = {field = "turn_budget", emit_default = true, argv = {{option = "turn_budget"}}}},
-                options = {fields = {turn_budget = {type = "budget"}}},
+                flags = {permission = {field = "permission_mode", emit_default = true, argv = {{option = "permission"}}}},
+                options = {fields = {permission_mode = {type = "enum", values = {"default"}}}},
             }
-            local ok, argv, render_error = pcall(universal.render_argv, {{option = "turn_budget"}},
-                {profile_id = "batch", brief = "work", turn_budget = 1}, recursive)
+            local ok, argv, render_error = pcall(universal.render_argv, {{option = "permission"}},
+                {profile_id = "batch", brief = "work", permission_mode = "default"}, recursive)
             test.is_true(ok)
             test.is_nil(argv)
             test.not_nil(render_error)

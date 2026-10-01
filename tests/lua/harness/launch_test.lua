@@ -24,6 +24,8 @@ local placement_store = require("placement_store")
 local capability_grants = require("capability_grants")
 local capability_catalog = require("capability_catalog")
 local sends = require("sends")
+local bounds = require("bounds")
+local json = require("json")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local SHIPPED_SHAPE_DEFINITION = "bee.harness.catalog:shipped_shape_definition"
@@ -362,7 +364,7 @@ local function define_tests()
             local workspace_id, saved_id = workspace, fresh("profile")
             local function save(revision: integer, title: string, options: {[string]: unknown})
                 value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
-                    expected_revision = revision, idempotency_key = fresh("save"), profile = {title = title, definition_ref = DEFINITION, options = options}}))
+                    expected_revision = revision, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = title, definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {permission_mode = options.permission_mode, model = options.model}, bee = {mcp = {}}}}))
             end
             save(0, "First profile", {})
             local original = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
@@ -389,6 +391,88 @@ local function define_tests()
             local unsafe = call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 3})
             test.is_false(unsafe.ok)
+        end)
+        test.it("applies credential selectors and independent narrowed gateway file grants", function()
+            for _, refs in ipairs({{}, {"anthropic"}}) do
+                local saved_id = fresh("credential-profile")
+                value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Selected credentials",
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {},
+                        bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
+                local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                    saved_profile_id = saved_id, saved_profile_revision = 1}))
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("credential-admit"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest}))
+                local request = assert(bounds.object(admitted.request))
+                test.eq(#assert(bounds.array(request.projections, 64)), #refs)
+                local grants = assert(bounds.array(request.profile_grants, 64))
+                test.eq(#grants, 1)
+                test.eq(assert(bounds.object(grants[1])).access, "read")
+                test.eq(assert(bounds.object(grants[1])).workspace_id, workspace)
+                local resources = assert(bounds.array(request.resources, 64))
+                test.eq(#resources, 1)
+                test.eq(assert(bounds.object(resources[1])).access, "write")
+            end
+            local saved_id = fresh("undeclared-credential")
+            value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Undeclared",
+                    definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
+            local refused = call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
+            test.eq(code(refused), "DENIED")
+        end)
+        test.it("honors credential environment destinations and rejects retargeting or literal conflicts", function()
+            local listed = value(call("bee.credentials.binding:list", {workspace_id = workspace}))
+            local definitions = assert(bounds.array(listed.definitions, 64))
+            local destination = assert(bounds.id(assert(bounds.object(definitions[1])).destination))
+            local descriptor_ref = "bee.driver.claude.descriptor:cli"
+            local declaration = assert(registry.get(descriptor_ref))
+            local policy_entry = assert(registry.get(POLICY))
+            local saved_descriptor, saved_policy = assert(json.encode(declaration.data)), assert(json.encode(policy_entry.data))
+            local fields = assert(bounds.object(assert(bounds.object(assert(bounds.object(declaration.data)).options)).fields))
+            local properties: {[string]: unknown} = {}
+            local value_schema = {type = "object", additionalProperties = false, required = {"kind"}, properties = {
+                kind = {type = "string", enum = {"credential", "literal"}}, credential_ref = {type = "string", maxLength = 128}, value = {type = "string", maxLength = 128}}}
+            properties[destination], properties.OTHER_PROVIDER_TOKEN = value_schema, value_schema
+            fields.env = {path = "provider.env", value_schema = {type = "object", additionalProperties = false, properties = properties},
+                label = "Environment", description = "Fixture environment", section = "advanced", order = 999, contexts = {"first_turn"},
+                support = {config_schema_ref = "fixture:environment"}, render = {{kind = "env", contexts = {"first_turn"}, name = destination, value = {field = "provider.env." .. destination}}}}
+            assert(bounds.object(policy_entry.data)).profile_restrictions = {["provider.env"] = {kind = "declared"}}
+            apply(declaration); apply(policy_entry)
+            local replies: {admission.Reply} = {}
+            for index, item in ipairs({{name = destination, literal = false}, {name = "OTHER_PROVIDER_TOKEN", literal = false}, {name = destination, literal = true}}) do
+                local saved_id = fresh("credential-env")
+                local environment: {[string]: unknown} = {}
+                environment[item.name] = item.literal and {kind = "literal", value = "fixture-value"} or {kind = "credential", credential_ref = "anthropic"}
+                value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Environment",
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
+                local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
+                replies[index] = call("bee.harness.launch:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
+                    brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
+            end
+            declaration.data = assert(json.decode(saved_descriptor)); policy_entry.data = assert(json.decode(saved_policy))
+            apply(declaration); apply(policy_entry)
+            test.eq(replies[1].ok, true)
+            test.eq(code(replies[2]), "DENIED"); test.eq(code(replies[3]), "DENIED")
+        end)
+        test.it("admits placement overrides only at both host ceilings and pins the selected home", function()
+            local resolved = admission.resolve(DEFINITION)
+            local original = assert(resolved)
+            local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
+            test.is_nil(refused)
+            with_overrides({"brief", "placement"}, {"placement"}, function()
+                local resolved = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
+                local selected = assert(resolved)
+                test.neq(selected.plan_digest, original.plan_digest)
+                test.eq(selected.placement_kind, "native")
+                test.eq(selected.effective_profile and selected.effective_profile.placement and selected.effective_profile.placement.home, "private")
+                local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "machine"})
+                test.is_nil(refused)
+            end)
+            with_overrides({"brief", "placement"}, {}, function()
+                local refused = admission.resolve(DEFINITION, nil, nil, nil, nil, nil, nil, nil, nil, {kind = "native", home = "private"})
+                test.is_nil(refused)
+            end)
         end)
         test.it("sets selected resources once, then admission grants the exact associations", function()
             local first_workspace = fresh("setup")
@@ -691,25 +775,25 @@ local function define_tests()
             test.is_nil(invalid)
             test.not_nil(err)
         end)
-        test.it("ships hidden research routes for every batch driver with bounded policies", function()
+        test.it("ships hidden research routes without harness turn ceilings", function()
             local cases = {
                 {definition = "bee.driver.codex:research_batch", policy = "bee.driver.codex:launch_policy_codex_batch",
                     binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
                     config = "bee.driver.codex:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude:research_batch", policy = "bee.driver.claude:launch_policy_claude_batch",
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
-                    config = "bee.driver.claude:config_home", option = "turn_budget", expected = 128},
+                    config = "bee.driver.claude:config_home", option = "permission_mode", expected = "default"},
                 {definition = "bee.driver.agy:research_batch", policy = "bee.driver.agy:launch_policy_agy_batch",
                     binding = "bee.driver.agy:binding", credential = "agy_login", executable = "bee.driver.agy:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
                 {definition = "bee.driver.muse:research_batch", policy = "bee.driver.muse:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
-                    option = "approval_mode", expected = "on-request", additional_options = {turn_budget = 128}},
+                    option = "approval_mode", expected = "on-request"},
                 {definition = "bee.driver.opencode:research_batch", policy = "bee.driver.opencode:launch_policy_opencode_batch",
                     binding = "bee.driver.opencode:binding", credential = "opencode_login", executable = "bee.driver.opencode:executable", unconfined = true},
                 {definition = "bee.driver.grok:research_batch", policy = "bee.driver.grok:launch_policy_grok_batch",
                     binding = "bee.driver.grok:binding", credential = "grok_login", executable = "bee.driver.grok:executable",
-                    option = "permission_mode", expected = "default", additional_options = {turn_budget = 128}, unconfined = true},
+                    option = "permission_mode", expected = "default", unconfined = true},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))
@@ -737,6 +821,10 @@ local function define_tests()
                 if not policy then error(tostring(policy_error)) end
                 if selected.option then test.eq(policy.prepare_options[selected.option], selected.expected)
                 else test.eq(next(policy.prepare_options or {}), nil) end
+                test.is_nil(policy.prepare_options.turn_budget)
+                test.is_nil(policy.prepare_options.max_turns)
+                test.is_nil(policy.prepare_options.max_steps)
+                test.is_nil(policy.prepare_options.print_timeout)
                 test.eq(table.concat(policy.allowed_overrides, ","), "thread,workdir")
                 for option, expected in pairs(selected.additional_options or {}) do
                     test.eq(policy.prepare_options[option], expected)
@@ -1284,7 +1372,7 @@ local function define_tests()
             changed_policy.executables = {codex = "/bin/true"}
             changed_policy.provider_ref = nil
             changed_policy.allow_host_home = true
-            changed_policy.profile_options = {config_profile = {kind = "text", max_bytes = 64}}
+            changed_policy.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 64}}
             changed_policy.gateway_tools = {"thread_read", "thread_wait"}
             changed_policy.gateway_hooks = {"SessionStart", "Stop"}
             changed_policy.prepare_options = {sandbox = "read-only"}
@@ -1311,7 +1399,7 @@ local function define_tests()
                 if not applied then error("configure codex named profile: " .. tostring(apply_error)) end
                 value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                     expected_revision = 0, idempotency_key = fresh("save"),
-                    profile = {title = "DeepSeek Flash", definition_ref = DEFINITION, options = {config_profile = "ds-flash"}, mcp_tools = {"thread_read"}}}))
+                    profile = {schema_revision = "bee.agent-profile@2", name = "DeepSeek Flash", definition_ref = DEFINITION, driver_binding_ref = "bee.driver.codex:binding", provider = {options = {config_profile = "ds-flash"}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
                 local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                     saved_profile_id = saved_id, saved_profile_revision = 1}))
                 local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("named-profile-admit"), definition_ref = DEFINITION,
@@ -1490,6 +1578,23 @@ local function define_tests()
                     workspace_id = workspace, brief = "ping", thread_id = foreign_thread})), "DENIED")
                 test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("override-both"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", thread_id = chosen, thread_title = "Both"})), "INVALID")
+            end)
+        end)
+        test.it("admits the exact named thread while retaining thread override and membership checks", function()
+            local selected = fresh("definition-thread")
+            value(call("bee.threads.service:create", {thread_id = selected, idempotency_key = fresh("create"), title = "Named"}))
+            with_entry(DEFINITION, function(changed)
+                changed.thread_policy = {kind = "named", thread_ref = selected}
+            end, function()
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("named-thread"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = selected}))
+                test.eq(admitted.thread_id, selected)
+                test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("different-thread"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = fresh("other")})), "FORBIDDEN")
+                test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("named-title"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_title = "New thread"})), "FORBIDDEN")
+                test.eq(code(call_as(fresh("nonmember"), "bee.harness.launch:admit", {request_id = fresh("named-nonmember"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = selected})), "DENIED")
             end)
         end)
         test.it("refuses a placement other than the host's before any thread or grant exists", function()
@@ -2066,13 +2171,13 @@ local function define_tests()
             local workspace_id, saved_id = workspace, fresh("agent-profile")
             value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                 expected_revision = 0, idempotency_key = fresh("save"),
-                profile = {title = "Outside tools", definition_ref = AGENT_DEFINITION, options = {}, mcp_tools = {"thread_read"}}}))
+                profile = {schema_revision = "bee.agent-profile@2", name = "Outside tools", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}}))
             local outside = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 1})
             test.eq(code(outside), "FORBIDDEN")
             value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace_id, profile_id = saved_id,
                 expected_revision = 1, idempotency_key = fresh("save"),
-                profile = {title = "Claimed model", definition_ref = AGENT_DEFINITION, options = {model = "sneaky"}, mcp_tools = {}}}))
+                profile = {schema_revision = "bee.agent-profile@2", name = "Claimed model", definition_ref = AGENT_DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {model = "sneaky"}, bee = {mcp = {}}}}))
             local claimed = call("bee.harness.launch:resolve", {definition_ref = AGENT_DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 2})
             test.eq(code(claimed), "FORBIDDEN")

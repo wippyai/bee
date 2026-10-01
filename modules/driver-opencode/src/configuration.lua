@@ -22,7 +22,7 @@ function M.settings_file(gateway: Gateway): (Configuration?, string?)
     for _, event in ipairs(gateway.hooks) do
         return nil, "opencode does not support gateway hook event " .. event
     end
-    if #gateway.tools == 0 then return nil, "opencode configuration needs at least one gateway tool" end
+    if #gateway.tools == 0 then return nil, "opencode configuration needs a gateway" end
     local document: {[string]: unknown} = {
         ["$schema"] = M.SCHEMA,
         mcp = {
@@ -40,7 +40,7 @@ function M.settings_file(gateway: Gateway): (Configuration?, string?)
     if #content > M.MAX_CONFIGURATION_BYTES then return nil, "configuration exceeds " .. tostring(M.MAX_CONFIGURATION_BYTES) .. " bytes" end
     local digest, digest_error = hash.sha256(content)
     if not digest then return nil, tostring(digest_error or "configuration digest failed") end
-    local operations: {{kind: "default" | "insert" | "append", path: {string}}} = {
+    local operations: {configure_protocol.JsonOperation} = {
         {kind = "default", path = {"$schema"}},
         {kind = "insert", path = {"mcp", "bee"}},
     }

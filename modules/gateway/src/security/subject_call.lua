@@ -46,7 +46,7 @@ type Attribution = {actor: security.Actor, context: Object}
 
 -- attribution: the bound subject as an actor and its authenticated call
 -- context; owners read caller identity from these and never from a payload.
-local function attribution(binding: Binding, values: Object, grant: RuntimeGrant?): (Attribution?, Reply?)
+local function attribution(binding: Binding, values: Object, grant: RuntimeGrant?, grants: {context.ResourceGrant}?): (Attribution?, Reply?)
     local meta: {[string]: string} = {}
     if binding.workspace_id then meta.workspace_id = binding.workspace_id end
     local actor, actor_error = security.new_actor(binding.subject, meta)
@@ -61,13 +61,13 @@ local function attribution(binding: Binding, values: Object, grant: RuntimeGrant
     local attributed, attribution_error = context.bind(values, {binding_id = binding.binding_id,
         thread_id = binding.thread_id, subject = binding.subject, action_id = binding.action_id,
         attempt_id = binding.attempt_id, policy_ref = binding.policy_ref, workspace_id = binding.workspace_id,
-        origin_view = binding.origin_view, application_runtime = runtime})
+        resource_grants = grants, origin_view = binding.origin_view, application_runtime = runtime})
     if not attributed then return nil, M.fail("DENIED", tostring(attribution_error)) end
     return {actor = actor, context = attributed}, nil
 end
 
-function M.executor(binding: Binding, policies: {security.Policy}, values: Object, grant: RuntimeGrant?): (funcs.Executor?, Reply?)
-    local who, failure = attribution(binding, values, grant)
+function M.executor(binding: Binding, policies: {security.Policy}, values: Object, grant: RuntimeGrant?, grants: {context.ResourceGrant}?): (funcs.Executor?, Reply?)
+    local who, failure = attribution(binding, values, grant, grants)
     if not who then return nil, failure end
     local executor = funcs.new()
     local contextual, context_error = executor:with_context(who.context)
@@ -82,8 +82,8 @@ end
 -- contract: the host-selected binding of one owner contract, opened as the
 -- bound subject under exactly these policies with the same authenticated
 -- context an owner function call carries.
-function M.contract(binding: Binding, policies: {security.Policy}, values: Object, contract_id: string): (Object?, Reply?)
-    local who, failure = attribution(binding, values, nil)
+function M.contract(binding: Binding, policies: {security.Policy}, values: Object, contract_id: string, grants: {context.ResourceGrant}?): (Object?, Reply?)
+    local who, failure = attribution(binding, values, nil, grants)
     if not who then return nil, failure end
     local definition, get_error = contract.get(contract_id)
     if not definition then return nil, M.fail("UNAVAILABLE", tostring(get_error)) end

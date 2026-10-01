@@ -369,6 +369,11 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "environment.failed", environment_error or "environment", {execution = "exited"})
         return refused(environment_error or "environment")
     end
+    local profile_environment: {[string]: string} = delivery.environment or {}
+    for name, value in pairs(profile_environment) do
+        if environment[name] ~= nil and environment[name] ~= value then return refused("profile environment conflicts with a host-selected variable: " .. name) end
+        environment[name] = value
+    end
     -- Credential replies carry bytes only to their selected destination.
     -- File logins run before immutable driver configuration so their provider
     -- parent remains runner-owned for this materialization.
@@ -654,7 +659,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local write_error: string? = nil
         local published_uncertain: boolean? = nil
         if retained_home then
-            written, write_error, published_uncertain = homes.publish_configuration(selected_home_path, file.path, content, created_parents)
+            written, write_error, published_uncertain = homes.publish_configuration(selected_home_path, file.path, content, created_parents, file.composition ~= nil)
         else
             written, write_error = homes.write_protected(selected_home_path, file.path, content, created_parents)
         end

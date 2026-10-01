@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee application SDK
-    comment: Public application-side values, presentation helpers, and bounded thread facade messages; helpers grant no application, workspace, or thread authority
+    comment: Public application-side values, presentation helpers, and bounded thread
+      facade messages; helpers grant no application, workspace, or thread authority
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -15,7 +16,9 @@ entries:
 - name: client
   kind: library.lua
   source: file://client.lua
-  modules: [process, uuid]
+  modules:
+  - process
+  - uuid
   imports:
     arguments: bee.application:arguments
     interaction: bee.application:interaction
@@ -29,10 +32,13 @@ entries:
     canonical: bee.protocol:canonical
     record_values: bee.threads.records:values
     record_types: bee.threads.records:types
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
 - name: sessions
   kind: library.lua
   source: file://sessions.lua
-  modules: [contract]
+  modules:
+  - contract
   imports:
     bounds: bee.protocol:bounds
     protocol: bee.application:sessions_protocol
@@ -63,7 +69,11 @@ entries:
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua
-  modules: [process, channel, time, uuid]
+  modules:
+  - process
+  - channel
+  - time
+  - uuid
   imports:
     bounds: bee.threads.records:bounds
 - name: status_reader
@@ -86,11 +96,13 @@ entries:
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
-  modules: [env]
+  modules:
+  - env
 - name: frame
   kind: library.lua
   source: file://frame.lua
-  modules: [tty]
+  modules:
+  - tty
   imports:
     appearance: bee.application:appearance
 - name: names
@@ -106,21 +118,24 @@ entries:
 - name: viz
   kind: library.lua
   source: file://viz.lua
-  modules: [tty]
+  modules:
+  - tty
   imports:
     appearance: bee.application:appearance
     frame: bee.application:frame
 - name: forms
   kind: library.lua
   source: file://forms.lua
-  modules: [tty]
+  modules:
+  - tty
   imports:
     appearance: bee.application:appearance
     frame: bee.application:frame
 - name: diagram
   kind: library.lua
   source: file://diagram.lua
-  modules: [tty]
+  modules:
+  - tty
   imports:
     appearance: bee.application:appearance
     frame: bee.application:frame

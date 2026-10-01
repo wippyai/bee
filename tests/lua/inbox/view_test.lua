@@ -47,6 +47,22 @@ local function define_tests()
                 test.is_true(table.concat(drawn.rows):find("unavailable", 1, true) ~= nil)
             end
         end)
+        test.it("shows the command and effect after a long session and workspace identity", function()
+            local session = "bs:" .. string.rep("n", 36) .. ":" .. string.rep("w", 32) .. ":" .. string.rep("s", 36)
+            local prompt = "Session " .. session .. " in workspace " .. string.rep("w", 32)
+                .. " asks Bash {\"command\":\"touch inbox-proof.txt\"} (leave the requested marker)"
+            local state = model.new({"ws-1"})
+            local item = request("permission-command", "pending", prompt)
+            model.apply_inbox(state, "ws-1", reply({ok = true, value = {changes = {{seq = 1, request = item}}, next_seq = 1, more = false}}))
+            model.select(state, "permission-command")
+            model.apply_read(state, "permission-command", reply({ok = true, value = item}))
+            for _, width in ipairs({80, 160}) do
+                local shown = view.draw(width, 30, appearance.defaults(), state, model.rows(state), 0, "", leases.new())
+                local plain = table.concat(shown.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+                test.ok(plain:find("inbox-proof.txt", 1, true) ~= nil, plain)
+                test.ok(plain:find("requested%s+marker") ~= nil, plain)
+            end
+        end)
         test.it("keeps rows, detail and hits inside every terminal size and strips hostile text", function()
             local state = model.new({"ws-1"})
             local changes: {Object} = {}

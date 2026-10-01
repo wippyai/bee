@@ -11,9 +11,10 @@ type Object = {[string]: unknown}
 local function listing_of(value: unknown): agents.Listing return value :: agents.Listing end
 local function conversation_of(value: unknown): agents.Conversation return value :: agents.Conversation end
 local function screen(rows: {string}): string return table.concat(rows, "\n") end
-local function conversation(activity: string, turns: {Object}, ref: string?): agents.Conversation
+local function conversation(activity: string, turns: {Object}, ref: string?, evidence: protocol.ActivityEvidence?): agents.Conversation
     local session_ref = ref or "bs:n:w:worker"
-    return conversation_of({session = {ref = function(): string return session_ref end, snapshot = {provider = "claude"}}, title = "Worker", lifecycle = "active", activity = activity, queued = 1, turns = turns, notice = ""})
+    return conversation_of({session = {ref = function(): string return session_ref end, snapshot = {provider = "claude"}}, title = "Worker", lifecycle = "active",
+        activity = activity, queued = 1, activity_evidence = evidence, turns = turns, notice = ""})
 end
 local function define_tests()
     test.describe("Agent picker screen", function()
@@ -82,6 +83,19 @@ local function define_tests()
         end)
     end)
     test.describe("Sessions list", function()
+        test.it("shows stalled activity in the list and its quiet evidence in the session", function()
+            local evidence: protocol.ActivityEvidence = {kind = "quiet", turn = "bt:n:w:t1",
+                last_progress_at_ms = 1000, quiet_period_ms = 45000, quiet_for_ms = 51000}
+            local item: protocol.SessionSnapshot = {session = "bs:n:w:stalled", revision = 2, incarnation = 1,
+                title = "Quiet worker", lifecycle = "active", activity = "stalled", activity_evidence = evidence,
+                execution = {state = "running", evidence_at = "2026-09-30T00:00:00.000Z", stale = false},
+                queue_count = 0, effective_limits = {}, continuity = {mode = "provider_resume"}, actions = {}}
+            local listing = directory_view.draw(120, 36, appearance.defaults(), {item}, 1, "", false)
+            test.is_true(screen(listing.rows):find("stalled", 1, true) ~= nil)
+
+            local detail = session_view.draw(80, 16, appearance.defaults(), conversation("stalled", {}, nil, evidence), "", "")
+            test.is_true(screen(detail.rows):find("No progress for 51000 ms · bt:n:w:t1", 1, true) ~= nil)
+        end)
         test.it("renders addressable stopped sessions and stable help at 120 and 80", function()
             for _, size in ipairs({{120, 36}, {80, 24}}) do
                 local rows: any = {{session = "bs:n:w:s", title = "Fix API", lifecycle = "closed", activity = "idle", queue_count = 0}}

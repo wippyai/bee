@@ -7,15 +7,15 @@ local agents = require("agents")
 local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "U", verb = "unavailable"},
-    {key = "R", verb = "refresh"}, {key = "Esc", verb = "back"}, {key = "E", verb = "customize copy or edit"},
+    {key = "/", verb = "search"}, {key = "Ctrl+S", verb = "sort"}, {key = "R", verb = "refresh"}, {key = "Esc", verb = "back"}, {key = "E", verb = "customize copy or edit"},
     {key = "N", verb = "new profile"}, {key = "S", verb = "setup"}, {key = "M", verb = "open a window"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
-    listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?): Frame
+    listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?, query: string?, sort: string?, searching: boolean?): Frame
     local painter = frame.new(width, height, preferences)
     local theme = painter.theme
     local count = #listing.items
     frame.header(painter, "NEW SESSION", count > 0 and (tostring(count) .. " agents") or nil)
-    if height >= 5 then frame.line(painter, 2, "Choose a ready agent", theme.muted) end
+    if height >= 5 then frame.line(painter, 2, (searching and "Search: " or "Search /: ") .. (query or "") .. " · sort " .. (sort or "name"), theme.muted) end
     local show_summary = height >= 10
     local last = height - (show_summary and 5 or 3)
     local capacity = math.floor(math.max(0, last - 2))
@@ -44,6 +44,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
             {kind = item and not item.ready and "setup" or "open", key = "Enter", label = item and not item.ready and "Setup" or "Open", enabled = not busy and chosen, primary = true},
             {kind = "unavailable", key = "U", label = show_unavailable and "Hide unavailable" or "Show unavailable", enabled = not busy},
             {kind = "refresh", key = "R", label = "Refresh", enabled = not busy},
+            {kind = "search", key = "/", label = "Search", enabled = not busy},
+            {kind = "sort", key = "Ctrl+S", label = "Sort " .. (sort or "name"), enabled = not busy},
             {kind = "edit", key = "E", label = item and item.kind == "profile" and "Edit" or "Customize copy", enabled = not busy and chosen},
             {kind = "close", key = "Esc", label = "Back", enabled = true},
         })

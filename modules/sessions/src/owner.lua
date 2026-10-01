@@ -1,11 +1,14 @@
 -- MIT. Sessions owns admission and the public session operations; Threads
 -- remains the only durable store.
 local bounds = require("bounds")
+local budget_values = require("budget_values")
 local journal = require("journal")
 local admission = require("admission")
 local catalog_service = require("catalog_service")
 local driver_route = require("driver_route")
 local hash = require("hash")
+local canonical = require("canonical")
+local profile_values = require("profile_values")
 local security = require("security")
 local funcs = require("funcs")
 local scheduler = require("scheduler")
@@ -14,6 +17,7 @@ local M = {}
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value?: unknown, error?: Object}
+type Budget = budget_values.Budget
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -56,6 +60,14 @@ local function ref(value: unknown): string?
     return value
 end
 
+local function budget(value: unknown): (Budget?, string?)
+    return budget_values.decode(value)
+end
+
+local function merge_budget(session: Budget?, work: Budget?): Budget?
+    return budget_values.minimum(session, work)
+end
+
 local function snapshot(value: unknown): (Object?, string?)
     local row = object(value)
     if not row or type(row.session) ~= "string" or type(row.title) ~= "string"
@@ -63,26 +75,39 @@ local function snapshot(value: unknown): (Object?, string?)
         return nil, "Threads returned a malformed session snapshot"
     end
     local queued = type(row.queued) == "number" and row.queued or 0
-    local active = type(row.active) == "number" and row.active or 0
-    local uncertain = type(row.uncertain) == "number" and row.uncertain or 0
-    local stalled = type(row.stalled) == "number" and row.stalled or 0
     local lifecycle = row.state
     if lifecycle ~= "active" and lifecycle ~= "suspended" and lifecycle ~= "closing" and lifecycle ~= "closed" then
         return nil, "Threads returned an unsupported session lifecycle"
     end
-    local activity = "idle"
-    if stalled > 0 then activity = "stalled"
-    elseif uncertain > 0 then activity = "blocked"
-    elseif active > 0 or queued > 0 then activity = "working" end
+    local activity = row.activity
+    if activity ~= "idle" and activity ~= "working" and activity ~= "blocked" and activity ~= "stalled" then
+        return nil, "Threads returned an unsupported session activity"
+    end
+    local activity_evidence: Object? = nil
+    if row.activity_evidence ~= nil then
+        local evidence = object(row.activity_evidence)
+        local turn = evidence and ref(evidence.turn)
+        local last = evidence and bounds.count(evidence.last_progress_at_ms)
+        local quiet_period = evidence and bounds.count(evidence.quiet_period_ms)
+        local quiet_for = evidence and bounds.count(evidence.quiet_for_ms)
+        if not evidence or bounds.fields(evidence, {"kind", "turn", "last_progress_at_ms", "quiet_period_ms", "quiet_for_ms"})
+            or evidence.kind ~= "quiet" or not turn or not last or not quiet_period or quiet_period < 1
+            or not quiet_for or quiet_for < quiet_period then
+            return nil, "Threads returned malformed quiet-period evidence"
+        end
+        activity_evidence = {kind = "quiet", turn = turn, last_progress_at_ms = last,
+            quiet_period_ms = quiet_period, quiet_for_ms = quiet_for}
+    end
     local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
     if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
     local route = object(row.route) or {}
     return {presentation = route.delivery == "hook" and "window" or "headless", session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
         driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
         revision = row.revision, incarnation = 1, title = row.title,
-        lifecycle = lifecycle, activity = activity,
-        execution = {state = active > 0 and "running" or "quiescent", evidence_at = at, stale = false},
-        queue_count = queued, effective_limits = {}, continuity = {mode = "provider_resume"}, actions = {}}, nil
+        lifecycle = lifecycle, activity = activity, activity_evidence = activity_evidence,
+        execution = {state = row.execution_running == true and "running" or "quiescent", evidence_at = at, stale = false},
+        queue_count = queued, effective_limits = route.budgets or {},
+        effective_profile = route.effective_profile, profile_digest = route.profile_digest, budget_consumption = row.budget_consumption, continuity = {mode = "provider_resume"}, actions = {}}, nil
 end
 
 local finish_closing: (string, string) -> string?
@@ -96,11 +121,18 @@ end
 local function open(request: Object): Reply
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
-    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "presentation"}) then
+    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "presentation", "budgets", "supervision", "placement"}) then
         return fail("INVALID", "open requires a definition, optional profile/workdir, and operation_key", operation_key)
     end
+    local placement, placement_error = profile_values.placement(spec.placement)
+    if placement_error then return fail("INVALID", placement_error, operation_key) end
     local presentation = spec.presentation == nil and "headless" or spec.presentation
     if presentation ~= "headless" and presentation ~= "window" then return fail("INVALID", "presentation must be headless or window", operation_key) end
+    local session_budgets, budget_error = budget_values.budgets(spec.budgets)
+    if budget_error then return fail("INVALID", budget_error, operation_key) end
+    local supervision, supervision_error = budget_values.supervision(spec.supervision)
+    if supervision_error then return fail("INVALID", supervision_error, operation_key) end
+    local quiet_period = supervision and supervision.quiet_period_ms or 60000
     local definition = ref(spec.definition)
     if not definition then return fail("INVALID", "definition is not a ref", operation_key) end
     local profile = object(spec.profile)
@@ -128,8 +160,9 @@ local function open(request: Object): Reply
             if not actor then return unavailable(tostring(actor_error), operation_key) end
             local executor, executor_error = funcs.new():with_actor(actor)
             if not executor then return unavailable(tostring(executor_error), operation_key) end
-            local raw, call_error = executor:call("bee.sessions.binding:open", {spec = {definition = definition,
-                profile = profile, workdir = workdir, presentation = presentation}, operation_key = operation_key})
+            local forwarded: Object = {definition = definition, profile = profile, workdir = workdir,
+                presentation = spec.presentation, budgets = session_budgets, supervision = supervision, placement = placement}
+            local raw, call_error = executor:call("bee.sessions.binding:open", {spec = forwarded, operation_key = operation_key})
             if call_error then return unavailable(tostring(call_error), operation_key) end
             local reply = object(raw)
             if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
@@ -146,21 +179,7 @@ local function open(request: Object): Reply
         if not previous then return unavailable(previous_error or "prior session unavailable", operation_key) end
         if previous.presentation ~= presentation then return fail("CONFLICT", "open key belongs to another presentation", operation_key) end
     end
-    if presentation == "window" then
-        local raw, call_error = funcs.call("bee.harness.launch:present", {spec = spec, operation_key = operation_key})
-        local reply = object(raw)
-        if call_error or not reply or reply.ok ~= true then
-            local fault = reply and object(reply.error)
-            return fail(fault and tostring(fault.code) or "UNAVAILABLE", tostring(call_error or (fault and fault.message) or "window owner unavailable"), operation_key)
-        end
-        local receipt = object(reply.value)
-        local session = receipt and ref(receipt.session)
-        if not session or not receipt then return unavailable("window owner omitted its session", operation_key) end
-        local current, err = describe(session)
-        if not current then return unavailable(err or "window snapshot unavailable", operation_key) end
-        return succeed({session = session, operation = receipt.operation, snapshot = current})
-    end
-    local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision, nil, nil, nil, true)
+    local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision, nil, nil, nil, true, placement)
     if not plan then
         local fault = object(refused)
         local details = fault and object(fault.error)
@@ -173,12 +192,58 @@ local function open(request: Object): Reply
     if not plan_value or not driver_binding_ref or not profile_ref then
         return unavailable("admission returned an incomplete executor route", operation_key)
     end
+    local effective_profile = object(plan_value.effective_profile)
+    if spec.presentation == nil and effective_profile then
+        presentation = effective_profile.presentation or "headless"
+    end
+    if presentation ~= "headless" and presentation ~= "window" then return unavailable("Profile presentation is malformed", operation_key) end
+    local profile_budgets, profile_budget_error = budget_values.budgets(effective_profile and effective_profile.budgets)
+    if profile_budget_error then return unavailable(profile_budget_error, operation_key) end
+    session_budgets = {turn = budget_values.minimum(profile_budgets and profile_budgets.turn, session_budgets and session_budgets.turn),
+        session = budget_values.minimum(profile_budgets and profile_budgets.session, session_budgets and session_budgets.session)}
+    if not session_budgets.turn and not session_budgets.session then session_budgets = nil end
+    if not supervision then
+        supervision, supervision_error = budget_values.supervision(effective_profile and effective_profile.supervision)
+        if supervision_error then return unavailable(supervision_error, operation_key) end
+    end
+    local coverage = object(plan_value.budget_capabilities)
+    local accounting_error = budget_values.accounting(session_budgets, coverage, presentation)
+    if accounting_error then return fail("UNSUPPORTED_CAPABILITY", accounting_error, operation_key) end
+    if presentation == "window" and (session_budgets or (supervision and supervision.on_stall == "cancel_work")) then
+        return fail("UNSUPPORTED_CAPABILITY", "Window sessions do not expose proven budget or stall cancellation accounting", operation_key)
+    end
+    local effective_profile_digest = plan_value.effective_profile_digest
+    if effective_profile then
+        effective_profile.presentation = presentation
+        effective_profile.budgets = session_budgets
+        effective_profile.supervision = supervision or {quiet_period_ms = quiet_period, on_stall = "report"}
+        local encoded, encode_error = canonical.encode(effective_profile)
+        if not encoded then return unavailable(encode_error or "Effective profile cannot be encoded", operation_key) end
+        local digest, digest_error = hash.sha256(encoded)
+        if not digest then return unavailable(tostring(digest_error or "Effective profile cannot be measured"), operation_key) end
+        effective_profile_digest = digest
+    end
+    if presentation == "window" then
+        if placement then return fail("UNSUPPORTED_CAPABILITY", "Window placement overrides require a saved profile", operation_key) end
+        local raw, call_error = funcs.call("bee.harness.launch:present", {spec = {definition = definition, profile = profile, workdir = workdir, presentation = presentation}, operation_key = operation_key})
+        local reply = object(raw)
+        if call_error or not reply or reply.ok ~= true then
+            local fault = reply and object(reply.error)
+            return fail(fault and tostring(fault.code) or "UNAVAILABLE", tostring(call_error or (fault and fault.message) or "window owner unavailable"), operation_key)
+        end
+        local receipt = object(reply.value)
+        local session = receipt and ref(receipt.session)
+        if not session or not receipt then return unavailable("window owner omitted its session", operation_key) end
+        local current, err = describe(session)
+        if not current then return unavailable(err or "window snapshot unavailable", operation_key) end
+        return succeed({session = session, operation = receipt.operation, snapshot = current})
+    end
     if type(plan_value.session_resource) ~= "string" or plan_value.session_resource == "" then
         return fail("UNAVAILABLE", "the selected definition has no retained session resource", operation_key)
     end
     local setup_raw, setup_error = funcs.call("bee.harness.launch:setup", {workspace_id = workspace,
         definition_ref = definition, expected_plan_digest = plan_value.plan_digest,
-        saved_profile_id = profile_id, saved_profile_revision = profile_revision, session_turn = true})
+        saved_profile_id = profile_id, saved_profile_revision = profile_revision, session_turn = true, placement_override = placement})
     local setup = object(setup_raw)
     if setup_error or not setup or setup.ok ~= true then
         return unavailable(tostring(setup_error or (setup and setup.error) or "session resource setup failed"), operation_key)
@@ -187,10 +252,11 @@ local function open(request: Object): Reply
     if not methods then return unavailable(methods_error or "selected driver methods are unavailable", operation_key) end
     local placement_methods = object(plan_value.placement_methods)
     if not placement_methods then return unavailable("admission omitted placement operations", operation_key) end
-    local route: Object = {definition = definition, plan_digest = plan_value.plan_digest,
-        saved_profile_id = profile_id, saved_profile_revision = profile_revision, workdir = workdir,
+    local route: Object = {budget_capabilities = coverage, effective_profile = effective_profile, profile_digest = effective_profile_digest, definition = definition, plan_digest = plan_value.plan_digest,
+        saved_profile_id = profile_id, saved_profile_revision = profile_revision, workdir = workdir, placement_override = placement,
         driver_binding_ref = driver_binding_ref, provider = driver_binding_ref:match("^bee%.driver%.([^:]+):"), profile_id = profile_ref, driver_methods = methods,
-        placement_methods = placement_methods}
+        placement_methods = placement_methods, supervision = supervision or {quiet_period_ms = quiet_period, on_stall = "report"}}
+    if session_budgets then route.budgets = session_budgets end
     local created, create_error = journal.invoke("session_create", {operation_key = operation_key,
         title = plan_value.title or definition, route = route})
     if create_error or not created then return unavailable(create_error or "Threads returned no open receipt", operation_key) end
@@ -238,7 +304,7 @@ local function attach(request: Object): Reply
         created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
             title = plan.title or definition, route = {definition = definition, plan_digest = plan.plan_digest,
                 delivery = "hook", driver_binding_ref = driver, provider = driver:match("^bee%.driver%.([^:]+):"),
-                profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
+                saved_profile_id = profile_id, saved_profile_revision = revision, profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
         if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
     end
     local receipt = object(created)
@@ -307,8 +373,9 @@ local function hook_boundary(request: Object): Reply
     local caller = identity()
     local session, event, event_key = ref(request.session), request.event, key(request.operation_key)
     local attempt = bounds.id(request.attempt_id)
-    if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id"})
-        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
+    if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id", "permission", "input"})
+        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
+    if request.input ~= nil and (event ~= "UserPromptSubmit" or bounds.text(request.input, 65536) == nil) then return fail("INVALID", "native prompt is invalid", event_key) end
     if not security.can("bee.sessions.hook_boundary", session) then return fail("DENIED", "hook boundary requires the authenticated gateway", event_key) end
     local raw, err = journal.invoke("session_describe", {session = session})
     local stored = object(raw)
@@ -316,6 +383,24 @@ local function hook_boundary(request: Object): Reply
     if err or not route then return unavailable(err or "interactive route unavailable", event_key) end
     if route.delivery ~= "hook" then return succeed({}) end
     if route.native_attempt_id ~= attempt then return fail("STALE", "hook belongs to an earlier native attachment", event_key) end
+    if event == "PermissionRequest" then
+        local permission = bounds.object(request.permission)
+        local active = bounds.object(stored.active_turn)
+        if not permission or not active then return fail("CONFLICT", "permission requires a current interactive turn", event_key) end
+        local fields: Object = {session = session, definition = route.definition, plan_digest = route.plan_digest,
+            attempt_id = attempt, thread_id = stored.thread_ref, action_id = permission.action_id, binding_id = permission.binding_id,
+            turn = active.turn, claim = active.claim, event_id = event_key, payload = permission.payload,
+            saved_profile_id = route.saved_profile_id, saved_profile_revision = route.saved_profile_revision, transport = permission.transport}
+        local response, response_error = funcs.call("bee.executor.external.binding:answer_hook", fields)
+        if response_error then return unavailable(tostring(response_error), event_key) end
+        local reply = bounds.object(response)
+        if not reply or type(reply.ok) ~= "boolean" then return unavailable("invalid permission hook reply", event_key) end
+        if reply.ok ~= true then
+            local fault = bounds.object(reply.error)
+            return fail("PERMISSION_REFUSED", fault and bounds.text(fault.message, 4096) or "permission hook refused", event_key)
+        end
+        return succeed(reply.value)
+    end
     local event_digest, digest_error = hash.sha256(event_key)
     if not event_digest then return unavailable(tostring(digest_error), event_key) end
     local boundary_key = event_digest
@@ -340,6 +425,16 @@ local function hook_boundary(request: Object): Reply
     local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-start:" .. boundary_key})
     local turn = object(reserved)
     if reserve_error or not turn then return unavailable(reserve_error or "interactive work reserve unavailable", event_key) end
+    local native_input = false
+    if not turn.turn and request.input ~= nil and not bounds.object(stored.active_turn) then
+        local sent, send_error = journal.invoke("work_send", {session = session, operation_key = "hook-native:" .. boundary_key,
+            input = request.input, output_schema = "bee:Text@1"})
+        if send_error or not sent then return unavailable(send_error or "native prompt journal unavailable", event_key) end
+        local reserved_native, reserve_native_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-native-start:" .. boundary_key})
+        turn = object(reserved_native)
+        if reserve_native_error or not turn then return unavailable(reserve_native_error or "native prompt turn unavailable", event_key) end
+        native_input = true
+    end
     if not turn.turn then return succeed({}) end
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn.turn, claim = turn.claim})
     local input = object(pulled)
@@ -349,6 +444,7 @@ local function hook_boundary(request: Object): Reply
     local accepted, accept_error = journal.invoke("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = input.input_digest,
         checkpoint = {attempt_id = route.native_attempt_id, hook_event = event_key}, operation_key = "hook-accept:" .. boundary_key})
     if accept_error or not accepted then return unavailable(accept_error or "interactive turn accept unavailable", event_key) end
+    if native_input or (sender.id == session and request.input ~= nil) then return succeed({}) end
     local prompt, prompt_error = scheduler.prompt(input.input)
     if not prompt then return unavailable(prompt_error or "interactive input unavailable", event_key) end
     return succeed({additional_context = "[Bee message from " .. tostring(sender.id) .. "]\n" .. prompt})
@@ -358,9 +454,13 @@ local function send(request: Object): Reply
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
     if not operation_key or not session or request.input == nil
-        or bounds.fields(request, {"session", "input", "output", "expected_incarnation", "operation_key"}) then
+        or bounds.fields(request, {"session", "input", "output", "expected_incarnation", "operation_key", "budgets"}) then
         return fail("INVALID", "send requires session, input, and operation_key", operation_key)
     end
+    local work_budgets, budget_error = budget_values.budgets(request.budgets)
+    if work_budgets and work_budgets.session then return fail("INVALID", "Work budgets name only turn", operation_key) end
+    local work_budget = work_budgets and work_budgets.turn or nil
+    if budget_error then return fail("INVALID", budget_error, operation_key) end
     if request.expected_incarnation ~= nil and request.expected_incarnation ~= 1 then
         return fail("STALE", "session incarnation changed", operation_key)
     end
@@ -369,13 +469,22 @@ local function send(request: Object): Reply
     if current.lifecycle ~= "active" then return fail("CONFLICT", "session is not accepting work", operation_key) end
     local output_schema = request.output == nil and "bee:Text@1" or ref(request.output)
     if not output_schema then return fail("INVALID", "output must be a schema ref", operation_key) end
-    local stored = journal.invoke("session_describe", {session = session})
+    local stored, stored_error = journal.invoke("session_describe", {session = session})
     local route = object(stored) and object((object(stored)).route)
+    if stored_error or not route then return unavailable(stored_error or "Threads omitted the retained session route", operation_key) end
+    if work_budget then
+        local accounting_error = budget_values.accounting({turn = work_budget}, route.budget_capabilities, bounds.member(route.presentation, {"headless", "window"}))
+        if accounting_error then return fail("UNSUPPORTED_CAPABILITY", accounting_error, operation_key) end
+    end
+    local session_budgets, route_budget_error = budget_values.budgets(route.budgets)
+    local session_budget = session_budgets and session_budgets.turn or nil
+    if route_budget_error then return unavailable("Threads returned a malformed session budget", operation_key) end
+    local effective_budget = merge_budget(session_budget, work_budget)
     if route and route.delivery == "hook" and output_schema ~= "bee:Text@1" then
         return fail("INVALID", "interactive delivery supports Text acknowledgments", operation_key)
     end
     local receipt, send_error = journal.invoke("work_send", {session = session, operation_key = operation_key,
-        input = request.input, output_schema = output_schema})
+        input = request.input, output_schema = output_schema, budget = effective_budget})
     if send_error or not receipt then return unavailable(send_error or "Threads returned no work receipt", operation_key) end
     return succeed(receipt)
 end
@@ -398,6 +507,15 @@ local function work_value(value: unknown): (Object?, string?)
             state.phase = "settled"
             state.result = {outcome = outcome, schema = result.schema or row.output_schema,
                 value = result.value, artifacts = result.artifacts or {}, usage = result.usage or {}}
+        elseif outcome == "budget_exceeded" then
+            local failure = object(result.error) or {}
+            local evidence = object(result.evidence)
+            if failure.code ~= "BUDGET_EXCEEDED" or not evidence then return nil, "Threads returned a malformed budget outcome" end
+            state.phase = "settled"
+            state.cancelling = false
+            state.result = {outcome = outcome, error = {code = "BUDGET_EXCEEDED",
+                message = failure.message or "the configured work budget was exceeded", retry = "never"},
+                artifacts = result.artifacts or {}, evidence = evidence}
         elseif outcome == "failed" or outcome == "cancelled" or outcome == "rejected" then
             local failure = object(result.error) or {}
             state.phase = "settled"
@@ -865,7 +983,7 @@ function M.call(method: string, request: unknown): Reply
         local receipt = object(opened.value)
         if not receipt then return unavailable("open returned no session receipt", operation_key) end
         return send({session = receipt.session, input = input.input, output = input.output,
-            expected_incarnation = 1, operation_key = operation_key})
+            expected_incarnation = 1, operation_key = operation_key, budgets = input.budgets})
     end
     if method == "history" then
         local session = ref(input.session)

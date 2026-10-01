@@ -57,13 +57,24 @@ local function handle(): nil
         return nil
     end
 
-    -- Mode L: Runaway loop. A tool call on every turn, even after tool
-    -- results, so the driver must stop at its turn limit.
-    if user_prompt_of():find("call_tool_loop", 1, true) then
+    -- Mode L: Long tool-call sequence. It finishes only after eighteen tool
+    -- results have returned to the provider, beyond the former driver cap.
+    if user_prompt_of():find("call_tool_long", 1, true) then
+        local tool_results = 0
+        for _, message in ipairs(messages) do
+            if message.role == "tool" then tool_results = tool_results + 1 end
+        end
+        if tool_results >= 18 then
+            response:set_status(200)
+            response:set_content_type(http.CONTENT.JSON)
+            response:write_json({choices = {{index = 0,
+                message = {role = "assistant", content = "long-run-completed"}, finish_reason = "stop"}}})
+            return nil
+        end
         response:set_status(200)
         response:set_content_type(http.CONTENT.JSON)
         response:write_json({
-            id = "chatcmpl-loop",
+            id = "chatcmpl-long-" .. tostring(tool_results + 1),
             object = "chat.completion",
             created = 1234567,
             model = "test-model",
@@ -73,11 +84,11 @@ local function handle(): nil
                     role = "assistant",
                     content = nil,
                     tool_calls = {{
-                        id = "call_loop",
+                        id = "call_long_" .. tostring(tool_results + 1),
                         type = "function",
                         ["function"] = {
                             name = "FileReport",
-                            arguments = json.encode({summary = "loop-review"})
+                            arguments = json.encode({summary = "long-review-" .. tostring(tool_results + 1)})
                         }
                     }}
                 },

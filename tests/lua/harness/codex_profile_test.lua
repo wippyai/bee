@@ -54,11 +54,11 @@ end
 local function define_tests()
     test.describe("Saved Codex config profile reachability", function()
         test.it("offers the field only on Codex policies and keeps the window's inherited home", function()
-            test.eq((raw_policy(CODEX_WINDOW).profile_options :: {[string]: unknown}).config_profile.kind, "text")
-            test.eq((raw_policy(CODEX_NAMED_BATCH).profile_options :: {[string]: unknown}).config_profile.kind, "text")
+            test.eq((raw_policy(CODEX_WINDOW).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"].kind, "text")
+            test.eq((raw_policy(CODEX_NAMED_BATCH).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"].kind, "text")
             -- A Claude policy must never advertise a Codex-only field.
-            test.is_nil((raw_policy(CLAUDE_WINDOW).profile_options :: {[string]: unknown}).config_profile)
-            test.is_nil((raw_policy(CLAUDE_BATCH).profile_options :: {[string]: unknown}).config_profile)
+            test.is_nil((raw_policy(CLAUDE_WINDOW).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"])
+            test.is_nil((raw_policy(CLAUDE_BATCH).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"])
             -- The Codex window profile inherits the host home, so the named
             -- file it declares can resolve there.
             local codex, codex_error = registry.get("bee.driver.codex:profiles")
@@ -89,7 +89,7 @@ local function define_tests()
             -- it, and its driver has no such launch field.
             test.is_nil(preferences.apply(raw_policy(CLAUDE_WINDOW), selected()))
             test.is_nil(preferences.apply(raw_policy(CLAUDE_BATCH), selected()))
-            local claude, claude_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default", turn_budget = 1, config_profile = PROFILE})
+            local claude, claude_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default", config_profile = PROFILE})
             test.is_nil(claude)
             test.is_true(tostring(claude_error):find("config_profile", 1, true) ~= nil)
             -- Even if a host accidentally offers the generic text option on a
@@ -97,7 +97,7 @@ local function define_tests()
             -- launch field before it can become a command-line argument.
             local offered_policy: {[string]: unknown} = {}
             for key, item in pairs(raw_policy(CLAUDE_WINDOW)) do offered_policy[key] = item end
-            offered_policy.profile_options = {config_profile = {kind = "text", max_bytes = 64}}
+            offered_policy.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 64}}
             local offered, offered_error = preferences.apply(offered_policy, selected())
             if not offered then error(tostring(offered_error)) end
             local _, offered_launch_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default",
@@ -106,7 +106,7 @@ local function define_tests()
         end)
 
         test.it("projects the selected named profile into each private Codex route", function()
-            test.eq((raw_policy(CODEX_BATCH).profile_options :: {[string]: unknown}).config_profile.kind, "text")
+            test.eq((raw_policy(CODEX_BATCH).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"].kind, "text")
             local cases: {{profile_id: string, resume_ref: string?}} = {
                 {profile_id = "batch"},
                 {profile_id = "batch", resume_ref = "session-1"},

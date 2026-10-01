@@ -103,11 +103,11 @@ local function define_tests()
             test.eq(api.terminal.error and api.terminal.error.code, "api_error")
             test.is_true(api.terminal.error ~= nil and api.terminal.error.retryable)
         end)
-        test.it("surfaces a max-turn terminal as a typed, bounded failure", function()
+        test.it("keeps a provider turn-limit report as a typed failure", function()
             local raw, call_error = funcs.call("bee.driver.claude.binding:normalize", {
                 index = 1,
-                turn_budget = 32,
-                envelope = {type = "result", is_error = true, subtype = "error_max_turns", terminal_reason = "max_turns"},
+                envelope = {type = "result", is_error = true, subtype = "error_max_turns",
+                    terminal_reason = "max_turns", result = "provider turn limit reached"},
             })
             if call_error then error(tostring(call_error)) end
             local reply = raw :: {[string]: unknown}
@@ -116,19 +116,7 @@ local function define_tests()
             test.eq(terminal.outcome, "failed")
             local fault = terminal.error :: {[string]: unknown}
             test.eq(fault.code, "max_turns")
-            test.eq(fault.message, "turn budget of 32 reached")
-
-            local subtype_only, subtype_error = funcs.call("bee.driver.claude.binding:normalize", {
-                index = 2,
-                turn_budget = 32,
-                envelope = {type = "result", is_error = true, subtype = "error_max_turns"},
-            })
-            if subtype_error then error(tostring(subtype_error)) end
-            local subtype_reply = subtype_only :: {[string]: unknown}
-            local subtype_terminal = subtype_reply.terminal :: {[string]: unknown}
-            local subtype_fault = subtype_terminal.error :: {[string]: unknown}
-            test.eq(subtype_fault.code, "max_turns")
-            test.eq(subtype_fault.message, "turn budget of 32 reached")
+            test.eq(fault.message, "provider turn limit reached")
         end)
         test.it("reports a stream that ends before the result as uncertain", function()
             local cut = run(claude, "/claude/stream-json-2/plain.jsonl", 50, true)
@@ -139,7 +127,7 @@ local function define_tests()
             test.is_true(has(cut.types, "turn.signal:ended"))
         end)
         test.it("produces declarative launch specifications only", function()
-            local request, err = claude_launch.decode({profile_id = "session", brief = "say hi", permission_mode = "dontAsk", turn_budget = 2, model = "sonnet", effort = "xhigh"})
+            local request, err = claude_launch.decode({profile_id = "session", brief = "say hi", permission_mode = "dontAsk", model = "sonnet", effort = "xhigh"})
             if not request then error(tostring(err)) end
             local launch = claude_launch.specification(request)
             test.eq(launch.executable, "claude")
@@ -151,8 +139,7 @@ local function define_tests()
                 if arg == "--allowedTools" then allowed = selected.argv[index + 1] end
             end
             test.eq(allowed, "mcp__bee__session,mcp__bee__docs,mcp__bee__overlay")
-            test.eq(quote.line(launch.argv), "-p --output-format stream-json --verbose --include-partial-messages --permission-mode dontAsk --max-turns 2 --model sonnet --effort xhigh -- 'say hi'")
-            test.is_nil(bound.turn_budget)
+            test.eq(quote.line(launch.argv), "-p --output-format stream-json --verbose --include-partial-messages --permission-mode dontAsk --model sonnet --effort xhigh -- 'say hi'")
             test.is_true(table.concat(selected.argv, " "):find("--max-turns", 1, true) == nil)
             local _, mode_error = claude_launch.decode({profile_id = "session", brief = "x", permission_mode = "bypassPermissions"})
             test.eq(mode_error, "permission_mode is not one Bee admits")
@@ -160,14 +147,13 @@ local function define_tests()
             test.eq(model_error, "model is not one bounded model identifier")
             local _, effort_error = claude_launch.decode({profile_id = "session", brief = "x", effort = "turbo"})
             test.eq(effort_error, "effort is not one Bee admits")
-            local batch, batch_error = claude_launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default", turn_budget = 1})
+            local batch, batch_error = claude_launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default"})
             if not batch then error(tostring(batch_error)) end
             test.eq(quote.line(claude_launch.specification(batch).argv),
-                "-p --output-format stream-json --verbose --include-partial-messages --permission-mode default --max-turns 1 -- 'read traits'")
-            local roomy, roomy_error = claude_launch.decode({profile_id = "batch", brief = "use tools", turn_budget = 128})
-            if not roomy then error(tostring(roomy_error)) end
-            test.eq(roomy.turn_budget, 128)
-            local resumed = claude_launch.specification({profile_id = "session", brief = "next", permission_mode = "default", turn_budget = 1, resume_ref = "sess-1", permission_exchange = false})
+                "-p --output-format stream-json --verbose --include-partial-messages --permission-mode default -- 'read traits'")
+            local _, legacy_budget_error = claude_launch.decode({profile_id = "batch", brief = "use tools", turn_budget = 128})
+            test.eq(legacy_budget_error, "unknown field turn_budget")
+            local resumed = claude_launch.specification({profile_id = "session", brief = "next", permission_mode = "default", resume_ref = "sess-1", permission_exchange = false})
             test.eq(resumed.argv[#resumed.argv - 2], "sess-1")
             test.eq(resumed.argv[#resumed.argv - 1], "--")
             test.eq(resumed.argv[#resumed.argv], "next")
@@ -179,10 +165,10 @@ local function define_tests()
             -- The exchange launch: the brief is the first stream-json line
             -- on stdin, canonically encoded, stdin stays open, and prompts
             -- route to the stdio prompt tool.
-            local exchange, exchange_error = claude_launch.decode({profile_id = "batch", brief = "leave a \"marker\"", permission_mode = "default", turn_budget = 3, permission_exchange = true})
+            local exchange, exchange_error = claude_launch.decode({profile_id = "batch", brief = "leave a \"marker\"", permission_mode = "default", permission_exchange = true})
             if not exchange then error(tostring(exchange_error)) end
             local interactive = claude_launch.specification(exchange)
-            test.eq(quote.line(interactive.argv), "-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode default --max-turns 3 --permission-prompt-tool stdio --permission-prompts host")
+            test.eq(quote.line(interactive.argv), "-p --input-format stream-json --output-format stream-json --verbose --include-partial-messages --permission-mode default --permission-prompt-tool stdio --permission-prompts host")
             test.eq(interactive.stdin, '{"message":{"content":"leave a \\"marker\\"","role":"user"},"type":"user"}\n')
             test.is_nil(interactive.stdin_eof)
             test.eq(interactive.session_end, "stdin_close")
@@ -227,7 +213,7 @@ local function define_tests()
         end)
         test.it("refuses structured-only options for a native window and empty structured turns", function()
             local no_turns, turns_error = claude_launch.decode({profile_id = "window", brief = "hello", turn_budget = 2})
-            test.is_nil(no_turns); test.eq(turns_error, "turn_budget is only supported for structured turns")
+            test.is_nil(no_turns); test.eq(turns_error, "unknown field turn_budget")
             local no_exchange, exchange_error = claude_launch.decode({profile_id = "window", brief = "hello", permission_exchange = true})
             test.is_nil(no_exchange); test.eq(exchange_error, "stdio permission exchange is only supported for structured turns")
             local empty_claude = claude_launch.decode({profile_id = "batch", brief = ""})
@@ -262,7 +248,8 @@ local function define_tests()
             test.eq(quote.line(launch.argv), "exec --json --skip-git-repo-check --sandbox workspace-write -")
             local resumed = codex_launch.specification({profile_id = "batch", brief = "next", sandbox = "read-only", resume_ref = "sess-1", gateway_hooks = true})
             test.eq(quote.line(resumed.argv), "--sandbox read-only exec resume sess-1 --json --skip-git-repo-check -")
-            local _, sandbox_error = codex_launch.decode({profile_id = "batch", brief = "x", sandbox = "danger-full-access"})
+            test.not_nil(codex_launch.decode({profile_id = "batch", brief = "x", sandbox = "danger-full-access"}))
+            local _, sandbox_error = codex_launch.decode({profile_id = "batch", brief = "x", sandbox = "invalid"})
             test.eq(sandbox_error, "sandbox is not one Bee admits")
             local reply = funcs.call("bee.driver.codex.binding:normalize", {index = 1, envelope = {type = "thread.started", thread_id = "t1"}})
             test.is_true(reply.ok)
@@ -460,14 +447,14 @@ local function define_tests()
             test.eq(launch.readiness, "protocol:runtime.command.accepted")
             test.is_nil(launch.stdin)
             local full, full_error = muse_launch.decode({profile_id = "batch", brief = "say ok", approval_mode = "never",
-                model = "muse-spark-1.3", effort = "high", turn_budget = 4})
+                model = "muse-spark-1.3", effort = "high"})
             if not full then error(tostring(full_error)) end
             test.eq(quote.line(muse_launch.specification(full).argv),
-                "exec --json --approval-mode never --model muse-spark-1.3 --reasoning-effort high --max-model-steps 4 -- 'say ok'")
-            local worker, worker_error = muse_launch.decode({profile_id = "batch", brief = "read traits", approval_mode = "on-request", turn_budget = 32})
+                "exec --json --approval-mode never --model muse-spark-1.3 --reasoning-effort high -- 'say ok'")
+            local worker, worker_error = muse_launch.decode({profile_id = "batch", brief = "read traits", approval_mode = "on-request"})
             if not worker then error(tostring(worker_error)) end
             test.eq(quote.line(muse_launch.specification(worker).argv),
-                "exec --json --approval-mode on-request --max-model-steps 32 -- 'read traits'")
+                "exec --json --approval-mode on-request -- 'read traits'")
             local unbounded, unbounded_error = muse_launch.decode({profile_id = "batch", brief = "say ok"})
             if not unbounded then error(tostring(unbounded_error)) end
             test.is_true(table.concat(muse_launch.specification(unbounded).argv, " "):find("--max-model-steps", 1, true) == nil)
@@ -486,7 +473,7 @@ local function define_tests()
                 test.eq(exotic_error, "effort is not one Bee admits")
             end
             local _, steps_error = muse_launch.decode({profile_id = "batch", brief = "x", turn_budget = 0})
-            test.eq(steps_error, "turn_budget must be between 1 and 128")
+            test.eq(steps_error, "unknown field turn_budget")
             local _, model_error = muse_launch.decode({profile_id = "batch", brief = "x", model = "not a model"})
             test.eq(model_error, "model is not one bounded model identifier")
             local window, window_error = muse_launch.decode({profile_id = "window", brief = ""})

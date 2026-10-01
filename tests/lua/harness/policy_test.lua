@@ -3,6 +3,7 @@
 local test = require("test")
 local policy = require("policy")
 local preferences = require("preferences")
+local bounds = require("bounds")
 
 type Entry = {[string]: unknown}
 type Resolver = (string) -> (string?, string?)
@@ -31,15 +32,31 @@ local function define_tests()
     test.describe("Launch-policy executable environment", function()
         test.it("preserves explicit empty environment values for isolated children", function()
             local raw = entry({claude = "/bin/claude"})
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.environment = {CLAUDECODE = "", ANTHROPIC_API_KEY = ""}
             local decoded = assert(policy.decode("test:policy", raw))
             test.eq(decoded.environment.CLAUDECODE, "")
             test.eq(decoded.environment.ANTHROPIC_API_KEY, "")
         end)
+        test.it("keeps answer preferences below the host acceptance ceiling", function()
+            local raw = entry({sh = "/bin/sh"})
+            local data = assert(bounds.object(raw.data))
+            for _, mode in ipairs({"ask", "deny"}) do
+                test.eq(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = mode}}), nil)
+            end
+            data.permission_exchange = {adapter_ref = "host:adapter", acceptance_ref = "host:acceptance", fixture_digest = string.rep("a", 64),
+                approver_policy = "person", poll_ms = 50, ttl_ms = 1000}
+            local asking = assert(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = "ask"}}))
+            local denying = assert(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = "deny"}}))
+            local provider = assert(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = "provider"}}))
+            test.eq(provider.permission_exchange, nil)
+            test.eq(denying.permission_answers, "deny")
+            test.neq(asking.digest, denying.digest)
+            test.neq(asking.digest, provider.digest)
+        end)
         test.it("measures MCP context and traits without retaining mutable host tables", function()
             local raw = entry({sh = "/bin/sh"})
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             local fixed = {project = "one"}
             data.gateway_tools = {"thread_read"}
             data.gateway_surface = {tools = {}, traits = {{id = "docs:reader", title = "Reader", prompt = "Read first", tools = {"thread_read"}}},
@@ -47,7 +64,7 @@ local function define_tests()
             local first, err = policy.decode("test:policy", raw)
             if not first or not first.gateway_surface then error(tostring(err)) end
             fixed.project = "two"
-            test.eq((first.gateway_surface.fixed_context :: Entry).project, "one")
+            test.eq(assert(bounds.object(first.gateway_surface.fixed_context)).project, "one")
             local changed = policy.decode("test:policy", raw)
             if not changed then error("changed surface") end
             test.neq(first.digest, changed.digest)
@@ -56,7 +73,7 @@ local function define_tests()
         end)
         test.it("inherits only selected nonempty environment values and fences changes", function()
             local raw = entry({sh = "/bin/sh"})
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.environment_refs = {CODEX_HOME = "test:config_home", CLAUDE_CONFIG_DIR = "test:absent"}
             local first, first_error = policy.decode("test:policy", raw, resolve({["test:config_home"] = "/custom/codex", ["test:absent"] = ""}))
             if not first then error(tostring(first_error)) end
@@ -75,7 +92,7 @@ local function define_tests()
         end)
         test.it("pins component options with the explicitly selected placement", function()
             local raw = entry({sh = "/bin/sh"})
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.placement_options = {image = "one", user = "1000:1000"}
             local missing = policy.decode("test:policy", raw)
             test.is_nil(missing)
@@ -100,7 +117,7 @@ local function define_tests()
             if not denied then error(tostring(denied_error)) end
             test.eq(denied.allow_host_home, false)
             local denied_digest = denied.digest
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.allow_host_home = true
             local allowed, allowed_error = policy.decode("test:policy", raw)
             if not allowed then error(tostring(allowed_error)) end
@@ -114,7 +131,7 @@ local function define_tests()
         test.it("rejects fields for the removed managed-agent launch route", function()
             for _, field in ipairs({"agent_launch", "agent_launch_unconfined"}) do
                 local raw = entry({sh = "/bin/sh"})
-                local data = raw.data :: Entry
+                local data = assert(bounds.object(raw.data))
                 data[field] = {"test:worker"}
                 test.is_nil(policy.decode("test:policy", raw))
             end
@@ -122,7 +139,7 @@ local function define_tests()
 
         test.it("measures the surface against the host's tools, not the narrower set a profile offers", function()
             local raw = entry({claude = "/bin/claude"})
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.instructions = "Host instructions"
             data.gateway_tools = {"thread_read", "application_open"}
             data.gateway_surface = {tools = {}, traits = {}, base_tools = {"thread_read"}, active_traits = {},
@@ -140,36 +157,31 @@ local function define_tests()
             test.eq(#narrowed.gateway_tools, 1)
             test.eq(narrowed.gateway_tools[1], "thread_read")
         end)
-        test.it("keeps the host turn budget when applying an admitted preference", function()
+        test.it("rejects legacy harness turn ceilings in host and profile preferences", function()
             local raw = entry({claude = "/bin/claude"})
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.prepare_options = {turn_budget = 3}
-            data.profile_options = {turn_budget = {1, 3, 5}}
-            data.profile_instructions = true
-            data.instructions = "Host instructions"
             local host, host_error = policy.decode("test:policy", raw)
-            if not host then error(tostring(host_error)) end
-            local selected, selected_error = policy.decode("test:policy", raw, nil, {options = {turn_budget = 1}, mcp_tools = {}, instructions = "Profile instructions"})
-            if not selected then error(tostring(selected_error)) end
-            test.eq(host.prepare_options.turn_budget, 3)
-            test.eq(selected.prepare_options.turn_budget, 1)
-            test.eq(selected.instructions, "Host instructions\n\nProfile instructions")
-            test.eq(selected.executables.claude, host.executables.claude)
-            local over_budget, over_budget_error = policy.decode("test:policy", raw, nil,
-                {options = {turn_budget = 5}, mcp_tools = {}, instructions = ""})
-            test.is_nil(over_budget)
-            test.eq(over_budget_error, "test:policy: option turn_budget exceeds the host policy turn budget of 3")
+            test.is_nil(host)
+            test.not_nil(host_error)
+
+            data.prepare_options = {}
+            data.profile_restrictions = {["provider.options.turn_budget"] = {1, 3, 5}}
+            local profile, profile_error = policy.decode("test:policy", raw, nil,
+                {options = {turn_budget = 1}, mcp_tools = {}, instructions = ""})
+            test.is_nil(profile)
+            test.not_nil(profile_error)
         end)
         test.it("applies declared text options without widening host policy", function()
             local raw = entry({codex = "/bin/codex"})
-            local data = raw.data :: Entry
-            data.profile_options = {config_profile = {kind = "text", max_bytes = 64}}
+            local data = assert(bounds.object(raw.data))
+            data.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 64}}
             local closed, closed_error = policy.decode("test:policy", raw)
             if not closed then error(tostring(closed_error)) end
             local opened, opened_error = policy.decode("test:policy", raw, nil, {options = {config_profile = "ds-flash"}, mcp_tools = {}, instructions = ""})
             if not opened then error(tostring(opened_error)) end
             test.eq(opened.prepare_options.config_profile, "ds-flash")
-            data.profile_options = {config_profile = {kind = "text", max_bytes = 513}}
+            data.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 513}}
             test.is_nil(policy.decode("test:policy", raw))
         end)
 
@@ -178,17 +190,17 @@ local function define_tests()
                 access = {policy = "research", traits = {"research:read"}}}
             local composed = policy.with_workspace(source, "workspace-one")
             if not composed then error("compose surface") end
-            local fixed = composed.fixed_context :: Entry
+            local fixed = assert(bounds.object(composed.fixed_context))
             test.eq(fixed["bee.workspace_id"], "workspace-one")
             test.eq(fixed.project, "one")
             -- The approval workspace is the binding's, so access carries none.
-            test.is_nil((composed.access :: Entry).workspace_id)
-            test.eq((composed.access :: Entry).policy, "research")
+            test.is_nil(assert(bounds.object(composed.access)).workspace_id)
+            test.eq(assert(bounds.object(composed.access)).policy, "research")
             -- The helper copies: a launch policy's surface is host-owned and shared.
-            test.is_nil((source.fixed_context :: Entry)["bee.workspace_id"])
+            test.is_nil(assert(bounds.object(source.fixed_context))["bee.workspace_id"])
             local absent = policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, dynamic_keys = {}}, "workspace-two")
             if not absent then error("compose surface without context") end
-            test.eq((absent.fixed_context :: Entry)["bee.workspace_id"], "workspace-two")
+            test.eq(assert(bounds.object(absent.fixed_context))["bee.workspace_id"], "workspace-two")
             test.is_nil(policy.with_workspace(nil, "workspace-one"))
             -- A malformed declared context refuses rather than silently dropping it.
             test.is_nil(policy.with_workspace({tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = "broken", dynamic_keys = {}}, "workspace-one"))
@@ -199,7 +211,7 @@ local function define_tests()
         end)
         test.it("measures hooks independently from the MCP tool grant", function()
             local raw = entry({claude = "/bin/claude"})
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.gateway_tools = {}
             data.gateway_hooks = {"SessionStart"}
             local decoded, err = policy.decode("test:policy", raw)
@@ -243,7 +255,7 @@ local function define_tests()
             local closed = policy.decode("test:policy", raw)
             if not closed then error("policy without overrides") end
             test.eq(#closed.allowed_overrides, 0)
-            local data = raw.data :: Entry
+            local data = assert(bounds.object(raw.data))
             data.allowed_overrides = {"workdir", "thread", "placement"}
             local open, open_error = policy.decode("test:policy", raw)
             if not open then error(tostring(open_error)) end

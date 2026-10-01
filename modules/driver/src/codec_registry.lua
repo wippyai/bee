@@ -18,13 +18,13 @@ type Protocol = {
     MAX_ANSWER_BYTES: integer,
     new: (boolean) -> unknown,
     decode_state: (unknown) -> (unknown?, string?),
-    normalize: (unknown, integer, {[string]: unknown}, integer?, Object?) -> (Step?, string?),
+    normalize: (unknown, integer, {[string]: unknown}, Object?) -> (Step?, string?),
     finish: (unknown, integer) -> (Step?, string?),
 }
 type Codec<State> = {
     PROTOCOL_REVISION: string, MAX_ANSWER_BYTES: integer,
     new: (boolean) -> State, decode_state: (unknown) -> (State?, string?),
-    normalize: (State, integer, Object, integer?, Object?) -> (Step?, string?),
+    normalize: (State, integer, Object, Object?) -> (Step?, string?),
     finish: (State, integer) -> (Step?, string?),
 }
 local function synchronize(raw: unknown, decoded: unknown)
@@ -40,10 +40,10 @@ local function adapted<State>(codec: Codec<State>): Protocol
         PROTOCOL_REVISION = codec.PROTOCOL_REVISION, MAX_ANSWER_BYTES = codec.MAX_ANSWER_BYTES,
         new = function(resumed: boolean): unknown return codec.new(resumed) end,
         decode_state = function(raw: unknown): (unknown?, string?) return codec.decode_state(raw) end,
-        normalize = function(raw: unknown, index: integer, envelope: Object, budget: integer?, paths: Object?): (Step?, string?)
+        normalize = function(raw: unknown, index: integer, envelope: Object, paths: Object?): (Step?, string?)
             local state, state_error = codec.decode_state(raw)
             if not state then return nil, state_error end
-            local step, step_error = codec.normalize(state, index, envelope, budget, paths)
+            local step, step_error = codec.normalize(state, index, envelope, paths)
             synchronize(raw, state)
             return step, step_error
         end,
@@ -64,48 +64,48 @@ local implementations: {[string]: Protocol} = {
 function M.bind(codec_id: string, paths: Object): ((unknown) -> unknown)?
     if codec_id == "claude-stream-json" then
         return normalizer.bind(claude.new, claude.decode_state,
-            function(state: claude.State, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-                return claude.normalize(state, index, envelope, budget, paths)
+            function(state: claude.State, index: integer, envelope: Object): (Step?, string?)
+                return claude.normalize(state, index, envelope, paths)
             end, function(state: claude.State, index: integer): (Step?, string?)
                 return claude.finish(state, index), nil
             end)
     end
     if codec_id == "codex-jsonl" then
         return normalizer.bind(codex.new, codex.decode_state,
-            function(state: codex.State, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-                return codex.normalize(state, index, envelope, budget, paths)
+            function(state: codex.State, index: integer, envelope: Object): (Step?, string?)
+                return codex.normalize(state, index, envelope, paths)
             end, function(state: codex.State, index: integer): (Step?, string?)
                 return codex.finish(state, index), nil
             end)
     end
     if codec_id == "opencode-json-events" then
         return normalizer.bind(opencode.new, opencode.decode_state,
-            function(state: opencode.State, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-                return opencode.normalize(state, index, envelope, budget, paths)
+            function(state: opencode.State, index: integer, envelope: Object): (Step?, string?)
+                return opencode.normalize(state, index, envelope, paths)
             end, function(state: opencode.State, index: integer): (Step?, string?)
                 return opencode.finish(state, index), nil
             end)
     end
     if codec_id == "agy-stream-json" then
         return normalizer.bind(agy.new, agy.decode_state,
-            function(state: agy.State, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-                return agy.normalize(state, index, envelope, budget, paths)
+            function(state: agy.State, index: integer, envelope: Object): (Step?, string?)
+                return agy.normalize(state, index, envelope, paths)
             end, function(state: agy.State, index: integer): (Step?, string?)
                 return agy.finish(state, index), nil
             end)
     end
     if codec_id == "grok-streaming-json" then
         return normalizer.bind(grok.new, grok.decode_state,
-            function(state: grok.State, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-                return grok.normalize(state, index, envelope, budget, paths)
+            function(state: grok.State, index: integer, envelope: Object): (Step?, string?)
+                return grok.normalize(state, index, envelope, paths)
             end, function(state: grok.State, index: integer): (Step?, string?)
                 return grok.finish(state, index), nil
             end)
     end
     if codec_id == "muse-record-jsonl" then
         return normalizer.bind(muse.new, muse.decode_state,
-            function(state: muse.State, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-                return muse.normalize(state, index, envelope, budget, paths)
+            function(state: muse.State, index: integer, envelope: Object): (Step?, string?)
+                return muse.normalize(state, index, envelope, paths)
             end, function(state: muse.State, index: integer): (Step?, string?)
                 return muse.finish(state, index), nil
             end)
@@ -121,8 +121,8 @@ function M.resolve(codec_id: string, json_paths: Object): Protocol?
         MAX_ANSWER_BYTES = implementation.MAX_ANSWER_BYTES,
         new = function(resumed: boolean): unknown return implementation.new(resumed) end,
         decode_state = function(value: unknown): (unknown?, string?) return implementation.decode_state(value) end,
-        normalize = function(state: unknown, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-            return implementation.normalize(state, index, envelope, budget, json_paths)
+        normalize = function(state: unknown, index: integer, envelope: Object): (Step?, string?)
+            return implementation.normalize(state, index, envelope, json_paths)
         end,
         finish = function(state: unknown, index: integer): (Step?, string?) return implementation.finish(state, index) end,
     }

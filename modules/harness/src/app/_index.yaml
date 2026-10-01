@@ -148,18 +148,26 @@ entries:
 - name: profile_editor
   kind: library.lua
   source: file://profile_editor.lua
+  modules: [json]
   imports:
+    canonical: bee.threads.records:canonical
     bounds: bee.threads.records:bounds
     preferences: bee.driver:preferences
+    budgets: bee.threads.records:budgets
     protocol: bee.harness.profiles:protocol
 - name: profile_form
   kind: library.lua
   source: file://profile_form.lua
-  modules: [funcs, uuid]
+  modules: [funcs, uuid, json]
   imports:
+    canonical: bee.threads.records:canonical
+    descriptors: bee.driver:descriptor
+    readiness: bee.harness.launch:readiness
+    preferences: bee.driver:preferences
     bounds: bee.threads.records:bounds
     catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
+    budgets: bee.threads.records:budgets
     protocol: bee.harness.profiles:protocol
     editor: bee.harness.app:profile_editor
 - name: profile_view
@@ -167,6 +175,9 @@ entries:
   source: file://profile_view.lua
   modules: [tty]
   imports:
+    canonical: bee.threads.records:canonical
+    settings: bee.harness.app:profile_settings
+    bounds: bee.threads.records:bounds
     frame: bee.application:frame
     appearance: bee.application:appearance
     text: bee.application:text
@@ -194,3 +205,11 @@ entries:
     bounds: bee.threads.records:bounds
     client: bee.application:client
     input_event: bee.harness.app:input
+
+- name: profile_settings
+  kind: library.lua
+  source: file://profile_settings.lua
+  imports:
+    budgets: bee.threads.records:budgets
+    bounds: bee.threads.records:bounds
+    editor: bee.harness.app:profile_editor

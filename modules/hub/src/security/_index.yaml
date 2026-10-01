@@ -15,7 +15,7 @@ entries:
 - name: read_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [registry.get, hub.modules.list, hub.modules.search, hub.modules.get, hub.modules.readme, hub.versions.open, hub.versions.list], resources: '*', effect: allow}
+  policy: {actions: [registry.get, registry.resolution.get, hub.modules.list, hub.modules.search, hub.modules.get, hub.modules.readme, hub.versions.open, hub.versions.list], resources: '*', effect: allow}
 - name: publisher_policy
   kind: security.policy
   groups: [execution_scope]

@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee sessions
-    comment: Durable session launch contracts, host-selected executors, location and scheduling
+    comment: Durable session launch contracts, host-selected executors, location and
+      scheduling
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -35,17 +36,23 @@ entries:
     type: bee.sessions.executor_selection
     comment: The host-selected executor binding refs
   data:
-    refs: [bee.sessions.binding:external_executor_binding]
+    refs:
+    - bee.sessions.binding:external_executor_binding
 - name: threads_journal
   kind: library.lua
   source: file://threads_journal.lua
-  modules: [registry, funcs]
+  modules:
+  - registry
+  - funcs
   imports:
     scheduler: bee.sessions.service:scheduler
 - name: owner
   kind: library.lua
   source: file://owner.lua
-  modules: [security, hash, funcs]
+  modules:
+  - security
+  - hash
+  - funcs
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -55,34 +62,53 @@ entries:
     admission: bee.harness.launch:admission
     catalog_service: bee.sessions.service:catalog
     scheduler: bee.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol
 - name: driver_route
   kind: library.lua
   source: file://driver_route.lua
-  modules: [registry]
+  modules:
+  - registry
 - name: executor_registry
   kind: library.lua
   source: file://executor_registry.lua
-  modules: [registry, funcs, security]
+  modules:
+  - registry
+  - funcs
+  - security
   imports:
     scheduler: bee.sessions.service:scheduler
 - name: contract
   kind: contract.definition
   methods:
-  - {name: open, description: Open a reusable managed session}
-  - {name: run, description: Open a session and queue its first work item}
-  - {name: send, description: Durably queue work for a session}
-  - {name: await, description: Observe work or operation state}
-  - {name: join, description: Join an exact ordered set of work items}
-  - {name: get, description: Read an exact session, work or operation}
-  - {name: list, description: List durable sessions independently of executor readiness}
-  - {name: history, description: Page immutable work inputs for a session}
-  - {name: cancel, description: Request evidence-backed work cancellation}
-  - {name: close, description: Seal a session and reconcile its cleanup}
+  - name: open
+    description: Open a reusable managed session
+  - name: run
+    description: Open a session and queue its first work item
+  - name: send
+    description: Durably queue work for a session
+  - name: await
+    description: Observe work or operation state
+  - name: join
+    description: Join an exact ordered set of work items
+  - name: get
+    description: Read an exact session
+    work or operation: null
+  - name: list
+    description: List durable sessions independently of executor readiness
+  - name: history
+    description: Page immutable work inputs for a session
+  - name: cancel
+    description: Request evidence-backed work cancellation
+  - name: close
+    description: Seal a session and reconcile its cleanup
 - name: catalog
   kind: contract.definition
   methods:
-  - {name: list, description: List admitted definitions and profiles with executor readiness}
+  - name: list
+    description: List admitted definitions and profiles with executor readiness
 - name: executor
   kind: contract.definition
   methods:
-  - {name: run_turn, description: Execute one accepted work turn through the selected driver and placement}
+  - name: run_turn
+    description: Execute one accepted work turn through the selected driver and placement

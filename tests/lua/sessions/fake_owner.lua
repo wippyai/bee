@@ -23,8 +23,7 @@ end
 local function snapshot(session: string): {[string]: unknown}
     return {session = session, revision = 1, incarnation = incarnation(session), title = "session", lifecycle = "active",
         activity = "idle", execution = {state = "quiescent", evidence_at = STAMP, stale = false},
-        queue_count = 0, effective_limits = {active_ms = 900000, model_steps = 32, tool_calls = 64,
-        recovery_attempts = 3, queue_ms = 86400000}, continuity = {mode = "fresh"}, actions = {}}
+        queue_count = 0, effective_limits = {turn = {wall_time_ms = 900000, provider_steps = 32, tool_calls = 64}}, continuity = {mode = "fresh"}, actions = {}}
 end
 
 local function succeeded(): {[string]: unknown}

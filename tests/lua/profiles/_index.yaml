@@ -118,3 +118,28 @@ entries:
   imports:
     test: wippy.test:test
     launch: bee.driver.codex:launch
+- name: migration_test
+  kind: function.lua
+  source: file://migration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [uuid]
+  security: {policies: [bee.sync:sync_test_policy]}
+  imports:
+    test: wippy.test:test
+    bounds: bee.threads.records:bounds
+    migration: bee.harness.profiles:migration
+    protocol: bee.harness.profiles:protocol
+    sync: bee.sync.persist:store
+- name: repair_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy: {actions: [registry.apply], resources: '*', effect: allow}
+- name: repair_test
+  kind: function.lua
+  source: file://repair_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, json]
+  security: {policies: [bee.harness.profiles:repair_policy]}
+  imports: {test: wippy.test:test, form: bee.harness.app:profile_form, editor: bee.harness.app:profile_editor, bounds: bee.threads.records:bounds}

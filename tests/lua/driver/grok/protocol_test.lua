@@ -248,7 +248,7 @@ local function define_tests()
             test.eq(step.terminal.outcome, "failed")
             test.not_nil(step.terminal.error)
             test.eq(step.terminal.error.code, "max_turns")
-            test.eq(step.terminal.error.message, "turn budget reached")
+            test.eq(step.terminal.error.message, "provider turn limit reached")
         end)
 
         test.it("handles finish on unterminated stream as uncertain", function()

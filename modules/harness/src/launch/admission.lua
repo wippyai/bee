@@ -22,6 +22,9 @@ local placement_profiles = require("placement_profiles")
 local continuation = require("continuation")
 local interrupted = require("interrupted")
 local profiles = require("profiles")
+local profile_validation = require("profile_validation")
+local descriptors = require("descriptors")
+local budgets = require("budgets")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
@@ -37,6 +40,9 @@ M.NOT_RESUMABLE = "NOT_RESUMABLE"
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, error: Fault?, value: unknown}
 type Plan = {
+    budget_capabilities: descriptors.BudgetCapabilities?,
+    effective_profile: profiles.Profile?,
+    effective_profile_digest: string?,
     saved_profile_id: string?,
     saved_profile_revision: integer?,
     owner_component_revision: integer?,
@@ -53,6 +59,7 @@ type Plan = {
     policy_digest: string,
     placement_profile_ref: string?,
     placement_profile_digest: string?,
+    permission_answers: string,
     placement_binding_ref: string,
     placement_binding_digest: string,
     placement_methods: {[string]: string},
@@ -84,6 +91,7 @@ type Admitted = {
 }
 type Continuation = {origin_request_id: string, previous_attempt_id: string, thread_id: string, reauthorize: boolean?}
 type Request = {
+    placement_override: profiles.Placement?,
     saved_profile_id: string?,
     saved_profile_revision: integer?,
     owner_component_revision: integer?,
@@ -174,7 +182,8 @@ local function selected_profile(workspace: string, id: string, revision: integer
 end
 local function preference_value(selected: Selected?): placement_types.Preferences?
     if not selected then return nil end
-    return {options = selected.profile.options, mcp_tools = selected.profile.mcp_tools, instructions = selected.profile.instructions}
+    local value = profiles.preferences(selected.profile)
+    return value
 end
 -- agent_preferences: the carrier preferences for one admitted agent closure.
 -- The run offers exactly the closure's tool aliases through the gateway and
@@ -209,13 +218,17 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     if #instructions > M.MAX_AGENT_INSTRUCTIONS_BYTES then
         return nil, fail("INVALID", "agent instructions exceed " .. tostring(M.MAX_AGENT_INSTRUCTIONS_BYTES) .. " bytes for this route")
     end
-    return {options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
+    return {bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
-local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, session_route: boolean?): (Plan?, Reply?, placement_types.Preferences?)
+local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, session_route: boolean?, placement_override: profiles.Placement?): (Plan?, Reply?, placement_types.Preferences?)
     if session_route and launch.session_profile_id then
         launch.profile_id = launch.session_profile_id
         if launch.session_credentials then launch.credentials = launch.session_credentials end
         launch.default_mode = launch.session_mode or "session"
+    end
+    if selected then
+        local invalid = profile_validation.check(pinned, selected.profile)
+        if invalid then return nil, fail("UNSUPPORTED_CAPABILITY", invalid) end
     end
     local definition_ref = launch.ref
     local chosen = launch.default_mode
@@ -231,13 +244,14 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local binding_digest, profile_digest = "", ""
     local binding = nil
     local supported = false
+    local default_private_home = true
     for _, candidate in ipairs(usable) do
         if candidate.binding_id == launch.binding_ref then
             binding = candidate
             binding_digest = candidate.binding_digest.entry
             profile_digest = candidate.profile_digest.entry
             for _, profile in ipairs(candidate.profiles) do
-                if profile.id == launch.profile_id and profile.supported and profile.mode == chosen then supported = true end
+                if profile.id == launch.profile_id and profile.supported and profile.mode == chosen then supported = true; default_private_home = profile.private_home end
             end
         end
     end
@@ -253,7 +267,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     -- admission supplies that text, never the caller's profile.
     local agent: agent_resolver.Closure? = nil
     local checked: agent_resolver.Checked? = nil
-    local effective = preference_value(selected)
+    local effective: placement_types.Preferences? = preference_value(selected)
     local launch_policy: policy.Policy
     local effective_agent_ref = (selected and selected.profile and selected.profile.agent_ref) or launch.agent_ref or req_agent_ref
     if selected and selected.profile and selected.profile.agent_ref then
@@ -306,22 +320,73 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         end
         launch_policy = measured
     else
-        local decoded, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, preference_value(selected))
+        local saved_preferences: placement_types.Preferences? = nil
+        if selected then
+            local validated, preference_error = profiles.preferences(selected.profile)
+            if not validated then return nil, fail("UNSUPPORTED_CAPABILITY", preference_error or "Profile preferences cannot be rendered") end
+            saved_preferences = validated
+        end
+        local decoded, policy_error = policy.decode(launch.policy_ref, policy_entry, nil, saved_preferences)
         if not decoded then return nil, fail("NOT_FOUND", policy_error or "policy") end
         launch_policy = decoded
     end
     -- Resolve placement alongside the driver and policy from this immutable
     -- registry snapshot. The policy may select an implementation; absent that
     -- field the resolver's native host default is used.
-    local selected_profile_ref = selected and selected.profile.placement_profile_ref or nil
+    if placement_override and (not definition.allows(launch, "placement") or not bounds.member("placement", launch_policy.allowed_overrides)) then
+        return nil, fail("FORBIDDEN", "The definition and host policy must both admit a placement override")
+    end
+    local profile_placement = placement_override or (selected and selected.profile.placement or nil)
+    if placement_override then
+        local stock_options: {[string]: string | number | boolean} = {}
+        local stock_preferences: placement_types.Preferences = {options = stock_options, mcp_tools = launch_policy.gateway_tools, instructions = ""}
+        local override_preferences: placement_types.Preferences = effective or stock_preferences
+        if placement_override.kind == "native" then
+            override_preferences.home = placement_override.home
+            override_preferences.docker_overrides = nil
+        else
+            override_preferences.home = nil
+            override_preferences.docker_overrides = placement_override.overrides
+        end
+        effective = override_preferences
+    end
+    local selected_profile_ref: string? = nil
+    if profile_placement and profile_placement.kind == "docker" then selected_profile_ref = profile_placement.profile_ref
+    elseif profile_placement then selected_profile_ref = placement_profiles.DEFAULT end
+    if selected and selected.profile.driver_binding_ref ~= launch.binding_ref then return nil, fail("CONFLICT", "Profile driver binding differs from the admitted definition") end
+    if profile_placement and profile_placement.kind == "native" and profile_placement.home == "machine" and not launch_policy.allow_host_home then
+        return nil, fail("FORBIDDEN", "Host policy does not admit machine home")
+    end
     local resolved_profile: placement_profiles.Resolved? = nil
     if selected_profile_ref then
         if not bounds.member(selected_profile_ref, launch_policy.placement_profiles) then return nil, fail("FORBIDDEN", "launch policy does not admit this placement profile") end
         local resolved, profile_error = placement_profiles.resolve(pinned, selected_profile_ref)
         if not resolved then return nil, fail("UNAVAILABLE", profile_error or "placement profile") end
-        resolved_profile = resolved
+        local tuned, tune_error = placement_profiles.tune(resolved, profile_placement and profile_placement.kind == "docker" and profile_placement.overrides or nil)
+        if not tuned then return nil, fail("FORBIDDEN", tune_error or "Docker override is outside the host template") end
+        resolved_profile = tuned
     end
     if resolved_profile and resolved_profile.profile.placement_binding == "bee.placement.docker.binding:binding" and launch.session_credentials then launch.credentials = launch.session_credentials end
+    if selected and selected.profile.bee.credential_refs then
+        local admitted: {string} = {}
+        for _, ref in ipairs(selected.profile.bee.credential_refs) do
+            if not bounds.member(ref, launch.credentials) then return nil, fail("DENIED", "bee.credential_refs: definition does not admit " .. ref) end
+            admitted[#admitted + 1] = ref
+        end
+        launch.credentials = admitted
+    end
+    if selected then
+        for name, value in pairs(selected.profile.provider.env or {}) do
+            if value.kind == "credential" and not bounds.member(value.credential_ref, launch.credentials) then return nil, fail("DENIED", "provider.env." .. name .. ": credential reference is outside the selected definition/credential_refs") end
+        end
+    end
+    if selected then
+        for _, destination in ipairs(selected.profile.bee.workspaces or {}) do
+            for _, operation in ipairs(destination.operations) do
+                if not security.can("funcs.call", operation) then return nil, fail("DENIED", "bee.workspaces: host does not admit owner operation " .. operation .. " for destination " .. destination.workspace_id) end
+            end
+        end
+    end
     local selected_binding = launch_policy.placement_binding
     if resolved_profile then selected_binding = resolved_profile.profile.placement_binding end
     local placement, placement_error = placement_resolver.resolve(pinned, selected_binding)
@@ -355,13 +420,55 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     local plan_digest, digest_error = digest_of({definition = launch.digest, binding = binding_digest, profile = profile_digest, policy = launch_policy.digest,
         placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest, placement_methods = placement.methods,
-        provider = provider_digest, mode = chosen, saved_profile = selected,
+        provider = provider_digest, mode = chosen, saved_profile = selected, placement_override = placement_override,
         agent = agent and agent.digest or nil, agent_model = checked and checked.model or nil,
         declined_tuning = checked and checked.declined or nil,
         owner_component_revision = effective_owner_rev})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
-    return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
-        profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
+    local effective_profile: profiles.Profile = selected and assert(profiles.profile(selected.profile)) or {
+        schema_revision = profiles.SCHEMA, name = launch.title, definition_ref = definition_ref,
+        driver_binding_ref = launch.binding_ref, provider = {}, bee = {}}
+    if placement_override then effective_profile.placement = placement_override end
+    local binding_entry = catalog.entry(pinned, launch.binding_ref)
+    local binding_meta = binding_entry and bounds.object(binding_entry.meta)
+    local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
+    local descriptor = descriptor_ref and descriptors.load_from(pinned, descriptor_ref)
+    local fields = descriptor and bounds.object(descriptor.options.fields) or {}
+    for name, raw in pairs(fields) do
+        local field = bounds.object(raw)
+        local path = field and bounds.id(field.path)
+        local value = launch_policy.prepare_options[name]
+        if value == nil and field then value = field.default end
+        if path and value ~= nil then
+            if path == "provider.model" and type(value) == "string" then effective_profile.provider.model = value
+            elseif path == "provider.effort" and type(value) == "string" then effective_profile.provider.effort = value
+            elseif path == "provider.permission_mode" and type(value) == "string" then effective_profile.provider.permission_mode = value
+            elseif path:match("^provider.options%.") then
+                effective_profile.provider.options = effective_profile.provider.options or {}
+                effective_profile.provider.options[name] = value
+            end
+        end
+    end
+    if launch_policy.instructions then effective_profile.provider.system_prompt_append = launch_policy.instructions end
+    local tools: {profiles.Mcp} = {}
+    for _, tool in ipairs(launch_policy.gateway_tools) do tools[#tools + 1] = {tool = tool, scope = {}} end
+    if effective_profile.bee.mcp == nil then effective_profile.bee.mcp = tools end
+    if bounds.member(launch_policy.permission_answers, {"provider", "ask", "deny"}) then
+        if launch_policy.permission_answers == "ask" then effective_profile.bee.permission_answers = "ask"
+        elseif launch_policy.permission_answers == "deny" then effective_profile.bee.permission_answers = "deny"
+        else effective_profile.bee.permission_answers = "provider" end
+    end
+    if not effective_profile.placement then
+        if resolved_profile and placement.placement_kind == "docker" then effective_profile.placement = {kind = "docker", profile_ref = resolved_profile.ref}
+        else effective_profile.placement = {kind = "native", home = default_private_home and "private" or "machine"} end
+    end
+    if not effective_profile.presentation then effective_profile.presentation = chosen == "window" and "window" or "headless" end
+    local budget_error = budgets.accounting(effective_profile.budgets, descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile.presentation, descriptor and descriptor.codec)
+    if budget_error then return nil, fail("UNSUPPORTED_CAPABILITY", budget_error) end
+    return {budget_capabilities = descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile = effective_profile,
+        effective_profile_digest = digest_of(effective_profile),
+        title = selected and selected.profile.name or launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
+        profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest, permission_answers = launch_policy.permission_answers,
         placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
         session_resource = launch.session_resource,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,
@@ -384,7 +491,7 @@ function M.read(pinned: catalog.Pinned, definition_ref: string, mode: string?, s
     if not plan then return nil, refused end
     return plan, nil
 end
-function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?, session_route: boolean?): (Plan?, Reply?)
+function M.resolve(definition_ref: string, mode: string?, workspace: string?, saved_id: string?, saved_revision: integer?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?, session_route: boolean?, placement_override: profiles.Placement?): (Plan?, Reply?)
     local selected: Selected? = nil
     if saved_id or saved_revision then
         if not workspace or not saved_id or not saved_revision or saved_revision < 1 then return nil, fail("INVALID", "saved profile needs workspace, identity and revision") end
@@ -396,15 +503,17 @@ function M.resolve(definition_ref: string, mode: string?, workspace: string?, sa
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest, session_route)
+    local plan, refused = resolve(pinned, launch, mode, selected, agent_ref, owner_component_revision, spec_digest, session_route, placement_override)
     if not plan then return nil, refused end
     return plan, nil
 end
 function M.decode_request(value: unknown): (Request?, string?)
     local object = bounds.object(value)
     if not object then return nil, "request must be an object" end
-    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "thread_title", "placement", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view", "agent_ref", "owner_component_revision", "spec_digest"})
+    local unknown_field = bounds.fields(object, {"request_id", "definition_ref", "workspace_id", "brief", "mode", "workdir", "thread_id", "thread_title", "placement", "placement_override", "expected_plan_digest", "continuation", "saved_profile_id", "saved_profile_revision", "parent_action_id", "origin_view", "agent_ref", "owner_component_revision", "spec_digest"})
     if unknown_field then return nil, unknown_field end
+    local placement_override, placement_error = profiles.placement(object.placement_override)
+    if placement_error then return nil, placement_error end
     local request_id, definition_ref, workspace_id = bounds.id(object.request_id), bounds.id(object.definition_ref), bounds.id(object.workspace_id)
     if not request_id then return nil, "request_id is not an identifier" end
     if not definition_ref then return nil, "definition_ref is not an identifier" end
@@ -503,7 +612,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     end
     return {request_id = request_id, definition_ref = definition_ref, workspace_id = workspace_id, brief = brief, mode = mode, workdir = workdir, thread_id = thread_id,
         thread_title = thread_title, placement = placement, saved_profile_id = saved_id, saved_profile_revision = saved_revision,
-        expected_plan_digest = expected_plan_digest, continuation = previous, parent_action_id = parent_action_id, origin_view = origin_view,
+        expected_plan_digest = expected_plan_digest, placement_override = placement_override, continuation = previous, parent_action_id = parent_action_id, origin_view = origin_view,
         agent_ref = agent_ref, owner_component_revision = owner_component_revision, spec_digest = spec_digest}, nil
 end
 -- The durable identities of a request: the same request id always names
@@ -543,17 +652,16 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
     if not pinned then return nil, fail("UNAVAILABLE", pin_error or "pin the registry") end
     local launch, definition_error = read_definition(pinned, request.definition_ref)
     if not launch then return nil, fail("NOT_FOUND", definition_error or "definition") end
-    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest, session_turn ~= nil)
+    local plan, plan_refused, preferences = resolve(pinned, launch, request.mode, selected, request.agent_ref, request.owner_component_revision, request.spec_digest, session_turn ~= nil, request.placement_override)
     if not plan then return nil, plan_refused end
     if request.expected_plan_digest and request.expected_plan_digest ~= plan.plan_digest then
         return nil, fail("CONFLICT", "the selected launch plan changed; resolve it again before starting")
     end
     if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
     if request.workdir and not M.overrides(plan, "workdir") then return nil, fail("FORBIDDEN", "the launch does not allow a workdir override") end
-    -- A caller-thread definition names the caller's thread by design; any
-    -- other thread choice, and a new thread under the caller's title, is an
-    -- override.
-    local thread_override = not session_turn and (request.thread_title ~= nil or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller"))
+    local defined_thread = launch.thread_policy.kind == "named" and request.thread_id == launch.thread_policy.thread_ref
+    local thread_override = not session_turn and (request.thread_title ~= nil
+        or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller" and not defined_thread))
     if thread_override and not M.overrides(plan, "thread") then return nil, fail("FORBIDDEN", "the launch does not allow a thread override") end
     if request.placement and request.placement ~= plan.placement_kind then
         if not M.overrides(plan, "placement") then return nil, fail("FORBIDDEN", "the launch does not allow a placement override") end
@@ -652,6 +760,10 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         if not typed then return nil, fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
         resources[#resources + 1] = typed
     end
+    for _, ref in ipairs(plan.effective_profile and plan.effective_profile.bee.approval_leases or {}) do
+        local _, refused = call("bee.approvals.binding:runtime_lease", {operation = "check", lease_ref = ref, workspace_id = request.workspace_id})
+        if refused then return nil, refused end
+    end
     if not thread_id then
         local created, create_refused = call(M.THREADS .. ":create", {thread_id = "thread:" .. request.request_id, idempotency_key = "launch:" .. request.request_id .. ":thread", title = request.thread_title or launch.title})
         if not created then return nil, create_refused end
@@ -676,6 +788,17 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         resources[#resources + 1] = typed
         working = workdir_name
     end
+    local profile_grants: {carrier.ProfileGrant} = {}
+    for index, file in ipairs(plan.effective_profile and plan.effective_profile.bee.files or {}) do
+        local granted, refused = call(M.RESOURCES .. ":grant", {workspace_id = file.workspace_id, name = file.resource, subpath = file.subpath,
+            access = file.access, purpose = "project", audience = requester, attempt_id = ids.attempt_id,
+            idempotency_key = "launch:" .. request.request_id .. ":file:" .. tostring(index)})
+        if not granted then return nil, refused end
+        local grant_id, root = bounds.id(granted.grant_id), bounds.id(granted.root_ref)
+        if not grant_id or not root or granted.subpath ~= file.subpath or granted.workspace_id ~= file.workspace_id or granted.name ~= file.resource
+            or granted.access ~= file.access or granted.attempt_id ~= ids.attempt_id or granted.audience ~= requester then return nil, fail("UNAVAILABLE", "bee.files: owner returned a different grant") end
+        profile_grants[#profile_grants + 1] = {workspace_id = file.workspace_id, name = file.resource, subpath = file.subpath, access = file.access, grant_ref = grant_id}
+    end
     local projections: {string} = {}
     local credentials = launch.credentials
     for index, credential in ipairs(credentials) do
@@ -683,9 +806,18 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
             profile_id = plan.profile_id, profile_digest = plan.profile_digest, binding_digest = plan.binding_digest, launch_policy_digest = plan.policy_digest,
             idempotency_key = "launch:" .. request.request_id .. ":credential:" .. tostring(index)})
         if not issued then return nil, issue_refused end
+        if selected then
+            for name, value in pairs(selected.profile.provider.env or {}) do
+                if value.kind == "credential" and value.credential_ref == credential and (issued.projection_kind ~= "environment" or issued.destination ~= name) then
+                    return nil, fail("DENIED", "provider.env." .. name .. ": credential broker destination differs; references cannot retarget credentials")
+                elseif value.kind == "literal" and issued.projection_kind == "environment" and issued.destination == name then
+                    return nil, fail("DENIED", "provider.env." .. name .. ": literal conflicts with an admitted credential projection")
+                end
+            end
+        end
         projections[index] = tostring(issued.projection_id)
     end
-    local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
+    local carrier_request: carrier.Request = {profile_grants = profile_grants, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
         preferences = preferences or preference_value(selected),
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_profile_ref = plan.placement_profile_ref, placement_profile_digest = plan.placement_profile_digest, placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},
@@ -707,7 +839,7 @@ function M.admit_session_turn(value: unknown): (Admitted?, Reply?)
     local input = bounds.object(value)
     if not input then return nil, fail("INVALID", "session turn admission must be an object") end
     local unknown_field = bounds.fields(input, {"attempt_id", "definition_ref", "workspace_id", "owner_id", "thread_id", "session_ref",
-        "action_id", "brief", "expected_plan_digest", "profile_id", "saved_profile_id", "saved_profile_revision", "workdir"})
+        "action_id", "brief", "expected_plan_digest", "profile_id", "saved_profile_id", "saved_profile_revision", "workdir", "placement_override"})
     if unknown_field then return nil, fail("INVALID", "session turn admission: " .. unknown_field) end
     local attempt_id, definition_ref = bounds.id(input.attempt_id), bounds.id(input.definition_ref)
     local workspace_id, owner_id = bounds.id(input.workspace_id), bounds.id(input.owner_id)
@@ -726,6 +858,7 @@ function M.admit_session_turn(value: unknown): (Admitted?, Reply?)
         workspace_id = workspace_id, thread_id = thread_id, brief = brief,
         expected_plan_digest = expected_plan_digest}
     if input.saved_profile_id ~= nil then request.saved_profile_id = input.saved_profile_id end
+    if input.placement_override ~= nil then request.placement_override = input.placement_override end
     if input.saved_profile_revision ~= nil then request.saved_profile_revision = input.saved_profile_revision end
     if workdir then request.workdir = workdir end
     local context: SessionTurnContext = {owner_id = owner_id, session_ref = session_ref,

@@ -4,11 +4,13 @@ local catalog = require("catalog")
 local context = require("context")
 local mcp = require("mcp")
 local capability_model = require("capability_model")
+local profile_access = require("profile_access")
 local M = {}
 M.APPLICATION_RUNTIME_TRAIT = mcp.APPLICATION_RUNTIME_TRAIT
 -- The approval workspace is the binding's; a declaration names only policy and traits.
 type Access = {policy: string, traits: {string}}
-type Surface = {catalog: catalog.Catalog, ceiling: {string}, base_tools: {string},
+type Grant = context.ResourceGrant
+type Surface = {resource_grants: {Grant}?, profile: profile_access.Bee?, catalog: catalog.Catalog, ceiling: {string}, base_tools: {string},
     allowed_traits: {string}, fixed_context: context.Values, dynamic_keys: {string}, access: Access?}
 type Selection = {active: {string}, context: context.Values}
 
@@ -31,8 +33,16 @@ end
 function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (Surface?, Selection?, string?)
     local value = bounds.object(raw)
     if not value then return nil, nil, "MCP surface must be an object" end
-    local extra = bounds.fields(value, {"tools", "traits", "base_tools", "active_traits", "fixed_context", "dynamic_keys", "access"})
+    local extra = bounds.fields(value, {"tools", "traits", "base_tools", "active_traits", "fixed_context", "dynamic_keys", "access", "profile", "resource_grants"})
     if extra then return nil, nil, extra end
+    local profile: profile_access.Bee? = nil
+    if value.profile ~= nil then
+        local decoded, err = profile_access.decode(value.profile)
+        if not decoded then return nil, nil, err end
+        profile = decoded
+    end
+    local grants, grant_error = context.resource_grants(value.resource_grants)
+    if grant_error then return nil, nil, grant_error end
     local access, access_error = decode_access(value.access)
     if access_error then return nil, nil, access_error end
     local configured, config_error = catalog.decode({tools = value.tools, traits = {}})
@@ -111,7 +121,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     if not checked then return nil, nil, context_error end
     local admitted, admitted_error = bounds.ids(ceiling, true)
     if not admitted then return nil, nil, admitted_error end
-    return {catalog = complete, ceiling = admitted, base_tools = base, allowed_traits = allowed,
+    return {resource_grants = grants, profile = profile, catalog = complete, ceiling = admitted, base_tools = base, allowed_traits = allowed,
         fixed_context = fixed, dynamic_keys = keys, access = access}, {active = active, context = {}}, nil
 end
 
@@ -142,7 +152,7 @@ function M.grant(surface: Surface, trait_ids: unknown): (Surface?, string?)
     if select_error then return nil, select_error end
     local copied_access: Access = {policy = surface.access.policy, traits = {}}
     for _, id in ipairs(surface.access.traits) do copied_access.traits[#copied_access.traits + 1] = id end
-    return {catalog = surface.catalog, ceiling = surface.ceiling, base_tools = surface.base_tools,
+    return {resource_grants = surface.resource_grants, profile = surface.profile, catalog = surface.catalog, ceiling = surface.ceiling, base_tools = surface.base_tools,
         allowed_traits = allowed, fixed_context = surface.fixed_context, dynamic_keys = surface.dynamic_keys,
         access = copied_access}, nil
 end

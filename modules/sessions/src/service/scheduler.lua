@@ -16,9 +16,11 @@ type Due = {work: string, session: string, state: "queued" | "reserved" | "accep
 type Page = {items: {Due}}
 type Turn = {work: string, session: string, turn: string, claim: string, owner_epoch: integer,
     input: unknown, input_digest: string, output_schema: string, sender: Sender, route: Object,
-    checkpoint: unknown?, context: Object?, phase: "reserved" | "accepted"}
+    checkpoint: unknown?, context: Object?, budget: Object?, session_consumption: Object?, phase: "reserved" | "accepted"}
 type Execution = {state: "settled", outcome: "succeeded" | "failed" | "cancelled", answer: string?,
     error: {code: string, message: string}?, usage: unknown?, checkpoint: Object?, evidence: unknown?}
+    | {state: "settled", outcome: "budget_exceeded", error: {code: string, message: string},
+        checkpoint: Object?, evidence: {summary: string, artifacts: {string}}}
     | {state: "pending" | "uncertain", outcome: string?, evidence: unknown?}
 type Reservation = {work: string?, session: string, turn: string?, claim: string?, owner_epoch: integer?, state: string}
 type Journal = {
@@ -116,7 +118,7 @@ function M.turn(raw: unknown): (Turn?, string?)
         or type(output_schema) ~= "string" or (value.context ~= nil and not context) then return nil, "Threads returned a malformed turn" end
     return {work = work, session = session, turn = turn, claim = claim, owner_epoch = epoch, sender = from,
         route = route, phase = phase, input = value.input, input_digest = input_digest, output_schema = output_schema,
-        checkpoint = value.checkpoint, context = context}, nil
+        checkpoint = value.checkpoint, context = context, budget = object(value.budget), session_consumption = object(value.session_consumption)}, nil
 end
 function M.execution(raw: unknown): (Execution?, string?)
     local value = object(raw)
@@ -125,6 +127,20 @@ function M.execution(raw: unknown): (Execution?, string?)
     if state == "pending" or state == "uncertain" then
         if outcome ~= nil and type(outcome) ~= "string" then return nil, "executor returned a malformed execution" end
         return {state = state, outcome = outcome, evidence = value.evidence}, nil
+    end
+    if state == "settled" and outcome == "budget_exceeded" then
+        local fault, evidence = object(value.error), object(value.evidence)
+        local artifacts = evidence and bounds.array(evidence.artifacts, 64)
+        if not fault or fault.code ~= "BUDGET_EXCEEDED" or type(fault.message) ~= "string"
+            or not evidence or type(evidence.summary) ~= "string" or not artifacts then return nil, "executor budget outcome lacks stop evidence" end
+        local checked: {string} = {}
+        for _, artifact in ipairs(artifacts) do
+            if type(artifact) ~= "string" then return nil, "executor budget evidence is malformed" end
+            checked[#checked + 1] = artifact
+        end
+        local result: Execution = {state = "settled", outcome = "budget_exceeded", error = {code = "BUDGET_EXCEEDED", message = fault.message},
+            checkpoint = object(value.checkpoint), evidence = {summary = evidence.summary, artifacts = checked}}
+        return result, nil
     end
     if state ~= "settled" or (outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled") then
         return nil, "executor returned a malformed execution"
@@ -137,7 +153,11 @@ function M.execution(raw: unknown): (Execution?, string?)
     end
     local answer, checkpoint = value.answer, object(value.checkpoint)
     if (answer ~= nil and type(answer) ~= "string") or (value.checkpoint ~= nil and not checkpoint) then return nil, "executor returned a malformed execution" end
-    return {state = "settled", outcome = outcome, answer = answer, checkpoint = checkpoint,
+    local settled: "succeeded" | "failed" | "cancelled"
+    if outcome == "succeeded" then settled = "succeeded" elseif outcome == "failed" then settled = "failed" else settled = "cancelled" end
+    local answer_text: string? = nil
+    if type(answer) == "string" then answer_text = answer end
+    return {state = "settled", outcome = settled, answer = answer_text, checkpoint = checkpoint,
         usage = value.usage, error = fault, evidence = value.evidence}, nil
 end
 local function decode_page(raw: unknown): ({Due}?, string?)
@@ -286,6 +306,7 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     if route.saved_profile_id ~= nil then admission.saved_profile_id = route.saved_profile_id end
     if route.saved_profile_revision ~= nil then admission.saved_profile_revision = route.saved_profile_revision end
     if route.workdir ~= nil then admission.workdir = route.workdir end
+    if route.placement_override ~= nil then admission.placement_override = route.placement_override end
     if not valid_id(admission.definition_ref) or not valid_id(admission.workspace_id) or not valid_id(admission.owner_id)
         or not valid_id(admission.thread_id) or not valid_id(admission.session_ref) or not valid_id(admission.action_id)
         or type(admission.expected_plan_digest) ~= "string" then
@@ -294,7 +315,8 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     local invocation: Object = {attempt_id = turn.turn,
         generation = turn.owner_epoch, recovery = due.state ~= "queued", prompt = input, sender = sender, admission = admission,
         driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id,
-        driver_methods = route.driver_methods,
+        driver_methods = route.driver_methods, budget = turn.budget,
+        session_budget = (object(route.budgets) or {}).session, session_consumption = turn.session_consumption, supervision = route.supervision,
         placement_methods = route.placement_methods, checkpoint = context}
     local observation_target: string? = "bee.threads.service:turn_observation"
     if journal.target then
@@ -334,6 +356,9 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     if outcome.outcome == "succeeded" then
         result = {state = "succeeded", schema = turn.output_schema, value = {text = outcome.answer or ""},
             artifacts = {}, usage = outcome.usage}
+    elseif outcome.outcome == "budget_exceeded" then
+        result = {state = "budget_exceeded", error = outcome.error, evidence = outcome.evidence,
+            artifacts = outcome.evidence.artifacts}
     else
         local error_value = outcome.error or {code = "EXECUTOR_FAILED", message = "the external turn failed"}
         result = {state = outcome.outcome, error = {code = error_value.code or "EXECUTOR_FAILED",
@@ -362,7 +387,7 @@ function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: str
             if not valid_id(request.session) or type(request.operation_key) ~= "string" or #request.operation_key == 0
                 or #request.operation_key > 128 or request.input == nil then return nil, "INVALID: session, operation_key and input are required" end
             local enqueue = {session = request.session, operation_key = request.operation_key, input = request.input,
-                output_schema = request.output_schema or "bee:Text@1"}
+                output_schema = request.output_schema or "bee:Text@1", budget = request.budget}
             local receipt, enqueue_error = journal.enqueue(enqueue)
             if enqueue_error or not receipt then return nil, enqueue_error or "Threads did not return a work receipt" end
             if wake then

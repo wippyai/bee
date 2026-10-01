@@ -90,6 +90,7 @@ def exercise(project, packed, pack):
         ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
         try:
             ui.wait("MODULES", timeout=20)
+            ui.resize(160, 40)
             ui.wait("Update fixture")
             ui.key(b"\x1b[B")
             ui.key(b"\r")
@@ -122,7 +123,7 @@ def exercise(project, packed, pack):
             ui.wait("Ready for confirmation")
             ui.quit()
         except Exception:
-            Path("/tmp/bee-modules-update-failure.raw").write_bytes(ui.raw)
+            (Path(directory) / "bee-modules-update-failure.raw").write_bytes(ui.raw)
             raise
         finally:
             ui.close()

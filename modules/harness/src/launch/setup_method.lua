@@ -4,6 +4,7 @@ local funcs = require("funcs")
 local security = require("security")
 local bounds = require("bounds")
 local admission = require("admission")
+local profiles = require("profiles")
 local BACKEND = "bee.harness.launch:setup_backend"
 local SCOPE = "bee.harness.launch:harness_setup_execution_scope"
 local function digest(value: unknown): string?
@@ -14,7 +15,7 @@ end
 local function handle(raw: unknown): {[string]: unknown}
     local request = bounds.object(raw)
     if not request then return {ok = false, error = "request must be an object"} end
-    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir", "session_turn"}) then return {ok = false, error = "unknown field"} end
+    if bounds.fields(request, {"workspace_id", "definition_ref", "expected_plan_digest", "saved_profile_id", "saved_profile_revision", "workdir", "session_turn", "placement_override"}) then return {ok = false, error = "unknown field"} end
     if request.session_turn ~= nil and type(request.session_turn) ~= "boolean" then return {ok = false, error = "session_turn must be boolean"} end
     local workspace, definition_ref = bounds.id(request.workspace_id), bounds.id(request.definition_ref)
     if not workspace then return {ok = false, error = "workspace_id is not an identifier"} end
@@ -25,7 +26,9 @@ local function handle(raw: unknown): {[string]: unknown}
     if request.saved_profile_id ~= nil or request.saved_profile_revision ~= nil then
         if not saved_id or not saved_revision or saved_revision < 1 then return {ok = false, error = "saved profile needs identity and positive revision"} end
     end
-    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, request.session_turn == true)
+    local placement, placement_error = profiles.placement(request.placement_override)
+    if placement_error then return {ok = false, error = placement_error} end
+    local plan, plan_error = admission.resolve(definition_ref, nil, workspace, saved_id, saved_revision, nil, nil, nil, request.session_turn == true, placement)
     if not plan then return {ok = false, error = tostring(plan_error and plan_error.error and plan_error.error.message or "launch plan unavailable")} end
     if plan.plan_digest ~= request.expected_plan_digest then return {ok = false, error = "selected launch plan changed"} end
     -- A folder under an admitted root becomes the working directory only

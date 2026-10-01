@@ -29,7 +29,6 @@ fresh per-attempt actor narrowed to the tool's declared scopes.
 - `stream`: consume server-sent events when true.
 - `admitted_delegates`: host-admitted agent delegates. The agent definition
   never admits its own delegates.
-- `max_turns`: 1..16, default 16.
 
 The native route admits agent memory and refuses every trait behavior,
 contract, wrapper, hook, option or delegate capability it cannot prove.

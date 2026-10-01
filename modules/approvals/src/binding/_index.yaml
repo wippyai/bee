@@ -214,3 +214,10 @@ entries:
   method: handle
   imports: {service: bee.approvals:service}
   security: {policies: [bee.security.approvals:approval_store_policy]}
+
+- name: runtime_lease
+  kind: function.lua
+  source: file://runtime_lease_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security: {policies: [bee.security.approvals:approval_store_policy]}

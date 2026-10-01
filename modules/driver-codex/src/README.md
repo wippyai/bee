@@ -35,3 +35,14 @@ adapter. When the granted workdir is a repository or worktree, native placement
 adds the exact `.git` directory and, for a worktree, its shared Git common
 directory through `sandbox_workspace_write.writable_roots`. Placement adds
 these roots only when both are inside a host-admitted write root.
+
+## Profile prompt append
+
+`provider.system_prompt_append` becomes additive `developer_instructions` in the
+private `.codex/config.toml`. A host provider projection appends it to host guidance.
+Ordinary user configuration is copied by the credential owner into the private
+`.codex/.bee-user-config.toml` and the existing TOML composition inserts or appends
+only the guidance leaf; other settings and named profiles remain intact. The
+original host files are not changed. `model_instructions_file` is not selected
+because it replaces Codex's built-in instructions, according to the
+[official config reference](https://developers.openai.com/codex/config-reference).

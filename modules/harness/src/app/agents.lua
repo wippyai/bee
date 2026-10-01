@@ -15,18 +15,18 @@ type Workspace = {label: string, folder: string}
 type Ask = (string, {[string]: unknown}) -> caller.Reply
 
 M.MAX_PAGES = 16
-M.MAX_TURNS = 64
+M.MAX_HISTORY_ITEMS = 64
 
 type Fault = {code: string, message: string, retry: string, operation_key: string?}
 type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, title: string,
-    status: string, ready: boolean, reason: string}
-type EntrySortKey = {ref: string, title: string, ready: boolean}
+    status: string, ready: boolean, reason: string, driver: string?}
+type EntrySortKey = {ref: string, title: string, ready: boolean, driver: string?}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
-type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain"
+type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
 type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
-    turns: {Turn}, unsent: Unsent?, notice: string, thread_cursor: integer?}
+    activity_evidence: sessions_protocol.ActivityEvidence?, turns: {Turn}, unsent: Unsent?, notice: string, thread_cursor: integer?}
 
 local function describe(fault: Fault?): string
     if not fault then return "sessions contract returned no reason" end
@@ -36,18 +36,20 @@ M.describe = describe
 
 -- Ready entries first, then title order. include_unavailable adds the
 -- candidates the catalog could not confirm, each with its reason.
-function M.list(client: sessions.Client, include_unavailable: boolean): (Listing?, string?)
+function M.list(client: sessions.Client, include_unavailable: boolean, query: string?, sort: "name" | "driver"?): (Listing?, string?)
     local listing: Listing = {items = {}, unavailable = 0, notes = {}}
     local cursor: string? = nil
-    for _ = 1, M.MAX_PAGES do
-        local page, fault = client:catalog({include_unavailable = include_unavailable, cursor = cursor})
+    while true do
+        local page, fault = client:catalog({include_unavailable = include_unavailable, cursor = cursor, query = query ~= "" and query or nil, sort = sort})
         if not page then return nil, describe(fault) end
         for _, candidate in ipairs(page.items) do
             if candidate.kind ~= "executor" then
                 local ready = candidate.status == "ready"
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
+                local driver: string? = nil
+                for _, feature in ipairs(candidate.features) do driver = feature:match("^driver:(.+)$") or driver end
                 listing.items[#listing.items + 1] = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,
-                    title = candidate.title, status = candidate.status, ready = ready, reason = reason}
+                    title = candidate.title, status = candidate.status, ready = ready, reason = reason, driver = driver}
             end
         end
         listing.unavailable = page.unavailable_count
@@ -57,6 +59,7 @@ function M.list(client: sessions.Client, include_unavailable: boolean): (Listing
     end
     table.sort(listing.items, function(left: EntrySortKey, right: EntrySortKey): boolean
         if left.ready ~= right.ready then return left.ready end
+        if sort == "driver" and left.driver ~= right.driver then return (left.driver or "") < (right.driver or "") end
         if left.title ~= right.title then return left.title < right.title end
         return left.ref < right.ref
     end)
@@ -67,7 +70,8 @@ local function conversation(session: sessions.Session): Conversation
     local snapshot = session.snapshot
     local turns: {Turn} = {}
     return {session = session, title = snapshot.title, lifecycle = snapshot.lifecycle, activity = snapshot.activity,
-        queued = snapshot.queue_count, turns = turns, unsent = nil, notice = "", thread_cursor = 0}
+        queued = snapshot.queue_count, activity_evidence = snapshot.activity_evidence,
+        turns = turns, unsent = nil, notice = "", thread_cursor = 0}
 end
 
 -- The key identifies one open operation: retrying the same key returns the
@@ -92,7 +96,7 @@ function M.submit(conv: Conversation, text: string, new_key: () -> string): bool
     end
     conv.unsent, conv.notice = nil, ""
     conv.turns[#conv.turns + 1] = {work = work, input = text, state = "queued", text = ""}
-    if #conv.turns > M.MAX_TURNS then table.remove(conv.turns, 1) end
+    if #conv.turns > M.MAX_HISTORY_ITEMS then table.remove(conv.turns, 1) end
     return true
 end
 
@@ -120,6 +124,8 @@ local function settle(turn: Turn, observed: unknown)
         local result = await.result
         if result.outcome == "succeeded" then
             turn.state, turn.text = "ready", render(result.value)
+        elseif result.outcome == "budget_exceeded" then
+            turn.state, turn.text = "budget_exceeded", result.evidence.summary
         else
             local fault = result.error
             turn.state, turn.text = "failed", tostring(result.outcome) .. ": " .. describe(fault)
@@ -187,6 +193,7 @@ function M.refresh(conv: Conversation): boolean
     local snapshot = current.snapshot
     conv.session = current
     conv.title, conv.lifecycle, conv.activity, conv.queued = snapshot.title, snapshot.lifecycle, snapshot.activity, snapshot.queue_count
+    conv.activity_evidence = snapshot.activity_evidence
     conv.notice = ""
     for _, turn in ipairs(conv.turns) do
         if turn.state == "queued" or turn.state == "working" or turn.state == "blocked" or turn.state == "uncertain" then
@@ -207,7 +214,8 @@ end
 
 function M.remember(current: Conversation, saved: Conversation): Conversation
     return {session = current.session, title = current.title, lifecycle = current.lifecycle, activity = current.activity,
-        queued = current.queued, turns = saved.turns, unsent = saved.unsent, notice = current.notice, thread_cursor = saved.thread_cursor}
+        queued = current.queued, activity_evidence = current.activity_evidence, turns = saved.turns,
+        unsent = saved.unsent, notice = current.notice, thread_cursor = saved.thread_cursor}
 end
 
 function M.resume(client: sessions.Client, ref: string): (Conversation?, string?)
@@ -224,7 +232,7 @@ function M.resume(client: sessions.Client, ref: string): (Conversation?, string?
             if not work then return nil, describe(work_fault) end
             local turn: Turn = {work = work, input = render(item.input), state = "queued", text = ""}
             turns[#turns + 1] = turn
-            if #turns > M.MAX_TURNS then table.remove(turns, 1) end
+            if #turns > M.MAX_HISTORY_ITEMS then table.remove(turns, 1) end
         end
         cursor = page.next
         if not cursor then break end

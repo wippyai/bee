@@ -67,8 +67,9 @@ local function define_tests()
                     found = true
                     for _, profile in ipairs(binding.profiles) do
                         if profile.mode == "window" then
-                            test.eq(profile.permission.mode, "none")
-                            test.is_false(profile.permission.eligible)
+                            test.eq(profile.permission.mode, "adapter")
+                            test.is_true(profile.permission.eligible)
+                            test.eq(profile.permission.adapter_ref, "bee.driver:permission_request_hook")
                         else
                             if not profile.permission.eligible or profile.permission.adapter_ref ~= ADAPTER then
                                 error("profile " .. profile.id .. " does not pin " .. ADAPTER .. " at digest " .. pinned.digest .. ": " .. table.concat(binding.diagnostics, "; "))

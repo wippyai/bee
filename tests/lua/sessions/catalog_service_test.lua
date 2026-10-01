@@ -22,7 +22,7 @@ local function define_tests()
         test.it("retains a saved profile's identity and title beside its definition", function()
             local saved = assert(funcs.call("bee.harness.profiles:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
-                profile = {title = "Selected container profile", definition_ref = "bee.driver.claude:default_window"}}))
+                profile = {schema_revision = "bee.agent-profile@2", name = "Selected container profile", definition_ref = "bee.driver.claude:default_window", driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {mcp = {}}}}))
             test.is_true((saved :: Object).ok == true)
             local page, page_fault = catalog.list({include_unavailable = true}, "saved-profile-workspace")
             if not page then error(page_fault and page_fault.message or "catalog list failed") end

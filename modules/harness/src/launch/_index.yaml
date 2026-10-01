@@ -23,6 +23,7 @@ entries:
   - security
   - time
   imports:
+    budgets: bee.threads.records:budgets
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     catalog: bee.harness.catalog:catalog
@@ -35,6 +36,8 @@ entries:
     continuation: bee.harness.carrier:continuation
     interrupted: bee.harness.app:interrupted
     profiles: bee.harness.profiles:protocol
+    profile_validation: bee.harness.profiles:validation
+    descriptors: bee.driver:descriptor
     placement_profiles: bee.placement:profiles
 - name: agent_resolver
   kind: library.lua
@@ -87,7 +90,9 @@ entries:
   - registry
   - json
   - funcs
+  - hash
   imports:
+    canonical: bee.threads.records:canonical
     bounds: bee.threads.records:bounds
     descriptor: bee.driver:descriptor
     driver_resolver: bee.driver:resolver
@@ -97,15 +102,9 @@ entries:
     resources: bee.placement.native:resources
     placement_profiles: bee.placement:profiles
     placement_resolver: bee.placement:resolver
-    probe_capture: bee.harness.launch:probe_capture
+    probe_capture: bee.driver:probe_capture
     probe_version: bee.harness.launch:probe_version
     login_evidence: bee.driver:login_evidence
-- name: probe_capture
-  kind: library.lua
-  source: file://probe_capture.lua
-  modules:
-  - channel
-  - time
 - name: probe_version
   kind: library.lua
   source: file://probe_version.lua
@@ -155,6 +154,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     admission: bee.harness.launch:admission
+    profiles: bee.harness.profiles:protocol
   security:
     policies:
     - bee.harness.launch:setup_facade_policy

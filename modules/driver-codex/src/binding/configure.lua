@@ -5,24 +5,28 @@ local configure_protocol = require("configure_protocol")
 local universal = require("universal")
 local function handle(request: configure_protocol.Request): {[string]: unknown}
     if not request.provider_ref and not request.provider then
-        local arguments, argument_error = configuration.session_arguments(request.gateway, request.instructions)
+        local arguments, argument_error = configuration.session_arguments(request.gateway)
         if not arguments then return {ok = false, error = tostring(argument_error)} end
-        return {ok = true, delivery = {arguments = arguments, files = {}}}
+        local files: {configure_protocol.Configuration} = {}
+        if request.private_home == true or request.instructions then
+            local projected, err = configuration.login_configuration()
+            if not projected then return {ok = false, error = tostring(err)} end
+            files[#files + 1] = projected
+        end
+        return {ok = true, delivery = {arguments = arguments, files = files}}
     end
     if not request.provider_ref or not request.provider then return {ok = false, error = "codex configuration needs the selected provider"} end
     local provider, decode_error = configuration.decode(request.provider_ref, request.provider)
     if not provider then return {ok = false, error = tostring(decode_error)} end
     if provider.loopback_fixture and request.fixture ~= true then return {ok = false, error = "loopback fixture provider needs a fixture policy"} end
-    if request.instructions then
-        if provider.developer_instructions then return {ok = false, error = "instructions are declared in both the launch policy and provider"} end
-    end
+    local instructions = provider.developer_instructions
     local section: string? = nil
     if request.gateway then
         local generated = configuration.gateway_section(request.gateway)
         if type(generated) ~= "string" then return {ok = false, error = "Codex gateway configuration is malformed"} end
         section = generated
     end
-    local projected, projection_error = configuration.projection(provider, section, request.instructions)
+    local projected, projection_error = configuration.projection(provider, section, instructions)
     if not projected then return {ok = false, error = tostring(projection_error)} end
     local files = {{revision = projected.revision, path = projected.path, content = projected.content, digest = projected.digest, provider_ref = projected.provider_ref}}
     if request.gateway and #request.gateway.hooks > 0 then
@@ -35,4 +39,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.gateway and #request.gateway.hooks > 0 then arguments = {"--profile", "bee"} end
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
-return {handle = universal.configure("codex", {codex = handle})}
+return {handle = universal.configure("codex", {codex = handle}, "bee.driver.codex.descriptor:cli")}

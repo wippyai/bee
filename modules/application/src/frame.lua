@@ -73,7 +73,7 @@ end
 -- A painter over a canvas cleared to the theme's surface, with no hits yet.
 function M.new(width: integer, height: integer, preferences: appearance.Preferences): Painter
     local theme = appearance.theme(preferences.theme)
-    local canvas = tty.canvas(width, height)
+    local canvas = tty.canvas(maximum(1, width), maximum(1, height))
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
     local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = ""}
     local bars: {[integer]: Bar} = {}
@@ -84,7 +84,16 @@ end
 function M.rows(painter: Painter): {string}
     for y, bar in pairs(painter.bars) do M.actions(painter, y, bar.buttons, bar.x) end
     painter.bars = {}
-    return painter.canvas:rows()
+    local painted = painter.canvas:rows()
+    local rows: {string} = {}
+    for y = 1, painter.height do
+        local row = painted[y] or ""
+        -- The compositor may omit trailing blank cells. A frame publishes a
+        -- complete rectangle, including its surface at the right edge.
+        local gap = maximum(0, painter.width - tty.text.width(row))
+        rows[y] = row .. appearance.style(painter.theme.text, painter.theme.surface) .. string.rep(" ", gap) .. RESET
+    end
+    return rows
 end
 
 -- Draws value at (x, y) within room cells and returns the drawn width.

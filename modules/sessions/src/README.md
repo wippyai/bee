@@ -8,7 +8,7 @@ worker contract.
 
 A launch definition may select `session_profile_id` for structured executor
 turns and `session_credentials` for their explicit broker projections. Sessions admission pins that driver profile while native manual windows
-retain the definition's window profile. Catalog readiness measures the same
+retain the definition's window profile. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes remain addressable. Catalog readiness measures the same
 structured route that `open` admits. The real owner and catalog bindings are
 defaults; the kit starts the pull scheduler against the Threads journal.
 

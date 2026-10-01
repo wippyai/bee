@@ -40,17 +40,28 @@ function M.list(client: sessions.Client, include_unavailable: boolean): (Listing
     local listing: Listing = {items = {}, unavailable = 0, notes = {}}
     local cursor: string? = nil
     for _ = 1, M.MAX_PAGES do
-        local page, fault = client:catalog({include_unavailable = include_unavailable, cursor = cursor})
+        local page, fault = client:catalog({include_unavailable = true, cursor = cursor})
         if not page then return nil, describe(fault) end
         for _, candidate in ipairs(page.items) do
-            if candidate.kind ~= "executor" then
+            local person_launchable = false
+            for _, feature in ipairs(candidate.features) do if feature == "presentation:start_menu" then person_launchable = true end end
+            if candidate.kind ~= "executor" and person_launchable then
                 local ready = candidate.status == "ready"
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
+                local provider = ""
+                for _, feature in ipairs(candidate.features) do provider = feature:match("^driver:(.+)$") or provider end
+                if provider ~= "" then
+                    if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
+                    elseif candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
+                    elseif reason:find("bee.", 1, true) then reason = "This agent cannot run with the current setup. Check its folder and permissions." end
+                elseif reason:find("bee.", 1, true) then reason = "This agent's setup is unavailable. Check installation, folder and permissions." end
+                if not ready then listing.unavailable = listing.unavailable + 1 end
+                if ready or include_unavailable then
                 listing.items[#listing.items + 1] = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,
                     title = candidate.title, status = candidate.status, ready = ready, reason = reason}
+                end
             end
         end
-        listing.unavailable = page.unavailable_count
         for _, diagnostic in ipairs(page.diagnostics) do listing.notes[#listing.notes + 1] = describe(diagnostic) end
         if not page.next then break end
         cursor = page.next

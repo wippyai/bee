@@ -6,7 +6,7 @@ type Object = {[string]: unknown}
 local function client_of(value: unknown): sessions.Client return value :: sessions.Client end
 local function candidate(ref: string, title: string, status: string, reasons: {string}, kind: string?): Object
     return {ref = ref, kind = kind or "definition", title = title, status = status, checked_at = "t", reasons = reasons,
-        features = {}, actions = {}}
+        features = {"presentation:start_menu"}, actions = {}}
 end
 local function snapshot(activity: string, queued: integer): Object
     return {session = "bs:n:w:s1", revision = 1, incarnation = 1, title = "Worker", lifecycle = "active", activity = activity,
@@ -66,10 +66,10 @@ local function define_tests()
                     candidate("x:exec", "Exec", "ready", {}, "executor")}, complete = true, unavailable_count = 2, diagnostics = {}}, nil
             end}
             local listing = must_list(client_of(client), false)
-            test.eq(at(asked, 1).include_unavailable, false)
+            test.eq(at(asked, 1).include_unavailable, true)
             test.eq(#listing.items, 2)
             test.eq(listing.items[1].ref, "a:one")
-            test.eq(listing.unavailable, 2)
+            test.eq(listing.unavailable, 0)
         end)
         test.it("shows unavailable candidates after ready ones with their reason and follows pages", function()
             local pages = {
@@ -93,6 +93,16 @@ local function define_tests()
             test.eq(listing.items[2].reason, "codex is not installed")
             test.is_false(listing.items[2].ready)
             test.eq(listing.notes[1], "UNAVAILABLE: probe skipped")
+        end)
+        test.it("hides programmatic routes from the person catalog", function()
+            local hidden = candidate("c:batch", "Research batch", "ready", {})
+            hidden.features = {}
+            local scripted: Object = {catalog = function(_self: unknown, _options: Object): (Object, nil)
+                return {items = {candidate("c:window", "Claude", "ready", {}), hidden}, complete = true, unavailable_count = 0, diagnostics = {}}, nil
+            end}
+            local listing = must_list(client_of(scripted), true)
+            test.eq(#listing.items, 1)
+            test.eq(listing.items[1].title, "Claude")
         end)
         test.it("reports a catalog fault", function()
             local client: any = {catalog = function(): (nil, Object) return nil, {code = "DENIED", message = "no", retry = "never"} end}

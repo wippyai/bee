@@ -2,6 +2,8 @@
 -- pages and searches every workspace a node holds and sees which a host
 -- serves now, through the same dispatch as node telemetry.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -28,7 +30,9 @@ local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.superviso
 local function admit()
     local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
-    local roots = (entry.data :: Object).roots :: {Object}
+    local roots_owner = assert(bounds.object(entry.data))
+    local roots = principals.objects(roots_owner.roots)
+    roots_owner.roots = roots
     for _, root in ipairs(roots) do if root.root_ref == PROJECTS then return end end
     roots[#roots + 1] = {root_ref = PROJECTS, access = "write"}
     local changes = registry.snapshot():changes()
@@ -39,7 +43,7 @@ local function create(label: string, subpath: string): string
     admit()
     local reply, err = manager:call("bee.workspace.catalog:create", {label = label, root_ref = PROJECTS, subpath = subpath, create_directory = true})
     if err or type(reply) ~= "table" or reply.ok ~= true then error("create " .. label .. ": " .. tostring(err)) end
-    return tostring(((reply :: Object).value :: Object).workspace_id)
+    return tostring((assert(bounds.object((assert(bounds.object(reply))).value))).workspace_id)
 end
 local function request(input: Object): types.Request
     local digest = assert(types.digest(input))
@@ -68,8 +72,8 @@ local function define_tests()
             local third = create(prefix .. " c", prefix .. "-c")
             local page = dispatch({label = prefix, limit = 2})
             if not page.ok then error(tostring(page.error and page.error.message)) end
-            local value = page.value :: Object
-            local rows = value.workspaces :: {Object}
+            local value = assert(bounds.object(page.value))
+            local rows = principals.objects(value.workspaces)
             test.eq(#rows, 2)
             test.eq(rows[1].workspace_id, first)
             test.eq(rows[1].label, prefix .. " a")
@@ -79,10 +83,10 @@ local function define_tests()
             local cursor = value.next_after
             if type(cursor) ~= "string" then error("the first page has no cursor") end
             local rest = dispatch({label = prefix, after = cursor, limit = 2})
-            local last = (rest.value :: Object).workspaces :: {Object}
+            local last = principals.objects((assert(bounds.object(rest.value))).workspaces)
             test.eq(#last, 1)
             test.eq(last[1].workspace_id, third)
-            test.is_nil((rest.value :: Object).next_after)
+            test.is_nil((assert(bounds.object(rest.value))).next_after)
         end)
         test.it("lists the folder workspace's unnamed catalog row", function()
             -- The classic launch path creates the folder's row when it opens it.
@@ -95,8 +99,8 @@ local function define_tests()
                 if after then input.after = after end
                 local page = dispatch(input)
                 if not page.ok then error(tostring(page.error and page.error.message)) end
-                local value = page.value :: Object
-                for _, row in ipairs(value.workspaces :: {Object}) do
+                local value = assert(bounds.object(page.value))
+                for _, row in ipairs(principals.objects(value.workspaces)) do
                     if row.label == "" then unnamed = unnamed + 1 end
                 end
                 local cursor = value.next_after

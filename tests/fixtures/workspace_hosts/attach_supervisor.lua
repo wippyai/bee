@@ -3,6 +3,7 @@
 -- a lease, so the manager starts the workspace host; the supervisor admits its
 -- display and an attached recipient through the manager, which owns the host;
 -- ending the supervisor releases the lease and the host stops once idle.
+local bounds = require("bounds")
 local logger = require("logger")
 local process = require("process")
 local channel = require("channel")
@@ -102,9 +103,9 @@ local function run(fallback: boolean)
         :with_scope(scope({"bee.security.desktop:host_policy", "bee.security.desktop:desktop_policy", "bee.security.desktop:retained_supervisor_spawn_policy", "bee.security.desktop:desktop_catalog_policy",
             "bee.security.desktop:desktop_catalog_resource_policy", "bee.security.desktop:workspace_host_lease_policy"}))
         :spawn_monitored("bee.launch:retained", "bee:workers", self, {workspace_id = workspace_id})))
-    local announced = await(ready, events, supervisor, "desktop readiness", function(data: unknown): boolean
+    local announced = assert(bounds.object(await(ready, events, supervisor, "desktop readiness", function(data: unknown): boolean
         return type(data) == "table" and data.workspace_id == workspace_id
-    end) :: {[string]: unknown}
+    end)))
     local desktop_id = tostring(announced.desktop_id)
 
     -- The lease started the host; the manager serves it, not the supervisor.
@@ -119,9 +120,9 @@ local function run(fallback: boolean)
     local attach_id = "attach-" .. uuid.v7()
     assert(process.send(supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
         request_id = attach_id, recipient = recipient, op = "attach", mode = "observe"}))
-    local attached = await(results, events, supervisor, "attachment", function(data: unknown): boolean
+    local attached = assert(bounds.object(await(results, events, supervisor, "attachment", function(data: unknown): boolean
         return type(data) == "table" and data.request_id == attach_id
-    end) :: {[string]: unknown}
+    end)))
     eq(attached.error_code, "", "attachment refusal " .. tostring(attached.error))
     if type(attached.mount) ~= "string" or attached.mount == "" then error("attachment has no mount") end
     local definition = assert(registry.get("bee.host:main"))
@@ -130,10 +131,10 @@ local function run(fallback: boolean)
     changes:update(definition)
     assert(changes:apply())
     if fallback then
-        local replaced = await(replacements, events, supervisor, "leased host replacement", function(data: unknown): boolean
+        local replaced = assert(bounds.object(await(replacements, events, supervisor, "leased host replacement", function(data: unknown): boolean
             return type(data) == "table" and data.version == 1 and data.schema == 1
                 and data.workspace_id == workspace_id and type(data.host) == "string" and data.host ~= host
-        end) :: {[string]: unknown}
+        end)))
         host = tostring(replaced.host)
         eq(served(workspace_id), host, "leased host replacement registration")
         await(clients, events, supervisor, "leased desktop reattachment", function(data: unknown): boolean
@@ -150,9 +151,9 @@ local function run(fallback: boolean)
     local detach_id = "detach-" .. uuid.v7()
     assert(process.send(supervisor, "bee.retained.request", {version = 1, workspace_id = workspace_id, desktop_id = desktop_id,
         request_id = detach_id, recipient = recipient, op = "detach"}))
-    local detached = await(results, events, supervisor, "detachment", function(data: unknown): boolean
+    local detached = assert(bounds.object(await(results, events, supervisor, "detachment", function(data: unknown): boolean
         return type(data) == "table" and data.request_id == detach_id
-    end) :: {[string]: unknown}
+    end)))
     eq(detached.error_code, "", "detachment refusal " .. tostring(detached.error))
     process.terminate(recipient)
 

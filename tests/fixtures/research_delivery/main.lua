@@ -90,9 +90,13 @@ local function main()
         local item = object(raw_entry)
         local id = bounds.id(item.id)
         if id == "bee.research.demo:app" and item.kind == "process.lua" then
-            expected_app_source = object(item.data).source :: string
+            local data = object(item.data)
+            assert(type(data.source) == "string")
+            expected_app_source = data.source
         elseif id == "bee.research.demo:canonical" and item.kind == "library.lua" then
-            expected_canonical_source = object(item.data).source :: string
+            local data = object(item.data)
+            assert(type(data.source) == "string")
+            expected_canonical_source = data.source
         end
     end
     if not expected_app_source or not expected_canonical_source then
@@ -230,7 +234,7 @@ local function main()
     local versions = avail_res.versions
     if type(versions) ~= "table" then error("available returned invalid versions list") end
     local found_desc = false
-    for _, v_raw in ipairs(versions :: {unknown}) do
+    for _, v_raw in ipairs(assert(bounds.array(versions))) do
         local v = object(v_raw)
         if v.key == descriptor.key and v.digest == descriptor.digest then
             found_desc = true
@@ -250,7 +254,7 @@ local function main()
     })
     assert(stage_res.status == "staged", "staged version status expected 'staged'")
     assert(stage_res.selected ~= true, "staged version must not be selected")
-    local stage_rev = stage_res.revision :: integer
+    local stage_rev = stage_res.revision
 
     local review_res = call_api("bee.gov.binding:destination_call", {
         operation = "review",
@@ -264,7 +268,7 @@ local function main()
         review_reason = "Test operator acceptance review",
     })
     assert(review_res.review_status == "accepted", "review_status expected 'accepted'")
-    local review_rev = review_res.revision :: integer
+    local review_rev = review_res.revision
 
     local select_res = call_api("bee.gov.binding:destination_call", {
         operation = "select",

@@ -14,6 +14,7 @@ entries:
     decode: bee.protocol:decode
     client: bee.app:client
     arguments: bee.app:arguments
+    bounds: bee.protocol:bounds
 - name: decode_test
   kind: function.lua
   source: file://decode_test.lua
@@ -43,7 +44,9 @@ entries:
   kind: function.lua
   source: file://interaction_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     interaction: bee.app:interaction
     test: wippy.test:test
@@ -51,7 +54,9 @@ entries:
   kind: function.lua
   source: file://display_transfer_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     transfer: bee.protocol:display_transfer
     test: wippy.test:test

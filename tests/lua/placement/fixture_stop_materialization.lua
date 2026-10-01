@@ -1,6 +1,7 @@
 -- MIT. The writer opens the fixture login FIFO, waits until the real
 -- credential broker has opened its reader, then stops the attempt before
 -- releasing a valid projection reply to the materialization runner.
+local bounds = require("bounds")
 local fs = require("fs")
 local funcs = require("funcs")
 
@@ -9,7 +10,7 @@ type Reply = {ok: boolean, stopped: unknown?, written: boolean?, error: string?}
 
 local function handle(value: unknown): Reply
     if type(value) ~= "table" then return {ok = false, error = "fixture request is not an object"} end
-    local request = value :: Request
+    local request = value
     if type(request.source_ref) ~= "string" or type(request.attempt_id) ~= "string" or type(request.content) ~= "string" then
         return {ok = false, error = "fixture request is incomplete"}
     end
@@ -21,17 +22,17 @@ local function handle(value: unknown): Reply
     local file, open_error = volume:open("/auth.json", "w")
     if not file then return {ok = false, error = tostring(open_error or "open fixture fifo")} end
     local stopped, stop_error = funcs.call("bee.placement.native.binding:stop", {attempt_id = request.attempt_id, mode = "cooperative"})
-    if stop_error or type(stopped) ~= "table" or (stopped :: {[string]: unknown}).ok ~= true then
+    if stop_error or type(stopped) ~= "table" or (assert(bounds.object(stopped))).ok ~= true then
         file:close()
-        local failure = type(stopped) == "table" and (stopped :: {[string]: unknown}).error
-        local code = type(failure) == "table" and (failure :: {[string]: unknown}).code or nil
-        local message = type(failure) == "table" and (failure :: {[string]: unknown}).message or nil
+        local failure = type(stopped) == "table" and (assert(bounds.object(stopped))).error
+        local code = type(failure) == "table" and (assert(bounds.object(failure))).code or nil
+        local message = type(failure) == "table" and (assert(bounds.object(failure))).message or nil
         return {ok = false, error = tostring(stop_error or code or "stop was refused") .. (message and (": " .. tostring(message)) or "")}
     end
-    local stop_object = stopped :: {[string]: unknown}
+    local stop_object = assert(bounds.object(stopped))
     local stop_value = stop_object.value
     local stop_state = stop_object.execution_state
-    if type(stop_value) == "table" then stop_state = (stop_value :: {[string]: unknown}).execution_state end
+    if type(stop_value) == "table" then stop_state = (assert(bounds.object(stop_value))).execution_state end
     local written, write_error = file:write(request.content)
     file:close()
     if not written then return {ok = false, error = tostring(write_error or "write fixture fifo")} end

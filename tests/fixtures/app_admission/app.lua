@@ -17,7 +17,7 @@ local function main(value: unknown)
     assert(surface:present({security.can("bee.admission.probe", "fixture") and "GRANTED" or "DENIED"}))
     client.ready(launch)
     while true do
-        local message = assert(closes:receive())
+        local message = assert((closes:receive()))
         if message:from() == launch.broker_pid then break end
     end
     process.unlisten(closes)

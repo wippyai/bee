@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Only fixture credentials cross the private in-memory callback to the host
 -- acceptance driver. Nothing is printed or written to a credential file.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local json = require("json")
 local http_client = require("http_client")
@@ -12,15 +13,15 @@ type Object = {[string]: unknown}
 local function call(target: string, request: Object): Object
     local raw, err = funcs.call(target, request)
     if err or type(raw) ~= "table" then error(target .. ": " .. tostring(err)) end
-    local reply = raw :: Object
+    local reply = assert(bounds.object(raw))
     if reply.ok ~= true then
         local failure = reply.error
         if type(failure) == "table" then
-            error(target .. " refused: " .. tostring((failure :: Object).code) .. ": " .. tostring((failure :: Object).message))
+            error(target .. " refused: " .. tostring((assert(bounds.object(failure))).code) .. ": " .. tostring((assert(bounds.object(failure))).message))
         end
         error(target .. " refused without an error value")
     end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function main()
     local callback = env.get("bee.gateway.container:callback")
@@ -28,18 +29,18 @@ local function main()
     local selected: Object? = nil
     for _ = 1, 100 do
         local raw, err = funcs.call("bee.gateway:address", {})
-        if not err and type(raw) == "table" then selected = raw :: Object; break end
+        if not err and type(raw) == "table" then selected = assert(bounds.object(raw)); break end
         time.sleep("20ms")
     end
     if not selected or type(selected.address) ~= "string" then error("listener unavailable") end
-    local address = selected.address :: string
+    local address = selected.address
     for _, url in ipairs({"http://" .. address .. "/mcp/other", "http://" .. address .. "/ready/extra", "http://" .. address .. "/ready?extra=1", "http://example.invalid/ready"}) do
         if security.can("http_client.request", url) then error("readiness policy grants an unrelated URL") end
     end
     call("bee.threads.service:create", {thread_id = "container-thread", idempotency_key = "create", title = "Container gateway proof"})
     local admitted = call("bee.gateway.binding:admit", {subject = "bee.test.container", action_id = "container-action", attempt_id = "container-attempt",
         thread_id = "container-thread", owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "capabilities"}, hooks = {"SessionStart"}, ttl_ms = 120000})
-    local binding = admitted.binding :: Object
+    local binding = assert(bounds.object(admitted.binding))
     local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = "container-attempt", carrier_epoch = 1, binding_id = binding.binding_id})
     local materialized = call("bee.gateway.binding:materialize", {attempt_id = "container-attempt", carrier_epoch = 1, materialization_key = authorized.materialization_key})
     local ready = call("bee.gateway.binding:ready", {binding_id = binding.binding_id})

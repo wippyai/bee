@@ -66,7 +66,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     if not publication then error("publication profiles are unavailable") end
     local publication_data = object(publication.data)
     local publication_profiles: {unknown} = {}
-    for _, raw in ipairs(publication_data.profiles :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(publication_data.profiles))) do
         local profile = object(raw)
         if profile.workspace_id ~= workspace_id or profile.component ~= COMPONENT then
             publication_profiles[#publication_profiles + 1] = profile
@@ -81,7 +81,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     if not activation then error("activation profiles are unavailable") end
     local activation_data = object(activation.data)
     local activation_profiles: {unknown} = {}
-    for _, raw in ipairs(activation_data.profiles :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(activation_data.profiles))) do
         local profile = object(raw)
         if profile.workspace_id ~= workspace_id or profile.source_node ~= local_node
             or profile.source_workspace ~= source_workspace then
@@ -103,7 +103,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     local approvers = registry.get("bee:approver_policies")
     if not approvers then error("approval policies are unavailable") end
     local approver_data = object(approvers.data)
-    local policies = approver_data.policies :: {unknown}
+    local policies = assert(bounds.array(approver_data.policies))
     local declared = false
     for _, raw in ipairs(policies) do
         local policy = bounds.object(raw)
@@ -144,7 +144,7 @@ local function main()
 
     local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
-    for _, raw in ipairs(available.versions :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(available.versions))) do
         local item = object(raw)
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
@@ -173,11 +173,11 @@ local function main()
     if report.ready == true and #report.diagnostics == 0 then
         local changes = call_api("bee.gov.binding:destination_call", {operation = "changes", workspace_id = workspace_id,
             source_node = local_node, source_workspace = source_workspace, version = version})
-        for _, raw in ipairs(changes.added :: {unknown}) do
+        for _, raw in ipairs(assert(bounds.array(changes.added))) do
             local item = object(raw)
             added[#added + 1] = {id = item.id, kind = item.kind}
         end
-        for _, raw in ipairs(changes.changed :: {unknown}) do
+        for _, raw in ipairs(assert(bounds.array(changes.changed))) do
             local item = object(raw)
             modified[#modified + 1] = {id = item.id, kind = item.kind}
         end

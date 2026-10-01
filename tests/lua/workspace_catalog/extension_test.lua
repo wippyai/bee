@@ -3,6 +3,9 @@
 -- beside the applications a checkpoint keeps open, search_within asks every
 -- binding, and a failing binding never hides the others.
 local test = require("test")
+local app_caller = require("app_caller")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -39,18 +42,20 @@ local stranger = executor("bee.test.extension_stranger", {"bee.workspace.catalog
 local function call(client: funcs.Executor, target: string, value: unknown): Reply
     local reply, err = client:call(target, value)
     if err then error(target .. ": " .. tostring(err)) end
-    return reply :: Reply
+    return assert(app_caller.decode(reply))
 end
 
 local function value(reply: Reply): Object
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 
 local function admit()
     local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
-    local roots = (entry.data :: Object).roots :: {Object}
+    local roots_owner = assert(bounds.object(entry.data))
+    local roots = principals.objects(roots_owner.roots)
+    roots_owner.roots = roots
     for _, root in ipairs(roots) do if root.root_ref == PROJECTS then return end end
     roots[#roots + 1] = {root_ref = PROJECTS, access = "write"}
     local changes = registry.snapshot():changes()
@@ -68,7 +73,7 @@ local function workspace(label: string): string
 end
 
 local function extension(inspected: Object, binding: string): Object
-    for _, item in ipairs(inspected.extensions :: {Object}) do
+    for _, item in ipairs(principals.objects(inspected.extensions)) do
         if item.binding == binding then return item end
     end
     error("extension " .. binding .. " is missing")
@@ -87,9 +92,9 @@ local function define_tests()
                     restart_policy = "automatic", resume_state = ""}}}))
             saved:close()
             local inspected = value(call(reader, "bee.workspace.catalog:inspect", {workspace_id = id}))
-            test.eq((inspected.workspace :: Object).label, "Described")
+            test.eq((assert(bounds.object(inspected.workspace))).label, "Described")
             test.eq(inspected.live, false)
-            local applications = inspected.applications :: {Object}
+            local applications = principals.objects(inspected.applications)
             test.eq(#applications, 1)
             test.eq(applications[1].definition_id, "bee.settings.app:app")
             test.eq(applications[1].instance_id, "instance-1")
@@ -97,7 +102,7 @@ local function define_tests()
             test.eq(resources.title, "Resources", tostring(resources.error))
             test.eq(resources.total, 2)
             test.is_nil(resources.error)
-            local items = resources.items :: {Object}
+            local items = principals.objects(resources.items)
             test.eq(items[1].label, "docs")
             test.contains(tostring(items[1].detail), PROJECTS)
             local agents = extension(inspected, AGENTS)
@@ -113,9 +118,9 @@ local function define_tests()
             end
             local found = value(call(reader, "bee.workspace.catalog:search_within", {workspace_id = id, text = "alpha", limit = 5}))
             local resources: Object? = nil
-            for _, item in ipairs(found.results :: {Object}) do if item.binding == RESOURCES then resources = item end end
+            for _, item in ipairs(principals.objects(found.results)) do if item.binding == RESOURCES then resources = item end end
             if not resources then error("resources results missing") end
-            local hits = resources.hits :: {Object}
+            local hits = principals.objects(resources.hits)
             test.eq(#hits, 2)
             test.eq(hits[1].label, "alpha-code")
             test.eq(hits[2].label, "alpha-notes")

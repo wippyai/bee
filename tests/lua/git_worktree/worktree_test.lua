@@ -1,5 +1,6 @@
 -- MIT. Tests for Git worktree dedicated creation, status detection, and cleanup.
 local test = require("test")
+local bounds = require("bounds")
 local time = require("time")
 local worktree = require("worktree")
 local setup_method = require("setup_method")
@@ -12,13 +13,16 @@ local function unauthorized_call(target: string, request: {[string]: unknown}): 
     if not policy then error("caller policy: " .. tostring(policy_error)) end
     local reply, err = funcs.new():with_actor(security.new_actor("intruder", {})):with_scope(security.new_scope({policy})):call(target, request)
     if err then error("call " .. target .. ": " .. tostring(err)) end
-    return reply :: {[string]: unknown}
+    return assert(bounds.object(reply))
 end
 
 local counter = 0
 local function temp_dir(): string
     counter = counter + 1
-    local dir = "/tmp/bee-test-gitwt-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
+    local temporary, status, problem = worktree.run_git({"pwd", "-P"})
+    if not temporary or status ~= 0 then error("test working directory: " .. tostring(problem)) end
+    temporary = temporary:gsub("%s+$", "") .. "/.wippy"
+    local dir = temporary .. "/bee-test-gitwt-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
     worktree.run_git({"mkdir", "-p", dir})
     return dir
 end
@@ -351,14 +355,14 @@ local function define_tests()
                 write_roots = {repo}, options = {worktree = "dedicated"}, argv = {"test"}}
             local planned = unauthorized_call("bee.git_worktree:plan", request)
             test.is_false(planned.ok)
-            test.eq((planned.error :: {[string]: unknown}).code, "DENIED")
+            test.eq((assert(bounds.object(planned.error))).code, "DENIED")
             local setup_res = unauthorized_call("bee.git_worktree:setup", request)
             test.is_false(setup_res.ok)
-            test.eq((setup_res.error :: {[string]: unknown}).code, "DENIED")
+            test.eq((assert(bounds.object(setup_res.error))).code, "DENIED")
             local state = assert(worktree.plan_dedicated(repo, "test-att-denied", {repo}))
             local cleanup_res = unauthorized_call("bee.git_worktree:cleanup", {attempt_id = "test-att-denied", owner_id = "intruder", state = state})
             test.is_false(cleanup_res.ok)
-            test.eq((cleanup_res.error :: {[string]: unknown}).code, "DENIED")
+            test.eq((assert(bounds.object(cleanup_res.error))).code, "DENIED")
             local _, present = worktree.run_git({"test", "-e", state.worktree_path})
             test.eq(present, 1)
             cleanup_dir(repo)

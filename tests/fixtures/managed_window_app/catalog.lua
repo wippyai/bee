@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- Fixture-only sessions catalog owner.
 local registry = require("registry")
 local M = {}
@@ -6,8 +7,8 @@ local M = {}
 -- definition is listed while its Start-menu presentation is visible.
 function M.catalog(_: unknown): {[string]: unknown}
     local entry = registry.get("bee.managed.window.fixture:selector_definition")
-    local data = entry and entry.data :: {[string]: unknown} or {}
-    local presentation = data.presentation :: {[string]: unknown}?
+    local data = entry and assert(bounds.object(entry.data)) or {}
+    local presentation = bounds.object(data.presentation)
     local items: {{[string]: unknown}} = {}
     if presentation and presentation.start_menu == true then
         items[1] = {ref = "bee.managed.window.fixture:selector_definition", kind = "definition", title = tostring(data.title),

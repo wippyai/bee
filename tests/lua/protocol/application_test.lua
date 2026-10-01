@@ -1,4 +1,5 @@
 local test = require("test")
+local bounds = require("bounds")
 local contract = require("contract")
 local decode = require("decode")
 local client = require("client")
@@ -37,7 +38,8 @@ local function define_tests()
             test.eq(ordinary.close_grace_ms, 250)
             test.eq(assert(contract.binding({definition_id = "test:app", policies = {}, close_grace_ms = 0})).close_grace_ms, 0)
             test.eq(assert(contract.binding({definition_id = "test:app", policies = {}, close_grace_ms = 60000})).close_grace_ms, 60000)
-            for _, value in ipairs({-1, 60001, 1.5, "250", {}} :: {unknown}) do
+            local invalid_values: {unknown} = {-1, 60001, 1.5, "250", {}}
+            for _, value in ipairs(invalid_values) do
                 test.is_nil(contract.binding({definition_id = "test:app", policies = {}, close_grace_ms = value}))
             end
             test.is_nil(contract.binding({definition_id = "test:app", policies = {}, close_grace = 60000}))
@@ -48,12 +50,13 @@ local function define_tests()
             test.eq(ordinary.thread_access, "none")
             local observing = assert(contract.binding({definition_id = "test:app", policies = {}, thread_access = "observe_post"}))
             test.eq(observing.thread_access, "observe_post")
-            for _, value in ipairs({true, false, 0, 1, {}, "observe", "post", ""} :: {unknown}) do
+            local invalid_values: {unknown} = {true, false, 0, 1, {}, "observe", "post", ""}
+            for _, value in ipairs(invalid_values) do
                 test.is_nil(contract.binding({definition_id = "test:app", policies = {}, thread_access = value}))
             end
             local descriptor = assert(contract.descriptor("test:app", {api_version = 1, lifetime = "view", title = "Test",
                 revision = "1", instance_policy = "multiple", thread_access = "observe_post"}))
-            test.is_nil((descriptor :: {[string]: unknown}).thread_access)
+            test.is_nil((assert(bounds.object(descriptor))).thread_access)
             local request = assert(contract.request({version = 1, request_id = "thread-access-argument", op = "open",
                 definition_id = "test:app", arguments = {"observe_post"}}))
             test.eq(request.arguments[1], "observe_post")
@@ -139,12 +142,14 @@ local function define_tests()
                 registry_revision = "1", launch_token = "token"}
             local unbound = assert(client.launch(value))
             test.is_nil(unbound.thread_id)
-            for _, invalid in ipairs({"", "thread\n", string.rep("x", 161), 42, {id = "thread"}} :: {unknown}) do
+            local invalid_values: {unknown} = {"", "thread\n", string.rep("x", 161), 42, {id = "thread"}}
+            for _, invalid in ipairs(invalid_values) do
                 value.thread_id = invalid
                 test.is_nil(client.launch(value))
             end
             value.thread_id = nil
-            for _, invalid in ipairs({0, -1, 1.5, 2147483648, "1"} :: {unknown}) do
+            local invalid_values: {unknown} = {0, -1, 1.5, 2147483648, "1"}
+            for _, invalid in ipairs(invalid_values) do
                 value.execution_generation = invalid
                 test.is_nil(client.launch(value))
             end

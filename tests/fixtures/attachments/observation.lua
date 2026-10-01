@@ -29,7 +29,7 @@ end
 function M.observer(owner: string)
     local mounts = assert(process.listen("bee.observation.mount", {message = true}))
     assert(process.send(owner, "bee.observation.ready", {}))
-    local message = assert(mounts:receive())
+    local message = assert((mounts:receive()))
     assert(message:from() == owner)
     local data: unknown = message:payload():data()
     if type(data) ~= "table" or type(data.observer) ~= "string" or type(data.controller) ~= "string" then

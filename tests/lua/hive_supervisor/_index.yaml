@@ -68,6 +68,7 @@ entries:
   meta: {type: test_support}
   modules: [registry]
   imports:
+    bounds: bee.protocol:bounds
     audiences: bee.hive.supervisor:audiences
 - name: audiences_test
   kind: function.lua
@@ -117,6 +118,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.hive.supervisor:replica_admission_test_policy]}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     types: bee.hive:types
     catalog: bee.hive:catalog
@@ -135,6 +137,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, registry, uuid]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     types: bee.hive:types
     store: bee.storage:store
@@ -147,6 +151,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, registry, time]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     types: bee.hive:types
     commands: bee.hive.supervisor:workspace_commands

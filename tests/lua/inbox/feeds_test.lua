@@ -2,6 +2,8 @@
 -- incremental events, and replaces that cache after a reset so revoked data
 -- and stale route addresses disappear together.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local feeds = require("feeds")
 local source_config = require("source_config")
 local model = require("model")
@@ -60,21 +62,21 @@ local function define_tests()
             local first = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             test.is_true(first and first.kind == "success")
             if not first or first.kind ~= "success" then error("first inbox page failed") end
-            local first_page = first.value :: Object
-            local first_item = (first_page.changes :: {unknown})[1] :: Object
-            test.eq((first_item.request :: Object).revision, 1)
+            local first_page = assert(bounds.object(first.value))
+            local first_item = assert(bounds.object((principals.items(first_page.changes))[1]))
+            test.eq((assert(bounds.object(first_item.request))).revision, 1)
             local second = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             test.is_true(second and second.kind == "success")
             if not second or second.kind ~= "success" then error("second inbox page failed") end
-            local second_page = second.value :: Object
-            local second_item = (second_page.changes :: {unknown})[1] :: Object
-            test.eq((second_item.request :: Object).revision, 2)
+            local second_page = assert(bounds.object(second.value))
+            local second_item = assert(bounds.object((principals.items(second_page.changes))[1]))
+            test.eq((assert(bounds.object(second_item.request))).revision, 2)
             local third = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             test.is_true(third and third.kind == "success")
             if not third or third.kind ~= "success" then error("third inbox page failed") end
-            local third_page = third.value :: Object
-            test.is_true(third_page.replace_source :: boolean)
-            test.eq(#(third_page.changes :: {unknown}), 0)
+            local third_page = assert(bounds.object(third.value))
+            test.is_true(third_page.replace_source)
+            test.eq(#(principals.items(third_page.changes)), 0)
             local stale = client:invoke("bee.approvals.binding:read", {approval_id = "approval-a"})
             test.eq(stale and stale.kind, "failure")
             test.eq(reply_code(stale), "DENIED")
@@ -112,9 +114,9 @@ local function define_tests()
             local result = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             if not result or result.kind ~= "success" then error("complete inbox snapshot failed") end
             local previous = 0
-            for _, raw in ipairs(((result.value :: Object).changes :: {unknown})) do
-                local change = raw :: Object
-                local sequence = change.seq :: integer
+            for _, raw in ipairs((principals.items((assert(bounds.object(result.value))).changes))) do
+                local change = assert(bounds.object(raw))
+                local sequence = change.seq
                 test.is_true(sequence > previous, "snapshot changes are not ordered by inbox sequence")
                 previous = sequence
             end
@@ -145,9 +147,9 @@ local function define_tests()
             test.is_true(initial and initial.kind == "success")
             local reset = malformed_page:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
             if not reset or reset.kind ~= "success" then error("reset snapshot failed") end
-            local page = reset.value :: Object
-            test.is_true(page.replace_source :: boolean)
-            test.eq(#(page.changes :: {unknown}), 0)
+            local page = assert(bounds.object(reset.value))
+            test.is_true(page.replace_source)
+            test.eq(#(principals.items(page.changes)), 0)
             test.eq(snapshot_count, 2)
         end)
         test.it("resets owner and revision mismatches and enforces the 256 request source limit", function()
@@ -171,7 +173,7 @@ local function define_tests()
                 client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
                 local reset = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
                 if not reset or reset.kind ~= "success" then error("replacement snapshot failed") end
-                test.is_true(((reset.value :: Object).replace_source) :: boolean)
+                test.is_true(((assert(bounds.object(reset.value))).replace_source))
             end
 
             local configured = assert(source_config.configure("node-capacity", {"ws"}))
@@ -192,7 +194,7 @@ local function define_tests()
                 local complete = snapshot_count == 5
                 local result: Object = {ok = true, value = {schema = "bee.sync-snapshot@1", owner_id = source.node_id, feed = source.feed,
                     cursor = 1, earliest_cursor = 0, scope_revision = "scope-1", items = items, complete = complete, reset_required = false}, replayed = false}
-                if not complete then (result.value :: Object).next_key = items[#items].key end
+                if not complete then (assert(bounds.object(result.value))).next_key = items[#items].key end
                 return result, nil
             end)
             local too_many = client:invoke("bee.approvals.binding:inbox", {workspace_id = "ws"})
@@ -240,10 +242,11 @@ local function define_tests()
                         projection(source, item(remote and "approval-c" or "approval-d", source.node_id, remote and "ws-b" or "ws"), 2)}), nil
                 end
                 if target == "bee.approvals.binding:decide_batch" then
-                    seen = request :: Object
+                    seen = assert(bounds.object(request))
                     local views: {Object} = {}
-                    for _, raw in ipairs(((request :: Object).decisions :: {Object})) do
-                        local decided = item(raw.approval_id :: string, source.node_id, source.node_id == "node-b" and "ws-b" or "ws")
+                    for _, raw in ipairs((principals.objects((assert(bounds.object(request))).decisions))) do
+                        if type(raw.approval_id) ~= "string" then error("invalid fixture raw.approval_id") end
+                        local decided = item(raw.approval_id, source.node_id, source.node_id == "node-b" and "ws-b" or "ws")
                         decided.revision, decided.state, decided.decision = 2, "decided", "approved"
                         views[#views + 1] = decided
                     end
@@ -256,13 +259,14 @@ local function define_tests()
             local remote_id: string? = nil
             for _, id in ipairs(configured.workspaces) do if id ~= "ws" then remote_id = id end end
             local remote_page = client:invoke("bee.approvals.binding:inbox", {workspace_id = remote_id})
-            local remote_changes = ((remote_page :: model.Reply).value :: Object).changes :: {Object}
-            local remote_ui = (remote_changes[1].request :: Object).approval_id :: string
+            assert(remote_page and remote_page.kind == "success")
+            local remote_changes = principals.objects((assert(bounds.object(remote_page.value))).changes)
+            local remote_ui = (assert(bounds.object(remote_changes[1].request))).approval_id
             local ok = client:invoke("bee.approvals.binding:decide_batch", {decisions = {
                 {approval_id = "approval-a", expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"},
                 {approval_id = "approval-d", expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"}}})
             test.is_true(ok ~= nil and ok.kind == "success")
-            test.eq(#(((seen :: Object).decisions) :: {unknown}), 2)
+            test.eq(#(principals.items(((assert(bounds.object(seen))).decisions))), 2)
             local mixed = client:invoke("bee.approvals.binding:decide_batch", {decisions = {
                 {approval_id = "approval-a", expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"},
                 {approval_id = remote_ui, expected_revision = 1, proposal_digest = string.rep("a", 64), decision = "approved"}}})
@@ -274,15 +278,15 @@ local function define_tests()
             local sent: Object? = nil
             local client = feeds.new(configured, function(_source: Source, target: string, request: unknown): (unknown, string?)
                 test.eq(target, "bee.gov.binding:destination_call")
-                sent = request :: Object
+                sent = assert(bounds.object(request))
                 return {ok = true, value = {leases = {}}}, nil
             end)
-            local answer = client:lease("ws", {operation = "lease_list", workspace_id = "ignored"}) :: Object
+            local answer = assert(bounds.object(client:lease("ws", {operation = "lease_list", workspace_id = "ignored"})))
             test.is_true(answer.ok == true)
-            test.eq((sent :: Object).workspace_id, "ws")
+            test.eq((assert(bounds.object(sent))).workspace_id, "ws")
             local remote_id: string? = nil
             for _, id in ipairs(configured.workspaces) do if id ~= "ws" then remote_id = id end end
-            test.is_nil(client:lease(remote_id :: string, {operation = "lease_list"}))
+            test.is_nil(client:lease(remote_id, {operation = "lease_list"}))
         end)
     end)
 end

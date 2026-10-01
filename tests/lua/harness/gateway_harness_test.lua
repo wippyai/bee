@@ -10,6 +10,7 @@
 -- evidence, records, output or the endpoint. Without an executable the
 -- gate is reported open.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -65,16 +66,16 @@ local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
+    local reply = result
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function read_all(stream): string
     local content = ""
     while true do
         local chunk: unknown = stream:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk :: string)
+        content = content .. (chunk)
     end
     return content
 end
@@ -98,8 +99,8 @@ local function write_file(path: string, content: string)
 end
 local function endpoint_offered(recorded: string, wanted: string): boolean
     for line in recorded:gmatch("[^\n]+") do
-        local item = json.decode(line) :: Object
-        for _, name in ipairs((item.mcp_tools or {}) :: {string}) do
+        local item = assert(bounds.object(json.decode(line)))
+        for _, name in ipairs(principals.strings((item.mcp_tools or {}))) do
             if name == wanted then return true end
         end
     end
@@ -114,7 +115,7 @@ end
 local function admit(entry_id: string, list_key: string, item: Object, matches: (Object) -> boolean)
     local entry = registry.get(entry_id)
     if not entry then error(entry_id) end
-    local list = (entry.data :: Object)[list_key] :: {Object}
+    local list = principals.objects((assert(bounds.object(entry.data)))[list_key])
     for _, existing in ipairs(list) do
         if matches(existing) then return end
     end
@@ -131,8 +132,8 @@ local function fixture_bin(): string
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end
-local endpoint_handle: any = nil
-local endpoint_executor: any = nil
+local endpoint_handle: exec.Process? = nil
+local endpoint_executor: exec.Executor? = nil
 -- The endpoint scripts one call of the named gateway tool, then text.
 local function start_endpoint(record: string): string
     local executor = assert(exec.get("bee.placement.native:placement_executor"))
@@ -172,7 +173,7 @@ end
 local function endpoint_address(): string
     local entry = registry.get("bee:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
-    return tostring((entry.data :: Object).address)
+    return tostring((assert(bounds.object(entry.data))).address)
 end
 local function gateway_input(address: string, action_id: string, hooks: {string}?): configuration.GatewayInput
     return {endpoint = address, action_id = action_id, tools = {"thread_read", "thread_wait"}, hooks = hooks or {},
@@ -195,14 +196,16 @@ local function open_gateway()
 end
 local function thread(): string
     local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Gateway harness"})
-    return created.thread_id :: string
+    if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
+    return created.thread_id
 end
 local function projection_for(workspace: string, attempt_id: string, name: string, provider: string, source: string, binding_ref: string, policy_ref: string): string
     call("bee.credentials.binding:define", {workspace_id = workspace, name = name, provider = provider, source = {kind = "env_variable", ref = source}})
     local binding_digest, profile_digest, policy_digest = measured(binding_ref, policy_ref)
     local issued = call("bee.credentials.binding:issue_projection", {workspace_id = workspace, name = name, audience = ACTOR, attempt_id = attempt_id, profile_id = "batch",
         profile_digest = profile_digest, binding_digest = binding_digest, launch_policy_digest = policy_digest, idempotency_key = fresh("key")})
-    return issued.projection_id :: string
+    if type(issued.projection_id) ~= "string" then error("invalid fixture issued.projection_id") end
+    return issued.projection_id
 end
 local function request(thread_id: string, attempt_id: string, binding_ref: string, policy_ref: string, projections: {string}): Object
     local placement = placement_fixture.resolve()
@@ -228,35 +231,36 @@ local function await_carrier(pid: string, label: string): Outcome
         if event.kind == process.event.EXIT then
             local result = event.result or {}
             local value: Object? = nil
-            if type(result.value) == "table" then value = result.value :: Object end
+            if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
             exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
         end
     end
-    return exited[pid] :: Outcome
+    return exited[pid]
 end
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
     for _ = 1, 32 do
         local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
-        for _, item in ipairs(page.records :: {Object}) do all[#all + 1] = item end
+        for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
-        cursor = math.floor(page.scanned_through :: number)
+        if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
+        cursor = math.floor(page.scanned_through)
     end
     return all
 end
 local function evidence_of(attempt_id: string): {Object}
     local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
-    return page.evidence :: {Object}
+    return principals.objects(page.evidence)
 end
 -- The stream as the carrier recorded it, for a failure message.
 local function stream_summary(thread_id: string): string
     local lines: {string} = {}
     for _, item in ipairs(records_of(thread_id)) do
         if item.kind == "observation" and item.source == "stream" then
-            local data = (item.body :: Object).data :: Object
+            local data = assert(bounds.object((assert(bounds.object(item.body))).data))
             local text = ""
-            if type(data.content) == "table" then text = tostring((data.content :: Object).text or "") end
+            if type(data.content) == "table" then text = tostring((assert(bounds.object(data.content))).text or "") end
             lines[#lines + 1] = tostring(data.type) .. "/" .. tostring(data.code or data.phase or data.name or "") .. ":" .. text:sub(1, 160)
         end
     end
@@ -293,14 +297,14 @@ local function prepare_host(harness: Harness, port: string)
     apply(mode)
     local entry = registry.get(harness.policy)
     if not entry then error(harness.policy) end
-    local data = entry.data :: Object
+    local data = assert(bounds.object(entry.data))
     data.executables = {[harness.name] = harness.bin}
     if harness.name == "claude" then data.environment = {ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port} end
     apply(entry)
     if harness.name == "codex" then
         local provider = registry.get(PROVIDER)
         if not provider then error("provider entry") end
-        (provider.data :: Object).base_url = "http://127.0.0.1:" .. port .. "/v1"
+        (assert(bounds.object(provider.data))).base_url = "http://127.0.0.1:" .. port .. "/v1"
         apply(provider)
     end
     admit("bee.placement.native:placement_admitted_roots", "roots", {root_ref = ROOT, access = "write"}, function(item: Object): boolean return item.root_ref == ROOT end)
@@ -321,7 +325,7 @@ local function through_placement(harness: Harness)
     local outcome = await_carrier(spawn_carrier(request(thread_id, attempt_id, harness.binding, harness.policy, {projection_id})), harness.name .. " run")
     stop_endpoint()
     if not outcome.value then error(harness.name .. " run failed: " .. tostring(outcome.error)) end
-    local settlement = outcome.value.settlement :: Object
+    local settlement = assert(bounds.object(outcome.value.settlement))
     local recorded = shell("cat " .. record)
     local evidence = evidence_of(attempt_id)
     local kinds = kinds_of(evidence)
@@ -346,9 +350,9 @@ local function through_placement(harness: Harness)
     local hook_text = ""
     for _, item in ipairs(records_of(thread_id)) do
         if item.kind == "observation" and item.source == "bee" then
-            local data = (item.body :: Object).data :: Object
+            local data = assert(bounds.object((assert(bounds.object(item.body))).data))
             if data.event_name == "bee.harness.hook" then
-                local payload = json.decode(tostring(data.payload_json)) :: Object
+                local payload = assert(bounds.object(json.decode(tostring(data.payload_json))))
                 hook_events[tostring(payload.event)] = (hook_events[tostring(payload.event)] or 0) + 1
                 hook_text = hook_text .. tostring(data.payload_json)
             end
@@ -369,9 +373,9 @@ local function through_placement(harness: Harness)
     -- proceeds without one otherwise.
     local wanted_evidence = {"gateway.materialized", "credential.materialized"}
     local capabilities = call("bee.placement.native.binding:capabilities", {})
-    if (capabilities.executable_measurement :: Object).streaming == true then
+    if (assert(bounds.object(capabilities.executable_measurement))).streaming == true then
         local measurable, measure_err = funcs.new():with_actor(actor):with_scope(scope()):call("bee.placement.native.binding:measure_executable", {path = harness.bin})
-        if measure_err or type(measurable) ~= "table" or (measurable :: Object).ok ~= true then error(harness.name .. ": this runtime measures streams but could not measure " .. harness.bin .. ": " .. tostring(measure_err or json.encode(measurable))) end
+        if measure_err or type(measurable) ~= "table" or (assert(bounds.object(measurable))).ok ~= true then error(harness.name .. ": this runtime measures streams but could not measure " .. harness.bin .. ": " .. tostring(measure_err or json.encode(measurable))) end
         wanted_evidence[#wanted_evidence + 1] = "executable.measured"
     end
     for _, wanted in ipairs(wanted_evidence) do
@@ -399,7 +403,7 @@ local function without_variable(harness: Harness)
     local attempt_id = fresh("direct")
     local action_id = "action-" .. attempt_id
     local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id, thread_id = thread(), owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}})
-    local binding_id = tostring((admitted.binding :: Object).binding_id)
+    local binding_id = tostring((assert(bounds.object(admitted.binding))).binding_id)
     local address = endpoint_address()
     local home = shell("cd " .. root .. "/home && pwd"):gsub("%s+$", "")
     local argv: {string} = {}
@@ -418,8 +422,8 @@ local function without_variable(harness: Harness)
     else
         local provider_entry = registry.get(PROVIDER)
         if not provider_entry then error("provider entry") end
-        (provider_entry.data :: Object).base_url = "http://127.0.0.1:" .. port .. "/v1"
-        local provider, provider_error = codex_configuration.decode(PROVIDER, provider_entry :: {[string]: unknown})
+        (assert(bounds.object(provider_entry.data))).base_url = "http://127.0.0.1:" .. port .. "/v1"
+        local provider, provider_error = codex_configuration.decode(PROVIDER, assert(bounds.object(provider_entry)))
         if not provider then error(provider_error or "Codex provider missing") end
         local content = codex_configuration.render(provider, codex_configuration.gateway_section(codex_gateway(gateway_input(address, action_id, nil))))
         write_file(root .. "/home/.codex/config.toml", content)
@@ -442,8 +446,8 @@ local function without_variable(harness: Harness)
     if stdin then
         local written, write_error = proc:write_stdin(stdin)
         if not written then error("write the brief: " .. tostring(write_error)) end
-        local handle = proc :: {[string]: unknown}
-        if type(handle.close_stdin) == "function" then (handle.close_stdin :: (unknown) -> unknown)(proc) end
+        local handle = assert(bounds.object(proc))
+        if type(handle.close_stdin) == "function" then (handle.close_stdin)(proc) end
     end
     local output = read_all(stdout)
     local errors = read_all(stderr)
@@ -495,14 +499,14 @@ local function drive_app_server(codex_home: string, cwd: string): {[string]: str
     while time.now():before(deadline) do
         local chunk: unknown = stdout:read(4096)
         if type(chunk) ~= "string" or chunk == "" then break end
-        buffer = buffer .. (chunk :: string)
+        buffer = buffer .. (chunk)
         local finished = false
         for line in buffer:gmatch("[^\n]+") do
             local decoded: unknown = json.decode(line)
-            if type(decoded) == "table" and (decoded :: Object).id == 2 then
-                local data = ((decoded :: Object).result :: Object).data :: {Object}
+            if type(decoded) == "table" and (assert(bounds.object(decoded))).id == 2 then
+                local data = principals.objects((assert(bounds.object((assert(bounds.object(decoded))).result))).data)
                 for _, entry in ipairs(data) do
-                    for _, hook in ipairs(entry.hooks :: {Object}) do hashes[tostring(hook.key)] = tostring(hook.currentHash) end
+                    for _, hook in ipairs(principals.objects(entry.hooks)) do hashes[tostring(hook.key)] = tostring(hook.currentHash) end
                 end
                 finished = true
             end
@@ -526,7 +530,7 @@ local function hooks_through_gateway(harness: Harness)
     local attempt_id = fresh("direct")
     local action_id = "action-" .. attempt_id
     local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = action_id, attempt_id = attempt_id, thread_id = thread(), owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "thread_wait"}, hooks = HOOK_EVENTS})
-    local binding_id = tostring((admitted.binding :: Object).binding_id)
+    local binding_id = tostring((assert(bounds.object(admitted.binding))).binding_id)
     local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id})
     local minted = call("bee.gateway.binding:materialize", {attempt_id = attempt_id, carrier_epoch = 1, binding_id = binding_id, materialization_key = authorized.materialization_key})
     local address = endpoint_address()
@@ -548,8 +552,8 @@ local function hooks_through_gateway(harness: Harness)
     else
         local provider_entry = registry.get(PROVIDER)
         if not provider_entry then error("provider entry") end
-        (provider_entry.data :: Object).base_url = "http://127.0.0.1:" .. port .. "/v1"
-        local provider, provider_error = codex_configuration.decode(PROVIDER, provider_entry :: {[string]: unknown})
+        (assert(bounds.object(provider_entry.data))).base_url = "http://127.0.0.1:" .. port .. "/v1"
+        local provider, provider_error = codex_configuration.decode(PROVIDER, assert(bounds.object(provider_entry)))
         if not provider then error(tostring(provider_error)) end
         local input = gateway_input(address, action_id, HOOK_EVENTS)
         local codex_input = codex_gateway(input)
@@ -578,8 +582,8 @@ local function hooks_through_gateway(harness: Harness)
     assert(proc:start())
     if stdin then
         assert(proc:write_stdin(stdin))
-        local handle = proc :: {[string]: unknown}
-        if type(handle.close_stdin) == "function" then (handle.close_stdin :: (unknown) -> unknown)(proc) end
+        local handle = assert(bounds.object(proc))
+        if type(handle.close_stdin) == "function" then (handle.close_stdin)(proc) end
     end
     local output = read_all(stdout)
     local errors = read_all(stderr)
@@ -593,22 +597,22 @@ local function hooks_through_gateway(harness: Harness)
     if not recorded:find('"tool_result":true', 1, true) then error(harness.name .. " with hooks did not complete the read: [" .. recorded:sub(1, 600) .. "]; stdout " .. output:sub(1, 400) .. "; stderr " .. errors:sub(1, 400)) end
     local queue = call("bee.gateway.binding:hook_queue", {binding_id = binding_id})
     local seen: {[string]: Object} = {}
-    for _, item in ipairs(queue.hooks :: {Object}) do seen[tostring(item.event)] = item end
+    for _, item in ipairs(principals.objects(queue.hooks)) do seen[tostring(item.event)] = item end
     local expected = harness.name == "claude" and {"UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"} or {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
     for _, event in ipairs(expected) do
         if not seen[event] then error(harness.name .. ": hook " .. event .. " never reached the gateway; queue " .. tostring(json.encode(queue.hooks)):sub(1, 800) .. "; stderr " .. errors:sub(1, 400)) end
     end
     local provenance = harness.name == "claude" and "http" or "codex:hook_engine"
-    for _, item in ipairs(queue.hooks :: {Object}) do
+    for _, item in ipairs(principals.objects(queue.hooks)) do
         test.eq(item.provenance, provenance)
         test.eq(item.status, "queued")
         -- A stop names no occurrence of its own; every other event does.
         test.eq(item.ambiguous, item.event == "Stop")
     end
-    local pre = seen.PreToolUse.fields :: Object
+    local pre = assert(bounds.object(seen.PreToolUse.fields))
     test.eq(pre.tool_name, "mcp__bee__thread_read")
     test.is_nil(pre.tool_input)
-    test.is_true((tonumber((pre.content_sizes :: Object).tool_input) or 0) > 0)
+    test.is_true((tonumber((assert(bounds.object(pre.content_sizes))).tool_input) or 0) > 0)
     local queue_text = json.encode(queue.hooks) or ""
     test.is_nil((queue_text:find("read the thread", 1, true)))
     test.is_nil((queue_text:find("cursor", 1, true)))

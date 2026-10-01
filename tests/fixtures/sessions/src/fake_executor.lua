@@ -1,4 +1,5 @@
 -- MIT. Deterministic turn executor for scheduler recovery tests.
+local bounds = require("bounds")
 local M = {}
 type Object = {[string]: unknown}
 type State = {stop_after_first: boolean?}
@@ -7,7 +8,7 @@ type Executor = {run_turn: (Object) -> (Object?, string?), launches: integer, re
 
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
-    return value :: Object
+    return assert(bounds.object(value))
 end
 
 function M.new(config: State): Executor

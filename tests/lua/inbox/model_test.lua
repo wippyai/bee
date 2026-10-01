@@ -4,6 +4,7 @@
 -- committed, an unknown answer is recovered by reading, and the
 -- checkpoint carries selection only.
 local test = require("test")
+local bounds = require("bounds")
 local json = require("json")
 local model = require("model")
 local inbox = require("inbox")
@@ -129,7 +130,7 @@ local function define_tests()
             model.apply_answer(state, "q1", reply({ok = false, error = {code = "CONFLICT", message = "request was decided approved by bee.test.bob"}, value = view("r1", 2, "decided", {decision = "approved", decider_id = "bee.test.bob"}), replayed = false}))
             test.is_nil(state.pending)
             test.eq(state.notice, "CONFLICT: approved by bee.test.bob at revision 2")
-            test.eq((state.detail :: Object).decision, "approved")
+            test.eq((assert(bounds.object(state.detail))).decision, "approved")
             test.eq(state.rows["r1"].decider_id, "bee.test.bob")
             local _, refused = model.decision_intent(state, "q2", "denied")
             test.eq(refused, "the request is decided")

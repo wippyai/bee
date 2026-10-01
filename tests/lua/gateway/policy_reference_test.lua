@@ -4,6 +4,7 @@
 -- references afresh for each tool call, so this is characterization, not a
 -- binding-level policy pinning test.
 local test = require("test")
+local bounds = require("bounds")
 local registry = require("registry")
 local security = require("security")
 local json = require("json")
@@ -31,7 +32,7 @@ end
 local function entry(): Object
     local value, err = registry.get(POLICY)
     if err or not value then error("read policy reference fixture: " .. tostring(err)) end
-    return value :: Object
+    return assert(bounds.object(value))
 end
 
 local function copy(value: unknown): Object
@@ -39,7 +40,7 @@ local function copy(value: unknown): Object
     if not encoded then error(tostring(encode_error or "encode policy entry")) end
     local decoded, decode_error = json.decode(encoded)
     if type(decoded) ~= "table" then error(tostring(decode_error or "decode policy entry")) end
-    return decoded :: Object
+    return assert(bounds.object(decoded))
 end
 
 local function replace(value: Object)

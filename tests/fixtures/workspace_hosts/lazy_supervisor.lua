@@ -4,6 +4,7 @@
 -- checkpointed the workspace, starts it again from that checkpoint, and at
 -- its cap stops the least recently used idle host to make room. A workspace
 -- another composition serves stays that composition's.
+local bounds = require("bounds")
 local logger = require("logger")
 local process = require("process")
 local channel = require("channel")
@@ -71,7 +72,9 @@ local function applications(workspace_id: string): {Object}
     if not encoded then return {} end
     local value: unknown = json.decode(encoded)
     if type(value) ~= "table" or type(value.applications) ~= "table" then error("corrupt workspace state") end
-    return value.applications :: {Object}
+    local result: {Object} = {}
+    for index, item in ipairs(assert(bounds.array(value.applications))) do result[index] = assert(bounds.object(item)) end
+    return result
 end
 
 -- The fixture owns one host directly, as classic folder mode does, and opens

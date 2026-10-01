@@ -63,6 +63,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json, funcs]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     hooks: bee.gateway:hooks
     configuration: bee.driver:configuration
@@ -75,6 +77,8 @@ entries:
   modules: [registry, json]
   security: {policies: [bee.gateway:mcp_test_policy]}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     mcp: bee.gateway:mcp
     gateway: bee.gateway.binding:gateway
@@ -95,6 +99,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     context: bee.gateway:context
 - name: ephemeral_listener
@@ -127,6 +133,7 @@ entries:
   security:
     policies: [bee.gateway:address_test_policy]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     configuration: bee.gateway:configuration
 - name: native_admission_db_path
@@ -162,6 +169,8 @@ entries:
   security:
     policies: [bee.gateway:native_admission_test_policy]
   imports:
+    app_caller: bee.app:caller
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     configuration: bee.gateway:configuration
     protocol: bee.gateway:protocol
@@ -188,6 +197,7 @@ entries:
   security:
     policies: [bee.gateway:policy_reference_admin]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
 - name: sessions_test
   kind: function.lua
@@ -201,6 +211,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     mcp: bee.gateway:mcp
     catalog: bee.gateway:catalog

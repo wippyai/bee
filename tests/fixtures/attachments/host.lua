@@ -32,7 +32,7 @@ function M.main()
     local function start(expected_records: integer): (string, string)
         local host = tostring(assert(process.with_options({}):with_scope(scope):with_context({["bee.host_owner"] = owner})
             :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
-        local message = assert(ready:receive())
+        local message = assert((ready:receive()))
         assert(message:from() == host)
         local data: unknown = message:payload():data()
         if type(data) ~= "table" or data.version ~= 1 then error("Invalid host readiness") end
@@ -46,7 +46,7 @@ function M.main()
     local host, workspace_id = start(0)
     local function reply(id: string, op: string): decode.Reply
         while true do
-            local message = assert(replies:receive())
+            local message = assert((replies:receive()))
             assert(message:from() == host)
             local result = decode.reply(message:payload():data())
             if not result then error("Invalid host reply") end
@@ -65,7 +65,7 @@ function M.main()
         request(id, "shutdown")
         assert(reply(id, "shutdown").error_code == "")
         while true do
-            local event = assert(events:receive())
+            local event = assert((events:receive()))
             if event.kind == process.event.EXIT and tostring(event.from) == host then break end
         end
     end
@@ -75,7 +75,7 @@ function M.main()
     request("open", "open")
     local opened = reply("open", "open")
     assert(opened.error_code == "" and opened.mount == "")
-    local committed = assert(checkpoints:receive())
+    local committed = assert((checkpoints:receive()))
     assert(committed:from() == host)
     local data: unknown = committed:payload():data()
     if type(data) ~= "table" or data.workspace_id ~= workspace_id then error("Foreign checkpoint") end
@@ -97,7 +97,7 @@ function M.main()
     local previous_workspace = workspace_id
     host, workspace_id = start(1)
     assert(workspace_id == previous_workspace)
-    local restored_message = assert(restores:receive())
+    local restored_message = assert((restores:receive()))
     assert(restored_message:from() == host)
     local restored = decode.reply(restored_message:payload():data())
     assert(restored and restored.error_code == "" and restored.id == opened.id and restored.instance_id == opened.instance_id)
@@ -128,7 +128,7 @@ function M.manual()
     local function start(expected_records: integer): (string, string)
         local host = tostring(assert(process.with_options({}):with_scope(host_scope):with_context({["bee.host_owner"] = owner})
             :spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
-        local message = assert(ready:receive())
+        local message = assert((ready:receive()))
         assert(message:from() == host)
         local data: unknown = message:payload():data()
         if type(data) ~= "table" or type(data.saved) ~= "table" or type(data.saved.applications) ~= "table"
@@ -140,7 +140,7 @@ function M.manual()
     local host, workspace_id = start(0)
     local function reply(id: string, op: string): decode.Reply
         while true do
-            local message = assert(replies:receive())
+            local message = assert((replies:receive()))
             assert(message:from() == host)
             local value = decode.reply(message:payload():data())
             if not value then error("Invalid manual host reply") end
@@ -152,7 +152,7 @@ function M.manual()
         assert(process.send(host, "bee.app.request", {version = 1, request_id = id, op = "shutdown", workspace_id = workspace_id}))
         assert(reply(id, "shutdown").error_code == "")
         while true do
-            local event = assert(events:receive())
+            local event = assert((events:receive()))
             if event.kind == process.event.EXIT and tostring(event.from) == host then return end
         end
     end
@@ -160,7 +160,7 @@ function M.manual()
         definition_id = "bee.attachment.probe:app"}))
     local opened = reply("manual-open", "open")
     assert(opened.error_code == "")
-    local checkpoint = assert(checkpoints:receive())
+    local checkpoint = assert((checkpoints:receive()))
     assert(checkpoint:from() == host)
     local checkpoint_data: unknown = checkpoint:payload():data()
     if type(checkpoint_data) ~= "table" then error("Invalid manual checkpoint") end
@@ -191,32 +191,32 @@ function M.manual()
     local client_policy = assert(security.policy("bee.attachment.probe:client_policy"))
     local source = tostring(assert(process.with_options({}):with_scope(security.new_scope({client_policy}))
         :spawn_monitored("bee.attachment.probe:client", "bee:workers", owner, host, workspace_id, "A", false, "bee.attachment.probe:app", true)))
-    local source_ready = assert(statuses:receive())
+    local source_ready = assert((statuses:receive()))
     local source_ready_data: unknown = source_ready:payload():data()
     assert(source_ready:from() == source and type(source_ready_data) == "table" and source_ready_data.phase == "ready")
     assert(process.send(host, "bee.host.client", {version = 1, request_id = "manual-source-admit", op = "admit", workspace_id = workspace_id,
         recipient = source, display_id = string.rep("a", 32), permissions = {open = true, close = false, control = true}}))
-    local source_admitted = assert(results:receive())
+    local source_admitted = assert((results:receive()))
     local source_admitted_data: unknown = source_admitted:payload():data()
     assert(source_admitted:from() == host and type(source_admitted_data) == "table" and source_admitted_data.request_id == "manual-source-admit"
         and source_admitted_data.error_code == "")
-    local preflight = assert(statuses:receive())
+    local preflight = assert((statuses:receive()))
     local preflight_data: unknown = preflight:payload():data()
     assert(preflight:from() == source and type(preflight_data) == "table" and preflight_data.phase == "preflight")
     assert(process.send(source, "bee.client.command", {id = opened.id, instance_id = opened.instance_id}))
-    local fenced_bind = assert(statuses:receive())
+    local fenced_bind = assert((statuses:receive()))
     local fenced_bind_data: unknown = fenced_bind:payload():data()
     assert(fenced_bind:from() == source and type(fenced_bind_data) == "table" and fenced_bind_data.phase == "prepared-bind")
     assert(process.send(source, "bee.client.command", "exit"))
     local client = tostring(assert(process.with_options({}):with_scope(security.new_scope({client_policy}))
         :spawn_monitored("bee.attachment.probe:client", "bee:workers", owner, host, workspace_id, "B", false, "bee.attachment.probe:app")))
-    local ready_client = assert(statuses:receive())
+    local ready_client = assert((statuses:receive()))
     local ready_data: unknown = ready_client:payload():data()
     assert(ready_client:from() == client and type(ready_data) == "table" and ready_data.phase == "ready")
     assert(process.send(host, "bee.host.client", {version = 1, request_id = "manual-admit", op = "admit", workspace_id = workspace_id,
         recipient = client, display_id = string.rep("b", 32), permissions = {open = true, close = false, control = true}}))
     while true do
-        local admitted = assert(results:receive())
+        local admitted = assert((results:receive()))
         local admitted_data: unknown = admitted:payload():data()
         assert(admitted:from() == host and type(admitted_data) == "table")
         if admitted_data.request_id == "manual-admit" then
@@ -224,7 +224,7 @@ function M.manual()
             break
         end
     end
-    local restored = assert(statuses:receive())
+    local restored = assert((statuses:receive()))
     assert(restored:from() == client)
     local restored_data: unknown = restored:payload():data()
     if type(restored_data) ~= "table" or restored_data.phase ~= "opened" or type(restored_data.view) ~= "table"

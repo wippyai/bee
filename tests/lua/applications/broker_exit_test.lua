@@ -2,6 +2,7 @@
 -- broker reports that EXIT as an ordinary close, so the workspace retires the
 -- instance instead of preserving it as a failed application.
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -37,7 +38,7 @@ local function define_tests()
                     local message = received.value
                     local data: unknown = message:payload():data()
                     if tostring(message:from()) == broker and type(data) == "table" then
-                        local value = data :: {[string]: unknown}
+                        local value = assert(bounds.object(data))
                         if value.op == op and (id == nil or value.id == id)
                             and (op ~= "open" or value.request_id == request_id) then return value end
                     end

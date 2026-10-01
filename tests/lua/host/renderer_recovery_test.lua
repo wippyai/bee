@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -13,12 +14,12 @@ local function spawn_idle(monitored: boolean): string
     if monitored then return tostring(assert(process.spawn_monitored("bee.host:idle_process", "bee:workers"))) end
     return tostring(assert(process.spawn("bee.host:idle_process", "bee:workers")))
 end
-type Message = {[string]: any}
-local function receive(inbox: any): Message
+type Message = {[string]: unknown}
+local function receive(inbox: channel.Channel<process.Message>): Message
     local deadline = time.after("5s")
     local selected = channel.select({inbox:case_receive(), deadline:case_receive()})
     assert(selected.channel == inbox, "expected host message")
-    return selected.value:payload():data() :: Message
+    return assert(bounds.object(selected.value:payload():data()))
 end
 local function define_tests()
     test.describe("Host renderer recovery", function()
@@ -126,7 +127,7 @@ local function define_tests()
             local deadline = time.after("200ms")
             local early = channel.select({results:case_receive(), requests:case_receive(), deadline:case_receive()})
             if early.channel ~= deadline then
-                local answered = early.value:payload():data() :: Message
+                local answered = early.value:payload():data()
                 error("replacement was answered before the release completed: " .. tostring(answered.error_code) .. " " .. tostring(answered.error))
             end
 

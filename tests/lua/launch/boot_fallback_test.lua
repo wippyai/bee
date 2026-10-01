@@ -1,4 +1,5 @@
 local test = require("test")
+local bounds = require("bounds")
 local fallback = require("boot_fallback")
 
 local function define_tests()
@@ -15,7 +16,7 @@ local function define_tests()
             end, function() end)
             test.eq(starts, 2)
             test.eq(disabled, 1)
-            test.eq((ready :: {[string]: unknown}).workspace_id, "workspace")
+            test.eq((assert(bounds.object(ready))).workspace_id, "workspace")
             test.is_nil(err)
         end)
 

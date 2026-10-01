@@ -31,6 +31,8 @@ entries:
       name: gateway-container-probe
       security:
         actor: {id: bee.test.container}
+  imports: {bounds: bee.protocol:bounds}
+
 - name: callback_policy
   kind: security.policy
   policy:

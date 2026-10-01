@@ -1,5 +1,6 @@
 -- MIT. Owner-local exact overlay replacement with generation conflict retry.
 local test = require("test")
+local bounds = require("bounds")
 local materializer = require("materializer")
 local artifact = require("artifact")
 local admission = require("application_admission")
@@ -17,7 +18,7 @@ end
 local function copy(value: unknown): unknown
     if type(value) ~= "table" then return value end
     local result: {[unknown]: unknown} = {}
-    for key, item in pairs(value :: table) do result[key] = copy(item) end
+    for key, item in pairs(value) do result[key] = copy(item) end
     return result
 end
 
@@ -73,7 +74,7 @@ local function api(state: State): materializer.Open
 end
 
 local function is_conflict(err: unknown): boolean
-    return type(err) == "table" and (err :: {[string]: unknown}).conflict == true
+    return type(err) == "table" and (assert(bounds.object(err))).conflict == true
 end
 
 local function define_tests()
@@ -91,8 +92,8 @@ local function define_tests()
             if not result then error(tostring(err)) end
             test.eq(result.attempts, 1)
             test.is_true(result.changed == true)
-            test.eq((state.entries["app:kept"].data :: {[string]: unknown}).value, "after")
-            test.eq((state.entries["app:new"].data :: {[string]: unknown}).value, "new")
+            test.eq((assert(bounds.object(state.entries["app:kept"].data))).value, "after")
+            test.eq((assert(bounds.object(state.entries["app:new"].data))).value, "new")
             test.is_true(state.entries["old:gone"] == nil)
             test.is_true(materializer.matches_with(api(state), "bee.gov:overlay", desired) == true)
 
@@ -157,7 +158,7 @@ local function define_tests()
             test.eq(applied.entries, 2)
             test.eq(applied.overlay_entries, 4)
             test.eq(state.generation, 2)
-            test.eq((state.entries["app.notes:threads"].data :: {[string]: unknown}).default, policy_id)
+            test.eq((assert(bounds.object(state.entries["app.notes:threads"].data))).default, policy_id)
             test.not_nil(state.entries[policy_id])
             test.not_nil(state.entries[generated.record.id])
             test.is_true(materializer.matches_composed_with(api(state), "bee.gov:overlay",
@@ -166,7 +167,7 @@ local function define_tests()
             assert(materializer.reconcile_composed_with(api(state), is_conflict,
                 "bee.gov:overlay", portable, nil, narrowed))
             test.is_nil(state.entries[policy_id])
-            test.is_nil((state.entries["app.notes:threads"].data :: {[string]: unknown}).default)
+            test.is_nil((assert(bounds.object(state.entries["app.notes:threads"].data))).default)
         end)
         test.it("installs host-created file volumes and databases beside generated policies", function()
             local state: State = {entries = {}, generation = 1, conflicts = 0}

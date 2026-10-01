@@ -4,6 +4,7 @@
 -- its supervisor (releasing its host lease), and a leased supervisor that
 -- exits ends only its own sessions.
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -99,9 +100,9 @@ local function answer(h: Harness): types.Reply
 end
 local function asked(h: Harness, topic: string): Object
     local message = next_message(h.received, topic)
-    local data = message:payload():data() :: Object
+    local data = assert(bounds.object(message:payload():data()))
     test.eq(data.topic, topic)
-    return data.value :: Object
+    return assert(bounds.object(data.value))
 end
 local function send_as(supervisor: string, topic: string, value: Object)
     process.send(supervisor, "bee.test.retained.send", {topic = topic, value = value})
@@ -146,7 +147,7 @@ local function attach_folder(h: Harness): Object
     owner.result(h.state, next_message(h.results, "folder attach result"), 1)
     local attached = answer(h)
     if not attached.ok then error(tostring(attached.error and attached.error.message)) end
-    return attached.value :: Object
+    return assert(bounds.object(attached.value))
 end
 -- The folder workspace's supervisor asks the bridge to show another workspace
 -- on the display, as its display did.
@@ -177,7 +178,7 @@ local function define_tests()
             local h = harness("detach")
             local attached = attach_leased(h)
             if not attached.ok then error(tostring(attached.error and attached.error.message)) end
-            local value = attached.value :: Object
+            local value = assert(bounds.object(attached.value))
             test.eq(value.workspace_id, LEASED)
             test.eq(value.mount_ref, "leased-mount")
             test.is_true(owner.serves(h.state, LEASED))
@@ -189,7 +190,7 @@ local function define_tests()
             owner.result(h.state, next_message(h.results, "detach result"), 1)
             local detached = answer(h)
             test.is_true(detached.ok)
-            test.eq((detached.value :: Object).detached, true)
+            test.eq((assert(bounds.object(detached.value))).detached, true)
             test.is_nil(h.state.clients[h.standin])
             test.is_nil(h.state.workspaces[LEASED])
             test.eq(h.state.served_count, 0)
@@ -207,12 +208,12 @@ local function define_tests()
             local h = harness("replay")
             local first = attach_leased(h)
             if not first.ok then error(tostring(first.error and first.error.message)) end
-            local original = first.value :: Object
+            local original = assert(bounds.object(first.value))
             send_call_with_identity(h, protocol.ATTACH, "attach-replay-correlation", "attach-1",
                 {owner_execution = EXECUTION, workspace_id = LEASED, desktop_id = DISPLAY, mode = "control"}, "5s")
             local replay = answer(h)
             test.is_true(replay.ok)
-            local repeated = replay.value :: Object
+            local repeated = assert(bounds.object(replay.value))
             test.eq(repeated.session_id, original.session_id)
             test.eq(repeated.mount_ref, original.mount_ref)
             silent(h.received, "a second retained attach for a completed idempotency key")
@@ -229,7 +230,7 @@ local function define_tests()
             h.state.allowed = {[node] = true}
             local attached = attach_leased(h)
             test.is_true(attached.ok)
-            test.eq((attached.value :: Object).workspace_id, LEASED)
+            test.eq((assert(bounds.object(attached.value))).workspace_id, LEASED)
             close(h)
         end)
         test.it("lists for a client that learns the owner execution from the listing", function()
@@ -276,7 +277,7 @@ local function define_tests()
             test.is_nil((next(h.state.retiring)))
             local now = current(h)
             if not now.ok then error(tostring(now.error and now.error.message)) end
-            local value = now.value :: Object
+            local value = assert(bounds.object(now.value))
             test.eq(value.workspace_id, LEASED)
             test.eq(value.desktop_id, DISPLAY)
             test.eq(value.mount_ref, "leased-mount")
@@ -298,7 +299,7 @@ local function define_tests()
             test.eq(switched.error_code, "UNAVAILABLE")
             silent(h.received, "a release of the folder's grant after a refused switch")
             local now = current(h)
-            local value = now.value :: Object
+            local value = assert(bounds.object(now.value))
             test.eq(value.workspace_id, FOLDER)
             test.eq(value.session_id, first.session_id)
             test.eq(value.mount_ref, "folder-mount")
@@ -340,7 +341,7 @@ local function define_tests()
             })
             local default_plan = answer(h)
             test.eq(default_plan.ok, true)
-            local default_value = default_plan.value :: Object
+            local default_value = assert(bounds.object(default_plan.value))
             test.eq(default_value.kind, "attach")
             test.eq(default_value.workspace_id, FOLDER)
             test.eq(default_value.desktop_id, DEFAULT_DISPLAY)
@@ -351,14 +352,14 @@ local function define_tests()
                 request = {kind = "automatic", mode = "control", desktops = candidates, excluded = {}},
             })
             local picker_plan = answer(h)
-            local picker_value = picker_plan.value :: Object
+            local picker_value = assert(bounds.object(picker_plan.value))
             test.eq(picker_value.kind, "choose_workspace")
 
             request(h, protocol.PLAN, "plan-next", {
                 request = {kind = "workspace", workspace_id = LEASED, mode = "control", desktops = candidates, excluded = {DEFAULT_DISPLAY}},
             })
             local next_plan = answer(h)
-            local next_value = next_plan.value :: Object
+            local next_value = assert(bounds.object(next_plan.value))
             test.eq(next_value.kind, "attach")
             test.eq(next_value.workspace_id, LEASED)
             test.eq(next_value.desktop_id, DISPLAY)
@@ -367,7 +368,7 @@ local function define_tests()
             request(h, protocol.PLAN, "plan-allocation", {
                 request = {kind = "workspace", workspace_id = LEASED, mode = "control", desktops = candidates, excluded = candidates},
             })
-            local allocation = answer(h).value :: Object
+            local allocation = assert(bounds.object(answer(h).value))
             test.eq(allocation.kind, "allocate")
             test.eq(allocation.workspace_id, LEASED)
             test.eq(h.state.client_count, 0)

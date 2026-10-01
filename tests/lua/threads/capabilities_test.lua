@@ -12,10 +12,12 @@ local waits = require("waits")
 local function names(id: string): {string}
     local entry, err = registry.get(id)
     if err or not entry then error("contract " .. id .. ": " .. tostring(err)) end
-    local data = entry.data :: {[string]: unknown}
+    local data = assert(bounds.object(entry.data))
     local result: {string} = {}
-    for index, method in ipairs(data.methods :: {{[string]: unknown}}) do
-        result[index] = method.name :: string
+    for index, raw in ipairs(assert(bounds.array(data.methods))) do
+        local method = assert(bounds.object(raw))
+        if type(method.name) ~= "string" then error("contract method name must be text") end
+        result[index] = method.name
     end
     return result
 end
@@ -70,10 +72,12 @@ local function define_tests()
             local caller = funcs.new():with_actor(security.new_actor("bee.test.nobody")):with_scope(security.new_scope({"bee.threads:client_test_policy"}))
             local reply, err = caller:call("bee.threads:capabilities", {})
             if err then error(tostring(err)) end
-            local described = reply :: capabilities.Report
+            local described = assert(bounds.object(reply))
+            local limits = assert(bounds.object(described.limits))
+            local contracts = assert(bounds.array(described.contracts))
             test.eq(described.revision, "bee.threads.capabilities@1")
-            test.eq(described.limits.max_thread_records, bounds.MAX_THREAD_RECORDS)
-            test.eq(#described.contracts, 7)
+            test.eq(limits.max_thread_records, bounds.MAX_THREAD_RECORDS)
+            test.eq(#contracts, 7)
         end)
     end)
 end

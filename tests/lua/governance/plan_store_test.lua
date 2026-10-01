@@ -1,5 +1,6 @@
 -- MIT. Durable destination plan lifecycle; no approval or overlay is invoked.
 local test = require("test")
+local bounds = require("bounds")
 local hash = require("hash")
 local store = require("plan_store")
 local database = require("database")
@@ -14,7 +15,7 @@ end
 
 local function ok(result: {[string]: unknown}): {[string]: unknown}
     test.is_true(result.ok == true)
-    return result.value :: {[string]: unknown}
+    return assert(bounds.object(result.value))
 end
 
 local function identity(operation: string, revision: integer, key: string, workspace: string): {[string]: unknown}

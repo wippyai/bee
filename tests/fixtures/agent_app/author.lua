@@ -134,7 +134,7 @@ local function configure(policy_ref: string, keep_executable: boolean)
     if not approvers then error("approval policies missing") end
     local approver_data = bounds.object(approvers.data)
     if not approver_data then error("approval policy data missing") end
-    local policies = approver_data.policies :: {unknown}
+    local policies = assert(bounds.array(approver_data.policies))
     local declared = false
     for _, raw in ipairs(policies) do
         local existing = bounds.object(raw)
@@ -319,7 +319,7 @@ local function reported_digest(started: Object, marker: string): (string?, strin
                     and record.action_id == started.action_id and record.attempt_id == started.attempt_id then
                     local content = bounds.object(body.content)
                     if not content or type(content.artifact_ref) ~= "string" then error("missing authored snapshot digest") end
-                    digest = content.artifact_ref :: string
+                    digest = content.artifact_ref
                     sequence = bounds.sequence(record.sequence) or 0
                 end
             end
@@ -465,7 +465,7 @@ local function main()
     if type(file.content_base64) ~= "string" then
         report.findings = refusal_findings("MISSING_ARTIFACT", "the frozen overlay holds no entries.json")
     else
-        local source, decode_error = base64.decode(file.content_base64 :: string)
+        local source, decode_error = base64.decode(file.content_base64)
         if not source then
             report.findings = refusal_findings("INVALID_ARTIFACT", tostring(decode_error))
         else

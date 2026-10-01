@@ -18,6 +18,7 @@ entries:
   security:
     policies: [bee.git_worktree:worktree_policy, bee.placement.native.security:placement_runner_policy, bee.placement.native.security:placement_service_policy, bee.git_worktree.test:caller_policy]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     worktree: bee.git_worktree:worktree
     setup_method: bee.git_worktree:setup

@@ -106,6 +106,12 @@ func stageComposition(tempDir, srcDir, repoRoot string) (string, error) {
 		}
 	}
 
+	for _, organization := range []string{"wippy", "userspace"} {
+		if err := copyDir(filepath.Join(tempDir, ".wippy", "vendor", organization), filepath.Join(repoRoot, ".wippy", "vendor", organization)); err != nil {
+			return "", fmt.Errorf("copy fixture dependencies: %w", err)
+		}
+	}
+
 	// 5. Pick ephemeral random loopback address for gateway
 	endpointAddress, err := pickRandomLoopbackAddress()
 	if err != nil {
@@ -254,14 +260,14 @@ func runHarness() error {
 		env = append(env, "BEE_WINDOW_HOOKS_COMMAND="+beePath)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
+	lintContext, cancelLint := context.WithTimeout(context.Background(), 120*time.Second)
 
 	// 1. Run lint on staged composition
-	lintCmd := exec.CommandContext(ctx, runtimePath, "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")
+	lintCmd := exec.CommandContext(lintContext, runtimePath, "lint", "--strict-any", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")
 	lintCmd.Dir = tempDir
 	lintCmd.Env = env
 	lintOut, err := lintCmd.CombinedOutput()
+	cancelLint()
 	if err != nil {
 		return fmt.Errorf("lint staged composition failed: %w\n%s", err, string(lintOut))
 	}
@@ -277,6 +283,8 @@ func runHarness() error {
 	} else if *crash {
 		command = "window-hooks-crash-acceptance"
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, runtimePath, "run", "--host", "bee:terminal", "--", command)
 	cmd.Dir = tempDir
 	cmd.Env = env

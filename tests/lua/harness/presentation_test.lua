@@ -1,5 +1,6 @@
 -- MIT. Retained presentation enters the fixed host scope through a trusted function boundary.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -28,7 +29,7 @@ local function define_tests()
                 test.eq(scope:evaluate(actor, "process.context", "context"), "deny")
                 local raw, err = funcs.new():with_actor(actor):with_scope(scope):call("bee.harness.launch:present", {})
                 if err then error(tostring(err)) end
-                local reply = raw :: {[string]: any}
+                local reply = raw
                 test.is_true(reply.ok)
                 test.eq(reply.value.owner, "presentation-caller")
                 test.eq(reply.value.workspace, workspace)
@@ -71,7 +72,7 @@ local function define_tests()
                         while true do
                             local message = requests:receive()
                             if not message then return end
-                            local body = message:payload():data() :: {[string]: unknown}
+                            local body = assert(bounds.object(message:payload():data()))
                             local sender = tostring(message:from())
                             assert(sender == tostring(viewer), "mount RPC sender is not the viewer process")
                             if sender == tostring(viewer) then

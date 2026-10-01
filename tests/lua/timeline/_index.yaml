@@ -48,6 +48,7 @@ entries:
   security:
     policies: [bee.threads:client_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     model: bee.threads.timeline.app:model
     view: bee.threads.timeline.app:view

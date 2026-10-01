@@ -113,7 +113,7 @@ local function main()
     if delivered.plan_digest ~= staged.plan_digest then
         error("the product delivery tool reported another staged plan")
     end
-    local steps = delivered.human_steps :: {unknown}
+    local steps = assert(bounds.array(delivered.human_steps))
     if type(steps) ~= "table" or #steps ~= 6 then
         error("the product delivery tool did not name the human steps")
     end

@@ -1,5 +1,6 @@
 -- MIT. Drives the real manager through its normal broker attachment. This fixture
 -- is packed only into disposable acceptance packs.
+local bounds = require("bounds")
 local process = require("process")
 local time = require("time")
 local security = require("security")
@@ -28,21 +29,21 @@ local function main(mode: string?)
     local boundary = assert(security.policy("bee.security:core_spawn_boundary"))
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
-    assert(catalogs:receive())
+    assert((catalogs:receive()))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
         definition_id = "bee.hive.manager.app:app", arguments = {}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
-        local message = assert(replies:receive())
+        local message = assert((replies:receive()))
         local data: unknown = message:payload():data()
-        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "open" then opened = data :: {[string]: unknown} end
+        if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "open" then opened = assert(bounds.object(data)) end
     end
     assert(opened.error_code == "", "manager did not become ready: " .. tostring(opened.error))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = WORKSPACE,
         id = opened.id, instance_id = opened.instance_id, recipient = owner}))
     local mount = ""
     while mount == "" do
-        local message = assert(replies:receive())
+        local message = assert((replies:receive()))
         local data: unknown = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind" and data.op == "attached" then mount = tostring(data.mount) end
     end
@@ -51,7 +52,7 @@ local function main(mode: string?)
     local function close()
         assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
         while true do
-            local message = assert(replies:receive())
+            local message = assert((replies:receive()))
             local data: unknown = message:payload():data()
             if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then
                 assert(data.error_code == "", "manager close failed: " .. tostring(data.error)); return
@@ -64,7 +65,7 @@ local function main(mode: string?)
     elseif mode == "slow" then
         wait_text(view, "ready")
         key(view, "enter")
-        assert(slow_entered:receive())
+        assert((slow_entered:receive()))
         key(view, "t"); wait_text(view, "Hide details")
         local started = time.now()
         close()
@@ -73,10 +74,10 @@ local function main(mode: string?)
         wait_text(view, "ready")
         key(view, "enter"); wait_text(view, "main")
         key(view, "c")
-        local state = assert(dialogs:receive())
+        local state = assert((dialogs:receive()))
         local data: unknown = state:payload():data()
         assert(type(data) == "table" and type(data.items) == "table" and data.items[1] ~= nil, "missing manager confirmation")
-        local question = data.items[1] :: {[string]: unknown}
+        local question = assert(bounds.object(data.items[1]))
         -- The selection moves to another workspace while the question stands;
         -- accepting it must not redirect consent to the new selection.
         key(view, "down"); wait_text(view, "›replacement")

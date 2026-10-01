@@ -129,7 +129,6 @@ end
 -- Read one host-selected supplemental file with the same bounded, typed
 -- source read used for provider login files. The bytes remain transient.
 local function read_source_file(volume: fs.FS, path: string, content_format: string, bound: integer, label: string): (string?, string?, string?)
-    if volume:exists("/" .. path) == false then return nil, "MISSING", nil end
     local file, open_error = volume:open("/" .. path, "r")
     if not file then
         if open_error and open_error:kind() == errors.NOT_FOUND then return nil, "MISSING", nil end

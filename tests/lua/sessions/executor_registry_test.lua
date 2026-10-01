@@ -1,6 +1,8 @@
 -- MIT. Host selection is the only source of executable bindings, and exact
 -- executor identities have one binding in a registry snapshot.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local registry = require("registry")
 
 local CONTRACT = "bee.sessions:executor"
@@ -24,10 +26,10 @@ local function define_tests()
             local built, err = registry.build({["bee.fake:chosen"] = chosen, ["bee.fake:spare"] = spare}, {"bee.fake:chosen"})
             test.is_nil(err)
             test.not_nil(built)
-            local selected, selected_error = registry.get(built :: registry.Registry, "external")
+            local selected, selected_error = registry.get(built, "external")
             test.is_nil(selected_error)
-            test.eq((selected :: registry.Binding).ref, "bee.fake:chosen")
-            local absent, absent_error = registry.get(built :: registry.Registry, "native")
+            test.eq((selected).ref, "bee.fake:chosen")
+            local absent, absent_error = registry.get(built, "native")
             test.is_nil(absent)
             test.eq(absent_error, "NOT_FOUND")
         end)
@@ -44,10 +46,11 @@ local function define_tests()
 
         test.it("rejects a selected binding with an incomplete executor contract", function()
             local broken = binding("external")
-            local data = broken.data :: {[string]: unknown}
-            local contracts = data.contracts :: {unknown}
-            local contract = contracts[1] :: {[string]: unknown}
-            (contract.methods :: {[string]: string}).run_turn = "invalid target"
+            local data = assert(bounds.object(broken.data))
+            local contracts = principals.items(data.contracts)
+            local contract = assert(bounds.object(contracts[1]))
+            local methods = assert(bounds.object(contract.methods))
+            methods.run_turn = "invalid target"
             local built, err = registry.build({["bee.fake:broken"] = broken}, {"bee.fake:broken"})
             test.is_nil(built)
             test.eq(err, "INVALID: selected executor binding bee.fake:broken does not bind run_turn")

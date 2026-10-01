@@ -65,7 +65,7 @@ local function plans(statement: catalog.Statement): {string}
     transaction(function(tx: sql.Transaction)
         local rows, err = tx:query("EXPLAIN QUERY PLAN " .. statement.sql, statement.params)
         if err or not rows then error("explain: " .. tostring(err)) end
-        for _, row in ipairs(rows) do details[#details + 1] = tostring((row :: Row).detail) end
+        for _, row in ipairs(rows) do details[#details + 1] = tostring((row).detail) end
     end)
     return details
 end

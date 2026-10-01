@@ -12,6 +12,7 @@ local capability_grants = require("capability_grants")
 local capability_files = require("capability_files")
 local protected_kernel = require("protected_kernel")
 local lists = require("lists")
+local resolution = require("resolution")
 
 local M = {}
 type Object = {[string]: unknown}
@@ -32,7 +33,8 @@ type Policy = {node_id: string, policy_digest: string, packages: {[string]: bool
 -- it is consulted only when the plan requests workspace files.
 type Deps = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?}
-type Resolver = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
+type Resolver = resolution.Resolver
+type Instance = {capture: () -> (Captured?, string?), root: (unknown) -> (Root?, string?),
     policy: (unknown, Captured, Root) -> (Policy?, string?), folder: (() -> (unknown?, string?))?,
     revision: (Resolver) -> (integer?, string?),
     resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
@@ -671,10 +673,11 @@ function M.new(config: Config): Resolver
             end}
         return captured, nil
     end
-    local value: Resolver = {capture = capture, root = config.root, policy = config.policy, folder = config.folder,
+    local value: Instance
+    value = {capture = capture, root = config.root, policy = config.policy, folder = config.folder,
         revision = function(_: Resolver): (integer?, string?) return current_revision() end,
-        resolve = function(self: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
-            return M.resolve_with(self, spec)
+        resolve = function(_: Resolver, spec: unknown): (preflight.Candidate?, preflight.Context?, string?)
+            return M.resolve_with(value, spec)
         end}
     return value
 end

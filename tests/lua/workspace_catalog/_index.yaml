@@ -43,6 +43,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, registry, process, time, fs]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
 - name: resources_call_test_policy
   kind: security.policy
@@ -71,6 +73,9 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, registry, time, fs]
   imports:
+    app_caller: bee.app:caller
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     persistence: bee.workspace:persistence
     model: bee.desktop:model

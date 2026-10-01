@@ -1,6 +1,7 @@
 -- MIT. Authenticated supervisor peers may fill only their own inert replica
 -- cache slot without a principal mapping.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local system = require("system")
 local time = require("time")
@@ -46,7 +47,7 @@ end
 local function call(value: types.Request): types.Reply
     local result, err = funcs.call("bee.sync.hive:admit", value)
     if err then error(tostring(err)) end
-    return result :: types.Reply
+    return assert(types.decode_reply(result))
 end
 
 local function define_tests()
@@ -55,16 +56,16 @@ local function define_tests()
             local source = "replica-peer-" .. assert(uuid.v7())
             local reply = call(request(source, source))
             test.is_true(reply.ok)
-            local result = reply.value :: {[string]: unknown}
+            local result = assert(bounds.object(reply.value))
             test.is_true(result.ok)
-            test.eq(((result.value :: {[string]: unknown}).state), "receiving")
+            test.eq(((assert(bounds.object(result.value))).state), "receiving")
         end)
 
         test.it("denies source-owner substitution before replica storage", function()
             local source = "replica-peer-" .. assert(uuid.v7())
             local reply = call(request(source, "other-peer-" .. assert(uuid.v7())))
             test.is_false(reply.ok)
-            test.eq((reply.error :: types.Fault).code, "DENIED")
+            test.eq(assert(reply.error).code, "DENIED")
         end)
     end)
 end

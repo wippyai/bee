@@ -2,6 +2,7 @@
 -- leads with the proposed effect, and lets no control sequence from a
 -- request through.
 local test = require("test")
+local bounds = require("bounds")
 local tty = require("tty")
 local model = require("model")
 local leases = require("leases")
@@ -131,7 +132,7 @@ local function define_tests()
         test.it("shows catalog capability and delta on the ordinary approval screen", function()
             local state = model.new({"ws-1"})
             local item = request("grant-1", "pending", "Install Tally?")
-            local proposal = item.proposal :: Object
+            local proposal = assert(bounds.object(item.proposal))
             proposal.payload = {permission_changes = {"added: Read owned threads"},
                 resolved_capabilities = {"Read owned threads"}}
             model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {
@@ -153,7 +154,7 @@ local function define_tests()
                 changes[index] = "added: Capability " .. tostring(index)
                 resolved[index] = "Capability " .. tostring(index)
             end
-            local proposal = item.proposal :: Object
+            local proposal = assert(bounds.object(item.proposal))
             proposal.payload = {permission_changes = changes, resolved_capabilities = resolved}
             model.apply_inbox(state, "ws-1", reply({ok = true, error = nil, value = {
                 changes = {{seq = 1, approval_id = "grant-many", revision = 1, request = item}},

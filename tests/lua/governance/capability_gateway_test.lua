@@ -3,6 +3,8 @@
 -- grant, the exact binding and method, and the approved origin, method and
 -- path prefix.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local catalog = require("capability_catalog")
 local grants = require("capability_grants")
 local gateway = require("capability_gateway")
@@ -42,7 +44,7 @@ end
 local function define_tests()
     test.describe("capability gateway checks", function()
         test.it("authenticates only a broker application principal", function()
-            local identity = caller() :: {[string]: unknown}
+            local identity = assert(bounds.object(caller()))
             test.eq(identity.workspace_id, WORKSPACE)
             test.eq(identity.definition_id, APP)
             test.is_nil(gateway.caller("bee.gov.activation", {workspace_id = WORKSPACE, definition_id = APP}))
@@ -76,7 +78,7 @@ local function define_tests()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("contract.call", {binding = BINDING, methods = {"get"}})}))
             local stored = assert(grants.record(OWNER, WORKSPACE, APP, proposed, "approval-call", 1))
-            local data = (stored :: {[string]: unknown}).data :: {[string]: unknown}
+            local data = assert(bounds.object((assert(bounds.object(stored))).data))
             data.workspace_id = OTHER_WORKSPACE
             test.is_nil(grants.decode(stored, OWNER, WORKSPACE, APP, vocabulary()))
         end)
@@ -99,13 +101,13 @@ local function define_tests()
         test.it("materializes callable gateway grants rather than direct runtime access", function()
             local contract_grant = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("contract.call", {binding = BINDING, methods = {"get"}})}))
-            local contract_inner = (contract_grant.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
-            test.eq((contract_inner.actions :: {string})[1], "funcs.call")
-            test.eq((contract_inner.resources :: {string})[1], gateway.CONTRACT_CALL)
+            local contract_inner = assert(bounds.object((assert(bounds.object(contract_grant.policies[1].data))).policy))
+            test.eq((principals.strings(contract_inner.actions))[1], "funcs.call")
+            test.eq((principals.strings(contract_inner.resources))[1], gateway.CONTRACT_CALL)
             local http_grant = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("http.api", {origin = "https://api.example.com", methods = {"GET"}, path_prefix = "/v1"})}))
-            local http_inner = (http_grant.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
-            test.eq((http_inner.resources :: {string})[1], gateway.HTTP_REQUEST)
+            local http_inner = assert(bounds.object((assert(bounds.object(http_grant.policies[1].data))).policy))
+            test.eq((principals.strings(http_inner.resources))[1], gateway.HTTP_REQUEST)
         end)
     end)
 end

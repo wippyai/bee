@@ -21,8 +21,8 @@ local function key(): string return "k-" .. tostring(time.now():unix_nano()) end
 local function call(target: string, request: Object): Object
     local reply, err = funcs.call(target, request)
     assert(not err, target .. ": " .. tostring(err))
-    assert((reply :: Object).ok == true, target .. ": " .. tostring(json.encode(reply)))
-    return (reply :: Object).value :: Object
+    assert((assert(bounds.object(reply))).ok == true, target .. ": " .. tostring(json.encode(reply)))
+    return assert(bounds.object((assert(bounds.object(reply))).value))
 end
 local function endpoint(): string
     local selected, err = funcs.call("bee.gateway:address", {})
@@ -32,16 +32,16 @@ local function endpoint(): string
         selected, err = funcs.call("bee.gateway:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
-    local address = (selected :: Object).address
-    assert(type(address) == "string" and (address :: string):find("^127%.0%.0%.1:%d+$"), "gateway endpoint address")
-    return address :: string
+    local address = (assert(bounds.object(selected))).address
+    assert(type(address) == "string" and (address):find("^127%.0%.0%.1:%d+$"), "gateway endpoint address")
+    return address
 end
 -- Admit this subject for exactly the docs tool and materialize its token once,
 -- the same admission and credential path every managed Agent uses.
 local function binding(): (string, string)
     local admitted = call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "docs-agent", attempt_id = "docs-agent-attempt",
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"docs"}, ttl_ms = 60000})
-    local binding_id = tostring((admitted.binding :: Object).binding_id)
+    local binding_id = tostring((assert(bounds.object(admitted.binding))).binding_id)
     assert(admitted.token == nil, "admit must not return token bytes")
     local authorized = call("bee.gateway.binding:authorize_materialization", {attempt_id = "docs-agent-attempt", carrier_epoch = 1, binding_id = binding_id})
     local materialized = call("bee.gateway.binding:materialize", {attempt_id = "docs-agent-attempt", carrier_epoch = 1,
@@ -54,20 +54,20 @@ local function rpc(token: string, method: string, params: Object?): (number, Obj
         ["Content-Type"] = "application/json"}, body = body, timeout = "8s"})
     assert(response, "rpc " .. method .. ": " .. tostring(err))
     local decoded: unknown = json.decode(tostring(response.body))
-    return response.status_code, type(decoded) == "table" and (decoded :: Object) or nil
+    return response.status_code, type(decoded) == "table" and (assert(bounds.object(decoded))) or nil
 end
 local function tool(token: string, arguments: Object): Object
     local status, reply = rpc(token, "tools/call", {name = "docs", arguments = arguments})
     assert(status == 200 and reply and reply.result, "docs status " .. tostring(status))
-    local result = reply.result :: Object
-    local content = (result.content :: {Object})[1]
+    local result = assert(bounds.object(reply.result))
+    local content = (assert(bounds.array(result.content)))[1]
     local text: unknown = json.decode(tostring(content.text))
     assert(type(text) == "table", "docs returned no reply")
-    return text :: Object
+    return assert(bounds.object(text))
 end
 local function value(reply: Object, what: string): Object
     assert(reply.ok == true, what .. " failed: " .. tostring(reply.code) .. " " .. tostring(reply.message))
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function find(haystack: string, needle: string): boolean
     return string.find(haystack, needle, 1, true) ~= nil
@@ -77,10 +77,10 @@ end
 local function terminal_toolkit(token: string): string
     -- A phrase only Bee's toolkit reference carries, so search must find it.
     local found = value(tool(token, {operation = "search", query = "one-based cells", topic = "terminal", limit = 8}), "search toolkit")
-    local results = found.results :: {{[string]: unknown}}
+    local results = assert(bounds.array(found.results))
     assert(#results >= 1, "the toolkit search returned nothing")
     local selected: Object? = nil
-    for _, result in ipairs(results) do if tostring(result.id) == "toolkit" then selected = result end end
+    for _, result in ipairs(results) do if tostring(result.id) == "toolkit" then selected = assert(bounds.object(result)) end end
     assert(selected ~= nil, "the toolkit reference was not found by search")
     assert(tostring(selected.section) ~= "", "a toolkit match must name its section")
     local read = value(tool(token, {operation = "read", id = tostring(selected.id), limit = 16384}), "read toolkit")
@@ -105,11 +105,11 @@ end
 -- cluster topic, then read the implemented sync contract the search found.
 local function cross_node_sync(token: string): string
     local found = value(tool(token, {operation = "search", query = "expected revisions", topic = "cluster", limit = 8}), "search cluster")
-    local results = found.results :: {{[string]: unknown}}
+    local results = assert(bounds.array(found.results))
     assert(#results >= 1, "the cross-node search returned nothing")
     local selected: Object? = nil
     for _, result in ipairs(results) do
-        if tostring(result.id) == "docs/sync_and_inbox" then selected = result end
+        if tostring(result.id) == "docs/sync_and_inbox" then selected = assert(bounds.object(result)) end
     end
     assert(selected ~= nil, "the sync contract was not found by search")
     local read = value(tool(token, {operation = "read", id = tostring(selected.id), limit = 16384}), "read contract")
@@ -123,7 +123,7 @@ end
 -- corpus by the id list returned, and the terminal module by name.
 local function runtime_module(token: string): string
     local listed = value(tool(token, {operation = "list", topic = "storage", limit = 64}), "list storage")
-    local documents = listed.documents :: {{[string]: unknown}}
+    local documents = assert(bounds.array(listed.documents))
     local found = false
     for _, document in ipairs(documents) do if tostring(document.id) == "runtime/lua/storage/sql" then found = true end end
     assert(found, "the SQL module is absent from the storage topic")
@@ -154,7 +154,8 @@ local function main()
     local status, listed = rpc(token, "tools/list", {})
     assert(status == 200 and listed and listed.result, "tools/list failed")
     local names: {[string]: boolean} = {}
-    for _, advertised in ipairs((listed.result :: Object).tools :: {{[string]: unknown}}) do names[tostring(advertised.name)] = true end
+    for _, advertised in ipairs(assert(bounds.array((assert(bounds.object(listed.result))).tools))) do
+        local advertised = assert(bounds.object(advertised)) names[tostring(advertised.name)] = true end
     assert(names["docs"] == true, "the docs tool is not advertised to this binding")
     bounds_hold(token)
     local first = terminal_toolkit(token)

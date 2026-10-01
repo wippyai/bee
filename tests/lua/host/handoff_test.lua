@@ -1,5 +1,6 @@
 -- MIT. A host checkpoint carries descriptive state and exact owner identity.
 local test = require("test")
+local bounds = require("bounds")
 local handoff = require("handoff")
 local inventory = require("inventory")
 local questions = require("questions")
@@ -18,7 +19,7 @@ local function define_tests()
         end)
         test.it("rejects unknown fields, invalid inventory and malformed admissions", function()
             local saved = handoff.pack(owner, workspace, "broker-pid", inventory.new(workspace), {}, 0, 0, questions.new(workspace))
-            local raw = saved :: {[string]: unknown}
+            local raw = assert(bounds.object(saved))
             raw.version = 2
             test.is_nil(handoff.decode(raw, owner, workspace))
             raw.version = 1

@@ -73,8 +73,8 @@ local function exact_request(request: Object, workspace_id: string, thread_id: s
         or capability.resource ~= payload.binding_id
         or bounds.fields(payload, {"binding_id", "subject", "thread_id", "configuration_digest", "capability", "fixed_context"})
         or payload.subject ~= actor_id or payload.thread_id ~= thread_id or not bounds.id(payload.binding_id)
-        or type(payload.configuration_digest) ~= "string" or #(payload.configuration_digest :: string) ~= 64
-        or not (payload.configuration_digest :: string):match("^[0-9a-f]+$")
+        or type(payload.configuration_digest) ~= "string" or #(payload.configuration_digest) ~= 64
+        or not (payload.configuration_digest):match("^[0-9a-f]+$")
         or type(payload.fixed_context) ~= "table" then
         return "proposal payload differs"
     end
@@ -85,13 +85,13 @@ local function carrier_report(): string
     local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
     local records = page and page.records
     if type(records) ~= "table" then return "no error" end
-    for _, raw in ipairs(records :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(records))) do
         local record = object(raw)
         local body = record and object(record.body)
         local data = body and object(body.data)
         local content = data and object(data.content)
         if data and data.code == "stderr" and content and type(content.text) == "string" then
-            return content.text :: string
+            return content.text
         end
     end
     return "no error"
@@ -118,7 +118,7 @@ local function approve(workspace_id: string, thread_id: string, actor_id: string
             if inbox then
                 local changes = inbox.changes
                 if type(changes) ~= "table" then return false, "approval inbox changes are missing" end
-                for _, raw in ipairs(changes :: {unknown}) do
+                for _, raw in ipairs(assert(bounds.array(changes))) do
                     local change = object(raw)
                     local request = change and object(change.request)
                     if request and request.workspace_id == workspace_id and request.policy == POLICY and request.state == "pending" then
@@ -199,7 +199,7 @@ local function await_proofs(workspace_id: string, action_id: string, attempt_id:
         if not page then error("read application thread: " .. tostring(page_error)) end
         local records = page.records
         if type(records) ~= "table" then error("application thread records are missing") end
-        for _, raw in ipairs(records :: {unknown}) do
+        for _, raw in ipairs(assert(bounds.array(records))) do
             local record = object(raw)
             local body = record and object(record.body)
             local content = body and object(body.content)
@@ -367,7 +367,7 @@ local function main()
             local bindings = data and data.bindings
             if type(bindings) ~= "table" then error("application admission bindings are unavailable") end
             local found = false
-            for _, raw in ipairs(bindings :: {unknown}) do
+            for _, raw in ipairs(assert(bounds.array(bindings))) do
                 local binding = object(raw)
                 if binding and binding.definition_id == APPLICATION then
                     binding.thread_access = "none"; found = true
@@ -391,7 +391,7 @@ local function main()
             local key = workspace_id .. ":" .. view_id
             if not completed[key] then
                 local ok, outcome = pcall(execute, workspace_id, view_id, instance_id)
-                local proof: Object = ok and (outcome :: Object) or {error = tostring(outcome)}
+                local proof: Object = ok and (assert(bounds.object(outcome))) or {error = tostring(outcome)}
                 proof.workspace_id = workspace_id
                 local delivered, delivery_error = process.send(recipient, RESULT, proof)
                 if not delivered then error("deliver app-open result: " .. tostring(delivery_error)) end

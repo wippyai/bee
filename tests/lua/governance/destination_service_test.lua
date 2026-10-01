@@ -1,5 +1,7 @@
 -- MIT. Host configuration is the authority boundary for destination activation.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local service = require("destination_service")
 local registry = require("registry")
 
@@ -35,7 +37,8 @@ local function define_tests()
 
         test.it("rejects duplicate destination and source mappings", function()
             local config = valid()
-            local profiles = config.profiles :: {unknown}
+            local profiles = principals.items(config.profiles)
+            config.profiles = profiles
             profiles[2] = profiles[1]
             local decoded, err = service.configuration(config, "node-destination")
             test.is_true(decoded == nil)
@@ -44,9 +47,9 @@ local function define_tests()
 
         test.it("rejects malformed allowlists instead of widening policy", function()
             local config = valid()
-            local profiles = config.profiles :: {{[string]: unknown}}
+            local profiles = principals.objects(config.profiles)
             local profile = profiles[1]
-            local allow = profile.allow :: {[string]: unknown}
+            local allow = assert(bounds.object(profile.allow))
             allow.packages = {"vendor/app", "vendor/app"}
             local decoded, err = service.configuration(config, "node-destination")
             test.is_true(decoded == nil)
@@ -55,7 +58,7 @@ local function define_tests()
 
         test.it("accepts only explicit resolver modes and binds the mode into policy", function()
             local config = valid()
-            local profiles = config.profiles :: {{[string]: unknown}}
+            local profiles = principals.objects(config.profiles)
             profiles[1].resolver = "overlay"
             local overlay, overlay_error = service.configuration(config, "node-destination")
             if not overlay then error(tostring(overlay_error)) end
@@ -70,8 +73,8 @@ local function define_tests()
         end)
         test.it("binds logical databases to host resources inside the measured policy", function()
             local config = valid()
-            local profiles = config.profiles :: {{[string]: unknown}}
-            local allow = profiles[1].allow :: {[string]: unknown}
+            local profiles = principals.objects(config.profiles)
+            local allow = assert(bounds.object(profiles[1].allow))
             allow.databases = {"vendor:data"}
             profiles[1].database_bindings = {{target_db = "vendor:data",
                 database_id = "bee.host:application_db", table_prefix = "vendor_"}}
@@ -84,7 +87,7 @@ local function define_tests()
             test.eq(binding["vendor:data"].table_prefix, "vendor_")
             test.eq(decoded.profiles[1].migration_policies[1], "bee.host:vendor_migration_policy")
             local original_digest = decoded.profiles[1].policy_digest
-            local rows = profiles[1].database_bindings :: {{[string]: unknown}}
+            local rows = principals.objects(profiles[1].database_bindings)
             rows[1].database_id = "bee.host:alternate_db"
             local changed = assert(service.configuration(config, "node-destination"))
             test.is_true(changed.profiles[1].policy_digest ~= original_digest)
@@ -103,8 +106,8 @@ local function define_tests()
         end)
         test.it("rejects unsafe, duplicate and non-admitted database bindings", function()
             local config = valid()
-            local profiles = config.profiles :: {{[string]: unknown}}
-            local allow = profiles[1].allow :: {[string]: unknown}
+            local profiles = principals.objects(config.profiles)
+            local allow = assert(bounds.object(profiles[1].allow))
             allow.databases = {"vendor:data"}
             profiles[1].database_bindings = {{target_db = "vendor:data",
                 database_id = "bee.host:application_db", table_prefix = "bad-prefix"}}
@@ -130,7 +133,7 @@ local function define_tests()
         end)
         test.it("normalizes application admission into the host policy digest", function()
             local config = valid()
-            local profile = (config.profiles :: {{[string]: unknown}})[1]
+            local profile = (principals.objects(config.profiles))[1]
             profile.applications = {{definition_id = "vendor.app:main",
                 policies = {"bee:policy-b", "bee:policy-a"}, thread_access = "observe_post"}}
             local decoded, decode_error = service.configuration(config, "node-destination")
@@ -138,7 +141,7 @@ local function define_tests()
             test.eq(decoded.profiles[1].applications[1].policies[1], "bee:policy-a")
             test.eq(decoded.profiles[1].applications[1].thread_access, "observe_post")
             local digest = decoded.profiles[1].policy_digest
-            local applications = profile.applications :: {{[string]: unknown}}
+            local applications = principals.objects(profile.applications)
             applications[1].thread_access = nil
             local changed = assert(service.configuration(config, "node-destination"))
             test.is_true(changed.profiles[1].policy_digest ~= digest)
@@ -150,9 +153,9 @@ local function define_tests()
         test.it("admits a super-edit profile only while unexpired and explicitly confirmed", function()
             local function install(name: string, confirm: unknown?, approvers: unknown?)
                 local current = assert(registry.get("bee:approver_policies"))
-                local data = current.data :: {[string]: unknown}
+                local data = assert(bounds.object(current.data))
                 local rows: {{[string]: unknown}} = {}
-                for _, policy in ipairs(data.policies :: {{[string]: unknown}}) do
+                for _, policy in ipairs(principals.objects(data.policies)) do
                     if policy.name ~= name then rows[#rows + 1] = policy end
                 end
                 local row: {[string]: unknown} = {name = name, max_ttl_ms = 60000,
@@ -186,20 +189,20 @@ local function define_tests()
             local expired, expired_error = service.super_edit_admission(
                 profile_of(row({expires_at = "2000-01-01T00:00:00.000Z"})))
             test.is_false(expired)
-            test.not_nil((string.find(expired_error :: string, "expired", 1, true)))
+            test.not_nil((string.find(expired_error, "expired", 1, true)))
             -- A dedicated approver policy that does not confirm explicitly is refused.
             install("super-edit-host", "standard")
             local unconfirmed, unconfirmed_error = service.super_edit_admission(profile_of(row({})))
             test.is_false(unconfirmed)
-            test.not_nil((string.find(unconfirmed_error :: string, "explicitly", 1, true)))
+            test.not_nil((string.find(unconfirmed_error, "explicitly", 1, true)))
             -- An explicit policy that names no approver is refused.
             install("super-edit-host", "explicit", {})
             local approverless, approverless_error = service.super_edit_admission(profile_of(row({})))
             test.is_false(approverless)
-            test.not_nil((string.find(approverless_error :: string, "names no approvers", 1, true)))
+            test.not_nil((string.find(approverless_error, "names no approvers", 1, true)))
             -- A dedicated policy absent from the host table is refused.
             local stripped = assert(registry.get("bee:approver_policies"))
-            local stripped_data = stripped.data :: {[string]: unknown}
+            local stripped_data = assert(bounds.object(stripped.data))
             stripped_data.policies = {{name = "workspace-application-delivery",
                 approvers = {{definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}}
             local changes = registry.snapshot():changes()
@@ -207,7 +210,7 @@ local function define_tests()
             assert(changes:apply())
             local missing, missing_error = service.super_edit_admission(profile_of(row({})))
             test.is_false(missing)
-            test.not_nil((string.find(missing_error :: string, "not configured", 1, true)))
+            test.not_nil((string.find(missing_error, "not configured", 1, true)))
             -- A non-super-edit profile bypasses the gate entirely.
             local plain = assert(service.super_edit_admission({super_edit = false}))
             test.is_true(plain)

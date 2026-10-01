@@ -2,6 +2,7 @@
 -- observation decodes, answers come only from terminal envelopes, tool
 -- failures and denials are evidence, and a truncated stream is uncertain.
 local test = require("test")
+local bounds = require("bounds")
 local fs = require("fs")
 local json = require("json")
 local funcs = require("funcs")
@@ -14,6 +15,8 @@ local codex_launch = require("codex_launch")
 local muse_launch = require("muse_launch")
 local observation = require("observation")
 local quote = require("quote")
+local universal = require("universal")
+local driver_types = require("driver_types")
 type Terminal = {outcome: string, answer: string?, resume_ref: string?, usage: {[string]: unknown}?, error: {code: string, message: string, retryable: boolean}?}
 type Run = {types: {string}, observations: {{[string]: unknown}}, terminal: Terminal?, problems: integer}
 local function fixture(path: string): string
@@ -25,7 +28,7 @@ local function fixture(path: string): string
 end
 -- Feeds a fixture in odd-sized chunks through the transport and the
 -- normalizer; optionally stops before the last frame.
-local function run(normalizer: any, path: string, chunk_size: integer, drop_last: boolean): Run
+local function run(normalizer: universal.DeferredProtocol, path: string, chunk_size: integer, drop_last: boolean): Run
     local content = fixture(path)
     if drop_last then
         local cut = content:sub(1, -2)
@@ -40,26 +43,26 @@ local function run(normalizer: any, path: string, chunk_size: integer, drop_last
         local envelopes, problems = stream_json.feed(decoder, content:sub(offset, offset + chunk_size - 1))
         result.problems = result.problems + #problems
         for _, envelope in ipairs(envelopes) do
-            local step = normalizer.normalize(state, envelope.index, envelope.value)
+            local step = assert(normalizer.normalize(state, envelope.index, assert(bounds.object(envelope.value))))
             for _, item in ipairs(step.observations) do
                 local decoded, err = observation.decode(item)
                 if not decoded then error(path .. " " .. tostring(item.type) .. ": " .. tostring(err)) end
                 result.types[#result.types + 1] = tostring(item.type) .. ":" .. tostring(item.data.state or item.data.phase or item.data.outcome or item.data.level or item.data.channel or "")
                 result.observations[#result.observations + 1] = item
             end
-            if step.terminal then result.terminal = step.terminal end
+            if step.terminal then result.terminal = assert(driver_types.decode_terminal(step.terminal)) end
         end
         offset = offset + chunk_size
     end
     local tail = stream_json.finish(decoder)
     if tail then result.problems = result.problems + 1 end
-    local final = normalizer.finish(state, decoder.index + 1)
+    local final = assert(normalizer.finish(state, decoder.index + 1))
     for _, item in ipairs(final.observations) do
         local decoded, err = observation.decode(item)
         if not decoded then error(path .. " eof: " .. tostring(err)) end
         result.types[#result.types + 1] = tostring(item.type) .. ":" .. tostring(item.data.phase or "")
     end
-    if final.terminal then result.terminal = final.terminal end
+    if final.terminal then result.terminal = assert(driver_types.decode_terminal(final.terminal)) end
     return result
 end
 local function has(list: {string}, item: string): boolean
@@ -110,11 +113,11 @@ local function define_tests()
                     terminal_reason = "max_turns", result = "provider turn limit reached"},
             })
             if call_error then error(tostring(call_error)) end
-            local reply = raw :: {[string]: unknown}
+            local reply = assert(bounds.object(raw))
             test.is_true(reply.ok == true)
-            local terminal = reply.terminal :: {[string]: unknown}
+            local terminal = assert(bounds.object(reply.terminal))
             test.eq(terminal.outcome, "failed")
-            local fault = terminal.error :: {[string]: unknown}
+            local fault = assert(bounds.object(terminal.error))
             test.eq(fault.code, "max_turns")
             test.eq(fault.message, "provider turn limit reached")
         end)
@@ -308,7 +311,7 @@ local function define_tests()
             })
             test.eq(#call.observations, 1)
             test.eq(call.observations[1].type, "tool.call")
-            local call_data = call.observations[1].data :: {[string]: unknown}
+            local call_data = assert(bounds.object(call.observations[1].data))
             test.eq(call_data.call_id, "call-1")
             test.eq(call_data.tool_name, "read_file")
             local result = muse.normalize(state, 2, {
@@ -318,7 +321,7 @@ local function define_tests()
             })
             test.eq(#result.observations, 1)
             test.eq(result.observations[1].type, "tool.result")
-            local result_data = result.observations[1].data :: {[string]: unknown}
+            local result_data = assert(bounds.object(result.observations[1].data))
             test.eq(result_data.call_id, "call-1")
             test.eq(result_data.outcome, "succeeded")
             local failed = muse.normalize(state, 3, {
@@ -327,9 +330,9 @@ local function define_tests()
                 payload = {call_id = "call-2", outcome = "error", reason = "denied", text = "no"},
             })
             test.eq(failed.observations[1].type, "tool.result")
-            local failed_data = failed.observations[1].data :: {[string]: unknown}
+            local failed_data = assert(bounds.object(failed.observations[1].data))
             test.eq(failed_data.outcome, "failed")
-            test.eq((failed_data.error :: {[string]: unknown}).code, "tool_error")
+            test.eq((assert(bounds.object(failed_data.error))).code, "tool_error")
 
             local lifecycle = muse.normalize(state, 4, {
                 payload_type = "task.lifecycle.proposed",
@@ -405,7 +408,7 @@ local function define_tests()
             muse.normalize(identity_state, 1, {payload_type = "runtime.command.accepted", stream = {id = "sess-original"}, payload = {}})
             local changed = muse.normalize(identity_state, 2, {payload_type = "run.lifecycle.started", stream = {id = "sess-other"}, payload = {}})
             test.eq(identity_state.session_id, "sess-original")
-            local mismatch = changed.observations[1].data :: {[string]: unknown}
+            local mismatch = assert(bounds.object(changed.observations[1].data))
             test.eq(mismatch.code, "session_mismatch")
         end)
         test.it("bounds retained answers and rejects untrusted persisted state", function()
@@ -418,7 +421,7 @@ local function define_tests()
             test.is_nil(state.answer)
             local saw_bound = false
             for _, item in ipairs(oversized.observations) do
-                local data = item.data :: {[string]: unknown}
+                local data = assert(bounds.object(item.data))
                 if data.code == "answer_truncated" then saw_bound = true end
             end
             test.is_true(saw_bound)

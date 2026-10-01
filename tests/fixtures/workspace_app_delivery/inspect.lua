@@ -1,4 +1,5 @@
 -- MIT. Read the installed registry and the broker's admitted policy list.
+local bounds = require("bounds")
 local registry = require("registry")
 local env = require("env")
 local logger = require("logger")
@@ -19,27 +20,27 @@ local function inspect()
     local installed = assert(grants.decode(installed_entry, identity.overlay_owner,
         workspace, identity.definition_id, host_catalog))
     assert(grants.live(installed, function(id: string): unknown return registry.get(id) end))
-    local capabilities = installed.capabilities :: {{[string]: unknown}}
+    local capabilities = assert(bounds.array(installed.capabilities))
     assert(#capabilities == 4)
     local seen: {[string]: boolean} = {}
-    for _, grant in ipairs(capabilities) do seen[grant.capability :: string] = true end
+    for _, grant in ipairs(capabilities) do seen[grant.capability] = true end
     assert(seen["threads.read"] and seen["workspace.files.read"] and seen["app.database"] and seen["agents.launch"])
-    local generated_policies = installed.policies :: {{[string]: unknown}}
+    local generated_policies = assert(bounds.array(installed.policies))
     assert(#generated_policies == 4)
     local policy_ids: {[string]: boolean} = {}
     for _, generated_policy in ipairs(generated_policies) do
-        policy_ids[generated_policy.id :: string] = true
-        local body = (generated_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}
+        policy_ids[generated_policy.id] = true
+        local body = assert(bounds.object((assert(bounds.object(generated_policy.data))).policy))
         assert(body.effect == "allow")
-        for _, resource in ipairs(body.resources :: {string}) do assert(resource ~= "*") end
+        for _, resource in ipairs(assert(bounds.ids(body.resources))) do assert(resource ~= "*") end
     end
-    local volumes = (installed.volumes or {}) :: {{[string]: unknown}}
+    local volumes = assert(bounds.array((installed.volumes or {})))
     assert(#volumes == 1)
     assert(volumes[1].kind == "fs.directory")
-    local volume_config = volumes[1].data :: {[string]: unknown}
+    local volume_config = assert(bounds.object(volumes[1].data))
     assert(volume_config.directory == "shared")
     assert(volume_config.readonly == true)
-    local databases = (installed.databases or {}) :: {{[string]: unknown}}
+    local databases = assert(bounds.array((installed.databases or {})))
     assert(#databases == 1)
     assert(databases[1].kind == "db.sql.sqlite")
     local expected: {[string]: string} = {["app.tally:threads_read"] = "threads.read",
@@ -47,15 +48,15 @@ local function inspect()
         ["app.tally:agent_launch"] = "agents.launch"}
     for requirement_id in pairs(expected) do
         local requirement = assert(registry.get(requirement_id))
-        local default = (requirement.data :: {[string]: unknown}).default
-        assert(type(default) == "string" and policy_ids[default :: string])
+        local default = (assert(bounds.object(requirement.data))).default
+        assert(type(default) == "string" and policy_ids[default])
     end
     local admitted: {[string]: unknown}? = nil
     for _, binding in ipairs(catalog.read(workspace).bindings) do
         if binding.definition_id == identity.definition_id then admitted = binding; break end
     end
     assert(admitted)
-    local policies = admitted.policies :: {string}
+    local policies = assert(bounds.ids(admitted.policies))
     assert(#policies == 6)
     local boundary_count = 0
     for _, policy_id in ipairs(policies) do

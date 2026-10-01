@@ -2,6 +2,8 @@
 -- ambiguity, what a normalized submission keeps and drops, and the
 -- classification of Codex request metadata.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local json = require("json")
 local funcs = require("funcs")
 local hooks = require("hooks")
@@ -22,7 +24,7 @@ local function define_tests()
             test.is_false(value.ambiguous)
             local encoded = json.encode(value.fields)
             test.is_nil((encoded:find("private-command", 1, true)))
-            local digests = value.fields.content_digests :: Object
+            local digests = assert(bounds.object(value.fields.content_digests))
             test.not_nil(digests.tool_input)
             local start, start_error = hooks.normalize("SessionStart", {sessionId = "s", session_id = "s",
                 permissionMode = "default", permission_mode = "default", source = "startup"})
@@ -122,15 +124,15 @@ local function define_tests()
             test.eq(fields.permission_mode, "dontAsk")
             test.is_nil(fields.source)
             local odd_name = hooks.normalize("PostToolUse", {session_id = "s1", tool_use_id = "toolu_2", tool_name = "rm -rf /"})
-            test.is_nil((odd_name :: hooks.Submission).fields.tool_name)
+            test.is_nil((odd_name).fields.tool_name)
             test.is_nil(fields.tool_input)
             test.is_nil(fields.tool_response)
             test.is_nil(fields.cwd)
             test.is_nil(fields.decision)
-            local sizes = fields.content_sizes :: Object
+            local sizes = assert(bounds.object(fields.content_sizes))
             test.is_true((tonumber(sizes.tool_input) or 0) > 0)
             test.is_true((tonumber(sizes.cwd) or 0) > 0)
-            local digests = fields.content_digests :: Object
+            local digests = assert(bounds.object(fields.content_digests))
             test.eq(#tostring(digests.tool_response), 64)
             local encoded = json.encode(fields) or ""
             test.is_nil((encoded:find("sk-live", 1, true)))
@@ -138,10 +140,10 @@ local function define_tests()
             test.is_nil((encoded:find("private", 1, true)))
             test.is_nil((encoded:find("/home/someone", 1, true)))
             local same = hooks.normalize("PostToolUse", cleaned)
-            test.eq((same :: hooks.Submission).digest, submission.digest)
+            test.eq((same).digest, submission.digest)
             cleaned.tool_response = {content = {{type = "text", text = "changed"}}}
             local changed = hooks.normalize("PostToolUse", cleaned)
-            test.neq((changed :: hooks.Submission).digest, submission.digest)
+            test.neq((changed).digest, submission.digest)
             local _, unknown_event = hooks.normalize("Notification", cleaned)
             test.eq(unknown_event, "event Notification is not in the hook catalog")
         end)
@@ -165,15 +167,15 @@ local function define_tests()
             local settings_json: string? = nil
             for index, argument in ipairs(claude.arguments) do if argument == "--settings" then settings_json = claude.arguments[index + 1] end end
             if not settings_json then error("Claude delivery has no --settings") end
-            local settings = json.decode(settings_json) :: Object
-            test.eq(#(settings.allowedHttpHookUrls :: {string}), 1)
-            test.eq((settings.allowedHttpHookUrls :: {string})[1], "http://127.0.0.1:18790/hook/act-1")
-            test.eq((settings.httpHookAllowedEnvVars :: {string})[1], "BEE_GATEWAY_HOOK_TOKEN")
-            local stop = ((settings.hooks :: Object).Stop :: {Object})[1]
-            local handler = (stop.hooks :: {Object})[1]
+            local settings = assert(bounds.object(json.decode(settings_json)))
+            test.eq(#(principals.strings(settings.allowedHttpHookUrls)), 1)
+            test.eq((principals.strings(settings.allowedHttpHookUrls))[1], "http://127.0.0.1:18790/hook/act-1")
+            test.eq((principals.strings(settings.httpHookAllowedEnvVars))[1], "BEE_GATEWAY_HOOK_TOKEN")
+            local stop = (principals.objects((assert(bounds.object(settings.hooks))).Stop))[1]
+            local handler = (principals.objects(stop.hooks))[1]
             test.eq(handler.type, "http")
             test.eq(handler.timeout, 2)
-            test.eq((handler.headers :: Object).Authorization, "Bearer ${BEE_GATEWAY_HOOK_TOKEN}")
+            test.eq((assert(bounds.object(handler.headers))).Authorization, "Bearer ${BEE_GATEWAY_HOOK_TOKEN}")
             test.is_nil((settings_json:find("BEE_GATEWAY_HOOK_TOKEN=", 1, true)))
             local codex_gateway: codex_configuration.Gateway = {endpoint = gateway.endpoint, action_id = gateway.action_id, tools = gateway.tools, hooks = gateway.hooks, token_environment = gateway.token_environment, hook_token_environment = gateway.hook_token_environment}
             local section = codex_configuration.gateway_section(codex_gateway)
@@ -182,9 +184,9 @@ local function define_tests()
             local files, files_error = codex_configuration.hook_files(codex_gateway, "/private/home")
             if not files then error(tostring(files_error)) end
             test.eq(files[1].path, ".codex/hooks.json")
-            local file = json.decode(files[1].content) :: Object
-            test.is_nil((file.hooks :: Object).SessionEnd)
-            test.is_true((file.hooks :: Object).PreToolUse ~= nil)
+            local file = assert(bounds.object(json.decode(files[1].content)))
+            test.is_nil((assert(bounds.object(file.hooks))).SessionEnd)
+            test.is_true((assert(bounds.object(file.hooks))).PreToolUse ~= nil)
             -- Hashes as codex 0.153.4's app-server listed them for these
             -- templates, so the host's trust state is what the executable
             -- expects without any bypass.
@@ -209,13 +211,13 @@ local function define_tests()
         test.it("advertises the closed event enum and identity fields as the hook schema", function()
             local schema = hooks.schema()
             test.eq(schema.type, "object")
-            local properties = schema.properties :: {[string]: unknown}
-            local event = properties.event :: {[string]: unknown}
-            test.eq(#(event.enum :: {string}), #hooks.EVENTS)
+            local properties = assert(bounds.object(schema.properties))
+            local event = assert(bounds.object(properties.event))
+            test.eq(#(principals.strings(event.enum)), #hooks.EVENTS)
             for _, name in ipairs({"session_id", "turn_id", "prompt_id", "tool_use_id", "agent_id", "tool_name"}) do
                 test.not_nil(properties[name])
             end
-            test.is_true(#(schema.examples :: {unknown}) >= 2)
+            test.is_true(#(principals.items(schema.examples)) >= 2)
             local normalized = hooks.normalize("PreToolUse", {session_id = "s", tool_use_id = "t", tool_name = "read"})
             test.not_nil(normalized)
         end)

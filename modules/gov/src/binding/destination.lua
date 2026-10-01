@@ -10,6 +10,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local preflight = require("preflight")
 local transaction = require("transaction")
+local resolution = require("resolution")
 
 local M = {}
 type Store = store.Store
@@ -18,7 +19,7 @@ type Executor = approval.Executor
 type Object = {[string]: unknown}
 type ReplicaIdentity = {source_owner: string, feed: string, version_key: string,
     descriptor_digest: string, idempotency_key: string}
-type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
+type Resolver = resolution.Resolver
 
 local function failure(code: string, message: string, value: unknown?): transaction.Result
     return transaction.failure(code, message, value)

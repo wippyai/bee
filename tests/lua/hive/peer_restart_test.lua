@@ -89,7 +89,7 @@ local function define_tests()
             test.not_nil(peers.begin(state, "hive-b", fresh, "a-challenge", 1000))
             local _, _, err = peers.receive(state, stale, hello("inc-b1", "b-old", "a-challenge"), nil, 1100)
             test.eq(err, "sender PID does not match pending exchange PID")
-            test.eq((peers.pending(state, "hive-b") :: peers.PendingInfo).pid, fresh)
+            test.eq((peers.pending(state, "hive-b")).pid, fresh)
         end)
     end)
 end

@@ -112,6 +112,7 @@ entries:
   - json
   - registry
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
   security:
     policies:

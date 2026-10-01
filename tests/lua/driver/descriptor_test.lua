@@ -1,5 +1,6 @@
 -- MIT. CLI descriptors are strict, bounded registry data.
 local test = require("test")
+local principals = require("principals")
 local descriptor = require("descriptor")
 local login_evidence = require("login_evidence")
 local bounds = require("bounds")
@@ -29,7 +30,7 @@ local function define_tests()
             end
         end)
         test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()
-            local loaded = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
+            local loaded = assert(bounds.object(assert(descriptor.load("bee.driver.claude.descriptor:cli"))))
             local changed = copy_object(loaded)
             local valid = {
                 {kind = "file_exists", paths = {".fixture/auth.json", ".fixture/config.jsonc"}},
@@ -172,12 +173,12 @@ local function define_tests()
         end)
 
         test.it("rejects invalid defaults, undeclared template fields and cyclic flag dependencies", function()
-            local claude = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
+            local claude = assert(bounds.object(assert(descriptor.load("bee.driver.claude.descriptor:cli"))))
 
             local bad_default = copy_object(claude)
-            local options = copy_object(claude.options :: Object)
-            local fields = copy_object(options.fields :: Object)
-            local permission = copy_object(fields.permission_mode :: Object)
+            local options = copy_object(assert(bounds.object(claude.options)))
+            local fields = copy_object(assert(bounds.object(options.fields)))
+            local permission = copy_object(assert(bounds.object(fields.permission_mode)))
             permission.default = "bypassPermissions"
             fields.permission_mode = permission
             options.fields = fields
@@ -187,10 +188,10 @@ local function define_tests()
             test.not_nil(decode_error)
 
             local undeclared_field = copy_object(claude)
-            local templates = copy_object(claude.argv_templates :: Object)
-            local window = copy_object(templates.window :: Object)
+            local templates = copy_object(assert(bounds.object(claude.argv_templates)))
+            local window = copy_object(assert(bounds.object(templates.window)))
             local argv: {unknown} = {}
-            for _, item in ipairs(window.argv :: {unknown}) do argv[#argv + 1] = item end
+            for _, item in ipairs(principals.items(window.argv)) do argv[#argv + 1] = item end
             argv[#argv + 1] = {field = "not_declared"}
             window.argv = argv
             templates.window = window
@@ -200,7 +201,7 @@ local function define_tests()
             test.not_nil(decode_error)
 
             local cyclic_flag = copy_object(claude)
-            local flags = copy_object(claude.flags :: Object)
+            local flags = copy_object(assert(bounds.object(claude.flags)))
             local permission: Object = {field = "permission_mode", argv = {{option = "permission"}}}
             flags.permission = permission
             cyclic_flag.flags = flags
@@ -224,11 +225,11 @@ local function define_tests()
         end)
 
         test.it("rejects inert option metadata and reserved request fields", function()
-            local claude = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
+            local claude = assert(bounds.object(assert(descriptor.load("bee.driver.claude.descriptor:cli"))))
             local inert_metadata = copy_object(claude)
-            local options = copy_object(claude.options :: Object)
-            local fields = copy_object(options.fields :: Object)
-            local permission = copy_object(fields.permission_mode :: Object)
+            local options = copy_object(assert(bounds.object(claude.options)))
+            local fields = copy_object(assert(bounds.object(options.fields)))
+            local permission = copy_object(assert(bounds.object(fields.permission_mode)))
             permission.constant = "MAX_TURNS"
             fields.permission_mode = permission
             options.fields = fields
@@ -238,8 +239,8 @@ local function define_tests()
             test.not_nil(decode_error)
 
             local reserved_field = copy_object(claude)
-            options = copy_object(claude.options :: Object)
-            fields = copy_object(options.fields :: Object)
+            options = copy_object(assert(bounds.object(claude.options)))
+            fields = copy_object(assert(bounds.object(options.fields)))
             fields.profile_id = {type = "id"}
             options.fields = fields
             reserved_field.options = options

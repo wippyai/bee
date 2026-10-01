@@ -1,6 +1,8 @@
 -- MIT. The shipped host activation configuration carries the narrow
 -- workspace-application rule beside the wider package ceiling.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local profiles = require("activation_profiles")
 local registry = require("registry")
 
@@ -34,11 +36,11 @@ local function define_tests()
 
         test.it("rejects a package ceiling without explicit approval", function()
             local entry = assert(registry.get("bee.env:gov_activation_profiles"))
-            local data = entry.data :: {[string]: unknown}
-            local narrow = (data.workspace_applications :: {[string]: unknown})
-            local wide = (data.packages :: {[string]: unknown})
-            local kinds = (wide.kinds :: {unknown})
-            local modules = (wide.modules :: {unknown})
+            local data = assert(bounds.object(entry.data))
+            local narrow = (assert(bounds.object(data.workspace_applications)))
+            local wide = (assert(bounds.object(data.packages)))
+            local kinds = (principals.items(wide.kinds))
+            local modules = (principals.items(wide.modules))
             local value: {[string]: unknown} = {profiles = {}, workspace_applications = narrow,
                 packages = {kinds = kinds, modules = modules, policies = {},
                     thread_access = "none"}}
@@ -72,11 +74,11 @@ local function define_tests()
             test.is_true(selected.kinds["security.policy"])
             test.is_true(selected.namespaces["bee.probe.manager"])
             test.is_false(selected.auto_start)
-            local applications = selected.applications :: {{[string]: unknown}}
+            local applications = principals.objects(selected.applications)
             test.eq(#applications, 1)
             test.eq(applications[1].definition_id, "bee.probe.manager:app")
-            test.eq((applications[1].policies :: {string})[1], "bee.probe.manager:client_policy")
-            test.eq((applications[1].policies :: {string})[2], "bee.security:ordinary_app_subsystem_boundary")
+            test.eq((principals.strings(applications[1].policies))[1], "bee.probe.manager:client_policy")
+            test.eq((principals.strings(applications[1].policies))[2], "bee.security:ordinary_app_subsystem_boundary")
             test.is_true(applications[1].application_stop == true)
             test.is_true(applications[1].appearance_write == false)
             test.eq(applications[1].close_grace_ms, 250)
@@ -102,11 +104,11 @@ local function define_tests()
             local foreign, foreign_refusal = profiles.select_decoded(configured, WORKSPACE,
                 "node-remote", "bee.probe.manager", NODE)
             test.is_nil(foreign)
-            test.not_nil((string.find(foreign_refusal :: string, "bee.env:gov_activation_profiles", 1, true)))
+            test.not_nil((string.find(foreign_refusal, "bee.env:gov_activation_profiles", 1, true)))
             local unknown, unknown_refusal = profiles.select_decoded(configured, WORKSPACE, NODE,
                 "bee.probe.other", NODE)
             test.is_nil(unknown)
-            test.not_nil((string.find(unknown_refusal :: string, "no activation profile for overlay", 1, true)))
+            test.not_nil((string.find(unknown_refusal, "no activation profile for overlay", 1, true)))
             local bare = assert(profiles.decode({profiles = {}}))
             test.is_nil(profiles.select_decoded(bare, WORKSPACE, NODE, "bee.probe.manager", NODE))
         end)
@@ -120,7 +122,7 @@ local function define_tests()
             local mismatched, mismatch_error = profiles.select(configured, WORKSPACE, source_node,
                 "autoresearch", nil, nil, nil, source_node)
             test.is_nil(mismatched)
-            test.not_nil((string.find(mismatch_error :: string, "no activation profile for overlay", 1, true)))
+            test.not_nil((string.find(mismatch_error, "no activation profile for overlay", 1, true)))
             local local_profile = assert(profiles.select(configured, WORKSPACE, runtime_node, "autoresearch"))
             test.eq(local_profile.source_node, runtime_node)
             test.eq(local_profile.source_workspace, "autoresearch")
@@ -129,7 +131,7 @@ local function define_tests()
             local projected, projected_error = profiles.select_decoded(decoded, WORKSPACE, source_node,
                 "autoresearch", runtime_node, nil, nil, local_profile.overlay_owner)
             test.is_nil(projected)
-            test.not_nil((string.find(projected_error :: string, "no activation profile for overlay", 1, true)))
+            test.not_nil((string.find(projected_error, "no activation profile for overlay", 1, true)))
         end)
         test.it("rejects malformed package applications by shape", function()
             local function configured_with(entry: {[string]: unknown}): {[string]: unknown}
@@ -137,7 +139,7 @@ local function define_tests()
                 wide.applications = {entry}
                 return {profiles = {}, packages = wide}
             end
-            local dotted = rule().applications :: {{[string]: unknown}}
+            local dotted = principals.objects(rule().applications)
             local flat = {component = "probe", definition_id = "bee.probe.manager:app",
                 capabilities = {}, policies = {}, thread_access = "none"}
             test.is_nil(profiles.decode(configured_with(flat)))

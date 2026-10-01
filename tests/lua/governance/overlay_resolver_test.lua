@@ -1,6 +1,8 @@
 -- MIT. Private-overlay resolution uses immutable definitions with host-owned
 -- package, overlay and policy choices. These doubles expose no registry writer.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local artifact = require("artifact")
 local resolver = require("overlay_resolver")
 local capability_grants = require("capability_grants")
@@ -48,9 +50,9 @@ local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured,
         },
         overlay_ids = { ["private.app:old-overlay"] = true },
         owner = function(item: Entry): (string?, string?)
-            local metadata = item.registry
-            if type(metadata) == "table" and type((metadata :: Object).owner) == "string" then
-                return (metadata :: Object).owner :: string, nil
+            local metadata = bounds.object(item.registry)
+            if metadata and type(metadata.owner) == "string" then
+                return metadata.owner, nil
             end
             return nil, "local registry owner is missing"
         end,
@@ -67,11 +69,12 @@ local function fixture(policy_raw: Policy?): (Deps, Object, {captured: Captured,
     local deps: Deps = {
         capture = function(): (resolver.Captured?, string?) return captured, nil end,
         root = function(raw: unknown): (resolver.Root?, string?)
-            local spec = raw :: Object
+            local spec = assert(bounds.object(raw))
             if spec.source_node ~= "node-source" or spec.source_workspace ~= "author/app" then
                 return nil, "private artifact does not match host source mapping"
             end
-            return {component = "host/private-app", version = spec.version :: string}, nil
+            assert(type(spec.version) == "string")
+            return {component = "host/private-app", version = spec.version}, nil
         end,
         policy = function(_: unknown, _: resolver.Captured, _: resolver.Root): (Policy?, string?) return policy, nil end,
     }
@@ -101,14 +104,14 @@ local function define_tests()
                 source = "return true", modules = {"os"}, security = {policies = {"bee.host:db"}},
                 lifecycle = {auto_start = true}}}})
             local facts = resolve(deps, spec)
-            local native = (facts.candidate.entries :: {Object})[1]
-            test.eq((native.modules :: {string})[1], "os")
-            test.eq((native.grants :: {string})[1], "bee.host:db")
+            local native = (principals.objects(facts.candidate.entries))[1]
+            test.eq((principals.strings(native.modules))[1], "os")
+            test.eq((principals.strings(native.grants))[1], "bee.host:db")
             test.eq(native.auto_start, true)
-            test.is_nil((facts.context.modules :: Object).os)
-            test.is_nil((facts.context.grants :: Object)["bee.host:db"])
-            local report, problem = preflight.check(facts.candidate :: preflight.Candidate,
-                facts.context :: preflight.Context)
+            test.is_nil((assert(bounds.object(facts.context.modules))).os)
+            test.is_nil((assert(bounds.object(facts.context.grants)))["bee.host:db"])
+            local report, problem = preflight.check(facts.candidate,
+                facts.context)
             if not report then error(tostring(problem)) end
             test.is_false(report.ready)
             local denied: {[string]: boolean} = {}
@@ -125,10 +128,10 @@ local function define_tests()
             changes(spec, {{id = "private.app:main", kind = "function.lua", data = {
                 source = "return true", security = {actor = "private.app:owner", groups = {"private.app:admins"}}}}})
             local facts = resolve(deps, spec)
-            local measured = (facts.candidate.entries :: {Object})[1]
+            local measured = (principals.objects(facts.candidate.entries))[1]
             test.is_true(measured.security_actor)
             test.is_true(measured.security_groups)
-            local report = assert(preflight.check(facts.candidate :: preflight.Candidate, facts.context :: preflight.Context))
+            local report = assert(preflight.check(facts.candidate, facts.context))
             test.is_false(report.ready)
             local denied = false
             for _, diagnostic in ipairs(report.diagnostics) do
@@ -138,7 +141,7 @@ local function define_tests()
         end)
         test.it("retains a capability requirement and validates its app policy append target", function()
             local deps, spec = fixture(nil)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "workspace.files.read",
@@ -152,21 +155,21 @@ local function define_tests()
                 meta = {value_kind = "security.policy", capability = "workspace.files.read",
                     parameters = {subpath = "docs"}, reason = "Render documentation"},
                 data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
-            local request_data = request.data :: Object
-            local request_meta = request.meta :: Object
+            local request_data = assert(bounds.object(request.data))
+            local request_meta = assert(bounds.object(request.meta))
             changes(spec, {app, request})
             local facts = resolve(deps, spec)
-            local capability = (facts.candidate.requirements :: {Object})[1].capability_request :: Object
+            local capability = assert(bounds.object((principals.objects(facts.candidate.requirements))[1].capability_request))
             test.eq(capability.capability, "workspace.files.read")
-            test.eq((capability.parameters :: Object).subpath, "docs")
+            test.eq((assert(bounds.object(capability.parameters))).subpath, "docs")
             test.eq(capability.reason, "Render documentation")
             test.eq(capability.target, "private.app:main")
             test.eq(capability.path, ".security.policies +=")
             local before_digest = facts.candidate.base_digest
-            local captured_state = captured :: Captured
+            local captured_state = assert(captured)
             local catalog_entry = captured_state.entries[#captured_state.entries]
-            local catalog_data = catalog_entry.data :: Object
-            local catalog_rows = catalog_data.capabilities :: {Object}
+            local catalog_data = assert(bounds.object(catalog_entry.data))
+            local catalog_rows = principals.objects(catalog_data.capabilities)
             catalog_rows[1].revision = 2
             test.is_true(resolve(deps, spec).candidate.base_digest ~= before_digest)
             for _, bad_path in ipairs({".security.policies", ".security.groups +=", ".security.policies += .other"}) do
@@ -188,7 +191,7 @@ local function define_tests()
         end)
         test.it("accepts a Hive exposure request for the artifact's own operations", function()
             local deps, spec = fixture(nil)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 7, never = {"exec"}, capabilities = {{id = "hive.expose",
@@ -207,15 +210,15 @@ local function define_tests()
                     parameters = {operations = {"private.app:telemetry"}, mode = "open", audiences = {"node-1"}},
                     reason = "Expose telemetry"},
                 data = {targets = {{entry = "private.app:telemetry", path = ".security.policies +="}}}}
-            local request_data = request.data :: Object
-            local request_meta = request.meta :: Object
+            local request_data = assert(bounds.object(request.data))
+            local request_meta = assert(bounds.object(request.meta))
             changes(spec, {op, other, request})
             local facts = resolve(deps, spec)
-            local capability = (facts.candidate.requirements :: {Object})[1].capability_request :: Object
+            local capability = assert(bounds.object((principals.objects(facts.candidate.requirements))[1].capability_request))
             test.eq(capability.capability, "hive.expose")
             test.eq(capability.target, "private.app:telemetry")
-            test.eq(((capability.parameters :: Object).operations :: {string})[1], "private.app:telemetry")
-            test.eq((capability.parameters :: Object).mode, "open")
+            test.eq((principals.strings((assert(bounds.object(capability.parameters))).operations))[1], "private.app:telemetry")
+            test.eq((assert(bounds.object(capability.parameters))).mode, "open")
             request_data.targets = {{entry = "private.app:extra", path = ".security.policies +="}}
             changes(spec, {op, other, request})
             test.is_nil((resolver.resolve_with(deps, spec)))
@@ -229,7 +232,7 @@ local function define_tests()
         end)
         test.it("requires every agents.launch definition to be a launch definition", function()
             local deps, spec = fixture(nil)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 7, never = {"exec"}, capabilities = {{id = "agents.launch",
@@ -251,7 +254,7 @@ local function define_tests()
                     parameters = {definitions = {"bee.host:worker"}},
                     reason = "Launch the allow-listed worker"},
                 data = {targets = {{entry = "private.app:main", path = ".security.policies +="}}}}
-            local request_meta = request.meta :: Object
+            local request_meta = assert(bounds.object(request.meta))
             changes(spec, {app, request})
             test.not_nil((resolver.resolve_with(deps, spec)))
             -- A callable entry named as a definition would widen the generated
@@ -262,17 +265,17 @@ local function define_tests()
         end)
         test.it("accepts the runtime's initial registry revision", function()
             local deps, spec = fixture(nil)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.revision = 0
             test.eq(resolve(deps, spec).candidate.base_revision, 0)
         end)
 
         test.it("measures an incoming entry from its exact immutable artifact bytes", function()
             local deps, spec, source = fixture(nil)
-            local bytes = assert(canonical.encode((source.artifact.entries :: {Entry})[1]))
+            local bytes = assert(canonical.encode((source.artifact.entries)[1]))
             local expected = assert(hash.sha256(bytes))
             local candidate = resolve(deps, spec).candidate
-            test.eq(((candidate.entries :: {Object})[1]).digest, expected)
+            test.eq(((principals.objects(candidate.entries))[1]).digest, expected)
         end)
 
         test.it("derives application admission from the pinned external policy definition", function()
@@ -286,7 +289,7 @@ local function define_tests()
             local deps, spec = fixture(policy)
             changes(spec, {{id = "private.app:main", kind = "process.lua",
                 meta = {type = "bee.app"}, data = {source = "return true"}}})
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
                 data = {},
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
@@ -294,7 +297,7 @@ local function define_tests()
             local first = resolve(deps, spec)
             local first_admission = admission(first.context)
             test.eq(first_admission.record.artifact_digest, spec.artifact_digest)
-            local policy_body = captured.entries[#captured.entries].policy :: Object
+            local policy_body = assert(bounds.object(captured.entries[#captured.entries].policy))
             policy_body.comment = "changed"
             local second = resolve(deps, spec)
             test.is_true(admission(second.context).digest ~= first_admission.digest)
@@ -317,7 +320,7 @@ local function define_tests()
                     policies = {"bee:ordinary-policy"}, thread_access = "none",
                     appearance_write = true, close_grace_ms = 1000}}}
             local deps, spec = fixture(policy)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
                 data = {},
@@ -341,13 +344,13 @@ local function define_tests()
             test.is_true(binding[1].appearance_write == true)
             test.eq(binding[1].close_grace_ms, 1000)
             test.is_true(binding[1].application_stop == false)
-            test.eq(#(binding[1].policies :: {unknown}), 2)
+            test.eq(#(principals.items(binding[1].policies)), 2)
             test.eq(binding[1].policies[1], capability_proposal.policies[1].id)
-            test.eq((binding[1].policies :: {string})[2], "bee:ordinary-policy")
-            test.is_true(facts.context.grants[capability_proposal.policies[1].id :: string] == true)
-            test.is_nil((facts.context.grants :: Object)["bee.gov.grants:policy." .. SHA])
-            test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
-                facts.context :: preflight.Context)).ready)
+            test.eq((principals.strings(binding[1].policies))[2], "bee:ordinary-policy")
+            test.is_true(facts.context.grants[capability_proposal.policies[1].id] == true)
+            test.is_nil((assert(bounds.object(facts.context.grants)))["bee.gov.grants:policy." .. SHA])
+            test.is_true(assert(preflight.check(facts.candidate,
+                facts.context)).ready)
         end)
 
         test.it("asks the destination person for a first Hive-received plan and reads only its own grants", function()
@@ -361,7 +364,7 @@ local function define_tests()
                 applications = {{definition_id = "private.app:main",
                     policies = {"bee:ordinary-policy"}, thread_access = "none"}}}
             local deps, spec = fixture(policy)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
                 data = {},
@@ -382,8 +385,8 @@ local function define_tests()
             local capability = remote.context.host_evidence.capability
             if capability.kind ~= "new" then error("new capability review is missing") end
             test.is_true(capability.review.requires_approval)
-            test.is_true(assert(preflight.check(remote.candidate :: preflight.Candidate,
-                remote.context :: preflight.Context)).ready)
+            test.is_true(assert(preflight.check(remote.candidate,
+                remote.context)).ready)
             captured.entries[#captured.entries + 1] = {id = assert(capability_grants.record_id(
                 "bee.apps:workspace-destination")), kind = "registry.entry",
                 registry = {owner = "bee.gov:overlay"},
@@ -403,7 +406,7 @@ local function define_tests()
                 source_node = "node-source", source_workspace = "author/app",
                 applications = {{definition_id = "private.app:main", policies = {}, thread_access = "none"}}}
             local deps, spec = fixture(policy)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:capability_catalog", kind = "registry.entry",
                 meta = {type = "bee.capability_catalog"}, registry = {owner = "bee/host"},
                 data = {revision = 1, never = {"exec"}, capabilities = {{id = "workspace.files.read",
@@ -426,8 +429,8 @@ local function define_tests()
             end
             local facts = resolve(deps, spec)
             local volume = proposal(facts.context).volumes[1]
-            test.eq((volume.data :: Object).directory, "projects/alpha/docs")
-            test.is_true((volume.data :: Object).readonly)
+            test.eq((assert(bounds.object(volume.data))).directory, "projects/alpha/docs")
+            test.is_true((assert(bounds.object(volume.data))).readonly)
         end)
 
         test.it("binds an application database grant to its provisioned store", function()
@@ -441,7 +444,7 @@ local function define_tests()
                 applications = {{definition_id = "private.app:main",
                     policies = {"bee:ordinary-policy"}, thread_access = "none"}}}
             local deps, spec = fixture(policy)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
                 policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
                 data = {},
@@ -465,25 +468,25 @@ local function define_tests()
             local facts = resolve(deps, spec)
             local capability_proposal = proposal(facts.context)
             test.eq(#capability_proposal.databases, 1)
-            local bindings = facts.context.database_bindings :: Object
-            local bound = bindings["journal"] :: Object
+            local bindings = assert(bounds.object(facts.context.database_bindings))
+            local bound = assert(bounds.object(bindings["journal"]))
             test.eq(bound.database_id,
                 capability_proposal.databases[1].id)
-            local generated = facts.context.generated_databases :: Object
-            test.eq(generated[capability_proposal.databases[1].id :: string], "journal")
-            test.is_true(((facts.context.databases :: {[string]: boolean})["journal"]) == true)
-            test.is_true(assert(preflight.check(facts.candidate :: preflight.Candidate,
-                facts.context :: preflight.Context)).ready)
+            local generated = assert(bounds.object(facts.context.generated_databases))
+            test.eq(generated[capability_proposal.databases[1].id], "journal")
+            test.is_true(((facts.context.databases)["journal"]) == true)
+            test.is_true(assert(preflight.check(facts.candidate,
+                facts.context)).ready)
         end)
         test.it("keeps unrelated registry edits out of the semantic base", function()
             local deps, spec = fixture(nil)
             local first = resolve(deps, spec)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries + 1] = {id = "other:unrelated", kind = "function.lua",
                 registry = {owner = "host/other"}, data = {source = "return 'unrelated'"}}
             local added = resolve(deps, spec)
             test.eq(added.candidate.base_digest, first.candidate.base_digest)
-            test.is_true((added.context.entries :: Object)["other:unrelated"] ~= nil)
+            test.is_true((assert(bounds.object(added.context.entries)))["other:unrelated"] ~= nil)
             captured.entries[#captured.entries].data = {source = "return 'changed'"}
             test.eq(resolve(deps, spec).candidate.base_digest, first.candidate.base_digest)
             captured.entries[#captured.entries] = nil
@@ -495,8 +498,8 @@ local function define_tests()
             changes(spec, {{id = "private.app:main", kind = "function.lua", data = {
                 source = "return true", config = "bee.host:db"}}})
             local first = resolve(deps, spec)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
-            local data = captured.entries[1].data :: Object
+            local captured = (deps.capture)()
+            local data = assert(bounds.object(captured.entries[1].data))
             data.changed = true
             local second = resolve(deps, spec)
             test.is_true(second.candidate.base_digest ~= first.candidate.base_digest)
@@ -507,8 +510,8 @@ local function define_tests()
             changes(spec, {{id = "private.app:requirement", kind = "ns.requirement", data = {
                 targets = {{entry = "bee.host:db", path = ".id"}}}}})
             local first = resolve(deps, spec)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
-            local data = captured.entries[1].data :: Object
+            local captured = (deps.capture)()
+            local data = assert(bounds.object(captured.entries[1].data))
             data.changed = true
             local second = resolve(deps, spec)
             test.is_true(second.candidate.base_digest ~= first.candidate.base_digest)
@@ -525,8 +528,8 @@ local function define_tests()
                 meta = {type = "migration", target_db = "private.app:data", ordinal = 1},
                 data = {source = "return true"}}})
             local first = resolve(deps, spec)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
-            local data = captured.entries[1].data :: Object
+            local captured = (deps.capture)()
+            local data = assert(bounds.object(captured.entries[1].data))
             data.changed = true
             local second = resolve(deps, spec)
             test.is_true(second.candidate.base_digest ~= first.candidate.base_digest)
@@ -535,9 +538,9 @@ local function define_tests()
         test.it("reads the protected kernel only from the destination registry", function()
             local deps, spec = fixture(nil)
             local facts = resolve(deps, spec)
-            local kernel = facts.context.protected :: Object
+            local kernel = assert(bounds.object(facts.context.protected))
             test.eq(kernel.revision, 1)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[#captured.entries] = nil
             local missing, _, missing_error = resolver.resolve_with(deps, spec)
             test.is_nil(missing)
@@ -547,19 +550,19 @@ local function define_tests()
         test.it("returns selected overlay entries without including them in the base", function()
             local deps, spec = fixture(nil)
             local first = resolve(deps, spec)
-            local installed = first.context.installed_entries :: Object
-            test.eq((installed["private.app:old-overlay"] :: Object).package, "host/private-app")
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local installed = assert(bounds.object(first.context.installed_entries))
+            test.eq((assert(bounds.object(installed["private.app:old-overlay"]))).package, "host/private-app")
+            local captured = (deps.capture)()
             captured.entries[2].meta = table.create(0, 1)
             local same = resolve(deps, spec)
-            test.eq((same.context.installed_entries["private.app:old-overlay"] :: Object).digest,
-                (installed["private.app:old-overlay"] :: Object).digest)
-            local data = captured.entries[2].data :: Object
+            test.eq((assert(bounds.object(same.context.installed_entries["private.app:old-overlay"]))).digest,
+                (assert(bounds.object(installed["private.app:old-overlay"]))).digest)
+            local data = assert(bounds.object(captured.entries[2].data))
             data.changed = true
             local second = resolve(deps, spec)
             test.eq(second.candidate.base_digest, first.candidate.base_digest)
-            test.is_true((second.context.installed_entries["private.app:old-overlay"] :: Object).digest ~=
-                (first.context.installed_entries["private.app:old-overlay"] :: Object).digest)
+            test.is_true((assert(bounds.object(second.context.installed_entries["private.app:old-overlay"]))).digest ~=
+                (assert(bounds.object(first.context.installed_entries["private.app:old-overlay"]))).digest)
         end)
 
         test.it("preserves IDs and assigns ownership from the host-selected profile", function()
@@ -569,13 +572,13 @@ local function define_tests()
             test.eq(candidate.destination_node, "node-destination")
             test.eq(candidate.source_node, "node-source")
             test.eq(candidate.base_revision, 19)
-            test.eq(#(candidate.artifacts :: {unknown}), 1)
-            local package = (candidate.artifacts :: {Object})[1]
+            test.eq(#(principals.items(candidate.artifacts)), 1)
+            local package = (principals.objects(candidate.artifacts))[1]
             test.eq(package.component, "host/private-app")
             test.eq(package.digest, spec.artifact_digest)
-            test.eq(((candidate.entries :: {Object})[1]).id, "private.app:main")
-            test.eq(((candidate.entries :: {Object})[1]).package, "host/private-app")
-            test.is_true(((facts.context.namespaces :: {[string]: boolean})["private.app"]) == true)
+            test.eq(((principals.objects(candidate.entries))[1]).id, "private.app:main")
+            test.eq(((principals.objects(candidate.entries))[1]).package, "host/private-app")
+            test.is_true(((facts.context.namespaces)["private.app"]) == true)
         end)
         test.it("retains copied host database bindings in the preflight context", function()
             local policy: Policy = {node_id = "node-destination", policy_digest = SHA,
@@ -585,25 +588,25 @@ local function define_tests()
                 database_bindings = {["private.app:data"] = {database_id = "bee.host:db", table_prefix = "private_"}}}
             local deps, spec = fixture(policy)
             local facts = resolve(deps, spec)
-            local bindings = facts.context.database_bindings :: Object
-            test.eq((bindings["private.app:data"] :: Object).database_id, "bee.host:db")
-            local source_binding = (policy.database_bindings :: Object)["private.app:data"] :: Object
+            local bindings = assert(bounds.object(facts.context.database_bindings))
+            test.eq((assert(bounds.object(bindings["private.app:data"]))).database_id, "bee.host:db")
+            local source_binding = assert(bounds.object((assert(bounds.object(policy.database_bindings)))["private.app:data"]))
             source_binding.database_id = "other:db"
-            test.eq((bindings["private.app:data"] :: Object).database_id, "bee.host:db")
+            test.eq((assert(bounds.object(bindings["private.app:data"]))).database_id, "bee.host:db")
         end)
 
         test.it("allows replacing definitions from only the selected destination overlay", function()
             local deps, spec = fixture(nil)
             changes(spec, {entry("private.app:old-overlay", "function.lua", "replacement")})
             local facts = resolve(deps, spec)
-            test.is_nil((facts.context.entries :: Object)["private.app:old-overlay"])
-            test.is_true((facts.context.entries :: Object)["bee.host:db"] ~= nil)
-            test.eq(((facts.candidate.entries :: {Object})[1]).id, "private.app:old-overlay")
+            test.is_nil((assert(bounds.object(facts.context.entries)))["private.app:old-overlay"])
+            test.is_true((assert(bounds.object(facts.context.entries)))["bee.host:db"] ~= nil)
+            test.eq(((principals.objects(facts.candidate.entries))[1]).id, "private.app:old-overlay")
         end)
 
         test.it("rejects an entry collision with the composed destination registry", function()
             local deps, spec = fixture(nil)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[2] = {id = "private.app:old", kind = "function.lua", data = {},
                 registry = {owner = "some/other-package"}}
             changes(spec, {entry("private.app:old", "function.lua", "new")})
@@ -615,7 +618,7 @@ local function define_tests()
 
         test.it("rejects namespace collision with a definition outside the selected overlay", function()
             local deps, spec = fixture(nil)
-            local captured = (deps.capture :: () -> (Captured?, string?))()
+            local captured = (deps.capture)()
             captured.entries[2] = {id = "private.app:foreign", kind = "function.lua", data = {},
                 registry = {owner = "some/other-package"}}
             changes(spec, {entry("private.app:new", "function.lua", "new")})
@@ -653,9 +656,9 @@ local function define_tests()
                 applied = {}, migration_barrier = false}
             local deps, spec = fixture(denied)
             local facts = resolve(deps, spec)
-            test.is_false((facts.context.packages :: {[string]: boolean})["host/private-app"])
-            test.is_false((facts.context.namespaces :: {[string]: boolean})["private.app"])
-            test.is_false((facts.context.kinds :: {[string]: boolean})["function.lua"])
+            test.is_false((facts.context.packages)["host/private-app"])
+            test.is_false((facts.context.namespaces)["private.app"])
+            test.is_false((facts.context.kinds)["function.lua"])
         end)
     end)
 end

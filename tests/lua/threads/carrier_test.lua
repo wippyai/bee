@@ -2,7 +2,9 @@
 -- lands records and checkpoint together or not at all, replayed records
 -- deduplicate by key while the checkpoint still advances, and nothing
 -- moves on an ended attempt or without carrier authority.
+local principals = require("principals")
 local test = require("test")
+local bounds = require("bounds")
 local harness = require("harness")
 local CARRIER = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy"}
 local function checkpoint(consumed: integer): {[string]: unknown}
@@ -120,7 +122,7 @@ local function define_tests()
                 test.eq(ended.attempt_outcome, outcome)
                 test.eq(ended.checkpoint.terminal.outcome, "succeeded")
                 if outcome == "succeeded" then test.is_nil(ended.attempt_error)
-                else test.eq((ended.attempt_error :: {[string]: unknown}).message, outcome) end
+                else test.eq((assert(bounds.object(ended.attempt_error))).message, outcome) end
             end
         end)
         test.it("records a durable cancel intent per attempt and surfaces it on the checkpoint", function()
@@ -137,7 +139,7 @@ local function define_tests()
             test.eq(replayed.idempotency_key, "cancel-1")
             -- The checkpoint carries the intent, so a restarted reader reconciles it.
             local surfaced = harness.value(carrier:call("carrier_checkpoint", {thread_id = thread_id, attempt_id = "t1"}))
-            test.eq((surfaced.cancel_intent :: {[string]: unknown}).state, "cancelling")
+            test.eq((assert(bounds.object(surfaced.cancel_intent))).state, "cancelling")
             test.eq(surfaced.attempt_state, "prepared")
             -- Advancing to ended settles the intent; a later record keeps it.
             local ended = harness.value(carrier:call("carrier_cancel_intent", {thread_id = thread_id, attempt_id = "t1", state = "ended", outcome = "cancelled"}))
@@ -193,11 +195,11 @@ local function define_tests()
             bad_checkpoint.schema_revision = "bee.carrier.checkpoint@2"
             test.eq(harness.code(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1, expected_revision = 0, checkpoint = bad_checkpoint, records = {}})), "INVALID_ARGUMENT")
             local vendor_control = control("w2", "intended")
-            local vendor_data = (vendor_control.body :: {[string]: unknown}).data :: {[string]: unknown}
+            local vendor_data = assert(bounds.object((assert(bounds.object(vendor_control.body))).data))
             vendor_data.event_name = "bee.other.thing"
             test.eq(harness.code(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1, expected_revision = 0, checkpoint = checkpoint(1), records = {vendor_control}})), "INVALID_ARGUMENT")
             local evidenced = text(3, "x")
-            local evidenced_body = evidenced.body :: {[string]: unknown}
+            local evidenced_body = assert(bounds.object(evidenced.body))
             evidenced_body.raw_ref = "artifact:1"
             test.eq(harness.code(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1, expected_revision = 0, checkpoint = checkpoint(1), records = {evidenced}})), "INVALID_ARGUMENT")
             local unprovenanced = text(4, "x")
@@ -230,11 +232,12 @@ local function define_tests()
                 expected_revision = 0, checkpoint = checkpoint(1), records = {stopped}}))
             test.eq(#committed.records, 1)
             local page = harness.value(carrier:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"observation"}}}))
-            local observed = page.records[#page.records]
+            local records = principals.objects(page.records, 64)
+            local observed = assert(records[#records])
             test.eq(observed.source, "hook")
             test.eq(observed.action_id, "a1")
             test.eq(observed.body.data.phase, "ended")
-            local raw_hook = {source = "hook", body = (control("w9", "intended").body :: {[string]: unknown})}
+            local raw_hook = {source = "hook", body = (assert(bounds.object(control("w9", "intended").body)))}
             test.eq(harness.code(carrier:call("carrier_commit", {thread_id = thread_id, idempotency_key = harness.key(), attempt_id = "t1", carrier_epoch = 1,
                 expected_revision = 1, checkpoint = checkpoint(2), records = {raw_hook}})), "INVALID_ARGUMENT")
             local with_provenance = {source = "hook", provenance = provenance(1, 0, 1, 1), body = stopped.body}
@@ -253,7 +256,8 @@ local function define_tests()
             test.eq(#committed.records, 1)
             test.is_false(committed.records[1].replayed)
             local page = harness.value(carrier:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"observation"}}}))
-            local observed = page.records[#page.records]
+            local records = principals.objects(page.records, 64)
+            local observed = assert(records[#records])
             test.eq(observed.source, "bee")
             test.eq(observed.body.data.event_name, "bee.carrier.memory")
             test.eq(observed.body.data.payload_json, '{"key":"summary","value":"persisted facts"}')

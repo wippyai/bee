@@ -61,7 +61,7 @@ local function define_tests()
                 '{"padding":"' .. string.rep("x", events.MAX_TEXT_BYTES * 2) .. '"}')
             local decoded, decode_error = observation.decode(large)
             if not decoded then error(tostring(decode_error)) end
-            local payload = large.data.payload_json :: string
+            local payload = large.data.payload_json
             test.eq(payload, '{"omitted_bytes":' .. tostring(events.MAX_TEXT_BYTES * 2 + 14) .. '}')
         end)
         test.it("decodes stream-json envelopes and reports undecodable frames", function()

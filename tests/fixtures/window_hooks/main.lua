@@ -1,4 +1,5 @@
 -- MIT. Real native-window hook acceptance fixture.
+local bounds = require("bounds")
 local io = require("io")
 local process = require("process")
 local channel = require("channel")
@@ -18,7 +19,7 @@ local THREAD = "window_hooks_thread"
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
@@ -27,7 +28,7 @@ local function call(target: string, value: unknown): {[string]: unknown}
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
+        local fault = type(result.error) == "table" and assert(bounds.object(result.error)) or {}
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
     return result
@@ -36,9 +37,9 @@ end
 local function endpoint(): string
     local entry, err = registry.get("bee:gateway_endpoint")
     assert(not err and entry and type(entry.data) == "table", "gateway endpoint")
-    local address = (entry.data :: {[string]: unknown}).address
-    assert(type(address) == "string" and (address :: string):find("^127%.0%.0%.1:%d+$"), "gateway endpoint address")
-    return address :: string
+    local address = (assert(bounds.object(entry.data))).address
+    assert(type(address) == "string" and (address):find("^127%.0%.0%.1:%d+$"), "gateway endpoint address")
+    return address
 end
 
 -- Nonsecret markers the fixture child prints, in first-seen order. Terminal
@@ -61,14 +62,16 @@ local function placement_report(): string
     local lines: {string} = {}
     local attempts = db:query([[SELECT attempt_id, execution_state, cleanup_state, exit_code, exit_signal,
         exit_source, session_ref, home_key FROM bee_placement_attempts ORDER BY created_at]]) or {}
-    for _, row in ipairs(attempts :: {{[string]: unknown}}) do
+    for _, row in ipairs(assert(bounds.array(attempts))) do
+        local row = assert(bounds.object(row))
         table.insert(lines, string.format("attempt %s execution=%s cleanup=%s exit_code=%s exit_signal=%s exit_source=%s session=%s home=%s",
             tostring(row.attempt_id), tostring(row.execution_state), tostring(row.cleanup_state), tostring(row.exit_code),
             tostring(row.exit_signal), tostring(row.exit_source), tostring(row.session_ref), tostring(row.home_key)))
     end
     local evidence = db:query([[SELECT attempt_id, sequence, kind, detail FROM bee_placement_evidence
         ORDER BY attempt_id, sequence LIMIT 80]]) or {}
-    for _, row in ipairs(evidence :: {{[string]: unknown}}) do
+    for _, row in ipairs(assert(bounds.array(evidence))) do
+        local row = assert(bounds.object(row))
         table.insert(lines, string.format("  %s #%s %s: %s", tostring(row.attempt_id), tostring(row.sequence),
             tostring(row.kind), tostring(row.detail)))
     end
@@ -110,7 +113,9 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
-    assert(catalogs:receive():from() == broker)
+    local catalog, catalog_ok = catalogs:receive()
+    assert(catalog_ok, "broker catalog channel closed before catalog arrived")
+    assert(catalog:from() == broker)
 
     -- 4. Resolve plan and open bee.harness.app:app
     local plan, refused = admission.resolve(definition, "window")
@@ -136,24 +141,25 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local opened: {[string]: unknown}? = nil
     while not opened do
-        local message = assert(replies:receive())
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before window opened")
         if tostring(message:from()) == broker then
             local data = message:payload():data()
             if type(data) == "table" and data.request_id == "open" and data.op == "open" then
-                opened = data :: {[string]: unknown}
+                opened = assert(bounds.object(data))
             end
         end
     end
     if opened.error_code ~= "" then
         local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0})
-        local records = page.value and (page.value :: {[string]: unknown}).records or {}
+        local records = page.value and (assert(bounds.object(page.value))).records or {}
         local last_receipt = ""
-        for _, rec in ipairs(records :: {unknown}) do
-            local item = rec :: {[string]: unknown}
+        for _, rec in ipairs(assert(bounds.array(records))) do
+            local item = assert(bounds.object(rec))
             if item.kind == "receipt" and type(item.body) == "table" then
-                local body = item.body :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
                 if type(body.error) == "table" then
-                    last_receipt = tostring((body.error :: {[string]: unknown}).message)
+                    last_receipt = tostring((assert(bounds.object(body.error))).message)
                 end
             end
         end
@@ -174,7 +180,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local mounted = ""
     while mounted == "" do
-        local message = assert(replies:receive())
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before window attached")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-one" and data.op == "attached" then
             assert(data.error_code == "")
@@ -185,21 +192,19 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local view = assert(tty.attach(mounted))
     assert(view:send({type = "resize", width = 240, height = 24}))
 
-    local checkpoint_deadline = time.after("3s")
-    local checkpoint_event = channel.select({checkpoints:case_receive(), checkpoint_deadline:case_receive()})
-    if checkpoint_event.channel == checkpoint_deadline or not checkpoint_event.ok then
+    local checkpoint_message, checkpoint_ok = checkpoints:receive()
+    if not checkpoint_ok then
         local frame = view:snapshot()
         local diagnosis = frame and table.concat(frame.rows, "\n"):match("Managed window[^\n]*") or ""
         error("window checkpoint was not delivered: " .. diagnosis .. " " .. placement_report())
     end
-    local checkpoint_message = checkpoint_event.value
     assert(tostring(checkpoint_message:from()) == broker, "window checkpoint came from an unauthenticated sender")
     local checkpoint_data = checkpoint_message:payload():data()
     assert(type(checkpoint_data) == "table" and checkpoint_data.version == 1
         and checkpoint_data.resume_schema == "bee.agent.window@1" and type(checkpoint_data.resume_state) == "string",
         "window checkpoint has an invalid persisted state")
     assert(view:send({type = "resize", width = 80, height = 24}))
-    local saved_state = checkpoint_data.resume_state :: string
+    local saved_state = checkpoint_data.resume_state
     assert(process.send(broker, "bee.app.persisted", {version = 1, request_id = checkpoint_data.request_id,
         error_code = "", error = ""}))
 
@@ -249,19 +254,20 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     for _ = 1, 200 do
         local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64})
         local value = reply(records.value)
-        for _, item in ipairs(value.records :: {{[string]: unknown}}) do
+        for _, item in ipairs(assert(bounds.array(value.records))) do
+        local item = assert(bounds.object(item))
             if item.kind == "observation" and type(item.body) == "table" then
-                local body = item.body :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
                 local event_key = tostring(body.event_key or "")
                 if event_key:find("^hook:") then
                     hook_committed = true
                     committed_record = item
                     if type(body.data) == "table" then
-                        local data = body.data :: {[string]: unknown}
+                        local data = assert(bounds.object(body.data))
                         if data.payload_json then
                             local decoded = json.decode(tostring(data.payload_json))
                             if type(decoded) == "table" then
-                                local payload_obj = decoded :: {[string]: unknown}
+                                local payload_obj = assert(bounds.object(decoded))
                                 committed_event_id = tostring(payload_obj.event_id or "")
                                 committed_binding_id = tostring(payload_obj.binding_id or "")
                             end
@@ -286,7 +292,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         local queue_res = call("bee.gateway.binding:hook_queue", {binding_id = committed_binding_id})
         local queue_val = reply(queue_res.value)
         local found_hook: {[string]: unknown}? = nil
-        for _, h in ipairs(queue_val.hooks :: {{[string]: unknown}}) do
+        for _, h in ipairs(assert(bounds.array(queue_val.hooks))) do
+        local h = assert(bounds.object(h))
             if committed_event_id and h.event_id == committed_event_id then
                 found_hook = h
                 break
@@ -344,7 +351,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         assert(accepted, "additional hook was not accepted before the crash")
         local queue = reply(call("bee.gateway.binding:hook_queue", {binding_id = committed_binding_id}).value)
         local unclaimed = false
-        for _, hook in ipairs(queue.hooks :: {{[string]: unknown}}) do
+        for _, hook in ipairs(assert(bounds.array(queue.hooks))) do
+        local hook = assert(bounds.object(hook))
             local fields = reply(hook.fields)
             if fields.tool_use_id == "toolu_pending" then
                 unclaimed = hook.status == "queued" and hook.claimed_epoch == 0
@@ -359,13 +367,14 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         local recorded = assert(store.row(db, admission.identities("window-hooks-req").attempt_id))
         db:release()
         assert(type(recorded.runner_pid) == "string", "fixture has no recorded owner actor")
-        assert(process.terminate(recorded.runner_pid :: string))
+        assert(process.terminate(recorded.runner_pid))
     else
         assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close", op = "close", workspace_id = WORKSPACE, id = opened.id}))
     end
     local closed = false
     while not closed do
-        local message = assert(replies:receive())
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before window closed")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then
             assert(data.error_code == "", "managed window close failed: " .. tostring(data.error))
@@ -380,7 +389,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     -- Broker completion observes EXIT, so the durable receipt must exist now.
     local final_page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
     local receipts = 0
-    for _, item in ipairs(final_page.records :: {{[string]: unknown}}) do
+    for _, item in ipairs(assert(bounds.array(final_page.records))) do
+        local item = assert(bounds.object(item))
         if item.kind == "receipt" then
             receipts = receipts + 1
             local body = reply(item.body)
@@ -390,14 +400,15 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(receipts == (crashed and 0 or 1), "unexpected receipt count before recovery")
     local tool_hooks = 0
     local lifecycle_hooks = 0
-    for _, record in ipairs(final_page.records :: {{[string]: unknown}}) do
+    for _, record in ipairs(assert(bounds.array(final_page.records))) do
+        local record = assert(bounds.object(record))
         assert(record.kind ~= "turn.request" and record.kind ~= "turn.end", "native hooks invented a logical turn")
         if record.kind == "observation" then
             local body = reply(record.body)
             if tostring(body.event_key):find("^hook:") and type(body.data) == "table" then
-                local data = body.data :: {[string]: unknown}
+                local data = assert(bounds.object(body.data))
                 local decoded = data.payload_json and json.decode(tostring(data.payload_json)) or nil
-                local payload = type(decoded) == "table" and decoded :: {[string]: unknown} or {}
+                local payload = type(decoded) == "table" and assert(bounds.object(decoded)) or {}
                 if payload.event == "SessionStart" then lifecycle_hooks = lifecycle_hooks + 1
                 elseif payload.event == "PreToolUse" then tool_hooks = tool_hooks + 1
                 else error("unexpected committed hook event: " .. tostring(payload.event)) end
@@ -426,11 +437,12 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local continued: {[string]: unknown}? = nil
     while not continued do
-        local message = assert(replies:receive())
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before continuation opened")
         if tostring(message:from()) == broker then
             local data = message:payload():data()
             if type(data) == "table" and data.request_id == "continuation-open" and data.op == "open" then
-                continued = data :: {[string]: unknown}
+                continued = assert(bounds.object(data))
             end
         end
     end
@@ -457,7 +469,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     }))
     local mounted_two = ""
     while mounted_two == "" do
-        local message = assert(replies:receive())
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before continuation attached")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-two" and data.op == "attached" then
             assert(data.error_code == "")
@@ -539,15 +552,16 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         local value = reply(records.value)
         total_hooks = 0
         continuation_attempt_id, continuation_binding_id, continuation_session_id = nil, nil, nil
-        for _, item in ipairs(value.records :: {{[string]: unknown}}) do
+        for _, item in ipairs(assert(bounds.array(value.records))) do
+        local item = assert(bounds.object(item))
             if item.kind == "observation" and item.action_id == admission.identities("window-hooks-req").action_id and type(item.body) == "table" then
-                local body = item.body :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
                 if tostring(body.event_key or ""):find("^hook:") and type(body.data) == "table" then
-                    local data = body.data :: {[string]: unknown}
+                    local data = assert(bounds.object(body.data))
                     local decoded = data.payload_json and json.decode(tostring(data.payload_json)) or nil
                     if type(decoded) == "table" then
-                        local payload = decoded :: {[string]: unknown}
-                        local fields = type(payload.fields) == "table" and payload.fields :: {[string]: unknown} or {}
+                        local payload = assert(bounds.object(decoded))
+                        local fields = type(payload.fields) == "table" and assert(bounds.object(payload.fields)) or {}
                         total_hooks = total_hooks + 1
                         assert(payload.ambiguous == false, "fixture hook must remain unambiguous")
                         assert(fields.session_id == "s1", "hook provider conversation changed across continuation")
@@ -574,7 +588,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         -- They remain durable rejections, never fabricated thread commits.
         local queue = reply(call("bee.gateway.binding:hook_queue", {binding_id = committed_binding_id}).value)
         local rejected = false
-        for _, hook in ipairs(queue.hooks :: {{[string]: unknown}}) do
+        for _, hook in ipairs(assert(bounds.array(queue.hooks))) do
+        local hook = assert(bounds.object(hook))
             local fields = reply(hook.fields)
             if fields.tool_use_id == "toolu_pending" then
                 rejected = hook.status == "rejected" and type(hook.rejected_reason) == "string" and hook.rejected_reason ~= ""
@@ -599,7 +614,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close-two", op = "close", workspace_id = WORKSPACE, id = continued.id}))
     local closed_two = false
     while not closed_two do
-        local message = assert(replies:receive())
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before continuation closed")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close-two" and data.op == "close" then
             assert(data.error_code == "", "window continuation close failed: " .. tostring(data.error))
@@ -609,7 +625,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(closed_two, "window continuation close failed")
     local continued_page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}).value)
     local continued_receipts = 0
-    for _, item in ipairs(continued_page.records :: {{[string]: unknown}}) do
+    for _, item in ipairs(assert(bounds.array(continued_page.records))) do
+        local item = assert(bounds.object(item))
         if item.kind == "receipt" then
             continued_receipts = continued_receipts + 1
             local body = reply(item.body)

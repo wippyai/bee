@@ -1,5 +1,6 @@
 -- MIT. Preflight has no runtime-write route; host evidence remains separate.
 local test = require("test")
+local bounds = require("bounds")
 local preflight = require("preflight")
 local protected_kernel = require("protected_kernel")
 local registry = require("registry")
@@ -227,7 +228,7 @@ local function define_tests()
         end)
         test.it("refuses app-shipped actor and group selectors on every entry kind", function()
             local candidate, context = fixture()
-            local entry = candidate.entries[1] :: {[string]: unknown}
+            local entry = assert(bounds.object(candidate.entries[1]))
             for _, kind in ipairs({"process.lua", "function.lua", "library.lua"}) do
                 candidate.entries[1].kind = kind
                 context.kinds[kind] = true
@@ -250,7 +251,7 @@ local function define_tests()
                 path = ".security.policies +=", catalog_revision = 1, template_revision = 1}
             local bytes = assert(canonical.encode(candidate, 1048576))
             local decoded = assert(preflight.decode_candidate(bytes, assert(hash.sha256(bytes))))
-            test.eq((decoded.requirements[1].capability_request :: preflight.CapabilityRequest).reason, "Show docs")
+            test.eq((decoded.requirements[1].capability_request).reason, "Show docs")
             test.is_true(checked(decoded, context).ready)
             candidate.requirements[1].capability_request.target = "other:run"
             test.is_true(has(checked(candidate, context), "CAPABILITY_REQUEST_DENIED"))
@@ -408,7 +409,7 @@ local function define_tests()
             test.is_true(bytes ~= nil and digest ~= nil)
             local decoded = assert(preflight.decode_report(bytes, digest))
             test.eq(decoded.plan_digest, report.plan_digest)
-            test.is_nil(preflight.decode_report((bytes :: string) .. " ", digest))
+            test.is_nil(preflight.decode_report((bytes) .. " ", digest))
             local forged = {schema_revision = report.schema_revision, plan_digest = report.plan_digest,
                 destination_node = report.destination_node, base_revision = report.base_revision,
                 policy_digest = report.policy_digest, ready = true,

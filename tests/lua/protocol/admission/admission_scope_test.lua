@@ -15,7 +15,8 @@ local function define_tests()
             test.is_true(trusted.scope_management)
         end)
         test.it("rejects nonboolean opt-in and unrecognized authority fields", function()
-            for _, value in ipairs({"true", "false", 0, 1, {}} :: {unknown}) do
+            local invalid_values: {unknown} = {"true", "false", 0, 1, {}}
+            for _, value in ipairs(invalid_values) do
                 test.is_nil(application.binding({definition_id = "fixture:app", policies = {}, scope_management = value}))
             end
             test.is_nil(application.binding({definition_id = "fixture:app", policies = {}, boundary_policy = "fixture:allow_all"}))

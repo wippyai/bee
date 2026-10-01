@@ -8,6 +8,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [json, hash, registry, funcs]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     profile: bee.driver:profile
     launch: bee.driver.agy:launch

@@ -38,7 +38,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         assert(process.send(owner, "bee.client.status", {phase = phase, client_id = display_id, view = view}))
     end
     local function admission(): string
-        local message = assert(admissions:receive())
+        local message = assert((admissions:receive()))
         assert(message:from() == host)
         local data: unknown = message:payload():data()
         if type(data) ~= "table" or data.workspace_id ~= workspace_id or data.display_id ~= display_id
@@ -48,7 +48,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     end
     local function reply(id: string, op: string): decode.Reply
         while true do
-            local message = assert(replies:receive())
+            local message = assert((replies:receive()))
             assert(message:from() == host)
             local envelope = client_protocol.result(message:payload():data())
             if not envelope then error("Invalid client reply") end
@@ -70,7 +70,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local last_revision = -1
     local function catalog()
         while true do
-            local message = assert(catalogs:receive())
+            local message = assert((catalogs:receive()))
             assert(message:from() == host)
             local value = inventory.catalog(message:payload():data())
             if not value then error("Invalid host catalog") end
@@ -98,7 +98,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     end
     local function wait_views(count: integer, title: string?)
         while true do
-            local message = assert(updates:receive())
+            local message = assert((updates:receive()))
             local value = views(tostring(message:from()), message:payload():data())
             if value and #value.items == count then
                 if not title then return end
@@ -110,7 +110,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     wait_views(definition_id ~= nil and 0 or (label == "A" and 0 or 1))
     if preflight then
         status("preflight")
-        local message = assert(commands:receive())
+        local message = assert((commands:receive()))
         assert(message:from() == owner)
         local target: unknown = message:payload():data()
         if type(target) ~= "table" or type(target.id) ~= "string" or type(target.instance_id) ~= "string" then error("Invalid prepared bind target") end
@@ -118,13 +118,13 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             connection_id = connection_id, renderer_generation = renderer_generation, id = target.id, instance_id = target.instance_id}))
         assert(reply("prepared-startup-bind", "bind").error_code == "permission_denied", "Recovered manual transfer granted its source early")
         status("prepared-bind")
-        local exit = assert(commands:receive())
+        local exit = assert((commands:receive()))
         assert(exit:from() == owner and exit:payload():data() == "exit")
         for _, subscription in ipairs({admissions, replies, commands, presentations, catalogs, updates, question_results, transfers}) do process.unlisten(subscription) end
         return
     end
     local function presentation(renderer: string, code: string)
-        local message = assert(presentations:receive())
+        local message = assert((presentations:receive()))
         assert(message:from() == host)
         local data: unknown = message:payload():data()
         if type(data) ~= "table" or data.connection_id ~= connection_id or data.workspace_id ~= workspace_id
@@ -153,7 +153,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
     local check_sequence = 0
     local observe_sequence = 0
     while true do
-        local message = assert(commands:receive())
+        local message = assert((commands:receive()))
         assert(message:from() == owner)
         local op: unknown = message:payload():data()
         if type(op) == "table" and op.op == "render" and type(op.renderer) == "string" then
@@ -258,7 +258,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
                 connection_id = connection_id, renderer_generation = renderer_generation, request_id = op.request_id,
                 view_id = opened.id, instance_id = opened.instance_id, target_display_id = op.target_display_id,
                 expected_revision = op.expected_revision}))
-            local outcome = assert(transfers:receive())
+            local outcome = assert((transfers:receive()))
             assert(outcome:from() == host)
             local value: unknown = outcome:payload():data()
             assert(type(value) == "table" and value.request_id == op.request_id and value.error_code == op.error_code,
@@ -268,7 +268,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             assert(process.send(host, "bee.host.transfer", {version = 1, workspace_id = workspace_id,
                 connection_id = connection_id, renderer_generation = renderer_generation, request_id = "fixture-transfer",
                 view_id = opened.id, instance_id = opened.instance_id, target_display_id = op.target_display_id, expected_revision = 1}))
-            local outcome = assert(transfers:receive())
+            local outcome = assert((transfers:receive()))
             assert(outcome:from() == host)
             local value: unknown = outcome:payload():data()
             if fail_commit then
@@ -285,7 +285,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             assert(process.send(host, "bee.host.transfer", {version = 1, workspace_id = workspace_id,
                 connection_id = connection_id, renderer_generation = renderer_generation, request_id = "fixture-transfer",
                 view_id = opened.id, instance_id = opened.instance_id, target_display_id = op.target_display_id, expected_revision = 1}))
-            local outcome = assert(transfers:receive())
+            local outcome = assert((transfers:receive()))
             assert(outcome:from() == host)
             local value: unknown = outcome:payload():data()
             assert(type(value) == "table" and value.request_id == "fixture-transfer" and value.error_code == ""
@@ -298,7 +298,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
                 connection_id = connection_id, renderer_generation = renderer_generation, request_id = op.request_id,
                 view_id = op.id, instance_id = op.instance_id, target_display_id = op.target_display_id,
                 expected_revision = op.expected_revision}))
-            local outcome = assert(transfers:receive())
+            local outcome = assert((transfers:receive()))
             assert(outcome:from() == host)
             local value: unknown = outcome:payload():data()
             assert(type(value) == "table" and value.request_id == op.request_id and value.error_code == ""
@@ -341,7 +341,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             assert(process.send(host, "bee.host.answer", {version = 1, workspace_id = workspace_id,
                 connection_id = fresh, selection_revision = 1, request_id = "forbidden-answer",
                 id = opened.id, instance_id = opened.instance_id, action = "accept", value = ""}))
-            local denied = assert(question_results:receive())
+            local denied = assert((question_results:receive()))
             assert(denied:from() == host)
             local receipt: unknown = denied:payload():data()
             assert(type(receipt) == "table" and receipt.request_id == "forbidden-answer"
@@ -359,7 +359,7 @@ function M.renderer(owner: string, client: string)
     local commands = assert(process.listen("bee.renderer.command", {message = true}))
     local function status(phase: string) assert(process.send(owner, "bee.renderer.status", phase)) end
     status("ready")
-    local mounted = assert(mounts:receive())
+    local mounted = assert((mounts:receive()))
     assert(mounted:from() == client)
     local data: unknown = mounted:payload():data()
     if type(data) ~= "table" or type(data.mount) ~= "string" or type(data.native_pid) ~= "string" or type(data.label) ~= "string" then error("Invalid renderer mount") end
@@ -369,7 +369,7 @@ function M.renderer(owner: string, client: string)
     wait_for(view, "BEE_RENDERER_" .. data.label .. "_" .. data.native_pid)
     status("mounted")
     while true do
-        local message = assert(commands:receive())
+        local message = assert((commands:receive()))
         assert(message:from() == owner)
         local op: unknown = message:payload():data()
         if op == "exit" then break end
@@ -399,7 +399,7 @@ function M.main(fail_commit: boolean?)
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
         :with_context({["bee.host_owner"] = owner, ["bee.test.fail_renderer_once"] = true,
             ["bee.test.fail_transfer_commit"] = fail_commit == true}):spawn_monitored("bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
-    local started = assert(ready:receive())
+    local started = assert((ready:receive()))
     assert(started:from() == host)
     local boot: unknown = started:payload():data()
     if type(boot) ~= "table" then error("Invalid host boot") end
@@ -410,7 +410,7 @@ function M.main(fail_commit: boolean?)
     local scope = security.new_scope({policy})
     local display_ids: {[string]: string} = {}
     local function status(pid: string, phase: string): View?
-        local message = assert(statuses:receive())
+        local message = assert((statuses:receive()))
         assert(message:from() == pid)
         local data: unknown = message:payload():data()
         if type(data) ~= "table" or data.phase ~= phase then error("Unexpected client phase") end
@@ -425,7 +425,7 @@ function M.main(fail_commit: boolean?)
         return {id = value.id, instance_id = value.instance_id, native_pid = value.native_pid}
     end
     local function result(id: string, recipient: string, expected: string)
-        local message = assert(results:receive())
+        local message = assert((results:receive()))
         assert(message:from() == host)
         local data: unknown = message:payload():data()
         assert(type(data) == "table" and data.request_id == id and data.recipient == recipient and data.error_code == expected)
@@ -437,7 +437,7 @@ function M.main(fail_commit: boolean?)
     end
     local function reply(id: string, op: string): decode.Reply
         while true do
-            local message = assert(replies:receive())
+            local message = assert((replies:receive()))
             assert(message:from() == host)
             local value = decode.reply(message:payload():data())
             if value then assert(decode.belongs(value, workspace_id)) end
@@ -464,7 +464,7 @@ function M.main(fail_commit: boolean?)
     assert(first_view.id ~= second_view.id and first_view.native_pid ~= second_view.native_pid, "Client request IDs collided")
     assert(process.send(first, "bee.client.command", "inventory-two")); status(first, "inventory-two")
     local function renderer_status(pid: string, phase: string)
-        local message = assert(renderers:receive())
+        local message = assert((renderers:receive()))
         assert(message:from() == pid and message:payload():data() == phase, "Unexpected renderer status")
     end
     local function renderer(): string
@@ -501,7 +501,7 @@ function M.main(fail_commit: boolean?)
     select_renderer("final-renderer", first, final_renderer, ""); delegate(final_renderer)
     admit("cannot-replace", first, false, "busy")
     assert(process.send(host, "bee.host.client", {version = 1, request_id = "queued-render", op = "render", workspace_id = workspace_id, recipient = first, renderer = original_renderer}))
-    local gated = assert(gates:receive())
+    local gated = assert((gates:receive()))
     assert(process.send(host, "bee.host.client", {version = 1, request_id = "detach-first", op = "detach", workspace_id = workspace_id, recipient = first}))
     select_renderer("while-detaching", first, original_renderer, "busy")
     assert(process.send(gated:from(), "bee.test.release_unbind", {}))

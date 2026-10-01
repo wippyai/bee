@@ -4,17 +4,18 @@
 local funcs = require("funcs")
 local security = require("security")
 local test = require("test")
+local bounds = require("bounds")
 
 local function call(target: string, request: unknown, actor: unknown?): {[string]: unknown}
     local executor = funcs.new()
     if actor then executor = executor:with_actor(actor) end
     local result, err = executor:call(target, request)
     if type(result) ~= "table" then error(tostring(err or "gateway returned no result")) end
-    return result :: {[string]: unknown}
+    return assert(bounds.object(result))
 end
 
 local function code(result: {[string]: unknown}): unknown
-    local fault = result.error :: {[string]: unknown}
+    local fault = assert(bounds.object(result.error))
     return fault.code
 end
 

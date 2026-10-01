@@ -21,7 +21,7 @@ type Channel = channel.Channel
 type Message = process.Message
 local function object(value: unknown): Object
     if type(value) ~= "table" then error("missing object") end
-    return value :: Object
+    return assert(bounds.object(value))
 end
 local function call(target: string, value: unknown): Object
     local raw, call_error = funcs.call(target, value)

@@ -24,7 +24,7 @@ local function main()
     local host = tostring(assert(process.with_options({}):with_scope(security.new_scope(policies))
         :with_context({["bee.host_owner"] = self}):spawn_monitored("bee.host:main", "bee:workers", self, {root_ref = "bee.env:workspace_root", subpath = ""})))
 
-    local started = assert(ready:receive())
+    local started = assert((ready:receive()))
     assert(tostring(started:from()) == host, "Ready sender mismatch")
     local boot: unknown = started:payload():data()
     if type(boot) ~= "table" then error("Invalid host boot") end
@@ -37,7 +37,7 @@ local function main()
     -- it starts on its own. Correlate on the request this supervisor issued.
     local function client_result(req_id: string, op: string): unknown
         while true do
-            local res = assert(results:receive())
+            local res = assert((results:receive()))
             assert(tostring(res:from()) == host, "Client result sender mismatch")
             local data: unknown = res:payload():data()
             if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id then
@@ -51,7 +51,7 @@ local function main()
     -- no request id. Either completion for this recipient satisfies the owner.
     local function detach_result(req_id: string, target: string)
         while true do
-            local res = assert(results:receive())
+            local res = assert((results:receive()))
             assert(tostring(res:from()) == host, "Client result sender mismatch")
             local data: unknown = res:payload():data()
             if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id then
@@ -74,7 +74,7 @@ local function main()
             local authorized_controller = client_pid
             assert(io.print("BEE_HIVE_REMOTE desktop_ready " .. authorized_controller))
             while true do
-                local phase = assert(phases:receive())
+                local phase = assert((phases:receive()))
                 assert(tostring(phase:from()) == authorized_controller, "Phase message sender mismatch: expected authorized controller " .. authorized_controller .. ", got " .. tostring(phase:from()))
                 local phase_data: unknown = phase:payload():data()
                 if type(phase_data) ~= "table" or phase_data.version ~= 1 then
@@ -173,7 +173,7 @@ local function main()
                 display_id = display_id,
                 permissions = {open = true, close = false, control = true},
             }))
-            local res = assert(results:receive())
+            local res = assert((results:receive()))
             assert(tostring(res:from()) == host, "Admission result sender mismatch")
             local data: unknown = res:payload():data()
             if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id
@@ -184,7 +184,7 @@ local function main()
             -- Wait through the actor inbox, without occupying the runtime's
             -- terminal reader while another actor starts a virtual terminal.
             while true do
-                local phase = assert(phases:receive())
+                local phase = assert((phases:receive()))
                 assert(tostring(phase:from()) == client_pid, "Phase message sender mismatch: expected " .. client_pid .. ", got " .. tostring(phase:from()))
                 local phase_data: unknown = phase:payload():data()
                 if type(phase_data) ~= "table" or phase_data.version ~= 1 then
@@ -204,7 +204,7 @@ local function main()
                         recipient = client_pid,
                         renderer = renderer,
                     }))
-                    local res = assert(results:receive())
+                    local res = assert((results:receive()))
                     assert(tostring(res:from()) == host, "Render result sender mismatch")
                     local res_data: unknown = res:payload():data()
                     if type(res_data) ~= "table" or res_data.version ~= 1 or res_data.workspace_id ~= workspace_id
@@ -229,7 +229,7 @@ local function main()
                 workspace_id = workspace_id,
                 recipient = client_pid,
             }))
-            local res = assert(results:receive())
+            local res = assert((results:receive()))
             assert(tostring(res:from()) == host, "Detach result sender mismatch")
             local data: unknown = res:payload():data()
             if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id
@@ -244,7 +244,7 @@ local function main()
                 op = "shutdown",
                 workspace_id = workspace_id,
             }))
-            local res = assert(replies:receive())
+            local res = assert((replies:receive()))
             assert(tostring(res:from()) == host, "Shutdown reply sender mismatch")
             local data: unknown = res:payload():data()
             if type(data) ~= "table" or data.version ~= 1 or data.workspace_id ~= workspace_id

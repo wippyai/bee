@@ -18,6 +18,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     configuration: bee.driver.grok:configuration
     configure: bee.driver.grok.binding:configure
@@ -27,6 +29,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     protocol: bee.driver.grok:protocol
     normalize: bee.driver.grok.binding:normalize

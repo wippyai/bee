@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- Placement migrations carry existing attempts and evidence through the
 -- terminal rebuild, Docker columns and retained configuration bindings.
 local test = require("test")
@@ -7,6 +8,7 @@ local migrations = require("migrations")
 local RESOURCE = "bee.window.native:upgrade_db"
 local LEDGER = {table = "bee_window_native_schema_migrations", label = "window native"}
 type Row = {[string]: unknown}
+type Object = {[string]: unknown}
 
 local function reset()
     local db, err = sql.get(RESOURCE)
@@ -31,7 +33,7 @@ end
 local function one(db: sql.DB, statement: string): Row
     local rows, err = db:query(statement)
     if err or not rows or #rows ~= 1 then error(statement .. ": " .. tostring(err or "wrong row count")) end
-    return rows[1] :: Row
+    return assert(bounds.object(rows[1]))
 end
 
 local function run()
@@ -57,7 +59,7 @@ local function run()
     test.eq(evidence.attempt_id, "migration-attempt")
     test.eq(evidence.sequence, 1)
     test.eq(evidence.detail, "retained evidence")
-    test.eq(#(upgraded:query("PRAGMA foreign_key_check") :: {{[string]: unknown}}), 0)
+    test.eq(#(assert(bounds.array(upgraded:query("PRAGMA foreign_key_check")))), 0)
     local _, terminal_error = upgraded:execute("UPDATE bee_placement_attempts SET exit_source = 'terminal' WHERE attempt_id = 'migration-attempt'")
     test.is_nil(terminal_error)
     upgraded:release()
@@ -87,7 +89,7 @@ local function run()
         FROM bee_placement_session_files WHERE owner_id = 'migration-owner' AND session_ref = 'migration-session']])
     test.eq(binding.path, ".grok/.bee-global-config.toml")
     test.eq(binding.digest, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-    test.eq(#(reopened:query("PRAGMA foreign_key_check") :: {{[string]: unknown}}), 0)
+    test.eq(#(assert(bounds.array(reopened:query("PRAGMA foreign_key_check")))), 0)
     reopened:release()
 end
 

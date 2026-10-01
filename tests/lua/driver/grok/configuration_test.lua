@@ -2,6 +2,8 @@
 -- strict rejection of provider configuration and unbound command hooks,
 -- and deterministic SHA-256 measurement.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local json = require("json")
 local configuration = require("configuration")
 local configure = require("configure")
@@ -11,7 +13,7 @@ local function define_tests()
         test.it("publishes admitted private login config without gateway tools", function()
             local reply = configure.handle({fixture = false, private_home = true})
             test.is_true(reply.ok)
-            local files = (reply.delivery :: {files: {{composition: {kind: string, base_path: string}, path: string}}}).files
+            local files = (reply.delivery).files
             test.eq(#files, 1)
             test.eq(files[1].composition.kind, "copy")
             test.eq(files[1].path, configuration.PATH)
@@ -93,29 +95,29 @@ local function define_tests()
             }
             local reply = configure.handle(req)
             test.is_true(reply.ok)
-            local delivery = reply.delivery :: {[string]: unknown}
+            local delivery = assert(bounds.object(reply.delivery))
             test.not_nil(delivery)
-            local files = delivery.files :: {{[string]: unknown}}
+            local files = principals.objects(delivery.files)
             test.eq(#files, 1)
             test.eq(files[1].path, ".grok/config.toml")
             test.eq(files[1].revision, "bee.grok-config@1")
             test.eq(files[1].provider_ref, "bee:gateway_endpoint")
-            local composition = files[1].composition :: {[string]: unknown}
+            local composition = assert(bounds.object(files[1].composition))
             test.eq(composition.kind, "toml_insert")
             test.eq(composition.base_path, ".grok/.bee-global-config.toml")
-            local path = composition.path :: {string}
+            local path = principals.strings(composition.path)
             test.eq(path[1], "mcp_servers")
             test.eq(path[2], "bee")
-            local arguments = delivery.arguments :: {string}
+            local arguments = principals.strings(delivery.arguments)
             test.eq(#arguments, 0)
 
             -- Empty delivery when gateway is nil
             local empty_req = {fixture = false}
             local empty_reply = configure.handle(empty_req)
             test.is_true(empty_reply.ok)
-            local empty_del = empty_reply.delivery :: {[string]: unknown}
-            test.eq(#(empty_del.files :: {unknown}), 0)
-            test.eq(#(empty_del.arguments :: {unknown}), 0)
+            local empty_del = assert(bounds.object(empty_reply.delivery))
+            test.eq(#(principals.items(empty_del.files)), 0)
+            test.eq(#(principals.items(empty_del.arguments)), 0)
 
             -- Rejects provider configuration
             local provider_req = {
@@ -149,7 +151,7 @@ local function define_tests()
                 token_environment = "BEE_TOKEN",
             }})
             test.is_true(reply.ok)
-            local arguments = (reply.delivery :: {[string]: unknown}).arguments :: {string}
+            local arguments = principals.strings((assert(bounds.object(reply.delivery))).arguments)
             test.eq(#arguments, 2)
             test.eq(arguments[1], "--rules")
             test.eq(arguments[2], "Keep the Bee thread current.")
@@ -162,10 +164,12 @@ local function define_tests()
                 hook_command = "/private/bee tool",
             }})
             test.is_true(reply.ok)
-            local delivery = reply.delivery :: {files: {{path: string, content: string}}}
+            local delivery = reply.delivery
             test.eq(#delivery.files, 1)
             test.eq(delivery.files[1].path, ".grok/hooks/bee.json")
-            local decoded = json.decode(delivery.files[1].content) :: {hooks: {[string]: {{hooks: {{command: string, timeout: number}}}}}}
+            local content = delivery.files[1].content
+            assert(type(content) == "string")
+            local decoded = json.decode(content)
             for _, event in ipairs({"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}) do
                 local handler = decoded.hooks[event][1].hooks[1]
                 test.is_true(handler.command:find("'/private/bee tool'", 1, true) ~= nil)

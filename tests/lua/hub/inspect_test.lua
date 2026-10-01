@@ -1,5 +1,6 @@
 -- MIT. Requests cannot turn a package reader into a credential destination.
 local test = require("test")
+local bounds = require("bounds")
 local inspect = require("inspect")
 local inspection = require("inspection")
 local inventory = require("inventory")
@@ -34,8 +35,8 @@ local function define_tests()
             test.not_nil(version)
             if not version then return end
             local manifest = assert(installed.sources({component = "bee/application", version = version}))
-            local revision = manifest.revision :: number
-            local entries = manifest.entries :: {{id: string}}
+            local revision = manifest.revision
+            local entries = manifest.entries
             local found = false
             for _, entry in ipairs(entries) do
                 if entry.id == "bee.app:frame" then found = true end
@@ -43,7 +44,7 @@ local function define_tests()
             test.is_true(found)
             local page = assert(installed.sources({component = "bee/application", version = version,
                 entry_id = "bee.app:frame", expected_revision = revision, offset = 0, limit = 4096}))
-            test.is_true((page.content :: string):find("function M.", 1, true) ~= nil)
+            test.is_true((page.content):find("function M.", 1, true) ~= nil)
         end)
         test.it("returns entry summaries first with stable paging", function()
             local summarized = inspection.decode({component = "acme/tool", version = "1.2.3"})
@@ -61,13 +62,13 @@ local function define_tests()
             test.eq(#first.entries, 32)
             test.eq(first.next_offset, 32)
             test.eq(first.eof, false)
-            test.is_nil((first.entries[1] :: {[string]: unknown}).data)
+            test.is_nil((assert(bounds.object(first.entries[1]))).data)
             local last = inspection.page(entries, 32, 32, false)
             test.eq(#last.entries, 8)
             test.is_nil(last.next_offset)
             test.eq(last.eof, true)
             local full = inspection.page(entries, 0, 32, true)
-            test.eq((full.entries[1] :: {[string]: unknown}).data, "source")
+            test.eq((assert(bounds.object(full.entries[1]))).data, "source")
             local stated = preview.decode("state", {component = "acme/tool", version = "1.2.3", entry_limit = 4})
             test.eq(stated and stated.entry_limit, 4)
             test.is_nil(preview.decode("read_file", {component = "acme/tool", version = "1.2.3",

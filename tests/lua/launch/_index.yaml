@@ -23,6 +23,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     owner_handoff: bee.launch:owner_handoff
 - name: protocol_test
@@ -71,8 +72,10 @@ entries:
   source: file://desktop_lifecycle_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [process, channel, time]
+  modules: [tty, security, process, channel, time]
   imports:
+    attachments: bee.client:attachments
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     desktops: bee.client:desktops
     desktop_lifecycle: bee.launch:desktop_lifecycle
@@ -82,5 +85,6 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     boot_fallback: bee.launch:boot_fallback

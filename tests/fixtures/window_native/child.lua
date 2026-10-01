@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -10,8 +11,8 @@ type StopResult = {ok: boolean, error: string}
 -- Stops the attempt through the placement service once the window's control
 -- listener answers, which it first does while executor:terminal() is starting
 -- the child, and reports the stop reply on the returned channel.
-local function stop_once_supervised(attempt_id: string): Channel<StopResult>
-    local stopped: Channel<StopResult> = channel.new(1)
+local function stop_once_supervised(attempt_id: string): channel.Channel<StopResult>
+    local stopped = channel.new(1)
     local replies = assert(process.listen(protocol.TOPIC_STATUS, {message = true}))
     coroutine.spawn(function()
         local probe = 0
@@ -25,8 +26,9 @@ local function stop_once_supervised(attempt_id: string): Channel<StopResult>
         process.unlisten(replies)
         local reply, call_error = funcs.call("bee.placement.native.binding:stop", {attempt_id = attempt_id, mode = "cooperative"})
         local accepted = false
-        if type(reply) == "table" then accepted = (reply :: {[string]: unknown}).ok == true end
-        stopped:send({ok = call_error == nil and accepted, error = tostring(call_error or "")})
+        if type(reply) == "table" then accepted = (assert(bounds.object(reply))).ok == true end
+        local result: StopResult = {ok = call_error == nil and accepted, error = tostring(call_error or "")}
+        stopped:send(result)
     end)
     return stopped
 end
@@ -36,6 +38,7 @@ local function main(parent: string, attempt_id: string, mode: string)
         local stopped = stop_once_supervised(attempt_id)
         local facade, open_error = window.open(attempt_id, {width = 20, height = 8, term = "xterm-256color"})
         local stop = stopped:receive()
+        if stop ~= nil then assert(type(stop) == "table" and type(stop.ok) == "boolean" and type(stop.error) == "string") end
         local stop_seen, finished = false, false
         if facade then
             -- A returned window must end from the committed stop alone.

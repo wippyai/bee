@@ -2,6 +2,7 @@
 local test = require("test")
 local graph = require("graph")
 local inspect = require("inspect")
+local requirements = require("requirements")
 local function edge(name: string, version: string): graph.Edge
     return {component = name, version = version, parameters = {}}
 end
@@ -26,8 +27,79 @@ local function required_artifact(name: string, version: string, dependencies: {g
         requirements = {requirements = {{id = id, has_default = false, has_selected = false, targets = targets}}, missing = {id}},
         next_offset = nil, eof = true}
 end
+local function forwarding_artifact(name: string, version: string, dependencies: {graph.Edge},
+    targets: {requirements.Target}, fallback: unknown?): inspect.Inspection
+    local original = artifact(name, version, dependencies)
+    local entries: {inspect.Entry} = {}
+    for _, entry in ipairs(original.entries) do entries[#entries + 1] = entry end
+    entries[#entries + 1] = {id = name:gsub("/", ".") .. ":target_db", kind = "ns.requirement", meta = {},
+        data = {targets = targets, default = fallback}}
+    local selected, problem = requirements.read(entries, {})
+    if not selected then error(problem or "invalid requirement fixture") end
+    return {component = name, version = version, digest = original.digest, entries = entries,
+        requirements = selected, next_offset = nil, eof = true}
+end
 local function define_tests()
     test.describe("Hub dependency graph", function()
+        test.it("forwards bound requirement defaults through a dependency chain", function()
+            local result, problem = graph.resolve({
+                {component = "acme/root", version = "1.0.0", parameters = {{name = "target_db", value = false}}},
+            }, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {}, false, nil end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    local next_name = name == "acme/root" and "acme/child" or name == "acme/child" and "acme/grand" or nil
+                    local deps: {graph.Edge} = {}
+                    if next_name then deps = {edge(next_name, "1.0.0")} end
+                    local namespace = name:gsub("/", ".")
+                    local destination = next_name and next_name:gsub("/", ".") .. ":target_db" or namespace .. ":config"
+                    return forwarding_artifact(name, version, deps,
+                        {{entry = destination, path = next_name and ".default" or ".database"}}, "fallback"), nil
+                end,
+            })
+            test.is_nil(problem); test.not_nil(result)
+            if result then
+                test.eq(#result.missing, 0)
+                test.eq(result.packages[1].requirements.requirements[1].default, false)
+                test.eq(result.packages[2].requirements.requirements[1].default, false)
+            end
+        end)
+        for _, explicit in ipairs({false, true}) do
+            test.it(explicit and "preserves explicit selections over forwarded defaults" or "rejects conflicting forwarded defaults", function()
+                local parameters: {requirements.Parameter} = {}
+                if explicit then parameters[1] = {name = "acme.shared:target_db", value = "chosen"} end
+                local result, problem = graph.resolve({{component = "acme/root", version = "1.0.0", parameters = parameters}}, {
+                    versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {}, false, nil end,
+                    artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                        if name == "acme/root" then
+                            return forwarding_artifact(name, version, {edge("acme/other", "1.0.0"), edge("acme/shared", "1.0.0")},
+                                {{entry = "acme.shared:target_db", path = ".default"}}, "first"), nil
+                        elseif name == "acme/other" then
+                            return forwarding_artifact(name, version, {}, {{entry = "acme.shared:target_db", path = ".default"}}, "second"), nil
+                        end
+                        return forwarding_artifact(name, version, {}, {{entry = "acme.shared:config", path = ".database"}}, "fallback"), nil
+                    end,
+                })
+                if explicit then
+                    test.is_nil(problem); test.not_nil(result)
+                    if result then test.eq(result.packages[3].requirements.requirements[1].selected, "chosen") end
+                else
+                    test.is_nil(result); test.eq(problem, "conflicting requirement defaults for acme.shared:target_db")
+                end
+            end)
+        end
+        test.it("rejects requirement default cycles", function()
+            local result, problem = graph.resolve({edge("acme/root", "1.0.0")}, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {}, false, nil end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    local dependencies: {graph.Edge} = {}
+                    if name == "acme/root" then dependencies = {edge("acme/child", "1.0.0")} end
+                    local target = name == "acme/root" and "acme.child:target_db" or "acme.root:target_db"
+                    return forwarding_artifact(name, version, dependencies, {{entry = target, path = ".default"}}, nil), nil
+                end,
+            })
+            test.is_nil(result)
+            test.is_true((problem or ""):find("requirement default cycle at ", 1, true) ~= nil)
+        end)
         test.it("scopes bare parameters to each dependency's own requirements", function()
             local result, problem = graph.resolve({
                 {component = "acme/one", version = "1.0.0", parameters = {{name = "target_db", value = "acme.one:db"}}},

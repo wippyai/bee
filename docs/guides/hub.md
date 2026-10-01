@@ -90,6 +90,10 @@ A bare dependency parameter binds requirements of that name owned by that
 dependency. A qualified parameter binds its exact requirement in that
 dependency's closure. Unrelated roots cannot supply each other's requirements;
 different values for the same qualified requirement make the plan invalid.
+Planning follows requirement targets that set another requirement's `.default`,
+including dependency chains. Explicit parameters take precedence over these
+defaults. Conflicting default writers, cycles and chains beyond 128 requirements
+are refused; native linking owns other target paths.
 
 Planning is read-only. It may fetch and verify package artifacts into the local
 cache, but does not publish registry state or execute a migration. `ready` means

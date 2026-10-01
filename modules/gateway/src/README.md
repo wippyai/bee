@@ -70,7 +70,11 @@ larger authoring files require another admitted facade rather than an oversized
 gateway request. The underlying overlay store keeps its own larger
 limits for non-MCP callers.
 All four default profiles include the `thread_message` write. Claude/Codex also
-declare lifecycle hooks.
+declare lifecycle hooks. Both HTTP hook endpoints carry the exact
+`bee.gateway.security:session_boundary_policy` call grant alongside its policy
+resolver. Delivery runs as the authenticated binding's SessionRef; Sessions
+checks that identity, workspace and current native attempt before journaling a
+turn or answering a permission request.
 
 The default remains `127.0.0.1:0`. A host may explicitly select a loopback or
 RFC1918 IPv4 interface for a local container, with its corresponding readiness

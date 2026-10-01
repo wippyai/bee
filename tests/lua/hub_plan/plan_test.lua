@@ -5,6 +5,9 @@ local graph = require("graph")
 local inspect = require("inspect")
 local requirements = require("requirements")
 local host_identity = require("binary_identity")
+local funcs = require("funcs")
+local security = require("security")
+local bounds = require("bounds")
 
 local function root(component: string, version: string): {[string]: unknown}
     local id, problem = plan.root_id(component)
@@ -361,19 +364,18 @@ local function define_tests()
         end)
 
         test.it("fails closed when host binary facts are unavailable", function()
-            local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
-                data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
-            local required = "v0.0.0-20260926183503-c0d6585b5fd1"
-            local root_package = package("bee/bee", "0.2.0", "f", {
-                {id = "bee:definition", kind = "ns.definition", meta = {native_requirements = {
-                    {package = "github.com/wippyai/bee/native/launch", version = required}}}, data = {}},
-                binary_identity("github.com/wippyai/bee/native/launch", required),
-            })
-            local missing, problem = plan.prepare(state({deployment}, {{name = "bee/bee", version = "0.1.0", source = "local"}}), 12,
-                request({action = "update", component = "bee/bee", version = "0.2.0"}),
-                source({["bee/bee@0.2.0"] = root_package}))
-            test.is_nil(missing)
-            test.is_true((problem or ""):find("needs a newer Bee binary", 1, true) ~= nil)
+            local scope, scope_error = security.named_scope("tests.hub.plan:without_native")
+            if not scope then error(tostring(scope_error)) end
+            local executor, executor_error = funcs.new():with_scope(scope)
+            if not executor then error(tostring(executor_error)) end
+            local reply, call_error = executor:call("tests.hub.plan:missing_native_probe", {})
+            test.is_nil(call_error)
+            local result = bounds.object(reply)
+            test.not_nil(result)
+            if result then
+                test.eq(result.refused, true)
+                test.eq(result.message, "needs a newer Bee binary: running binary native manifest is unavailable")
+            end
         end)
 
         test.it("binds digest to the captured base revision and selected artifact", function()

@@ -8,7 +8,8 @@ type Reply = caller.Envelope
 type ReplayedReply = {ok: boolean, error: caller.Fault?, value: unknown, replayed: boolean}
 local M = {}
 function M.reply(raw: unknown): Reply
-    return assert(caller.envelope(raw), "invalid fixture reply")
+    local reply = assert(caller.envelope(raw), "invalid fixture reply")
+    return reply
 end
 function M.replayed_reply(raw: unknown): ReplayedReply
     local reply = M.reply(raw)

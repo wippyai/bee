@@ -1386,6 +1386,12 @@ function M.on_exit(io: IO, session: Session, sender: string, message: placement_
     if not from_runner(session, sender, message.generation) then return end
     session.exit = {code = message.code, signal = message.signal, uncertain = message.uncertain, stopped = message.stopped == true}
 end
+function M.on_runner_exit(session: Session, sender: string): boolean
+    if not session.runner or sender ~= session.runner then return false end
+    session.runner_ended = true
+    if not session.exit then session.exit = {code = nil, uncertain = true} end
+    return true
+end
 function M.drained(session: Session): boolean
     return session.eof.stdout and session.eof.stderr
 end
@@ -1406,7 +1412,8 @@ function M.stop_session(io: IO, session: Session): (string, string?)
     return "stopping", nil
 end
 local function evidence_of(session: Session, drain_elapsed: boolean): settle.Evidence
-    return {terminal = session.terminal, stream_ended = session.stream_ended, exit = session.exit, drained = M.drained(session) or drain_elapsed,
+    local delivery_ended = session.runner == nil or session.runner_ended == true
+    return {terminal = session.terminal, stream_ended = session.stream_ended, exit = session.exit, drained = M.drained(session) or (delivery_ended and drain_elapsed),
         exit_codes_trustworthy = session.plan.exit_codes_trustworthy}
 end
 -- ready_to_settle: the turn's outcome is decidable and no write is still

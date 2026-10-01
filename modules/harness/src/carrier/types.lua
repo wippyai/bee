@@ -99,6 +99,7 @@ type Session = {
     exit: settle.Exit?,
     eof: {stdout: boolean, stderr: boolean},
     runner: string?,
+    runner_ended: boolean?,
     settled: settle.Settlement?,
     recovered: boolean,
     output: OutputState,

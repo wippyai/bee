@@ -28,6 +28,10 @@ local function define_tests()
         test.it("announces " .. (structured and "structured" or "direct") .. " launch readiness before opening the terminal", function()
             local ref = "bee.driver.claude.descriptor:cli"
             local original = assert(registry.get(ref))
+            local original_mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+            local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+            mode.data = {mode = "granted"}
+            apply(mode)
             local fixture = assert(registry.get(ref))
             local data = fixture.data :: {[string]: unknown}
             -- This fixture tests the file advisory and its Enter continuation,
@@ -108,6 +112,7 @@ local function define_tests()
             view:close()
             end)
             apply(original)
+            apply(original_mode)
             if not ok then error(tostring(failure)) end
         end)
         end

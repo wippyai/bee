@@ -114,6 +114,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     inspect: bee.hub.binding:inspect
     inspection: bee.hub:inspection

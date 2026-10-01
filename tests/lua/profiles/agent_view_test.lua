@@ -97,6 +97,13 @@ local function define_tests()
         end)
     end)
     test.describe("Agent session screen", function()
+        test.it("wraps prose at spaces and preserves paragraphs", function()
+            local conv = conversation("idle", {{input = "hello", state = "ready", text = "alpha beta gamma delta\nnext paragraph"}})
+            local lines = session_view.lines(conv, 18)
+            test.eq(lines[2].text, "  alpha beta gamma")
+            test.eq(lines[3].text, "  delta")
+            test.eq(lines[4].text, "  next paragraph")
+        end)
         test.it("shows activity, the transcript and the draft", function()
             local conv = conversation("working", {
                 {input = "hello", state = "ready", text = "line one\nline two"},

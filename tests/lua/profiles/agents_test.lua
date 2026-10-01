@@ -183,6 +183,13 @@ local function define_tests()
             test.eq(conv.activity, "idle")
             test.is_false(agents.pending(conv))
         end)
+        test.it("displays a structured text outcome with real newlines", function()
+            local produced = work("bw:1", {{tag = "ready", result = {outcome = "succeeded", value = {text = "hello\nworld"}, artifacts = {}, usage = {}}}}, "accepted")
+            local conv = must_open(client_of({open = function(): (unknown, nil) return session("idle", 0, {}, {works = {produced}}), nil end}), "d:x", nil, "k")
+            agents.submit(conv, "hello", key_source())
+            agents.refresh(conv)
+            test.eq(conv.turns[1].text, "hello\nworld")
+        end)
         test.it("shows unsuccessful, blocked and uncertain observations", function()
             local sent: {Object} = {}
             local failed: Object = {tag = "ready", result = {outcome = "failed", error = {code = "TIMEOUT", message = "slow", retry = "never"}, artifacts = {}}}

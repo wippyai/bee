@@ -23,11 +23,20 @@ local function wrap(value: string, room: integer): {string}
         if size <= width then
             out[#out + 1] = clean
         else
-            local offset = 0
-            while offset < size do
-                out[#out + 1] = tty.text.cut(clean, offset, offset + width)
-                offset = offset + width
+            local remaining = clean
+            while tty.text.width(remaining) > width do
+                local piece = tty.text.cut(remaining, 0, width)
+                local boundary = piece:match("^.*()%s")
+                if remaining:sub(#piece + 1, #piece + 1):match("%s") then boundary = #piece + 1 end
+                if boundary and boundary > 1 then
+                    out[#out + 1] = piece:sub(1, boundary - 1)
+                    remaining = remaining:sub(boundary + 1):gsub("^%s+", "")
+                else
+                    out[#out + 1] = piece
+                    remaining = remaining:sub(#piece + 1)
+                end
             end
+            out[#out + 1] = remaining
         end
     end
     return out
@@ -63,12 +72,17 @@ function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
         for index, row in ipairs(wrap(turn.input, room - 2)) do
             lines[#lines + 1] = {text = (index == 1 and "> " or "  ") .. row, role = "accent"}
         end
+        local tools = turn.tools or {}
+        local keys: {string} = {}
+        for key in pairs(tools) do keys[#keys + 1] = key end
+        table.sort(keys)
+        for _, key in ipairs(keys) do lines[#lines + 1] = {text = "  " .. text.bound(tools[key], room - 2), role = "muted"} end
         local role = STATE_ROLE[turn.state]
         local label = STATE_LABEL[turn.state]
         if turn.text == "" then
             lines[#lines + 1] = {text = "  " .. (label ~= "" and label or turn.state), role = role}
         else
-            for index, row in ipairs(wrap(turn.text, room - 2)) do
+            for index, row in ipairs(wrap(turn.text, room - 2 - (label ~= "" and #label + 2 or 0))) do
                 local prefix = index == 1 and label ~= "" and (label .. ": ") or ""
                 lines[#lines + 1] = {text = "  " .. prefix .. row, role = role}
             end

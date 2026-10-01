@@ -23,7 +23,7 @@ type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, t
 type EntrySortKey = {ref: string, title: string, ready: boolean}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain"
-type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?}
+type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
     turns: {Turn}, unsent: Unsent?, notice: string, thread_cursor: integer?}
@@ -110,8 +110,11 @@ end
 
 local function render(value: unknown): string
     if type(value) == "string" then return value end
-    local encoded = json.encode(value)
-    return encoded or "(unreadable result)"
+    local object = bounds.object(value)
+    if object and type(object.text) == "string" then return object.text end
+    if object and type(object.message) == "string" then return object.message end
+    if value == nil then return "Completed" end
+    return "Completed · structured result available in Details"
 end
 
 local function settle(turn: Turn, observed: unknown)
@@ -156,7 +159,9 @@ local function observe_thread(conv: Conversation)
                 if event and event.kind == "turn.observation" and observation and data then
                     for _, turn in ipairs(conv.turns) do
                         if detail and event.subject == turn.work:ref() and (turn.state == "queued" or turn.state == "working") then
-                            if observation.type == "text" and type(data.text) == "string" and #data.text <= 65536 then
+                            if observation.type == "text" and data.segment_id == "executor-stderr" and type(data.text) == "string" then
+                                turn.diagnostics = ((turn.diagnostics or "") .. data.text):sub(-4096)
+                            elseif observation.type == "text" and data.channel ~= "progress" and type(data.text) == "string" and #data.text <= 65536 then
                                 local segment = bounds.id(data.segment_id) or "answer"
                                 turn.segments = turn.segments or {}
                                 local pieces = turn.segments
@@ -167,6 +172,13 @@ local function observe_thread(conv: Conversation)
                                 local values: {string} = {}
                                 for _, key in ipairs(keys) do values[#values + 1] = pieces[key] end
                                 turn.text = table.concat(values, "\n"):sub(-65536)
+                            elseif observation.type == "tool.call" and type(data.call_id) == "string" and type(data.tool_name) == "string" then
+                                turn.tools = turn.tools or {}
+                                turn.tools[data.call_id] = "Tool: " .. data.tool_name
+                            elseif observation.type == "tool.result" and type(data.call_id) == "string" and type(data.outcome) == "string" then
+                                turn.tools = turn.tools or {}
+                                local previous = turn.tools[data.call_id] or "Tool"
+                                turn.tools[data.call_id] = previous .. " · " .. data.outcome
                             end
                         end
                     end

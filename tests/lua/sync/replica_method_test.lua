@@ -1,6 +1,7 @@
 -- MIT. The public replica receiver derives the caller actor from the
 -- authenticated execution context and authorizes the exact source owner.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local uuid = require("uuid")
@@ -55,7 +56,16 @@ end
 local function call(executor: funcs.Executor, request: Object): Result
     local reply, err = executor:call("bee.sync.binding:replica_receive", request)
     if err then error("replica_receive: " .. tostring(err)) end
-    return reply :: Result
+    if type(reply) ~= "table" or type(reply.ok) ~= "boolean" or type(reply.replayed) ~= "boolean" then
+        error("invalid replica reply")
+    end
+    local code, message, commit = reply.code, reply.message, reply.commit
+    if code ~= nil and type(code) ~= "string" then error("invalid replica fault code") end
+    if message ~= nil and type(message) ~= "string" then error("invalid replica fault message") end
+    if commit ~= nil and type(commit) ~= "boolean" then error("invalid replica commit flag") end
+    local result: Result = {ok = reply.ok, value = reply.value, replayed = reply.replayed,
+        code = code, message = message, commit = commit}
+    return result
 end
 
 local function code(reply: Result): string
@@ -82,7 +92,7 @@ local function define_tests()
             local receiving = call(executor, {action = "status", source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(receiving.ok)
-            test.eq((receiving.value :: Object).state, "receiving")
+            test.eq((assert(bounds.object(receiving.value))).state, "receiving")
             local written = call(executor, {action = "put", source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest, offset = 0,
                 content_base64 = required_base64(content)})
@@ -90,12 +100,12 @@ local function define_tests()
             local finished = call(executor, {action = "finish", source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(finished.ok)
-            test.eq((finished.value :: Object).state, "available")
+            test.eq((assert(bounds.object(finished.value))).state, "available")
             local available = call(executor, {action = "status", source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(available.ok)
-            test.eq((available.value :: Object).received_bytes, #content)
-            test.eq((available.value :: Object).total_bytes, #content)
+            test.eq((assert(bounds.object(available.value))).received_bytes, #content)
+            test.eq((assert(bounds.object(available.value))).total_bytes, #content)
         end)
     end)
 end

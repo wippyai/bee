@@ -4,6 +4,7 @@ local test = require("test")
 local json = require("json")
 local canonical = require("canonical")
 local bounds = require("bounds")
+local scalar = require("scalar")
 local function define_tests()
     test.describe("Canonical JSON empty table shape", function()
         test.it("reads the allocation the runtime json module reads", function()
@@ -48,7 +49,7 @@ local function define_tests()
         test.it("preserves quoted text and turn-boundary newlines through a JSON decoder", function()
             for _, value in ipairs({'sender\nreply with ok', '"quoted"', 'path\\file'}) do
                 local encoded = assert(canonical.encode({text = value}))
-                local decoded = assert(json.decode(encoded)) :: {[string]: unknown}
+                local decoded = assert(scalar.object(assert(json.decode(encoded))))
                 test.eq(decoded.text, value)
             end
         end)

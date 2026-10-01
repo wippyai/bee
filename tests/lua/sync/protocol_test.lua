@@ -2,6 +2,7 @@
 -- pins authorization scope through a snapshot, and leaves domain projection
 -- folding to the source-specific reducer.
 local test = require("test")
+local bounds = require("bounds")
 local protocol = require("protocol")
 local function projection(key: string, revision: integer): {[string]: unknown}
     return {schema = "bee.sync-projection@1", owner_id = "node-a", feed = "approval", key = key, revision = revision,
@@ -20,7 +21,7 @@ local function define_tests()
             test.is_nil(apply_error)
             test.is_true(changed)
             test.eq(state.cursor, 1)
-            test.eq((state.projections.a.value :: {[string]: unknown}).approval_id, "a")
+            test.eq((assert(bounds.object(state.projections.a.value))).approval_id, "a")
             local page, page_error = protocol.page({schema = "bee.sync-page@1", owner_id = "node-a", feed = "approval", events = {},
                 next_cursor = 3, more = false, head_cursor = 3, earliest_cursor = 0, scope_revision = "scope-1", reset_required = false}, "node-a", "approval")
             test.is_nil(page_error)
@@ -50,7 +51,7 @@ local function define_tests()
             if not page then error("page did not decode") end
             local state = protocol.new("node-a", "approval")
             local changed, reduce_error = protocol.apply_page(state, page, function(current: protocol.State, item: protocol.Event): (boolean?, string?)
-                local payload = item.payload :: {[string]: unknown}
+                local payload = assert(bounds.object(item.payload))
                 local request = payload.request
                 local next: protocol.Projection = {owner_id = item.owner_id, feed = item.feed, key = item.projection_key,
                     revision = item.revision, value = request, tombstone = item.tombstone, sequence = item.sequence, updated_at = item.committed_at}
@@ -58,7 +59,7 @@ local function define_tests()
             end)
             test.is_nil(reduce_error)
             test.is_true(changed)
-            test.eq(((state.projections.a.value :: {[string]: unknown}).approval_id), "a")
+            test.eq(((assert(bounds.object(state.projections.a.value))).approval_id), "a")
             test.eq(state.cursor, 6)
         end)
         test.it("does not commit an earlier reduced event when a later reducer fails", function()

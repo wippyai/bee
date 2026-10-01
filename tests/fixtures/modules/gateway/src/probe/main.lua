@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. Slice 1 of the gateway against the real listener and thread owner:
 -- readiness, admission and revocation, thread_read, bounded read-only
 -- authenticated thread_message append, replay and context
@@ -29,30 +30,30 @@ local function endpoint(): string
         selected, err = funcs.call("bee.gateway:address", {})
     end
     assert(not err and type(selected) == "table", "gateway endpoint: " .. tostring(err))
-    local address = (selected :: Object).address
-    assert(type(address) == "string" and (address :: string):find("^127%.0%.0%.1:%d+$") and address ~= "127.0.0.1:0", "gateway endpoint address")
-    return address :: string
+    local address = (assert(bounds.object(selected))).address
+    assert(type(address) == "string" and (address):find("^127%.0%.0%.1:%d+$") and address ~= "127.0.0.1:0", "gateway endpoint address")
+    return address
 end
 local function key(): string return "k-" .. tostring(time.now():unix_nano()) end
 local function call(target: string, request: Object): Object
     local reply, err = funcs.call(target, request)
     assert(not err, target .. ": " .. tostring(err))
-    return reply :: Object
+    return assert(bounds.object(reply))
 end
 local function ok(reply: Object, what: string): Object
-    assert(reply.ok == true, what .. " failed: " .. tostring(type(reply.error) == "table" and (reply.error :: Object).message))
-    return reply.value :: Object
+    assert(reply.ok == true, what .. " failed: " .. tostring(type(reply.error) == "table" and (assert(bounds.object(reply.error))).message))
+    return assert(bounds.object(reply.value))
 end
 local function code(reply: Object): string
     assert(reply.ok == false, "expected a refusal")
-    return tostring((reply.error :: Object).code)
+    return tostring((assert(bounds.object(reply.error))).code)
 end
 local function admit(action: string, ttl: integer?, carrier_epoch: integer?, tools: {string}?, workspace_id: string?): (string, string)
     local request: Object = {subject = ACTOR, action_id = action, attempt_id = action .. "-attempt", thread_id = THREAD, owner_incarnation = 1,
         carrier_epoch = carrier_epoch or 1, tools = tools or {"thread_read", "capabilities"}, ttl_ms = ttl or 60000}
     if workspace_id ~= nil then request.workspace_id = workspace_id end
     local value = ok(call("bee.gateway.binding:admit", request), "admit " .. action)
-    local binding_id = tostring((value.binding :: Object).binding_id)
+    local binding_id = tostring((assert(bounds.object(value.binding))).binding_id)
     assert(value.token == nil, "admit must not return token bytes")
     local authorized = ok(call("bee.gateway.binding:authorize_materialization", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, binding_id = binding_id}), "authorize " .. action)
     local materialized = ok(call("bee.gateway.binding:materialize", {attempt_id = action .. "-attempt", carrier_epoch = carrier_epoch or 1, materialization_key = authorized.materialization_key}), "materialize " .. action)
@@ -67,25 +68,25 @@ local function rpc(action: string, token: string, method: string, params: Object
     local response, err = http_client.post("http://" .. ADDRESS .. "/mcp/" .. action, {headers = {Authorization = "Bearer " .. token, ["Content-Type"] = "application/json"}, body = body, timeout = "8s"})
     assert(response, "rpc " .. method .. ": " .. tostring(err))
     local decoded: unknown = json.decode(tostring(response.body))
-    return response.status_code, type(decoded) == "table" and (decoded :: Object) or nil
+    return response.status_code, type(decoded) == "table" and (assert(bounds.object(decoded))) or nil
 end
 local function tool(action: string, token: string, name: string, arguments: Object): Object
     local status, reply = rpc(action, token, "tools/call", {name = name, arguments = arguments})
     assert(status == 200 and reply and reply.result, name .. " status " .. tostring(status))
-    local result = reply.result :: Object
-    local content = (result.content :: {Object})[1]
+    local result = assert(bounds.object(reply.result))
+    local content = (assert(bounds.array(result.content)))[1]
     local text: unknown = json.decode(tostring(content.text))
     assert(type(text) == "table", name .. " returned no reply")
-    return text :: Object
+    return assert(bounds.object(text))
 end
 local function validate_output(value: unknown, schema_value: unknown, location: string)
-    local schema = schema_value :: Object
+    local schema = assert(bounds.object(schema_value))
     local kind = schema.type
     if kind == "object" then
         assert(type(value) == "table", location .. " must be an object")
-        local object = value :: Object
-        local properties = (schema.properties or {}) :: Object
-        for _, name in ipairs((schema.required :: {string}?) or {}) do
+        local object = assert(bounds.object(value))
+        local properties = assert(bounds.object((schema.properties or {})))
+        for _, name in ipairs(assert(bounds.ids(schema.required or {}))) do
             assert(object[name] ~= nil, location .. " is missing " .. name)
         end
         for name, child in pairs(object) do
@@ -97,11 +98,11 @@ local function validate_output(value: unknown, schema_value: unknown, location: 
         assert(type(value) == "table", location .. " must be an array")
         local item_schema = schema.items
         assert(item_schema ~= nil, location .. " has no item schema")
-        for index, item in ipairs(value :: {unknown}) do validate_output(item, item_schema, location .. "[" .. tostring(index) .. "]") end
+        for index, item in ipairs(assert(bounds.array(value))) do validate_output(item, item_schema, location .. "[" .. tostring(index) .. "]") end
     elseif kind == "string" then
         assert(type(value) == "string", location .. " must be a string")
     elseif kind == "integer" then
-        assert(type(value) == "number" and value == math.floor(value :: number), location .. " must be an integer")
+        assert(type(value) == "number" and value == math.floor(value), location .. " must be an integer")
     elseif kind == "boolean" then
         assert(type(value) == "boolean", location .. " must be a boolean")
     else
@@ -115,80 +116,83 @@ end
 local function prove_mcp_contract(token: string)
     local init_status, init = rpc("act-a", token, "initialize")
     assert(init_status == 200 and init, "contract initialize")
-    local capabilities = (init.result :: Object).capabilities :: Object
-    assert((capabilities.tools :: Object).listChanged == true, "tool list changes with trait selection")
+    local capabilities = assert(bounds.object((assert(bounds.object(init.result))).capabilities))
+    assert((assert(bounds.object(capabilities.tools))).listChanged == true, "tool list changes with trait selection")
     local _, catalog = rpc("act-a", token, "tools/list")
     assert(catalog, "contract tools/list")
-    local entries = (catalog.result :: Object).tools :: {Object}
+    local entries = assert(bounds.array((assert(bounds.object(catalog.result))).tools))
     local seen: {[string]: boolean} = {}
     for _, entry in ipairs(entries) do
         local name = tostring(entry.name)
         seen[name] = true
-        local schema = entry.inputSchema :: Object
+        local schema = assert(bounds.object(entry.inputSchema))
         assert(type(schema) == "table" and type(schema.properties) == "table", name .. " inputSchema properties object")
         assert(type(entry.outputSchema) == "table", name .. " outputSchema")
-        local annotations = entry.annotations :: Object
+        local annotations = assert(bounds.object(entry.annotations))
         assert(type(annotations.readOnlyHint) == "boolean", name .. " annotations")
     end
     assert(seen.thread_read and seen.capabilities, "admitted tools listed")
     local contract_token, _ = admit("contract-action", nil, 1, {"capabilities", "overlay", "docs", "delivery", "components"},
         string.rep("c", 32))
     local _, contract_list = rpc("contract-action", contract_token, "tools/list")
-    local contracts = (contract_list.result :: Object).tools :: {Object}
+    local contracts = assert(bounds.array((assert(bounds.object(contract_list.result))).tools))
     local by_name: {[string]: Object} = {}
     for _, entry in ipairs(contracts) do by_name[tostring(entry.name)] = entry end
     local delivery = by_name.delivery
-    assert(delivery and (delivery.annotations :: Object).readOnlyHint == false, "delivery stages versions, never read-only")
-    local operations = (((delivery.inputSchema :: Object).properties :: Object).operation :: Object).enum :: {string}
+    assert(delivery and (assert(bounds.object(delivery.annotations))).readOnlyHint == false, "delivery stages versions, never read-only")
+    local operations = assert(bounds.ids((assert(bounds.object((assert(bounds.object((assert(bounds.object(delivery.inputSchema))).properties))).operation))).enum))
     local preflighted = false
     for _, operation in ipairs(operations) do if operation == "preflight" then preflighted = true end end
     assert(preflighted, "delivery preflight without staging")
     local overlay = by_name.overlay
-    assert(overlay and (overlay.annotations :: Object).readOnlyHint == false, "overlay mixes reads and writes")
-    assert((((overlay.inputSchema :: Object).properties :: Object).section :: Object).pattern ~= nil, "guide sections in schema")
+    assert(overlay and (assert(bounds.object(overlay.annotations))).readOnlyHint == false, "overlay mixes reads and writes")
+    assert((assert(bounds.object((assert(bounds.object((assert(bounds.object(overlay.inputSchema))).properties))).section))).pattern ~= nil, "guide sections in schema")
     local components = by_name.components
-    local request_schema = (((components.inputSchema :: Object).properties :: Object).request :: Object)
-    assert(type((request_schema.properties :: Object).component) == "table", "components per-operation fields")
-    assert(type(((components.inputSchema :: Object).examples :: {unknown})[1]) == "table", "components examples")
+    local request_schema = (assert(bounds.object((assert(bounds.object((assert(bounds.object(components.inputSchema))).properties))).request)))
+    assert(type((assert(bounds.object(request_schema.properties))).component) == "table", "components per-operation fields")
+    assert(type((assert(bounds.array((assert(bounds.object(components.inputSchema))).examples)))[1]) == "table", "components examples")
     -- The authoring path: a bare guide read is the short index with sections
     -- and no example; one section reads alone; the example is explicit.
     local index = tool("contract-action", contract_token, "overlay", {operation = "guide"})
     assert(index.ok == true, "guide index: " .. tostring(json.encode(index)))
-    local index_value = index.value :: Object
+    local index_value = assert(bounds.object(index.value))
     assert(type(index_value.document) == "string", "guide index document")
-    assert(#(index_value.sections :: {unknown}) >= 8, "guide section list")
+    assert(#(assert(bounds.array(index_value.sections))) >= 8, "guide section list")
     assert(index_value.example == nil, "guide index carries no example")
     local section = tool("contract-action", contract_token, "overlay", {operation = "guide", section = "delivery"})
-    assert((section.value :: Object).section == "delivery" and type((section.value :: Object).text) == "string", "guide section")
+    assert((assert(bounds.object(section.value))).section == "delivery" and type((assert(bounds.object(section.value))).text) == "string", "guide section")
     local example = tool("contract-action", contract_token, "overlay", {operation = "guide", include_example = true})
-    assert(type(((example.value :: Object).example :: Object).entries_json) == "string", "guide example on request")
+    assert(type((assert(bounds.object((assert(bounds.object(example.value))).example))).entries_json) == "string", "guide example on request")
     -- Docs windows honor the offset after section selection.
     local first = tool("contract-action", contract_token, "docs", {operation = "read", id = "toolkit", section = "lifecycle", limit = 400})
     local continued = tool("contract-action", contract_token, "docs", {operation = "read", id = "toolkit", section = "lifecycle", offset = 100, limit = 400})
-    assert((continued.value :: Object).offset == (first.value :: Object).offset + 100, "docs section paging")
+    local first_offset = assert(bounds.object(first.value)).offset
+    local continued_offset = assert(bounds.object(continued.value)).offset
+    assert(type(first_offset) == "number" and type(continued_offset) == "number")
+    assert(continued_offset == first_offset + 100, "docs section paging")
     -- The capability report names the admitted surface before authoring.
     local report = tool("contract-action", contract_token, "capabilities", {})
-    local report_value = report.value :: Object
+    local report_value = assert(bounds.object(report.value))
     assert(type(report_value.thread_id) == "string", "capability thread")
     assert(type(report_value.tools) == "table" and report_value.launch == nil, "capability tools")
     validate_output(report, by_name.capabilities.outputSchema, "capabilities result")
-    local capability_schema = (((by_name.capabilities.outputSchema :: Object).properties :: Object).value :: Object)
-    local traits_schema = (capability_schema.properties :: Object).traits :: Object
+    local capability_schema = (assert(bounds.object((assert(bounds.object((assert(bounds.object(by_name.capabilities.outputSchema))).properties))).value)))
+    local traits_schema = assert(bounds.object((assert(bounds.object(capability_schema.properties))).traits))
     assert(traits_schema.type == "array" and type(traits_schema.items) == "table", "capability traits are advertised as typed array items")
-    assert(type((report_value.authoring :: Object).preflight_operation) == "string", "capability authoring path")
+    assert(type((assert(bounds.object(report_value.authoring))).preflight_operation) == "string", "capability authoring path")
     -- A delivery without its frozen digest is refused before anything stages;
     -- a delivery for an unknown overlay fails in the normalized tool shape.
     local _, missing_digest = rpc("contract-action", contract_token, "tools/call", {name = "delivery", arguments = {operation = "request",
         source_overlay_id = "missing", version = "0.0.0"}})
-    assert(missing_digest and (missing_digest.error :: Object).code == -32602, "delivery digest required")
+    assert(missing_digest and (assert(bounds.object(missing_digest.error))).code == -32602, "delivery digest required")
     local _, refused = rpc("contract-action", contract_token, "tools/call", {name = "delivery", arguments = {operation = "request",
         source_overlay_id = "missing", version = "0.0.0", snapshot_digest = string.rep("0", 64)}})
     assert(refused and refused.result, "delivery refusal")
-    local content = ((refused.result :: Object).content :: {Object})[1]
+    local content = (assert(bounds.array((assert(bounds.object(refused.result))).content)))[1]
     local fault: unknown = json.decode(tostring(content.text))
-    assert(type(fault) == "table" and (fault :: Object).ok == false, "delivery refusal shape")
-    local structured = (refused.result :: Object).structuredContent :: Object
-    assert(type(structured) == "table" and (structured.error :: Object).code ~= nil, "delivery refusal structured error")
+    assert(type(fault) == "table" and (assert(bounds.object(fault))).ok == false, "delivery refusal shape")
+    local structured = assert(bounds.object((assert(bounds.object(refused.result))).structuredContent))
+    assert(type(structured) == "table" and (assert(bounds.object(structured.error))).code ~= nil, "delivery refusal structured error")
 end
 local function record(text: string)
     ok(call("bee.threads.service:record", {thread_id = THREAD, idempotency_key = key(), kind = "message",
@@ -202,23 +206,23 @@ local function prove_configuration_scope(address: string)
     local privileged_result, privileged_call_error = funcs.call("bee.gateway.probe:render_configuration", {address = address, action_id = "scope-render", privileged = true})
     assert(not privileged_call_error and type(privileged_result) == "table",
         "privileged configuration control call failed: " .. tostring(privileged_call_error))
-    local privileged = privileged_result :: Object
+    local privileged = assert(bounds.object(privileged_result))
     assert(privileged.placement_db_acquired == true, "privileged callee could not acquire placement database")
     assert(privileged.placement_executor_acquired == true, "privileged callee could not acquire placement executor")
     local result, call_error = executor:call("bee.gateway.probe:render_configuration", {address = address, action_id = "scope-render"})
     assert(result and not call_error, "configuration scope call: " .. tostring(call_error))
     assert(type(result) == "table", "configuration scope call returned a non-table")
-    local value = result :: Object
+    local value = assert(bounds.object(result))
     assert(value.placement_db_denied == true, "callee acquired placement database")
     assert(value.placement_executor_denied == true, "callee acquired placement executor")
     assert(value.placement_policy_denied == true, "callee recovered placement policy")
     assert(value.funcs_security_denied == true, "callee rebuilt a security scope")
     assert(value.scope_create_denied == true, "callee created a custom scope")
     assert(type(value.projection) == "table", "configuration projection must be a table")
-    local projection = value.projection :: Object
+    local projection = assert(bounds.object(value.projection))
     assert(projection.path == ".codex/config.toml", "unexpected rendered configuration path")
-    assert(type(projection.content) == "string" and (projection.content :: string):find("scope%-render", 1, false) ~= nil, "configuration did not render input")
-    assert((projection.content :: string):find("BEE_GATEWAY_TOKEN", 1, true) ~= nil, "rendered configuration omitted host destination")
+    assert(type(projection.content) == "string" and (projection.content):find("scope%-render", 1, false) ~= nil, "configuration did not render input")
+    assert((projection.content):find("BEE_GATEWAY_TOKEN", 1, true) ~= nil, "rendered configuration omitted host destination")
 end
 local function prove_endpoint_call_scope()
     local policies: {security.Policy} = {}
@@ -252,7 +256,7 @@ local function configurable_surface(token_a: string)
             traits = {{id = "research:measure", title = "Measure", prompt = "Collect a baseline", tools = {"measure_context"}},
                 {id = "research:compare", title = "Compare", prompt = "Compare measurements", tools = {"measure_context"}}},
             base_tools = {"thread_read"}, active_traits = {}, fixed_context = {project = "project-a"}, dynamic_keys = {"experiment"}}}), "configurable admission")
-    local configurable_binding = tostring((configurable.binding :: Object).binding_id)
+    local configurable_binding = tostring((assert(bounds.object(configurable.binding))).binding_id)
     local configurable_token = tostring(ok(materialize("configurable-attempt", 1, configurable_binding), "configurable credential").token)
     local _, disabled = rpc("configurable", configurable_token, "tools/call", {name = "measure_context", arguments = {}})
     assert(disabled and disabled.error ~= nil, "inactive trait exposed its tool")
@@ -260,10 +264,10 @@ local function configurable_surface(token_a: string)
         active_traits = {"research:measure", "research:compare"}, context = {experiment = "baseline"}})
     assert(selected.ok == true, "two-trait selection failed")
     local measured = tool("configurable", configurable_token, "call_tool", {name = "measure_context", arguments = {}})
-    local measured_value = measured.value :: Object
+    local measured_value = assert(bounds.object(measured.value))
     assert(measured.ok == true and measured_value.project == "project-a" and measured_value.experiment == "baseline", "native context was not delivered: " .. tostring(json.encode(measured)))
     assert(measured_value.can_read_gateway == false and measured_value.can_create_scope == false, "tool gained gateway authority")
-    local attribution = measured_value.binding :: Object
+    local attribution = assert(bounds.object(measured_value.binding))
     assert(attribution.binding_id == configurable_binding and attribution.thread_id == THREAD
         and attribution.action_id == "configurable" and attribution.attempt_id == "configurable-attempt", "tool received foreign binding attribution")
     local spoofed = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 2,
@@ -274,14 +278,14 @@ local function configurable_surface(token_a: string)
         surface = {tools = {{name = "measure_context", operation = "bee.gateway.probe:context_tool", description = "Read attribution",
             policies = {"bee.gateway.probe:context_tool_policy"}, schema = {type = "object", additionalProperties = false}, annotations = {readOnlyHint = true}}},
             traits = {}, base_tools = {"measure_context"}, active_traits = {}, fixed_context = {}, dynamic_keys = {}}}), "peer context admission")
-    local peer_binding = tostring((peer.binding :: Object).binding_id)
+    local peer_binding = tostring((assert(bounds.object(peer.binding))).binding_id)
     local peer_token = tostring(ok(materialize("context-peer-attempt", 1, peer_binding), "peer credential").token)
     local peer_result = tool("context-peer", peer_token, "measure_context", {})
-    local peer_identity = (peer_result.value :: Object).binding :: Object
+    local peer_identity = assert(bounds.object((assert(bounds.object(peer_result.value))).binding))
     assert(peer_result.ok == true and peer_identity.binding_id == peer_binding and peer_binding ~= configurable_binding
         and peer_identity.action_id == "context-peer" and peer_identity.attempt_id == "context-peer-attempt", "same-subject bindings shared attribution")
     local original_again = tool("configurable", configurable_token, "measure_context", {})
-    assert(((original_again.value :: Object).binding :: Object).binding_id == configurable_binding, "peer call contaminated original attribution")
+    assert((assert(bounds.object((assert(bounds.object(original_again.value))).binding))).binding_id == configurable_binding, "peer call contaminated original attribution")
     local rejected_context = tool("configurable", configurable_token, "session", {operation = "select", expected_revision = 2,
         active_traits = {"research:measure"}, context = {project = "foreign"}})
     assert(rejected_context.ok == false, "caller replaced host context")
@@ -292,7 +296,7 @@ local function configurable_surface(token_a: string)
         active_traits = {}, context = {}})
     assert(stale_selection.ok == false, "stale selection overwrote current state")
     local independent = tool("act-a", token_a, "session", {operation = "read"})
-    assert(next((independent.value :: Object).context :: Object) == nil, "binding context leaked")
+    assert(next(assert(bounds.object((assert(bounds.object(independent.value))).context))) == nil, "binding context leaked")
     local left = funcs.async("bee.gateway.probe:concurrent_call", endpoint(), configurable_token, "left")
     local right = funcs.async("bee.gateway.probe:concurrent_call", endpoint(), configurable_token, "right")
     assert(left and right, "concurrent calls did not start")
@@ -304,19 +308,19 @@ local function configurable_surface(token_a: string)
     local loser = left_value.ok and right_value or left_value
     assert(loser.error.code == "CONFLICT", "concurrent loser was not a revision conflict")
     local winner = tool("configurable", configurable_token, "session", {operation = "read"})
-    assert((winner.value :: Object).revision == 3, "concurrent update advanced twice")
+    assert((assert(bounds.object(winner.value))).revision == 3, "concurrent update advanced twice")
     ok(call("bee.gateway.binding:reissue", {binding_id = configurable_binding, expected_generation = 1}), "rotate configurable credential")
     local old_status = rpc("configurable", configurable_token, "tools/call", {name = "session", arguments = {operation = "read"}})
     assert(old_status == 401, "rotated token retained selection access")
     configurable_token = tostring(ok(materialize("configurable-attempt", 1, configurable_binding), "renew configurable credential").token)
     local retained = tool("configurable", configurable_token, "session", {operation = "read"})
-    local retained_value, winner_value = retained.value :: Object, winner.value :: Object
+    local retained_value, winner_value = assert(bounds.object(retained.value)), assert(bounds.object(winner.value))
     assert(retained_value.revision == winner_value.revision, "credential rotation changed selection revision")
-    assert((retained_value.context :: Object).experiment == (winner_value.context :: Object).experiment, "credential rotation lost dynamic context")
+    assert((assert(bounds.object(retained_value.context))).experiment == (assert(bounds.object(winner_value.context))).experiment, "credential rotation lost dynamic context")
     assert(json.encode(retained_value.active_traits) == json.encode(winner_value.active_traits), "credential rotation lost active traits")
     local after_rotation = tool("configurable", configurable_token, "measure_context", {})
-    assert(after_rotation.ok == true and (after_rotation.value :: Object).project == "project-a", "credential rotation lost fixed context or dispatch")
-    assert((after_rotation.value :: Object).replacement_granted == false, "ungranted replacement action was allowed")
+    assert(after_rotation.ok == true and (assert(bounds.object(after_rotation.value))).project == "project-a", "credential rotation lost fixed context or dispatch")
+    assert((assert(bounds.object(after_rotation.value))).replacement_granted == false, "ungranted replacement action was allowed")
     local policy_entry = registry.get("bee.gateway.probe:replacement_policy")
     if not policy_entry then error("replacement fixture policy missing") end
     policy_entry.data = {policy = {actions = {"bee.probe.replacement"}, resources = {"sentinel"}, effect = "allow"}}
@@ -327,7 +331,7 @@ local function configurable_surface(token_a: string)
     local observed = false
     for _ = 1, 100 do
         local current = tool("configurable", configurable_token, "measure_context", {})
-        if current.ok == true and (current.value :: Object).replacement_granted == true then observed = true; break end
+        if current.ok == true and (assert(bounds.object(current.value))).replacement_granted == true then observed = true; break end
         time.sleep("10ms")
     end
     assert(observed, "same binding did not observe native policy replacement")
@@ -338,7 +342,7 @@ end
 local function prove_corrupt_hooks(hook_post: HookPost, header_of: HeaderOf)
     local corrupt = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-corrupt-hooks", attempt_id = "act-corrupt-hooks-attempt",
         thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"Stop"}, ttl_ms = 60000}), "admit corrupt hook probe")
-    local binding_id = tostring((corrupt.binding :: Object).binding_id)
+    local binding_id = tostring((assert(bounds.object(corrupt.binding))).binding_id)
     local tokens = ok(materialize("act-corrupt-hooks-attempt", 1, binding_id), "materialize corrupt hook probe")
     local status, _, headers = hook_post("act-corrupt-hooks", tostring(tokens.hook_token),
         {hook_event_name = "Stop", session_id = "corrupt", prompt_id = "corrupt-prompt", stop_hook_active = false})
@@ -367,11 +371,11 @@ local function prove_child_thread()
     local token, _ = admit("child-launcher", nil, 1, {"thread_read"})
     local member = tool("child-launcher", token, "thread_read", {cursor = 0, member_thread = child})
     assert(member.ok == true, "a launched child thread was not readable as member_thread: " .. tostring(json.encode(member)))
-    local child_records = (member.value :: Object).records :: {Object}
-    assert(#child_records == 1 and (((child_records[1].body :: Object).content :: Object).text) == "child progress", "member_thread read the wrong thread")
+    local child_records = assert(bounds.array((assert(bounds.object(member.value))).records))
+    assert(#child_records == 1 and ((assert(bounds.object((assert(bounds.object(child_records[1].body))).content))).text) == "child progress", "member_thread read the wrong thread")
     local bound = tool("child-launcher", token, "thread_read", {cursor = 0})
     assert(bound.ok == true, "the bound thread was not readable without member_thread")
-    assert((bound.value :: Object).records ~= nil and ((bound.value :: Object).records :: {Object})[1].thread_id ~= child, "no member_thread read the bound thread, not the child")
+    assert((assert(bounds.object(bound.value))).records ~= nil and (assert(bounds.object((assert(bounds.array((assert(bounds.object(bound.value))).records)))[1]))).thread_id ~= child, "no member_thread read the bound thread, not the child")
     -- A thread this caller does not belong to is refused, never silently
     -- redirected to the bound thread. The foreign thread is owned by a
     -- different actor, so membership really does deny it.
@@ -380,10 +384,10 @@ local function prove_child_thread()
     assert(other, "construct the foreign actor")
     local created, create_error = funcs.new():with_actor(other):call("bee.threads.service:create",
         {thread_id = foreign, idempotency_key = key(), title = "Someone else"})
-    assert(not create_error and type(created) == "table" and (created :: Object).ok == true,
+    assert(not create_error and type(created) == "table" and (assert(bounds.object(created))).ok == true,
         "create foreign thread: " .. tostring(create_error or json.encode(created)))
     local refused_read = tool("child-launcher", token, "thread_read", {cursor = 0, member_thread = foreign})
-    assert(refused_read.ok == false and (refused_read.error :: Object).code == "NOT_FOUND", "an unrelated member_thread was not refused")
+    assert(refused_read.ok == false and (assert(bounds.object(refused_read.error))).code == "NOT_FOUND", "an unrelated member_thread was not refused")
 end
 
 local function main()
@@ -399,18 +403,18 @@ local function main()
     assert(readiness_response, "readiness request: " .. tostring(readiness_error))
     if readiness_response.status_code ~= 200 then error("readiness refused: " .. tostring(readiness_response.body)) end
     local ready = ok(call("bee.gateway.binding:ready", {binding_id = binding_a}), "ready")
-    assert(ready.listening == true and (ready.generation :: Object).epoch == 1, "readiness under epoch 1")
+    assert(ready.listening == true and (assert(bounds.object(ready.generation))).epoch == 1, "readiness under epoch 1")
     assert(ready.binding_valid == true, "binding A valid")
     local status, init = rpc("act-a", token_a, "initialize")
-    assert(status == 200 and init and (init.result :: Object).protocolVersion ~= nil, "initialize")
+    assert(status == 200 and init and (assert(bounds.object(init.result))).protocolVersion ~= nil, "initialize")
     local _, listed = rpc("act-a", token_a, "tools/list")
-    assert(listed and #((listed.result :: Object).tools :: {unknown}) == 4, "two admitted tools and MCP controls advertised")
+    assert(listed and #(assert(bounds.array((assert(bounds.object(listed.result))).tools))) == 4, "two admitted tools and MCP controls advertised")
     prove_mcp_contract(token_a)
     access_probe.run(ADDRESS)
     configurable_surface(token_a)
     local page = tool("act-a", token_a, "thread_read", {cursor = 0})
     assert(page.ok == true, "thread_read refused: " .. tostring(json.encode(page)))
-    assert(#((page.value :: Object).records :: {unknown}) == 3, "thread_read returned the three records: " .. tostring(json.encode(page)))
+    assert(#(assert(bounds.array((assert(bounds.object(page.value))).records))) == 3, "thread_read returned the three records: " .. tostring(json.encode(page)))
     -- A managed subject authors through the same authenticated endpoint. The
     -- workspace owner remains the subject; neither thread binding fields nor
     -- publication/activation authority enter the request.
@@ -418,17 +422,17 @@ local function main()
     local workspace_token, workspace_binding = admit("workspace-action", nil, 1, {"overlay"})
     local created = tool("workspace-action", workspace_token, "overlay", {operation = "create", overlay_id = "gateway-research",
         expected_revision = 0, idempotency_key = "create"})
-    assert(created.ok == true and (created.value :: Object).revision == 1, "MCP overlay create failed")
+    assert(created.ok == true and (assert(bounds.object(created.value))).revision == 1, "MCP overlay create failed")
     local put_arguments: Object = {operation = "put", overlay_id = "gateway-research", expected_revision = 1,
         idempotency_key = "finding", path = "findings/one.md", content = "measured evidence"}
     local put = tool("workspace-action", workspace_token, "overlay", put_arguments)
-    assert(put.ok == true and (put.value :: Object).revision == 2, "MCP overlay put failed")
+    assert(put.ok == true and (assert(bounds.object(put.value))).revision == 2, "MCP overlay put failed")
     local put_replay = tool("workspace-action", workspace_token, "overlay", put_arguments)
-    assert(put_replay.ok == true and put_replay.replayed == true and (put_replay.value :: Object).revision == 2,
+    assert(put_replay.ok == true and put_replay.replayed == true and (assert(bounds.object(put_replay.value))).revision == 2,
         "MCP overlay retry was not idempotent")
     local frozen = tool("workspace-action", workspace_token, "overlay", {operation = "freeze", overlay_id = "gateway-research",
         expected_revision = 2, idempotency_key = "freeze"})
-    assert(frozen.ok == true and type((frozen.value :: Object).digest) == "string", "MCP overlay freeze failed")
+    assert(frozen.ok == true and type((assert(bounds.object(frozen.value))).digest) == "string", "MCP overlay freeze failed")
     local source = string.rep("local measurement = 1\n", 1024)
     local large_created = tool("workspace-action", workspace_token, "overlay", {operation = "create", overlay_id = "gateway-large-source",
         expected_revision = 0, idempotency_key = "create-large"})
@@ -439,7 +443,7 @@ local function main()
     local tail = string.rep("local measurement = 2\n", 2200)
     local large_append = tool("workspace-action", workspace_token, "overlay", {operation = "append", overlay_id = "gateway-large-source",
         expected_revision = 2, idempotency_key = "append-large", path = "app.lua", offset = #source, content = tail})
-    assert(large_append.ok == true and (large_append.value :: Object).revision == 3, "app-size append refused over HTTP")
+    assert(large_append.ok == true and (assert(bounds.object(large_append.value))).revision == 3, "app-size append refused over HTTP")
     local complete = source .. tail
     local parts: {string} = {}
     local offset = 0
@@ -447,8 +451,8 @@ local function main()
     repeat
         local page = tool("workspace-action", workspace_token, "overlay", {operation = "read", overlay_id = "gateway-large-source",
             path = "app.lua", offset = offset})
-        assert(page.ok == true and (page.value :: Object).bytes == #complete, "app-size source was truncated")
-        local value = page.value :: Object
+        assert(page.ok == true and (assert(bounds.object(page.value))).bytes == #complete, "app-size source was truncated")
+        local value = assert(bounds.object(page.value))
         local decoded = assert(base64.decode(tostring(value.content_base64)))
         parts[#parts + 1] = decoded
         offset = offset + #decoded
@@ -463,14 +467,14 @@ local function main()
     local body_status = rpc("workspace-action", workspace_token, "ping", {padding = string.rep("x", 524288)})
     assert(body_status == 400, "whole MCP body limit was not enforced")
     local unchanged = tool("workspace-action", workspace_token, "overlay", {operation = "list", overlay_id = "gateway-large-source"})
-    assert(unchanged.ok == true and (unchanged.value :: Object).revision == 3, "refused oversized request changed the workspace")
+    assert(unchanged.ok == true and (assert(bounds.object(unchanged.value))).revision == 3, "refused oversized request changed the workspace")
     local foreign_admission = ok(call("bee.gateway.binding:admit", {subject = "foreign-workspace-subject", action_id = "foreign-workspace-action",
         attempt_id = "foreign-workspace-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1,
         tools = {"overlay"}, ttl_ms = 60000}), "admit foreign workspace actor")
-    local foreign_workspace_binding = tostring((foreign_admission.binding :: Object).binding_id)
+    local foreign_workspace_binding = tostring((assert(bounds.object(foreign_admission.binding))).binding_id)
     local foreign_workspace_token = tostring(ok(materialize("foreign-workspace-attempt", 1, foreign_workspace_binding), "materialize foreign workspace actor").token)
     local foreign_workspace = tool("foreign-workspace-action", foreign_workspace_token, "overlay", {operation = "list", overlay_id = "gateway-research"})
-    local foreign_fault = type(foreign_workspace.error) == "table" and (foreign_workspace.error :: Object).code or foreign_workspace.code
+    local foreign_fault = type(foreign_workspace.error) == "table" and (assert(bounds.object(foreign_workspace.error))).code or foreign_workspace.code
     assert(foreign_workspace.ok == false and foreign_fault == "DENIED",
         "foreign MCP actor read another workspace: " .. tostring(json.encode(foreign_workspace)))
     ok(call("bee.gateway.binding:revoke", {binding_id = workspace_binding}), "revoke workspace binding")
@@ -503,15 +507,15 @@ local function main()
     -- One live binding per attempt and carrier epoch: the same admission
     -- replays it, a different one at the same epoch conflicts.
     local replayed = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read", "capabilities"}, ttl_ms = 60000}), "replay admission")
-    assert(replayed.replayed == true and (replayed.binding :: Object).binding_id == binding_a, "same admission replays the live binding")
+    assert(replayed.replayed == true and (assert(bounds.object(replayed.binding))).binding_id == binding_a, "same admission replays the live binding")
     assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "a different admission at the same epoch conflicts")
     -- A later carrier epoch's admission supersedes the earlier binding of the same attempt.
     local superseding = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 2, tools = {"thread_read"}, ttl_ms = 60000}), "admit under epoch 2")
-    assert((superseding.binding :: Object).binding_id ~= binding_a, "a new binding")
+    assert((assert(bounds.object(superseding.binding))).binding_id ~= binding_a, "a new binding")
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 401, "the superseded binding's token is refused")
     local superseded = ok(call("bee.gateway.binding:check", {binding_id = binding_a}), "check superseded")
     assert(superseded.valid == false and tostring(superseded.reason) == "binding is revoked", "superseded binding is revoked")
-    binding_a = tostring((superseding.binding :: Object).binding_id)
+    binding_a = tostring((assert(bounds.object(superseding.binding))).binding_id)
     token_a = tostring(ok(materialize("act-a-attempt", 2, binding_a), "materialize under epoch 2").token)
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 200, "the superseding binding's token works")
     -- A delayed admission under an epoch below the highest ever admitted for
@@ -520,7 +524,7 @@ local function main()
     ok(call("bee.gateway.binding:revoke", {binding_id = binding_a}), "revoke the epoch 2 binding")
     assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000})) == "CONFLICT", "stale admission refused even with the newer binding revoked")
     local reopened_a = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-a", attempt_id = "act-a-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 3, tools = {"thread_read", "capabilities"}, ttl_ms = 60000}), "admit under epoch 3")
-    binding_a = tostring((reopened_a.binding :: Object).binding_id)
+    binding_a = tostring((assert(bounds.object(reopened_a.binding))).binding_id)
     token_a = tostring(ok(materialize("act-a-attempt", 3, binding_a), "materialize under epoch 3").token)
     assert(select(1, rpc("act-a", token_a, "tools/list")) == 200, "the epoch 3 binding's token works")
     -- Independent revocation is fenced by carrier epoch: a report from an
@@ -535,20 +539,20 @@ local function main()
     -- A tool outside the binding's admitted set is refused at the call, whatever a client allows for itself.
     local token_h = admit("act-h", nil, 1)
     local narrow_status, narrow_reply = rpc("act-h", token_h, "tools/list")
-    assert(narrow_status == 200 and #(((narrow_reply :: Object).result :: Object).tools :: {Object}) == 4, "the probe admits both tools and MCP controls")
+    assert(narrow_status == 200 and #(assert(bounds.array((assert(bounds.object((assert(bounds.object(narrow_reply))).result))).tools))) == 4, "the probe admits both tools and MCP controls")
     local admitted_only = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-i", attempt_id = "act-i-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, ttl_ms = 60000}), "admit read only")
-    local token_i = tostring(ok(materialize("act-i-attempt", 1, tostring((admitted_only.binding :: Object).binding_id)), "materialize read only").token)
+    local token_i = tostring(ok(materialize("act-i-attempt", 1, tostring((assert(bounds.object(admitted_only.binding))).binding_id)), "materialize read only").token)
     local listed_status, listed = rpc("act-i", token_i, "tools/list")
-    assert(listed_status == 200 and #(((listed :: Object).result :: Object).tools :: {Object}) == 3, "only the admitted tool and MCP controls are advertised")
+    assert(listed_status == 200 and #(assert(bounds.array((assert(bounds.object((assert(bounds.object(listed))).result))).tools))) == 3, "only the admitted tool and MCP controls are advertised")
     local refused_status, refused = rpc("act-i", token_i, "tools/call", {name = "docs", arguments = {operation = "list"}})
-    assert(refused_status == 200 and refused and refused.error ~= nil and tostring(((refused :: Object).error :: Object).message):find("not admitted", 1, true), "a tool outside the binding is refused")
+    assert(refused_status == 200 and refused and refused.error ~= nil and tostring((assert(bounds.object((assert(bounds.object(refused))).error))).message):find("not admitted", 1, true), "a tool outside the binding is refused")
     local refused_message_status, refused_message = rpc("act-i", token_i, "tools/call", {name = "thread_message", arguments = {idempotency_key = "read-only-message", message_id = "read-only-message", message_kind = "notification", content = {text = "no"}}})
-    assert(refused_message_status == 200 and refused_message and refused_message.error ~= nil and tostring(((refused_message :: Object).error :: Object).message):find("not admitted", 1, true), "a read-only binding admitted a write")
+    assert(refused_message_status == 200 and refused_message and refused_message.error ~= nil and tostring((assert(bounds.object((assert(bounds.object(refused_message))).error))).message):find("not admitted", 1, true), "a read-only binding admitted a write")
     local foreign_admission = ok(call("bee.gateway.binding:admit", {subject = "foreign-subject", action_id = "foreign-action", attempt_id = "foreign-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit non-member message")
-    local foreign_binding = tostring((foreign_admission.binding :: Object).binding_id)
+    local foreign_binding = tostring((assert(bounds.object(foreign_admission.binding))).binding_id)
     local foreign_token = tostring(ok(materialize("foreign-attempt", 1, foreign_binding), "materialize non-member message").token)
     local foreign_message = tool("foreign-action", foreign_token, "thread_message", {idempotency_key = "foreign-message", message_id = "foreign-message", message_kind = "notification", content = {text = "no"}})
-    assert(foreign_message.ok == false and type(foreign_message.error) == "table" and (foreign_message.error :: Object).code == "DENIED", "a non-member message sender was accepted")
+    assert(foreign_message.ok == false and type(foreign_message.error) == "table" and (assert(bounds.object(foreign_message.error))).code == "DENIED", "a non-member message sender was accepted")
     -- A token bound to another action is refused on this action, and vice versa.
     local token_b = admit("act-b")
     assert(select(1, rpc("act-a", token_b, "tools/list")) == 403, "cross-attempt token refused")
@@ -567,7 +571,7 @@ local function main()
     record("line 4")
     assert(tool("act-d", token_d, "thread_read", {cursor = 0}).ok == true, "read the bound thread")
     local marks = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"delivery.mark"}}}), "read marks")
-    assert(#(marks.records :: {unknown}) == 0, "viewing wrote a delivery mark")
+    assert(#(assert(bounds.array(marks.records))) == 0, "viewing wrote a delivery mark")
     do
     -- thread_message is an explicitly admitted write. Its arguments contain
     -- only the message and a stable key; the endpoint supplies the thread,
@@ -578,44 +582,45 @@ local function main()
         prepared = {binding_ref = "mcp-binding", binding_digest = "mcp-digest", profile_id = "mcp-profile", profile_digest = "mcp-profile-digest", placement_binding = "mcp-placement", placement_attempt_id = "mcp-placement-attempt", plan_digest = "mcp-plan"}}), "prepare MCP attempt")
     local mcp_admit = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "mcp-action", attempt_id = "mcp-attempt", thread_id = THREAD,
         owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_message"}, ttl_ms = 60000}), "admit MCP message")
-    local mcp_binding = tostring((mcp_admit.binding :: Object).binding_id)
+    local mcp_binding = tostring((assert(bounds.object(mcp_admit.binding))).binding_id)
     local mcp_token = tostring(ok(materialize("mcp-attempt", 1, mcp_binding), "materialize MCP message").token)
     local message_arguments: Object = {idempotency_key = "mcp-message-key", message_id = "mcp-message", message_kind = "notification", content = {text = "from authenticated MCP"}}
     local appended = tool("mcp-action", mcp_token, "thread_message", message_arguments)
     assert(appended.ok == true and type(appended.value) == "table", "thread_message append refused: " .. tostring(json.encode(appended)))
-    local appended_value = appended.value :: Object
+    local appended_value = assert(bounds.object(appended.value))
     local replay = tool("mcp-action", mcp_token, "thread_message", message_arguments)
-    assert(replay.ok == true and replay.replayed == true and (replay.value :: Object).record_id == appended_value.record_id and (replay.value :: Object).sequence == appended_value.sequence,
+    assert(replay.ok == true and replay.replayed == true and (assert(bounds.object(replay.value))).record_id == appended_value.record_id and (assert(bounds.object(replay.value))).sequence == appended_value.sequence,
         "identical thread_message replay duplicated or changed the result")
     local changed_arguments: Object = {idempotency_key = "mcp-message-key", message_id = "mcp-message", message_kind = "notification", content = {text = "changed"}}
     local changed = tool("mcp-action", mcp_token, "thread_message", changed_arguments)
-    assert(changed.ok == false and (changed.error :: Object).code == "CONFLICT", "changed thread_message replay was accepted")
+    assert(changed.ok == false and (assert(bounds.object(changed.error))).code == "CONFLICT", "changed thread_message replay was accepted")
     local contextual = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {action_id = "mcp-action"}}), "read MCP append")
     local message_records = 0
-    for _, item in ipairs(contextual.records :: {Object}) do
+    for _, item in ipairs(assert(bounds.array(contextual.records))) do
+        local item = assert(bounds.object(item))
         if item.kind == "message" then
             message_records = message_records + 1
             assert(item.thread_id == THREAD and item.producer_id == ACTOR and item.action_id == "mcp-action" and item.attempt_id == "mcp-attempt", "MCP append context was not bound")
-            assert((item.body :: Object).sender_id == ACTOR, "MCP sender was not authenticated")
+            assert((assert(bounds.object(item.body))).sender_id == ACTOR, "MCP sender was not authenticated")
         end
     end
     assert(message_records == 1, "replayed thread_message created a duplicate record")
     local _, foreign_thread = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "foreign-thread", message_id = "foreign-thread", message_kind = "notification", content = {text = "no"}, thread_id = "other-thread"}})
-    assert(foreign_thread and foreign_thread.error and tostring((foreign_thread.error :: Object).message):find("unknown field thread_id", 1, true), "foreign thread override was accepted")
+    assert(foreign_thread and foreign_thread.error and tostring((assert(bounds.object(foreign_thread.error))).message):find("unknown field thread_id", 1, true), "foreign thread override was accepted")
     local _, foreign_sender = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "foreign-sender", message_id = "foreign-sender", message_kind = "notification", content = {text = "no"}, sender_id = "foreign"}})
-    assert(foreign_sender and foreign_sender.error and tostring((foreign_sender.error :: Object).message):find("unknown field sender_id", 1, true), "foreign producer override was accepted")
+    assert(foreign_sender and foreign_sender.error and tostring((assert(bounds.object(foreign_sender.error))).message):find("unknown field sender_id", 1, true), "foreign producer override was accepted")
     local _, foreign_context = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "foreign-context", message_id = "foreign-context", message_kind = "notification", content = {text = "no"}, context = {action_id = "other-action"}}})
-    assert(foreign_context and foreign_context.error and tostring((foreign_context.error :: Object).message):find("unknown field context", 1, true), "foreign context override was accepted")
+    assert(foreign_context and foreign_context.error and tostring((assert(bounds.object(foreign_context.error))).message):find("unknown field context", 1, true), "foreign context override was accepted")
     local _, arbitrary_record = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = {idempotency_key = "arbitrary-record", kind = "receipt", message_id = "arbitrary-record", message_kind = "notification", content = {text = "no"}}})
-    assert(arbitrary_record and arbitrary_record.error and tostring((arbitrary_record.error :: Object).message):find("unknown field kind", 1, true), "arbitrary record kind was accepted")
+    assert(arbitrary_record and arbitrary_record.error and tostring((assert(bounds.object(arbitrary_record.error))).message):find("unknown field kind", 1, true), "arbitrary record kind was accepted")
     for _, field in ipairs({"session", "recipient_ids", "member_thread", "in_reply_to"}) do
         local addressed: Object = {idempotency_key = "note-" .. field, message_id = "note-" .. field, message_kind = "progress", content = {text = "no"}}
         addressed[field] = "x"
         local _, refused_field = rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = addressed})
-        assert(refused_field and refused_field.error and tostring((refused_field.error :: Object).message):find("unknown field " .. field, 1, true), "a note accepted " .. field)
+        assert(refused_field and refused_field.error and tostring((assert(bounds.object(refused_field.error))).message):find("unknown field " .. field, 1, true), "a note accepted " .. field)
     end
     local settled = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, filter = {kinds = {"receipt"}, action_id = "mcp-action"}}), "read MCP receipts")
-    assert(#(settled.records :: {unknown}) == 0, "thread_message settled an attempt")
+    assert(#(assert(bounds.array(settled.records))) == 0, "thread_message settled an attempt")
     ok(call("bee.gateway.binding:revoke", {binding_id = mcp_binding}), "revoke MCP message binding")
     assert(select(1, rpc("mcp-action", mcp_token, "tools/call", {name = "thread_message", arguments = message_arguments})) == 401, "revoked thread_message token was accepted")
     end
@@ -624,16 +629,16 @@ local function main()
     -- its own kind; neither credential opens the other endpoint.
     local function header_of(headers: unknown, name: string): string?
         if type(headers) ~= "table" then return nil end
-        for key, value in pairs(headers :: {[string]: unknown}) do
+        for key, value in pairs(assert(bounds.object(headers))) do
             if tostring(key):lower() == name:lower() then
-                if type(value) == "table" then return tostring((value :: {unknown})[1]) end
+                if type(value) == "table" then return tostring((assert(bounds.array(value)))[1]) end
                 return tostring(value)
             end
         end
         return nil
     end
     local function hook_post(action: string, token: string, body: unknown, path: string?): (number, string, unknown)
-        local encoded = type(body) == "string" and body :: string or (json.encode(body) or "{}")
+        local encoded = type(body) == "string" and body or (json.encode(body) or "{}")
         local response, err = http_client.post("http://" .. ADDRESS .. "/hook/" .. action .. (path or ""), {headers = {Authorization = "Bearer " .. token, ["Content-Type"] = "application/json"}, body = encoded, timeout = "8s"})
         assert(response, "hook post: " .. tostring(err))
         return response.status_code, tostring(response.body or ""), response.headers
@@ -642,11 +647,11 @@ local function main()
         local response, err = http_client.get("http://" .. ADDRESS .. "/hook/" .. action .. "/" .. event_id, {headers = {Authorization = "Bearer " .. token}, timeout = "8s"})
         assert(response, "hook get: " .. tostring(err))
         local decoded: unknown = json.decode(tostring(response.body))
-        return response.status_code, type(decoded) == "table" and (decoded :: Object) or nil
+        return response.status_code, type(decoded) == "table" and (assert(bounds.object(decoded))) or nil
     end
     local hook_admit = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"},
         hooks = {"PreToolUse", "PostToolUse", "Stop", "SessionStart"}, ttl_ms = 60000}), "admit with hooks")
-    local binding_k = tostring((hook_admit.binding :: Object).binding_id)
+    local binding_k = tostring((assert(bounds.object(hook_admit.binding))).binding_id)
     assert(code(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-k2", attempt_id = "act-k2-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"Notification"}})) == "INVALID", "an event outside the catalog is not admitted")
     local minted_k = ok(materialize("act-k-attempt", 1, binding_k), "materialize with hooks")
     local token_k, hook_k = tostring(minted_k.token), tostring(minted_k.hook_token)
@@ -694,7 +699,7 @@ local function main()
     -- What the queue holds: kinds, claims, sizes and digests; no content and
     -- no control field.
     local queue = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "hook queue")
-    local queued_list = queue.hooks :: {Object}
+    local queued_list = assert(bounds.array(queue.hooks))
     assert(#queued_list == 5, "five submissions queued: " .. tostring(#queued_list))
     local queued_text = json.encode(queued_list) or ""
     assert(not queued_text:find("sk-live", 1, true) and not queued_text:find("\"ls\"", 1, true) and not queued_text:find("decision", 1, true) and not queued_text:find("permissionDecision", 1, true), "no content or control field in the queue")
@@ -706,30 +711,30 @@ local function main()
         local response, err = http_client.post("http://" .. ADDRESS .. "/hook/act-k/mcp", {headers = {Authorization = "Bearer " .. token, ["Content-Type"] = "application/json"}, body = body, timeout = "8s"})
         assert(response, "hook rpc: " .. tostring(err))
         local decoded: unknown = json.decode(tostring(response.body))
-        return response.status_code, type(decoded) == "table" and (decoded :: Object) or nil
+        return response.status_code, type(decoded) == "table" and (assert(bounds.object(decoded))) or nil
     end
     assert(select(1, hook_rpc(token_k, "tools/list")) == 401, "the tool credential is refused on the MCP hook endpoint")
     local listed_status, listed_hook = hook_rpc(hook_k, "tools/list")
-    assert(listed_status == 200 and #(((listed_hook :: Object).result :: Object).tools :: {Object}) == 1, "the MCP hook endpoint serves one tool")
+    assert(listed_status == 200 and #(assert(bounds.array((assert(bounds.object((assert(bounds.object(listed_hook))).result))).tools))) == 1, "the MCP hook endpoint serves one tool")
     local engine_status, engine_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "PostToolUse", session_id = "s2", turn_id = "t1", tool_use_id = "call_1", tool_name = "mcp__bee__thread_read", tool_response = {content = {}}}, _meta = {threadId = "s2", progressToken = 1}})
     assert(engine_status == 200 and engine_reply and engine_reply.result ~= nil, "a hook-engine shaped call is accepted")
     -- Codex joins the tool's text content into hook stdout and reads it with
     -- command-hook semantics: plain text is invalid Stop output and becomes
     -- model context for other events. An observer answers no text at all and
     -- carries its receipt as structured content.
-    local engine_result = (engine_reply :: Object).result :: Object
-    assert(#(engine_result.content :: {Object}) == 0, "the MCP answer carries no hook stdout: " .. tostring(json.encode(engine_result)))
-    local engine_receipt = engine_result.structuredContent :: Object
+    local engine_result = assert(bounds.object((assert(bounds.object(engine_reply))).result))
+    assert(#(assert(bounds.array(engine_result.content))) == 0, "the MCP answer carries no hook stdout: " .. tostring(json.encode(engine_result)))
+    local engine_receipt = assert(bounds.object(engine_result.structuredContent))
     assert(engine_receipt and engine_receipt.status == "queued" and type(engine_receipt.event_id) == "string", "the receipt is structured: " .. tostring(json.encode(engine_result)))
     local stop_status, stop_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "Stop", session_id = "s2", turn_id = "t1", last_assistant_message = "done"}, _meta = {threadId = "s2", progressToken = 2}})
-    local stop_result = stop_reply and (stop_reply :: Object).result :: Object or nil
-    assert(stop_status == 200 and stop_result and #(stop_result.content :: {Object}) == 0 and stop_result.isError == false, "a Stop hook answers no stdout: " .. tostring(json.encode(stop_reply)))
+    local stop_result = stop_reply and assert(bounds.object((assert(bounds.object(stop_reply))).result)) or nil
+    assert(stop_status == 200 and stop_result and #(assert(bounds.array(stop_result.content))) == 0 and stop_result.isError == false, "a Stop hook answers no stdout: " .. tostring(json.encode(stop_reply)))
     local _, model_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "PostToolUse", session_id = "s2", turn_id = "t1", tool_use_id = "call_2"}, _meta = {callId = "call_2", ["x-codex-turn-metadata"] = {turn_id = "t1"}}})
-    assert(model_reply and model_reply.error ~= nil and tostring(((model_reply :: Object).error :: Object).message):find("(model)", 1, true), "a model shaped call is refused")
+    assert(model_reply and model_reply.error ~= nil and tostring((assert(bounds.object((assert(bounds.object(model_reply))).error))).message):find("(model)", 1, true), "a model shaped call is refused")
     local _, mixed_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "PostToolUse", session_id = "s2", turn_id = "t1", tool_use_id = "call_3"}, _meta = {threadId = "s2", callId = "call_3"}})
-    assert(mixed_reply and mixed_reply.error ~= nil and tostring(((mixed_reply :: Object).error :: Object).message):find("(mixed)", 1, true), "a mixed metadata call is refused")
+    assert(mixed_reply and mixed_reply.error ~= nil and tostring((assert(bounds.object((assert(bounds.object(mixed_reply))).error))).message):find("(mixed)", 1, true), "a mixed metadata call is refused")
     local _, bare_reply = hook_rpc(hook_k, "tools/call", {name = "hook", arguments = {event = "PostToolUse", session_id = "s2", turn_id = "t1", tool_use_id = "call_4"}})
-    assert(bare_reply and bare_reply.error ~= nil and tostring(((bare_reply :: Object).error :: Object).message):find("(unclassified)", 1, true), "a call without metadata is refused")
+    assert(bare_reply and bare_reply.error ~= nil and tostring((assert(bounds.object((assert(bounds.object(bare_reply))).error))).message):find("(unclassified)", 1, true), "a call without metadata is refused")
     local _, other_tool = hook_rpc(hook_k, "tools/call", {name = "thread_read", arguments = {cursor = 0}, _meta = {threadId = "s2"}})
     assert(other_tool and other_tool.error ~= nil, "no thread tool is served on the hook endpoint")
     local engine_queue = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "hook queue after mcp")
@@ -753,10 +758,10 @@ local function main()
     -- with the retained claim below. A claim or acknowledgment from an epoch
     -- below the highest admitted for the attempt changes nothing.
     local lost_claim = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim whose reply is lost")
-    local lost_list = lost_claim.hooks :: {Object}
+    local lost_list = assert(bounds.array(lost_claim.hooks))
     assert(#lost_list == 3 and lost_list[1].event_id == event_1, "the first three queued submissions are claimed in order")
     local claimed = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "recover lost claim reply")
-    local claimed_list = claimed.hooks :: {Object}
+    local claimed_list = assert(bounds.array(claimed.hooks))
     assert(#claimed_list == #lost_list, "the lost claim is redelivered at the same bound")
     for index, item in ipairs(claimed_list) do
         assert(item.event_id == lost_list[index].event_id, "the same epoch redelivers outstanding rows in order")
@@ -771,7 +776,7 @@ local function main()
     assert(replay_status == 200 and replay_body == "", "a replay of a committed submission answers 200 with an empty body")
     assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = claimed_ids}), "ack twice").acknowledged == 0, "an acknowledgment is idempotent")
     local progressed_claim = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 1, limit = 3}), "claim after acknowledgment")
-    assert(#(progressed_claim.hooks :: {Object}) == 3 and (progressed_claim.hooks :: {Object})[1].event_id ~= event_1,
+    assert(#(assert(bounds.object((assert(bounds.array(progressed_claim.hooks))) == 3 and (assert(bounds.array(progressed_claim.hooks)))[1]))).event_id ~= event_1,
         "acknowledgment advances the next bounded claim")
     -- Sealing ends intake at once and keeps the accepted rows for the carrier.
     local pre_seal = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "queue before seal")
@@ -781,20 +786,21 @@ local function main()
     assert(select(1, hook_post("act-k", hook_k, first_payload)) == 200, "a replay of a committed submission still answers after the seal")
     assert(select(1, rpc("act-k", token_k, "tools/list")) == 200, "the seal leaves the tool credential valid")
     local post_seal = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "queue after seal")
-    assert(#(post_seal.hooks :: {Object}) == #(pre_seal.hooks :: {Object}), "the seal discards nothing accepted")
+    assert(#(assert(bounds.array(post_seal.hooks))) == #(assert(bounds.array(pre_seal.hooks))), "the seal discards nothing accepted")
     local taken_over = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 3, limit = 2}), "claim under a higher epoch")
-    assert(#(taken_over.hooks :: {Object}) == 2, "a higher epoch takes over rows a lower epoch claimed, sealed or not")
-    local stale_ack = ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = {(taken_over.hooks :: {Object})[1].event_id}}), "stale ack")
+    assert(#(assert(bounds.array(taken_over.hooks))) == 2, "a higher epoch takes over rows a lower epoch claimed, sealed or not")
+    local stale_ack = ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 1, event_ids = {(assert(bounds.object((assert(bounds.array(taken_over.hooks)))[1]))).event_id}}), "stale ack")
     assert(stale_ack.acknowledged == 0, "a lower epoch cannot acknowledge what a higher one claimed")
-    local unclaimed_ack = ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(progressed_claim.hooks :: {Object})[3].event_id}}), "ack without claim")
+    local unclaimed_ack = ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(assert(bounds.object((assert(bounds.array(progressed_claim.hooks)))[3]))).event_id}}), "ack without claim")
     assert(unclaimed_ack.acknowledged == 0, "an epoch that did not take over a row cannot acknowledge it")
     local admitted_higher = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-k", attempt_id = "act-k-attempt", thread_id = THREAD, owner_incarnation = 1, carrier_epoch = 4, tools = {"thread_read"}, hooks = {"Stop", "PreToolUse"}, ttl_ms = 60000}), "admit act-k under epoch 4")
     assert(code(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 3})) == "CONFLICT", "a claim below the highest admitted epoch is refused")
-    assert(code(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(taken_over.hooks :: {Object})[1].event_id}})) == "CONFLICT",
+    assert(code(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 3, event_ids = {(assert(bounds.object((assert(bounds.array(taken_over.hooks)))[1]))).event_id}})) == "CONFLICT",
         "an old claim cannot acknowledge after the replacement admission")
     local superseded_queue = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k}), "superseded queue")
     local rejected_count, committed_count, retained_claimed = 0, 0, 0
-    for _, item in ipairs(superseded_queue.hooks :: {Object}) do
+    for _, item in ipairs(assert(bounds.array(superseded_queue.hooks))) do
+        local item = assert(bounds.object(item))
         if item.status == "rejected" then rejected_count = rejected_count + 1; assert(item.rejected_reason == "binding superseded", "rejection names its reason") end
         if item.status == "committed" then committed_count = committed_count + 1 end
         if item.status == "queued" and (tonumber(item.claimed_epoch) or 0) > 0 then retained_claimed = retained_claimed + 1 end
@@ -802,12 +808,12 @@ local function main()
     assert(committed_count == 3 and rejected_count > 0 and retained_claimed > 0,
         "supersession rejects unclaimed rows, keeps committed rows and retains claimed uncertainty: " .. tostring(committed_count) .. " " .. tostring(rejected_count) .. " " .. tostring(retained_claimed))
     local recovered_after_supersession = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k, carrier_epoch = 4, limit = 3}), "reclaim superseded claims")
-    assert(#(recovered_after_supersession.hooks :: {Object}) > 0, "the current carrier reclaims a superseded claimed row")
-    local recovered_id = tostring((recovered_after_supersession.hooks :: {Object})[1].event_id)
+    assert(#(assert(bounds.array(recovered_after_supersession.hooks))) > 0, "the current carrier reclaims a superseded claimed row")
+    local recovered_id = tostring((assert(bounds.object((assert(bounds.array(recovered_after_supersession.hooks)))[1]))).event_id)
     assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k, carrier_epoch = 4, event_ids = {recovered_id}}), "ack reclaimed superseded row").acknowledged == 1,
         "a replacement can acknowledge a retained claim")
     assert(select(1, hook_post("act-k", hook_k, first_payload)) == 401, "the superseded binding's hook credential is refused")
-    local binding_k4 = tostring((admitted_higher.binding :: Object).binding_id)
+    local binding_k4 = tostring((assert(bounds.object(admitted_higher.binding))).binding_id)
     local minted_k4 = ok(materialize("act-k-attempt", 4, binding_k4), "materialize under epoch 4")
     local hook_k4 = tostring(minted_k4.hook_token)
     local stop_status, _, stop_headers = hook_post("act-k", hook_k4, {hook_event_name = "Stop", session_id = "s4", prompt_id = "p4", stop_hook_active = false})
@@ -825,7 +831,7 @@ local function main()
     local queued_before_revoke, _, revoke_headers = hook_post("act-k", hook_k4, {hook_event_name = "PreToolUse", session_id = "s4", tool_use_id = "toolu_revoked", tool_name = "Bash"})
     assert(claimed_before_revoke == 202 and queued_before_revoke == 202, "claimed and unclaimed rows queue before the revocation")
     local claimed_for_commit = ok(call("bee.gateway.binding:hook_claim", {binding_id = binding_k4, carrier_epoch = 4, limit = 1}), "claim before lost acknowledgment")
-    local claimed_item = (claimed_for_commit.hooks :: {Object})[1]
+    local claimed_item = (assert(bounds.array(claimed_for_commit.hooks)))[1]
     local claimed_for_commit_id = tostring(claimed_item.event_id)
     assert(claimed_for_commit_id == tostring(header_of(claimed_headers, "X-Bee-Event")), "the row held across revoke was claimed first")
     -- Commit the claimed hook through the actual fenced carrier API, then
@@ -850,21 +856,23 @@ local function main()
         data = {type = "extension", event_name = "bee.harness.hook", event_revision = "1", payload_json = payload}}}
     local first_commit = ok(call("bee.threads.carrier:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 0,
         checkpoint = {schema_revision = "bee.carrier.checkpoint@1", phase = "hook-committed-before-ack"}, records = {hook_record}}), "commit claimed hook")
-    assert(#(first_commit.records :: {Object}) == 1 and (first_commit.records :: {Object})[1].replayed == false, "the claimed hook committed once")
+    assert(#(assert(bounds.object((assert(bounds.array(first_commit.records))) == 1 and (assert(bounds.array(first_commit.records)))[1]))).replayed == false, "the claimed hook committed once")
     ok(call("bee.gateway.binding:revoke", {binding_id = binding_k4}), "revoke the hook binding")
     assert(select(1, hook_post("act-k", hook_k4, first_payload)) == 401, "a revoked binding's hook credential is refused")
     local after_revoke = ok(call("bee.gateway.binding:hook_queue", {binding_id = binding_k4}), "queue after revoke")
-    for _, item in ipairs(after_revoke.hooks :: {Object}) do
+    for _, item in ipairs(assert(bounds.array(after_revoke.hooks))) do
+        local item = assert(bounds.object(item))
         if item.event_id == header_of(revoke_headers, "X-Bee-Event") then assert(item.status == "rejected" and item.rejected_reason == "binding revoked", "revocation rejects an unclaimed row terminally") end
         if item.event_id == claimed_for_commit_id then assert(item.status == "queued" and item.claimed_epoch == 4, "revocation retains the claimed row after its thread commit") end
     end
     local retry_commit = ok(call("bee.threads.carrier:commit", {thread_id = THREAD, idempotency_key = key(), attempt_id = "act-k-attempt", carrier_epoch = 4, expected_revision = 1,
         checkpoint = {schema_revision = "bee.carrier.checkpoint@1", phase = "hook-recovered-before-ack"}, records = {hook_record}}), "retry committed hook")
-    assert(#(retry_commit.records :: {Object}) == 1 and (retry_commit.records :: {Object})[1].replayed == true, "retry replays the retained hook record")
+    assert(#(assert(bounds.object((assert(bounds.array(retry_commit.records))) == 1 and (assert(bounds.array(retry_commit.records)))[1]))).replayed == true, "retry replays the retained hook record")
     local committed_records = ok(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 64}), "read retained hook record")
     local retained_records = 0
-    for _, item in ipairs(committed_records.records :: {Object}) do
-        if item.kind == "observation" and type(item.body) == "table" and (item.body :: Object).event_key == event_key then retained_records = retained_records + 1 end
+    for _, item in ipairs(assert(bounds.array(committed_records.records))) do
+        local item = assert(bounds.object(item))
+        if item.kind == "observation" and type(item.body) == "table" and (assert(bounds.object(item.body))).event_key == event_key then retained_records = retained_records + 1 end
     end
     assert(retained_records == 1, "the replay did not duplicate the committed hook record")
     assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = binding_k4, carrier_epoch = 4, event_ids = {claimed_for_commit_id}}), "ack after revoke").acknowledged == 1,
@@ -874,17 +882,17 @@ local function main()
     -- that was already claimed before expiry.
     local expiring = ok(call("bee.gateway.binding:admit", {subject = ACTOR, action_id = "act-expiring-hooks", attempt_id = "act-expiring-hooks-attempt", thread_id = THREAD,
         owner_incarnation = 1, carrier_epoch = 1, tools = {"thread_read"}, hooks = {"PreToolUse"}, ttl_ms = 250}), "admit expiring hooks")
-    local expiring_binding = tostring((expiring.binding :: Object).binding_id)
+    local expiring_binding = tostring((assert(bounds.object(expiring.binding))).binding_id)
     local expiring_tokens = ok(materialize("act-expiring-hooks-attempt", 1, expiring_binding), "materialize expiring hooks")
     local expiring_hook = tostring(expiring_tokens.hook_token)
     local expiring_status, _, expiring_headers = hook_post("act-expiring-hooks", expiring_hook, {hook_event_name = "PreToolUse", session_id = "expiry", tool_use_id = "toolu_expiry", tool_name = "Bash"})
     assert(expiring_status == 202, "hook queues before expiry")
     local expiring_claim = ok(call("bee.gateway.binding:hook_claim", {binding_id = expiring_binding, carrier_epoch = 1, limit = 1}), "claim before expiry")
-    local expiring_id = tostring((expiring_claim.hooks :: {Object})[1].event_id)
+    local expiring_id = tostring((assert(bounds.object((assert(bounds.array(expiring_claim.hooks)))[1]))).event_id)
     assert(expiring_id == tostring(header_of(expiring_headers, "X-Bee-Event")), "the expiring row was claimed")
     time.sleep("300ms")
     local expired_recovery = ok(call("bee.gateway.binding:hook_claim", {binding_id = expiring_binding, carrier_epoch = 2, limit = 1}), "reclaim after expiry")
-    assert(#(expired_recovery.hooks :: {Object}) == 1 and tostring((expired_recovery.hooks :: {Object})[1].event_id) == expiring_id,
+    assert(#(assert(bounds.object((assert(bounds.array(expired_recovery.hooks))) == 1 and tostring((assert(bounds.array(expired_recovery.hooks)))[1]))).event_id) == expiring_id,
         "expiry retains and reclaims a claimed row")
     assert(ok(call("bee.gateway.binding:hook_ack", {binding_id = expiring_binding, carrier_epoch = 2, event_ids = {expiring_id}}), "ack after expiry").acknowledged == 1,
         "the reclaimed expired row acknowledges normally")
@@ -899,7 +907,7 @@ local function main()
     local reopened = ok(call("bee.gateway.binding:open", {address = ADDRESS}), "reopen")
     assert(reopened.epoch == 2, "second epoch")
     local stale = ok(call("bee.gateway.binding:ready", {binding_id = binding_d}), "ready after reopen")
-    assert((stale.generation :: Object).epoch == 2 and stale.binding_valid == false, "earlier binding fenced by the new epoch")
+    assert((assert(bounds.object(stale.generation))).epoch == 2 and stale.binding_valid == false, "earlier binding fenced by the new epoch")
     assert(select(1, rpc("act-d", token_d, "tools/list")) == 401, "earlier epoch token refused")
 end
 return {main = main}

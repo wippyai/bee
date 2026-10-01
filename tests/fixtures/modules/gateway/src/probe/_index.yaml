@@ -34,7 +34,7 @@ entries:
 - name: main
   kind: process.lua
   source: file://main.lua
-  imports: {access_probe: bee.gateway.probe:access_probe}
+  imports: {bounds: bee.protocol:bounds, access_probe: bee.gateway.probe:access_probe}
   method: main
   modules: [funcs, http_client, json, time, registry, security, base64, sql]
   meta:

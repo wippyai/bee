@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. Bounded acceptance for lazily started workspace hosts: the node host
 -- manager starts a host on the first lease for its workspace, keeps it while
 -- a lease holds it, stops it once it has been idle and its shutdown
@@ -71,7 +72,9 @@ local function applications(workspace_id: string): {Object}
     if not encoded then return {} end
     local value: unknown = json.decode(encoded)
     if type(value) ~= "table" or type(value.applications) ~= "table" then error("corrupt workspace state") end
-    return value.applications :: {Object}
+    local result: {Object} = {}
+    for index, item in ipairs(assert(bounds.array(value.applications))) do result[index] = assert(bounds.object(item)) end
+    return result
 end
 
 -- The fixture owns one host directly, as classic folder mode does, and opens

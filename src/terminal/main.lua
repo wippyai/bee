@@ -72,6 +72,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
     assert(process.monitor(owner))
     local tabs_order: {string} = {}
     local catalog: {menu.Descriptor} = {}
+    local landing_pending = initial_application == nil
     local routing_scene: model.Scene = scene
     local routing_revision = scene.revision
     local pending_request: string? = nil
@@ -627,6 +628,14 @@ local function main(owner: string, initial_application: string?, secondary_appli
                     if state then tabs_order = state.tabs; preferences = state.preferences; catalog = state.catalog end
                     if not hydrated and status == "Starting workspace" then status = "" end
                     hydrated = true
+                    if landing_pending and #catalog > 0 then
+                        landing_pending = false
+                        if #scene.windows == 0 then
+                            for _, descriptor in ipairs(catalog) do
+                                if descriptor.role == "sessions" then application("open", descriptor.definition_id, ""); break end
+                            end
+                        end
+                    end
                     if not pending_request then adopt_routing() end
                 end
                 dirty = true

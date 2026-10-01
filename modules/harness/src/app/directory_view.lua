@@ -32,12 +32,15 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     end
     if #rows == 0 and status == "" then frame.empty(painter, layout.work.y, "No sessions yet", "N new session · choose an agent, then send work") end
     if height >= 6 then frame.line(painter, height - 2, text.bound(status, 512), painter.theme.text) end
-    if height >= 6 then frame.actions(painter, height - 1, {
-        {kind = "open", key = "Enter", label = "Open", enabled = rows[selected] ~= nil, primary = true},
-        {kind = "new_session", key = "N", label = "New session", enabled = true},
-        {kind = "workspace", key = "W", label = filtered and "All workspaces" or "Workspace", enabled = true},
-        {kind = "refresh", key = "R", label = "Refresh", enabled = true},
-    }) end
+    if height >= 6 then
+        local buttons: {frame.Button} = {{kind = "new_session", key = "N", label = "New session", enabled = true, primary = #rows == 0}}
+        if #rows > 0 then
+            table.insert(buttons, 1, {kind = "open", key = "Enter", label = "Open", enabled = rows[selected] ~= nil, primary = true})
+            buttons[#buttons + 1] = {kind = "workspace", key = "W", label = filtered and "All workspaces" or "Workspace", enabled = true}
+            buttons[#buttons + 1] = {kind = "refresh", key = "R", label = "Refresh", enabled = true}
+        end
+        frame.actions(painter, height - 1, buttons)
+    end
     frame.footer(painter, "", "↑↓ select · Enter open · N new · W workspace · R refresh · Esc close")
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end

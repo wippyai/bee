@@ -1,9 +1,13 @@
 -- MIT. A retained display's switch request reaches the desktop bridge naming
 -- the display it came from, and the bridge's answer reaches that display.
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
+local tty = require("tty")
+local security = require("security")
+local attachments = require("attachments")
 local desktops = require("desktops")
 local desktop_lifecycle = require("desktop_lifecycle")
 type Channel = channel.Channel
@@ -19,6 +23,12 @@ local function quiet(messages: Channel<process.Message>, what: string)
     local selected = channel.select({messages:case_receive(), time.after("200ms"):case_receive()})
     if selected.channel == messages then error("unexpected " .. what) end
 end
+local function desktop(pid: string): desktops.Desktop
+    local view = assert(tty.viewport({width = 80, height = 24}))
+    return {pid = pid, database = "bee.env:client_db", view = view, grants = attachments.new(view),
+        selection = {host = "host", workspace_id = WORKSPACE, database = "bee.env:client_db", width = 80, height = 24, options = {}},
+        scope = security.new_scope({})}
+end
 local function define_tests()
     test.describe("Retained display switch routing", function()
         test.it("forwards a display's own switch request and returns the answer to it", function()
@@ -27,12 +37,12 @@ local function define_tests()
             local relayed = assert(process.listen("bee.test.switch.relayed", {message = true}))
             local display = tostring(assert(process.spawn("bee.launch:switch_relay", "bee:workers", self)))
             local state = desktop_lifecycle.new(self, "host", "route", WORKSPACE, DESKTOP, desktops.new())
-            local resource = {pid = display, database = "bee.env:client_db"} :: desktops.Desktop
+            local resource = desktop(display)
             desktop_lifecycle.adopt(state, DESKTOP, resource, "connection-1")
             local handled = desktop_lifecycle.switch(state, display, {version = 1, workspace_id = WORKSPACE, desktop_id = DESKTOP,
                 request_id = "switch-1", target_workspace_id = TARGET})
             test.is_true(handled)
-            local forwarded = next_message(requests, "forwarded switch"):payload():data() :: {[string]: unknown}
+            local forwarded = assert(bounds.object(next_message(requests, "forwarded switch"):payload():data()))
             test.eq(forwarded.desktop_id, DESKTOP)
             test.eq(forwarded.workspace_id, WORKSPACE)
             test.eq(forwarded.target_workspace_id, TARGET)
@@ -45,9 +55,10 @@ local function define_tests()
                 request_id = "switch-3", target_workspace_id = TARGET}))
             desktop_lifecycle.switched(state, {version = 1, workspace_id = WORKSPACE, desktop_id = DESKTOP,
                 request_id = "switch-1", error_code = "", error = ""})
-            local answer = next_message(relayed, "relayed answer"):payload():data() :: {[string]: unknown}
+            local answer = assert(bounds.object(next_message(relayed, "relayed answer"):payload():data()))
             test.eq(answer.request_id, "switch-1")
             test.eq(answer.error_code, "")
+            resource.view:close()
             process.terminate(display)
             process.unlisten(requests); process.unlisten(relayed)
         end)
@@ -58,8 +69,9 @@ local function define_tests()
             local notices = assert(process.listen("bee.retained.replaced", {message = true}))
             local display = tostring(assert(process.spawn("bee.launch:switch_relay", "bee:workers", self)))
             local state = desktop_lifecycle.new(self, "host", "route", WORKSPACE, DESKTOP, desktops.new())
+            local resource = desktop(display)
             desktop_lifecycle.adopt(state, DESKTOP,
-                {pid = display, database = "bee.env:client_db"} :: desktops.Desktop, "connection-1")
+                resource, "connection-1")
             local child = state.children[DESKTOP]
             child.phase, child.pending, child.ready, child.restarts = "render", "render-1", false, 1
             test.is_true(desktop_lifecycle.receive(state, "presented", display, {version = 1,
@@ -69,10 +81,11 @@ local function define_tests()
             test.is_true(desktop_lifecycle.receive(state, "result", "route", {version = 1,
                 workspace_id = WORKSPACE, request_id = "render-1", op = "render", recipient = display,
                 connection_id = "connection-2", error_code = "", error = ""}))
-            local notice = next_message(notices, "replacement readiness"):payload():data() :: {[string]: unknown}
+            local notice = assert(bounds.object(next_message(notices, "replacement readiness"):payload():data()))
             test.eq(notice.display_id, DESKTOP)
             test.eq(notice.pid, display)
             test.eq(notice.schema, 1)
+            resource.view:close()
             process.terminate(display)
             process.unlisten(notices)
         end)

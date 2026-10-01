@@ -407,6 +407,7 @@ def exercise_real_facade(project, packed, pack):
                 ui.wait("Search: dummy")
                 ui.wait("Dummy Module", timeout=30)
 
+            ui.resize(180, 40)
             ui.wait("MODULES", timeout=20)
             ui.wait("Keyword: bee")
             ui.key(b"K")
@@ -424,7 +425,7 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"e")
             ui.wait("wippy.dummy:router")
             ui.key(b"\r")
-            ui.wait('"app:router"')
+            ui.wait("Configure package")
             ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
             ui.wait("Selected")
             ui.key(b"p")
@@ -457,7 +458,7 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"e")
             ui.wait("wippy.dummy:router")
             ui.key(b"\r")
-            ui.wait('"app:router"')
+            ui.wait("Configure package")
             ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
             ui.wait("Selected")
             ui.key(b"p")
@@ -502,6 +503,7 @@ def exercise_authored_publication(project, packed, pack):
         ui = Desktop(directory, packed=packed, project=project, deployment=pack,
                      apps=("bee.hub.modules:app",))
         try:
+            ui.resize(180, 40)
             ui.wait("MODULES", timeout=20)
             ui.key(b"a")
             ui.wait("MODULES  AUTHORING")

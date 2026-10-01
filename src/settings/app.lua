@@ -187,7 +187,7 @@ local function main(value: unknown)
     if broker then process.send(broker, "bee.appearance.request", {version = 1, request_id = uuid.v7(), op = "state"}) end
     while running do
         if dirty then
-            local drawn = view.draw(width, height, preferences, pane, offset, status)
+            local drawn = view.draw(width, height, preferences, pane, offset, status, live_status, live_pending, binary_info)
             frame.render(drawn, menu, preferences)
             hits = drawn.hits
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))

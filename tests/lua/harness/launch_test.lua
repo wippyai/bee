@@ -1580,6 +1580,23 @@ local function define_tests()
                     workspace_id = workspace, brief = "ping", thread_id = chosen, thread_title = "Both"})), "INVALID")
             end)
         end)
+        test.it("admits the exact named thread while retaining thread override and membership checks", function()
+            local selected = fresh("definition-thread")
+            value(call("bee.threads.service:create", {thread_id = selected, idempotency_key = fresh("create"), title = "Named"}))
+            with_entry(DEFINITION, function(changed)
+                changed.thread_policy = {kind = "named", thread_ref = selected}
+            end, function()
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("named-thread"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = selected}))
+                test.eq(admitted.thread_id, selected)
+                test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("different-thread"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = fresh("other")})), "FORBIDDEN")
+                test.eq(code(call("bee.harness.launch:admit", {request_id = fresh("named-title"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_title = "New thread"})), "FORBIDDEN")
+                test.eq(code(call_as(fresh("nonmember"), "bee.harness.launch:admit", {request_id = fresh("named-nonmember"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "ping", thread_id = selected})), "DENIED")
+            end)
+        end)
         test.it("refuses a placement other than the host's before any thread or grant exists", function()
             local native = value(call("bee.harness.launch:admit", {request_id = fresh("placement-native"), definition_ref = DEFINITION,
                 workspace_id = workspace, brief = "ping", placement = "native"}))

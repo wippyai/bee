@@ -659,10 +659,9 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
     end
     if request.brief == "" and plan.mode ~= "window" then return nil, fail("INVALID", "a structured launch needs a nonempty brief") end
     if request.workdir and not M.overrides(plan, "workdir") then return nil, fail("FORBIDDEN", "the launch does not allow a workdir override") end
-    -- A caller-thread definition names the caller's thread by design; any
-    -- other thread choice, and a new thread under the caller's title, is an
-    -- override.
-    local thread_override = not session_turn and (request.thread_title ~= nil or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller"))
+    local defined_thread = launch.thread_policy.kind == "named" and request.thread_id == launch.thread_policy.thread_ref
+    local thread_override = not session_turn and (request.thread_title ~= nil
+        or (request.thread_id ~= nil and launch.thread_policy.kind ~= "caller" and not defined_thread))
     if thread_override and not M.overrides(plan, "thread") then return nil, fail("FORBIDDEN", "the launch does not allow a thread override") end
     if request.placement and request.placement ~= plan.placement_kind then
         if not M.overrides(plan, "placement") then return nil, fail("FORBIDDEN", "the launch does not allow a placement override") end

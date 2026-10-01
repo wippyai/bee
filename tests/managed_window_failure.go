@@ -174,7 +174,7 @@ local function run()
 		time.sleep("25ms")
 	end
 	assert(failure, "failure surface did not remain visible: " .. tostring(view:snapshot() and table.concat(view:snapshot().rows, "|")))
-    assert((pending ~= nil) == (not BEFORE_ADMISSION), "incorrect settlement scope")
+    assert((pending ~= nil) == (not BEFORE_ADMISSION), "incorrect settlement scope: " .. tostring(failure and table.concat(failure.rows, "|")))
     local failure_text = table.concat(failure.rows)
 	assert(failure_text:find(STAGE == "component" and "window component" or (STAGE == "generation" and "attachment generation" or "injected"), 1, true), "failure reason missing")
     assert(appearance_replies > 0, "broker did not receive authenticated appearance state response")
@@ -217,7 +217,10 @@ local function run()
     assert(view:snapshot(), "failure surface auto-dismissed before explicit close")
     assert(view:send({type = "key", key = "", key_type = "escape", action = "press"}))
     time.sleep("250ms")
-    assert(not view:snapshot(), "Escape did not dismiss failure surface")
+    local returned = view:snapshot()
+    local returned_text = returned and table.concat(returned.rows, "|") or ""
+    assert(returned and returned_text:find("SESSIONS", 1, true)
+        and not returned_text:find("Agent launch failed", 1, true), "Escape did not return from the failure surface to Sessions: " .. returned_text)
     view:close()
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies); process.unlisten(appearance_requests)
@@ -247,7 +250,11 @@ type fixtureIndex struct {
 
 func copyTree(dst, src string) error { return os.CopyFS(dst, os.DirFS(src)) }
 
-func runCommand(ctx context.Context, dir, runtime string, env []string, args ...string) ([]byte, error) {
+func runCommand(dir, runtime string, env []string, args ...string) ([]byte, error) {
+	// Dependency loading and static checking must not spend the execution
+	// proof's deadline. Each phase retains its own bounded cancellation.
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
 	cmd := exec.CommandContext(ctx, runtime, args...)
 	cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -460,7 +467,7 @@ func run() error {
 		machineText = string(machine)
 	}
 	if *stage == "component" {
-		appPath := filepath.Join(dir, "modules", "harness", "src", "app", "app.lua")
+		appPath := filepath.Join(dir, "modules", "harness", "src", "app", "windows.lua")
 		appSource, err := os.ReadFile(appPath)
 		if err != nil {
 			return err
@@ -522,15 +529,13 @@ func run() error {
 		}
 	}
 	env := envFor(dir)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-	if out, err := runCommand(ctx, dir, runtimePath, env, "install"); err != nil {
+	if out, err := runCommand(dir, runtimePath, env, "install"); err != nil {
 		return fmt.Errorf("staged dependency install failed: %w\n%s", err, out)
 	}
-	if out, err := runCommand(ctx, dir, runtimePath, env, "lint"); err != nil {
+	if out, err := runCommand(dir, runtimePath, env, "lint"); err != nil {
 		return fmt.Errorf("staged lint failed: %w\n%s", err, out)
 	}
-	out, err := runCommand(ctx, dir, runtimePath, env, "test", "--host", "bee:terminal")
+	out, err := runCommand(dir, runtimePath, env, "test", "--host", "bee:terminal")
 	if err != nil {
 		return fmt.Errorf("failure acceptance failed: %w\n%s", err, out)
 	}

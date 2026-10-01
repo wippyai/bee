@@ -13,15 +13,20 @@ local function package_entry(data: unknown, meta: {[string]: unknown}?): {[strin
     return {id = ID, kind = "function.lua", meta = meta or {type = "migration", target_db = TARGET, timestamp = TIMESTAMP}, data = data}
 end
 
-local function prepared(entry: {[string]: unknown}, displayed: {[string]: unknown}?): plan.Prepared
+local function prepared(entry: {[string]: unknown}, displayed: plan.Migration?): plan.Prepared
     local migration = displayed or {id = ID, component = COMPONENT, target_db = TARGET, timestamp = TIMESTAMP}
+    assert(type(entry.id) == "string" and type(entry.kind) == "string")
+    local entry_meta = entry.meta
+    assert(type(entry_meta) == "table")
+    local metadata: {[string]: unknown} = {}
+    for key, value in pairs(entry_meta) do metadata[key] = value end
     return {
-        plan = {request = {}, base_revision = 1, root_id = "bee.hub.deps:test", digest = "", modules = {},
-            missing = {}, migrations = {migration}, starts = {}, capabilities = {}, ready = true},
-        resolved = {packages = {{component = COMPONENT, version = "1.0.0", digest = "", entries = {entry},
+        plan = {request = {action = "install", component = COMPONENT, version = "1.0.0", parameters = {}, migration_policy = "review"}, base_revision = 1, root_id = "bee.hub.deps:test", digest = "", modules = {},
+            missing = {}, migrations = {migration}, starts = {}, capabilities = {}, policy_changes = {}, ready = true},
+        resolved = {packages = {{component = COMPONENT, version = "1.0.0", digest = "", entries = {{id = entry.id, kind = entry.kind, meta = metadata, data = entry.data}},
             dependencies = {}, requirements = {requirements = {}, missing = {}}}}, missing = {}},
         installed = {version = 1, modules = {}, roots = {}},
-    } :: plan.Prepared
+    }
 end
 
 local function runtime(entry: {[string]: unknown}, owner: string?): {[string]: unknown}

@@ -249,6 +249,7 @@ def command_environment(folder):
         "XDG_STATE_HOME": str(folder / "state"),
         "PATH": "/usr/bin:/bin",
         "GOMAXPROCS": "2",
+        "TMPDIR": os.environ.get("TMPDIR", str(folder)),
     }
 
 
@@ -271,7 +272,7 @@ entries:
   source: file://canonical.lua
   modules: [json]
 """)
-    for module in ("hub", "hive", "persist", "sync", "threads"):
+    for module in ("hub", "hive", "persist", "sync", "threads", "placement", "driver"):
         shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
     (folder / "src/hubrecoveryprobe").mkdir()
     (folder / "src/hubrecoveryprobe/main.lua").write_text(PROBE)
@@ -283,13 +284,14 @@ entries:
         "- name: bee/persist\n  version: 0.1.0-dev\n"
         "- name: bee/sync\n  version: 0.1.0-dev\n"
         "- name: bee/threads\n  version: 0.1.0-dev\n"
+        "- name: bee/placement\n  version: 0.1.0-dev\n- name: bee/driver\n  version: 0.1.0-dev\n"
     )
     (folder / ".wippy.yaml").write_text(
         "version: '1.0'\nregistry:\n  enable_history: true\n"
         "  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"
         "workspace:\n  replacements:\n"
         "    bee/hub: ./modules/hub\n    bee/hive: ./modules/hive\n    bee/persist: ./modules/persist\n"
-        "    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+        "    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/placement: ./modules/placement\n    bee/driver: ./modules/driver\n"
     )
 
 

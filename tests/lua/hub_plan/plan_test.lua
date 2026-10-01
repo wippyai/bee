@@ -69,6 +69,28 @@ end
 
 local function define_tests()
     test.describe("Hub dependency plan", function()
+        test.it("measures a large policy closure without the message encoder limit", function()
+            local entries: {inspect.Entry} = {}
+            for index = 1, 200 do
+                entries[index] = {id = "acme.large:policy_" .. tostring(index), kind = "security.policy",
+                    meta = {}, data = {policy = {actions = {"registry.get"}, resources = {"acme.large:*"}, effect = "allow"}}}
+            end
+            local selected = request({action = "install", component = "acme/large", version = "1.0.0"})
+            local prepared, problem = plan.prepare(state({}), 1, selected,
+                source({["acme/large@1.0.0"] = package("acme/large", "1.0.0", "a", entries)}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if not prepared then return end
+            test.eq(#prepared.plan.policy_changes, 200)
+            test.eq(#prepared.plan.digest, 64)
+            entries[200].data = {policy = {actions = {"registry.apply"}, resources = {"acme.large:*"}, effect = "allow"}}
+            local changed, changed_error = plan.prepare(state({}), 1, selected,
+                source({["acme/large@1.0.0"] = package("acme/large", "1.0.0", "a", entries)}))
+            test.is_nil(changed_error)
+            test.not_nil(changed)
+            if changed then test.eq(changed.plan.digest == prepared.plan.digest, false) end
+        end)
+
         test.it("preserves bundled modules outside the dependency-root closure", function()
             local resident = {id = "bee.core:main", kind = "library.lua", registry = {owner = "bee/core", root = false}}
             -- A fresh embedded deployment has ownership but no persisted

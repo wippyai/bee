@@ -60,6 +60,7 @@ entries:
   source: file://render.lua
   modules: [tty]
   imports:
+    frame: bee.application:frame
     title_editor: bee.terminal:title_editor
     dialog: bee.terminal:dialog
     model: bee.desktop:model
@@ -82,6 +83,7 @@ entries:
   source: file://chrome.lua
   modules: [tty]
   imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance
 - name: menu
   kind: library.lua

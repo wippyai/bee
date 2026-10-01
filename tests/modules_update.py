@@ -129,6 +129,7 @@ def exercise(project, packed, pack):
         (Path(directory) / ".wippy").mkdir()
         ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
         try:
+            ui.resize(150, 40)
             ui.wait("MODULES", timeout=20)
             ui.wait("Update fixture")
             ui.key(b"\x1b[B")
@@ -162,7 +163,7 @@ def exercise(project, packed, pack):
             ui.wait("Ready for confirmation")
             ui.quit()
         except Exception:
-            Path("/tmp/bee-modules-update-failure.raw").write_bytes(ui.raw)
+            (Path(directory) / "bee-modules-update-failure.raw").write_bytes(ui.raw)
             raise
         finally:
             ui.close()
@@ -194,7 +195,7 @@ def exercise_self_update(project, packed, pack):
             assert "update  bee/bee  2.0.0" in ui.text() and "update  bee/application  2.0.0" in ui.text(), ui.text()
             ui.quit()
         except Exception:
-            Path("/tmp/bee-modules-self-update-failure.raw").write_bytes(ui.raw)
+            (Path(directory) / "bee-modules-self-update-failure.raw").write_bytes(ui.raw)
             raise
         finally:
             ui.close()

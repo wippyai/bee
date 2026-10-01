@@ -81,13 +81,13 @@ function M.new(width: integer, height: integer, preferences: appearance.Preferen
 end
 
 -- The painted rows, ready for output:present.
-function M.rows(painter: Painter): {string}
+function M.rows(painter: Painter, background: string?): {string}
     for y, bar in pairs(painter.bars) do M.actions(painter, y, bar.buttons, bar.x) end
     painter.bars = {}
     local rows = painter.canvas:rows()
     for index, row in ipairs(rows) do
         local gap = maximum(0, painter.width - tty.text.width(row))
-        rows[index] = row .. appearance.style(painter.theme.text, painter.theme.surface) .. string.rep(" ", gap) .. RESET
+        rows[index] = row .. appearance.style(painter.theme.text, background or painter.theme.surface) .. string.rep(" ", gap) .. RESET
     end
     return rows
 end

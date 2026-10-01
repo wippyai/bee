@@ -2,6 +2,7 @@
 local test = require("test")
 local editor = require("editor")
 local tty = require("tty")
+local frame = require("frame")
 local appearance = require("appearance")
 local function define_tests()
     test.describe("Window title editor", function()
@@ -42,10 +43,11 @@ local function define_tests()
             state.selected = false
             for _, width in ipairs({1, 4, 12, 24, 80}) do
                 for _, height in ipairs({1, 4, 7, 24}) do
-                    local canvas = tty.canvas(width, height)
+                    local painter = frame.new(width, height, appearance.defaults())
+                    local canvas = painter.canvas
                     canvas:clear(appearance.style("#ffffff", "#000000") .. " \27[0m")
                     local cursor = editor.draw(canvas, state, width, height, appearance.defaults())
-                    for _, row in ipairs(canvas:rows()) do test.eq(tty.text.width(row), width) end
+                    for _, row in ipairs(frame.rows(painter)) do test.eq(tty.text.width(row), width) end
                     if cursor.visible then
                         test.is_true(cursor.x >= 1 and cursor.x <= width)
                         test.is_true(cursor.y >= 1 and cursor.y <= height)

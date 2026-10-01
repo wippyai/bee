@@ -56,3 +56,12 @@ entries:
   parameters:
   - name: bee.hub:process_host
     value: bee:hub_workers
+  - name: bee.hub:target_publish_configuration
+    value: bee:hub_publish_configuration
+
+- name: hub_publish_configuration
+  kind: registry.entry
+  data: {}
+- name: protected_kernel
+  kind: registry.entry
+  data: {namespaces: []}

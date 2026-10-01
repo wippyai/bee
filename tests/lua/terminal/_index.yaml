@@ -47,6 +47,7 @@ entries:
   modules: [tty]
   meta: {type: test, suite: bee}
   imports:
+    frame: bee.application:frame
     test: wippy.test:test
     editor: bee.terminal:title_editor
     appearance: bee.application:appearance
@@ -57,6 +58,7 @@ entries:
   modules: [tty]
   meta: {type: test, suite: bee}
   imports:
+    frame: bee.application:frame
     test: wippy.test:test
     dialog: bee.terminal:dialog
     appearance: bee.application:appearance

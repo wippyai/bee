@@ -249,7 +249,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     local plan: Plan = {request = request, base_revision = revision, root_id = root_id, digest = "", modules = modules,
         missing = resolved.missing, migrations = migrations, starts = starts, capabilities = capabilities,
         policy_changes = policy_changes, ready = #resolved.missing == 0}
-    local encoded, encode_error = canonical.encode(plan)
+    local encoded, encode_error = canonical.encode(plan, 1048576)
     if not encoded then return nil, encode_error end
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error) end

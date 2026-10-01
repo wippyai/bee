@@ -253,7 +253,9 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         shutil.copy2(ROOT / "wippy.yaml", folder / "wippy.yaml")
         lock = yaml.safe_load((ROOT / "wippy.lock").read_text())
         lock.setdefault("modules", [])
-        lock["modules"] += yaml.safe_load((ROOT / "tests/dependencies.yaml").read_text())["modules"]
+        installed_dependencies = {(module["name"], str(module["version"])) for module in lock["modules"]}
+        lock["modules"] += [module for module in yaml.safe_load((ROOT / "tests/dependencies.yaml").read_text())["modules"]
+                            if (module["name"], str(module["version"])) not in installed_dependencies]
         (folder / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
         vendor = folder / ".wippy/vendor/wippy"
         vendor.mkdir(parents=True)

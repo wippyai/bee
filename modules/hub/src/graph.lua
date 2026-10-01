@@ -118,108 +118,135 @@ local function forward_defaults(packages: {Package}): ({Package}?, string?)
     return bound, nil
 end
 
--- Rebuild constraints from each candidate assignment. Backtracking discards
--- edges from abandoned package versions, including diamond dependencies.
-function M.resolve(roots: {Edge}, source: Source): (Result?, string?)
+-- Use the runtime resolver's worklist rule: retain a compatible installed
+-- selection, otherwise choose the best catalog match. Retract superseded
+-- dependencies and resolve their intersections again; never choose a lower
+-- parent version to make its descendants succeed.
+function M.resolve(roots: {Edge}, source: Source, installed: {[string]: string}?): (Result?, string?)
     if #roots > 128 then return nil, "too many dependency roots" end
-    local versions_cache: {[string]: {items: {string}, more: boolean}} = {}
-    local artifact_cache: {[string]: Package} = {}
     local assigned: {[string]: Package} = {}
-    local searches, artifact_count = 0, 0
-    local fatal: string? = nil
-    local last_conflict = "no compatible dependency versions"
-    local function search(depth: integer): boolean
-        searches = searches + 1
-        if searches > 512 or depth > 64 then fatal = "dependency plan exceeds search bound"; return false end
-        local incoming: {[string]: {string}} = {}
-        local names: {string} = {}
-        local function add(edge: Edge)
-            local constraints = incoming[edge.component]
-            if not constraints then constraints = {}; incoming[edge.component] = constraints; names[#names + 1] = edge.component end
-            constraints[#constraints + 1] = edge.version
+    local demands: {[string]: {[string]: string}} = {}
+    local children: {[string]: {string}} = {}
+    local queue: {string} = {}
+    local queued: {[string]: boolean} = {}
+    local problems: {[string]: string} = {}
+    local artifact_cache: {[string]: Package} = {}
+    local versions_cache: {[string]: {items: {string}, more: boolean}} = {}
+    local artifact_count = 0
+    local function enqueue(name: string)
+        if not queued[name] then queue[#queue + 1] = name; queued[name] = true end
+    end
+    local function add(name: string, owner: string, constraint: string)
+        local incoming = demands[name] or {}
+        incoming[owner] = constraint; demands[name] = incoming
+        enqueue(name)
+    end
+    local function retract(name: string)
+        for _, child in ipairs(children[name] or {}) do
+            local incoming = demands[child]
+            if incoming then incoming[name] = nil end
+            enqueue(child)
         end
-        for _, root in ipairs(roots) do add(root) end
-        for _, item in pairs(assigned) do for _, edge in ipairs(item.dependencies) do add(edge) end end
-        if #names > 64 then fatal = "dependency closure exceeds 64 modules"; return false end
-        table.sort(names)
-        local next_name: string? = nil
-        for _, name in ipairs(names) do
-            local chosen = assigned[name]
-            if chosen then
-                for _, constraint in ipairs(incoming[name]) do
-                    local matches, problem = semver.matches(chosen.version, constraint)
-                    if matches == nil then fatal = problem or "invalid version constraint"; return false end
-                    if not matches then last_conflict = name .. " has conflicting constraints: " .. table.concat(incoming[name], ", "); return false end
-                end
-            elseif not next_name then next_name = name end
+        children[name] = nil
+    end
+    local function allowed(version: string, constraints: {string}): (boolean?, string?)
+        for _, constraint in ipairs(constraints) do
+            local matches, problem = semver.matches(version, constraint)
+            if matches == nil then return nil, problem end
+            if not matches then return false, nil end
         end
-        if not next_name then return true end
-        local name = next_name
-        -- An exact incoming pin supplies the only possible candidate directly.
-        -- Ranges inspect catalog pages lazily; successful plans never fetch the
-        -- remainder of a package's release history.
-        local pinned: string? = nil
-        for _, constraint in ipairs(incoming[name]) do
-            if semver.parse(constraint) then pinned = constraint; break end
+        return true, nil
+    end
+    local function choose(name: string, constraints: {string}): (string?, string?)
+        local retained = installed and installed[name] or nil
+        if retained then
+            local matches, problem = allowed(retained, constraints)
+            if matches == nil then return nil, problem end
+            if matches then return retained, nil end
         end
-        local page = 1
-        local more = true
-        while more do
-            local versions: {string} = {}
-            if pinned then
-                versions = {pinned}; more = false
-            else
-                local cache_key = name .. "#" .. tostring(page)
-                local cached = versions_cache[cache_key]
-                if not cached then
-                    local listed, has_more, problem = source.versions(name, page)
-                    if not listed or has_more == nil then fatal = problem or "cannot list dependency versions"; return false end
-                    versions = {}
-                    for _, version in ipairs(listed) do
-                        if not semver.parse(version) then fatal = name .. " has an invalid version"; return false end
-                        versions[#versions + 1] = version
-                    end
-                    table.sort(versions, function(a: string, b: string): boolean return (semver.compare(a, b) or 0) > 0 end)
-                    cached = {items = versions, more = has_more}
-                    versions_cache[cache_key] = cached
-                end
-                versions, more = cached.items, cached.more
+        for _, constraint in ipairs(constraints) do
+            if semver.parse(constraint) then
+                local matches, problem = allowed(constraint, constraints)
+                if matches == nil then return nil, problem end
+                if matches then return constraint, nil end
+                return nil, name .. " has conflicting constraints: " .. table.concat(constraints, ", ")
             end
-        for _, version in ipairs(versions) do
-            local allowed = true
-            for _, constraint in ipairs(incoming[name]) do
-                local matches, problem = semver.matches(version, constraint)
-                if matches == nil then fatal = problem or "invalid version constraint"; return false end
-                if not matches then allowed = false; break end
+        end
+        local best_stable: string? = nil
+        local best_prerelease: string? = nil
+        for page = 1, 64 do
+            local key = name .. "#" .. tostring(page)
+            local cached = versions_cache[key]
+            if not cached then
+                local listed, more, problem = source.versions(name, page)
+                if not listed or more == nil then return nil, problem or "cannot list dependency versions" end
+                for _, version in ipairs(listed) do
+                    if not semver.parse(version) then return nil, name .. " has an invalid version" end
+                end
+                table.sort(listed, function(a: string, b: string): boolean return (semver.compare(a, b) or 0) > 0 end)
+                cached = {items = listed, more = more}; versions_cache[key] = cached
             end
-            if allowed then
+            for _, version in ipairs(cached.items) do
+                local matches, problem = allowed(version, constraints)
+                if matches == nil then return nil, problem end
+                if matches then
+                    local parsed = semver.parse(version)
+                    if parsed and #parsed.prerelease == 0 then
+                        if not best_stable or (semver.compare(version, best_stable) or 0) > 0 then best_stable = version end
+                    elseif not best_prerelease or (semver.compare(version, best_prerelease) or 0) > 0 then best_prerelease = version end
+                end
+            end
+            if not cached.more then
+                if best_stable or best_prerelease then return best_stable or best_prerelease, nil end
+                return nil, name .. " has no version satisfying " .. table.concat(constraints, ", ")
+            end
+        end
+        return nil, "dependency plan exceeds version page bound"
+    end
+    for index, root in ipairs(roots) do add(root.component, "@root/" .. tostring(index), root.version) end
+    local cursor = 1
+    while cursor <= #queue do
+        if cursor > 512 then return nil, "dependency plan exceeds search bound" end
+        local name = queue[cursor]; cursor = cursor + 1; queued[name] = nil
+        local constraints: {string} = {}
+        for _, constraint in pairs(demands[name] or {}) do constraints[#constraints + 1] = constraint end
+        table.sort(constraints)
+        if #constraints == 0 then
+            retract(name); assigned[name] = nil; problems[name] = nil
+        else
+            local version, problem = choose(name, constraints)
+            if not version then
+                retract(name); assigned[name] = nil; problems[name] = problem or "no compatible dependency versions"
+            elseif not assigned[name] or assigned[name].version ~= version then
+                retract(name)
                 local key = name .. "@" .. version
                 local item = artifact_cache[key]
                 if not item then
                     artifact_count = artifact_count + 1
-                    if artifact_count > 128 then fatal = "artifact inspection exceeds bound"; return false end
-                    local artifact, problem = source.artifact(name, version)
-                    if not artifact then fatal = problem or "cannot inspect package"; return false end
+                    if artifact_count > 128 then return nil, "artifact inspection exceeds bound" end
+                    local artifact, artifact_error = source.artifact(name, version)
+                    if not artifact then return nil, artifact_error or "cannot inspect package" end
                     if artifact.component ~= name or (semver.compare(artifact.version, version) or 1) ~= 0 then
-                        fatal = "artifact identity does not match its selection"; return false
+                        return nil, "artifact identity does not match its selection"
                     end
                     local decoded, decode_error = package(artifact)
-                    if not decoded then fatal = decode_error; return false end
-                    item = decoded
-                    artifact_cache[key] = item
+                    if not decoded then return nil, decode_error end
+                    item = decoded; artifact_cache[key] = item
                 end
-                assigned[name] = item
-                if search(depth + 1) then return true end
-                assigned[name] = nil
-                if fatal then return false end
-            end
+                assigned[name] = item; problems[name] = nil
+                local outgoing: {string} = {}
+                for _, edge in ipairs(item.dependencies) do
+                    add(edge.component, name, edge.version); outgoing[#outgoing + 1] = edge.component
+                end
+                children[name] = outgoing
+            else problems[name] = nil end
         end
-            page = page + 1
-        end
-        last_conflict = name .. " has no version satisfying " .. table.concat(incoming[name], ", ")
-        return false
     end
-    if not search(0) then return nil, fatal or last_conflict end
+    local names: {string} = {}
+    for name in pairs(assigned) do names[#names + 1] = name end
+    if #names > 64 then return nil, "dependency closure exceeds 64 modules" end
+    table.sort(names)
+    for _, problem in pairs(problems) do return nil, problem end
     local parameters: {[string]: requirements.Parameter} = {}
     local function bind(edge: Edge): string?
         for _, parameter in ipairs(edge.parameters) do

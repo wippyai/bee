@@ -547,8 +547,8 @@ function M.apply(raw: unknown, expected: unknown): Result
     if #request.parameters > 0 then data.parameters = request.parameters end
     local entry = {id = displayed.root_id, kind = "ns.dependency", dependency_root = true, data = data}
     local staged, stage_error
-    if request.action == "install" then staged, stage_error = changes:create(entry)
-    elseif request.action == "update" then staged, stage_error = changes:update(entry)
+    if displayed.root_operation == "create" then staged, stage_error = changes:create(entry)
+    elseif displayed.root_operation == "update" then staged, stage_error = changes:update(entry)
     else staged, stage_error = changes:delete(displayed.root_id) end
     if not staged then return transaction.failure("FAILED", tostring(stage_error)) end
     local expected: {ExpectedModule} = {}

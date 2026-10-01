@@ -96,6 +96,100 @@ local function define_tests()
                 end
             end)
         end
+        for _, constraint in ipairs({"*", ">=0.4.0 <0.5.0", ">=0.4.6", "0.4.6"}) do
+            test.it("predicts runtime installed selection for " .. constraint, function()
+                local captured = state({root("acme/app", "1.0.0"),
+                    {id = "acme.app:test", kind = "ns.dependency", registry = {owner = "acme/app"},
+                        data = {component = "wippy/test", version = "0.4.17"}},
+                    {id = "wippy.test:terminal", kind = "ns.dependency", registry = {owner = "wippy/test"},
+                        data = {component = "wippy/terminal", version = "*"}},
+                }, {{name = "acme/app", version = "1.0.0"}, {name = "wippy/test", version = "0.4.17"},
+                    {name = "wippy/terminal", version = "0.4.5"}})
+                -- The live selection, rather than the shipped lock, is preferred.
+                captured.resolution = {modules = {{name = "acme/app", version = "1.0.0"},
+                    {name = "wippy/test", version = "0.4.17"}, {name = "wippy/terminal", version = "0.4.5"}},
+                    lock = {root_module = "", modules = {{name = "wippy/terminal", version = "0.4.4"}}}}
+                local artifacts = source({
+                    ["acme/app@2.0.0"] = package("acme/app", "2.0.0", "a", {
+                        {id = "acme.app:test", kind = "ns.dependency", meta = {},
+                            data = {component = "wippy/test", version = "0.4.17"}},
+                        {id = "acme.app:terminal", kind = "ns.dependency", meta = {},
+                            data = {component = "wippy/terminal", version = constraint}},
+                    }),
+                    ["wippy/test@0.4.17"] = package("wippy/test", "0.4.17", "b", {
+                        {id = "wippy.test:terminal", kind = "ns.dependency", meta = {},
+                            data = {component = "wippy/terminal", version = "*"}},
+                    }),
+                    ["wippy/terminal@0.4.5"] = package("wippy/terminal", "0.4.5", "c"),
+                    ["wippy/terminal@0.4.6"] = package("wippy/terminal", "0.4.6", "d"),
+                })
+                local lists = 0
+                artifacts.versions = function(_: string, _: integer): ({string}?, boolean?, string?)
+                    lists = lists + 1; return {"0.4.6", "0.4.5"}, false, nil
+                end
+                local prepared, problem = plan.prepare(captured, 4,
+                    request({action = "update", component = "acme/app", version = "2.0.0"}), artifacts)
+                test.is_nil(problem); test.not_nil(prepared)
+                if prepared then
+                    local terminal = module_for(prepared.plan.modules, "wippy/terminal")
+                    test.not_nil(terminal)
+                    if terminal then
+                        local kept = constraint == "*" or constraint == ">=0.4.0 <0.5.0"
+                        test.eq(terminal.version, kept and "0.4.5" or "0.4.6")
+                        test.eq(terminal.change, kept and "keep" or "update")
+                        if kept then test.eq(lists, 0) end
+                    end
+                end
+            end)
+        end
+        test.it("reselects an installed candidate when a later diamond constraint rejects it", function()
+            local artifacts = source({
+                ["acme/root@1.0.0"] = package("acme/root", "1.0.0", "a", {
+                    {id = "acme.root:shared", kind = "ns.dependency", meta = {}, data = {component = "acme/shared", version = "*"}},
+                    {id = "acme.root:z", kind = "ns.dependency", meta = {}, data = {component = "acme/z", version = "1.0.0"}},
+                }),
+                ["acme/z@1.0.0"] = package("acme/z", "1.0.0", "b", {
+                    {id = "acme.z:shared", kind = "ns.dependency", meta = {}, data = {component = "acme/shared", version = ">=2.0.0"}},
+                }),
+                ["acme/shared@1.0.0"] = package("acme/shared", "1.0.0", "c", {
+                    {id = "acme.shared:old", kind = "ns.dependency", meta = {}, data = {component = "acme/old", version = "1.0.0"}},
+                }),
+                ["acme/shared@2.0.0"] = package("acme/shared", "2.0.0", "d"),
+                ["acme/old@1.0.0"] = package("acme/old", "1.0.0", "e"),
+            })
+            artifacts.versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {"2.0.0", "1.0.0"}, false, nil end
+            local resolved, problem = graph.resolve({{component = "acme/root", version = "1.0.0", parameters = {}}},
+                artifacts, {["acme/shared"] = "1.0.0"})
+            test.is_nil(problem); test.not_nil(resolved)
+            if resolved then
+                test.eq(#resolved.packages, 3)
+                test.eq(resolved.packages[2].component, "acme/shared")
+                test.eq(resolved.packages[2].version, "2.0.0")
+            end
+        end)
+        test.it("uses runtime stable-release preference and does not backtrack a parent to satisfy its children", function()
+            local artifacts = source({
+                ["acme/app@1.0.0"] = package("acme/app", "1.0.0", "a"),
+                ["acme/app@2.0.0-beta"] = package("acme/app", "2.0.0-beta", "b"),
+                ["acme/app@2.0.0"] = package("acme/app", "2.0.0", "c", {
+                    {id = "acme.app:child", kind = "ns.dependency", meta = {}, data = {component = "acme/child", version = "1.0.0"}},
+                }),
+            })
+            artifacts.versions = function(name: string, _: integer): ({string}?, boolean?, string?)
+                if name == "acme/app" then return {"2.0.0-beta", "1.0.0"}, false, nil end
+                return {}, false, nil
+            end
+            local resolved, problem = graph.resolve({{component = "acme/app", version = ">=1.0.0 || >=2.0.0-beta", parameters = {}}}, artifacts)
+            test.is_nil(problem); test.not_nil(resolved)
+            if resolved then test.eq(resolved.packages[1].version, "1.0.0") end
+            artifacts.versions = function(name: string, _: integer): ({string}?, boolean?, string?)
+                if name == "acme/app" then return {"2.0.0", "1.0.0"}, false, nil end
+                return {}, false, nil
+            end
+            -- Only the lower parent has a satisfiable closure. Runtime still
+            -- chooses 2.0.0 and reports its missing child rather than downgrading.
+            test.is_nil((graph.resolve({{component = "acme/app", version = "*", parameters = {}}}, artifacts)))
+        end)
         test.it("reads the native host manifest through the declared environment module", function()
             local identity, problem = host_identity.read_host()
             test.is_nil(problem)
@@ -256,6 +350,65 @@ local function define_tests()
             test.eq(problem, "Bee packs update through the bee/bee deployment root")
         end)
 
+        test.it("creates the first standalone selection instead of updating an absent entry", function()
+            local installed = state({}, {{name = "bee/bee", version = "0.1.0", source = "hub"}})
+            installed.resolution = {modules = {{name = "bee/bee", version = "0.1.0", source = "hub"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.1.0"}}}}
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = package("bee/bee", "0.2.0", "a", {
+                    binary_identity("github.com/wippyai/bee/native", "1.0.0"),
+                })}), baked_identity("1.0.0"))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                test.eq(prepared.plan.root_id, assert(plan.root_id("bee/bee")))
+                test.eq(prepared.plan.root_operation, "create")
+                test.eq(#prepared.installed.roots, 0)
+            end
+        end)
+
+        test.it("refuses a first standalone selection whose destination is occupied", function()
+            local installed = state({{id = assert(plan.root_id("bee/bee")), kind = "registry.entry",
+                registry = {owner = "", root = false}, data = {}}})
+            installed.resolution = {modules = {{name = "bee/bee", version = "0.1.0", source = "hub"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.1.0"}}}}
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = package("bee/bee", "0.2.0", "a", {
+                    binary_identity("github.com/wippyai/bee/native", "1.0.0"),
+                })}), baked_identity("1.0.0"))
+            test.is_nil(prepared)
+            test.eq(problem, "dependency destination is already occupied")
+        end)
+
+        test.it("updates the resident standalone selection while preserving parameters", function()
+            local selection = root("bee/bee", "0.2.0")
+            selection.data = {component = "bee/bee", version = "0.2.0", parameters = {{name = "setting", value = "kept"}}}
+            local installed = state({selection})
+            installed.resolution = {modules = {{name = "bee/bee", version = "0.2.0", source = "hub"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.1.0"}}}}
+            local prepared, problem = plan.prepare(installed, 13,
+                request({action = "update", component = "bee/bee", version = "0.3.0",
+                    parameters = {{name = "setting", value = "kept"}}}),
+                source({["bee/bee@0.3.0"] = package("bee/bee", "0.3.0", "a", {
+                    binary_identity("github.com/wippyai/bee/native", "1.0.0"),
+                    {id = "bee:setting", kind = "ns.requirement", meta = {},
+                        data = {targets = {{entry = "bee.env:binary_identity", path = ".data.setting"}}}},
+                }, {requirements = {{id = "bee:setting", has_default = false, has_selected = false,
+                    targets = {{entry = "bee.env:binary_identity", path = ".data.setting"}}}}, missing = {"bee:setting"}})}), baked_identity("1.0.0"))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                test.eq(prepared.plan.root_id, selection.id)
+                test.eq(prepared.plan.root_operation, "update")
+                test.eq(#prepared.installed.roots, 1)
+                test.eq(prepared.plan.request.parameters[1].value, "kept")
+            end
+            test.is_nil((plan.prepare(installed, 13,
+                request({action = "update", component = "bee/bee", version = "0.3.0"}), source({}), baked_identity("1.0.0"))))
+        end)
+
         test.it("updates the existing Bee deployment root and resolves its pack closure", function()
             local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
                 data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
@@ -281,6 +434,7 @@ local function define_tests()
             test.not_nil(prepared)
             if prepared then
                 test.eq(prepared.plan.root_id, "bee:deployment")
+                test.eq(prepared.plan.root_operation, "update")
                 local bee, application, third_party = module_for(prepared.plan.modules, "bee/bee"),
                     module_for(prepared.plan.modules, "bee/application"), module_for(prepared.plan.modules, "acme/app")
                 test.not_nil(bee); test.not_nil(application); test.not_nil(third_party)

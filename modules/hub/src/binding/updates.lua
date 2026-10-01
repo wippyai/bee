@@ -51,11 +51,16 @@ function M.read(): (Result?, string?)
         end
     end
 
-    local installed_root, root_id = "", nil
+    local installed_root = ""
+    if installed.deployment == "bee/bee" then
+        for _, item in ipairs(installed.modules) do
+            if item.component == installed.deployment then installed_root = item.version end
+        end
+    end
     local root_parameters: {unknown} = {}
     for _, root in ipairs(installed.roots) do
         if root.component == "bee/bee" and root.owner == "" then
-            installed_root, root_id = root.version, root.id
+            installed_root = root.version
             for _, parameter in ipairs(root.parameters) do
                 root_parameters[#root_parameters + 1] = {name = parameter.name, value = parameter.value}
             end
@@ -66,7 +71,7 @@ function M.read(): (Result?, string?)
         update_available = false, needs_new_binary = false, reason = ""}
     local order = available_root ~= "" and semver.compare(available_root, installed_root) or nil
     self_update.update_available = order ~= nil and order > 0
-    if root_id and order and order > 0 then
+    if installed_root ~= "" and order and order > 0 then
         local _, compatibility_error = publication.prepare({action = "update", component = "bee/bee",
             version = available_root, parameters = root_parameters, migration_policy = "none"})
         if compatibility_error and compatibility_error:find("needs a newer Bee binary", 1, true) then

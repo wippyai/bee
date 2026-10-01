@@ -39,6 +39,10 @@ their bounded bytes. Optional environment absence also carries its fixed
 destination and UTF-8 encoding so placement can validate the reply before
 omitting the variable. Missing required sources, permission failures, invalid
 JSON and other source failures remain errors.
+File materialization opens the admitted path directly and treats only a
+`NOT_FOUND` open error as absence. An existence probe cannot distinguish a
+missing file from an unreadable path; permission-denied open errors refuse an
+optional projection too.
 
 The host's `data.formats` map selects reviewed component-owned registry entries
 whose data declares an environment destination or a relative login layout.

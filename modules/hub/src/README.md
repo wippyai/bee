@@ -55,13 +55,22 @@ operations `publish_request` and `publish_apply` for person-approved Hub
 uploads (see the publication section of the Hub guide).
 Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
-artifacts. Exact dependency pins do not list release history; ranges page lazily.
+artifacts. The planner uses the runtime selection rule: preserve a live installed
+version when every incoming constraint permits it, otherwise choose the highest
+compatible stable release (or a compatible prerelease when no stable release
+matches). Changed selections retract their old dependencies and re-evaluate
+intersections; a parent is never downgraded to satisfy its children. Exact pins
+and compatible installed selections do not list release history; other ranges
+inspect the complete bounded catalog, whose pages are ordered by publication time.
 Standalone inventory identifies the deployment root from
 `snapshot:state().resolution.lock.root_module`, under the Hub execution scope's
 exact `registry.resolution.get` grant. The live `resolution.modules` supplies
 installed versions; `resolution.lock.modules` supplies the unchanged shipped
-pins shown separately in About. Before the first update, the implicit root uses
-`bee:deployment`; subsequent approved updates retain that explicit root.
+pins shown separately in About. Inventory roots contain only resident registry
+entries; the lock-selected deployment is reported separately. The first standalone
+update creates a history-owned `ns.dependency` at the normal `bee.hub.deps` ID.
+Later updates change that resident selection; an existing host root retains its ID
+and parameters. The plan digest covers the root ID and create/update operation.
 
 For self-update, the request updates the installed host `bee/bee` root and
 resolves its `bee/*` closure, preserving the root's typed parameters and every
@@ -139,3 +148,11 @@ selects install or update and the newest release, renders one approval body
 from a ready plan bound to the asking gateway binding, verifies a recorded
 request belongs to that binding and attempt, and maps an apply reply to the
 agent's status. The gateway performs the calls.
+
+`make hub-self-update-standalone-check` builds two local sealed deployments and
+serves their artifacts through a disposable fixture Hub. `BEE_RUNTIME` selects
+the proof executable without changing the repository runtime pin. The acceptance
+checks the installed older wildcard dependency, exact digest approval, completed
+receipt, unchanged runtime owner PID, live Settings About rendering, and restart
+with the same history/cache in an isolated network namespace. To reuse already
+built fixtures, set `BEE_DEPLOYMENT` and `BEE_SELF_UPDATE_TARGET_DEPLOYMENT`.

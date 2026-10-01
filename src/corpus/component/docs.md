@@ -21,5 +21,7 @@ one strict request (`list`, `search`, `read`), opens the one volume and answers
 within the bounds `bee.docs:protocol` declares; it holds no writer, no registry
 publication and no host path. The host fills `bee.docs:corpus_ref` through
 `target_corpus` and names `bee.security.docs:docs_policy` to grant only that reference and its
-selected volume. The launch policies admit `docs` beside
-`workspace` for every provider.
+selected volume. The normal provider window policies also serve saved headless
+sessions and admit `docs`, `overlay` (including the workspace guide),
+`components`, `capabilities` and `delivery` beside the session and thread tools.
+The hidden research batch policies keep their narrower session and thread surface.

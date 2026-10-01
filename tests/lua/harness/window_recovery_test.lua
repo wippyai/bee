@@ -1,6 +1,7 @@
 -- MIT. Agent application checkpoint data is bounded identity, and checkpoint
 -- acknowledgements are accepted only from the authenticated broker request.
 local test = require("test")
+local bounds = require("bounds")
 local recovery = require("recovery")
 local restore_view = require("restore_view")
 local json = require("json")
@@ -22,7 +23,7 @@ local function define_tests()
             test.eq(decoded.origin_request_id, SAVED.origin_request_id)
             test.eq(decoded.previous_attempt_id, SAVED.previous_attempt_id)
             test.eq(decoded.thread_id, SAVED.thread_id)
-            for key in pairs(decoded :: {[string]: unknown}) do
+            for key in pairs(assert(bounds.object(decoded))) do
                 test.is_true(key == "definition_ref" or key == "plan_digest" or key == "origin_request_id"
                     or key == "previous_attempt_id" or key == "thread_id", "unexpected checkpoint field")
             end
@@ -30,7 +31,7 @@ local function define_tests()
 
         test.it("preserves a selected profile revision and refuses partial selection", function()
             local selected: {[string]: unknown} = {}
-            for key, value in pairs(SAVED :: {[string]: unknown}) do selected[key] = value end
+            for key, value in pairs(assert(bounds.object(SAVED))) do selected[key] = value end
             selected.saved_profile_id = "profile:work"
             test.is_nil(recovery.decode(selected))
             selected.saved_profile_revision = 3
@@ -53,7 +54,7 @@ local function define_tests()
 
         test.it("refuses malformed or authority bearing checkpoint data", function()
             local malformed: {[string]: unknown} = {}
-            for key, value in pairs(SAVED :: {[string]: unknown}) do malformed[key] = value end
+            for key, value in pairs(assert(bounds.object(SAVED))) do malformed[key] = value end
             malformed.plan_digest = string.rep("A", 64)
             test.is_nil(recovery.decode(malformed))
             malformed.plan_digest = PLAN

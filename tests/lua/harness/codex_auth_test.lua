@@ -5,6 +5,7 @@
 -- admitted profile's launch is run as prepared by the driver. Without the
 -- executable the gate stays open and the capability says so.
 local test = require("test")
+local bounds = require("bounds")
 local exec = require("exec")
 local env = require("env")
 local time = require("time")
@@ -16,7 +17,7 @@ local function read_all(stream): string
     while true do
         local chunk: unknown = stream:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk :: string)
+        content = content .. (chunk)
     end
     return content
 end
@@ -98,7 +99,7 @@ local function define_tests()
             if not proc then error("exec codex: " .. tostring(proc_error)) end
             local stdout = proc:stdout_stream()
             local stderr = proc:stderr_stream()
-            local handle = proc :: {[string]: unknown}
+            local handle = assert(bounds.object(proc))
             if type(handle.close_stdin) ~= "function" then
                 proc:close(true)
                 stdout:close()
@@ -115,7 +116,7 @@ local function define_tests()
             local started, start_error = proc:start()
             if not started then error("start codex: " .. tostring(start_error)) end
             proc:write_stdin(specification.stdin or "say hi")
-            local closed, close_error = (handle.close_stdin :: (unknown) -> (unknown, unknown))(proc)
+            local closed, close_error = (handle.close_stdin)(proc)
             if not closed then error("close stdin: " .. tostring(close_error)) end
             local out = read_all(stdout)
             local err = read_all(stderr)

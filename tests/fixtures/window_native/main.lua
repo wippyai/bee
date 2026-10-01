@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- Real PTY acceptance for the process-local native window seam.
 local test = require("test")
 local process = require("process")
@@ -33,9 +34,9 @@ end
 local function prepare(attempt_id: string, required_cleanup: string?): string
     local reply, err = caller():call("bee.placement.native.binding:prepare", request(attempt_id, required_cleanup))
     if err then error(tostring(err)) end
-    local value = reply :: {[string]: unknown}
-    if value.ok ~= true then error(tostring((value.error :: {[string]: unknown}).message)) end
-    return tostring((value.value :: {[string]: unknown}).attempt_id)
+    local value = assert(bounds.object(reply))
+    if value.ok ~= true then error(tostring((assert(bounds.object(value.error))).message)) end
+    return tostring((assert(bounds.object(value.value))).attempt_id)
 end
 local function captured_identity(attempt_id: string): boolean
     local db = store.open()
@@ -43,10 +44,10 @@ local function captured_identity(attempt_id: string): boolean
     local row = db and store.row(db, attempt_id) or nil
     db:release()
     if not row then return false end
-    return type(row.pid) == "number" and (row.pid :: number) > 1
-        and type(row.pgid) == "number" and (row.pgid :: number) > 1
-        and type(row.start_ticks) == "number" and (row.start_ticks :: number) > 0
-        and type(row.boot_id) == "string" and #(row.boot_id :: string) > 0
+    return type(row.pid) == "number" and (row.pid) > 1
+        and type(row.pgid) == "number" and (row.pgid) > 1
+        and type(row.start_ticks) == "number" and (row.start_ticks) > 0
+        and type(row.boot_id) == "string" and #(row.boot_id) > 0
 end
 local function process_group_recorded(attempt_id: string): boolean
     local db = store.open()
@@ -80,8 +81,8 @@ local function wait_for(view: tty.Viewport, text: string, timeout_ms: integer): 
 end
 local function run()
     local activation = assert(registry.get("bee.harness:harness_activation"))
-    local data = activation.data :: {[string]: unknown}
-    local bindings = data.bindings :: {string}
+    local data = assert(bounds.object(activation.data))
+    local bindings = assert(bounds.ids(data.bindings))
     bindings[#bindings + 1] = "bee.window.native:binding"
     local changes = registry.snapshot():changes()
     changes:update(activation)
@@ -113,8 +114,8 @@ local function run()
                 process.send(owner_child, "bee.placement.control", {command = "stop", mode = "forced", grace_ms = 0})
                 time.sleep("100ms")
                 local reconciled, reconcile_error = caller():call("bee.placement.native.binding:reconcile", {attempt_id = prepared})
-                local reply = type(reconciled) == "table" and reconciled :: {[string]: unknown} or nil
-                local attempt = reply and type(reply.value) == "table" and reply.value :: {[string]: unknown} or nil
+                local reply = type(reconciled) == "table" and assert(bounds.object(reconciled)) or nil
+                local attempt = reply and type(reply.value) == "table" and assert(bounds.object(reply.value)) or nil
                 test.is_nil(reconcile_error)
                 test.eq(reply and reply.ok, true)
                 test.eq(attempt and attempt.execution_state, "running", "live terminal retains supervised running state")
@@ -126,7 +127,7 @@ local function run()
                 saw_io = data.sent == true and data.resized == true
                 if saw_io and wait_for(view, "WINDOW:hello from window", 3000) and wait_for(view, "10 30", 3000) then
                     local stopped, stop_error = caller():call("bee.placement.native.binding:stop", {attempt_id = prepared})
-                    local stop_reply = type(stopped) == "table" and stopped :: {[string]: unknown} or nil
+                    local stop_reply = type(stopped) == "table" and assert(bounds.object(stopped)) or nil
                     test.is_nil(stop_error)
                     test.eq(stop_reply and stop_reply.ok, true)
                     process.send(tostring(owner_child), "bee.window.native.close." .. parent, {})
@@ -146,20 +147,20 @@ local function run()
     test.ok(saw_finish, "terminal completion is finalized by finish")
     test.ok(saw_foreign, "foreign actor cannot open the attempt")
     local status_reply, status_call_error = caller():call("bee.placement.native.binding:status", {attempt_id = prepared})
-    local status_object = type(status_reply) == "table" and status_reply :: {[string]: unknown} or nil
-    local status_result = status_object and type(status_object.value) == "table" and status_object.value :: {[string]: unknown} or nil
-    local status_value = status_result and type(status_result.attempt) == "table" and status_result.attempt :: {[string]: unknown} or nil
+    local status_object = type(status_reply) == "table" and assert(bounds.object(status_reply)) or nil
+    local status_result = status_object and type(status_object.value) == "table" and assert(bounds.object(status_object.value)) or nil
+    local status_value = status_result and type(status_result.attempt) == "table" and assert(bounds.object(status_result.attempt)) or nil
     test.is_nil(status_call_error)
     test.eq(status_object and status_object.ok, true)
     test.eq(status_value and status_value.execution_state, "exited")
     test.eq(status_value and status_value.cleanup_state, "pending")
     test.not_nil(status_value and status_value.home_ref)
     local cleanup_reply, cleanup_call_error = caller():call("bee.placement.native.binding:cleanup", {attempt_id = prepared})
-    local cleanup_object = type(cleanup_reply) == "table" and cleanup_reply :: {[string]: unknown} or nil
-    local cleanup_error = cleanup_object and type(cleanup_object.error) == "table" and cleanup_object.error :: {[string]: unknown} or nil
+    local cleanup_object = type(cleanup_reply) == "table" and assert(bounds.object(cleanup_reply)) or nil
+    local cleanup_error = cleanup_object and type(cleanup_object.error) == "table" and assert(bounds.object(cleanup_object.error)) or nil
     test.is_nil(cleanup_call_error)
     test.eq(cleanup_object and cleanup_object.ok, true)
-    local cleaned = cleanup_object and type(cleanup_object.value) == "table" and cleanup_object.value :: {[string]: unknown} or nil
+    local cleaned = cleanup_object and type(cleanup_object.value) == "table" and assert(bounds.object(cleanup_object.value)) or nil
     test.eq(cleaned and cleaned.cleanup_state, "complete")
 
     -- A process-group attempt retains its home while live and can be cleaned
@@ -180,10 +181,10 @@ local function run()
                 group_open = data.ok == true and process_group_recorded(group_attempt)
             elseif data.phase == "io" and group_open then
                 local live_cleanup = caller():call("bee.placement.native.binding:cleanup", {attempt_id = group_attempt})
-                local live_object = type(live_cleanup) == "table" and live_cleanup :: {[string]: unknown} or nil
+                local live_object = type(live_cleanup) == "table" and assert(bounds.object(live_cleanup)) or nil
                 if live_object and live_object.ok == false then group_live_refused = true end
                 local stopped = caller():call("bee.placement.native.binding:stop", {attempt_id = group_attempt})
-                local stop_object = type(stopped) == "table" and stopped :: {[string]: unknown} or nil
+                local stop_object = type(stopped) == "table" and assert(bounds.object(stopped)) or nil
                 test.eq(stop_object and stop_object.ok, true)
                 time.sleep("100ms")
                 process.send(tostring(group_child), "bee.window.native.close." .. parent, {})
@@ -199,7 +200,7 @@ local function run()
     local group_cleanup_ok = false
     for _ = 1, 20 do
         local group_cleanup = caller():call("bee.placement.native.binding:cleanup", {attempt_id = group_attempt})
-        local group_object = type(group_cleanup) == "table" and group_cleanup :: {[string]: unknown} or nil
+        local group_object = type(group_cleanup) == "table" and assert(bounds.object(group_cleanup)) or nil
         if group_object and group_object.ok == true then
             group_cleanup_ok = true
             break
@@ -230,11 +231,11 @@ local function run()
     local lost_cleaned = false
     for _ = 1, 50 do
         local raw = caller():call("bee.placement.native.binding:reconcile", {attempt_id = lost_attempt})
-        local result = type(raw) == "table" and raw :: {[string]: unknown} or nil
-        local attempt = result and type(result.value) == "table" and result.value :: {[string]: unknown} or nil
+        local result = type(raw) == "table" and assert(bounds.object(raw)) or nil
+        local attempt = result and type(result.value) == "table" and assert(bounds.object(result.value)) or nil
         if attempt and attempt.execution_state == "exited" then
             local cleaned = caller():call("bee.placement.native.binding:cleanup", {attempt_id = lost_attempt})
-            local cleanup = type(cleaned) == "table" and cleaned :: {[string]: unknown} or nil
+            local cleanup = type(cleaned) == "table" and assert(bounds.object(cleaned)) or nil
             if cleanup and cleanup.ok == true then lost_cleaned = true; break end
         end
         time.sleep("100ms")
@@ -279,7 +280,7 @@ local function run()
         local message = selected.value
         local data = message:payload():data()
         if tostring(message:from()) == startup_child and type(data) == "table" and data.phase == "startup_stop" then
-            startup = data :: {[string]: unknown}
+            startup = assert(bounds.object(data))
         end
     end
     test.not_nil(startup, "startup-stop child reported")
@@ -293,8 +294,8 @@ local function run()
     local startup_settled = false
     for _ = 1, 50 do
         local raw = caller():call("bee.placement.native.binding:reconcile", {attempt_id = startup_attempt})
-        local result = type(raw) == "table" and raw :: {[string]: unknown} or nil
-        local attempt = result and type(result.value) == "table" and result.value :: {[string]: unknown} or nil
+        local result = type(raw) == "table" and assert(bounds.object(raw)) or nil
+        local attempt = result and type(result.value) == "table" and assert(bounds.object(result.value)) or nil
         if attempt and attempt.execution_state == "exited" then startup_settled = true; break end
         time.sleep("100ms")
     end

@@ -1,5 +1,7 @@
 -- MIT. Window launches declare where their provider looks for login evidence.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local codex = require("codex_launch")
 local claude = require("claude_launch")
 local agy = require("agy_launch")
@@ -26,19 +28,19 @@ local function define_tests()
                 local login = case.launch.login
                 if not login then error("missing login declaration") end
                 local entry = assert(registry.get("bee.driver." .. case.provider .. ":default_window"))
-                local definition = entry.data :: {[string]: unknown}
+                local definition = assert(bounds.object(entry.data))
                 local policy = assert(registry.get(tostring(definition.policy_ref)))
-                local policy_data = policy.data :: {allow_host_home: boolean}
+                local policy_data = policy.data
                 local private = case.provider == "grok"
                 if private then
-                    local credentials = definition.credentials :: {string}
+                    local credentials = principals.strings(definition.credentials)
                     test.eq(credentials[1], "grok_login")
                     test.is_true(policy_data.allow_host_home ~= true)
                 else test.eq(policy_data.allow_host_home, true) end
                 local home = assert(case.launch.provider_home)
                 test.eq(home.private, private)
                 local profiles = assert(registry.get("bee.driver." .. case.provider .. ":profiles"))
-                local profile_data = profiles.data :: {driver: {profiles: {{id: string, isolation_env: {private_home: boolean}}}}}
+                local profile_data = profiles.data
                 for _, profile in ipairs(profile_data.driver.profiles) do
                     if profile.id == "window" then test.eq(profile.isolation_env.private_home, private) end
                 end
@@ -108,10 +110,10 @@ local function define_tests()
         }
         for _, case in ipairs(cases) do
             test.it(case.provider .. " declares its exact private provider files", function()
-                local home = case.launch.provider_home :: {[string]: unknown}
+                local home = assert(bounds.object(case.launch.provider_home))
                 test.eq(home.provider, case.provider)
                 test.eq(home.private, true)
-                local files = home.files :: {{[string]: unknown}}
+                local files = principals.objects(home.files)
                 test.eq(#files, #case.paths)
                 for index, expected in ipairs(case.paths) do
                     if expected[1] == "" then test.is_nil(files[index].source_path)
@@ -124,8 +126,8 @@ local function define_tests()
             end)
         end
         test.it("places OpenCode XDG config and data roots inside the private home", function()
-            local home = opencode.specification(assert(opencode.decode({profile_id = "batch", brief = "fixture"}))).provider_home :: {[string]: unknown}
-            local variables = home.extra_variables :: {{[string]: unknown}}
+            local home = assert(bounds.object(opencode.specification(assert(opencode.decode({profile_id = "batch", brief = "fixture"}))).provider_home))
+            local variables = principals.objects(home.extra_variables)
             test.eq(#variables, 2)
             test.eq(variables[1].variable, "XDG_CONFIG_HOME")
             test.eq(variables[1].directory, ".config")

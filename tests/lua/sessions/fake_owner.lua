@@ -1,5 +1,9 @@
 -- MIT. A stateless bee.sessions owner: replies follow the request, and a ref's
 -- last segment selects the observation the owner reports for it.
+local principals = require("principals")
+local bounds = require("bounds")
+local sessions = require("sessions")
+local protocol = require("protocol")
 local M = {}
 local STAMP = "2026-09-29T10:00:00.000Z"
 type Reply = {[string]: unknown}
@@ -11,7 +15,7 @@ end
 local function tail(ref: unknown): string return tostring(ref):match("[^:]+$") or "" end
 local function segment(key: unknown): string return (tostring(key):gsub("[^%w]", "_")) end
 local function incarnation(session: unknown): integer return math.floor(tonumber(tostring(session):match("(%d)$")) or 1) end
-local function object(value: unknown): {[string]: unknown} return value :: {[string]: unknown} end
+local function object(value: unknown): {[string]: unknown} return assert(bounds.object(value)) end
 
 local function closed(request: unknown, allowed: {string}): string?
     local seen: {[string]: boolean} = {}
@@ -85,7 +89,7 @@ function M.send(request: unknown): Reply
     if (input.expected_incarnation or 1) ~= incarnation(input.session) then
         return refuse("STALE", "incarnation changed", input.operation_key)
     end
-    local word = type(input.input) == "string" and (input.input :: string):match("^%a+$") or "ready"
+    local word = type(input.input) == "string" and (input.input):match("^%a+$") or "ready"
     return ok({work = "bw:n:w:" .. word, session = input.session, operation = "bo:n:w:" .. segment(input.operation_key),
         committed_at = STAMP, sequence = 2, kind = "request", state = "queued", output_schema = input.output or "bee:Text@1",
         sender = {kind = "session", id = "bs:n:w:lead"}})
@@ -106,10 +110,10 @@ function M.join(request: unknown): Reply
     local children: {unknown} = {}
     local rank = {ready = 0, pending = 1, blocked = 2, uncertain = 3}
     local worst = "ready"
-    for index, work in ipairs(input.works :: {string}) do
+    for index, work in ipairs(principals.strings(input.works)) do
         local child = observation("work", work, tail(work))
         children[index] = child
-        if rank[child.tag :: string] > rank[worst] then worst = child.tag :: string end
+        if rank[child.tag] > rank[worst] then worst = child.tag end
     end
     local joined: {[string]: unknown} = {subject_kind = "join", subject = "bj:n:w:" .. segment(input.operation_key),
         cursor = "c1", tag = worst, children = children}
@@ -165,4 +169,86 @@ function M.catalog(request: unknown): Reply
 end
 
 function M.history(_: unknown): unknown return {ok = true, value = {items = {}}} end
+type ClientScript = {
+    catalog: ((sessions.CatalogOptions) -> (unknown, sessions.Fault?))?,
+    list: ((sessions.ListOptions) -> (unknown, sessions.Fault?))?,
+    open: ((sessions.OpenOptions) -> (sessions.Session?, sessions.Fault?))?,
+}
+type SessionScript = {
+    send: ((sessions.SendOptions) -> (sessions.Work?, sessions.Fault?))?,
+    get: (() -> (sessions.Session?, sessions.Fault?))?,
+}
+type WorkScript = {
+    await: (() -> (protocol.WorkAwait?, sessions.Fault?))?,
+    state: (() -> (protocol.WorkState?, sessions.Fault?))?,
+    cancel: ((sessions.CancelOptions) -> (sessions.Operation?, sessions.Fault?))?,
+}
+function M.fixture_snapshot(ref: string, title: string, activity: string, queued: integer, lifecycle: string?, evidence: protocol.ActivityEvidence?): protocol.SessionSnapshot
+    return assert(protocol.decode_snapshot({session = ref, title = title, revision = 1, incarnation = 1,
+        lifecycle = lifecycle or "active", activity = activity, activity_evidence = evidence, queue_count = queued,
+        execution = {state = "quiescent", evidence_at = STAMP, stale = false}, effective_limits = {},
+        continuity = {mode = "fresh"}, actions = {}}))
+end
+function M.fixture_client(script: ClientScript): sessions.Client
+    return {
+        catalog = function(_: sessions.Client, options: sessions.CatalogOptions?): (protocol.CatalogPage?, sessions.Fault?)
+            if not script.catalog then error("unexpected fixture catalog") end
+            local raw, fault = script.catalog(options or {})
+            if fault then return nil, fault end
+            return assert(protocol.decode_catalog_page(raw)), nil
+        end,
+        list = function(_: sessions.Client, options: sessions.ListOptions?): (protocol.ListPage?, sessions.Fault?)
+            if not script.list then error("unexpected fixture list") end
+            local raw, fault = script.list(options or {})
+            if fault then return nil, fault end
+            return assert(protocol.decode_list_page(raw)), nil
+        end,
+        open = function(_: sessions.Client, options: sessions.OpenOptions): (sessions.Session?, sessions.Fault?)
+            if not script.open then error("unexpected fixture open") end
+            return script.open(options)
+        end,
+        call = function(_: sessions.Client, _: sessions.CallOptions): (sessions.Call?, sessions.Fault?) error("unexpected fixture call") end,
+        send = function(_: sessions.Client, _: sessions.SendOptions): (sessions.Work?, sessions.Fault?) error("unexpected fixture send") end,
+        cancel = function(_: sessions.Client, _: sessions.CancelOptions): (sessions.Operation?, sessions.Fault?) error("unexpected fixture cancel") end,
+        close = function(_: sessions.Client, _: sessions.CloseOptions): (sessions.Operation?, sessions.Fault?) error("unexpected fixture close") end,
+        await = function(_: sessions.Client, _: sessions.ClientAwaitOptions): (sessions.AnyAwait?, sessions.Fault?) error("unexpected fixture await") end,
+        join = function(_: sessions.Client, _: sessions.JoinOptions): (sessions.JoinAwait?, sessions.Fault?) error("unexpected fixture join") end,
+        get = function(_: sessions.Client, _: string): (sessions.Session?, sessions.Fault?) error("unexpected fixture get") end,
+        work = function(_: sessions.Client, _: string): (sessions.Work?, sessions.Fault?) error("unexpected fixture work") end,
+        history = function(_: sessions.Client, _: sessions.HistoryOptions): (protocol.HistoryPage?, sessions.Fault?) error("unexpected fixture history") end,
+    }
+end
+function M.fixture_session(snapshot: protocol.SessionSnapshot, script: SessionScript): sessions.Session
+    return {snapshot = snapshot, incarnation = snapshot.incarnation,
+        ref = function(_: sessions.Session): string return snapshot.session end,
+        send = function(_: sessions.Session, options: sessions.SendOptions): (sessions.Work?, sessions.Fault?)
+            if not script.send then error("unexpected fixture send") end
+            return script.send(options)
+        end,
+        get = function(_: sessions.Session): (sessions.Session?, sessions.Fault?)
+            if not script.get then error("unexpected fixture get") end
+            return script.get()
+        end,
+        await = function(_: sessions.Session, _: sessions.Work, _: sessions.AwaitOptions?): (protocol.WorkAwait?, sessions.Fault?) error("unexpected fixture session await") end,
+        close = function(_: sessions.Session, _: sessions.CloseOptions): (sessions.Operation?, sessions.Fault?) error("unexpected fixture session close") end,
+        history = function(_: sessions.Session, _: {cursor: integer?, limit: integer?}?): (protocol.HistoryPage?, sessions.Fault?) error("unexpected fixture session history") end,
+    }
+end
+function M.fixture_work(ref: string, script: WorkScript): sessions.Work
+    return {session = "bs:n:w:s1", incarnation = 1,
+        ref = function(_: sessions.Work): string return ref end,
+        await = function(_: sessions.Work, _: sessions.AwaitOptions?): (protocol.WorkAwait?, sessions.Fault?)
+            if not script.await then error("unexpected fixture work await") end
+            return script.await()
+        end,
+        state = function(_: sessions.Work): (protocol.WorkState?, sessions.Fault?)
+            if not script.state then error("unexpected fixture work state") end
+            return script.state()
+        end,
+        cancel = function(_: sessions.Work, options: sessions.CancelOptions): (sessions.Operation?, sessions.Fault?)
+            if not script.cancel then error("unexpected fixture work cancel") end
+            return script.cancel(options)
+        end,
+    }
+end
 return M

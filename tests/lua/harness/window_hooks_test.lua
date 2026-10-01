@@ -1,6 +1,8 @@
 -- MIT. Window hook delivery, pure: one in-flight identity, exact commit
 -- replay after a lost reply, and settlement that never follows a hook.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local hooks = require("hooks")
 local checkpoint = require("checkpoint")
 type Object = {[string]: unknown}
@@ -10,9 +12,9 @@ local function decoder(binding_id: string, turn_id: string?, items: unknown): (h
     local records: {{[string]: unknown}} = {}
     local event_ids: {string} = {}
     local activity: string? = nil
-    for index, item in ipairs(items :: {unknown}) do
+    for index, item in ipairs(principals.items(items)) do
         if type(item) ~= "table" then return nil, "claimed hooks[" .. tostring(index) .. "] must be an object" end
-        local row = item :: Object
+        local row = assert(bounds.object(item))
         local event_id = tostring(row.event_id)
         event_ids[index] = event_id
         records[index] = {binding_id = binding_id, turn_id = turn_id, event_id = event_id, event = row.event}
@@ -38,7 +40,7 @@ local function open(extra: Object?): hooks.State
     }
     if extra then
         for key, value in pairs(extra) do
-            (config :: Object)[key] = value
+            (assert(bounds.object(config)))[key] = value
         end
     end
     return hooks.new(config)
@@ -78,7 +80,7 @@ local function config(extra: Object?): hooks.Config
         decoder = decoder,
     }
     if extra then
-        for key, field in pairs(extra) do (value :: Object)[key] = field end
+        for key, field in pairs(extra) do (assert(bounds.object(value)))[key] = field end
     end
     return value
 end
@@ -168,8 +170,8 @@ local function define_tests()
             test.eq(intent.request.carrier_epoch, 7)
             test.eq(intent.request.expected_revision, 0)
             test.eq(intent.request.idempotency_key, "launch:attempt-1:window:checkpoint")
-            test.eq(#(intent.request.records :: {unknown}), 0)
-            test.is_nil(intent.request.records and (intent.request.records :: {Object})[1] and (intent.request.records :: {Object})[1].turn_id)
+            test.eq(#(principals.items(intent.request.records)), 0)
+            test.is_nil(intent.request.records and (principals.objects(intent.request.records))[1] and (principals.objects(intent.request.records))[1].turn_id)
             local point, err = checkpoint.decode(intent.request.checkpoint)
             if not point then error(tostring(err)) end
             test.eq(point.binding_ref, "driver:binding")
@@ -302,7 +304,7 @@ local function define_tests()
             local key = tostring(commit.request.idempotency_key)
             test.neq(key, "new-key")
             test.neq(key, "launch:attempt-1:window:checkpoint")
-            local records = commit.request.records :: {{[string]: unknown}}
+            local records = principals.objects(commit.request.records)
             test.eq(#records, 1)
             test.eq(records[1].event_id, "e1")
             test.is_nil(records[1].turn_id)
@@ -348,7 +350,7 @@ local function define_tests()
             local ack = hooks.next_intent(state, "k5", 5)
             if not ack then error("ack") end
             test.eq(ack.target, hooks.ACK)
-            local sealed_ids = ack.request.event_ids :: {string}
+            local sealed_ids = principals.strings(ack.request.event_ids)
             test.eq(#sealed_ids, 1)
             test.eq(sealed_ids[1], "e1")
             test.is_true(hooks.begin(state, "ack", ack))
@@ -374,14 +376,14 @@ local function define_tests()
             local commit = hooks.next_intent(state, "k2", 0)
             if not commit then error("commit") end
             test.eq(commit.target, hooks.COMMIT)
-            test.eq(#(commit.request.records :: {unknown}), 2)
+            test.eq(#(principals.items(commit.request.records)), 2)
             test.is_true(hooks.begin(state, "commit", commit))
             test.is_true(hooks.apply(state, "commit", ok({checkpoint_revision = 2})))
             test.eq(state.work, "ack")
             local ack = hooks.next_intent(state, "k3", 0)
             if not ack then error("ack") end
             test.eq(ack.target, hooks.ACK)
-            local ids = ack.request.event_ids :: {string}
+            local ids = principals.strings(ack.request.event_ids)
             test.eq(#ids, 2)
             test.eq(ids[1], "e1")
             test.eq(ids[2], "e2")

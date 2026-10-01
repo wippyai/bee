@@ -57,7 +57,6 @@ type ResolverPolicy = {node_id: string, policy_digest: string, packages: Set,
     migration_barrier: boolean, auto_start: boolean, applications: {Object}?, workspace_id: string?, overlay_owner: string?,
     source_node: string?, source_workspace: string?, workspace_application: boolean?,
     base_policy_digest: string?}
-type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?)}
 type OwnerConfigResult = {ok: true, config: owner.Config} | {ok: false, error: string}
 
 local function failure(code: string, message: string): Result

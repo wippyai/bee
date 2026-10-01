@@ -4,6 +4,8 @@
 -- as observations, and recovery from real crash points without duplicate
 -- records or duplicate settlement.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -50,9 +52,9 @@ local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): {[string]: unknown}
     local result, err = funcs.new():with_actor(actor):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
+    local reply = result
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: {[string]: unknown}
+    return assert(bounds.object(reply.value))
 end
 local function fixture_bin(): string
     local bin, err = env.get("bee.harness.catalog:fixture_bin")
@@ -67,7 +69,7 @@ end
 local function install_policy()
     local entry = registry.get(POLICY)
     if not entry then error("fixture policy entry") end
-    local data = entry.data :: {[string]: unknown}
+    local data = assert(bounds.object(entry.data))
     data.executables = {claude = fixture_bin() .. "/claude"}
     local changes = registry.snapshot():changes()
     changes:update(registry_input(entry))
@@ -84,8 +86,9 @@ local function admit_root()
     if not configured then error("fixture resource mode: " .. tostring(mode_error)) end
     local entry = registry.get("bee.placement.native:placement_admitted_roots")
     if not entry then error("admitted roots entry") end
-    local data = entry.data :: {[string]: unknown}
-    local roots = data.roots :: {{[string]: unknown}}
+    local data = assert(bounds.object(entry.data))
+    local roots = principals.objects(data.roots)
+    data.roots = roots
     for _, root in ipairs(roots) do
         if root.root_ref == ROOT then return end
     end
@@ -97,7 +100,8 @@ local function admit_root()
 end
 local function thread(): string
     local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Carrier"})
-    return created.thread_id :: string
+    if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
+    return created.thread_id
 end
 local function request(thread_id: string, attempt_id: string, environment: {[string]: string}): {[string]: unknown}
     local placement = placement_fixture.resolve()
@@ -132,7 +136,7 @@ local function await_carriers(pids: {string}, label: string?, timeout_ms: intege
         if event.kind == process.event.EXIT then
             local result = event.result or {}
             local value: {[string]: unknown}? = nil
-            if type(result.value) == "table" then value = result.value :: {[string]: unknown} end
+            if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
             exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
         end
     end
@@ -141,7 +145,7 @@ local function await_carriers(pids: {string}, label: string?, timeout_ms: intege
     return outcomes
 end
 local function await_carrier(pid: string, label: string?, timeout_ms: integer?): Outcome
-    return await_carriers({pid}, label, timeout_ms)[pid] :: Outcome
+    return assert(await_carriers({pid}, label, timeout_ms)[pid])
 end
 local function run_carrier(entry: string, request_value: {[string]: unknown}, mode: string, crash_after: string?, batch: number?, pause_after: string?, slow_commit_ms: number?, timeout_ms: integer?): Outcome
     return await_carrier(spawn_carrier(entry, request_value, mode, crash_after, batch, pause_after, slow_commit_ms), nil, timeout_ms)
@@ -152,7 +156,7 @@ local function kinds(thread_id: string): ({string}, {{[string]: unknown}})
     local cursor = 0
     while true do
         local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
-        local current = page.records :: {{[string]: unknown}}
+        local current = principals.objects(page.records)
         for _, item in ipairs(current) do
             list[#list + 1] = tostring(item.kind)
             records[#records + 1] = item
@@ -175,10 +179,10 @@ local function observations(records: {{[string]: unknown}}, event_name: string?)
     local out: {{[string]: unknown}} = {}
     for _, item in ipairs(records) do
         if item.kind == "observation" then
-            local body = item.body :: {[string]: unknown}
+            local body = assert(bounds.object(item.body))
             if event_name == nil and item.source == "stream" then out[#out + 1] = item end
             if event_name ~= nil and item.source == "bee" then
-                local data = body.data :: {[string]: unknown}
+                local data = assert(bounds.object(body.data))
                 if data.event_name == event_name then out[#out + 1] = item end
             end
         end
@@ -194,10 +198,10 @@ local function define_tests()
             local attempt_id = fresh("attempt")
             local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl")}), "open", nil)
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
-            local settlement = outcome.value.settlement :: {[string]: unknown}
+            local settlement = assert(bounds.object(outcome.value.settlement))
             test.eq(settlement.outcome, "succeeded")
             test.eq(settlement.answer, "pong")
-            test.is_true((outcome.value.revision :: number) > 1)
+            test.is_true((outcome.value.revision) > 1)
             local list, records = kinds(thread_id)
             test.eq(list[1], "action.admitted")
             test.eq(list[2], "attempt.prepared")
@@ -220,7 +224,7 @@ local function define_tests()
             test.is_true(#streamed >= 3)
             local texts: {string} = {}
             for _, item in ipairs(streamed) do
-                local body = item.body :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
                 test.is_nil(body.raw_ref)
                 test.eq(item.attempt_id, attempt_id)
                 test.eq(item.turn_id, "turn:" .. attempt_id .. ":1")
@@ -233,21 +237,21 @@ local function define_tests()
             local stored = call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = attempt_id})
             test.eq(stored.attempt_state, "ended")
             test.eq(stored.checkpoint_revision, outcome.value.revision)
-            local point = stored.checkpoint :: {[string]: unknown}
-            test.eq((point.terminal :: {[string]: unknown}).answer, "pong")
-            local placement = outcome.value.placement :: {[string]: unknown}
+            local point = assert(bounds.object(stored.checkpoint))
+            test.eq((assert(bounds.object(point.terminal))).answer, "pong")
+            local placement = assert(bounds.object(outcome.value.placement))
             test.eq(placement.execution_state, "exited")
             test.eq(placement.cleanup_state, "complete")
         end)
         test.it("reports api errors as failed turns and cut streams as uncertain", function()
             local failed = run_carrier("bee.harness.carrier:process", request(thread(), fresh("attempt"), {BEE_FIXTURE_STREAM = stream("api_error.jsonl")}), "open", nil)
             if not failed.value then error("carrier failed: " .. tostring(failed.error)) end
-            local failure = failed.value.settlement :: {[string]: unknown}
+            local failure = assert(bounds.object(failed.value.settlement))
             test.eq(failure.outcome, "failed")
             local thread_id = thread()
             local cut = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1"}), "open", nil)
             if not cut.value then error("carrier failed: " .. tostring(cut.error)) end
-            local uncertain = cut.value.settlement :: {[string]: unknown}
+            local uncertain = assert(bounds.object(cut.value.settlement))
             test.eq(uncertain.outcome, "uncertain")
             local list = kinds(thread_id)
             test.eq(count(list, "receipt"), 1)
@@ -257,30 +261,30 @@ local function define_tests()
             local thread_id = thread()
             local cut = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_LATE_STDERR = "1"}), "open", nil)
             if not cut.value then error("carrier failed: " .. tostring(cut.error)) end
-            local settlement = cut.value.settlement :: {[string]: unknown}
+            local settlement = assert(bounds.object(cut.value.settlement))
             test.eq(settlement.outcome, "uncertain")
             test.is_true(settlement.exit_reconciled == true)
-            local placement = cut.value.placement :: {[string]: unknown}
-            test.eq((placement.exit :: {[string]: unknown}).code, 0)
+            local placement = assert(bounds.object(cut.value.placement))
+            test.eq((assert(bounds.object(placement.exit))).code, 0)
             local _, records = kinds(thread_id)
             local late = 0
             for _, item in ipairs(observations(records, nil)) do
-                local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
-                if data.type == "notice" and data.code == "stderr" and tostring((data.content :: {[string]: unknown}).text):find("late:stderr", 1, true) then late = late + 1 end
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
+                if data.type == "notice" and data.code == "stderr" and tostring((assert(bounds.object(data.content))).text):find("late:stderr", 1, true) then late = late + 1 end
             end
             test.eq(late, 1, "stderr written after stdout ended")
         end)
         local function stream_counts(records: {{[string]: unknown}}): (integer, integer, integer)
             local texts, ended, reads = 0, 0, 0
             for _, item in ipairs(observations(records, nil)) do
-                local body = item.body :: {[string]: unknown}
-                local data = body.data :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
+                local data = assert(bounds.object(body.data))
                 if data.type == "text" then texts = texts + 1 end
                 if data.type == "turn.signal" and data.phase == "ended" then ended = ended + 1 end
                 -- The fixture reports the line it read as a stdout frame
                 -- ahead of its stream, so the evidence precedes the result.
                 if data.type == "notice" and data.code == "informational" then
-                    local content = data.content :: {[string]: unknown}
+                    local content = assert(bounds.object(data.content))
                     if content.text == "read:ping" then reads = reads + 1 end
                 end
             end
@@ -289,9 +293,9 @@ local function define_tests()
         local function writes(records: {{[string]: unknown}}): {string}
             local phases: {string} = {}
             for _, item in ipairs(observations(records, "bee.carrier.write")) do
-                local body = item.body :: {[string]: unknown}
-                local data = body.data :: {[string]: unknown}
-                local payload = require("json").decode(tostring(data.payload_json)) :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
+                local data = assert(bounds.object(body.data))
+                local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
                 phases[#phases + 1] = tostring(payload.write_id) .. ":" .. tostring(payload.phase)
             end
             return phases
@@ -308,7 +312,7 @@ local function define_tests()
             test.is_nil(crashed.value)
             local resumed = run_carrier("bee.harness.catalog:carrier_faulted", split, "resume", nil)
             if not resumed.value then error("split resume failed: " .. tostring(resumed.error)) end
-            test.eq((resumed.value.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object(resumed.value.settlement))).answer, "pong")
             local _, split_records = kinds(split_thread)
             local split_texts, split_ended = stream_counts(split_records)
             test.eq(split_texts, base_texts)
@@ -320,7 +324,7 @@ local function define_tests()
             test.is_true(tostring(partial.error):find("crash after partial_commit", 1, true) ~= nil)
             local continued = run_carrier("bee.harness.catalog:carrier_faulted", batched, "resume", nil, 2)
             if not continued.value then error("partial resume failed: " .. tostring(continued.error)) end
-            test.eq((continued.value.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object(continued.value.settlement))).answer, "pong")
             local batch_list, batch_records = kinds(batch_thread)
             local batch_texts, batch_ended = stream_counts(batch_records)
             test.eq(batch_texts, base_texts)
@@ -334,11 +338,11 @@ local function define_tests()
             local thread_id = thread()
             local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "1"}), "open", nil)
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
-            test.eq((outcome.value.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object(outcome.value.settlement))).answer, "pong")
             local function framing_notices(records: {{[string]: unknown}}): integer
                 local framing = 0
                 for _, item in ipairs(observations(records, nil)) do
-                    local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
+                    local data = assert(bounds.object((assert(bounds.object(item.body))).data))
                     if data.type == "notice" and data.code == "framing" then framing = framing + 1 end
                 end
                 return framing
@@ -351,23 +355,23 @@ local function define_tests()
             test.is_nil(crashed.value)
             local resumed = run_carrier("bee.harness.catalog:carrier_faulted", held, "resume", nil)
             if not resumed.value then error("resume across a held frame failed: " .. tostring(resumed.error)) end
-            test.eq((resumed.value.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object(resumed.value.settlement))).answer, "pong")
             local _, resumed_records = kinds(resumed_thread)
             test.eq(framing_notices(resumed_records), 0)
-            local reported = funcs.call("bee.harness.carrier:capabilities", {}) :: {[string]: unknown}
-            test.is_true((reported.max_frame_bytes :: number) > 16384)
+            local reported = assert(bounds.object(funcs.call("bee.harness.carrier:capabilities", {})))
+            test.is_true((reported.max_frame_bytes) > 16384)
             test.eq(reported.takeover, "claim")
         end)
         test.it("omits an oversized status frame and continues to the terminal result", function()
             local thread_id = thread()
             local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_HUGE = "10400"}), "open", nil)
             if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
-            local settled = outcome.value.settlement :: {[string]: unknown}
+            local settled = assert(bounds.object(outcome.value.settlement))
             local _, records = kinds(thread_id)
             local framing = 0
             local codes: {string} = {}
             for _, item in ipairs(observations(records, nil)) do
-                local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
                 if data.type == "notice" and data.code == "oversized_frame" then framing = framing + 1 end
                 if data.type == "notice" then codes[#codes + 1] = tostring(data.code) end
             end
@@ -380,7 +384,7 @@ local function define_tests()
             process.send(clean_pid, "bee.carrier.input", {write_id = "w1", data = "ping\n"})
             local clean = await_carrier(clean_pid)
             if not clean.value then error("write run failed: " .. tostring(clean.error)) end
-            test.eq((clean.value.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object(clean.value.settlement))).answer, "pong")
             local _, clean_records = kinds(clean_thread)
             local _, _, clean_reads = stream_counts(clean_records)
             test.eq(clean_reads, 1, "clean child read evidence")
@@ -394,7 +398,7 @@ local function define_tests()
                 test.is_true(tostring(crashed.error):find("crash after " .. crash, 1, true) ~= nil)
                 local resumed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
                 if not resumed.value then error(crash .. ": resume failed: " .. tostring(resumed.error)) end
-                test.eq((resumed.value.settlement :: {[string]: unknown}).answer, "pong")
+                test.eq((assert(bounds.object(resumed.value.settlement))).answer, "pong")
                 local _, records = kinds(thread_id)
                 local _, _, reads = stream_counts(records)
                 test.eq(reads, 1, crash .. " child read evidence")
@@ -417,7 +421,7 @@ local function define_tests()
             local wanted = "runner installed generation " .. tostring(generation)
             for _ = 1, 600 do
                 local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
-                for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                for _, item in ipairs(principals.objects(page.evidence)) do
                     if item.kind == "attach.fenced" and item.detail == wanted then return end
                 end
                 time.sleep("50ms")
@@ -449,7 +453,7 @@ local function define_tests()
             local stale = await_carrier(old, "old carrier")
             test.is_nil(stale.value)
             if not tostring(stale.error):find("INVALID_STATE: attempt has ended", 1, true) then error("old carrier ended with: " .. tostring(stale.error)) end
-            test.eq(((replacement.value :: {[string]: unknown}).settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object((assert(bounds.object(replacement.value))).settlement))).answer, "pong")
             local list, records = kinds(thread_id)
             local _, _, reads = stream_counts(records)
             test.eq(reads, 1, "child read evidence")
@@ -466,7 +470,7 @@ local function define_tests()
             await_paused(paused, old, "committed")
             process.unlisten(paused)
             local replacement_pid = spawn_carrier("bee.harness.carrier:process", launch, "resume", nil)
-            await_fenced(launch.attempt_id :: string, 2)
+            await_fenced(assert(bounds.id(launch.attempt_id)), 2)
             process.send(old, "bee.carrier.continue", {go = true})
             process.send(old, "bee.carrier.input", {write_id = "late", data = "late\n"})
             local stale = await_carrier(old)
@@ -474,7 +478,7 @@ local function define_tests()
             if not tostring(stale.error):find("CONFLICT", 1, true) then error("old carrier ended with: " .. tostring(stale.error)) end
             local replacement = await_carrier(replacement_pid)
             if not replacement.value then error("replacement failed: " .. tostring(replacement.error)) end
-            test.eq((replacement.value.settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object(replacement.value.settlement))).answer, "pong")
             local list, records = kinds(thread_id)
             test.eq(count(list, "receipt"), 1)
             test.eq(count(list, "turn.end"), 1)
@@ -489,7 +493,7 @@ local function define_tests()
             await_paused(paused, old, "write_intended")
             process.unlisten(paused)
             local replacement_pid = spawn_carrier("bee.harness.carrier:process", launch, "resume", nil)
-            await_fenced(launch.attempt_id :: string, 2)
+            await_fenced(assert(bounds.id(launch.attempt_id)), 2)
             process.send(old, "bee.carrier.continue", {go = true})
             local both = await_carriers({old, replacement_pid}, "old carrier and replacement")
             local stale = both[old]
@@ -498,12 +502,12 @@ local function define_tests()
             local waited, replacement_or_error = true, both[replacement_pid]
             if not replacement_or_error.value then
                 local list, records = kinds(thread_id)
-                local stored = call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = launch.attempt_id :: string})
-                local point = stored.checkpoint :: {[string]: unknown}
-                error("replacement failed: " .. tostring(replacement_or_error.error) .. "; records " .. table.concat(list, ",") .. "; writes " .. table.concat(writes(records), ",") .. "; pending " .. tostring(#(point.pending_writes :: {unknown})) .. "; epoch " .. tostring(stored.carrier_epoch) .. "; placement " .. require("json").encode(call("bee.placement.native.binding:evidence", {attempt_id = launch.attempt_id})))
+                local stored = call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = launch.attempt_id})
+                local point = assert(bounds.object(stored.checkpoint))
+                error("replacement failed: " .. tostring(replacement_or_error.error) .. "; records " .. table.concat(list, ",") .. "; writes " .. table.concat(writes(records), ",") .. "; pending " .. tostring(#(principals.items(point.pending_writes))) .. "; epoch " .. tostring(stored.carrier_epoch) .. "; placement " .. require("json").encode(call("bee.placement.native.binding:evidence", {attempt_id = launch.attempt_id})))
             end
             local replacement = replacement_or_error
-            test.eq((replacement.value :: {[string]: unknown}).settlement and ((replacement.value :: {[string]: unknown}).settlement :: {[string]: unknown}).answer, "pong")
+            test.eq((assert(bounds.object(replacement.value))).settlement and (assert(bounds.object((assert(bounds.object(replacement.value))).settlement))).answer, "pong")
             local _, records = kinds(thread_id)
             local _, _, reads = stream_counts(records)
             test.eq(reads, 1, "replacement child read evidence")
@@ -518,17 +522,17 @@ local function define_tests()
             test.is_true(expected_deltas * #fixture_delta > 256 * 1024,
                 "the emitted frames exceed the placement output spool")
             local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected_deltas),
-                BEE_FIXTURE_FLOOD_PACE = "0.001", BEE_FIXTURE_FLOOD_EXIT = "1"}
+                BEE_FIXTURE_FLOOD_PACE = "0", BEE_FIXTURE_FLOOD_EXIT = "1"}
             local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
                 "open", nil, nil, nil, 40, 150000)
             if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end
-            local settlement = outcome.value.settlement :: {[string]: unknown}
+            local settlement = assert(bounds.object(outcome.value.settlement))
             test.eq(settlement.outcome, "succeeded", require("json").encode(settlement))
             test.eq(settlement.answer, "flood-complete")
             local _, records = kinds(thread_id)
             local deltas = 0
             for _, item in ipairs(observations(records, nil)) do
-                local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
                 if data.type == "text" then
                     test.eq(data.text, string.rep("x", 80), "every burst delta retains its full content")
                     deltas = deltas + 1
@@ -537,8 +541,8 @@ local function define_tests()
             test.eq(deltas, expected_deltas)
             local state, truncated = "", 0
             for _, item in ipairs(observations(records, "bee.carrier.output")) do
-                local data = (item.body :: {[string]: unknown}).data :: {[string]: unknown}
-                local payload = require("json").decode(tostring(data.payload_json)) :: {[string]: unknown}
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
+                local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
                 if payload.state == "truncated" then truncated = truncated + 1 end
                 if payload.stream == nil then state = tostring(payload.state) end
             end
@@ -549,7 +553,7 @@ local function define_tests()
         test.it("keeps the post-exit drain budget while a slow carrier holds the spool full", function()
             local policy = registry.get(POLICY)
             if not policy then error("fixture policy entry") end
-            local data = policy.data :: {[string]: unknown}
+            local data = assert(bounds.object(policy.data))
             local saved_drain = data.runner_drain_ms
             local saved_carrier_drain = data.drain_ms
             data.runner_drain_ms = 2000
@@ -584,14 +588,14 @@ local function define_tests()
             local restored, restore_error = widened:apply()
             if not restored then error("restore runner drain: " .. tostring(restore_error)) end
             if not outcome.value then error("slow drain run failed: " .. tostring(outcome.error)) end
-            local settlement = outcome.value.settlement :: {[string]: unknown}
+            local settlement = assert(bounds.object(outcome.value.settlement))
             test.eq(settlement.outcome, "succeeded")
             test.eq(settlement.answer, "flood-complete")
             local _, records = kinds(thread_id)
             local deltas = 0
             for _, item in ipairs(observations(records, nil)) do
-                local body = item.body :: {[string]: unknown}
-                local data = body.data :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
+                local data = assert(bounds.object(body.data))
                 if data.type == "text" then
                     test.eq(data.text, string.rep("x", 2000), "every burst delta retains its full content")
                     deltas = deltas + 1
@@ -600,8 +604,8 @@ local function define_tests()
             test.eq(deltas, expected)
             local truncated = 0
             for _, item in ipairs(observations(records, "bee.carrier.output")) do
-                local body = item.body :: {[string]: unknown}
-                local payload = require("json").decode(tostring((body.data :: {[string]: unknown}).payload_json)) :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
+                local payload = assert(bounds.object(require("json").decode(tostring((assert(bounds.object(body.data))).payload_json))))
                 if payload.stream ~= nil and payload.state == "truncated" then truncated = truncated + 1 end
             end
             test.eq(truncated, 0)
@@ -609,7 +613,7 @@ local function define_tests()
         test.it("still truncates a silent consumer at the drain deadline", function()
             local policy = registry.get(POLICY)
             if not policy then error("fixture policy entry") end
-            local data = policy.data :: {[string]: unknown}
+            local data = assert(bounds.object(policy.data))
             local saved_drain = data.runner_drain_ms
             local saved_retain = data.retain_ms
             data.runner_drain_ms = 1000
@@ -634,7 +638,7 @@ local function define_tests()
             local drained, finished = false, false
             for _ = 1, 300 do
                 local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
-                for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
+                for _, item in ipairs(principals.objects(page.evidence)) do
                     if item.kind == "output.drain_elapsed" then drained = true end
                     if item.kind == "runner.finished" then finished = true end
                 end
@@ -655,17 +659,17 @@ local function define_tests()
             local attempt_id = fresh("attempt")
             local outcome = run_carrier("bee.harness.carrier:process", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_ORPHAN = "5"}), "open", nil)
             if not outcome.value then error("orphan run failed: " .. tostring(outcome.error)) end
-            local settlement = outcome.value.settlement :: {[string]: unknown}
+            local settlement = assert(bounds.object(outcome.value.settlement))
             test.eq(settlement.outcome, "uncertain")
             local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
-            local attempt = status.attempt :: {[string]: unknown}
+            local attempt = assert(bounds.object(status.attempt))
             local _, records = kinds(thread_id)
             local output = ""
             local truncated = 0
             for _, item in ipairs(observations(records, "bee.carrier.output")) do
-                local body = item.body :: {[string]: unknown}
-                local data = body.data :: {[string]: unknown}
-                local payload = require("json").decode(tostring(data.payload_json)) :: {[string]: unknown}
+                local body = assert(bounds.object(item.body))
+                local data = assert(bounds.object(body.data))
+                local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
                 if payload.stream ~= nil then
                     if payload.state == "truncated" then truncated = truncated + 1 end
                 else
@@ -699,7 +703,7 @@ local function define_tests()
                 test.is_true(tostring(crashed.error):find("crash after " .. crash, 1, true) ~= nil)
                 local resumed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
                 if not resumed.value then error(crash .. ": resume failed: " .. tostring(resumed.error)) end
-                local settlement = resumed.value.settlement :: {[string]: unknown}
+                local settlement = assert(bounds.object(resumed.value.settlement))
                 test.eq(settlement.outcome, "succeeded")
                 test.eq(settlement.answer, "pong")
                 local list, records = kinds(thread_id)
@@ -708,8 +712,8 @@ local function define_tests()
                 test.eq(count(list, "receipt"), 1)
                 local answers = 0
                 for _, item in ipairs(observations(records, nil)) do
-                    local body = item.body :: {[string]: unknown}
-                    local data = body.data :: {[string]: unknown}
+                    local body = assert(bounds.object(item.body))
+                    local data = assert(bounds.object(body.data))
                     if data.type == "turn.signal" and data.phase == "ended" then answers = answers + 1 end
                 end
                 test.eq(answers, 1)
@@ -717,7 +721,7 @@ local function define_tests()
                 test.eq(stored.carrier_epoch, 2)
                 local stale = funcs.new():with_actor(actor):with_scope(scope()):call("bee.threads.carrier:commit", {thread_id = thread_id, idempotency_key = fresh("key"), attempt_id = attempt_id,
                     carrier_epoch = 1, expected_revision = stored.checkpoint_revision, checkpoint = stored.checkpoint, records = {}})
-                test.eq((stale :: {[string]: unknown}).ok, false)
+                test.eq((assert(bounds.object(stale))).ok, false)
             end
         end)
     end)

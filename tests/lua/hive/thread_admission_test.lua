@@ -7,6 +7,7 @@
 -- the next request; the payload selects neither actor nor caller node;
 -- and the supervisor's worker entry answers with the hive reply.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local registry = require("registry")
 local time = require("time")
@@ -33,7 +34,7 @@ local UNINVOKING = {"bee.security.threads:thread_observe_policy", "bee.security.
 local function install(mappings: {Object})
     local entry = registry.get(principals.ENTRY)
     if not entry then error("mappings entry") end
-    (entry.data :: Object).mappings = mappings
+    (assert(bounds.object(entry.data))).mappings = mappings
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local applied, err = changes:apply()
@@ -74,7 +75,7 @@ local function code(reply: types.Reply): string
 end
 local function value(reply: types.Reply): Object
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function send_input(thread_id: string, idempotency: string, text: string): Object
     local message = harness.message("m-" .. key():sub(1, 8), text)
@@ -198,12 +199,12 @@ local function define_tests()
             local request = forwarded("bee.threads.service:send", send_input(thread_id, "k-1", "through the worker"), BETA)
             local raw, err = funcs.call("bee.threads.hive:admit", request)
             if err then error("admit_thread: " .. tostring(err)) end
-            local reply = raw :: types.Reply
+            local reply = raw
             test.eq(reply.request_id, request.request_id)
             test.eq(value(reply).sequence, 1)
             local denied = forwarded("bee.threads.service:send", send_input(thread_id, "k-2", "unmapped"), subject("a9"))
             local raw_denied = funcs.call("bee.threads.hive:admit", denied)
-            test.eq(code(raw_denied :: types.Reply), "DENIED")
+            test.eq(code(raw_denied), "DENIED")
         end)
     end)
 end

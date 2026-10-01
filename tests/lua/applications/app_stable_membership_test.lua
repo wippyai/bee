@@ -3,6 +3,8 @@
 -- records on it. Another app in the same workspace is refused, and after
 -- the app is uninstalled its stable family is fenced out of every thread.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -35,12 +37,12 @@ local function registry_input(value: {[string]: unknown}): RegistryInput
 end
 
 local function unwrap(raw: unknown): {[string]: unknown}
-    local reply = raw :: {[string]: unknown}
+    local reply = assert(bounds.object(raw))
     if reply.ok ~= true then
-        local fault = (reply.error :: {[string]: unknown}?) or {}
+        local fault = (bounds.object(reply.error)) or {}
         error("call failed: " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
-    return reply.value :: {[string]: unknown}
+    return assert(bounds.object(reply.value))
 end
 
 local CREATE_POLICY = "bee.security.threads:thread_create_policy"
@@ -60,9 +62,9 @@ local function app_code(instance_id: string, target: string, request: unknown): 
     local executor = assert(funcs.new():with_actor(actor):with_scope(security.new_scope({policy})))
     local raw, call_error = executor:call(target, request)
     if call_error then error(target .. ": " .. tostring(call_error)) end
-    local reply = raw :: {[string]: unknown}
+    local reply = assert(bounds.object(raw))
     assert(reply.ok ~= true, target .. " unexpectedly succeeded")
-    return tostring((reply.error :: {[string]: unknown}).code)
+    return tostring((assert(bounds.object(reply.error))).code)
 end
 
 local function run_code(instance_id: string, thread_id: string?): string?
@@ -71,21 +73,21 @@ local function run_code(instance_id: string, thread_id: string?): string?
     local executor = assert(funcs.new():with_actor(actor):with_scope(security.new_scope({policy})))
     local raw, call_error = executor:call("bee.threads.service:get", {thread_id = thread_id or RUN_THREAD})
     if call_error then error("run thread: " .. tostring(call_error)) end
-    local reply = raw :: {[string]: unknown}
+    local reply = assert(bounds.object(raw))
     if reply.ok == true then return nil end
-    return tostring((reply.error :: {[string]: unknown}).code)
+    return tostring((assert(bounds.object(reply.error))).code)
 end
 
 local baseline_bindings: {{[string]: unknown}}? = nil
 
 local function set_admission_for(definition_id: string, admitted: boolean)
     local snap = registry.snapshot()
-    local record = assert(snap:get(ADMISSION_ID)) :: {[string]: unknown}
-    local data = (record.data :: {[string]: unknown}?) or {}
+    local record = assert(bounds.object(assert(snap:get(ADMISSION_ID))))
+    local data = (bounds.object(record.data)) or {}
     if not baseline_bindings then
         baseline_bindings = {}
-        for _, raw in ipairs((data.bindings :: {unknown}?) or {}) do
-            baseline_bindings[#baseline_bindings + 1] = raw :: {[string]: unknown}
+        for _, raw in ipairs((principals.items(data.bindings or {})) or {}) do
+            baseline_bindings[#baseline_bindings + 1] = assert(bounds.object(raw))
         end
     end
     local bindings = {}
@@ -100,7 +102,7 @@ end
 
 local function set_duplicate_admission()
     local snap = registry.snapshot()
-    local record = assert(snap:get(ADMISSION_ID)) :: {[string]: unknown}
+    local record = assert(bounds.object(assert(snap:get(ADMISSION_ID))))
     local bindings: {{[string]: unknown}} = {}
     for _, binding in ipairs(baseline_bindings or {}) do bindings[#bindings + 1] = binding end
     bindings[#bindings + 1] = bindings[1]
@@ -151,7 +153,7 @@ local function define_tests()
                     if tostring(message:from()) == broker then
                         local data: unknown = message:payload():data()
                         if type(data) == "table" then
-                            local reply = data :: {[string]: unknown}
+                            local reply = assert(bounds.object(data))
                             if reply.request_id == request_id and reply.op == "open" then
                                 assert(reply.error_code == "", tag .. " did not become ready: " .. tostring(reply.error))
                                 return tostring(reply.instance_id), tostring(reply.id)
@@ -173,7 +175,7 @@ local function define_tests()
                     if tostring(message:from()) == broker then
                         local data: unknown = message:payload():data()
                         if type(data) == "table" then
-                            local reply = data :: {[string]: unknown}
+                            local reply = assert(bounds.object(data))
                             if reply.request_id == request_id and reply.op == "close" then
                                 assert(reply.error_code == "", request_id .. " failed: " .. tostring(reply.error))
                                 return
@@ -201,7 +203,7 @@ local function define_tests()
             test.eq(steered.sequence, 1)
             local reread = as_app(second, "bee.threads.service:read_after",
                 {thread_id = RUN_THREAD, cursor = 0, limit = 8})
-            test.eq(#(reread.records :: {unknown}), 1)
+            test.eq(#(principals.items(reread.records)), 1)
             local other, _ = open(OTHER_DEFINITION, "stable-view-3")
             test.eq(run_code(other), "DENIED")
             test.eq(app_code(other, "bee.threads.service:get", {thread_id = RUN_THREAD}), "DENIED")
@@ -265,8 +267,8 @@ local function define_tests()
                     if tostring(message:from()) == restarted_broker then
                         local data: unknown = message:payload():data()
                         if type(data) == "table" then
-                            for _, raw in ipairs(((data :: {[string]: unknown}).items :: {unknown}?) or {}) do
-                                if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id == OTHER_DEFINITION then
+                            for _, raw in ipairs((principals.items((assert(bounds.object(data))).items or {})) or {}) do
+                                if type(raw) == "table" and (assert(bounds.object(raw))).definition_id == OTHER_DEFINITION then
                                     definition_returned = true
                                 end
                             end
@@ -315,8 +317,8 @@ local function define_tests()
                     assert(received.ok and received.channel == replies, request_id .. " reply timed out")
                     local data: unknown = received.value:payload():data()
                     if tostring(received.value:from()) == broker and type(data) == "table"
-                        and (data :: {[string]: unknown}).request_id == request_id then
-                        return data :: {[string]: unknown}
+                        and (assert(bounds.object(data))).request_id == request_id then
+                        return assert(bounds.object(data))
                     end
                 end
                 error("reply loop ended")
@@ -416,7 +418,7 @@ local function define_tests()
                         local event = received.value
                         if event.kind == process.event.EXIT and tostring(event.from) == broker then
                             local result: unknown = event.result
-                            local failure = type(result) == "table" and tostring((result :: {[string]: unknown}).error) or "unknown exit"
+                            local failure = type(result) == "table" and tostring((assert(bounds.object(result))).error) or "unknown exit"
                             error("broker exited during refused refresh: " .. failure)
                         end
                     elseif received.channel == deadline then
@@ -425,7 +427,7 @@ local function define_tests()
                         local message = received.value
                         if tostring(message:from()) == broker then
                             local data: unknown = message:payload():data()
-                            local items = type(data) == "table" and (data :: {[string]: unknown}).items or nil
+                            local items = type(data) == "table" and (assert(bounds.object(data))).items or nil
                             if type(items) == "table" and #items == 0 then refused = true end
                         end
                     end
@@ -442,7 +444,7 @@ local function define_tests()
                         local event = received.value
                         if event.kind == process.event.EXIT and tostring(event.from) == broker then
                             local result: unknown = event.result
-                            local failure = type(result) == "table" and tostring((result :: {[string]: unknown}).error) or "unknown exit"
+                            local failure = type(result) == "table" and tostring((assert(bounds.object(result))).error) or "unknown exit"
                             error("broker exited before catalog convergence: " .. failure)
                         end
                     elseif received.channel == deadline then
@@ -452,12 +454,12 @@ local function define_tests()
                         if tostring(message:from()) == broker then
                             local data: unknown = message:payload():data()
                             if type(data) == "table" then
-                                local items = ((data :: {[string]: unknown}).items :: {unknown}?) or {}
+                                local items = (principals.items((assert(bounds.object(data))).items or {})) or {}
                                 local has_definition = false
                                 local has_other = false
                                 for _, raw in ipairs(items) do
                                     if type(raw) == "table" then
-                                        local definition_id = (raw :: {[string]: unknown}).definition_id
+                                        local definition_id = (assert(bounds.object(raw))).definition_id
                                         if definition_id == DEFINITION then has_definition = true end
                                         if definition_id == OTHER_DEFINITION then has_other = true end
                                     end
@@ -496,8 +498,8 @@ local function define_tests()
                 end
             end
             local function has_definition(data: {[string]: unknown}, definition_id: string): boolean
-                for _, raw in ipairs((data.items :: {unknown}?) or {}) do
-                    if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id == definition_id then return true end
+                for _, raw in ipairs((principals.items(data.items or {})) or {}) do
+                    if type(raw) == "table" and (assert(bounds.object(raw))).definition_id == definition_id then return true end
                 end
                 return false
             end
@@ -513,14 +515,14 @@ local function define_tests()
                     assert(received.ok and received.channel == catalogs, "broker did not publish its initial catalog")
                     if tostring(received.value:from()) == broker then
                         local data: unknown = received.value:payload():data()
-                        if type(data) == "table" then initial = data :: {[string]: unknown} end
+                        if type(data) == "table" then initial = assert(bounds.object(data)) end
                     end
                 end
                 test.is_true(has_definition(initial, OTHER_DEFINITION), "initial catalog lacks the definition under test")
                 local retained_definition: string? = nil
-                for _, raw in ipairs((initial.items :: {unknown}?) or {}) do
-                    if type(raw) == "table" and (raw :: {[string]: unknown}).definition_id ~= OTHER_DEFINITION then
-                        retained_definition = tostring((raw :: {[string]: unknown}).definition_id)
+                for _, raw in ipairs((principals.items(initial.items or {})) or {}) do
+                    if type(raw) == "table" and (assert(bounds.object(raw))).definition_id ~= OTHER_DEFINITION then
+                        retained_definition = tostring((assert(bounds.object(raw))).definition_id)
                         break
                     end
                 end
@@ -536,15 +538,15 @@ local function define_tests()
                     if received.channel == catalogs and tostring(received.value:from()) == broker then
                         local data: unknown = received.value:payload():data()
                         if type(data) == "table" then
-                            local catalog_data = data :: {[string]: unknown}
+                            local catalog_data = assert(bounds.object(data))
                             test.is_false(has_definition(catalog_data, OTHER_DEFINITION))
                             test.is_false(has_definition(catalog_data, retained_definition))
                             refusal_catalog = true
                         end
                     elseif received.channel == replies and tostring(received.value:from()) == broker then
                         local data: unknown = received.value:payload():data()
-                        if type(data) == "table" and (data :: {[string]: unknown}).request_id == "catalog-refused-open" then
-                            test.eq((data :: {[string]: unknown}).error_code, "not_admitted")
+                        if type(data) == "table" and (assert(bounds.object(data))).request_id == "catalog-refused-open" then
+                            test.eq((assert(bounds.object(data))).error_code, "not_admitted")
                             refusal_reply = true
                         end
                     end
@@ -560,15 +562,15 @@ local function define_tests()
                     if received.channel == catalogs and tostring(received.value:from()) == broker then
                         local data: unknown = received.value:payload():data()
                         if type(data) == "table" then
-                            local catalog_data = data :: {[string]: unknown}
+                            local catalog_data = assert(bounds.object(data))
                             if has_definition(catalog_data, retained_definition) and not has_definition(catalog_data, OTHER_DEFINITION) then
                                 final_catalog = true
                             end
                         end
                     elseif received.channel == replies and tostring(received.value:from()) == broker then
                         local data: unknown = received.value:payload():data()
-                        if type(data) == "table" and (data :: {[string]: unknown}).request_id == "catalog-final-open" then
-                            test.eq((data :: {[string]: unknown}).error_code, "not_admitted")
+                        if type(data) == "table" and (assert(bounds.object(data))).request_id == "catalog-final-open" then
+                            test.eq((assert(bounds.object(data))).error_code, "not_admitted")
                             final_reply = true
                         end
                     end

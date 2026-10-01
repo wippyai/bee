@@ -175,8 +175,8 @@ local function define_tests()
             local reply = access.request(unbound, prepared, string.rep("a", 64),
                 {idempotency_key = "export", traits = {"research:export"}, reason = "Export the report"})
             test.eq(reply.ok, false)
-            test.eq((reply.error :: {code: string, message: string}).code, "DENIED")
-            test.eq((reply.error :: {code: string, message: string}).message, "this binding names no workspace to request MCP access in")
+            test.eq((reply.error).code, "DENIED")
+            test.eq((reply.error).message, "this binding names no workspace to request MCP access in")
         end)
         test.it("gates application_open behind the approved runtime trait", function()
             local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},

@@ -1,5 +1,6 @@
 -- MIT. Native placement acceptance for instruction builders.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -56,7 +57,7 @@ end
 local function call(actor: string, method: string, value: unknown): service.Reply
     local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    return reply :: service.Reply
+    return principals.reply(reply)
 end
 
 local function admit_root()
@@ -69,8 +70,9 @@ local function admit_root()
     if not mode_ok then error(tostring(mode_error)) end
     local entry = registry.get(ROOTS)
     if not entry then error("admitted roots entry") end
-    local data = entry.data :: {[string]: unknown}
-    local roots = data.roots :: {{[string]: unknown}}
+    local data = assert(bounds.object(entry.data))
+    local roots = principals.objects(data.roots)
+    data.roots = roots
     for _, root in ipairs(roots) do
         if root.root_ref == ROOT then return end
     end
@@ -86,7 +88,7 @@ local function clone_object(value: unknown): {[string]: unknown}
     if not encoded then error(tostring(encode_error or "encode registry state")) end
     local copied, decode_error = json.decode(encoded)
     if type(copied) ~= "table" then error(tostring(decode_error or "decode registry state")) end
-    return copied :: {[string]: unknown}
+    return assert(bounds.object(copied))
 end
 
 local function registry_state(): RegistryState
@@ -120,8 +122,8 @@ end
 local function set_activation(enabled: boolean)
     local entry = registry.get(ACTIVATION)
     if not entry then error("activation entry") end
-    local data = entry.data :: {[string]: unknown}
-    local current = data.bindings :: {unknown}
+    local data = assert(bounds.object(entry.data))
+    local current = principals.items(data.bindings)
     local bindings: {string} = {}
     for _, item in ipairs(current) do
         local binding = tostring(item)
@@ -143,7 +145,7 @@ end
 local function measure_policy_digest(policy_ref: string): string
     local policy_entry = registry.get(policy_ref)
     if not policy_entry then error("policy entry not found: " .. policy_ref) end
-    local data = policy_entry.data :: {[string]: unknown}
+    local data = assert(bounds.object(policy_entry.data))
     local provider = registry.get(PROVIDER)
     if not provider then error("provider entry") end
     local request_input = {
@@ -200,7 +202,7 @@ local function shell(command: string): string
     while true do
         local chunk: unknown = stdout:read(4096)
         if type(chunk) ~= "string" or chunk == "" then break end
-        output = output .. (chunk :: string)
+        output = output .. (chunk)
     end
     proc:wait()
     stdout:close()
@@ -216,11 +218,11 @@ local function wait_for_exit(attempt_id: string)
     local deadline = time.now():unix_nano() + 5000 * 1000000
     while time.now():unix_nano() < deadline do
         local status = call(OWNER, "status", {attempt_id = attempt_id})
-        if status.ok and type(status.value) == "table" and (status.value :: {[string]: unknown}).attempt ~= nil then
-            local attempt = (status.value :: {[string]: unknown}).attempt :: {[string]: unknown}
+        if status.ok and type(status.value) == "table" and (assert(bounds.object(status.value))).attempt ~= nil then
+            local attempt = assert(bounds.object((assert(bounds.object(status.value))).attempt))
             if attempt.execution_state == "exited" then
                 local exit = attempt.exit
-                if type(exit) ~= "table" or (exit :: {[string]: unknown}).code ~= 0 then error("child exited unsuccessfully") end
+                if type(exit) ~= "table" or (assert(bounds.object(exit))).code ~= 0 then error("child exited unsuccessfully") end
                 return
             end
         end
@@ -232,8 +234,8 @@ end
 local function cleanup_attempt(attempt_id: string)
     local status = call(OWNER, "status", {attempt_id = attempt_id})
     if status.ok and type(status.value) == "table" then
-        local attempt = (status.value :: {[string]: unknown}).attempt
-        if type(attempt) == "table" and (attempt :: {[string]: unknown}).execution_state ~= "exited" then
+        local attempt = (assert(bounds.object(status.value))).attempt
+        if type(attempt) == "table" and (assert(bounds.object(attempt))).execution_state ~= "exited" then
             call(OWNER, "stop", {attempt_id = attempt_id, mode = "forced"})
         end
     end
@@ -241,8 +243,8 @@ local function cleanup_attempt(attempt_id: string)
     while time.now():unix_nano() < deadline do
         local current = call(OWNER, "status", {attempt_id = attempt_id})
         if current.ok and type(current.value) == "table" then
-            local attempt = (current.value :: {[string]: unknown}).attempt
-            if type(attempt) == "table" and (attempt :: {[string]: unknown}).execution_state == "exited" then break end
+            local attempt = (assert(bounds.object(current.value))).attempt
+            if type(attempt) == "table" and (assert(bounds.object(attempt))).execution_state == "exited" then break end
         end
         time.sleep("50ms")
     end
@@ -263,17 +265,18 @@ local function define_tests()
                 test.is_true(prepared_reply.ok)
                 local prepared_value = prepared_reply.value
                 if type(prepared_value) ~= "table" then error("prepare did not return an attempt") end
-                local prepared = prepared_value :: {[string]: unknown}
-                prepared_attempt_id = prepared.attempt_id :: string
+                local prepared = assert(bounds.object(prepared_value))
+                prepared_attempt_id = prepared.attempt_id
                 test.eq(prepared.execution_state, "intended")
 
                 -- Start child attempt
                 local started_reply = call(OWNER, "start", {attempt_id = prepared_attempt_id})
                 test.is_true(started_reply.ok)
-                local started = started_reply.value :: {[string]: unknown}
+                local started = assert(bounds.object(started_reply.value))
                 test.eq(started.execution_state, "running")
 
                 -- Inspect generated instructions file in child home
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
                 local key, key_error = homes.attempt_key(OWNER, prepared_attempt_id)
                 if not key then error(tostring(key_error or "attempt home key")) end
                 local path, path_error = homes.os_path("/attempts/" .. key .. "/home/.fixture-agent/instructions.txt")
@@ -285,6 +288,7 @@ local function define_tests()
                 test.is_true(content:find("sentinel=placement-sentinel-4e5f6a", 1, true) ~= nil)
                 test.is_true(content:find("tag=integration", 1, true) ~= nil)
 
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
                 wait_for_exit(prepared_attempt_id)
                 local cleaned = call(OWNER, "cleanup", {attempt_id = prepared_attempt_id})
                 test.is_true(cleaned.ok)
@@ -303,11 +307,12 @@ local function define_tests()
                 test.is_true(prepared_reply.ok)
                 local prepared_value = prepared_reply.value
                 if type(prepared_value) ~= "table" then error("prepare did not return an attempt") end
-                local prepared = prepared_value :: {[string]: unknown}
-                prepared_attempt_id = prepared.attempt_id :: string
+                local prepared = assert(bounds.object(prepared_value))
+                prepared_attempt_id = prepared.attempt_id
 
                 local db = store.open()
                 if not db then error("open placement store for frozen delivery") end
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
                 local initial_row, initial_row_error = store.row(db, prepared_attempt_id)
                 if not initial_row then db:release(); error(tostring(initial_row_error or "read committed attempt")) end
                 local initial_request, initial_request_error = store.request(initial_row)
@@ -332,11 +337,12 @@ local function define_tests()
                 -- Identical prepare replays without calling the replaced builder.
                 local replay_reply = call(OWNER, "prepare", request)
                 test.is_true(replay_reply.ok)
-                local replayed = replay_reply.value :: {[string]: unknown}
+                local replayed = assert(bounds.object(replay_reply.value))
                 test.eq(replayed.attempt_id, prepared.attempt_id)
 
                 local replay_db = store.open()
                 if not replay_db then error("open placement store after replay") end
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
                 local replay_row, replay_row_error = store.row(replay_db, prepared_attempt_id)
                 if not replay_row then replay_db:release(); error(tostring(replay_row_error or "read replayed attempt")) end
                 local replay_request, replay_request_error = store.request(replay_row)
@@ -346,6 +352,7 @@ local function define_tests()
                 if not replay_delivery then error(tostring(replay_delivery_error or "encode replayed delivery")) end
                 test.eq(replay_delivery, initial_delivery)
 
+                if type(prepared_attempt_id) ~= "string" then error("invalid fixture prepared_attempt_id") end
                 cleanup_attempt(prepared_attempt_id)
                 prepared_attempt_id = nil
             end)
@@ -383,7 +390,8 @@ local function define_tests()
                 -- Verify no attempt was recorded in store
                 local db, db_error = store.open()
                 if not db then error(tostring(db_error or "open placement store")) end
-                local recorded = store.attempt(db, request.attempt_id :: string)
+                if type(request.attempt_id) ~= "string" then error("invalid fixture request.attempt_id") end
+                local recorded = store.attempt(db, request.attempt_id)
                 db:release()
                 test.is_nil(recorded)
 
@@ -401,7 +409,8 @@ local function define_tests()
                 test.eq(denied_reply.error and denied_reply.error.code, "DENIED")
 
                 local db2 = assert(store.open())
-                local recorded2 = store.attempt(db2, no_digest_req.attempt_id :: string)
+                if type(no_digest_req.attempt_id) ~= "string" then error("invalid fixture no_digest_req.attempt_id") end
+                local recorded2 = store.attempt(db2, no_digest_req.attempt_id)
                 db2:release()
                 test.is_nil(recorded2)
             end)

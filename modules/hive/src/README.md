@@ -108,9 +108,14 @@ then boots with the hive's secret, the verified path's IP and hive node's gossip
 port as a seed, the certified leaf and the hive's authorities beside its own.
 
 Both nodes admit each other through the host enrollment: the owner writes
-`bee.hive.supervisor:enrollment_nodes` as `{nodes, peers}` from its local client
+`bee.hive.host:enrollment` as `{nodes, peers}` from its local client
 keys and its pinned peers, and resolves the same keys for the runtime's
-`internode.peer_key_source`. Peers are configured and discovered, so their
+`internode.peer_key_source`. This entry belongs to the native owner's process-local
+registry overlay, created after the supervisor publishes readiness; it is not
+package content or durable registry history. A package update cannot replace
+live enrollment with an empty default. Client departure and pin retirement still
+update the same enrollment and revoke mounts through the existing supervisor.
+Peers are configured and discovered, so their
 supervisors complete the hello exchange and hold a Session; local clients reach
 the desktop bridge and the invite operations only. Exposure levels are
 unchanged: a peer reaches the operations the catalog exposes, as any configured

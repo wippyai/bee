@@ -3,6 +3,7 @@
 -- frames, tool frames become tool call/result pairs, an error frame fails
 -- the turn, and only the stream end reports terminally.
 local test = require("test")
+local bounds = require("bounds")
 local fs = require("fs")
 local stream_json = require("stream_json")
 local protocol = require("protocol")
@@ -52,17 +53,17 @@ local function define_tests()
             local result = run("opencode/run-json-1/plain.jsonl", 7)
             test.is_true(has(result.observations, "session.state"))
             test.is_true(has(result.observations, "text"))
-            local state = result.state :: {[string]: unknown}
+            local state = assert(bounds.object(result.state))
             test.is_nil(state.terminal)
             local reply = normalize.handle({state = result.state, index = 100, eof = true})
             if not reply.ok then error(tostring(reply.error)) end
-            local terminal = reply.terminal :: {[string]: unknown}
+            local terminal = assert(bounds.object(reply.terminal))
             test.eq(terminal.outcome, "succeeded")
             test.eq(terminal.answer, "pineapple")
             test.eq(terminal.resume_ref, state.session_id)
             test.not_nil(terminal.usage)
-            local usage = terminal.usage :: {[string]: unknown}
-            test.is_true((usage.input_tokens :: integer) > 0)
+            local usage = assert(bounds.object(terminal.usage))
+            test.is_true((usage.input_tokens) > 0)
         end)
         test.it("reports tool frames as call/result pairs across steps", function()
             local result = run("opencode/run-json-1/tool.jsonl", 11)
@@ -72,10 +73,10 @@ local function define_tests()
             for _, item in ipairs(result.observations) do
                 if item.type == "tool.call" then
                     calls = calls + 1
-                    test.eq((item.data :: {[string]: unknown}).tool_name, "read")
+                    test.eq((assert(bounds.object(item.data))).tool_name, "read")
                 elseif item.type == "tool.result" then
                     results = results + 1
-                    local data = item.data :: {[string]: unknown}
+                    local data = assert(bounds.object(item.data))
                     if data.outcome == "succeeded" then succeeded = true end
                 end
             end
@@ -85,7 +86,7 @@ local function define_tests()
             test.is_true(#names > 4)
             local reply = normalize.handle({state = result.state, index = 200, eof = true})
             if not reply.ok then error(tostring(reply.error)) end
-            local terminal = reply.terminal :: {[string]: unknown}
+            local terminal = assert(bounds.object(reply.terminal))
             test.eq(terminal.outcome, "succeeded")
             test.is_true(tostring(terminal.answer):find("name", 1, true) ~= nil)
         end)
@@ -100,7 +101,7 @@ local function define_tests()
             test.not_nil(state.error)
             local reply = normalize.handle({state = state, index = 1, eof = true})
             if not reply.ok then error(tostring(reply.error)) end
-            local terminal = reply.terminal :: {[string]: unknown}
+            local terminal = assert(bounds.object(reply.terminal))
             test.eq(terminal.outcome, "failed")
             test.is_nil(terminal.answer)
             test.not_nil(terminal.error)
@@ -109,7 +110,7 @@ local function define_tests()
             local state = protocol.new(false)
             local reply = normalize.handle({state = state, index = 0, eof = true})
             if not reply.ok then error(tostring(reply.error)) end
-            test.eq((reply.terminal :: {[string]: unknown}).outcome, "uncertain")
+            test.eq((assert(bounds.object(reply.terminal))).outcome, "uncertain")
             local done = protocol.new(false)
             local first = protocol.normalize(done, 0, {type = "step_start", sessionID = "ses_after"})
             test.is_true(#first.observations > 0)
@@ -126,7 +127,7 @@ local function define_tests()
             local step = protocol.normalize(state, 0, {type = "session_updated", sessionID = "ses_ext", part = {}})
             test.eq(#step.observations, 3)
             test.eq(step.observations[3].type, "extension")
-            local data = step.observations[3].data :: {[string]: unknown}
+            local data = assert(bounds.object(step.observations[3].data))
             test.eq(data.event_name, "opencode.session_updated")
             test.eq(data.event_revision, "opencode-run-json-1")
             test.is_nil(state.terminal)
@@ -136,13 +137,13 @@ local function define_tests()
             protocol.normalize(state, 0, {type = "step_start", sessionID = "ses_persist"})
             local reply = normalize.handle({state = state, index = 5, envelope = {type = "text", sessionID = "ses_persist", part = {type = "text", text = "hi"}}})
             if not reply.ok then error(tostring(reply.error)) end
-            test.eq(((reply.state :: {[string]: unknown}).session_id), "ses_persist")
+            test.eq(((assert(bounds.object(reply.state))).session_id), "ses_persist")
             local bad = normalize.handle({state = {started = "yes"}, index = 0, eof = true})
             test.is_false(bad.ok)
             test.not_nil(bad.error)
             local fresh = normalize.handle({index = 0, eof = true})
             test.is_true(fresh.ok)
-            test.eq((fresh.terminal :: {[string]: unknown}).outcome, "uncertain")
+            test.eq((assert(bounds.object(fresh.terminal))).outcome, "uncertain")
             local missing = normalize.handle({index = -1, eof = true})
             test.is_false(missing.ok)
             test.eq(missing.error, "index must be a nonnegative integer")

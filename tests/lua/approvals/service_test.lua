@@ -5,6 +5,8 @@
 -- projecting onto a thread, and the outbox over its own store surviving a
 -- crash between the thread commit and its acknowledgement.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local json = require("json")
 local funcs = require("funcs")
 local security = require("security")
@@ -63,17 +65,17 @@ local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "b
 local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
     local reply, err = client:call("bee.approvals.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    return reply :: service.Reply
+    return principals.replayed_reply(reply)
 end
 local function value(reply: service.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: {[string]: unknown}
+    return assert(bounds.object(reply.value))
 end
 local function code(reply: service.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return reply.error and reply.error.code or ""
 end
-local function await(future: any): service.Reply
+local function await(future: funcs.Future): service.Reply
     local channel = future:response()
     local payload, open = channel:receive()
     local result, err = future:result()
@@ -81,7 +83,7 @@ local function await(future: any): service.Reply
     if not open or not payload then error("async call closed without a reply") end
     local data: unknown = result:data()
     if type(data) ~= "table" then error("async call returned " .. type(data)) end
-    return data :: service.Reply
+    return principals.replayed_reply(data)
 end
 local function open_test_store(): sql.DB
     local db, err = persist.open({resource = TEST_STORE, ledger = service.LEDGER, migrations = migrations.all()})
@@ -90,17 +92,18 @@ local function open_test_store(): sql.DB
 end
 local function executed(result: {ok: boolean, code: string?, message: string?, value: unknown, replayed: boolean}): {[string]: unknown}
     if not result.ok then error(tostring(result.code) .. ": " .. tostring(result.message)) end
-    return result.value :: {[string]: unknown}
+    return assert(bounds.object(result.value))
 end
 local function fault_value(reply: service.Reply): {[string]: unknown}
     if reply.ok then error("expected a failure, got success") end
-    return reply.value :: {[string]: unknown}
+    return assert(bounds.object(reply.value))
 end
 local function install_policy()
     local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
-    local data = entry.data :: {[string]: unknown}
-    local policies = data.policies :: {{[string]: unknown}}
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
+    data.policies = policies
     for _, policy in ipairs(policies) do
         if policy.name == POLICY then return end
     end
@@ -113,8 +116,8 @@ local function install_policy()
 end
 local function replace_approvers(value: {unknown})
     local entry = assert(registry.get("bee:approver_policies"))
-    local data = entry.data :: {[string]: unknown}
-    local policies = data.policies :: {{[string]: unknown}}
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
     local selected: {[string]: unknown}? = nil
     for _, policy in ipairs(policies) do
         if policy.name == POLICY then selected = policy; break end
@@ -144,17 +147,17 @@ local function thread(): string
     local thread_id = "thread-" .. key()
     local reply, err = requester:call("bee.threads.service:create", {thread_id = thread_id, idempotency_key = key(), title = "Approvals"})
     if err then error("create thread: " .. tostring(err)) end
-    local typed = reply :: service.Reply
+    local typed = principals.replayed_reply(reply)
     if not typed.ok then error("create thread: " .. tostring(typed.error and typed.error.message)) end
     return thread_id
 end
 local function records_of(thread_id: string, kinds: {string}): {{[string]: unknown}}
     local reply, err = requester:call("bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = kinds}})
     if err then error("read thread: " .. tostring(err)) end
-    local typed = reply :: service.Reply
+    local typed = principals.replayed_reply(reply)
     if not typed.ok then error("read thread: " .. tostring(typed.error and typed.error.message)) end
-    local page = typed.value :: {[string]: unknown}
-    return page.records :: {{[string]: unknown}}
+    local page = assert(bounds.object(typed.value))
+    return principals.objects(page.records)
 end
 local function thread_records(thread_id: string): {{[string]: unknown}}
     return records_of(thread_id, {"approval.request", "approval.transition"})
@@ -170,8 +173,8 @@ local function await_records(thread_id: string, kinds: {string}, count: integer)
         local reply, err = requester:call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor,
             limit = 64, filter = {kinds = kinds}})
         if err then error("read thread: " .. tostring(err)) end
-        local page = value(reply :: service.Reply)
-        for _, item in ipairs(page.records :: {{[string]: unknown}}) do records[#records + 1] = item end
+        local page = value(principals.replayed_reply(reply))
+        for _, item in ipairs(principals.objects(page.records)) do records[#records + 1] = item end
         cursor = math.floor(tonumber(page.scanned_through) or cursor)
         if #records >= count then break end
         if page.has_more ~= true then
@@ -180,7 +183,7 @@ local function await_records(thread_id: string, kinds: {string}, count: integer)
             local watched, watch_error = requester:call("bee.threads.delivery:watch", {thread_id = thread_id,
                 after_sequence = cursor, wait_ms = remaining})
             if watch_error then error("watch thread: " .. tostring(watch_error)) end
-            value(watched :: service.Reply)
+            value(principals.replayed_reply(watched))
         end
     end
     return records
@@ -239,14 +242,14 @@ local function define_tests()
             test.eq(tail.reset_required, false)
             local empty = value(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
                 expected_scope_revision = first.scope_revision}))
-            test.eq(#(empty.events :: {unknown}), 0)
+            test.eq(#(principals.items(empty.events)), 0)
             value(call(alice, "decide", {approval_id = created.approval_id, expected_revision = created.revision,
                 proposal_digest = created.proposal_digest, decision = "approved"}))
             test.eq(code(call(alice, "feed_snapshot", {workspace_id = workspace, limit = 1,
                 after_key = first.next_key, expected_cursor = first.cursor, expected_scope_revision = first.scope_revision})), "RESET_REQUIRED")
             local changed = value(call(alice, "feed_read_after", {workspace_id = workspace, cursor = first.cursor,
                 expected_scope_revision = first.scope_revision}))
-            local events = changed.events :: {{[string]: unknown}}
+            local events = principals.objects(changed.events)
             test.eq(#events, 1)
             test.eq(events[1].event_type, "approval.changed")
             test.eq(events[1].projection_key, created.approval_id)
@@ -270,7 +273,7 @@ local function define_tests()
             local settled = value(call(alice, "decide_batch", {decisions = {
                 {approval_id = first.approval_id, expected_revision = first.revision, proposal_digest = first.proposal_digest, decision = "approved"},
                 {approval_id = second.approval_id, expected_revision = second.revision, proposal_digest = second.proposal_digest, decision = "denied"}}}))
-            local views = settled.decisions :: {{[string]: unknown}}
+            local views = principals.objects(settled.decisions)
             test.eq(#views, 2)
             test.eq(views[1].decision, "approved")
             test.eq(views[2].decision, "denied")
@@ -365,13 +368,13 @@ local function define_tests()
             local store = open_test_store()
             local before = assert(service.establish(store))
             local created = executed(service.execute(store, REQUESTER, "request", request_of("ws-" .. key()), nil, requester))
-            local approval_id, digest = created.approval_id :: string, created.proposal_digest :: string
+            local approval_id, digest = created.approval_id, created.proposal_digest
             executed(service.execute(store, ALICE, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = digest}, nil, nil))
             local after = assert(service.establish(store))
             test.eq(after, before + 1)
             local stale = service.execute(store, REQUESTER, "consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = before}, nil, nil)
             test.eq(stale.code, "REVALIDATE")
-            test.eq((stale.value :: {[string]: unknown}).current_incarnation, after)
+            test.eq((assert(bounds.object(stale.value))).current_incarnation, after)
             local unvalidated = service.execute(store, REQUESTER, "consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = after}, nil, nil)
             test.eq(unvalidated.code, "REVALIDATE")
             test.eq(service.execute(store, REQUESTER, "revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = before}, nil, nil).code, "REVALIDATE")
@@ -397,7 +400,7 @@ local function define_tests()
             test.eq(created.state, "pending")
             test.eq(created.revision, 1)
             test.eq(created.requester_id, REQUESTER)
-            test.eq(#(created.proposal_digest :: string), 64)
+            test.eq(#(created.proposal_digest), 64)
             test.eq(created.owner_incarnation ~= nil, true)
             local replayed = call(requester, "request", first_request)
             test.eq(value(replayed).approval_id, created.approval_id)
@@ -405,13 +408,13 @@ local function define_tests()
             first_request.prompt = {text = "changed"}
             test.eq(code(call(requester, "request", first_request)), "CONFLICT")
             local listed = value(call(requester, "list", {workspace_id = workspace}))
-            test.eq(#(listed.requests :: {unknown}), 1)
-            test.eq(#(value(call(other_requester, "list", {workspace_id = workspace})).requests :: {unknown}), 0)
+            test.eq(#(principals.items(listed.requests)), 1)
+            test.eq(#(principals.items(value(call(other_requester, "list", {workspace_id = workspace})).requests)), 0)
         end)
         test.it("lets two eligible approvers race to one decision and reports every other outcome honestly", function()
             local workspace = "ws-" .. key()
             local created = value(call(requester, "request", request_of(workspace)))
-            local approval_id, digest = created.approval_id :: string, created.proposal_digest :: string
+            local approval_id, digest = created.approval_id, created.proposal_digest
             test.eq(code(call(outsider, "read", {approval_id = approval_id})), "DENIED")
             test.eq(value(call(alice, "read", {approval_id = approval_id})).approval_id, approval_id)
             test.eq(value(call(manager, "read", {approval_id = approval_id})).approval_id, approval_id)
@@ -427,7 +430,7 @@ local function define_tests()
             local decided = value(call(alice, "read", {approval_id = approval_id}))
             test.eq(decided.state, "decided")
             test.eq(decided.revision, 2)
-            local winner, decision = decided.decider_id :: string, decided.decision :: string
+            local winner, decision = decided.decider_id, decided.decision
             local winner_client = alice
             local loser_client = bob
             local loser_decision = "denied"
@@ -441,13 +444,13 @@ local function define_tests()
             test.eq(fault_value(conflict).decision, decision)
             local withdrawn = value(call(requester, "withdraw", {approval_id = approval_id}))
             test.eq(withdrawn.withdrawn, false)
-            test.eq((withdrawn.request :: {[string]: unknown}).state, "decided")
+            test.eq((assert(bounds.object(withdrawn.request))).state, "decided")
         end)
         test.it("admits a host-selected application definition while retaining its private actor", function()
             local workspace = "ws-" .. key()
             local created = value(call(requester, "request", request_of(workspace, {
                 proposal = proposal({definition_id = "bee.approvals.inbox.app:app"})})))
-            local approval_id, digest = created.approval_id :: string, created.proposal_digest :: string
+            local approval_id, digest = created.approval_id, created.proposal_digest
             test.eq(code(call(other_app, "read", {approval_id = approval_id})), "DENIED")
             test.eq(value(call(inbox_app, "read", {approval_id = approval_id})).approval_id, approval_id)
             local decided = value(call(inbox_app, "decide", {approval_id = approval_id,
@@ -459,7 +462,7 @@ local function define_tests()
             local valid: {unknown} = {ALICE, BOB, "bee.test.carol", {definition_id = "bee.approvals.inbox.app:app"}}
             for _, invalid in ipairs({{{}}, {{definition_id = ""}},
                     {{definition_id = "bee.approvals.inbox.app:app", extra = true}}}) do
-                replace_approvers(invalid :: {unknown})
+                replace_approvers(principals.items(invalid))
                 local decoded, decode_error = resources.policies()
                 test.eq(decoded, nil)
                 test.eq(type(decode_error), "string")
@@ -482,7 +485,7 @@ local function define_tests()
                 if not applied then error("write approver policy fixture: " .. tostring(apply_error)) end
             end
             local function mutated(change: ({[string]: unknown}) -> ())
-                local data = json.decode(original) :: {[string]: unknown}
+                local data = assert(bounds.object(json.decode(original)))
                 change(data)
                 write(data)
                 local policies, decode_error = resources.policies()
@@ -493,16 +496,19 @@ local function define_tests()
                 data.unexpected = true
             end)
             mutated(function(data)
-                local policies = data.policies :: {{[string]: unknown}}
+                local policies = principals.objects(data.policies)
+                data.policies = policies
                 local selected: {[string]: unknown}? = nil
                 for _, policy in ipairs(policies) do
                     if policy.name == POLICY then selected = policy; break end
                 end
                 assert(selected)
-                selected.approvers = ({[1] = ALICE, [3] = BOB} :: {unknown})
+                local invalid: unknown = {[1] = ALICE, [3] = BOB}
+                selected.approvers = invalid
             end)
             mutated(function(data)
-                local policies = data.policies :: {{[string]: unknown}}
+                local policies = principals.objects(data.policies)
+                data.policies = policies
                 local selected: {[string]: unknown}? = nil
                 for _, policy in ipairs(policies) do
                     if policy.name == POLICY then selected = policy; break end
@@ -513,12 +519,12 @@ local function define_tests()
                 policies[#policies + 1] = duplicate
             end)
             mutated(function(data)
-                local policies = data.policies :: {{[string]: unknown}}
+                local policies = principals.objects(data.policies)
                 for _, policy in ipairs(policies) do
                     if policy.name == POLICY then policy.max_ttl_ms = 1.5; break end
                 end
             end)
-            write(json.decode(original) :: {[string]: unknown})
+            write(assert(bounds.object(json.decode(original))))
             local decoded, decode_error = resources.policies()
             test.eq(decode_error, nil)
             test.eq(decoded ~= nil, true)
@@ -534,7 +540,7 @@ local function define_tests()
             test.eq(code(call(other_requester, "withdraw", {approval_id = pending.approval_id})), "DENIED")
             local withdrawn = value(call(requester, "withdraw", {approval_id = pending.approval_id}))
             test.eq(withdrawn.withdrawn, true)
-            test.eq((withdrawn.request :: {[string]: unknown}).state, "withdrawn")
+            test.eq((assert(bounds.object(withdrawn.request))).state, "withdrawn")
             test.eq(code(call(bob, "decide", {approval_id = pending.approval_id, expected_revision = 1, decision = "approved", proposal_digest = pending.proposal_digest})), "INVALID_STATE")
             test.eq(code(call(outsider, "reconcile", {})), "DENIED")
             local store = open_test_store()
@@ -551,7 +557,7 @@ local function define_tests()
             value(call(bob, "decide", {approval_id = approved.approval_id, expected_revision = 1, decision = "approved", proposal_digest = approved.proposal_digest}))
             test.eq(code(call(other_requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = incarnation})), "DENIED")
             test.eq(code(call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = string.rep("1", 64), effect_key = "launch-1", owner_incarnation = incarnation})), "CONFLICT")
-            local stale = call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = (incarnation :: number) + 1})
+            local stale = call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = assert(bounds.integer(incarnation)) + 1})
             test.eq(code(stale), "REVALIDATE")
             test.eq(fault_value(stale).consumed_effect, nil)
             local consumed = value(call(requester, "consume", {approval_id = approved.approval_id, proposal_digest = approved.proposal_digest, effect_key = "launch-1", owner_incarnation = incarnation}))
@@ -569,16 +575,16 @@ local function define_tests()
             test.eq(code(call(outsider, "inbox", {workspace_id = workspace})), "DENIED")
             test.eq(code(call(alice, "inbox", {workspace_id = workspace, limit = 65})), "INVALID_ARGUMENT")
             local page = value(call(alice, "inbox", {workspace_id = workspace, limit = 1}))
-            local changes = page.changes :: {{[string]: unknown}}
+            local changes = principals.objects(page.changes)
             test.eq(#changes, 1)
             test.eq(changes[1].approval_id, created.approval_id)
             test.eq(changes[1].revision, 1)
             value(call(carol, "decide", {approval_id = created.approval_id, expected_revision = 1, decision = "denied", proposal_digest = created.proposal_digest}))
             local rest = value(call(bob, "inbox", {workspace_id = workspace, after_seq = page.next_seq}))
-            local later = rest.changes :: {{[string]: unknown}}
+            local later = principals.objects(rest.changes)
             test.eq(#later, 1)
             test.eq(later[1].revision, 2)
-            test.eq((later[1].request :: {[string]: unknown}).decision, "denied")
+            test.eq((assert(bounds.object(later[1].request))).decision, "denied")
         end)
         test.it("projects requests and decisions onto the thread through the worker exactly once", function()
             local workspace = "ws-" .. key()
@@ -589,35 +595,35 @@ local function define_tests()
             test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a1", "t9")}))), "INVALID_ARGUMENT")
             test.eq(code(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a9", "t1")}))), "INVALID_ARGUMENT")
             local created = value(call(requester, "request", request_of(workspace, {thread_id = thread_id, proposal = attempt_proposal("a1", "t1")})))
-            local binding = created.binding :: {[string]: unknown}
+            local binding = assert(bounds.object(created.binding))
             test.eq(binding.attempt_id, "t1")
             test.eq(binding.record_id ~= nil, true)
-            local approval_id = created.approval_id :: string
-            local rows = value(call(requester, "deliveries", {approval_id = approval_id})).deliveries :: {{[string]: unknown}}
+            local approval_id = created.approval_id
+            local rows = principals.objects(value(call(requester, "deliveries", {approval_id = approval_id})).deliveries)
             test.eq(#rows, 1)
             test.eq(rows[1].event_id, approval_id .. ":1")
             local records = until_records(thread_id, 1)
             test.eq(#records, 1)
             test.eq(records[1].kind, "approval.request")
             test.eq(records[1].attempt_id, "t1")
-            test.eq((records[1].body :: {[string]: unknown}).requester_id, REQUESTER)
+            test.eq((assert(bounds.object(records[1].body))).requester_id, REQUESTER)
             value(call(alice, "decide", {approval_id = approval_id, expected_revision = 1, decision = "approved", proposal_digest = created.proposal_digest, response = {text = "go"}}))
             records = until_records(thread_id, 2)
             if #records ~= 2 then
-                local pendings = value(call(requester, "deliveries", {approval_id = approval_id})).deliveries :: {{[string]: unknown}}
+                local pendings = principals.objects(value(call(requester, "deliveries", {approval_id = approval_id})).deliveries)
                 error("transition not delivered: " .. tostring(pendings[2] and pendings[2].last_error) .. " attempts " .. tostring(pendings[2] and pendings[2].attempts))
             end
-            local body = records[2].body :: {[string]: unknown}
+            local body = assert(bounds.object(records[2].body))
             test.eq(body.state, "approved")
             test.eq(body.decider_id, ALICE)
             test.eq(body.expected_revision, 1)
-            test.eq((body.response :: {[string]: unknown}).text, "go")
+            test.eq((assert(bounds.object(body.response))).text, "go")
             -- The transition record owes nobody anything, so the outcome is
             -- also addressed to the requester: the obligation it creates is
             -- what the delivery layer carries to the waiting agent.
             local notices = until_notices(thread_id, 1)
             test.eq(#notices, 1)
-            local acked = value(call(requester, "deliveries", {approval_id = approval_id})).deliveries :: {{[string]: unknown}}
+            local acked = principals.objects(value(call(requester, "deliveries", {approval_id = approval_id})).deliveries)
             test.eq(#acked, 3)
             test.eq(acked[2].acknowledged_at ~= nil, true)
             test.eq(acked[3].event_id, approval_id .. ":2:notice")
@@ -625,32 +631,32 @@ local function define_tests()
             test.eq(code(call(requester, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "DENIED")
             test.eq(code(call(manager, "deliveries", {approval_id = approval_id, redeliver = approval_id .. ":2"})), "INVALID_STATE")
             test.eq(#thread_records(thread_id), 2)
-            local notice = notices[1].body :: {[string]: unknown}
+            local notice = assert(bounds.object(notices[1].body))
             test.eq(notice.message_kind, "notification")
             test.eq(notice.sender_id, service.WORKER_NAME)
-            test.eq((notice.recipient_ids :: {string})[1], REQUESTER)
-            test.eq((notice.content :: {[string]: unknown}).text, "Approval " .. approval_id .. " is approved.")
+            test.eq((principals.strings(notice.recipient_ids))[1], REQUESTER)
+            test.eq((assert(bounds.object(notice.content))).text, "Approval " .. approval_id .. " is approved.")
             local claimed = thread_harness.value(launcher:call("claim", {thread_id = thread_id, idempotency_key = key(), consumer_id = "inbox", limit = 4}))
-            local pending = claimed.deliveries :: {{[string]: unknown}}
+            local pending = principals.objects(claimed.deliveries)
             test.eq(#pending, 1)
             test.eq(pending[1].message_id, notice.message_id)
             -- A refusal is announced on the same path: what leaves an agent
             -- waiting is the silence, not the answer.
             local refused = value(call(requester, "request", request_of(workspace, {thread_id = thread_id})))
-            local refused_id = refused.approval_id :: string
+            local refused_id = refused.approval_id
             value(call(alice, "decide", {approval_id = refused_id, expected_revision = 1, decision = "denied", proposal_digest = refused.proposal_digest}))
             local both = until_notices(thread_id, 2)
             test.eq(#both, 2)
-            local denial = both[2].body :: {[string]: unknown}
-            test.eq((denial.content :: {[string]: unknown}).text, "Approval " .. refused_id .. " is denied.")
+            local denial = assert(bounds.object(both[2].body))
+            test.eq((assert(bounds.object(denial.content))).text, "Approval " .. refused_id .. " is denied.")
         end)
         test.it("survives a crash between the thread commit and the outbox acknowledgement without a duplicate record", function()
             local workspace = "ws-" .. key()
             local thread_id = thread()
             local db = open_test_store()
             local created = executed(service.execute(db, REQUESTER, "request", request_of(workspace, {thread_id = thread_id}), nil, requester))
-            test.eq((created.binding :: {[string]: unknown}).role, "owner")
-            local approval_id = created.approval_id :: string
+            test.eq((assert(bounds.object(created.binding))).role, "owner")
+            local approval_id = created.approval_id
             local honest = outbox.thread_sender(owner)
             local sent = 0
             local report = assert(outbox.drain(db, "holder", function(delivery): (boolean, string?)

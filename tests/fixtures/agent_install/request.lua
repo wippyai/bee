@@ -1,4 +1,5 @@
 -- MIT. The agent's attempt asks the person to install one Hub package.
+local bounds = require("bounds")
 local logger = require("logger")
 local time = require("time")
 local agent = require("agent")
@@ -6,7 +7,7 @@ local agent = require("agent")
 local function run()
     local suffix = tostring(time.now():unix_nano())
     local thread = agent.call("bee.threads.service:create", {thread_id = "install-" .. suffix,
-        idempotency_key = "create-" .. suffix, title = "Agent installation"}).thread_id :: string
+        idempotency_key = "create-" .. suffix, title = "Agent installation"}).thread_id
     local attempt = "attempt-" .. suffix
     local action = "action-" .. suffix
     agent.call("bee.threads.service:admit_action", {thread_id = thread, action_id = action, idempotency_key = "admit-" .. suffix,
@@ -22,7 +23,7 @@ local function run()
         attempt_id = attempt, thread_id = thread, owner_incarnation = 1, carrier_epoch = 1, tools = tools,
         ttl_ms = 3600000, idempotency_key = "binding-" .. suffix, workspace_id = agent.WORKSPACE,
         surface = {tools = {}, traits = {}, base_tools = tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}})
-    local binding_id = (admitted.binding :: {[string]: unknown}).binding_id :: string
+    local binding_id = (assert(bounds.object(admitted.binding))).binding_id
     local requested = agent.call("bee.gateway.binding:install_request", {binding_id = binding_id, component = "bee/agent-tool"})
     logger:info("AGENT_INSTALL_REQUESTED", {binding_id = binding_id, request_id = requested.request_id,
         status = requested.status, version = requested.version, action = requested.action})

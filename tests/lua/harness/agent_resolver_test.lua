@@ -4,6 +4,8 @@
 -- before that, and its declared accepts_model capability alone decides
 -- whether a route may carry an agent's model.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local registry = require("registry")
 local agent_resolver = require("agent_resolver")
 local ACTIVATION = "bee.harness:harness_activation"
@@ -19,8 +21,8 @@ end
 local function with_activated(binding_ref: string, body: () -> ())
     local entry = assert(registry.get(ACTIVATION))
     local original = entry.data
-    local data = original :: {[string]: unknown}
-    local bindings = data.bindings :: {string}
+    local data = assert(bounds.object(original))
+    local bindings = principals.strings(data.bindings)
     local changed_bindings: {string} = {}
     for _, item in ipairs(bindings) do changed_bindings[#changed_bindings + 1] = item end
     changed_bindings[#changed_bindings + 1] = binding_ref

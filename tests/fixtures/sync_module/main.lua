@@ -1,4 +1,5 @@
 -- MIT. Real public function dispatch, explicit principals, and a durable second boot.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local logger = require("logger")
@@ -15,12 +16,12 @@ local function call(client: funcs.Executor, method: string, request: unknown): O
     local result, err = client:call("bee.node.binding:" .. method, request)
     assert(not err, method .. ": " .. tostring(err))
     assert(type(result) == "table", "node returned malformed reply")
-    return result :: Object
+    return assert(bounds.object(result))
 end
 local function value(result: Object): Object
     assert(result.ok == true, tostring(result.code) .. ": " .. tostring(result.message))
     assert(type(result.value) == "table", "node returned no value")
-    return result.value :: Object
+    return assert(bounds.object(result.value))
 end
 local function main()
     local writer = principal("node-metadata-user", true)
@@ -51,7 +52,7 @@ local function main()
         logger:info("NODE_SYNC_FIRST_BOOT_PASS")
     else
         assert(description.revision == 1, "restart changed revision")
-        local metadata = description.metadata :: Object
+        local metadata = assert(bounds.object(description.metadata))
         assert(metadata.display_name == "Build worker", "restart lost metadata")
         local replay = call(writer, "update_metadata", request)
         assert(replay.ok == true and replay.replayed == true, "restart lost retry receipt")
@@ -75,7 +76,7 @@ local function main()
         assert(conflict.ok == false and conflict.code == "CONFLICT", "stale appearance write accepted")
     else
         assert(defaults.revision == 1, "restart changed appearance revision")
-        local preferences = defaults.preferences :: Object
+        local preferences = assert(bounds.object(defaults.preferences))
         assert(preferences.theme == "classic" and preferences.background == "solid", "restart lost node defaults")
     end
     local replay_appearance = call(appearance_writer, "update_appearance", appearance_request)

@@ -420,7 +420,7 @@ local function configure_host(workspace_id: string, local_node: string)
 
     local policy_entry = assert(registry.get("bee:approver_policies"))
     local policy_data = object(policy_entry.data)
-    local policies = policy_data.policies :: {unknown}
+    local policies = assert(bounds.array(policy_data.policies))
     policies[#policies + 1] = {name = APPROVAL_POLICY,
         approvers = {"bee.app_journey.operator", {definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}
     policy_data.policies = policies
@@ -437,7 +437,7 @@ local function configure_host(workspace_id: string, local_node: string)
     if selected_data.resource_ref ~= "bee.env:gov_activation_profiles" then
         error("activation profile requirement did not retain the default selection")
     end
-    local retained = assert(registry.get(selected_data.resource_ref :: string))
+    local retained = assert(registry.get(selected_data.resource_ref))
     local retained_data = object(retained.data)
     if type(retained_data.profiles) ~= "table" or #retained_data.profiles ~= 1 then
         error("activation profile update did not retain its configured data")
@@ -491,7 +491,7 @@ local function main()
 
     local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
-    for _, raw in ipairs(available.versions :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(available.versions))) do
         local item = object(raw)
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
@@ -616,7 +616,7 @@ local function main()
     -- One decision authorizes one effect. The activation owner already
     -- consumed it; no second effect may claim the same decision.
     local second = reply_of("bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = proposal_digest,
-        owner_incarnation = math.floor(incarnation :: number), effect_key = RETRY_EFFECT})
+        owner_incarnation = math.floor(incarnation), effect_key = RETRY_EFFECT})
     if second.ok == true then error("a second effect consumed the same decision") end
     if fault_code(second) ~= "CONFLICT" then
         error("second consume refused with " .. fault_code(second) .. " instead of CONFLICT")

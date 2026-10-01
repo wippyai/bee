@@ -6,6 +6,7 @@
 -- acknowledges an allow and a correlated failed tool result acknowledges
 -- a deny, and the capture is consistent with a continuing exchange.
 local test = require("test")
+local bounds = require("bounds")
 local exec = require("exec")
 local env = require("env")
 local registry = require("registry")
@@ -32,7 +33,7 @@ local function read_file(path: string): string
     while true do
         local chunk: unknown = stdout:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk :: string)
+        content = content .. (chunk)
     end
     proc:wait()
     stdout:close()
@@ -42,7 +43,7 @@ end
 local function real_adapter(): adapter.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("adapter entry") end
-    local decoded, err = adapter.decode(ADAPTER, (entry.data :: Object).adapter)
+    local decoded, err = adapter.decode(ADAPTER, (assert(bounds.object(entry.data))).adapter)
     if not decoded then error(tostring(err)) end
     return decoded
 end
@@ -52,7 +53,7 @@ local function observations_of(content: string): {Object}
     local out: {Object} = {}
     for _, envelope in ipairs(stream_json.feed(decoder, content)) do
         local step = protocol.normalize(state, envelope.index, envelope.value)
-        for _, observation in ipairs(step.observations) do out[#out + 1] = observation :: Object end
+        for _, observation in ipairs(step.observations) do out[#out + 1] = assert(bounds.object(observation)) end
     end
     return out
 end
@@ -97,13 +98,13 @@ local function define_tests()
             test.eq(request.acknowledgment_id, "toolu_bee_1")
             test.neq(request.correlation_id, request.acknowledgment_id)
             test.eq(request.prompt, "leave a marker")
-            test.eq((request.input :: Object).command, "touch proof.txt")
+            test.eq((assert(bounds.object(request.input))).command, "touch proof.txt")
             local echo = 0
             for index = request_index + 1, #observations do
                 if adapter.acknowledged(pinned, request, observations[index]) then echo = index break end
             end
             test.is_true(echo > request_index)
-            test.eq((observations[echo].data :: Object).call_id, "toolu_bee_1")
+            test.eq((assert(bounds.object(observations[echo].data))).call_id, "toolu_bee_1")
             local consistent, err = adapter.transcript_consistent(pinned, observations, request_index)
             if not consistent then error(tostring(err)) end
             local denial = events.tool_result("probe", "toolu_bee_1", "failed", "decision denied", events.fault("tool_error", "decision denied", false))
@@ -112,14 +113,14 @@ local function define_tests()
             test.is_false(adapter.deny_acknowledged(pinned, request, other))
             test.is_false(adapter.deny_acknowledged(pinned, request, observations[echo]))
             local allow = assert(adapter.allow(pinned, request, nil))
-            local decoded = json.decode(allow) :: Object
+            local decoded = assert(bounds.object(json.decode(allow)))
             test.eq(decoded.type, "control_response")
-            local response = decoded.response :: Object
+            local response = assert(bounds.object(decoded.response))
             test.eq(response.subtype, "success")
             test.eq(response.request_id, request.correlation_id)
-            test.eq((response.response :: Object).behavior, "allow")
-            local deny = json.decode(assert(adapter.deny(pinned, request, "decision denied"))) :: Object
-            local denied = (deny.response :: Object).response :: Object
+            test.eq((assert(bounds.object(response.response))).behavior, "allow")
+            local deny = assert(bounds.object(json.decode(assert(adapter.deny(pinned, request, "decision denied")))))
+            local denied = assert(bounds.object((assert(bounds.object(deny.response))).response))
             test.eq(denied.behavior, "deny")
             test.eq(denied.message, "decision denied")
         end)

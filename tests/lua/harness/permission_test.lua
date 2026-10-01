@@ -6,6 +6,7 @@
 -- consistency, a host acceptance record names what changed, and a
 -- decision after settlement sends nothing.
 local test = require("test")
+local bounds = require("bounds")
 local json = require("json")
 local adapter = require("adapter")
 local acceptance = require("acceptance")
@@ -91,14 +92,14 @@ local function define_tests()
             test.eq(asked.correlation_id, "req-7")
             test.eq(asked.acknowledgment_id, "toolu-7")
             test.eq(asked.prompt, "leave a marker")
-            local allow = json.decode(assert(adapter.allow(decoded, asked, nil))) :: {[string]: unknown}
+            local allow = assert(bounds.object(json.decode(assert(adapter.allow(decoded, asked, nil)))))
             test.eq(allow.type, "control_response")
-            local response = allow.response :: {[string]: unknown}
+            local response = assert(bounds.object(allow.response))
             test.eq(response.subtype, "success")
             test.eq(response.request_id, "req-7")
-            test.eq((response.response :: {[string]: unknown}).behavior, "allow")
-            local deny = json.decode(assert(adapter.deny(decoded, asked, "decision denied"))) :: {[string]: unknown}
-            local inner = (deny.response :: {[string]: unknown}).response :: {[string]: unknown}
+            test.eq((assert(bounds.object(response.response))).behavior, "allow")
+            local deny = assert(bounds.object(json.decode(assert(adapter.deny(decoded, asked, "decision denied")))))
+            local inner = assert(bounds.object((assert(bounds.object(deny.response))).response))
             test.eq(inner.behavior, "deny")
             test.eq(inner.message, "decision denied")
             test.is_true(adapter.acknowledged(decoded, asked, events.tool_result("8:res", "toolu-7", "succeeded", "", nil)))
@@ -152,7 +153,7 @@ local function define_tests()
             test.eq(proposal.revision, string.rep("b", 64))
             test.eq(proposal.action_id, "a1")
             test.eq(proposal.input_digest, request.input_digest)
-            local payload = proposal.payload :: {[string]: unknown}
+            local payload = assert(bounds.object(proposal.payload))
             test.eq(payload.permission_request_id, "7:request")
             test.eq(payload.adapter_digest, decoded.digest)
             test.is_nil(payload.carrier_epoch)
@@ -176,12 +177,12 @@ local function define_tests()
             local request = request_of(decoded, request_event("7:request", "req-1", "Bash"))
             local allow = assert(adapter.allow(decoded, request, {command = "ls -la"}))
             test.eq(allow:sub(-1), "\n")
-            local allowed = json.decode(allow) :: {[string]: unknown}
+            local allowed = assert(bounds.object(json.decode(allow)))
             test.eq(allowed.type, "control_response")
             test.eq(allowed.request_id, "req-1")
             test.eq(allowed.behavior, "allow")
-            test.eq((allowed.updated_input :: {[string]: unknown}).command, "ls -la")
-            local denied = json.decode(assert(adapter.deny(decoded, request, "denied by the owner"))) :: {[string]: unknown}
+            test.eq((assert(bounds.object(allowed.updated_input))).command, "ls -la")
+            local denied = assert(bounds.object(json.decode(assert(adapter.deny(decoded, request, "denied by the owner")))))
             test.eq(denied.behavior, "deny")
             test.eq(denied.message, "denied by the owner")
             test.is_nil(denied.updated_input)

@@ -1,5 +1,7 @@
 -- MIT. Verified workspace subroots and private-path exclusion for file grants.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local files = require("capability_files")
 
 local OWNER = "bee.gov.apps:workspace-1.notes"
@@ -25,26 +27,26 @@ local function define_tests()
         test.it("derives a host-created read-only volume for reads", function()
             local volume = assert(files.volume(OWNER, CLASSIC, "notes", false))
             test.eq(volume.kind, "fs.directory")
-            local config = volume.data :: {[string]: unknown}
+            local config = assert(bounds.object(volume.data))
             test.eq(config.directory, "notes")
             test.eq(config.base, "project")
             test.is_true(config.readonly)
             test.is_false(config.auto_init)
             test.is_true(volume.id:find("^bee%.gov%.grants:volume%.", 1) ~= nil)
             local writable = assert(files.volume(OWNER, CLASSIC, "notes", true))
-            test.is_false((writable.data :: {[string]: unknown}).readonly)
-            test.is_true((writable.data :: {[string]: unknown}).auto_init)
+            test.is_false((assert(bounds.object(writable.data))).readonly)
+            test.is_true((assert(bounds.object(writable.data))).auto_init)
             test.eq(writable.id, volume.id)
         end)
         test.it("roots the volume at the workspace folder, not the node folder", function()
             local nested = assert(files.volume(OWNER, NESTED, "notes", false))
-            test.eq((nested.data :: {[string]: unknown}).directory, "projects/alpha/notes")
-            test.eq((nested.data :: {[string]: unknown}).base, "project")
+            test.eq((assert(bounds.object(nested.data))).directory, "projects/alpha/notes")
+            test.eq((assert(bounds.object(nested.data))).base, "project")
             test.is_true(nested.id ~= (assert(files.volume(OWNER, CLASSIC, "notes", false))).id)
             local absolute = assert(files.volume(OWNER, {root_ref = "bee.env:shared_root", directory = "/srv/work",
                 subpath = "alpha"}, "notes", false))
-            test.eq((absolute.data :: {[string]: unknown}).directory, "/srv/work/alpha/notes")
-            test.is_nil((absolute.data :: {[string]: unknown}).base)
+            test.eq((assert(bounds.object(absolute.data))).directory, "/srv/work/alpha/notes")
+            test.is_nil((assert(bounds.object(absolute.data))).base)
             test.is_nil(files.volume(OWNER, {root_ref = "bee.env:workspace_root", directory = ".", base = "project",
                 subpath = ".wippy/placement"}, "notes", false))
             test.is_nil(files.volume(OWNER, {root_ref = "bee.env:workspace_root", directory = "${env:bee:root}",
@@ -56,7 +58,7 @@ local function define_tests()
         test.it("derives an isolated database outside the readable tree", function()
             local database = assert(files.database(OWNER, "notes"))
             test.eq(database.kind, "db.sql.sqlite")
-            local file = (database.data :: {[string]: unknown}).file :: string
+            local file = (assert(bounds.object(database.data))).file
             test.is_true(file:find("^${env:bee.env:app_database_root}/[0-9a-f]+%.db$") ~= nil)
             test.is_true(files.database_file(file))
             test.is_false(files.database_file(".wippy/app-db/" .. string.rep("d", 64) .. ".db"))
@@ -67,9 +69,9 @@ local function define_tests()
         test.it("names the exact policy actions for each grant", function()
             local read_policy = assert(files.file_policy(OWNER, CLASSIC, "notes", false, "bee.gov.grants:policy.read"))
             test.eq(read_policy.kind, "security.policy")
-            local read_inner = (read_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}
-            local read_actions = read_inner.actions :: {string}
-            local read_resources = read_inner.resources :: {string}
+            local read_inner = assert(bounds.object((assert(bounds.object(read_policy.data))).policy))
+            local read_actions = principals.strings(read_inner.actions)
+            local read_resources = principals.strings(read_inner.resources)
             test.eq(#read_actions, 2)
             test.eq(read_actions[1], "fs.get")
             test.eq(read_actions[2], "funcs.call")
@@ -77,9 +79,9 @@ local function define_tests()
             test.eq(read_resources[1], (assert(files.volume(OWNER, CLASSIC, "notes", false))).id)
             test.eq(read_resources[2], "bee.gov.binding:granted_resources")
             local db_policy = assert(files.database_policy(OWNER, "notes", "bee.gov.grants:policy.db"))
-            local db_inner = (db_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}
-            local db_actions = db_inner.actions :: {string}
-            local db_resources = db_inner.resources :: {string}
+            local db_inner = assert(bounds.object((assert(bounds.object(db_policy.data))).policy))
+            local db_actions = principals.strings(db_inner.actions)
+            local db_resources = principals.strings(db_inner.resources)
             test.eq(#db_actions, 2)
             test.eq(db_actions[1], "db.get")
             test.eq(#db_resources, 2)

@@ -83,6 +83,7 @@ entries:
   method: main
   modules: [process, channel, security, funcs, time, uuid, json, logger]
   imports:
+    bounds: bee.protocol:bounds
     store: bee.storage:store
     catalog: bee.storage:catalog
     decode: bee.protocol:decode
@@ -107,6 +108,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, json, logger]
   imports:
+    bounds: bee.protocol:bounds
     store: bee.storage:store
     catalog: bee.storage:catalog
     decode: bee.protocol:decode
@@ -132,6 +134,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, logger, registry]
   imports:
+    bounds: bee.protocol:bounds
     store: bee.storage:store
     catalog: bee.storage:catalog
     leases: bee.app:host_leases
@@ -150,6 +153,7 @@ entries:
   method: fallback
   modules: [process, channel, security, time, uuid, logger, registry]
   imports:
+    bounds: bee.protocol:bounds
     store: bee.storage:store
     catalog: bee.storage:catalog
     leases: bee.app:host_leases

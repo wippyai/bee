@@ -34,7 +34,7 @@ local function spawn_supervisor(host: string): (string, Channel<process.Event>)
         else
             local message = selected.value
             if tostring(message:from()) == supervisor then
-                local result = message:payload():data() :: {ready: boolean}
+                local result = message:payload():data()
                 if result.ready then
                     process.unlisten(ready)
                     return supervisor, lifecycle

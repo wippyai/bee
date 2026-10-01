@@ -4,6 +4,8 @@
 -- nothing else, and the inbox shows precisely what was approved, from the
 -- owner's record, never the latest action definition.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -14,7 +16,7 @@ local app_caller = require("caller")
 local REQUESTER, ALICE = "bee.test.inbox_requester", "bee.test.inbox_alice"
 local POLICY = "inbox-test"
 type Object = {[string]: unknown}
-type Reply = app_caller.Reply
+type Reply = app_caller.Envelope
 local function key(): string
     local id, err = uuid.v4()
     if err or not id then error("uuid: " .. tostring(err)) end
@@ -39,11 +41,11 @@ local alice = caller(ALICE, {"bee.security.approvals:approval_decide_policy"})
 local function call(executor: funcs.Executor, target: string, request: unknown): Reply
     local raw, err = executor:call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    return raw :: Reply
+    return assert(app_caller.envelope(raw))
 end
 local function value(reply: Reply): Object
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function code(reply: Reply): string
     if reply.ok then error("expected a failure, got success") end
@@ -52,8 +54,9 @@ end
 local function install_policy()
     local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
-    local data = entry.data :: Object
-    local policies = data.policies :: {Object}
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
+    data.policies = policies
     for _, policy in ipairs(policies) do
         if policy.name == POLICY then return end
     end
@@ -115,7 +118,7 @@ local function define_tests()
             refresh(state, owner)
             open(state, owner, tostring(original.approval_id))
             decide(state, owner, "approved")
-            local incarnation = math.floor(tonumber((state.detail :: Object).owner_incarnation) or 0)
+            local incarnation = math.floor(tonumber((assert(bounds.object(state.detail))).owner_incarnation) or 0)
             -- The approved decision authorizes only the proposal it was given.
             local crossed = call(requester, "bee.approvals.binding:consume", {approval_id = original.approval_id, proposal_digest = changed.proposal_digest, effect_key = "e1", owner_incarnation = incarnation})
             test.eq(code(crossed), "CONFLICT")
@@ -124,7 +127,7 @@ local function define_tests()
             -- The decision and its proposal stand as committed; the inbox shows them, not the changed definition.
             refresh(state, owner)
             open(state, owner, tostring(original.approval_id))
-            local detail = state.detail :: Object
+            local detail = assert(bounds.object(state.detail))
             test.eq(detail.state, "decided")
             test.eq(detail.decision, "approved")
             test.eq(detail.revision, 2)
@@ -156,8 +159,8 @@ local function define_tests()
             test.eq(state.rows[tostring(revised.approval_id)].state, "pending")
             test.eq(state.rows[tostring(repolicied.approval_id)].state, "pending")
             open(state, owner, tostring(revised.approval_id))
-            test.eq((state.detail :: Object).state, "pending")
-            test.is_true(lines_have(state.detail :: Object, "policy_ref: bee.host:policy-a"))
+            test.eq((assert(bounds.object(state.detail))).state, "pending")
+            test.is_true(lines_have(assert(bounds.object(state.detail)), "policy_ref: bee.host:policy-a"))
         end)
     end)
 end

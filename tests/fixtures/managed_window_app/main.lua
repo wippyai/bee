@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- Fixture-only broker acceptance for the private managed-window application.
 local process = require("process")
 local channel = require("channel")
@@ -18,7 +19,7 @@ local WORKSPACE = string.rep("a", 32)
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
@@ -27,7 +28,7 @@ local function call(target: string, value: unknown): {[string]: unknown}
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
+        local fault = type(result.error) == "table" and assert(bounds.object(result.error)) or {}
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
     return result
@@ -40,8 +41,8 @@ end
 -- exact instance the open reported, before driving any input.
 local function admit_app(thread_id: string, instance_id: string, idempotency_key: string)
     local thread = call("bee.threads.service:get", {thread_id = thread_id})
-    local value = thread.value :: {[string]: unknown}
-    local summary = value.summary :: {[string]: unknown}
+    local value = assert(bounds.object(thread.value))
+    local summary = assert(bounds.object(value.summary))
     local revision = summary.revision
     if type(revision) ~= "number" or revision < 1 then error("admit application thread: thread head is unavailable") end
     call("bee.threads.service:join", {thread_id = thread_id, idempotency_key = idempotency_key,
@@ -49,7 +50,10 @@ local function admit_app(thread_id: string, instance_id: string, idempotency_key
 end
 local function apply(entry: {[string]: unknown})
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    local id, kind = entry.id, entry.kind
+    assert(type(id) == "string" and type(kind) == "string")
+    local metadata = entry.meta == nil and {} or assert(bounds.object(entry.meta))
+    changes:update({id = id, kind = kind, meta = metadata, data = entry.data})
     local applied, err = changes:apply()
     if not applied then error("fixture update: " .. tostring(err)) end
 end
@@ -57,7 +61,7 @@ local function changed(entry: {[string]: unknown}): {[string]: unknown}
     local result: {[string]: unknown} = {}
     for key, value in pairs(entry) do result[key] = value end
     local data: {[string]: unknown} = {}
-    for key, value in pairs(entry.data :: {[string]: unknown}) do data[key] = value end
+    for key, value in pairs(assert(bounds.object(entry.data))) do data[key] = value end
     result.data = data
     return result
 end
@@ -66,7 +70,7 @@ local function clone_entry(entry: {[string]: unknown}): {[string]: unknown}
     if not encoded then error(tostring(encode_error or "encode registry entry")) end
     local copied, decode_error = json.decode(encoded)
     if type(copied) ~= "table" then error(tostring(decode_error or "decode registry entry")) end
-    return copied :: {[string]: unknown}
+    return assert(bounds.object(copied))
 end
 local function run(natural: boolean, selected: boolean?, original_definition: {[string]: unknown}?, original_policy: {[string]: unknown}?, retained_id: string?, cancel_activation: boolean?): (string?, string?)
     local THREAD = selected and "managed_window_selector" or (natural and "managed_window_natural" or "managed_window_thread")
@@ -123,11 +127,11 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         local message = receive_reply()
         if tostring(message:from()) == broker then
             local data = message:payload():data()
-            if type(data) == "table" and data.request_id == "open" and data.op == "open" then opened = data :: {[string]: unknown} end
+            if type(data) == "table" and data.request_id == "open" and data.op == "open" then opened = assert(bounds.object(data)) end
         end
     end
     assert(opened.error_code == "", "managed app did not become ready: " .. tostring(opened.error))
-    local instance_id = assert(opened.instance_id) :: string
+    local instance_id = assert(opened.instance_id)
     if selected then admit_app(THREAD, instance_id, "managed-window-picker-join") end
     if selected then
         assert(time.now():unix_nano() - picker_started < 1000000000,
@@ -176,7 +180,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         wait_for("Selected agent fixture")
         if cancel_activation then
             local resource_state = reply(call("bee.resources.binding:list", {workspace_id = WORKSPACE}).value)
-            local grants_before = #(resource_state.grants :: {{[string]: unknown}})
+            local grants_before = #(assert(bounds.array(resource_state.grants)))
             assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
             wait_for("Starting Agent")
             assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}), "duplicate attach was not accepted as input")
@@ -204,13 +208,14 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             assert(escaped_result.ok and escaped_result.channel == escaped and escaped_result.value == true,
                 "activating picker did not finish close after admission cleanup")
             local after = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
-            for _, record in ipairs(after.records :: {{[string]: unknown}}) do
+            for _, record in ipairs(assert(bounds.array(after.records))) do
+        local record = assert(bounds.object(record))
                 assert(record.kind ~= "action.admitted" and record.kind ~= "attempt.prepared"
                     and record.kind ~= "attempt.started" and record.kind ~= "receipt",
                     "cancelled picker crossed the carrier lifecycle boundary")
             end
             local resources_after = reply(call("bee.resources.binding:list", {workspace_id = WORKSPACE}).value)
-            assert(#(resources_after.grants :: {{[string]: unknown}}) == grants_before,
+            assert(#(assert(bounds.array(resources_after.grants))) == grants_before,
                 "cancelled picker retained an attempt-bound resource grant")
             view:close()
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open-after-cancel", op = "open",
@@ -220,10 +225,10 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
                 local message = receive_reply()
                 local data = message:payload():data()
                 if tostring(message:from()) == broker and type(data) == "table"
-                    and data.request_id == "open-after-cancel" and data.op == "open" then opened = data :: {[string]: unknown} end
+                    and data.request_id == "open-after-cancel" and data.op == "open" then opened = assert(bounds.object(data)) end
             end
             assert(opened.error_code == "", "replacement picker did not become ready: " .. tostring(opened.error))
-            admit_app(THREAD, assert(opened.instance_id) :: string, "managed-window-picker-rejoin")
+            admit_app(THREAD, assert(bounds.id(opened.instance_id)), "managed-window-picker-rejoin")
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "bind-after-cancel", op = "bind",
                 workspace_id = WORKSPACE, id = opened.id, instance_id = opened.instance_id, recipient = owner}))
             mounted = ""
@@ -242,14 +247,15 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             wait_for("Selected agent fixture")
         end
         local before = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
-        assert(#(before.records :: {{[string]: unknown}}) == 0, "selector created work before selection")
+        assert(#(assert(bounds.array(before.records))) == 0, "selector created work before selection")
         assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
     end
     if selected then
         local launched = false
         for _ = 1, 160 do
             local page = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
-            for _, record in ipairs(page.records :: {{[string]: unknown}}) do
+            for _, record in ipairs(assert(bounds.array(page.records))) do
+        local record = assert(bounds.object(record))
                 if record.kind == "attempt.started" then launched = true; break end
             end
             if launched then break end
@@ -274,7 +280,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     assert(tostring(incoming.value:from()) == broker, "checkpoint did not come through the broker")
     local application_checkpoint = reply(incoming.value:payload():data())
     assert(application_checkpoint.resume_schema == "bee.agent.window@1", "Agent checkpoint schema")
-    local application_state = reply(json.decode(application_checkpoint.resume_state :: string))
+    local application_state = reply(json.decode(application_checkpoint.resume_state))
     local field_count = 0
     for key in pairs(application_state) do
         assert(key == "definition_ref" or key == "plan_digest" or key == "origin_request_id" or key == "previous_attempt_id" or key == "thread_id",
@@ -290,7 +296,8 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     -- exist while it runs, rather than first appearing in the close path.
     local live_records = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
     local live_attempt: string? = nil
-    for _, record in ipairs(live_records.records :: {{[string]: unknown}}) do
+    for _, record in ipairs(assert(bounds.array(live_records.records))) do
+        local record = assert(bounds.object(record))
         if record.kind == "attempt.started" and type(record.attempt_id) == "string" then
             if retained_id then assert(record.attempt_id == admission.identities(request_id).attempt_id, "retained launch read another attempt") end
             live_attempt = record.attempt_id
@@ -307,7 +314,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local session_ref: string? = nil
     if retained_id then
         assert(type(point.retained_session_ref) == "string", "retained window checkpoint lost session identity")
-        session_ref = point.retained_session_ref :: string
+        session_ref = point.retained_session_ref
     end
     assert(saved.open_turn_id == nil and point.terminal == nil, "native checkpoint invented a logical turn result")
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "detach", op = "bind", workspace_id = WORKSPACE, recipient = ""}))
@@ -345,7 +352,8 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         for _ = 1, 160 do
             local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
             local page_value = reply(page.value)
-            for _, record in ipairs(page_value.records :: {{[string]: unknown}}) do
+            for _, record in ipairs(assert(bounds.array(page_value.records))) do
+        local record = assert(bounds.object(record))
                 if record.kind == "receipt" then settled = true end
             end
             if settled then break end
@@ -368,9 +376,10 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     end
     local records = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
-    local value = records.value :: {[string]: unknown}
+    local value = assert(bounds.object(records.value))
     local receipts = 0
-    for _, item in ipairs(value.records :: {{[string]: unknown}}) do
+    for _, item in ipairs(assert(bounds.array(value.records))) do
+        local item = assert(bounds.object(item))
         kinds[tostring(item.kind)] = true
         if item.kind == "receipt" then
             assert(item.attempt_id == live_attempt, "receipt belongs to another attempt")
@@ -390,7 +399,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     process.terminate(broker)
     process.unlisten(catalogs); process.unlisten(replies); process.unlisten(checkpoints)
     local finished = assert(opened)
-    return session_ref, assert(finished.instance_id) :: string
+    return session_ref, assert(bounds.id(finished.instance_id))
 end
 
 -- Broker replies are the owner's recovery projection. A checkpoint belongs in
@@ -409,9 +418,10 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))
     local boundary = assert(security.policy("bee.security:core_spawn_boundary"))
     local fixture_admission = changed(original_admission)
-    local fixture_data = fixture_admission.data :: {[string]: unknown}
+    local fixture_data = assert(bounds.object(fixture_admission.data))
     local bindings: {{[string]: unknown}} = {}
-    for _, binding in ipairs(fixture_data.bindings :: {{[string]: unknown}}) do
+    for _, binding in ipairs(assert(bounds.array(fixture_data.bindings))) do
+        local binding = assert(bounds.object(binding))
         local copy: {[string]: unknown} = {}
         for key, value in pairs(binding) do copy[key] = value end
         bindings[#bindings + 1] = copy
@@ -439,7 +449,8 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
             assert(process.send(broker, "bee.app.persisted", {version = 1, request_id = data.request_id,
                 error_code = "persistence_refused", error = "Fixture owner refused checkpoint"}))
         end
-        return data.request_id :: string
+        assert(type(data.request_id) == "string")
+        return data.request_id
     end
     local function receive_receipt(request_id: string, code: string, app_pid: string, timeout: string?)
         local message = wait_message(receipts, "checkpoint receipt " .. code, timeout)
@@ -450,6 +461,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
         local message = wait_message(sent, "checkpoint sent " .. state)
         local data: unknown = message:payload():data()
         assert(tostring(message:from()) == app_pid and type(data) == "table" and data.state == state and type(data.request_id) == "string", "unexpected checkpoint request")
+        assert(type(data.request_id) == "string")
         return data.request_id
     end
     local initial = "acknowledged-initial"
@@ -473,7 +485,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
         local data: unknown = message:payload():data()
         if type(data) == "table" and data.request_id == "checkpoint-open" and data.op == "open" then
             assert(data.error_code == "", "checkpoint fixture did not become ready")
-            opened = data :: {[string]: unknown}
+            opened = assert(bounds.object(data))
         end
     end
     local function attached(request_id: string, expected: string): string
@@ -486,13 +498,14 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
             if type(data) == "table" and data.request_id == request_id and data.op == "attached" then
                 assert(data.error_code == "", request_id .. ": attachment failed")
                 assert(data.resume_state == expected, request_id .. ": broker exposed an unacknowledged checkpoint")
-                return data.mount :: string
+                assert(type(data.mount) == "string")
+                return data.mount
             end
         end
         error("unreachable attachment wait")
     end
-    local view_id = opened.id :: string
-    local instance_id = opened.instance_id :: string
+    local view_id = opened.id
+    local instance_id = opened.instance_id
     attached("checkpoint-initial", initial)
     assert(process.send(app_pid, "bee.fixture.checkpoint.command", "refuse"))
     local refused_request = receive_sent(refused, app_pid)
@@ -524,10 +537,10 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     assert(wait_snapshot("CHECKPOINT APP 1"), "initial checkpoint app did not retain its resized viewport")
     local original_app = assert(registry.get("bee.managed.window.fixture:checkpoint_app"))
     local updated_app = clone_entry(original_app)
-    local updated_data = updated_app.data :: {[string]: unknown}
+    local updated_data = assert(bounds.object(updated_app.data))
     assert(type(updated_data.source) == "string", "checkpoint app lost its executable source")
-    local updated_meta = updated_app.meta :: {[string]: unknown}
-    local application = updated_meta.application :: {[string]: unknown}
+    local updated_meta = assert(bounds.object(updated_app.meta))
+    local application = assert(bounds.object(updated_meta.application))
     application.revision = "2"
     apply(updated_app)
     local replacement_pid = ""
@@ -590,8 +603,8 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     local pending_shutdown_write = receive_checkpoint("lost-newer", "lose")
     assert(process.monitor(replacement_pid))
     local third_app = clone_entry(updated_app)
-    local third_meta = third_app.meta :: {[string]: unknown}
-    local third_application = third_meta.application :: {[string]: unknown}
+    local third_meta = assert(bounds.object(third_app.meta))
+    local third_application = assert(bounds.object(third_meta.application))
     third_application.revision = "3"
     apply(third_app)
     local replacement_exit = time.after("5s")
@@ -647,20 +660,20 @@ M.select = function()
     local ok, failure = pcall(function()
         local found = assert(registry.find({["meta.type"] = "bee.launch_definition"}))
         for _, entry in ipairs(found) do
-            local meta = entry.meta :: {[string]: unknown}
+            local meta = assert(bounds.object(entry.meta))
             if meta.test_support ~= true then
                 defaults[#defaults + 1] = entry
                 local hidden_default = changed(entry)
-                local data = hidden_default.data :: {[string]: unknown}
+                local data = assert(bounds.object(hidden_default.data))
                 data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
                 apply(hidden_default)
             end
         end
         local configured = changed(definition)
-        local configured_data = configured.data :: {[string]: unknown}
+        local configured_data = assert(bounds.object(configured.data))
         configured_data.session_resource = "session"
         local hidden = changed(configured)
-        local hidden_data = hidden.data :: {[string]: unknown}
+        local hidden_data = assert(bounds.object(hidden.data))
         hidden_data.presentation = {start_menu = false, fullscreen = false, reuse = "never"}
         apply(hidden)
         run(false, true, configured, policy, nil, true)
@@ -698,7 +711,7 @@ M.retained = function()
             local content = file:read(128)
             file:close()
             assert(type(content) == "string", "retained marker is not text")
-            return content :: string
+            return content
         end
         local first, first_instance = run(false, false, nil, nil, "retained-first")
         if not first or not first_instance then error("first window has no retained session") end

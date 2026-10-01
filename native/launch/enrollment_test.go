@@ -36,6 +36,11 @@ type recordingRegistry struct {
 	lastPeers []string
 }
 
+func (r *recordingRegistry) ApplyOverlay(ctx context.Context, owner string, generation uint64, changes registry.ChangeSet) (uint64, error) {
+	_, err := r.Apply(ctx, changes)
+	return generation + 1, err
+}
+
 func (r *recordingRegistry) Apply(_ context.Context, changes registry.ChangeSet) (registry.Version, error) {
 	r.applied.Add(1)
 	r.lastNodes, r.lastPeers = nil, nil
@@ -172,6 +177,11 @@ type flakyRegistry struct {
 	applied  atomic.Int64
 }
 
+func (r *flakyRegistry) ApplyOverlay(ctx context.Context, owner string, generation uint64, changes registry.ChangeSet) (uint64, error) {
+	_, err := r.Apply(ctx, changes)
+	return generation + 1, err
+}
+
 func (r *flakyRegistry) Apply(_ context.Context, changes registry.ChangeSet) (registry.Version, error) {
 	if r.failures.Load() > 0 {
 		r.failures.Add(-1)
@@ -181,7 +191,7 @@ func (r *flakyRegistry) Apply(_ context.Context, changes registry.ChangeSet) (re
 	return nil, nil
 }
 
-func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
+func TestEnrollmentPublisherRetriesUntilTheRegistryAccepts(t *testing.T) {
 	state := t.TempDir()
 	prepareOwnerState(t, state)
 	writeClientKey(t, ownerTrustedDirectory(state), "client-a")
@@ -195,7 +205,7 @@ func TestEnrollmentPublisherRetriesUntilTheEntryExists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := registry.WithRegistry(base, reg)
+	ctx := liveOwner(t, state, registry.WithRegistry(base, reg))
 	starter, ok := component.(boot.Starter)
 	if !ok {
 		t.Fatal("publisher is not a starter")
@@ -223,6 +233,11 @@ type refusingRegistry struct {
 	recordingRegistry
 	refused atomic.Int64
 	refuse  atomic.Bool
+}
+
+func (r *refusingRegistry) ApplyOverlay(ctx context.Context, owner string, generation uint64, changes registry.ChangeSet) (uint64, error) {
+	_, err := r.Apply(ctx, changes)
+	return generation + 1, err
 }
 
 func (r *refusingRegistry) Apply(ctx context.Context, changes registry.ChangeSet) (registry.Version, error) {
@@ -377,6 +392,11 @@ type orderedRegistry struct {
 	applied  atomic.Int64
 	early    atomic.Bool
 	resolved func() bool
+}
+
+func (r *orderedRegistry) ApplyOverlay(ctx context.Context, owner string, generation uint64, changes registry.ChangeSet) (uint64, error) {
+	_, err := r.Apply(ctx, changes)
+	return generation + 1, err
 }
 
 func (r *orderedRegistry) Apply(_ context.Context, _ registry.ChangeSet) (registry.Version, error) {
@@ -625,12 +645,16 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheSupervisorIsPublished(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := component.(boot.Starter).Start(topapi.WithRegistry(registry.WithRegistry(base, &flakyRegistry{}), names)); err != nil {
+	reg := &flakyRegistry{}
+	if err := component.(boot.Starter).Start(topapi.WithRegistry(registry.WithRegistry(base, reg), names)); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = component.(boot.Stopper).Stop(context.Background()) }()
 	unpublished := time.Now().Add(1500 * time.Millisecond)
 	for time.Now().Before(unpublished) {
+		if reg.applied.Load() != 0 {
+			t.Fatal("enrollment overlay published before deployment readiness")
+		}
 		if resolved() {
 			t.Fatal("a client was listed before this boot's supervisor address was published")
 		}

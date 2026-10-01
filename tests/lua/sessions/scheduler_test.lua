@@ -62,17 +62,17 @@ local function define_tests()
             test.eq(executor.launches, 1)
             local state = assert(owner.work_state(receipt.work))
             test.eq(state.phase, "settled")
-            test.eq((state.sender :: {[string]: unknown}).kind, receipt.sender.kind)
-            test.eq((state.sender :: {[string]: unknown}).id, receipt.sender.id)
+            test.eq((assert(bounds.object(state.sender))).kind, receipt.sender.kind)
+            test.eq((assert(bounds.object(state.sender))).id, receipt.sender.id)
             local turn = assert(executor.last_turn)
-            test.eq((turn.sender :: {[string]: unknown}).kind, receipt.sender.kind)
-            test.eq((turn.sender :: {[string]: unknown}).id, receipt.sender.id)
-            local admission = turn.admission :: {[string]: unknown}
+            test.eq((assert(bounds.object(turn.sender))).kind, receipt.sender.kind)
+            test.eq((assert(bounds.object(turn.sender))).id, receipt.sender.id)
+            local admission = assert(bounds.object(turn.admission))
             test.eq(admission.session_ref, receipt.session)
             test.eq(admission.action_id, receipt.session)
             local result = state.result
             test.eq(type(result), "table")
-            test.eq((result :: {[string]: unknown}).value and ((result :: {[string]: unknown}).value :: {[string]: unknown}).text,
+            test.eq((assert(bounds.object(result))).value and (assert(bounds.object((assert(bounds.object(result))).value))).text,
                 "done: Review the current patch")
         end)
         test.it("passes a Work budget to the executor and persists its evidenced outcome", function()

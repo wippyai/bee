@@ -13,13 +13,13 @@ local migration_work = require("migration_work")
 local artifact = require("artifact")
 local application_admission = require("application_admission")
 local lease_store = require("lease_store")
+local resolution = require("resolution")
 
 local M = {}
 local LEASE_CONSUMER = "bee.gov.lease_apply"
 type Object = {[string]: unknown}
 type Result = transaction.Result
-type Resolver = {resolve: (Resolver, unknown) -> (preflight.Candidate?, preflight.Context?, string?),
-    revision: ((Resolver) -> (integer?, string?))?}
+type Resolver = resolution.Resolver
 type Executor = approval.Executor
 type Apply = (string, unknown, unknown?, unknown) -> ({[string]: unknown}?, string?)
 type Observe = (string, unknown, unknown?, unknown) -> (boolean?, string?)

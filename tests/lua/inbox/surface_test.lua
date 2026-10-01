@@ -6,6 +6,7 @@
 -- a close and reopen that decides nothing, and hostile prompt text kept
 -- out of the frame.
 local test = require("test")
+local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -57,8 +58,9 @@ end
 local function install_policy()
     local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
-    local data = entry.data :: Object
-    local policies = data.policies :: {Object}
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
+    data.policies = policies
     for _, policy in ipairs(policies) do
         if policy.name == POLICY then return end
     end
@@ -73,7 +75,7 @@ local function file(workspace: string, prompt: string, ttl_ms: integer?): string
     local reply, err = requester:call("bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = POLICY,
         proposal = {kind = "attempt", ref = attempt, revision = "r1", action_id = "action-1", payload = {tool_name = "Bash", correlation_id = "c-1"}}, prompt = {text = prompt}, ttl_ms = ttl_ms})
     if err then error("request: " .. tostring(err)) end
-    local typed = reply :: {ok: boolean, error: {code: string, message: string}?, value: Object}
+    local typed = reply
     if not typed.ok then error("request: " .. tostring(typed.error and typed.error.code) .. " " .. tostring(typed.error and typed.error.message)) end
     return tostring(typed.value.approval_id)
 end
@@ -124,7 +126,7 @@ local function define_tests()
             test.eq(rows[1].requester_id, REQUESTER)
             test.eq(rows[1].state, "pending")
             open(state, owner, approval_id)
-            local detail = state.detail :: Object
+            local detail = assert(bounds.object(state.detail))
             test.eq(detail.approval_id, approval_id)
             test.eq(detail.state, "pending")
             test.is_true(frame_text(state):find("Effect: Bash", 1, true) ~= nil)
@@ -139,16 +141,16 @@ local function define_tests()
             open(alice_state, alice_owner, approval_id)
             open(bob_state, bob_owner, approval_id)
             decide(alice_state, alice_owner, "approved")
-            test.eq((alice_state.detail :: Object).decision, "approved")
+            test.eq((assert(bounds.object(alice_state.detail))).decision, "approved")
             test.eq(alice_state.notice, "Recorded: approved by " .. ALICE)
             decide(bob_state, bob_owner, "denied")
             test.is_nil(bob_state.pending)
-            test.eq((bob_state.detail :: Object).decision, "approved")
-            test.eq((bob_state.detail :: Object).decider_id, ALICE)
+            test.eq((assert(bounds.object(bob_state.detail))).decision, "approved")
+            test.eq((assert(bounds.object(bob_state.detail))).decider_id, ALICE)
             test.is_true(bob_state.notice:find("CONFLICT: approved by " .. ALICE, 1, true) ~= nil)
             local _, refused = model.decision_intent(bob_state, key(), "denied")
             test.eq(refused, "the request is decided")
-            local record = alice:call("bee.approvals.binding:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
+            local record = alice:call("bee.approvals.binding:read", {approval_id = approval_id})
             test.eq(record.value.decision, "approved")
             test.eq(record.value.decider_id, ALICE)
         end)
@@ -176,14 +178,14 @@ local function define_tests()
             local owner = through(alice)
             refresh(state, owner)
             open(state, owner, approval_id)
-            test.eq((state.detail :: Object).state, "pending")
+            test.eq((assert(bounds.object(state.detail))).state, "pending")
             time.sleep("1300ms")
             local request_id = key()
             local intent = model.decision_intent(state, request_id, "approved")
             if not intent then error("the viewed request was pending") end
             model.apply_answer(state, request_id, model.decode_reply(owner:invoke(intent.target, intent.request)))
             test.is_nil(state.pending)
-            test.eq((state.detail :: Object).state, "expired")
+            test.eq((assert(bounds.object(state.detail))).state, "expired")
             test.is_true(state.notice:find("expired", 1, true) ~= nil)
             local _, refused = model.decision_intent(state, key(), "approved")
             test.eq(refused, "the request is expired")
@@ -218,7 +220,7 @@ local function define_tests()
             if not recovery then error("no recovery") end
             model.apply_recovery(state, model.decode_reply(owner:invoke(recovery.target, recovery.request)) or unknown_answer())
             test.is_nil(state.pending)
-            test.eq((state.detail :: Object).decision, "approved")
+            test.eq((assert(bounds.object(state.detail))).decision, "approved")
             test.eq(state.notice, "Recovered: approved by " .. ALICE)
             test.eq(decided, 1)
             local _, refused = model.decision_intent(state, key(), "approved")
@@ -239,7 +241,7 @@ local function define_tests()
             test.eq(reopened.rows[approval_id].state, "pending")
             test.eq(reopened.rows[approval_id].revision, state.rows[approval_id].revision)
             open(reopened, owner, approval_id)
-            test.eq((reopened.detail :: Object).state, "pending")
+            test.eq((assert(bounds.object(reopened.detail))).state, "pending")
         end)
         test.it("keeps hostile prompt text out of the frame", function()
             local workspace = "ws-" .. key():sub(1, 8)

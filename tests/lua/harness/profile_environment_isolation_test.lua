@@ -3,6 +3,7 @@
 -- either is awaited; each real child silently checks its own policy-only
 -- environment and broker projection before replaying the standard JSONL run.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -58,9 +59,9 @@ end
 local function call(target: string, request: unknown): {[string]: unknown}
     local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = result :: admission.Reply
+    local reply = principals.reply(result)
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: {[string]: unknown}
+    return assert(bounds.object(reply.value))
 end
 
 local function apply(entry: {[string]: unknown})
@@ -77,7 +78,7 @@ local function fixture_paths(): FixturePaths
     if bin_error or type(bin) ~= "string" or bin == "" or streams_error or type(streams) ~= "string" or streams == "" then
         error("fixture paths are not set for the test runtime")
     end
-    return {bin = bin :: string, streams = streams :: string}
+    return {bin = bin, streams = streams}
 end
 
 local function page(thread_id: string): {[string]: unknown}
@@ -87,13 +88,13 @@ end
 local function records(thread_id: string): {string}
     local result_page = page(thread_id)
     local result: {string} = {}
-    for index, item in ipairs(result_page.records :: {{[string]: unknown}}) do result[index] = tostring(item.kind) end
+    for index, item in ipairs(principals.objects(result_page.records)) do result[index] = tostring(item.kind) end
     return result
 end
 
 local function receipt_outcome(thread_id: string): string
-    for _, item in ipairs((page(thread_id).records :: {{[string]: unknown}})) do
-        if item.kind == "receipt" then return tostring((item.body :: {[string]: unknown}).outcome) end
+    for _, item in ipairs((principals.objects(page(thread_id).records))) do
+        if item.kind == "receipt" then return tostring((assert(bounds.object(item.body))).outcome) end
     end
     error("profile attempt has no durable receipt")
 end
@@ -110,7 +111,7 @@ local function await_receipt(thread_id: string, attempt_id: string): {[string]: 
     while true do
         local result_page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor,
             limit = 64, filter = {kinds = {"receipt"}}})
-        for _, item in ipairs(result_page.records :: {{[string]: unknown}}) do
+        for _, item in ipairs(principals.objects(result_page.records)) do
             if item.attempt_id == attempt_id then
                 local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
                 return status
@@ -146,12 +147,12 @@ local function await_carrier_exit(events: Channel<process.Event>, carrier: strin
 end
 
 local function profile_policy(entry: {[string]: unknown}, bin: string, stream: string): {[string]: unknown}
-    local data = entry.data :: {[string]: unknown}
+    local data = assert(bounds.object(entry.data))
     local configured: {[string]: unknown} = {}
     for key, item in pairs(data) do configured[key] = item end
     configured.executables = {claude = bin .. "/profile-probe"}
     local environment: {[string]: string} = {}
-    for key, item in pairs(data.environment :: {[string]: string}) do environment[key] = item end
+    for key, item in pairs(data.environment) do environment[key] = item end
     environment.BEE_FIXTURE_STREAM = stream .. "/claude/stream-json-2/plain.jsonl"
     configured.environment = environment
     return configured
@@ -185,28 +186,28 @@ local function define_tests()
             local ok, failure = pcall(function()
                 policy_alpha.data = profile_policy(policy_alpha, paths.bin, paths.streams)
                 policy_beta.data = profile_policy(policy_beta, paths.bin, paths.streams)
-                local resource_data = resource_roots.data :: {[string]: unknown}
+                local resource_data = assert(bounds.object(resource_roots.data))
                 local copied_resources: {{[string]: unknown}} = {}
                 local resource_found = false
-                for index, item in ipairs(resource_data.roots :: {{[string]: unknown}}) do
+                for index, item in ipairs(principals.objects(resource_data.roots)) do
                     copied_resources[index] = item
                     if item.root_ref == ROOT then resource_found = true end
                 end
                 if not resource_found then copied_resources[#copied_resources + 1] = {root_ref = ROOT, access = "write"} end
                 resource_roots.data = {roots = copied_resources}
-                local roots_data = roots.data :: {[string]: unknown}
+                local roots_data = assert(bounds.object(roots.data))
                 local copied_roots: {{[string]: unknown}} = {}
                 local found_root = false
-                for index, item in ipairs(roots_data.roots :: {{[string]: unknown}}) do
+                for index, item in ipairs(principals.objects(roots_data.roots)) do
                     copied_roots[index] = item
                     if item.root_ref == ROOT then found_root = true end
                 end
                 if not found_root then copied_roots[#copied_roots + 1] = {root_ref = ROOT, access = "write"} end
                 roots.data = {roots = copied_roots}
                 mode.data = {mode = "granted"}
-                local sources_data = sources.data :: {[string]: unknown}
+                local sources_data = assert(bounds.object(sources.data))
                 local copied_sources: {{[string]: unknown}} = {}
-                for index, item in ipairs(sources_data.sources :: {{[string]: unknown}}) do copied_sources[index] = item end
+                for index, item in ipairs(principals.objects(sources_data.sources)) do copied_sources[index] = item end
                 copied_sources[#copied_sources + 1] = {ref = SOURCE, workspace_id = "*", audience = ACTOR, provider = "claude", projection_kinds = {"environment"}}
                 sources.data = {sources = copied_sources, formats = sources_data.formats}
                 local changes = registry.snapshot():changes()
@@ -240,18 +241,18 @@ local function define_tests()
                     local status = await_receipt(tostring(started.thread_id), tostring(started.attempt_id))
                     await_carrier_exit(events, tostring(started.carrier))
                     status = call("bee.placement.native.binding:status", {attempt_id = tostring(started.attempt_id)})
-                    if (status.attempt :: {[string]: unknown}).execution_state ~= "exited" or (status.attempt :: {[string]: unknown}).exit == nil then
+                    if (assert(bounds.object(status.attempt))).execution_state ~= "exited" or (assert(bounds.object(status.attempt))).exit == nil then
                         local trail = call("bee.placement.native.binding:evidence", {attempt_id = tostring(started.attempt_id), limit = 64})
-                        error("placement " .. tostring((status.attempt :: {[string]: unknown}).execution_state) .. "; evidence " .. assert(json.encode(trail)))
+                        error("placement " .. tostring((assert(bounds.object(status.attempt))).execution_state) .. "; evidence " .. assert(json.encode(trail)))
                     end
-                    test.eq(((status.attempt :: {[string]: unknown}).exit :: {[string]: unknown}).code, 0)
+                    test.eq((assert(bounds.object((assert(bounds.object(status.attempt))).exit))).code, 0)
                     local durable = records(tostring(started.thread_id))
                     test.eq(count(durable, "attempt.started"), 1)
                     test.eq(count(durable, "receipt"), 1)
                     test.eq(receipt_outcome(tostring(started.thread_id)), "succeeded")
                     local checkpoint = call("bee.threads.carrier:checkpoint", {thread_id = tostring(started.thread_id), attempt_id = tostring(started.attempt_id)})
-                    test.eq(((checkpoint.checkpoint :: {[string]: unknown}).terminal :: {[string]: unknown}).answer, "pong")
-                    test.eq((status.attempt :: {[string]: unknown}).attempt_id, started.attempt_id)
+                    test.eq((assert(bounds.object((assert(bounds.object(checkpoint.checkpoint))).terminal))).answer, "pong")
+                    test.eq((assert(bounds.object(status.attempt))).attempt_id, started.attempt_id)
                     local thread_json = assert(json.encode(page(tostring(started.thread_id))))
                     local evidence = call("bee.placement.native.binding:evidence", {attempt_id = tostring(started.attempt_id), limit = 64})
                     local evidence_json = assert(json.encode(evidence))

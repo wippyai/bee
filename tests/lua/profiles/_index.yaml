@@ -45,6 +45,9 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    protocol: bee.app:sessions_protocol
+    fixtures: bee.tests.sessions:fixtures
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     agents: bee.harness.app:agents
     sessions: bee.app:sessions
@@ -82,6 +85,10 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
+    protocol: bee.app:sessions_protocol
+    fixtures: bee.tests.sessions:fixtures
     test: wippy.test:test
     agents: bee.harness.app:agents
     sessions: bee.app:sessions
@@ -118,6 +125,7 @@ entries:
   modules: [tty]
   meta: {type: test, suite: bee}
   imports:
+    fixtures: bee.tests.sessions:fixtures
     test: wippy.test:test
     directory_view: bee.harness.app:directory_view
     protocol: bee.app:sessions_protocol

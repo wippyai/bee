@@ -307,17 +307,17 @@
       "topic": "component"
     },
     {
-      "bytes": 15102,
+      "bytes": 15352,
       "id": "component/credentials",
-      "sha256": "68f0d1e3a4887080490ea43046734102ee343e986710f2090b3e9fbf07d33478",
+      "sha256": "b4e8c21dd078a1aa73ecf1c3e2a7b76adcd3cda36de77a8c48211cddf3b1c551",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
     },
     {
-      "bytes": 1354,
+      "bytes": 1578,
       "id": "component/docs",
-      "sha256": "b594e4cbe87b85299d7395918e40cbbdaccba26ff116428ba693156ed91b89bb",
+      "sha256": "2695991b2a25a984717ba305d996033660b898b59825a591b1aec964058d5b98",
       "source": "modules/docs/src/README.md",
       "title": "bee docs",
       "topic": "component"
@@ -403,9 +403,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8838,
+      "bytes": 9079,
       "id": "component/gateway",
-      "sha256": "a11a1ff492c36adbc9aeeb20d3c712df5516d50237f5ea49dade7eedcf1a7e67",
+      "sha256": "3fedd3d156bb93180b71468c27fda8eb685e496cd58e493e43d319e9f0f56b5e",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -419,25 +419,25 @@
       "topic": "component"
     },
     {
-      "bytes": 21072,
+      "bytes": 21374,
       "id": "component/gov",
-      "sha256": "9c5cf1e876baecd45209a79656e66e1a2444d1bb3a0d6cb82934ffeaf0e7bc13",
+      "sha256": "13e0f2df04a71e12b98972d3d880050eedbbe11064eb7b2bf65a35ecfb782346",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
     },
     {
-      "bytes": 11420,
+      "bytes": 11795,
       "id": "component/harness",
-      "sha256": "27e588ff015a9dd707b04a6ec5b8f5f988f4229f1d9a32dd7f156db0c0e54c4b",
+      "sha256": "14007584d3f7ff821693941db306114d9b09829d07344c74a96385813bb88979",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
     },
     {
-      "bytes": 11312,
+      "bytes": 11669,
       "id": "component/hive",
-      "sha256": "1547501cfa60a0d1276958b86d6c5bdf59bafe441b3c36abce98169becd1b0ee",
+      "sha256": "63aabb7a8158dc62e612394579622a8c2a9b38d5d2fe1bbed8ee0f87a788846f",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -451,9 +451,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9811,
+      "bytes": 10845,
       "id": "component/hub",
-      "sha256": "7dabb9cec6bffac07b33e5660118f94c51618bd4949df4d37ae55220c63e5298",
+      "sha256": "7c2b177d9b618c09c14a9bccb5e841444ba1387dc3849a3361cacdb1eee48965",
       "source": "modules/hub/src/README.md",
       "title": "Hub module management",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 721100,
+    "bytes": 723883,
     "documents": 77
   }
 }

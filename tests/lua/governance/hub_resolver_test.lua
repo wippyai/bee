@@ -3,6 +3,7 @@
 -- boundaries as the destination host without granting this test a registry
 -- writer or an execution capability.
 local test = require("test")
+local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local artifact = require("artifact")
@@ -81,7 +82,7 @@ local function deps_fixture(policy: Policy?): (Deps, Spec, {root: Object?, captu
     observed.captured = captured
     local selected_policy: Policy
     if policy then
-        selected_policy = policy :: Policy
+        selected_policy = policy
     else
         selected_policy = {node_id = "node-destination", policy_digest = SHA,
             packages = {["vendor/app"] = true}, namespaces = {app = true},
@@ -147,7 +148,7 @@ local function define_tests()
             local resolved = facts(deps, spec)
             test.eq(resolved.context.database_bindings["app:data"].database_id, "host:db")
             test.eq(resolved.context.database_bindings["app:data"].table_prefix, "app_")
-            local source_binding = (policy.database_bindings :: Object)["app:data"] :: Object
+            local source_binding = assert(bounds.object((assert(bounds.object(policy.database_bindings)))["app:data"]))
             source_binding.database_id = "other:db"
             test.eq(resolved.context.database_bindings["app:data"].database_id, "host:db")
         end)
@@ -158,18 +159,18 @@ local function define_tests()
             local resolved = facts(deps, spec)
             local root = observed.root
             test.is_true(root ~= nil)
-            test.is_nil(((root :: Object).data :: Object).parameters)
+            test.is_nil((assert(bounds.object((assert(bounds.object(root))).data))).parameters)
             test.eq(resolved.candidate.base_revision, 23)
         end)
 
         test.it("keeps the relevant base digest stable when unrelated definitions change", function()
             local deps, spec, observed = deps_fixture(nil)
             local first = facts(deps, spec)
-            local captured = observed.captured :: Captured
+            local captured = observed.captured
             captured.entries[#captured.entries + 1] = entry("other:unrelated", "host/other", "first")
             local second = facts(deps, spec)
             test.eq(second.candidate.base_digest, first.candidate.base_digest)
-            test.eq((second.context :: Context).registry_digest, first.candidate.base_digest)
+            test.eq((second.context).registry_digest, first.candidate.base_digest)
         end)
 
         test.it("removes dependency directives from the flattened artifact", function()
@@ -185,8 +186,8 @@ local function define_tests()
             local deps, spec = deps_fixture(nil)
             local resolved = facts(deps, spec)
             local claimed = find_entry(resolved.candidate.entries, "app:claimed")
-            test.eq((claimed :: CandidateEntry).package, "vendor/app")
-            test.eq((resolved.context.entries["app:claimed"] :: CandidateEntry).package, "vendor/app")
+            test.eq((claimed).package, "vendor/app")
+            test.eq((resolved.context.entries["app:claimed"]).package, "vendor/app")
         end)
 
         test.it("requires the reviewed artifact bytes and digest to match exactly", function()

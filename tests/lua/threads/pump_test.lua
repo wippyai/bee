@@ -3,6 +3,7 @@
 -- reply settles the row; a final refusal fails it; anything that leaves the
 -- outcome unknown settles nothing so the delivery repeats under the same key.
 local test = require("test")
+local bounds = require("bounds")
 local pump = require("pump")
 
 local function define_tests()
@@ -10,7 +11,7 @@ local function define_tests()
         test.it("settles a delivered row on the destination's committed reply", function()
             local outcome = pump.outcome({ok = true, value = {record_id = "record-1"}}, nil)
             test.eq(outcome.decision, "delivered")
-            test.eq((outcome.receipt :: {[string]: unknown}).record_id, "record-1")
+            test.eq((assert(bounds.object(outcome.receipt))).record_id, "record-1")
         end)
         test.it("fails a row only on a destination refusal that is final", function()
             for _, code in ipairs({"DENIED", "NOT_FOUND", "CONFLICT", "INVALID_ARGUMENT", "INVALID_STATE"}) do

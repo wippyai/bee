@@ -2,11 +2,13 @@
 -- when an action it can read ends its turn or its attempt exits. The owner
 -- commits one notification after the ending record, wakes a waiter on the
 -- watcher's thread, and never tells twice.
+local principals = require("principals")
 local test = require("test")
+local bounds = require("bounds")
 local harness = require("harness")
 type Object = {[string]: unknown}
 local function admitted_for(principal: string): Object
-    local body = harness.admitted() :: Object
+    local body = assert(bounds.object(harness.admitted()))
     body.principal_id = principal
     return body
 end
@@ -16,12 +18,12 @@ end
 local viewer = harness.principal("alice", harness.ALL)
 local function records(thread_id: string): {Object}
     local page = harness.value(viewer:call("read_after", {thread_id = thread_id, cursor = 0, limit = 64}))
-    return page.records :: {Object}
+    return principals.objects(page.records, 64)
 end
 local function notices(thread_id: string): {Object}
     local found: {Object} = {}
     for _, item in ipairs(records(thread_id)) do
-        local body = item.body :: Object
+        local body = assert(bounds.object(item.body))
         if item.kind == "message" and tostring(body.message_id):sub(1, 7) == "notice:" then found[#found + 1] = item end
     end
     return found
@@ -59,8 +61,8 @@ local function define_tests()
                 started = {execution_kind = "process", execution_ref = "pid-child", owner_epoch = 1}}))
         end
         local function observe(target: string, key: string, phase: string): Object
-            return harness.value(alice:call("record", {thread_id = target, idempotency_key = harness.key(), kind = "observation", source = "stream",
-                body = turn_signal(key, phase), context = {action_id = "target-action", attempt_id = "target-attempt"}})) :: Object
+            return assert(bounds.object(harness.value(alice:call("record", {thread_id = target, idempotency_key = harness.key(), kind = "observation", source = "stream",
+                body = turn_signal(key, phase), context = {action_id = "target-action", attempt_id = "target-attempt"}}))))
         end
         local function notify(watcher: string, target: string, key: string, watcher_action: string?)
             local request: Object = {thread_id = watcher, idempotency_key = key, target_thread_id = target, target_action_id = "target-action"}
@@ -81,13 +83,13 @@ local function define_tests()
             local ended = observe(target, "turn-end", "ended")
             local told = notices(watcher)
             test.eq(#told, 1)
-            local body = told[1].body :: Object
+            local body = assert(bounds.object(told[1].body))
             test.eq(body.message_kind, "notification")
             test.eq(body.sender_id, "alice")
-            test.eq((body.recipient_ids :: {string})[1], "alice")
-            test.eq((body.recipient_action_ids :: {string})[1], "watcher-action")
-            test.is_true(tostring((body.content :: Object).text):find("ended its turn", 1, true) ~= nil)
-            local causation = told[1].causation :: Object
+            test.eq(assert(bounds.ids(body.recipient_ids))[1], "alice")
+            test.eq(assert(bounds.ids(body.recipient_action_ids))[1], "watcher-action")
+            test.is_true(tostring((assert(bounds.object(body.content))).text):find("ended its turn", 1, true) ~= nil)
+            local causation = assert(bounds.object(told[1].causation))
             test.eq(causation.thread_id, target)
             test.eq(causation.record_id, ended.record_id)
             observe(target, "turn-end-2", "ended")
@@ -110,11 +112,11 @@ local function define_tests()
                 receipt = {scope = "attempt", outcome = "uncertain", evidence_refs = {}, error = {code = "lost", message = "lost", retryable = false}}}))
             local told = notices(watcher)
             test.eq(#told, 1)
-            local body = told[1].body :: Object
+            local body = assert(bounds.object(told[1].body))
             test.eq(body.outcome, "uncertain")
             test.is_nil(body.recipient_action_ids)
-            test.is_true(tostring((body.content :: Object).text):find("exited", 1, true) ~= nil)
-            test.eq((told[1].causation :: Object).record_id, receipt.record_id)
+            test.is_true(tostring((assert(bounds.object(body.content))).text):find("exited", 1, true) ~= nil)
+            test.eq((assert(bounds.object(told[1].causation))).record_id, receipt.record_id)
         end)
         test.it("tells at once when the watched action has no live attempt", function()
             local watcher, target = sessions()
@@ -124,8 +126,8 @@ local function define_tests()
             test.eq(registered.state, "fired")
             local told = notices(watcher)
             test.eq(#told, 1)
-            test.eq((told[1].causation :: Object).record_id, receipt.record_id)
-            test.eq((told[1].body :: Object).outcome, "succeeded")
+            test.eq((assert(bounds.object(told[1].causation))).record_id, receipt.record_id)
+            test.eq((assert(bounds.object(told[1].body))).outcome, "succeeded")
         end)
         test.it("stores an attempt notice before the child action binds", function()
             local watcher, target = pending_session()
@@ -153,8 +155,8 @@ local function define_tests()
                 body = turn_signal("child-turn-end", "ended"), context = {action_id = "child-action", attempt_id = "child-attempt"}}))
             local told = notices(watcher)
             test.eq(#told, 1)
-            test.is_true(tostring((((told[1].body :: Object).content :: Object).text)):find("child-action ended its turn", 1, true) ~= nil)
-            test.eq((told[1].causation :: Object).record_id, ended.record_id)
+            test.is_true(tostring(((assert(bounds.object((assert(bounds.object(told[1].body))).content))).text)):find("child-action ended its turn", 1, true) ~= nil)
+            test.eq((assert(bounds.object(told[1].causation))).record_id, ended.record_id)
             local db = harness.open()
             local stored = harness.query(db, "SELECT state FROM bee_thread_notices WHERE notice_id = ?", {registered.notice_id})
             db:release()
@@ -168,8 +170,8 @@ local function define_tests()
                 receipt = {scope = "attempt", outcome = "failed", evidence_refs = {}, error = {code = "fixture", message = "fixture exit", retryable = false}}}))
             local told = notices(watcher)
             test.eq(#told, 1)
-            test.eq((told[1].causation :: Object).record_id, receipt.record_id)
-            test.eq((told[1].body :: Object).outcome, "failed")
+            test.eq((assert(bounds.object(told[1].causation))).record_id, receipt.record_id)
+            test.eq((assert(bounds.object(told[1].body))).outcome, "failed")
         end)
         test.it("refuses an attempt notice from a caller outside the target thread", function()
             local _, target = pending_session()

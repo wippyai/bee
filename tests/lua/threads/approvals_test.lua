@@ -4,6 +4,7 @@
 -- by the thread. Its notices owe their recipient a delivery and never an
 -- answer.
 local test = require("test")
+local bounds = require("bounds")
 local harness = require("harness")
 local AUTHORITY = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_approval_policy"}
 local function request_body(approval_id: string): {[string]: unknown}
@@ -84,8 +85,8 @@ local function define_tests()
             -- The notice is still recorded: the outcome is not withheld from the thread.
             local page = harness.value(authority:call("read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"message"}}}))
             test.eq(#page.records, 1)
-            local recipients = (page.records[1].body :: {[string]: unknown}).recipient_ids
-            test.eq((recipients :: {string})[1], "member")
+            local recipients = (assert(bounds.object(page.records[1].body))).recipient_ids
+            test.eq(assert(bounds.ids(recipients))[1], "member")
             -- But nothing owes a delivery to someone who can no longer be held to one.
             local db = harness.open()
             local rows = harness.query(db, "SELECT recipient_id FROM bee_thread_obligations WHERE thread_id = ?", {thread_id})

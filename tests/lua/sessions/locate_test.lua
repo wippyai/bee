@@ -1,6 +1,7 @@
 -- MIT. Locate returns honest readiness and invalidates cached probes whenever
 -- its host-selected binding or observed environment changes.
 local test = require("test")
+local bounds = require("bounds")
 local locate = require("locate")
 
 local function clock(): (locate.Clock, {now: integer})
@@ -37,14 +38,14 @@ local function define_tests()
             for _, status in ipairs({"ready", "missing", "unconfigured", "incompatible", "unknown"}) do
                 local cache = assert(locate.new(1000, clock_value))
                 local result = assert(locate.locate(cache, candidate(), function(): locate.LocateObservation?
-                    return observation(status :: locate.Status)
+                    return observation(status)
                 end))
                 test.eq(result.ref, "research:claude")
                 test.eq(result.kind, "definition")
                 test.eq(result.status, status)
                 test.eq(result.title, "Claude review")
                 test.eq(result.checked_at, "2026-09-29T00:00:00.000Z")
-                test.is_nil((result :: {[string]: unknown}).expires_at)
+                test.is_nil((assert(bounds.object(result))).expires_at)
                 test.eq(#result.reasons, status == "ready" and 0 or 1)
                 test.eq(#result.features, 0)
                 test.eq(#result.actions, 0)

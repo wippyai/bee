@@ -2,6 +2,7 @@
 -- state when its arguments are invalid or no owner supervisor answers for the
 -- node, and never attaches anything.
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -15,7 +16,7 @@ local function state(states: Channel<process.Message>, viewer: string): {[string
         local selected = channel.select({states:case_receive(), deadline:case_receive()})
         if selected.channel == deadline then error("the remote view reported no state") end
         local message = selected.value
-        if tostring(message:from()) == viewer then found = message:payload():data() :: {[string]: unknown} end
+        if tostring(message:from()) == viewer then found = assert(bounds.object(message:payload():data())) end
     end
     return found
 end

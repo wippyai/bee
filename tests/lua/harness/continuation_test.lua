@@ -1,5 +1,6 @@
 -- MIT. Continuation comes from a successful owner receipt and native session.
 local test = require("test")
+local bounds = require("bounds")
 local continuation = require("continuation")
 local checkpoint = require("checkpoint")
 local hook_records = require("hook_records")
@@ -116,17 +117,17 @@ local function define_tests()
                 if target == "bee.threads.carrier:checkpoint" then return {ok = true, value = stored}, nil end
                 if target == PLACEMENT_METHODS.status then return {ok = true, value = {attempt = attempt, private_home = true}}, nil end
                 if target == PLACEMENT_METHODS.cleanup then
-                    test.eq((input :: {[string]: unknown}).attempt_id, "previous")
+                    test.eq((assert(bounds.object(input))).attempt_id, "previous")
                     cleanup_calls = cleanup_calls + 1
                     return cleanup_reply, nil
                 end
                 test.eq(target, "bee.threads.service:read_after")
                 reads = reads + 1
                 if denied then return {ok = false, error = {code = "DENIED"}}, nil end
-                local request = input :: {[string]: unknown}
+                local request = assert(bounds.object(input))
                 test.eq(request.thread_id, "thread")
                 test.eq(request.limit, 64)
-                local filter = request.filter :: {[string]: unknown}
+                local filter = assert(bounds.object(request.filter))
                 test.eq(filter.action_id, "action")
                 if request.cursor == 0 then return {ok = true, value = {records = {}, scanned_through = 1024, has_more = true}}, nil end
                 test.eq(request.cursor, 1024)
@@ -315,7 +316,7 @@ local function define_tests()
                         checkpoint_revision = 1, checkpoint = point}}, nil
                 end
                 if target == "bee.threads.service:receipt" then
-                    receipt = input :: {[string]: unknown}
+                    receipt = assert(bounds.object(input))
                     return {ok = true, value = {}}, nil
                 end
                 return nil, "unexpected recovery target " .. target
@@ -343,7 +344,7 @@ local function define_tests()
             test.eq(captured.profile_digest, "historical-profile")
             test.eq(captured.plan_digest, "historical-plan")
             test.eq(captured.gateway_binding, "historical-gateway")
-            test.eq(receipt and (receipt :: {[string]: unknown}).attempt_id, "previous")
+            test.eq(receipt and (assert(bounds.object(receipt))).attempt_id, "previous")
         end)
         test.it("forms native resume argv with no prompt or stdin replay", function()
             local codex_request, codex_error = codex.decode({profile_id = "window", brief = "", resume_ref = "provider-session"})
@@ -391,7 +392,7 @@ local function define_tests()
                         return {ok = true, value = {records = {observation(1, "provider-session", "old-binding", false, "previous")}, scanned_through = 1, has_more = false}}, nil
                     end
                     test.eq(target, "bee.driver.claude.binding:dispatch")
-                    local request = input :: {[string]: unknown}
+                    local request = assert(bounds.object(input))
                     test.eq(request.profile_id, "window")
                     test.eq(request.resume_ref, "provider-session")
                     test.eq(request.brief, "")

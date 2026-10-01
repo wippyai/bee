@@ -88,6 +88,7 @@ entries:
   method: run
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
@@ -101,6 +102,7 @@ entries:
   method: natural
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
@@ -113,6 +115,7 @@ entries:
   method: checkpoint_ack
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
@@ -167,6 +170,7 @@ entries:
   method: select
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
@@ -216,6 +220,7 @@ entries:
   method: retained
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
@@ -252,6 +257,8 @@ entries:
   source: file://catalog.lua
   method: catalog
   modules: [registry]
+  imports: {bounds: bee.protocol:bounds}
+
 - name: catalog_owner
   kind: contract.binding
   meta: {type: test_support}

@@ -2,6 +2,8 @@
 -- server and command hooks, strict rejection of provider configuration
 -- and profile instructions, and deterministic SHA-256 measurement.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local json = require("json")
 local registry = require("registry")
 local configuration = require("configuration")
@@ -24,7 +26,7 @@ local function define_tests()
             for _, ref in ipairs({"bee.driver.muse:launch_policy_muse_window", "bee.driver.muse:launch_policy_muse_batch"}) do
                 local entry, entry_error = registry.get(ref)
                 if not entry then error(tostring(entry_error or (ref .. " is missing"))) end
-                local data = entry.data :: {[string]: unknown}
+                local data = assert(bounds.object(entry.data))
                 test.eq(data.hook_command_ref, "bee.gateway:hook_executable")
             end
         end)
@@ -153,15 +155,15 @@ local function define_tests()
                     hooks = {"SessionStart"}, token_environment = "BEE_GATEWAY_TOKEN",
                     hook_token_environment = "BEE_HOOK_TOKEN", hook_command = "/abs/bee-hook"}})
             test.is_true(reply.ok)
-            local delivery = reply.delivery :: {[string]: unknown}
-            local files = delivery.files :: {{[string]: unknown}}
+            local delivery = assert(bounds.object(reply.delivery))
+            local files = principals.objects(delivery.files)
             test.eq(#files, 2)
             test.is_true(files[1].path:find(".config/muse/.bee-hooks/", 1, true) == 1)
             test.eq(files[2].path, ".config/muse/settings.json")
-            test.eq(#(delivery.arguments :: {unknown}), 0)
+            test.eq(#(principals.items(delivery.arguments)), 0)
             local empty = configure.handle({fixture = false})
             test.is_true(empty.ok)
-            test.eq(#((empty.delivery :: {[string]: unknown}).files :: {unknown}), 0)
+            test.eq(#(principals.items((assert(bounds.object(empty.delivery))).files)), 0)
             local provider_reply = configure.handle({fixture = false, provider_ref = "custom:provider",
                 provider = {schema_revision = "bee.muse-provider@1"}})
             test.is_false(provider_reply.ok)

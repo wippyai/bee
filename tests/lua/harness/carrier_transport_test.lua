@@ -14,7 +14,7 @@ local function claim_reply(epoch: integer): {[string]: unknown}
         checkpoint_revision = 0, attempt_state = "prepared"}}
 end
 local function commit_reply(request_value: unknown, revision: integer): {[string]: unknown}
-    local request = request_value :: {[string]: unknown}
+    local request = assert(bounds.object(request_value))
     return {ok = true, value = {attempt_id = request.attempt_id, carrier_epoch = request.carrier_epoch,
         checkpoint_revision = revision, records = {}}}
 end
@@ -70,6 +70,31 @@ local function plan(mode: string, protocol: string): machine.Plan
 end
 local function define_tests()
     test.describe("Carrier transport ownership", function()
+        test.it("does not settle an exited child while its runner still owns unconsumed output", function()
+            local selected = plan("session", "stream-json")
+            local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)
+            local session: machine.Session = {plan = selected, turn_id = "turn:attempt:1", turn_open = true, epoch = 1, revision = 0,
+                checkpoint = point, decoder = stream_json.new(machine.MAX_FRAME_BYTES), normalizer = nil, terminal = nil,
+                stream_ended = false, exit = {code = 0, uncertain = false}, eof = {stdout = false, stderr = false},
+                runner = "runner", settled = nil, recovered = false, output = "open", pending_hint = nil,
+                placement_evidence = 0, stderr_sequence = 0, last_sequence = {stdout = 0, stderr = 0}, held_from = nil, dropping_stdout = false}
+            test.is_false(machine.ready_to_settle(session, true), "a carrier deadline cannot retire output retained by a live runner")
+            local io: machine.IO = {
+                call = function(_: string, _: unknown): (unknown, string?) error("settlement must wait for output") end,
+                send = function(_: string, _: string, _: unknown) error("settlement must wait for output") end,
+                self_pid = function(): string return "carrier" end,
+                now_ms = function(): integer return 1000000 end,
+                key = function(): string return "key" end,
+            }
+            local settled, err = machine.settle(io, session, true)
+            test.is_nil(settled)
+            test.is_nil(err)
+            test.is_false(machine.on_runner_exit(session, "stale-runner"))
+            test.is_false(machine.ready_to_settle(session, true))
+            test.is_true(machine.on_runner_exit(session, "runner"))
+            test.is_false(machine.ready_to_settle(session, false), "runner loss still allows queued output to drain")
+            test.is_true(machine.ready_to_settle(session, true), "runner loss has a bounded fallback")
+        end)
         test.it("validates stdin closure against the selected attempt and explicit refusal", function()
             local value, err = placement_decode.stdin_closure({attempt = placement_attempt(nil), closed = true}, "attempt")
             test.is_nil(err)
@@ -251,7 +276,7 @@ local function define_tests()
                         }, has_more = false, scanned_through = 9}}, nil
                     end
                     if target == "bee.threads.service:prepare_attempt" then
-                        prepared_body = value :: {[string]: unknown}
+                        prepared_body = assert(bounds.object(value))
                         return {ok = true, value = {}}, nil
                     end
                     if target == "bee.threads.carrier:claim" then return claim_reply(2), nil end

@@ -1,5 +1,6 @@
 -- MIT. Probe child-thread messaging through the exact generated app grant.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -54,9 +55,9 @@ local function define_tests()
             local applied, apply_error = changes:apply()
             if not applied then error("apply generated grant: " .. tostring(apply_error)) end
 
-            local policy_id = proposed.policies[1].id :: string
-            local grant_data = proposed.policies[1].data :: {[string]: unknown}
-            local generated = (grant_data.policy :: {[string]: unknown}).resources :: {string}
+            local policy_id = proposed.policies[1].id
+            local grant_data = assert(bounds.object(proposed.policies[1].data))
+            local generated = principals.strings((assert(bounds.object(grant_data.policy))).resources)
             local methods: {[string]: boolean} = {}
             for _, method in ipairs(generated) do methods[method] = true end
             test.is_true(methods["bee.threads.service:send"] == true)
@@ -72,7 +73,7 @@ local function define_tests()
             local created, create_error = creator:call("bee.threads.service:create", {
                 thread_id = thread_id, idempotency_key = fresh("create"), title = "Steering probe"})
             if create_error then error("create thread: " .. tostring(create_error)) end
-            test.eq((created :: {[string]: unknown}).ok, true)
+            test.eq((assert(bounds.object(created))).ok, true)
             local caller = funcs.new():with_actor(actor):with_scope(security.new_scope({message_policy}))
 
             local message = {message_id = fresh("message"), message_kind = "notification",
@@ -92,9 +93,9 @@ local function define_tests()
                 if event.kind == process.event.EXIT and tostring(event.from) == tostring(pid) then
                     local result = event.result or {}
                     if result.error then error("app actor probe: " .. tostring(result.error)) end
-                    local probe = result.value :: {[string]: unknown}
+                    local probe = assert(bounds.object(result.value))
                     test.is_nil(probe.send_transport_error)
-                    test.eq((probe.send_reply :: {[string]: unknown}).ok, true)
+                    test.eq((assert(bounds.object(probe.send_reply))).ok, true)
                     local record_error = probe.record_transport_error
                     print("RAW_THREADS_MESSAGE_RECORD_FUNCS_CALL_ERROR=" .. tostring(record_error))
                     test.eq(record_error, "not allowed: bee.threads.service:record")

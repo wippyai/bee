@@ -1,5 +1,7 @@
 -- MIT. The Sessions catalog delegates route availability to host driver locate.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local catalog = require("catalog")
 local registry = require("registry")
 local funcs = require("funcs")
@@ -14,7 +16,7 @@ type Page = {items: {Candidate}, next: string?, complete: boolean, unavailable_c
 local function listed(include_unavailable: boolean?): Page
     local page, failure = catalog.list({kind = "definition", include_unavailable = include_unavailable}, "catalog-test-workspace")
     if not page then error(failure and failure.message or "Sessions catalog returned no page") end
-    return page :: Page
+    return page
 end
 
 local function define_tests()
@@ -23,7 +25,7 @@ local function define_tests()
             local saved = assert(funcs.call("bee.harness.profiles:call", {operation = "put", workspace_id = "saved-profile-workspace",
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
                 profile = {schema_revision = "bee.agent-profile@2", name = "Selected container profile", definition_ref = "bee.driver.claude:default_window", driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {mcp = {}}}}))
-            test.is_true((saved :: Object).ok == true)
+            test.is_true((assert(bounds.object(saved))).ok == true)
             local page, page_fault = catalog.list({include_unavailable = true}, "saved-profile-workspace")
             if not page then error(page_fault and page_fault.message or "catalog list failed") end
             local found = false
@@ -38,10 +40,11 @@ local function define_tests()
         end)
         test.it("registers every operation of the host-selected Threads journal", function()
             local binding = assert(registry.get("bee.threads:journal_local"))
-            local data = binding.data :: {contracts: {{contract: string, methods: {[string]: string}}}}
-            for _, contract in ipairs(data.contracts) do
+            local data = assert(bounds.object(binding.data))
+            for _, contract in ipairs(principals.objects(data.contracts)) do
                 if contract.contract == "bee.threads:journal" then
-                    for name, target in pairs(contract.methods) do
+                    for name, target in pairs(assert(bounds.object(contract.methods))) do
+                        assert(type(target) == "string")
                         local entry = registry.get(target)
                         if not entry then error("journal operation is missing: " .. name) end
                         test.eq(entry.kind, "function.lua")
@@ -58,7 +61,8 @@ local function define_tests()
             if found and found.status ~= "ready" then error(table.concat(found.reasons, "; ")) end
             test.eq(found and found.status, "ready")
             local entry = assert(registry.get("bee.driver.claude:default_window"))
-            local definition = entry.data :: {binding_ref: string, profile_id: string, policy_ref: string}
+            local definition = assert(bounds.object(entry.data))
+            assert(type(definition.binding_ref) == "string" and type(definition.profile_id) == "string" and type(definition.policy_ref) == "string")
             local request: machine.Request = {thread_id = "catalog-login-thread", action_id = "catalog-login-action",
                 attempt_id = "catalog-login-attempt", owner_id = "bee.test.catalog-login", owner_incarnation = 1,
                 binding_ref = definition.binding_ref, profile_id = definition.profile_id, policy_ref = definition.policy_ref,

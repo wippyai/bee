@@ -1,5 +1,6 @@
 -- MIT. Remote versions are cached durably but are never selected here.
 local test = require("test")
+local bounds = require("bounds")
 local replicas = require("replicas")
 local version = require("version")
 local uuid = require("uuid")
@@ -42,7 +43,7 @@ local function transfer(store: replicas.Store, item: version.Descriptor, content
     if not begun.ok then return begun end
     local offset = 0
     while offset < #content do
-        local chunk_end: integer = offset + (replicas.MAX_CHUNK_BYTES :: integer)
+        local chunk_end: integer = offset + (replicas.MAX_CHUNK_BYTES)
         if chunk_end > #content then chunk_end = #content end
         local chunk = content:sub(offset + 1, chunk_end)
         local encoded = required_base64(chunk)
@@ -73,7 +74,7 @@ local function define_tests()
             local available_status = replicas.status(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(available_status.ok)
-            local available_value = available_status.value :: {[string]: unknown}
+            local available_value = assert(bounds.object(available_status.value))
             test.eq(available_value.state, "available")
             test.eq(available_value.received_bytes, #content)
             test.eq(available_value.total_bytes, #content)
@@ -87,8 +88,8 @@ local function define_tests()
             local read = replicas.read(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(read.ok)
-            local value = read.value :: {[string]: unknown}
-            local read_descriptor = value.descriptor :: version.Descriptor
+            local value = assert(bounds.object(read.value))
+            local read_descriptor = assert(version.decode(value.descriptor))
             test.eq(read_descriptor.digest, item.digest)
             test.eq(read_descriptor.owner_id, item.owner_id)
             test.eq(read_descriptor.feed, item.feed)
@@ -97,7 +98,7 @@ local function define_tests()
             local replay = replicas.begin(store, item, 1)
             test.is_true(replay.ok)
             test.is_true(replay.replayed)
-            test.eq((replay.value :: {[string]: unknown}).state, "available")
+            test.eq((assert(bounds.object(replay.value))).state, "available")
             test.is_true(replicas.close(store))
         end)
         test.it("names the source owners with available versions of one feed", function()
@@ -112,7 +113,7 @@ local function define_tests()
             test.is_true(transfer(store, descriptor_for(first_owner, "other-" .. feed, "v1", "four"), "four").ok)
             local listed = replicas.sources(store, feed, 16)
             test.is_true(listed.ok)
-            local owners = (listed.value :: {[string]: unknown}).sources :: {string}
+            local owners = assert(bounds.array(assert(bounds.object(listed.value)).sources, 16))
             local expected = {first_owner, second_owner}
             table.sort(expected)
             test.eq(#owners, 2)
@@ -129,15 +130,15 @@ local function define_tests()
             local receiving_status = replicas.status(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(receiving_status.ok)
-            local receiving_value = receiving_status.value :: {[string]: unknown}
+            local receiving_value = assert(bounds.object(receiving_status.value))
             test.eq(receiving_value.state, "receiving")
             test.eq(receiving_value.received_bytes, 0)
             test.eq(receiving_value.total_bytes, #content)
-            local first = required_base64(content:sub(1, replicas.MAX_CHUNK_BYTES :: integer))
+            local first = required_base64(content:sub(1, replicas.MAX_CHUNK_BYTES))
             test.is_true(replicas.put(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = key, descriptor_digest = item.digest}, 0, first).ok)
             local gap = replicas.put(store, {source_owner = item.owner_id, feed = item.feed,
-                version_key = key, descriptor_digest = item.digest}, (replicas.MAX_CHUNK_BYTES :: integer) + 1, required_base64("tail"))
+                version_key = key, descriptor_digest = item.digest}, (replicas.MAX_CHUNK_BYTES) + 1, required_base64("tail"))
             test.eq(gap.code, "CONFLICT")
             local changed = descriptor(key, content .. "changed")
             test.eq(replicas.begin(store, changed, 8).code, "CONFLICT")
@@ -149,7 +150,7 @@ local function define_tests()
             local available_status = replicas.status(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(available_status.ok)
-            test.eq((available_status.value :: {[string]: unknown}).state, "available")
+            test.eq((assert(bounds.object(available_status.value))).state, "available")
             test.is_true(replicas.close(store))
         end)
         test.it("does not let an out-of-order blob completion skip a discovery cursor", function()
@@ -164,17 +165,17 @@ local function define_tests()
 
             local after_later = replicas.cursor(store, {source_owner = source_owner, feed = feed})
             test.is_true(after_later.ok)
-            test.eq((after_later.value :: {[string]: unknown}).cursor, 0)
+            test.eq((assert(bounds.object(after_later.value))).cursor, 0)
 
             test.is_true(transfer(store, earlier, earlier_content, 1).ok)
             local after_both = replicas.cursor(store, {source_owner = source_owner, feed = feed})
             test.is_true(after_both.ok)
-            test.eq((after_both.value :: {[string]: unknown}).cursor, 0)
+            test.eq((assert(bounds.object(after_both.value))).cursor, 0)
 
             local checkpoint = replicas.advance_cursor(store, {source_owner = source_owner, feed = feed,
                 expected_cursor = 0, next_cursor = 2})
             test.is_true(checkpoint.ok)
-            test.eq((checkpoint.value :: {[string]: unknown}).cursor, 2)
+            test.eq((assert(bounds.object(checkpoint.value))).cursor, 2)
             local stale = replicas.advance_cursor(store, {source_owner = source_owner, feed = feed,
                 expected_cursor = 0, next_cursor = 3})
             test.eq(stale.code, "CONFLICT")
@@ -192,11 +193,11 @@ local function define_tests()
 
             local listed = replicas.available(store, owner, "published-apps", 16)
             test.is_true(listed.ok)
-            local value = listed.value :: {[string]: unknown}
-            local items = value.items :: {version.Descriptor}
+            local value = assert(bounds.object(listed.value))
+            local items = assert(bounds.array(value.items, 16))
             test.eq(#items, 1)
-            test.eq(items[1].digest, first.digest)
-            test.eq(items[1].key, first.key)
+            test.eq(assert(version.decode(items[1])).digest, first.digest)
+            test.eq(assert(version.decode(items[1])).key, first.key)
             test.is_true(replicas.close(store))
         end)
         test.it("does not expose incomplete or digest-mismatched content", function()
@@ -209,7 +210,7 @@ local function define_tests()
             local receiving_status = replicas.status(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(receiving_status.ok)
-            test.eq((receiving_status.value :: {[string]: unknown}).state, "receiving")
+            test.eq((assert(bounds.object(receiving_status.value))).state, "receiving")
             test.is_nil((replicas.content(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = key, descriptor_digest = item.digest})))
             test.eq(replicas.read(store, {source_owner = item.owner_id, feed = item.feed,

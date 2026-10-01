@@ -1,6 +1,7 @@
 -- MIT. Activation declarations are deliberately narrow: they select from a
 -- host-pinned catalog but confer no publication, launch or process authority.
 local test = require("test")
+local bounds = require("bounds")
 local activation = require("activation")
 
 local function entry(data: {[string]: unknown}?): {[string]: unknown}
@@ -30,7 +31,7 @@ local function define_tests()
             test.is_nil(unknown)
             test.eq(unknown_error, "test:activation: unknown field publish")
             local foreign = entry({schema_revision = "bee.harness-activation@1", bindings = {}})
-            local foreign_meta = foreign.meta :: {[string]: unknown}
+            local foreign_meta = assert(bounds.object(foreign.meta))
             foreign_meta.type = "bee.launch_policy"
             local wrong, wrong_error = activation.decode_activation("test:activation", foreign)
             test.is_nil(wrong)

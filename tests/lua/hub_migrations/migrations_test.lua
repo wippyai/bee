@@ -11,7 +11,7 @@ end
 local function allowed_ids(options: {[string]: unknown}): {string}
     local raw = options.allowed_ids
     if type(raw) ~= "table" then return {} end
-    local values = raw :: {[number]: unknown}
+    local values: {[number]: unknown} = raw
     local ids: {string} = {}
     for _, value in ipairs(values) do if type(value) == "string" then ids[#ids + 1] = value end end
     return ids

@@ -57,4 +57,18 @@ from `lock.root_module`, and reports installed versions from the live
 Modules updates the `bee/bee` closure through the existing approved Hub plan
 and apply path. Registry history and cached artifacts restore that selection
 offline. `make hub-self-update-runtime-check` tests the seeded root adapter and
-continuity; `make hub-self-update-standalone-check` exercises source-free packs.
+continuity; `make hub-self-update-standalone-check` exercises source-free packs
+and the real native desktop client on a PTY against a local fixture Hub. It
+applies through Modules, retains and refreshes About on the attached terminal with unchanged
+owner/client OS PIDs, verifies clean detach, and relaunches offline. The native
+binary embeds the exact fixture baseline; an optional `BEE_SELF_UPDATE_BINARY`
+can reuse an already sealed binary after verifying its binary and pack digests
+against that baseline. `BEE_SELF_UPDATE_TARGET_DEPLOYMENT` selects an existing
+sealed target instead of generating fixture versions. `BEE_SELF_UPDATE_EVIDENCE`
+retains terminal frames and PID records from a successful run. Neither route publishes.
+
+Native Hive enrollment is an owner-local registry overlay, separate from package
+entries and durable history. Root replacement therefore preserves the host's
+current admission while client departures still revoke terminal mounts through
+the same supervision path. This native fix takes effect when the owner boots
+with the updated executable; Lua package updates do not replace native code.

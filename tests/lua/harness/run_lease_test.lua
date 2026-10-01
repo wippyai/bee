@@ -2,6 +2,8 @@
 -- node host manager serves the workspace while the run lasts and may stop it
 -- once the run ends; an identity outside the catalog names no host.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -24,7 +26,9 @@ local manager = funcs.new():with_actor(security.new_actor("bee.test.run_lease_ma
 local function admit()
     local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
-    local roots = (entry.data :: Object).roots :: {Object}
+    local roots_owner = assert(bounds.object(entry.data))
+    local roots = principals.objects(roots_owner.roots)
+    roots_owner.roots = roots
     for _, root in ipairs(roots) do if root.root_ref == PROJECTS then return end end
     roots[#roots + 1] = {root_ref = PROJECTS, access = "write"}
     local changes = registry.snapshot():changes()
@@ -35,7 +39,7 @@ local function create(label: string): string
     admit()
     local reply, err = manager:call("bee.workspace.catalog:create", {label = label, root_ref = PROJECTS, subpath = label, create_directory = true})
     if err or type(reply) ~= "table" or reply.ok ~= true then error("create " .. label .. ": " .. tostring(err)) end
-    return tostring(((reply :: Object).value :: Object).workspace_id)
+    return tostring((assert(bounds.object((assert(bounds.object(reply))).value))).workspace_id)
 end
 local function served(workspace_id: string): boolean
     return process.registry.lookup("bee.workspace.host/" .. workspace_id) ~= nil

@@ -59,6 +59,12 @@ The external executor starts one CLI invocation per reserved turn and leaves
 the session active after that invocation exits. Native Terminal continues to
 run with the operating system user's authority.
 
+Child exit does not end carrier output delivery. The carrier monitors the
+placement runner and consumes its acknowledged output until stream EOF or a
+terminal envelope. Placement owns the bounded pipe drain and output retention;
+the carrier's fallback drain starts only after runner loss and consumes already
+queued output before its deadline can settle a missing envelope.
+
 ## Sessions application
 
 Sessions is the primary desktop destination for agent work. The list shows

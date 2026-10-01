@@ -1,5 +1,6 @@
 -- MIT. Real two-runtime generic binary and application-version replication over
 -- the native Hive route. Receipt of v2 never selects it over v1.
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -43,7 +44,7 @@ local AGENT_DEFINITION = "bee.agent_app_demo:app"
 local AGENT_OVERLAY = "bee.replica.probe:activation_overlay"
 local function object(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("expected object") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 -- admission "rule" names a workspace application the destination admits
 -- under its shipped workspace-applications rule; "profile" names the Agent
@@ -60,7 +61,7 @@ local function selection(admission: unknown, source_workspace: unknown, componen
         or component ~= "app." .. source_workspace or definition_id ~= "app." .. source_workspace .. ":app" then
         error("agent scenario admission is malformed")
     end
-    return "rule", source_workspace :: string, component :: string, definition_id :: string
+    return "rule", source_workspace, component, definition_id
 end
 local function agent_scenario(): AgentScenario?
     local entry = registry.get("bee.replica.probe:agent_scenario")
@@ -74,8 +75,8 @@ local function agent_scenario(): AgentScenario?
     if type(workspace_id) ~= "string" or type(artifact_digest) ~= "string" then
         error("agent-artifact scenario is malformed")
     end
-    local selected_workspace = workspace_id :: string
-    local selected_digest = artifact_digest :: string
+    local selected_workspace = workspace_id
+    local selected_digest = artifact_digest
     if not selected_workspace:match("^[0-9a-f]+$") or #selected_workspace ~= 32
         or not selected_digest:match("^[0-9a-f]+$") or #selected_digest ~= 64 then error("agent-artifact scenario is malformed") end
     if source_node ~= "" or source_workspace_id ~= "" then
@@ -85,8 +86,8 @@ local function agent_scenario(): AgentScenario?
         end
         if type(source_version) ~= "string" or source_version == "" then error("agent source version is malformed") end
         return {workspace_id = selected_workspace, artifact_digest = selected_digest,
-            source_node = source_node :: string, source_workspace_id = source_workspace_id :: string,
-            source_version = source_version :: string, admission = admission, source_workspace = source_workspace,
+            source_node = source_node, source_workspace_id = source_workspace_id,
+            source_version = source_version, admission = admission, source_workspace = source_workspace,
             component = component, definition_id = definition_id}
     end
     return {workspace_id = selected_workspace, artifact_digest = selected_digest, admission = admission,
@@ -142,7 +143,7 @@ local function map_subject(subject: string, enabled: boolean)
 end
 local function send(remote: string, item: version.Descriptor, content: string, cursor: integer?): {[string]: unknown}
     local result = sender.send(remote, item, content, {source_cursor = cursor or 1, timeout = "5s"})
-    return result :: {[string]: unknown}
+    return assert(bounds.object(result))
 end
 local function must(result: {[string]: unknown}, operation: string): {[string]: unknown}
     if result.ok ~= true then error(operation .. ": " .. tostring(result.code) .. ": " .. tostring(result.message)) end
@@ -161,24 +162,24 @@ local function publish_binary()
     local item = descriptor("node-1", WORKER_KEY, CONTENT)
     local replica_store = assert(replicas.open("bee.sync:db"))
     local begun = replicas.begin(replica_store, item, 0)
-    must(begun :: {[string]: unknown}, "begin generic binary publication")
+    must(assert(bounds.object(begun)), "begin generic binary publication")
     local offset = 0
     while offset < #CONTENT do
-        local ending = math.min(#CONTENT, offset + (replicas.MAX_CHUNK_BYTES :: integer))
+        local ending = math.min(#CONTENT, offset + (replicas.MAX_CHUNK_BYTES))
         local encoded = assert(base64.encode(CONTENT:sub(offset + 1, ending)))
-        must(replicas.put(replica_store, {source_owner = item.owner_id, feed = item.feed,
-            version_key = item.key, descriptor_digest = item.digest}, offset, encoded) :: {[string]: unknown},
+        must(assert(bounds.object(replicas.put(replica_store, {source_owner = item.owner_id, feed = item.feed,
+            version_key = item.key, descriptor_digest = item.digest}, offset, encoded))),
             "write generic binary publication")
         offset = ending
     end
-    must(replicas.finish(replica_store, {source_owner = item.owner_id, feed = item.feed,
-        version_key = item.key, descriptor_digest = item.digest}) :: {[string]: unknown},
+    must(assert(bounds.object(replicas.finish(replica_store, {source_owner = item.owner_id, feed = item.feed,
+        version_key = item.key, descriptor_digest = item.digest}))),
         "finish generic binary publication")
     assert(replicas.close(replica_store))
     local feed = assert(sync.open({resource = "bee.sync:db", owner = "node-1"}))
-    must(sync.append(feed, {feed = item.feed, event_id = item.digest,
+    must(assert(bounds.object(sync.append(feed, {feed = item.feed, event_id = item.digest,
         idempotency_key = item.digest, event_type = "test.binary.published", payload = item,
-        projection_key = item.key, projection_value = item, expected_revision = 0}) :: {[string]: unknown},
+        projection_key = item.key, projection_value = item, expected_revision = 0}))),
         "append generic binary publication")
     assert(sync.close(feed))
 end
@@ -232,7 +233,7 @@ local function stage_resolver(): destination.Resolver
                 applied = applied, migration_barrier = false, auto_start = false}
             return host_policy, nil
         end})
-    return resolved :: destination.Resolver
+    return resolved
 end
 local function required(result: {[string]: unknown}, operation: string): {[string]: unknown}
     if result.ok ~= true then error(operation .. ": " .. tostring(result.code) .. ": " .. tostring(result.message)) end
@@ -297,7 +298,7 @@ local function configure_agent_destination(scenario: AgentScenario)
     local bindings = profile.applications
     if type(bindings) ~= "table" then error("governed application selection is unavailable") end
     local admitted = false
-    for _, raw in ipairs(bindings :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(bindings))) do
         local binding = object(raw)
         local policies = binding.policies
         if binding.definition_id == AGENT_DEFINITION and binding.thread_access == "observe_post"
@@ -311,7 +312,7 @@ local function agent_available(scenario: AgentScenario): {[string]: unknown}?
         "list agent artifact through public destination call")
     local versions = result.versions
     if type(versions) ~= "table" then error("available agent artifacts are malformed") end
-    for _, raw in ipairs(versions :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(versions))) do
         local descriptor = object(raw)
         local manifest = object(descriptor.manifest)
         if descriptor.owner_id == "node-1" and descriptor.feed == delivery.FEED and descriptor.object_id == scenario.component
@@ -561,7 +562,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
             local result = publisher.publish("bee.sync:db", "node-1", {source_workspace = "shared/application",
                 component = PACKAGE, version = selected_version,
                 artifact = {bytes = exact.bytes, digest = exact.digest}})
-            required(result :: {[string]: unknown}, "publish application " .. selected_version)
+            required(assert(bounds.object(result)), "publish application " .. selected_version)
             assert(io.print("BEE_HIVE_SUPERVISOR application_published_" .. label))
         elseif command == "application-available-v1" or command == "application-available-v2" then
             local label = string.sub(command, -2)
@@ -574,7 +575,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                     "list available applications")
                 local versions = result.versions
                 if type(versions) == "table" then
-                    for _, raw in ipairs(versions :: {unknown}) do
+                    for _, raw in ipairs(assert(bounds.array(versions))) do
                         local item = object(raw)
                         if item.digest == expected.digest and item.key == expected.key then found = true; break end
                     end
@@ -687,7 +688,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                     if recovery_error then error("recover locally applied agent artifact: " .. tostring(recovery_error)) end
                     local reply = object(raw)
                     if reply.ok ~= true then
-                        local fault = type(reply.error) == "table" and reply.error :: {[string]: unknown} or {}
+                        local fault = type(reply.error) == "table" and assert(bounds.object(reply.error)) or {}
                         local code, message = tostring(fault.code or reply.code), tostring(fault.message or reply.message)
                         -- Boot recovery steps the same desired intent; the
                         -- loser of that optimistic revision check re-reads it.
@@ -720,7 +721,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 end
                 if publish_error then error("publish locally applied agent artifact: " .. tostring(publish_error)) end
                 if not reply or reply.ok ~= true then
-                    local fault = reply and type(reply.error) == "table" and reply.error :: {[string]: unknown} or {}
+                    local fault = reply and type(reply.error) == "table" and assert(bounds.object(reply.error)) or {}
                     error("publish locally applied agent artifact was refused: "
                         .. tostring(fault.code or (reply and reply.code)) .. ": "
                         .. tostring(fault.message or (reply and reply.message)))
@@ -738,7 +739,7 @@ local function main(remote: string, source_destination_workspace: string?, sourc
                 local exact = exact_agent_artifact(agent)
                 local result = publisher.publish("bee.sync:db", "node-1", {source_workspace = AGENT_WORKSPACE,
                     component = AGENT_PACKAGE, version = AGENT_VERSION, artifact = {bytes = exact.bytes, digest = exact.digest}})
-                required(result :: {[string]: unknown}, "publish retained agent artifact")
+                required(assert(bounds.object(result)), "publish retained agent artifact")
             end
             assert(io.print("BEE_HIVE_SUPERVISOR agent_artifact_published"))
         elseif command == "agent-artifact-absent" then

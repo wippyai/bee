@@ -395,7 +395,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     assert(io.print("BEE_HIVE_REMOTE client_ready " .. self))
 
     -- 1. Receive admission notification from host
-    local adm_msg = assert(admissions:receive())
+    local adm_msg = assert((admissions:receive()))
     -- Preserved authenticated remote sender check:
     assert(tostring(adm_msg:from()) == host_pid, "Admission sender mismatch: expected " .. host_pid .. ", got " .. tostring(adm_msg:from()))
     local adm_data: unknown = adm_msg:payload():data()
@@ -408,7 +408,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     local renderer_generation = adm_data.renderer_generation
 
     -- 2. Receive catalog snapshot from host
-    local cat_msg = assert(catalogs:receive())
+    local cat_msg = assert((catalogs:receive()))
     assert(tostring(cat_msg:from()) == host_pid, "Catalog sender mismatch")
     local cat = inventory.catalog(cat_msg:payload():data())
     if not cat then error("Invalid host catalog") end
@@ -421,7 +421,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     assert(has_terminal, "Host catalog missing bee.console.app:app")
 
     -- 3. Receive initial views snapshot from host; verify pre-admission request had no side effect
-    local view_msg = assert(updates:receive())
+    local view_msg = assert((updates:receive()))
     assert(tostring(view_msg:from()) == host_pid, "Views sender mismatch")
     local v = inventory.views(view_msg:payload():data())
     if not v then error("Invalid host views") end
@@ -431,7 +431,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
 
     local function wait_reply(req_id: string, expected_op: string): decode.Reply
         while true do
-            local rmsg = assert(replies:receive())
+            local rmsg = assert((replies:receive()))
             assert(tostring(rmsg:from()) == host_pid, "Reply sender mismatch: expected " .. host_pid .. ", got " .. tostring(rmsg:from()))
             local env = client_protocol.result(rmsg:payload():data())
             if not env then error("Invalid client reply envelope") end
@@ -481,14 +481,14 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
             renderer = presenter_pid,
         }))
 
-        local ack_msg = assert(render_acks:receive())
+        local ack_msg = assert((render_acks:receive()))
         assert(tostring(ack_msg:from()) == supervisor_pid, "Renderer ack sender mismatch")
         local ack_data: unknown = ack_msg:payload():data()
         if type(ack_data) ~= "table" or ack_data.version ~= 1 or ack_data.request_id ~= "select-render-presenter" then
             error("Invalid renderer ack")
         end
 
-        local pres_msg = assert(presentations:receive())
+        local pres_msg = assert((presentations:receive()))
         assert(tostring(pres_msg:from()) == host_pid, "Presentation sender mismatch")
         local pres_data: unknown = pres_msg:payload():data()
         if type(pres_data) ~= "table" or pres_data.version ~= 1 or pres_data.workspace_id ~= workspace_id
@@ -637,14 +637,14 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
             op = "select_renderer",
             renderer = self,
         }))
-        local ack_self_msg = assert(render_acks:receive())
+        local ack_self_msg = assert((render_acks:receive()))
         assert(tostring(ack_self_msg:from()) == supervisor_pid, "Renderer ack self sender mismatch")
         local ack_self_data: unknown = ack_self_msg:payload():data()
         if type(ack_self_data) ~= "table" or ack_self_data.version ~= 1 or ack_self_data.request_id ~= "select-render-self" then
             error("Invalid renderer ack self")
         end
 
-        local pres_self_msg = assert(presentations:receive())
+        local pres_self_msg = assert((presentations:receive()))
         assert(tostring(pres_self_msg:from()) == host_pid, "Presentation self sender mismatch")
         local pres_self_data: unknown = pres_self_msg:payload():data()
         if type(pres_self_data) ~= "table" or pres_self_data.version ~= 1 or pres_self_data.workspace_id ~= workspace_id
@@ -834,7 +834,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     -- Unadmitted actors receive no host inventory or reply. Re-admit this
     -- execution and verify that the old-connection request created no app.
     assert(io.print("BEE_HIVE_REMOTE client_stale_done"))
-    local fresh_message = assert(admissions:receive())
+    local fresh_message = assert((admissions:receive()))
     assert(tostring(fresh_message:from()) == host_pid, "Fresh admission sender mismatch")
     local fresh: unknown = fresh_message:payload():data()
     if type(fresh) ~= "table" or fresh.version ~= 1 or fresh.workspace_id ~= workspace_id
@@ -845,13 +845,13 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     end
     connection_id = fresh.connection_id
     renderer_generation = fresh.renderer_generation
-    local fresh_catalog_message = assert(catalogs:receive())
+    local fresh_catalog_message = assert((catalogs:receive()))
     assert(tostring(fresh_catalog_message:from()) == host_pid, "Fresh catalog sender mismatch")
     local fresh_catalog = inventory.catalog(fresh_catalog_message:payload():data())
     assert(fresh_catalog and fresh_catalog.workspace_id == workspace_id and fresh_catalog.connection_id == connection_id, "Fresh catalog mismatch")
     local fresh_views: inventory.Views? = nil
     while not fresh_views do
-        local message = assert(updates:receive())
+        local message = assert((updates:receive()))
         assert(tostring(message:from()) == host_pid, "Fresh views sender mismatch")
         local value = inventory.views(message:payload():data())
         if value and value.connection_id == connection_id then fresh_views = value end

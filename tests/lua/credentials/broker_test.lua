@@ -3,6 +3,7 @@
 -- materializer receives bytes, and the sentinel never appears anywhere but
 -- in that one reply.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -26,6 +27,7 @@ local CLAUDE_LOGIN_SOURCE = "bee.credentials:claude_login_fixture"
 local INVALID_LOGIN_SOURCE = "bee.credentials:invalid_login_fixture"
 local MISSING_LOGIN_SOURCE = "bee.credentials:missing_login_fixture"
 local UNPRIVILEGED_LOGIN_SOURCE = "bee.credentials:unprivileged_login_fixture"
+local UNREADABLE_LOGIN_SOURCE = "bee.credentials:unreadable_login_fixture"
 local AGY_ONBOARDING = ".gemini/antigravity-cli/cache/onboarding.json"
 local ONBOARDING_SENTINEL = "agy-onboarding-sentinel-42"
 local GROK_CONFIG = ".grok/config.toml"
@@ -71,7 +73,7 @@ local outsider = caller("bee.test.cred.outsider", {})
 local function call(client: Principal, method: string, value: unknown): broker.Reply
     local reply, err = executor(client, value):call("bee.credentials.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    return reply :: broker.Reply
+    return principals.reply(reply)
 end
 local function async_call(client: Principal, method: string, value: unknown): funcs.Future
     local future, err = executor(client, value):async("bee.credentials.binding:" .. method, value)
@@ -83,11 +85,11 @@ local function await_call(future: funcs.Future): broker.Reply
     if not open then error("credential call closed without a reply") end
     local payload, result_error = future:result()
     if result_error or not payload then error("credential call: " .. tostring(result_error)) end
-    return payload:data() :: broker.Reply
+    return principals.reply(payload:data())
 end
 local function value(reply: broker.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: {[string]: unknown}
+    return assert(bounds.object(reply.value))
 end
 local function code(reply: broker.Reply): string
     if reply.ok then error("expected a failure, got success") end
@@ -134,7 +136,7 @@ end
 local function admit_sources(workspace: string)
     local entry = registry.get("bee.credentials:credential_sources")
     if not entry then error("credential sources entry") end
-    local data = entry.data :: {[string]: unknown}
+    local data = assert(bounds.object(entry.data))
     data.sources = {{ref = SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"environment"}},
         {ref = MISSING_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"environment"}},
         {ref = OTHER_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}},
@@ -145,6 +147,7 @@ local function admit_sources(workspace: string)
         {ref = CLAUDE_LOGIN_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"file"}},
         {ref = INVALID_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = MISSING_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
+        {ref = UNREADABLE_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
         {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
         {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "grok", projection_kinds = {"file"},
@@ -155,7 +158,7 @@ local function admit_sources(workspace: string)
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
     local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
     if not file_policy or not write_policy then error("credential file policy entry") end
-    file_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE}
+    file_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE, UNREADABLE_LOGIN_SOURCE}
     write_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE}
     changes:update(file_policy)
     changes:update(write_policy)
@@ -226,7 +229,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local openai = value(call(manager, "define", {workspace_id = workspace, name = "openai", provider = "codex", source = {kind = "env_variable", ref = OTHER_SOURCE}}))
             test.eq(openai.destination, "OPENAI_API_KEY")
             local listed = value(call(manager, "list", {workspace_id = workspace}))
-            test.eq(#(listed.definitions :: {unknown}), 2)
+            test.eq(#(principals.items(listed.definitions)), 2)
             clean(call(manager, "list", {workspace_id = workspace}))
         end)
         test.it("first-use credential creation and stale updates preserve the existing definition and projection", function()
@@ -269,17 +272,17 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             for _, bound_to in ipairs({elsewhere, false}) do
                 local reply, err = bound(user, bound_to or nil):call("bee.credentials.binding:issue_projection", request)
                 if err then error(tostring(err)) end
-                test.eq(code(reply :: broker.Reply), "DENIED")
+                test.eq(code(principals.reply(reply)), "DENIED")
             end
             local projection = issue(user, workspace, "anthropic", attempt)
             local app_runner = caller("bee.test.cred.app_runner", {"bee.credentials.security:credential_materialize_workspace_policy"})
             local use = {projection_id = projection.projection_id, subject = USER, audience = USER, attempt_id = attempt}
             local foreign, foreign_error = bound(app_runner, elsewhere):call("bee.credentials.binding:check", use)
             if foreign_error then error(tostring(foreign_error)) end
-            test.eq(code(foreign :: broker.Reply), "DENIED")
+            test.eq(code(principals.reply(foreign)), "DENIED")
             local own, own_error = bound(app_runner, workspace):call("bee.credentials.binding:check", use)
             if own_error then error(tostring(own_error)) end
-            test.eq((value(own :: broker.Reply)).projection_id, projection.projection_id)
+            test.eq((value(principals.reply(own))).projection_id, projection.projection_id)
         end)
         test.it("issues projections to the authenticated subject and materializes bytes once for the admitted materializer only", function()
             local attempt = fresh("attempt")
@@ -290,7 +293,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(projection.materializer, "bee.placement.native.binding:binding")
             test.eq(projection.materialization_generation, 0)
             clean(call(user, "issue_projection", {workspace_id = workspace, name = "anthropic", audience = USER, attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")}))
-            local id = projection.projection_id :: string
+            local id = projection.projection_id
             test.eq(code(call(user, "check", {projection_id = id, subject = USER, audience = USER, attempt_id = attempt})), "DENIED")
             test.eq(code(call(user, "materialize", {projection_id = id, subject = USER, audience = USER, attempt_id = attempt, generation_key = "g1"})), "DENIED")
             local checked = value(call(runner, "check", {projection_id = id, subject = USER, audience = USER, attempt_id = attempt}))
@@ -335,7 +338,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
         test.it("reserves unique monotonic materialization generations under concurrent calls", function()
             local attempt = fresh("parallel-materialization")
             local projection = issue(user, workspace, "anthropic", attempt)
-            local projection_id = projection.projection_id :: string
+            local projection_id = projection.projection_id
             local first_key, second_key = fresh("generation-a"), fresh("generation-b")
             local first_future = async_call(runner, "materialize", {projection_id = projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation_key = first_key})
@@ -344,8 +347,8 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local first_result, second_result = await_call(first_future), await_call(second_future)
             test.is_true(first_result.ok, tostring(first_result.error and first_result.error.message))
             test.is_true(second_result.ok, tostring(second_result.error and second_result.error.message))
-            local first_generation = value(first_result).generation :: number
-            local second_generation = value(second_result).generation :: number
+            local first_generation = value(first_result).generation
+            local second_generation = value(second_result).generation
             test.is_true(first_generation ~= second_generation)
             test.eq(math.min(first_generation, second_generation), 1)
             test.eq(math.max(first_generation, second_generation), 2)
@@ -360,7 +363,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             if not rows then error("query materialization generations: " .. tostring(query_error)) end
             test.eq(#rows, 2)
             local reserved: {[string]: number} = {}
-            for _, row in ipairs(rows) do reserved[tostring(row.generation_key)] = row.generation :: number end
+            for _, row in ipairs(rows) do reserved[tostring(row.generation_key)] = row.generation end
             test.eq(reserved[first_key], first_generation)
             test.eq(reserved[second_key], second_generation)
         end)
@@ -398,7 +401,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             value(call(runner, "check", {projection_id = live.projection_id, subject = USER, audience = USER, attempt_id = attempt}))
             local entry = registry.get("bee.credentials:credential_sources")
             if not entry then error("sources entry") end
-            local data = entry.data :: {[string]: unknown}
+            local data = assert(bounds.object(entry.data))
             data.sources = {{ref = OTHER_SOURCE, workspace_id = workspace, audience = "*", provider = "codex", projection_kinds = {"environment"}}}
             local changes = registry.snapshot():changes()
             changes:update(entry)
@@ -413,10 +416,10 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(reported.rotation, "next_materialization")
             test.eq(reported.revocation_enforcement, "stop_on_reconcile")
             test.eq(reported.max_file_bytes, 65536)
-            local kinds = reported.projection_kinds :: {string}
+            local kinds = principals.strings(reported.projection_kinds)
             test.eq(kinds[1], "environment")
             test.eq(kinds[2], "file")
-            local fdest = reported.file_destinations :: {[string]: string}
+            local fdest = reported.file_destinations
             test.eq(fdest.claude, ".credentials.json")
             test.eq(fdest.codex, "auth.json")
         end)
@@ -442,7 +445,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(claude_def.provider, "claude")
             test.eq(claude_def.revision, 1)
             local listed = value(call(manager, "list", {workspace_id = ws}))
-            test.eq(#(listed.definitions :: {unknown}), 2)
+            test.eq(#(principals.items(listed.definitions)), 2)
             clean(call(manager, "list", {workspace_id = ws}))
         end)
         test.it("reports provider-fixed login availability by stat without exposing bytes", function()
@@ -481,7 +484,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
 
             local source_entry = registry.get("bee.credentials:credential_sources")
             if not source_entry then error("sources entry") end
-            local source_data = source_entry.data :: {[string]: unknown}
+            local source_data = assert(bounds.object(source_entry.data))
             local saved_sources = source_data.sources
             source_data.sources = {}
             local changes = registry.snapshot():changes()
@@ -501,7 +504,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local function select_path(path: string)
                 local entry = registry.get("bee.credentials:credential_sources")
                 if not entry then error("sources") end
-                for _, source in ipairs(entry.data.sources :: {{[string]: unknown}}) do
+                for _, source in ipairs(principals.objects(entry.data.sources)) do
                     if source.ref == CODEX_LOGIN_SOURCE then source.path = path end
                 end
                 local changes = registry.snapshot():changes()
@@ -534,8 +537,8 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             -- source digest and cannot retarget a retained projection.
             local format_entry = registry.get("bee.driver.codex:credential_format")
             if not format_entry then error("codex credential format") end
-            local format_data = format_entry.data :: {[string]: unknown}
-            local file_data = format_data.file :: {[string]: unknown}
+            local format_data = assert(bounds.object(format_entry.data))
+            local file_data = assert(bounds.object(format_data.file))
             local saved_format_path = file_data.path
             -- Keep the basename and source unchanged: only the destination
             -- directory changes, so destination-name checks cannot prove this.
@@ -589,7 +592,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(proj.materialization_generation, 0)
             clean(call(user, "issue_projection", {workspace_id = ws, name = "codex_login", audience = USER, attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("key")}))
 
-            local proj_id = proj.projection_id :: string
+            local proj_id = proj.projection_id
             test.eq(code(call(user, "check", {projection_id = proj_id, subject = USER, audience = USER, attempt_id = attempt})), "DENIED")
             local checked = value(call(runner, "check", {projection_id = proj_id, subject = USER, audience = USER, attempt_id = attempt}))
             test.eq(checked.projection_id, proj_id)
@@ -663,11 +666,11 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id,
                 subject = USER, audience = USER, attempt_id = attempt, generation_key = "writeback-generation"}))
             test.eq(type(materialized.source_digest), "string")
-            test.eq(#(materialized.source_digest :: string), 64)
+            test.eq(#(materialized.source_digest), 64)
             test.eq(code(call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation = materialized.generation, source_digest = materialized.source_digest, value = refreshed, path = "other.json"})), "INVALID")
             test.eq(code(call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
-                attempt_id = attempt, generation = (materialized.generation :: number) + 1, source_digest = materialized.source_digest, value = refreshed})), "DENIED")
+                attempt_id = attempt, generation = assert(bounds.integer(materialized.generation)) + 1, source_digest = materialized.source_digest, value = refreshed})), "DENIED")
             local update = call(runner, "write_back", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation = materialized.generation, source_digest = materialized.source_digest, value = refreshed})
             clean(update)
@@ -730,7 +733,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation_key = "codex-profile-present", provider_files = {{source_path = profile_path, path = profile_path, optional = false}}}))
             local found = false
-            for _, item in ipairs((materialized.format.file.initialize :: {{[string]: unknown}})) do
+            for _, item in ipairs((principals.objects(materialized.format.file.initialize))) do
                 if item.path == profile_path then
                     test.eq(item.source_path, profile_path)
                     test.eq(item.content, profile_content)
@@ -744,7 +747,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local optional_materialization = value(call(runner, "materialize", {projection_id = optional_projection.projection_id,
                 subject = USER, audience = USER, attempt_id = optional_attempt, generation_key = "codex-profile-optional-missing",
                 provider_files = {{source_path = missing_profile, path = missing_profile, optional = true}}}))
-            for _, item in ipairs((optional_materialization.format.file.initialize :: {{[string]: unknown}})) do
+            for _, item in ipairs((principals.objects(optional_materialization.format.file.initialize))) do
                 test.is_false(item.path == missing_profile)
             end
         end)
@@ -754,7 +757,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             write_file(CODEX_LOGIN_SOURCE, "auth.json", CODEX_FILE_SENTINEL)
             local entry = registry.get("bee.credentials:credential_sources")
             if not entry then error("credential sources entry") end
-            for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+            for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
                 if item.ref == CODEX_LOGIN_SOURCE and item.provider == "codex" and item.audience == USER then item.write_back = false end
             end
             local changed = registry.snapshot():changes()
@@ -802,7 +805,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
                 attempt_id = attempt, generation_key = "agy-setup-oversized"})), "INVALID")
             local entry = registry.get("bee.credentials:credential_sources")
             if not entry then error("credential sources entry") end
-            for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+            for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
                 if item.provider == "agy" then item.setup_path = nil end
             end
             local changes = registry.snapshot():changes()
@@ -815,7 +818,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.is_true(tostring(revoked_setup.error and revoked_setup.error.message):find("credential source changed", 1, true) ~= nil)
             clean(revoked_setup)
             local listed = value(call(manager, "list", {workspace_id = ws}))
-            local definitions = listed.definitions :: {{[string]: unknown}}
+            local definitions = principals.objects(listed.definitions)
             local persisted: {[string]: unknown}? = nil
             for _, item in ipairs(definitions) do
                 if item.name == "agy_setup" then persisted = item end
@@ -830,7 +833,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             write_file(CLAUDE_LOGIN_SOURCE, ".credentials.json", CLAUDE_FILE_SENTINEL)
             local entry = registry.get("bee.credentials:credential_sources")
             if not entry then error("credential sources entry") end
-            for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+            for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
                 if item.ref == CLAUDE_LOGIN_SOURCE and item.provider == "claude" then
                     item.setup_path = ".claude/settings.json"
                     item.setup_destination = ".claude/settings.json"
@@ -915,7 +918,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
                 local entry = registry.get("bee.credentials:credential_sources")
                 if not entry then error("credential sources entry") end
                 local changed = false
-                for _, item in ipairs((entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}) do
+                for _, item in ipairs(principals.objects((assert(bounds.object(entry.data))).sources)) do
                     if item.provider == "grok" and item.workspace_id == ws then
                         item[mutation.field] = mutation.value
                         changed = true
@@ -934,6 +937,18 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
                 test.eq(definition.revision, 1)
                 clean(refused)
             end
+        end)
+        test.it("rejects an unreadable optional login instead of treating it as absent", function()
+            local ws = fresh("ws")
+            admit_sources(ws)
+            local attempt = fresh("attempt")
+            value(call(manager, "define", {workspace_id = ws, name = "unreadable_login", provider = "codex",
+                source = {kind = "fs_directory", ref = UNREADABLE_LOGIN_SOURCE}, optional = true}))
+            local projection = issue(user, ws, "unreadable_login", attempt)
+            local result = call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt, generation_key = fresh("gk")})
+            test.eq(code(result), "UNAVAILABLE")
+            clean(result)
         end)
         test.it("fails closed on missing, invalid, empty or oversized login files", function()
             local ws = fresh("ws")
@@ -1009,8 +1024,8 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local read_policy = registry.get("bee.credentials.security:credential_file_policy")
             local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
             if not read_policy or not write_policy then error("credential file policies are unavailable") end
-            local read_actions = (((read_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}).actions :: {string})
-            local write_actions = (((write_policy.data :: {[string]: unknown}).policy :: {[string]: unknown}).actions :: {string})
+            local read_actions = (principals.strings((assert(bounds.object((assert(bounds.object(read_policy.data))).policy))).actions))
+            local write_actions = (principals.strings((assert(bounds.object((assert(bounds.object(write_policy.data))).policy))).actions))
             test.is_true(has(read_actions, "fs.get"))
             test.is_true(has(read_actions, "fs.read"))
             test.is_false(has(read_actions, "fs.write"))
@@ -1027,7 +1042,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             value(call(manager, "define", {workspace_id = ws, name = "codex_login", provider = "codex", source = {kind = "fs_directory", ref = CODEX_LOGIN_SOURCE}}))
             local attempt = fresh("attempt")
             local proj = issue(user, ws, "codex_login", attempt)
-            local proj_id = proj.projection_id :: string
+            local proj_id = proj.projection_id
 
             -- 1. Outsider cannot check or materialize
             test.eq(code(call(outsider, "check", {projection_id = proj_id, subject = USER, audience = USER, attempt_id = attempt})), "DENIED")
@@ -1092,7 +1107,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local codex_proj = call(user, "issue_projection", {workspace_id = ws, name = "codex_login", audience = USER, attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("k")})
             test.is_true(codex_proj.ok)
             clean(codex_proj)
-            local proj_id = codex_proj.value.projection_id :: string
+            local proj_id = codex_proj.value.projection_id
 
             local claude_proj = call(user, "issue_projection", {workspace_id = ws, name = "claude_login", audience = USER, attempt_id = attempt, profile_id = "batch", profile_digest = DIGEST, binding_digest = DIGEST, launch_policy_digest = DIGEST, idempotency_key = fresh("k")})
             test.is_true(claude_proj.ok)

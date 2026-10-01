@@ -2,6 +2,7 @@
 -- is refused with a stable message before the corpus is consulted.
 local test = require("test")
 local protocol = require("protocol")
+local bounds = require("bounds")
 local function define_tests()
     test.describe("Docs request protocol", function()
         test.it("accepts list, search and read and refuses anything else", function()
@@ -71,12 +72,13 @@ local function define_tests()
             test.eq(protocol.MAX_QUERY_BYTES, 256)
             local schema = protocol.schema()
             test.eq(schema.type, "object")
-            local properties = schema.properties :: {[string]: unknown}
-            local limit = properties.limit :: {[string]: unknown}
+            local properties = assert(bounds.object(schema.properties))
+            local limit = assert(bounds.object(properties.limit))
+            if type(limit.description) ~= "string" then error("limit description must be text") end
             test.eq(limit.maximum, protocol.MAX_READ_BYTES)
-            test.not_nil((string.find(limit.description :: string, tostring(protocol.MAX_LIST), 1, true)))
-            test.not_nil((string.find(limit.description :: string, tostring(protocol.MAX_RESULTS), 1, true)))
-            test.is_true(#(schema.examples :: {unknown}) >= 3)
+            test.not_nil((string.find(limit.description, tostring(protocol.MAX_LIST), 1, true)))
+            test.not_nil((string.find(limit.description, tostring(protocol.MAX_RESULTS), 1, true)))
+            test.is_true(#(assert(bounds.array(schema.examples))) >= 3)
         end)
     end)
 end

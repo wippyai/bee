@@ -7,6 +7,7 @@
 -- provider acceptance or a completed turn. Without the executable the gate
 -- is reported open.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -49,16 +50,16 @@ local actor = security.new_actor(ACTOR)
 local function call(target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
+    local reply = result
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function read_all(stream): string
     local content = ""
     while true do
         local chunk: unknown = stream:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk :: string)
+        content = content .. (chunk)
     end
     return content
 end
@@ -84,7 +85,7 @@ end
 local function admit(entry_id: string, list_key: string, item: Object, matches: (Object) -> boolean)
     local entry = registry.get(entry_id)
     if not entry then error(entry_id) end
-    local list = (entry.data :: Object)[list_key] :: {Object}
+    local list = principals.objects((assert(bounds.object(entry.data)))[list_key])
     for _, existing in ipairs(list) do
         if matches(existing) then return end
     end
@@ -101,8 +102,8 @@ local function fixture_bin(): string
     if err or type(bin) ~= "string" or bin == "" then error("BEE_FIXTURE_BIN is not set for the test runtime") end
     return bin
 end
-local endpoint_handle: any = nil
-local endpoint_executor: any = nil
+local endpoint_handle: exec.Process? = nil
+local endpoint_executor: exec.Executor? = nil
 local function start_endpoint(record: string, text: string?): string
     local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local environment: {[string]: string}? = nil
@@ -152,7 +153,7 @@ local function prepare_host(port: string, claude: string)
     apply(mode)
     local entry = registry.get(POLICY)
     if not entry then error(POLICY) end
-    local data = entry.data :: Object
+    local data = assert(bounds.object(entry.data))
     data.executables = {claude = claude}
     data.environment = {ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}
     apply(entry)
@@ -161,14 +162,16 @@ local function prepare_host(port: string, claude: string)
 end
 local function thread(): string
     local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Claude path"})
-    return created.thread_id :: string
+    if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
+    return created.thread_id
 end
 local function projection_for(workspace: string, attempt_id: string): string
     call("bee.credentials.binding:define", {workspace_id = workspace, name = "anthropic", provider = "claude", source = {kind = "env_variable", ref = SOURCE}})
     local binding_digest, profile_digest, policy_digest = measured()
     local issued = call("bee.credentials.binding:issue_projection", {workspace_id = workspace, name = "anthropic", audience = ACTOR, attempt_id = attempt_id, profile_id = "batch",
         profile_digest = profile_digest, binding_digest = binding_digest, launch_policy_digest = policy_digest, idempotency_key = fresh("key")})
-    return issued.projection_id :: string
+    if type(issued.projection_id) ~= "string" then error("invalid fixture issued.projection_id") end
+    return issued.projection_id
 end
 local function request(thread_id: string, attempt_id: string, projections: {string}): Object
     local placement = placement_fixture.resolve()
@@ -194,26 +197,27 @@ local function await_carrier(pid: string, label: string): Outcome
         if event.kind == process.event.EXIT and tostring(event.from) == pid then
             local result = event.result or {}
             local value: Object? = nil
-            if type(result.value) == "table" then value = result.value :: Object end
+            if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
             outcome = {value = value, error = result.error and tostring(result.error) or nil}
         end
     end
-    return outcome :: Outcome
+    return outcome
 end
 local function records_of(thread_id: string): {Object}
     local all: {Object} = {}
     local cursor = 0
     for _ = 1, 32 do
         local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
-        for _, item in ipairs(page.records :: {Object}) do all[#all + 1] = item end
+        for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
-        cursor = math.floor(page.scanned_through :: number)
+        if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
+        cursor = math.floor(page.scanned_through)
     end
     return all
 end
 local function evidence_of(attempt_id: string): {Object}
     local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64})
-    return page.evidence :: {Object}
+    return principals.objects(page.evidence)
 end
 local function define_tests()
     test.describe("Claude authentication path through placement", function()
@@ -234,16 +238,17 @@ local function define_tests()
                 local first = request(thread_id, first_id, {projection_for(workspace, first_id)})
                 first.session_ref = session_ref
                 first.brief = "--version"
-                local resources = first.resources :: {Object}
+                local resources = principals.objects(first.resources)
+                first.resources = resources
                 resources[#resources + 1] = {name = "session", grant_ref = "host-session", root_ref = ROOT, subpath = "", access = "write", purpose = "session"}
                 local first_result = await_carrier(spawn_carrier(first), "first native turn")
                 if not first_result.value then error("first native turn: " .. tostring(first_result.error)) end
-                local first_settlement = first_result.value.settlement :: Object
+                local first_settlement = assert(bounds.object(first_result.value.settlement))
                 test.eq(first_settlement.outcome, "succeeded")
                 test.not_nil(first_settlement.resume_ref)
                 local before, initial_messages = 0, 0
                 for line in shell("cat " .. record):gmatch("[^\n]+") do
-                    local item = json.decode(line) :: Object
+                    local item = assert(bounds.object(json.decode(line)))
                     before = before + 1
                     initial_messages = math.max(initial_messages, tonumber(item.messages) or 0)
                 end
@@ -254,12 +259,12 @@ local function define_tests()
                 second.brief = "Second native prompt"
                 local second_result = await_carrier(spawn_carrier(second), "second native turn")
                 if not second_result.value then error("second native turn: " .. tostring(second_result.error)) end
-                local second_settlement = second_result.value.settlement :: Object
+                local second_settlement = assert(bounds.object(second_result.value.settlement))
                 test.eq(second_settlement.outcome, "succeeded")
                 test.eq(second_settlement.resume_ref, first_settlement.resume_ref)
                 local seen, resumed_messages = 0, 0
                 for line in shell("cat " .. record):gmatch("[^\n]+") do
-                    local item = json.decode(line) :: Object
+                    local item = assert(bounds.object(json.decode(line)))
                     seen = seen + 1
                     if seen > before then resumed_messages = math.max(resumed_messages, tonumber(item.messages) or 0) end
                 end
@@ -269,7 +274,7 @@ local function define_tests()
                     if item.kind == "action.admitted" then actions = actions + 1 end
                     if item.kind == "turn.request" then
                         turns = turns + 1
-                        if item.attempt_id == second_id then test.eq((item.body :: Object).resume_ref, first_settlement.resume_ref) end
+                        if item.attempt_id == second_id then test.eq((assert(bounds.object(item.body))).resume_ref, first_settlement.resume_ref) end
                     end
                     if item.kind == "receipt" then receipts = receipts + 1 end
                 end
@@ -297,7 +302,7 @@ local function define_tests()
             local projection_id = projection_for(workspace, attempt_id)
             local outcome = await_carrier(spawn_carrier(request(thread_id, attempt_id, {projection_id})), "claude run")
             if not outcome.value then error("claude run failed: " .. tostring(outcome.error)) end
-            local settlement = outcome.value.settlement :: Object
+            local settlement = assert(bounds.object(outcome.value.settlement))
             test.neq(settlement.outcome, "succeeded")
             local recorded = shell("cat " .. record)
             local evidence = evidence_of(attempt_id)

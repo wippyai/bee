@@ -1,4 +1,5 @@
 -- SPDX-License-Identifier: MIT
+local bounds = require("bounds")
 local funcs = require("funcs")
 local channel = require("channel")
 local time = require("time")
@@ -18,7 +19,7 @@ local function progress_for(progress: Channel<Message>, run_id: string, timeout:
         local message = selected.value
         local data: unknown = message:payload():data()
         if type(data) == "table" and data.run_id == run_id then
-            local value = data :: Object
+            local value = assert(bounds.object(data))
             assert(type(value.worker) == "string" and tostring(message:from()) == value.worker,
                 "spin progress sender did not match its worker")
             assert(type(value.chunk) == "number" and value.chunk == math.floor(value.chunk),
@@ -67,7 +68,8 @@ local function main()
         local update = progress_for(progress, control_id, "1s")
         if not update then error("uncanceled control did not report four chunks") end
         if update.chunk ~= chunk then error("uncanceled control skipped or reordered a chunk") end
-        local worker = update.worker :: string
+        local worker = update.worker
+        assert(type(worker) == "string")
         if control_worker == "" then control_worker = worker
         elseif control_worker ~= worker then error("uncanceled control changed worker identity") end
         if chunk < 4 then continue(worker, control_id, chunk) end
@@ -89,7 +91,8 @@ local function main()
     if not spinning then error(tostring(spin_error)) end
     local first = progress_for(progress, cancel_id, "1s")
     if not first or first.chunk ~= 1 then spinning:cancel(); error("cancel probe did not report its first chunk") end
-    local canceled_worker = first.worker :: string
+    local canceled_worker = first.worker
+    assert(type(canceled_worker) == "string")
     spinning:cancel()
 
     -- The bounded wait gives the worker a chance to process cancellation. If

@@ -1,6 +1,8 @@
 -- MIT. Destination orchestration keeps selection, approval, desired state and
 -- overlay observation in their separate owners.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local hash = require("hash")
@@ -45,11 +47,11 @@ end
 
 local function ok(result: {[string]: unknown}): {[string]: unknown}
     if result.ok ~= true then
-        local failure = result.error :: {[string]: unknown}?
+        local failure = bounds.object(result.error)
         error(tostring(result.code or (failure and failure.code)) .. ": "
             .. tostring(result.message or (failure and failure.message)))
     end
-    return result.value :: {[string]: unknown}
+    return assert(bounds.object(result.value))
 end
 local function migration_effect(): MigrationEffects
     return {
@@ -112,10 +114,11 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
     local selected_digest, digest_error = hash.sha256(entry_bytes)
     if not selected_digest then error(tostring(digest_error)) end
     local value = {}
-    function value:resolve(plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
-        local selected = plan :: {[string]: unknown}
-        local version = selected.version :: string
-        local entry_id, entry_kind = entry.id :: string, entry.kind :: string
+    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
+        local selected = assert(bounds.object(plan))
+        local version = selected.version
+        assert(type(version) == "string")
+        local entry_id, entry_kind = entry.id, entry.kind
         local candidate_entries: {preflight.Entry} = {
             candidate_entry(entry_id, entry_kind, "demo/app", selected_digest)}
         local candidate: preflight.Candidate = {destination_node = "node-owner", source_node = "source-a",
@@ -141,9 +144,9 @@ local function shifting_resolver(entry: {[string]: unknown}, world: ResolverWorl
         return candidate, context, nil
     end
     if read_revision then
-        function value:revision(): (integer?, string?) return world.revision, nil end
+        function value.revision(self: owner.Resolver): (integer?, string?) return world.revision, nil end
     end
-    return value :: owner.Resolver
+    return value
 end
 
 local function resolver(entry: {[string]: unknown}): owner.Resolver
@@ -153,8 +156,9 @@ end
 local function migration_resolver(entry: {[string]: unknown}, state: {[string]: unknown}): owner.Resolver
     local checksum = assert(hash.sha256(assert(canonical.encode(entry))))
     local value = {}
-    function value:resolve(plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
-        local selected = plan :: {[string]: unknown}
+    function value.resolve(self: owner.Resolver, plan: unknown): (preflight.Candidate?, preflight.Context?, string?)
+        local selected = assert(bounds.object(plan))
+        assert(type(selected.version) == "string")
         local applied: {[string]: preflight.Migration} = {}
         if state.executed == true then
             applied["host:db\ndemo:001"] = {id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}
@@ -163,11 +167,11 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
         local migration_entry = candidate_entry("demo:001", "function.lua", "demo/app", checksum)
         local candidate_entries: {preflight.Entry} = {migration_entry}
         local candidate: preflight.Candidate = {destination_node = "node-owner", source_node = "source-a", base_revision = 4, base_digest = SHA,
-            artifacts = {{component = "demo/app", version = selected.version :: string, digest = SHA,
+            artifacts = {{component = "demo/app", version = selected.version, digest = SHA,
                 dependencies = {}, namespaces = {"demo"}}}, entries = candidate_entries, requirements = {},
             migrations = {{id = "demo:001", target_db = "host:db", checksum = checksum, ordinal = 1}}}
         local context: preflight.Context = {node_id = "node-owner", registry_revision = 4, registry_digest = SHA,
-            policy_digest = type(state.policy_digest) == "string" and state.policy_digest :: string or SHA,
+            policy_digest = type(state.policy_digest) == "string" and state.policy_digest or SHA,
             packages = {["demo/app"] = true}, namespaces = {demo = true}, kinds = {["function.lua"] = true},
             databases = {["host:db"] = true}, grants = {}, modules = {}, entries = {["host:db"] = database},
             installed_entries = nil,
@@ -176,15 +180,15 @@ local function migration_resolver(entry: {[string]: unknown}, state: {[string]: 
             host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
         return candidate, context, nil
     end
-    return value :: owner.Resolver
+    return value
 end
 
 local function approvals(): owner.Executor
     local value = {}
-    function value:call(method: string, request: unknown): (unknown?, unknown?)
-        local input = request :: {[string]: unknown}
+    function value.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
+        local input = assert(bounds.object(request))
         if method == "bee.approvals.binding:request" then
-            local proposal = input.proposal :: {[string]: unknown}
+            local proposal = assert(bounds.object(input.proposal))
             return {ok = true, value = {approval_id = "approval-v1", proposal = proposal,
                 proposal_digest = assert(hash.sha256(assert(canonical.encode(proposal)))),
                 owner_incarnation = 3}}, nil
@@ -193,16 +197,16 @@ local function approvals(): owner.Executor
             proposal_digest = input.proposal_digest, consumer_id = "destination-host",
             consumed_effect = input.effect_key}}, nil
     end
-    return value :: owner.Executor
+    return value
 end
 
 local function lossy_approvals(): owner.Executor
     local value = {}
     local consumed = false
-    function value:call(method: string, request: unknown): (unknown?, unknown?)
-        local input = request :: {[string]: unknown}
+    function value.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
+        local input = assert(bounds.object(request))
         if method == "bee.approvals.binding:request" then
-            local proposal = input.proposal :: {[string]: unknown}
+            local proposal = assert(bounds.object(input.proposal))
             return {ok = true, value = {approval_id = "approval-crash", proposal = proposal,
                 proposal_digest = assert(hash.sha256(assert(canonical.encode(proposal)))),
                 owner_incarnation = 3}}, nil
@@ -215,23 +219,23 @@ local function lossy_approvals(): owner.Executor
             proposal_digest = input.proposal_digest, consumer_id = "destination-host",
             consumed_effect = input.effect_key}}, nil
     end
-    return value :: owner.Executor
+    return value
 end
 
-local LEASE_GRANT: {[string]: unknown} = {capability = "workspace.files.write", template_revision = 1,
+local LEASE_GRANT: capability_model.Grant = {capability = "workspace.files.write", template_revision = 1,
     operation = "files.write", resource = "workspace", scope = {subpath = "alpha"}, parameters = {subpath = "alpha"}}
-local LEASE_NARROW: {[string]: unknown} = {capability = "workspace.files.write", template_revision = 1,
+local LEASE_NARROW: capability_model.Grant = {capability = "workspace.files.write", template_revision = 1,
     operation = "files.write", resource = "workspace", scope = {subpath = "alpha/child"},
     parameters = {subpath = "alpha/child"}}
-local LEASE_OUTSIDE: {[string]: unknown} = {capability = "workspace.files.write", template_revision = 1,
+local LEASE_OUTSIDE: capability_model.Grant = {capability = "workspace.files.write", template_revision = 1,
     operation = "files.write", resource = "workspace", scope = {subpath = "beta"}, parameters = {subpath = "beta"}}
 
 -- Installed evidence whose measured proposal widens beyond the installed set.
-local function widening_capability(proposed: {{[string]: unknown}}): preflight.CapabilityEvidence
+local function widening_capability(proposed: {capability_model.Grant}): preflight.CapabilityEvidence
     local evidence = installed_capability(nil)
     if evidence.kind ~= "installed" then error("installed capability evidence is missing") end
     local proposal = evidence.proposal
-    proposal.capabilities = proposed :: {capability_model.Grant}
+    proposal.capabilities = proposed
     local review: capability_grants.Review = {added = {}, widened = {}, narrowed = {}, removed = {}, changed = {},
         requires_approval = true, revocation = {grants = {}, fenced_attempts = {}},
         lines = {"widened: Write alpha"}, resolved = {"Write alpha"}, delta = {"widened: Write alpha"}}
@@ -284,13 +288,13 @@ local function define_tests()
                 capability = evidence}
             local requests = 0
             local executor = {}
-            function executor:call(_method: string, _request: unknown): (unknown?, unknown?)
+            function executor.call(self: owner.Executor, _method: string, _request: unknown): (unknown?, unknown?)
                 requests = requests + 1
                 return nil, "reuse must not call Approvals"
             end
             local applied = false
             local config: owner.Config = {plans = plans, activations = activations,
-                resolver = shifting_resolver(entry, world), approvals = executor :: owner.Executor,
+                resolver = shifting_resolver(entry, world), approvals = executor,
                 actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                 migrations = migration_effect(),
@@ -328,10 +332,10 @@ local function define_tests()
             local world: ResolverWorld = {revision = 4, digest = SHA, capability = installed_capability(review)}
             local seen: {[string]: unknown}? = nil
             local executor = {}
-            function executor:call(method: string, request: unknown): (unknown?, unknown?)
-                local input = request :: {[string]: unknown}
+            function executor.call(self: owner.Executor, method: string, request: unknown): (unknown?, unknown?)
+                local input = assert(bounds.object(request))
                 if method == "bee.approvals.binding:request" then
-                    seen = input.proposal :: {[string]: unknown}
+                    seen = assert(bounds.object(input.proposal))
                     return {ok = true, value = {approval_id = "new-approval", proposal = seen,
                         proposal_digest = assert(hash.sha256(assert(canonical.encode(seen)))),
                         owner_incarnation = 3}}, nil
@@ -340,7 +344,7 @@ local function define_tests()
             end
             local applied = false
             local config: owner.Config = {plans = plans, activations = activations,
-                resolver = shifting_resolver(entry, world), approvals = executor :: owner.Executor,
+                resolver = shifting_resolver(entry, world), approvals = executor,
                 actor_id = "host-a", consumer_id = "destination-host",
                 overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install",
                 migrations = migration_effect(),
@@ -354,9 +358,9 @@ local function define_tests()
             local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-widened", receipt_key = "widened"}))
             test.eq(prepared.phase, "approval_bound")
-            local payload = (seen :: {[string]: unknown}).payload :: {[string]: unknown}
-            test.eq((payload.permission_changes :: {string})[1], "widened: Read owned threads")
-            test.eq((payload.resolved_capabilities :: {string})[1], "Read owned threads")
+            local payload = assert(bounds.object((assert(bounds.object(seen))).payload))
+            test.eq((principals.strings(payload.permission_changes))[1], "widened: Read owned threads")
+            test.eq((principals.strings(payload.resolved_capabilities))[1], "Read owned threads")
             test.eq(ok(owner.step(config, "intent-widened", "widened")).phase, "consuming")
             test.eq(owner.step(config, "intent-widened", "widened").code, "DENIED")
             test.is_false(applied)
@@ -366,12 +370,12 @@ local function define_tests()
         test.it("applies a widening covered by an active lease without asking Approvals", function()
             local requests = 0
             local executor = {}
-            function executor:call(_method: string, _request: unknown): (unknown?, unknown?)
+            function executor.call(self: owner.Executor, _method: string, _request: unknown): (unknown?, unknown?)
                 requests = requests + 1
                 return nil, "a lease-covered change must not call Approvals"
             end
             local config, plans, activations, leases, flags = lease_config("workspace-lease-covered",
-                widening_capability({LEASE_NARROW}), executor :: owner.Executor)
+                widening_capability({LEASE_NARROW}), executor)
             grant_lease(leases, 1)
             local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-lease", receipt_key = "lease"}))
@@ -397,8 +401,8 @@ local function define_tests()
             local reserved = ok(lease_store.get(leases, "lease-1"))
             local revoked = ok(lease_store.call(leases, "host-a", {operation = "revoke", idempotency_key = "revoke-fenced",
                 lease_id = "lease-1", expected_revision = reserved.revision, revoked_by = "person-a"}))
-            test.eq((revoked.fenced_intents :: {string})[1], "intent-fenced")
-            test.eq(#(revoked.started_effects :: {string}), 0)
+            test.eq((principals.strings(revoked.fenced_intents))[1], "intent-fenced")
+            test.eq(#(principals.strings(revoked.started_effects)), 0)
             test.eq(owner.step(config, "intent-fenced", "fenced").code, "DENIED")
             test.is_false(flags.applied)
             assert(lease_store.close(leases))
@@ -415,8 +419,8 @@ local function define_tests()
             local lease = ok(lease_store.get(leases, "lease-1"))
             local revoked = ok(lease_store.call(leases, "host-a", {operation = "revoke", idempotency_key = "revoke-started",
                 lease_id = "lease-1", expected_revision = lease.revision, revoked_by = "person-a"}))
-            test.eq((revoked.started_effects :: {string})[1], "intent-started")
-            test.eq(#(revoked.fenced_intents :: {string}), 0)
+            test.eq((principals.strings(revoked.started_effects))[1], "intent-started")
+            test.eq(#(principals.strings(revoked.fenced_intents)), 0)
             test.eq(ok(owner.step(config, "intent-started", "started")).outcome, "applied")
             test.is_true(flags.applied)
             assert(lease_store.close(leases))
@@ -576,7 +580,7 @@ local function define_tests()
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, _intent: unknown): ({[string]: unknown}?, string?) return {changed = true}, nil end}
             local prepared = ok(owner.prepare(config, {source_node = "source-a", source_workspace = "app-a",
                 version = "v1", intent_id = "intent-admission-drift", receipt_key = "admission-drift"}))
-            test.eq(prepared.application_admission_digest, (world.application_admission :: {[string]: unknown}).digest)
+            test.eq(prepared.application_admission_digest, (assert(bounds.object(world.application_admission))).digest)
             world.application_admission = admission(exact.digest, string.rep("b", 64), nil, workspace)
             local refused = owner.step(config, "intent-admission-drift", "admission-drift")
             test.is_false(refused.ok)
@@ -600,15 +604,15 @@ local function define_tests()
                     approvals = approvals(), actor_id = "host-a", consumer_id = "destination-host",
                     overlay_owner = "bee.gov:test-overlay", approval_policy = "local-install", migrations = migration_effect(),
                     matches = function(_overlay: string, entries: unknown, admission_blob: unknown?, _intent: unknown): (boolean?, string?)
-                        test.eq(#(entries :: {unknown}), 1)
-                        local blob = admission_blob :: {[string]: unknown}
+                        test.eq(#(principals.items(entries)), 1)
+                        local blob = assert(bounds.object(admission_blob))
                         test.eq(blob.bytes, frozen.bytes)
                         test.eq(blob.digest, frozen.digest)
                         return applied, nil
                     end,
                     apply = function(_overlay: string, entries: unknown, admission_blob: unknown?, _intent: unknown): ({[string]: unknown}?, string?)
-                        test.eq(#(entries :: {unknown}), 1)
-                        local blob = admission_blob :: {[string]: unknown}
+                        test.eq(#(principals.items(entries)), 1)
+                        local blob = assert(bounds.object(admission_blob))
                         test.eq(blob.bytes, frozen.bytes)
                         test.eq(blob.digest, frozen.digest)
                         applied, apply_count = true, apply_count + 1
@@ -655,10 +659,10 @@ local function define_tests()
                 end,
                 apply = function(_overlay: string, _entries: unknown, _admission: unknown?, intent_raw: unknown): ({[string]: unknown}?, string?)
                     if installed_evidence == nil then
-                        local intent = intent_raw :: Object
+                        local intent = assert(bounds.object(intent_raw))
                         local record, record_error = capability_grants.record("bee.gov:test-overlay", workspace,
-                            "demo:grant-recovery", proposal, intent.approval_id, 1, intent.artifact_digest :: string,
-                            intent.version :: string)
+                            "demo:grant-recovery", proposal, intent.approval_id, 1, intent.artifact_digest,
+                            intent.version)
                         if not record then return nil, tostring(record_error) end
                         local installed, decode_error = capability_grants.decode(record, "bee.gov:test-overlay",
                             workspace, "demo:grant-recovery", vocabulary)

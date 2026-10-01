@@ -3,6 +3,8 @@
 -- activated or not usable, and a replaced declaration moves the next
 -- generation without touching the snapshot already taken.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local registry = require("registry")
 local catalog = require("catalog")
 local classify = require("classify")
@@ -83,8 +85,8 @@ local function define_tests()
             if not before then error(tostring(before_error)) end
             local original = fake_profiles()
             local edited = fake_profiles()
-            local data = edited.data :: {[string]: unknown}
-            local driver = data.driver :: {[string]: unknown}
+            local data = assert(bounds.object(edited.data))
+            local driver = assert(bounds.object(data.driver))
             driver.implementation_version = "0.2.0"
             local pinned, pinned_error = registry.snapshot()
             if not pinned then error(tostring(pinned_error)) end
@@ -127,8 +129,8 @@ local function define_tests()
             if not pinned then error(tostring(pin_error)) end
             local original = fake_profiles()
             local edited = fake_profiles()
-            local data = edited.data :: {[string]: unknown}
-            local driver = data.driver :: {[string]: unknown}
+            local data = assert(bounds.object(edited.data))
+            local driver = assert(bounds.object(data.driver))
             driver.title = "Replaced between reads"
             local changes = registry.snapshot():changes()
             changes:update(registry_input(edited))
@@ -170,9 +172,9 @@ local function define_tests()
         test.it("ships a versioned host activation declaration", function()
             local entry = registry.get("bee.harness:harness_activation")
             if not entry then error("activation entry") end
-            local data = entry.data :: {[string]: unknown}
+            local data = assert(bounds.object(entry.data))
             test.eq(data.schema_revision, "bee.harness-activation@1")
-            local list = data.bindings :: {string}
+            local list = principals.strings(data.bindings)
             test.eq(#list, 7)
             test.is_true(has(list, "bee.driver.claude:binding"))
             test.is_true(has(list, "bee.driver.muse:binding"))
@@ -184,7 +186,7 @@ local function define_tests()
             if not original then error("activation entry") end
             local malformed = registry.get("bee.harness:harness_activation")
             if not malformed then error("activation entry") end
-            (malformed.data :: {[string]: unknown}).schema_revision = "bee.harness-activation@0"
+            (assert(bounds.object(malformed.data))).schema_revision = "bee.harness-activation@0"
             local changes = registry.snapshot():changes()
             changes:update(malformed)
             local applied, apply_error = changes:apply()

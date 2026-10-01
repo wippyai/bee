@@ -3,6 +3,7 @@
 -- and the outcome a publish reply reports. Pure; no Hub, approval owner or
 -- credential runs.
 local test = require("test")
+local bounds = require("bounds")
 local publishing = require("publishing")
 type Object = {[string]: unknown}
 local DIGEST = string.rep("b", 64)
@@ -57,7 +58,7 @@ local function define_tests()
             test.eq(prompt, "Publish bee/publish-probe 0.0.1-probe.1 (private)?")
             test.eq(proposal.ref, publishing.REF)
             test.eq(proposal.input_digest, digest)
-            local payload = proposal.payload :: Object
+            local payload = assert(bounds.object(proposal.payload))
             test.eq(payload.action, "publish")
             test.eq(payload.component, "bee/publish-probe")
             test.eq(payload.version, "0.0.1-probe.1")
@@ -93,7 +94,7 @@ local function define_tests()
             test.is_nil((publishing.verify(view, "other", "ws", "hub-publication", CONTEXT)))
             local tampered: Object = {requester_id = "agent", thread_id = "thread-1", workspace_id = "ws",
                 policy = "hub-publication", proposal = {ref = "bee.hub:apply", revision = "x",
-                input_digest = "x", payload = (proposal :: Object).payload}}
+                input_digest = "x", payload = (assert(bounds.object(proposal))).payload}}
             test.is_nil((publishing.verify(tampered, "agent", "ws", "hub-publication", CONTEXT)))
         end)
 
@@ -170,7 +171,7 @@ local function define_tests()
             local result = publishing.effect_result({ok = true, replayed = false,
                 value = {state = "published", message = "Publication completed"}})
             test.eq(result.ok, true)
-            test.eq((result.value :: Object).state, "published")
+            test.eq((assert(bounds.object(result.value))).state, "published")
         end)
     end)
 end

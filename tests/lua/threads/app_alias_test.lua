@@ -3,6 +3,7 @@
 -- row still belongs through that stable family. A different app, an
 -- unattested instance, or a left family stays refused.
 local test = require("test")
+local bounds = require("bounds")
 local harness = require("harness")
 local app_identity = require("app_identity")
 local ALIAS_POLICY = "bee.security.threads:application_thread_alias_policy"
@@ -28,7 +29,7 @@ local function attest(broker: Client, definition: string, id: string, workspace_
     local value: unknown = harness.value(broker:call("register_app_alias", {stable = stable(definition, selected_workspace),
         instance = id, workspace_id = selected_workspace, definition_id = definition}))
     if type(value) ~= "table" then error("application alias reply must be an object") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 
 local function define_tests()
@@ -78,8 +79,8 @@ local function define_tests()
             test.eq(#read.records, 1)
             local listed = harness.value(reopened:call("list", {limit = 8}))
             local found = false
-            for _, raw in ipairs(listed.threads :: {unknown}) do
-                if (raw :: {[string]: unknown}).thread_id == thread_id then found = true end
+            for _, raw in ipairs(assert(bounds.array(listed.threads, 8))) do
+                if (assert(bounds.object(raw))).thread_id == thread_id then found = true end
             end
             test.is_true(found)
             local other_broker = app_principal("other-broker", {ALIAS_POLICY}, OTHER_WORKSPACE)

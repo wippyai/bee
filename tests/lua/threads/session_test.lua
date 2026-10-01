@@ -3,6 +3,7 @@
 -- a new owner incarnation or resets a closed subscription, stale pages are
 -- dropped, and only an owner reply moves the cursor.
 local test = require("test")
+local bounds = require("bounds")
 local session = require("session")
 type Summary = {subscription_id: string, after_sequence: integer, lease_generation: integer, owner_incarnation: integer, owner_authority: string, closed: boolean}
 local function summary(incarnation: integer, lease: integer, after: integer, closed: boolean): Summary
@@ -21,7 +22,7 @@ local function define_tests()
             local _, action = session.reconnect(live, summary(1, 1, 5, false))
             test.eq(action, "continue")
             test.eq(live.state, "attached")
-            test.eq((live.outstanding :: {[string]: unknown}).page_id, "p-1")
+            test.eq((assert(bounds.object(live.outstanding))).page_id, "p-1")
             local acknowledgment = assert(session.acknowledgment(live))
             test.eq(acknowledgment.page_id, "p-1")
             test.eq(acknowledgment.scanned_through, 9)

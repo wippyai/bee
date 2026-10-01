@@ -3,6 +3,8 @@
 -- caller is admitted, repeated work on the same execution keeps the stored
 -- generation and drain state, and explicit open records that identity too.
 local test = require("test")
+local app_caller = require("app_caller")
+local bounds = require("bounds")
 local registry = require("registry")
 local funcs = require("funcs")
 local security = require("security")
@@ -43,21 +45,21 @@ local function clone(value: unknown): Object
     if not encoded then error(tostring(encode_error or "encode registry value")) end
     local decoded, decode_error = json.decode(encoded)
     if type(decoded) ~= "table" then error(tostring(decode_error or "decode registry value")) end
-    return decoded :: Object
+    return assert(bounds.object(decoded))
 end
 
 local function entry(id: string): Object
     local found, err = registry.get(id)
     if err or not found then error(id .. ": " .. tostring(err or "missing")) end
-    return found :: Object
+    return assert(bounds.object(found))
 end
 
 local function state(): RegistryState
     return {
-        endpoint_ref = clone((entry(ENDPOINT_REF).data :: Object)),
-        endpoint = clone((entry(ENDPOINT).data :: Object)),
-        listener = clone((entry(LISTENER_REF).data :: Object)),
-        database = clone((entry(DATABASE_REF).data :: Object)),
+        endpoint_ref = clone((assert(bounds.object(entry(ENDPOINT_REF).data)))),
+        endpoint = clone((assert(bounds.object(entry(ENDPOINT).data)))),
+        listener = clone((assert(bounds.object(entry(LISTENER_REF).data)))),
+        database = clone((assert(bounds.object(entry(DATABASE_REF).data)))),
     }
 end
 
@@ -109,22 +111,22 @@ end
 local function raw_call(client: funcs.Executor, target: string, request: unknown): Reply
     local result, err = client:call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    return result :: Reply
+    return assert(app_caller.decode(result))
 end
 
 local function row(db: sql.DB): Object
     local rows, err = db:query("SELECT epoch, address, secret, drained, native_key FROM bee_gateway_listener WHERE singleton = 1")
     if err or not rows or #rows ~= 1 then error("listener row: " .. tostring(err or (rows and #rows) or 0)) end
-    return rows[1] :: Object
+    return assert(bounds.object(rows[1]))
 end
 
 local function listener_count(db: sql.DB): integer
     local tables, table_error = db:query("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'bee_gateway_listener'")
     if table_error or not tables or #tables ~= 1 then error("listener schema: " .. tostring(table_error)) end
-    if math.floor(tonumber((tables[1] :: Object).count) or 0) == 0 then return 0 end
+    if math.floor(tonumber((assert(bounds.object(tables[1]))).count) or 0) == 0 then return 0 end
     local rows, err = db:query("SELECT COUNT(*) AS count FROM bee_gateway_listener")
     if err or not rows or #rows ~= 1 then error("listener count: " .. tostring(err)) end
-    return math.floor(tonumber((rows[1] :: Object).count) or 0)
+    return math.floor(tonumber((assert(bounds.object(rows[1]))).count) or 0)
 end
 
 local function database(): sql.DB
@@ -160,12 +162,12 @@ local function define_tests()
 
                 local denied = raw_call(caller(false, false), "bee.gateway.binding:admit", admit_request("unauthorized"))
                 test.is_false(denied.ok)
-                test.eq((denied.error :: Object).code, "DENIED")
+                test.eq((assert(bounds.object(denied.error))).code, "DENIED")
                 test.eq(listener_count(db), 0)
 
                 local selected = wait_for_listener()
                 local admitted = raw_call(caller(true, false), "bee.gateway.binding:admit", admit_request("authorized"))
-                if not admitted.ok then error("authorized admission: " .. tostring(admitted.error and (admitted.error :: Object).message)) end
+                if not admitted.ok then error("authorized admission: " .. tostring(admitted.error and (assert(bounds.object(admitted.error))).message)) end
                 local session_request = admit_request("session-ref")
                 local canonical_ref = "bs:" .. string.rep("n", 36) .. ":" .. string.rep("a", 32) .. ":" .. string.rep("s", 36)
                 session_request.subject, session_request.action_id = canonical_ref, canonical_ref
@@ -184,12 +186,12 @@ local function define_tests()
                 collision.workspace_name = "Builder"
                 local refused_name = raw_call(caller(true, false), "bee.gateway.binding:admit", collision)
                 test.is_false(refused_name.ok)
-                test.eq((refused_name.error :: Object).code, "CONFLICT")
+                test.eq((assert(bounds.object(refused_name.error))).code, "CONFLICT")
                 local first = row(db)
                 test.eq(first.epoch, 1)
                 test.eq(first.address, selected.address)
-                test.is_true(type(first.secret) == "string" and #(first.secret :: string) > 0)
-                test.is_true(type(first.native_key) == "string" and #(first.native_key :: string) > 0)
+                test.is_true(type(first.secret) == "string" and #(first.secret) > 0)
+                test.is_true(type(first.native_key) == "string" and #(first.native_key) > 0)
                 test.eq(first.native_key, selected.native_key)
                 test.eq(first.drained, 0)
 
@@ -200,7 +202,7 @@ local function define_tests()
                 if not hook_admitted.ok then error("hook-only admission: " .. tostring(hook_admitted.error and hook_admitted.error.message)) end
                 local stored_hooks, stored_error = db:query("SELECT tools_json, hooks_json FROM bee_gateway_bindings WHERE action_id = ?", {"native-action-hooks-only"})
                 if not stored_hooks or stored_error or #stored_hooks ~= 1 then error("missing hook-only binding") end
-                local binding = stored_hooks[1] :: Object
+                local binding = assert(bounds.object(stored_hooks[1]))
                 local tool_names = json.decode(tostring(binding.tools_json))
                 local hook_names = json.decode(tostring(binding.hooks_json))
                 if type(tool_names) ~= "table" or type(hook_names) ~= "table" then error("invalid stored gateway catalog") end
@@ -218,25 +220,25 @@ local function define_tests()
                 oversized_request.tools = many_tools
                 local oversized = raw_call(caller(true, false), "bee.gateway.binding:admit", oversized_request)
                 test.is_false(oversized.ok)
-                test.eq((oversized.error :: Object).code, "INVALID")
+                test.eq((assert(bounds.object(oversized.error))).code, "INVALID")
 
                 local replay_request = admit_request("origin-replay")
                 replay_request.idempotency_key = "origin-replay-key"
                 replay_request.origin_view = {view_id = "view-origin", instance_id = "instance-origin"}
                 local first_origin = raw_call(caller(true, false), "bee.gateway.binding:admit", replay_request)
                 if not first_origin.ok then error("origin admission: " .. tostring(first_origin.error and first_origin.error.message)) end
-                local first_binding = (first_origin.value :: Object).binding :: Object
-                test.eq(((first_binding.origin_view :: Object).view_id), "view-origin")
+                local first_binding = assert(bounds.object((assert(bounds.object(first_origin.value))).binding))
+                test.eq(((assert(bounds.object(first_binding.origin_view))).view_id), "view-origin")
                 local stored_origin, stored_origin_error = db:query("SELECT origin_view_json FROM bee_gateway_bindings WHERE binding_id = ?", {first_binding.binding_id})
                 if stored_origin_error or not stored_origin or #stored_origin ~= 1 then error("missing stored origin view") end
-                local stored_view = json.decode(tostring((stored_origin[1] :: Object).origin_view_json))
-                test.eq((stored_view :: Object).instance_id, "instance-origin")
+                local stored_view = json.decode(tostring((assert(bounds.object(stored_origin[1]))).origin_view_json))
+                test.eq((assert(bounds.object(stored_view))).instance_id, "instance-origin")
                 local replayed_origin = raw_call(caller(true, false), "bee.gateway.binding:admit", replay_request)
                 if not replayed_origin.ok then error("origin replay: " .. tostring(replayed_origin.error and replayed_origin.error.message)) end
-                test.is_true((replayed_origin.value :: Object).replayed == true)
-                local replayed_binding = (replayed_origin.value :: Object).binding :: Object
-                test.eq(((replayed_binding.origin_view :: Object).view_id), "view-origin")
-                test.eq(((replayed_binding.origin_view :: Object).instance_id), "instance-origin")
+                test.is_true((assert(bounds.object(replayed_origin.value))).replayed == true)
+                local replayed_binding = assert(bounds.object((assert(bounds.object(replayed_origin.value))).binding))
+                test.eq(((assert(bounds.object(replayed_binding.origin_view))).view_id), "view-origin")
+                test.eq(((assert(bounds.object(replayed_binding.origin_view))).instance_id), "instance-origin")
 
                 local before_epoch = first.epoch
                 local before_secret = first.secret
@@ -245,7 +247,7 @@ local function define_tests()
                 if drain_error then error("mark listener drained: " .. tostring(drain_error)) end
                 local still_denied = raw_call(caller(true, false), "bee.gateway.binding:admit", admit_request("same-execution"))
                 test.is_false(still_denied.ok)
-                test.eq((still_denied.error :: Object).code, "STORAGE")
+                test.eq((assert(bounds.object(still_denied.error))).code, "STORAGE")
                 local preserved = row(db)
                 test.eq(preserved.epoch, before_epoch)
                 test.eq(preserved.secret, before_secret)
@@ -253,7 +255,7 @@ local function define_tests()
                 test.eq(preserved.drained, 1)
 
                 local opened = raw_call(caller(false, true), "bee.gateway.binding:open", {address = selected.address})
-                if not opened.ok then error("explicit open: " .. tostring(opened.error and (opened.error :: Object).message)) end
+                if not opened.ok then error("explicit open: " .. tostring(opened.error and (assert(bounds.object(opened.error))).message)) end
                 local reopened = row(db)
                 test.eq(reopened.native_key, before_key)
                 test.eq(reopened.epoch, 2)
@@ -266,10 +268,10 @@ local function define_tests()
                 raw_call(caller(true, false), "bee.gateway.binding:check", {attempt_id = first_name.attempt_id, carrier_epoch = 1})
                 local described = raw_call(caller(true, false, true), "bee.gateway.binding:describe", {workspace_id = first_name.workspace_id})
                 if not described.ok then error("describe after listener restart: " .. tostring(described.error and described.error.message)) end
-                test.eq((described.value :: Object).title, "Agent sessions")
-                test.eq((described.value :: Object).total, 0)
+                test.eq((assert(bounds.object(described.value))).title, "Agent sessions")
+                test.eq((assert(bounds.object(described.value))).total, 0)
                 local reconciled = row(db)
-                test.eq(reconciled.epoch, (reopened.epoch :: number) + 1)
+                test.eq(reconciled.epoch, assert(bounds.integer(reopened.epoch)) + 1)
                 test.eq(reconciled.address, selected.address)
                 test.eq(reconciled.native_key, selected.native_key)
                 test.is_true(reconciled.secret ~= reopened.secret)

@@ -48,6 +48,7 @@ entries:
     suite: bee
     timeout: 120s
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
     app_identity: bee.threads.records:app_identity
@@ -209,6 +210,9 @@ entries:
   - sql
   - uuid
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
+    service_types: bee.threads.service:types
     database: bee.threads.persist:database
 - name: authority_test
   kind: function.lua
@@ -219,6 +223,7 @@ entries:
     suite: bee
     timeout: 120s
   imports:
+    bounds: bee.threads.records:bounds
     test: wippy.test:test
     harness: bee.threads:harness
 - name: lifecycle_test
@@ -260,6 +265,7 @@ entries:
   modules:
   - time
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
     owner: bee.threads.persist:owner
@@ -359,6 +365,8 @@ entries:
     type: test
     suite: bee
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
 - name: approvals_test
@@ -369,6 +377,7 @@ entries:
     type: test
     suite: bee
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
 - name: send_test
@@ -390,6 +399,7 @@ entries:
     type: test
     suite: bee
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     session: bee.threads.delivery:session
 - name: work_store_test
@@ -419,6 +429,7 @@ entries:
   modules:
   - system
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
     sends: bee.threads.service:sends
@@ -430,6 +441,7 @@ entries:
     type: test
     suite: bee
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
 - name: notice_test
@@ -441,6 +453,8 @@ entries:
     suite: bee
     timeout: 120s
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
 - name: workspace_test_db
@@ -462,6 +476,8 @@ entries:
   - funcs
   - security
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     harness: bee.threads:harness
     database: bee.threads.persist:database
@@ -474,6 +490,7 @@ entries:
     type: test
     suite: bee
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     pump: bee.threads.service:pump
 - name: definition_upgrade_test_db

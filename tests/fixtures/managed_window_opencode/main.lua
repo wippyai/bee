@@ -3,6 +3,8 @@
 -- fixture. The broker really spawns a process, the process really owns a PTY,
 -- and the frame we see is the one the process wrote. No prompt is submitted
 -- and no login is performed.
+local channel = require("channel")
+local bounds = require("bounds")
 local process = require("process")
 local registry = require("registry")
 local time = require("time")
@@ -21,7 +23,7 @@ end
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
@@ -29,18 +31,18 @@ local function call(target: string, value: unknown): {[string]: unknown}
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
+        local fault = type(result.error) == "table" and assert(bounds.object(result.error)) or {}
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
     return result
 end
 
-local function receive_reply(replies: any, request_id: string, operation: string): {[string]: unknown}
+local function receive_reply(replies: channel.Channel<process.Message>, request_id: string, operation: string): {[string]: unknown}
     while true do
-        local message = assert(replies:receive())
+        local message = assert((replies:receive()))
         local data = message:payload():data()
         if type(data) == "table" and data.request_id == request_id and data.op == operation then
-            return data :: {[string]: unknown}
+            return assert(bounds.object(data))
         end
     end
     return {}
@@ -48,7 +50,7 @@ end
 
 local function run()
     local expected = assert(registry.get("bee.managed.opencode.fixture:expectation"))
-    local data = expected.data :: {[string]: unknown}
+    local data = assert(bounds.object(expected.data))
     local marker = tostring(data.marker)
     local thread = "managed_opencode_thread"
     call("bee.threads.service:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open OpenCode window"})
@@ -111,9 +113,10 @@ local function run()
     assert(closed.error_code == "", "managed OpenCode close failed")
     local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
-    local value = records.value :: {[string]: unknown}
+    local value = assert(bounds.object(records.value))
     local receipts = 0
-    for _, item in ipairs(value.records :: {{[string]: unknown}}) do
+    for _, item in ipairs(assert(bounds.array(value.records))) do
+        local item = assert(bounds.object(item))
         kinds[tostring(item.kind)] = true
         if item.kind == "receipt" then
             receipts = receipts + 1

@@ -1,6 +1,8 @@
 -- MIT. Governed application admission joins the static catalog only for the
 -- broker's workspace and only while the host profile still selects it.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local registry = require("registry")
 local system = require("system")
 local uuid = require("uuid")
@@ -29,7 +31,7 @@ end
 
 local function ok(result: Object): Object
     test.is_true(result.ok == true, tostring(result.code) .. ": " .. tostring(result.message))
-    return result.value :: Object
+    return assert(bounds.object(result.value))
 end
 
 local function profile(definition_id: string): Object
@@ -53,11 +55,11 @@ end
 local function project(binding_profile: Object, definition: Object, owner: string, source_node: string,
     source_workspace: string): Object
     local state = assert(registry.snapshot():state())
-    local selected = binding_profile.applications :: {Object}
+    local selected = principals.objects(binding_profile.applications)
     local projected, project_error = admission.project({workspace_id = WORKSPACE, overlay_owner = owner,
         source_node = source_node, source_workspace = source_workspace, artifact_digest = DIGEST,
         bindings = selected, artifact_entries = {definition},
-        registry_entries = {find(state.entries :: {Object}, POLICY)}, overlay_ids = {}})
+        registry_entries = {find(principals.objects(state.entries), POLICY)}, overlay_ids = {}})
     if not projected then error(tostring(project_error)) end
     return {id = projected.id, kind = "registry.entry", data = projected.record}
 end
@@ -142,7 +144,7 @@ local function define_tests()
             test.is_false(has(catalog.read(FOREIGN), APP))
             local governed_binding: Object? = nil
             for _, binding in ipairs(selected.bindings) do
-                if binding.definition_id == APP then governed_binding = binding :: Object; break end
+                if binding.definition_id == APP then governed_binding = assert(bounds.object(binding)); break end
             end
             if not governed_binding then error("governed binding missing") end
             test.eq(governed_binding.thread_access, "observe_post")
@@ -162,7 +164,7 @@ local function define_tests()
 
             local cleanup = registry.snapshot():changes()
             assert(cleanup:update(original))
-            assert(cleanup:delete(derived.id :: string))
+            assert(cleanup:delete(derived.id))
             assert(cleanup:delete(APP))
             assert(cleanup:apply())
         end)
@@ -197,8 +199,8 @@ local function define_tests()
             -- Without Hive admission the rule covers only this node's own.
             local local_only = registry.snapshot():changes()
             local closed = assert(registry.get("bee.env:gov_activation_profiles"))
-            local closed_data = closed.data :: {[string]: unknown}
-            local closed_rule = closed_data.workspace_applications :: {[string]: unknown}
+            local closed_data = assert(bounds.object(closed.data))
+            local closed_rule = assert(bounds.object(closed_data.workspace_applications))
             closed_rule.hive = false
             assert(local_only:update(closed))
             assert(local_only:apply())
@@ -215,7 +217,7 @@ local function define_tests()
 
             local cleanup = registry.snapshot():changes()
             assert(cleanup:update(original))
-            for _, id in ipairs({derived.id :: string, derived_app, foreign.id :: string, foreign_app}) do
+            for _, id in ipairs({derived.id, derived_app, foreign.id, foreign_app}) do
                 assert(cleanup:delete(id))
             end
             assert(cleanup:apply())
@@ -263,7 +265,7 @@ local function define_tests()
             local cleanup = registry.snapshot():changes()
             assert(cleanup:update(original_profiles))
             assert(cleanup:update(original_database_ref))
-            assert(cleanup:delete(projected.id :: string))
+            assert(cleanup:delete(projected.id))
             assert(cleanup:delete(app_id))
             assert(cleanup:apply())
         end)
@@ -284,7 +286,7 @@ local function define_tests()
             local measured, measure_error = admission.project({workspace_id = WORKSPACE, overlay_owner = overlay_owner,
                 source_node = node, source_workspace = source_workspace, artifact_digest = DIGEST,
                 bindings = selected_profile.applications, artifact_entries = {definition},
-                registry_entries = {find(state.entries :: {Object}, POLICY)}, overlay_ids = {}})
+                registry_entries = {find(principals.objects(state.entries), POLICY)}, overlay_ids = {}})
             if not measured then error("project restored admission: " .. tostring(measure_error)) end
             local derived: Object = {id = measured.id, kind = "registry.entry", data = measured.record}
 
@@ -292,8 +294,9 @@ local function define_tests()
             local original_database_ref = assert(registry.get("bee.gov:database_ref"))
             local changes = registry.snapshot():changes()
             local configured = assert(registry.get("bee.env:gov_activation_profiles"))
-            local configuration = configured.data :: Object
-            local profiles = configuration.profiles :: {unknown}
+            local configuration = assert(bounds.object(configured.data))
+            local profiles = principals.items(configuration.profiles)
+            configuration.profiles = profiles
             profiles[#profiles + 1] = selected_profile
             assert(changes:update(configured))
             local database_ref = assert(registry.get("bee.gov:database_ref"))
@@ -302,7 +305,7 @@ local function define_tests()
             assert(changes:apply())
 
             local setup_ok, setup_error = pcall(function()
-                activate(WORKSPACE, node, node, source_workspace, overlay_owner, measured :: Object, "bee.gov:db")
+                activate(WORKSPACE, node, node, source_workspace, overlay_owner, assert(bounds.object(measured)), "bee.gov:db")
                 local before = broker_revision(WORKSPACE)
                 if before:match(":unavailable$") or before:match(":unlinked$") then
                     error("application broker could not read the governance activation revision after activation")
@@ -311,7 +314,7 @@ local function define_tests()
                 if not stored_before_result.ok then
                     error("read governance activation revision before overlay restoration: " .. tostring(stored_before_result.code))
                 end
-                local stored_before = (stored_before_result.value :: Object).revision
+                local stored_before = (assert(bounds.object(stored_before_result.value))).revision
                 local overlay = assert(registry.overlay(overlay_owner))
                 local install = overlay:changes()
                 assert(install:create(definition))
@@ -325,11 +328,11 @@ local function define_tests()
                 if not stored_after_result.ok then
                     error("read governance activation revision after overlay restoration: " .. tostring(stored_after_result.code))
                 end
-                test.eq((stored_after_result.value :: Object).revision, stored_before,
+                test.eq((assert(bounds.object(stored_after_result.value))).revision, stored_before,
                     "overlay restoration does not change the activation-store revision")
                 if after == before then
                     local stored = activation_store.catalog_revision("bee.gov:db", node, WORKSPACE)
-                    local stored_value = stored.ok and (stored.value :: Object).revision or stored.code
+                    local stored_value = stored.ok and (assert(bounds.object(stored.value))).revision or stored.code
                     error("restored admission did not invalidate the broker catalog revision; before=" .. before
                         .. "; after=" .. after .. "; stored=" .. tostring(stored_value))
                 end
@@ -340,7 +343,7 @@ local function define_tests()
             local overlay = assert(registry.overlay(overlay_owner))
             local cleanup_overlay = overlay:changes()
             cleanup_overlay:delete(definition_id)
-            cleanup_overlay:delete(measured.id :: string)
+            cleanup_overlay:delete(measured.id)
             assert(cleanup_overlay:apply())
             local cleanup = registry.snapshot():changes()
             assert(cleanup:update(original_profiles))
@@ -353,7 +356,7 @@ local function define_tests()
             local selected = catalog.read(WORKSPACE)
             local bindings: {[string]: Object} = {}
             for _, binding in ipairs(selected.bindings) do
-                bindings[binding.definition_id] = binding :: Object
+                bindings[binding.definition_id] = assert(bounds.object(binding))
             end
             local timeline = bindings["bee.threads.timeline.app:app"]
             if not timeline then error("timeline package binding missing") end
@@ -372,15 +375,15 @@ local function define_tests()
             test.eq(processes.close_grace_ms, 250)
             local manager = bindings["bee.hive.manager.app:app"]
             if not manager then error("hive manager package binding missing") end
-            test.eq(#(manager.policies :: {string}), 3)
+            test.eq(#(principals.strings(manager.policies)), 3)
             test.is_true(has(selected, "bee.workspace.manager.app:app"))
             test.is_true(has(selected, "bee.hub.modules.app:app"))
             test.is_true(has(selected, "bee.gov.overlays.app:app"))
             local files = bindings["bee.files.app:app"]
             if not files then error("Files package binding missing") end
-            test.eq(#(files.policies :: {string}), 2)
-            test.eq((files.policies :: {string})[1], "bee.security.files:read_policy")
-            test.eq((files.policies :: {string})[2], "bee.security:ordinary_app_subsystem_boundary")
+            test.eq(#(principals.strings(files.policies)), 2)
+            test.eq((principals.strings(files.policies))[1], "bee.security.files:read_policy")
+            test.eq((principals.strings(files.policies))[2], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(files.thread_access, "observe_post")
             test.is_true(has(selected, "bee.settings.app:app"))
             test.is_true(selected.evidence ~= "")
@@ -388,7 +391,7 @@ local function define_tests()
         end)
 
         test.it("refreshes a missing open selection once before refusing it", function()
-            local visible = catalog.read(WORKSPACE) :: Selection
+            local visible = catalog.read(WORKSPACE)
             local stale: Selection = {revision = visible.revision, evidence = "", bindings = {}, items = {}}
             local refreshes = 0
             local selected, binding, descriptor = catalog.resolve_open("bee.settings.app:app", function()

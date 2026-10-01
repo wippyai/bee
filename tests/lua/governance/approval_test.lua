@@ -1,5 +1,6 @@
 -- MIT. A selected plan is bound to the existing Approvals protocol exactly.
 local test = require("test")
+local bounds = require("bounds")
 local approval = require("approval")
 local canonical = require("canonical")
 local hash = require("hash")
@@ -13,10 +14,10 @@ end
 
 local function executor(change: boolean?): approval.Executor
     local selected = {}
-    function selected:call(method: string, request: unknown): (unknown?, unknown?)
-        local value = request :: {[string]: unknown}
+    function selected.call(self: approval.Executor, method: string, request: unknown): (unknown?, unknown?)
+        local value = assert(bounds.object(request))
         if method == "bee.approvals.binding:request" then
-            local proposal = value.proposal :: {[string]: unknown}
+            local proposal = assert(bounds.object(value.proposal))
             if change then proposal = {kind = "operation", ref = "other", revision = "other", payload = {}} end
             local bytes = assert(canonical.encode(proposal))
             local digest = assert(hash.sha256(bytes))
@@ -31,7 +32,7 @@ local function executor(change: boolean?): approval.Executor
             proposal_digest = value.proposal_digest, consumer_id = "governance-host",
             consumed_effect = value.effect_key}}, nil
     end
-    return selected :: approval.Executor
+    return selected
 end
 
 local function define_tests()
@@ -70,16 +71,16 @@ local function define_tests()
             if not consumed then error(tostring(consume_error and consume_error.message)) end
             test.eq(consumed.consumed_effect, intent.effect_key)
             local proposal = assert(approval.activation_proposal(intent))
-            test.eq(((proposal.payload :: {[string]: unknown}).application_admission_digest), string.rep("f", 64))
+            test.eq(((assert(bounds.object(proposal.payload))).application_admission_digest), string.rep("f", 64))
             local wrong, wrong_error = approval.consume_activation(executor(), intent, "other-host")
             test.is_nil(wrong)
             test.eq(wrong_error and wrong_error.code, "CONFLICT")
             local stale = {}
-            function stale:call(_method: string, _request: unknown): (unknown?, unknown?)
+            function stale.call(self: approval.Executor, _method: string, _request: unknown): (unknown?, unknown?)
                 return {ok = false, error = {code = "REVALIDATE", message = "authority changed"},
                     value = {current_incarnation = 9}}, nil
             end
-            local stale_result, stale_error = approval.consume_activation(stale :: approval.Executor, intent, "governance-host")
+            local stale_result, stale_error = approval.consume_activation(stale, intent, "governance-host")
             test.is_nil(stale_result)
             test.eq(stale_error and stale_error.code, "REVALIDATE")
             test.eq(stale_error and stale_error.value and stale_error.value.current_incarnation, 9)

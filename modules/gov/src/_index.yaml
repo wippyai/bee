@@ -304,11 +304,16 @@ entries:
     capability_files: bee.gov:capability_files
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  imports: {preflight: bee.gov:preflight}
 - name: hub_resolver
   kind: library.lua
   source: file://hub_resolver.lua
   modules: [registry, hash]
   imports:
+    resolution: bee.gov:resolver
     artifact: bee.gov:artifact
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds
@@ -321,6 +326,7 @@ entries:
   source: file://overlay_resolver.lua
   modules: [registry, hash]
   imports:
+    resolution: bee.gov:resolver
     artifact: bee.gov:artifact
     canonical: bee.sync:canonical
     bounds: bee.threads.records:bounds

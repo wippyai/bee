@@ -1,6 +1,8 @@
 -- MIT. Source publication persists exact bytes before advertising one
 -- destination-independent descriptor through the ordered Sync feed.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local uuid = require("uuid")
 local hash = require("hash")
 local publisher = require("publisher")
@@ -27,7 +29,7 @@ local function define_tests()
             local before_feed = assert(sync.open({resource = "bee.sync:sync_test_db", owner = source}))
             local empty = sync.read_after(before_feed, delivery.FEED, 0, 16)
             test.is_true(empty.ok)
-            test.eq(#(((empty.value :: {[string]: unknown}).events :: {unknown})), 0)
+            test.eq(#((principals.items((assert(bounds.object(empty.value))).events))), 0)
             assert(sync.close(before_feed))
             local first = publisher.publish("bee.sync:sync_test_db", source, request)
             test.is_true(first.ok)
@@ -35,23 +37,24 @@ local function define_tests()
             test.is_true(replay.ok)
             test.is_true(replay.replayed)
 
-            local receipt = first.value :: {[string]: unknown}
-            local descriptor = receipt.descriptor :: {[string]: unknown}
+            local receipt = assert(bounds.object(first.value))
+            local descriptor = assert(bounds.object(receipt.descriptor))
             test.is_nil(descriptor.destination_node)
-            test.is_nil((descriptor.manifest :: {[string]: unknown}).destination_workspace)
+            test.is_nil((assert(bounds.object(descriptor.manifest))).destination_workspace)
             local replica_store = assert(replicas.open("bee.sync:sync_test_db"))
-            local stored = replicas.read(replica_store, {source_owner = source, feed = descriptor.feed :: string,
-                version_key = descriptor.key :: string, descriptor_digest = descriptor.digest :: string})
+            assert(type(descriptor.feed) == "string" and type(descriptor.key) == "string" and type(descriptor.digest) == "string")
+            local stored = replicas.read(replica_store, {source_owner = source, feed = descriptor.feed,
+                version_key = descriptor.key, descriptor_digest = descriptor.digest})
             test.is_true(stored.ok)
-            test.eq((stored.value :: {[string]: unknown}).content, expected.bytes)
+            test.eq((assert(bounds.object(stored.value))).content, expected.bytes)
             test.is_true(replicas.close(replica_store))
 
             local feed_store = assert(sync.open({resource = "bee.sync:sync_test_db", owner = source}))
             local page = sync.read_after(feed_store, descriptor.feed, 0, 16)
             test.is_true(page.ok)
-            local events = ((page.value :: {[string]: unknown}).events :: {{[string]: unknown}})
+            local events = (principals.objects((assert(bounds.object(page.value))).events))
             test.eq(#events, 1)
-            test.eq((events[1].payload :: {[string]: unknown}).digest, descriptor.digest)
+            test.eq((assert(bounds.object(events[1].payload))).digest, descriptor.digest)
             assert(sync.close(feed_store))
 
             local changed = assert(artifact.create({{id = "published.app:main", kind = "function.lua",
@@ -76,13 +79,15 @@ local function define_tests()
             local frozen = store:call("author-a", {operation = "freeze", workspace_id = workspace,
                 expected_revision = 2, idempotency_key = "freeze"})
             test.is_true(frozen.ok)
-            local digest = (frozen.value :: {[string]: unknown}).digest :: string
+            local digest = (assert(bounds.object(frozen.value))).digest
+            assert(type(digest) == "string")
             local denied = store:call("author-b", {operation = "read", workspace_id = workspace,
                 path = "entries.json", snapshot_digest = digest})
             test.eq(denied.code, "DENIED")
+            if type(digest) ~= "string" then error("invalid fixture digest") end
             local read = store:read_frozen(workspace, "entries.json", digest)
             test.is_true(read.ok)
-            test.eq((read.value :: {[string]: unknown}).content_base64, "W10=")
+            test.eq((assert(bounds.object(read.value))).content_base64, "W10=")
             test.is_true(store:close())
         end)
         test.it("assembles large authored files with checked append, CAS and replay", function()
@@ -93,11 +98,11 @@ local function define_tests()
                 expected_revision = 0, idempotency_key = "create"}).ok)
             local owned = store:call("author-a", {operation = "list", workspace_id = "", owned = true})
             test.is_true(owned.ok)
-            local overlays = (owned.value :: {[string]: unknown}).overlays :: {{[string]: unknown}}
+            local overlays = principals.objects((assert(bounds.object(owned.value))).overlays)
             test.eq(#overlays, 1)
             test.eq(overlays[1].workspace_id, id)
             local foreign = store:call("author-b", {operation = "list", workspace_id = "", owned = true})
-            test.eq(#((foreign.value :: {[string]: unknown}).overlays :: {unknown}), 0)
+            test.eq(#(principals.items((assert(bounds.object(foreign.value))).overlays)), 0)
             local first = string.rep("x", 65536)
             local tail = string.rep("y", 20000)
             test.is_true(store:call("author-a", {operation = "put", workspace_id = id,
@@ -107,7 +112,7 @@ local function define_tests()
                 idempotency_key = "append", path = "entries.json", offset = #first,
                 content = tail})
             test.is_true(appended.ok)
-            test.eq((appended.value :: {[string]: unknown}).revision, 3)
+            test.eq((assert(bounds.object(appended.value))).revision, 3)
             test.is_true(store:call("author-a", {operation = "append", workspace_id = id, expected_revision = 2,
                 idempotency_key = "append", path = "entries.json", offset = #first,
                 content = tail}).replayed)
@@ -122,15 +127,15 @@ local function define_tests()
                 content = tail, result_digest = complete_digest}).code, "INVALID")
             local read = store:call("author-a", {operation = "read", workspace_id = id, path = "entries.json"})
             test.is_true(read.ok)
-            test.eq((read.value :: {[string]: unknown}).bytes, #first + #tail)
-            test.eq((read.value :: {[string]: unknown}).digest, complete_digest)
-            test.eq((read.value :: {[string]: unknown}).chunk_bytes, 16384)
-            test.is_false((read.value :: {[string]: unknown}).eof)
+            test.eq((assert(bounds.object(read.value))).bytes, #first + #tail)
+            test.eq((assert(bounds.object(read.value))).digest, complete_digest)
+            test.eq((assert(bounds.object(read.value))).chunk_bytes, 16384)
+            test.is_false((assert(bounds.object(read.value))).eof)
             local next_page = store:call("author-a", {operation = "read", workspace_id = id,
                 path = "entries.json", offset = 16384, limit = 8192})
             test.is_true(next_page.ok)
-            test.eq((next_page.value :: {[string]: unknown}).offset, 16384)
-            test.eq((next_page.value :: {[string]: unknown}).chunk_bytes, 8192)
+            test.eq((assert(bounds.object(next_page.value))).offset, 16384)
+            test.eq((assert(bounds.object(next_page.value))).chunk_bytes, 8192)
             test.is_true(store:close())
         end)
 

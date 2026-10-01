@@ -1,4 +1,5 @@
 -- MIT. Test-only host enrollment and calls through the real native Hive route.
+local bounds = require("bounds")
 local registry = require("registry")
 local client = require("client")
 local types = require("types")
@@ -6,7 +7,7 @@ local funcs = require("funcs")
 local principals = require("principals")
 local function object(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("expected object") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 local function handle(raw: unknown): string
     local input = object(raw)

@@ -98,7 +98,7 @@ local function read_entries(): {Object}
     local decoded, json_error = json.decode(all_bytes)
     if json_error or type(decoded) ~= "table" then error("source entries are not JSON: " .. tostring(json_error)) end
     local entries: {Object} = {}
-    for index, raw in ipairs(decoded :: {unknown}) do entries[index] = object(raw, "source entry") end
+    for index, raw in ipairs(assert(bounds.array(decoded))) do entries[index] = object(raw, "source entry") end
     return entries
 end
 
@@ -172,8 +172,8 @@ local function stage_version(workspace_id: string, workspace: string, version: s
     local current = workspace_value("read", workspace, nil, nil, nil)
     local revision = bounds.count(current.revision)
     if not revision then error("source workspace omitted its revision") end
-    local measured = workspace_value("put", workspace, revision, "put-" .. version,
-        json.encode(entries_for(version, source)))
+    local encoded = assert(json.encode(entries_for(version, source)))
+    local measured = workspace_value("put", workspace, revision, "put-" .. version, encoded)
     local next_revision = bounds.count(measured.revision)
     if not next_revision or next_revision ~= revision + 1 then error("workspace put did not advance its revision") end
     local frozen = workspace_value("freeze", workspace, next_revision, "freeze-" .. version, nil)
@@ -184,7 +184,7 @@ local function stage_version(workspace_id: string, workspace: string, version: s
     local descriptor = object(published.descriptor, "published descriptor")
     local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
-    for _, raw in ipairs(available.versions :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(available.versions))) do
         local item = object(raw, "available version")
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
@@ -200,13 +200,17 @@ end
 local function main()
     local activation = assert(registry.get("bee.env:gov_activation_profiles"))
     local data = object(activation.data, "activation profiles")
-    local first = object((data.profiles :: {unknown})[1], "initial activation profile")
+    local first = object((assert(bounds.array(data.profiles)))[1], "initial activation profile")
     local workspace_id = bounds.id(first.workspace_id)
     if not workspace_id then error("initial activation profile identity is missing") end
     local entries = read_entries()
     local source = ""
     for _, entry in ipairs(entries) do
-        if entry.id == DEFINITION_ID then source = object(entry.data, "application data").source :: string end
+        if entry.id == DEFINITION_ID then
+            local data = object(entry.data, "application data")
+            assert(type(data.source) == "string")
+            source = data.source
+        end
     end
     if source == "" then error("source application has no source") end
     local v2_source = source:gsub("APP JOURNEY DELIVERED", "AGENT APP UPDATED")

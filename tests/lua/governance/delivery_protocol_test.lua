@@ -1,6 +1,8 @@
 -- MIT. The delivery boundary admits only an agent's own operations and bounds
 -- every field; authority stays with the facade and the owner services.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local delivery = require("delivery_protocol")
 
 local function define_tests()
@@ -32,9 +34,9 @@ local function define_tests()
                 version = "1.0.1", snapshot_digest = string.rep("b", 64), intent_id = "x"}))
             local schema = delivery.schema()
             test.eq(schema.type, "object")
-            local operations = (schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
-            test.eq(#(operations.enum :: {string}), 3)
-            test.is_true(#(schema.examples :: {unknown}) >= 3)
+            local operations = assert(bounds.object((assert(bounds.object(schema.properties))).operation))
+            test.eq(#(principals.strings(operations.enum)), 3)
+            test.is_true(#(principals.items(schema.examples)) >= 3)
         end)
         test.it("refuses unknown operations and misplaced fields", function()
             test.is_nil(delivery.decode({operation = "apply", workspace_id = "ws", source_overlay_id = "src", version = "1"}))

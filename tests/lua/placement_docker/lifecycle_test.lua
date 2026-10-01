@@ -12,6 +12,7 @@ local profiles = require("profiles")
 local request_codec = require("request_codec")
 local store = require("store")
 local types = require("types")
+local placement_decode = require("placement_decode")
 local spec = require("spec")
 local placement_resolver = require("placement_resolver")
 local service = require("service")
@@ -24,11 +25,11 @@ local function call(method: string, value: unknown, owner: string?): service.Rep
     local client = assert(funcs.new():with_actor(principals.actor(owner or OWNER, "workspace-1")):with_scope(security.new_scope({grant})))
     local reply, err = client:call("bee.placement.docker.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    return reply :: service.Reply
+    return principals.reply(reply)
 end
 local function value(reply: service.Reply): types.Attempt
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: types.Attempt
+    return assert(placement_decode.attempt(reply.value))
 end
 local function running(id: string): types.Attempt
     local started = value(call("start", {attempt_id = id}))
@@ -37,7 +38,7 @@ local function running(id: string): types.Attempt
     while true do
         local status = call("status", {attempt_id = id})
         assert(status.ok)
-        local observed = status.value :: {attempt: types.Attempt}
+        local observed = assert(placement_decode.status(status.value))
         if observed.attempt.execution_state ~= "starting" then return observed.attempt end
         local poll = time.after("50ms")
         local selected = channel.select({poll:case_receive(), deadline:case_receive()})
@@ -54,7 +55,8 @@ local function configure()
     local policy = assert(registry.get(POLICY))
     policy.data.placement_profiles = {PROFILE}; changes:update(policy)
     local activation = assert(registry.get("bee.harness:harness_activation"))
-    local bindings = activation.data.bindings :: {string}
+    local bindings = principals.strings(activation.data.bindings)
+    activation.data.bindings = bindings
     bindings[#bindings + 1] = "bee.placement.native:fixture_agent_binding"; changes:update(activation)
     assert(changes:apply())
 end
@@ -87,7 +89,7 @@ local function run()
             local result = call("reconcile", {attempt_id = id})
             process.terminate(creator)
             test.is_true(result.ok)
-            test.eq((result.value :: types.Attempt).execution_state, "starting")
+            test.eq((result.value).execution_state, "starting")
             assert(service.change(id, {execution = "exited", fields = {exit_source = "runner"},
                 evidence = {kind = "test.finished", detail = "fixture has no dispatched container"}}).ok)
         end)
@@ -113,7 +115,7 @@ local function run()
                 test.eq(cleaned.exit and cleaned.exit.code, stopped.exit and stopped.exit.code)
                 local raw = call("evidence", {attempt_id = id, limit = 64})
                 test.is_true(raw.ok)
-                local page = raw.value :: {evidence: {{kind: string}}}
+                local page = raw.value
                 local stopped_at, verified_at, removed_at = 0, 0, 0
                 for i, item in ipairs(page.evidence) do
                     if item.kind == "docker.stopped" then stopped_at = i end
@@ -198,7 +200,7 @@ local function run()
         test.it("reports image and runtime readiness without starting a container", function()
             local reply = call("capabilities", {placement_profile_ref = PROFILE, runtime_name = "claude"})
             test.is_true(reply.ok)
-            local report = reply.value :: {image_readiness: {present: boolean, runtime_present: boolean}}
+            local report = reply.value
             test.is_true(report.image_readiness.present)
             test.is_false(report.image_readiness.runtime_present)
         end)

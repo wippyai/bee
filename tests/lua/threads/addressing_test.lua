@@ -2,15 +2,16 @@
 -- actions only when they are actions of the thread the message lands on,
 -- and a sending action only when it is the sender's own admitted work.
 local test = require("test")
+local bounds = require("bounds")
 local harness = require("harness")
 type Object = {[string]: unknown}
 local function admitted_for(principal: string): Object
-    local body = harness.admitted() :: Object
+    local body = assert(bounds.object(harness.admitted()))
     body.principal_id = principal
     return body
 end
 local function addressed(id: string, recipient_actions: {string}?, sender_action: string?): Object
-    local body = harness.message(id, "go ahead") :: Object
+    local body = assert(bounds.object(harness.message(id, "go ahead")))
     if recipient_actions then body.recipient_action_ids = recipient_actions end
     if sender_action then body.sender_action_id = sender_action end
     return body
@@ -26,7 +27,7 @@ local function define_tests()
             harness.value(alice:call("admit_action", {thread_id = sending, idempotency_key = harness.key(), action_id = "sending-action", admitted = admitted_for("alice")}))
             local committed = harness.value(alice:call("record", {thread_id = waiting, idempotency_key = harness.key(), kind = "message",
                 body = addressed("go-1", {"waiting-action"}, "sending-action")}))
-            local page = harness.value(alice:call("read_after", {thread_id = waiting, cursor = committed.sequence - 1, limit = 1}))
+            local page = harness.value(alice:call("read_after", {thread_id = waiting, cursor = assert(bounds.integer(committed.sequence)) - 1, limit = 1}))
             local body = page.records[1].body
             test.eq(body.recipient_action_ids[1], "waiting-action")
             test.eq(body.sender_action_id, "sending-action")

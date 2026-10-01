@@ -5,6 +5,7 @@
 -- each exercised. This is the proof an acceptance record stands on; the
 -- transcript checker alone is not.
 local test = require("test")
+local bounds = require("bounds")
 local exec = require("exec")
 local env = require("env")
 local registry = require("registry")
@@ -30,7 +31,7 @@ end
 local function fixture_adapter(): adapter.Adapter
     local entry = registry.get("bee.harness.catalog:permission_fixture_adapter")
     if not entry then error("fixture adapter entry") end
-    local data = entry.data :: Object
+    local data = assert(bounds.object(entry.data))
     local decoded, err = adapter.decode("bee.harness.catalog:permission_fixture_adapter", data.adapter)
     if not decoded then error(tostring(err)) end
     return decoded
@@ -52,12 +53,12 @@ local function drive(pinned: adapter.Adapter, respond: (adapter.Request) -> stri
     while true do
         local chunk: unknown = stdout:read(4096)
         if type(chunk) ~= "string" or chunk == "" then break end
-        local data = chunk :: string
+        local data = chunk
         local envelopes = stream_json.feed(decoder, data)
         for _, envelope in ipairs(envelopes) do
             local step = protocol.normalize(state, envelope.index, envelope.value)
             for _, observation in ipairs(step.observations) do
-                run.observations[#run.observations + 1] = observation :: Object
+                run.observations[#run.observations + 1] = assert(bounds.object(observation))
                 if not run.request then
                     local found = adapter.request(pinned, observation)
                     if found then run.request = found end
@@ -92,7 +93,7 @@ local function first_after(run: Run, kind: string, predicate: ((Object) -> boole
 end
 local function turn_outcome(run: Run): string
     for _, observation in ipairs(run.observations) do
-        local data = observation.data :: Object
+        local data = assert(bounds.object(observation.data))
         if observation.type == "turn.signal" and data.phase == "ended" then return tostring(data.reported_outcome) end
     end
     return ""
@@ -110,7 +111,7 @@ local function define_tests()
             test.eq(request.tool_name, "Bash")
             test.is_true(run.boundary >= 1)
             local echo = first_after(run, "tool.result", function(observation: Object): boolean
-                return (observation.data :: Object).call_id == REQUEST_ID
+                return (assert(bounds.object(observation.data))).call_id == REQUEST_ID
             end)
             test.is_true(echo > run.boundary)
             test.is_true(adapter.acknowledged(pinned, request, run.observations[echo]))
@@ -126,7 +127,7 @@ local function define_tests()
             test.not_nil(run.request)
             test.eq(first_after(run, "tool.result"), 0)
             local denied = first_after(run, "notice", function(observation: Object): boolean
-                return (observation.data :: Object).code == "permission_denied"
+                return (assert(bounds.object(observation.data))).code == "permission_denied"
             end)
             test.is_true(denied > run.boundary)
             test.eq(turn_outcome(run), "failed")

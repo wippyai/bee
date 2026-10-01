@@ -2,6 +2,8 @@
 -- the exact workspace or root it names, runs under the host-named execution
 -- scope, and keeps every folder under a root the host admitted.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -52,12 +54,12 @@ local function call(client: funcs.Executor, method: string, value: unknown): Rep
     local reply, err = client:call("bee.workspace.catalog:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     if type(reply) ~= "table" then error(method .. ": missing reply") end
-    return reply :: Reply
+    return reply
 end
 
 local function value(reply: Reply): Object
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 
 local function code(reply: Reply): string
@@ -71,8 +73,9 @@ local function admit_roots()
     admitted = true
     local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
-    local data = entry.data :: Object
-    local roots = data.roots :: {Object}
+    local data = assert(bounds.object(entry.data))
+    local roots = principals.objects(data.roots)
+    data.roots = roots
     roots[#roots + 1] = {root_ref = PROJECTS, access = "write"}
     roots[#roots + 1] = {root_ref = ARCHIVE, access = "read"}
     local changes = registry.snapshot():changes()
@@ -102,7 +105,7 @@ local function define_tests()
             test.eq(created.root_ref, PROJECTS)
             test.eq(created.subpath, name)
             local read = value(call(reader, "read", {workspace_id = created.workspace_id}))
-            test.eq((read.workspace :: Object).label, "Existing " .. name)
+            test.eq((assert(bounds.object(read.workspace))).label, "Existing " .. name)
             test.eq(read.live, false)
             test.eq(code(call(manager, "create", {label = "Again", root_ref = PROJECTS, subpath = name})), "CONFLICT")
         end)
@@ -147,16 +150,16 @@ local function define_tests()
                 local request: Object = {label = stem, limit = 3}
                 if after then request.after = after end
                 local page = value(call(reader, "search", request))
-                for _, item in ipairs(page.items :: {Object}) do labels[#labels + 1] = tostring(item.label) end
+                for _, item in ipairs(principals.objects(page.items)) do labels[#labels + 1] = tostring(item.label) end
                 after = page.next_after
             until after == nil
             test.eq(#labels, 7)
             test.eq(labels[1], stem .. " 1")
             test.eq(labels[7], stem .. " 7")
             local under = value(call(reader, "search", {root_ref = PROJECTS, path = base, limit = 100}))
-            test.eq(#(under.items :: {Object}), 7)
+            test.eq(#(principals.objects(under.items)), 7)
             local listed = value(call(reader, "list", {limit = 2}))
-            test.eq(#(listed.items :: {Object}), 2)
+            test.eq(#(principals.objects(listed.items)), 2)
             test.not_nil(listed.next_after)
             test.eq(code(call(reader, "list", {after = "forged"})), "INVALID")
             test.eq(code(call(reader, "list", {limit = 101})), "INVALID")
@@ -178,7 +181,7 @@ local function define_tests()
                 local request: Object = {path = base, limit = 1}
                 if after then request.after = after end
                 local page = value(call(reader, "search", request))
-                for _, item in ipairs(page.items :: {Object}) do found[#found + 1] = item end
+                for _, item in ipairs(principals.objects(page.items)) do found[#found + 1] = item end
                 after = page.next_after
             until after == nil
             test.eq(#found, 2)
@@ -198,7 +201,7 @@ local function define_tests()
             local listed = value(call(reader, "roots", {}))
             local access: {[string]: string} = {}
             local previous = ""
-            for _, root in ipairs(listed.roots :: {Object}) do
+            for _, root in ipairs(principals.objects(listed.roots)) do
                 local ref = tostring(root.root_ref)
                 test.is_true(ref > previous)
                 previous = ref
@@ -224,7 +227,7 @@ local function define_tests()
             test.eq(first.path, base)
             test.eq(first.access, "write")
             test.eq(first.workspace_id, own.workspace_id)
-            local items = first.folders :: {Object}
+            local items = principals.objects(first.folders)
             test.eq(#items, 2)
             test.eq(items[1].name, "alpha")
             test.is_nil(items[1].workspace_id)
@@ -232,7 +235,7 @@ local function define_tests()
             test.eq(items[2].workspace_id, held.workspace_id)
             test.not_nil(first.next_after)
             local second = value(call(manager, "folders", {root_ref = PROJECTS, path = base, limit = 2, after = first.next_after}))
-            local rest = second.folders :: {Object}
+            local rest = principals.objects(second.folders)
             test.eq(#rest, 1)
             test.eq(rest[1].name, "gamma")
             test.is_nil(second.next_after)
@@ -248,7 +251,7 @@ local function define_tests()
             -- Browsing folders is its own grant: it pages folders and lists
             -- the roots, and creates nothing.
             local browsed = value(call(browser, "folders", {root_ref = PROJECTS, path = base, limit = 2}))
-            test.eq(#(browsed.folders :: {Object}), 2)
+            test.eq(#(principals.objects(browsed.folders)), 2)
             test.not_nil(value(call(browser, "roots", {})).roots)
             test.eq(code(call(browser, "create", {label = "Browsed", root_ref = PROJECTS, subpath = base .. "/alpha"})), "DENIED")
             test.eq(code(call(browser, "archive", {workspace_id = own.workspace_id})), "DENIED")
@@ -264,7 +267,7 @@ local function define_tests()
             test.eq(value(call(manager, "archive", {workspace_id = id})).state, "archived")
             local archived = value(call(reader, "search", {label = "After", state = "archived", limit = 100}))
             local found = false
-            for _, item in ipairs(archived.items :: {Object}) do if item.workspace_id == id then found = true end end
+            for _, item in ipairs(principals.objects(archived.items)) do if item.workspace_id == id then found = true end end
             test.is_true(found)
             test.eq(value(call(manager, "restore", {workspace_id = id})).state, "active")
             test.eq(value(call(manager, "restore", {workspace_id = id})).state, "active")
@@ -300,7 +303,7 @@ local function define_tests()
             admit_roots()
             local created = value(call(application, "create", {label = "From an app", root_ref = PROJECTS, subpath = folder(PROJECTS, fresh("app"))}))
             test.eq(value(call(application, "read", {workspace_id = created.workspace_id})).live, false)
-            test.eq(#(value(call(application, "search", {label = "From an app", limit = 5})).items :: {Object}) >= 1, true)
+            test.eq(#(principals.objects(value(call(application, "search", {label = "From an app", limit = 5})).items)) >= 1, true)
         end)
     end)
 end

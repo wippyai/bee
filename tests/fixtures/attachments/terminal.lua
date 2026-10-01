@@ -29,7 +29,7 @@ function M.main()
     assert(process.registry.lookup(endpoint) == broker)
     local function reply(id: string, op: string): decode.Reply
         while true do
-            local message = assert(replies:receive())
+            local message = assert((replies:receive()))
             assert(message:from() == broker)
             local value = decode.reply(message:payload():data())
             if not value then error("Invalid reply") end
@@ -104,7 +104,7 @@ function M.main()
     local consumer = tostring(assert(process.with_options({}):spawn_monitored(
         "bee.attachment.probe:controller", "bee:workers", owner)))
     local function consumer_status(expected: string)
-        local message = assert(controller_status:receive())
+        local message = assert((controller_status:receive()))
         assert(message:from() == consumer and message:payload():data() == expected)
     end
     consumer_status("ready")

@@ -1,5 +1,6 @@
 -- MIT. Persistence and fencing checks for destination activation state.
 local test = require("test")
+local bounds = require("bounds")
 local hash = require("hash")
 local uuid = require("uuid")
 local canonical = require("canonical")
@@ -15,7 +16,7 @@ local function blob(bytes: string): {[string]: string}
 end
 local function ok(result: {[string]: unknown}): {[string]: unknown}
     test.is_true(result.ok == true, tostring(result.code) .. ": " .. tostring(result.message))
-    return result.value :: {[string]: unknown}
+    return assert(bounds.object(result.value))
 end
 local function base(operation: string, revision: integer, key: string): {[string]: unknown}
     return {operation = operation, intent_id = "intent-v1", expected_revision = revision, idempotency_key = key}
@@ -347,8 +348,8 @@ local function define_tests()
             test.is_true(completed.migrations_completed)
             test.eq(completed.phase, "applying")
             local facts = ok(store.applied(state, "demo/app"))
-            test.eq(((facts.migrations :: {[string]: unknown})["demo:db\ndemo:001"] :: {[string]: unknown}).checksum, checksum)
-            local database = (facts.databases :: {[string]: unknown})["demo:db"] :: {[string]: unknown}
+            test.eq((assert(bounds.object((assert(bounds.object(facts.migrations)))["demo:db\ndemo:001"]))).checksum, checksum)
+            local database = assert(bounds.object((assert(bounds.object(facts.databases)))["demo:db"]))
             test.eq(database.database_id, "demo:db")
             test.is_nil(database.table_prefix)
             assert(store.close(state))

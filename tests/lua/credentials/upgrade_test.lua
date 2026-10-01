@@ -1,5 +1,6 @@
 -- MIT. Populate the shipped credential schema before applying file sources.
 local test = require("test")
+local principals = require("principals")
 local persist = require("persist")
 local migrations = require("migrations")
 local broker = require("broker")
@@ -62,8 +63,8 @@ local function define_tests()
             for index = 2, 3 do test.eq(rows(again, statements[index]), before[index]) end
             local migrated, migrated_error = again:query("SELECT name,optional FROM bee_credential_definitions ORDER BY definition_id")
             test.is_nil(migrated_error)
-            test.eq(#(migrated :: {unknown}), 2)
-            for _, row in ipairs(migrated :: {{[string]: unknown}}) do test.eq(row.optional, 0) end
+            test.eq(#(principals.items(migrated)), 2)
+            for _, row in ipairs(principals.objects(migrated)) do test.eq(row.optional, 0) end
             -- Verify migration 2 schema check constraints enforce provider, source_kind and projection_kind
             local _, bad_provider = again:execute([[INSERT INTO bee_credential_definitions VALUES
                 ('ws','bad-p','def-bp',1,'unsupported','fs_directory','host:login','file','auth.json','d','node','created','updated',0)]])
@@ -84,10 +85,10 @@ local function define_tests()
             local ledger_rows, ledger_err = again:query("SELECT * FROM " .. broker.LEDGER.table .. " ORDER BY id")
             test.is_nil(ledger_err)
             test.is_true(ledger_rows ~= nil)
-            test.eq(#(ledger_rows :: {unknown}), 3)
-            local l1 = (ledger_rows :: {{[string]: unknown}})[1]
-            local l2 = (ledger_rows :: {{[string]: unknown}})[2]
-            local l3 = (ledger_rows :: {{[string]: unknown}})[3]
+            test.eq(#(principals.items(ledger_rows)), 3)
+            local l1 = (principals.objects(ledger_rows))[1]
+            local l2 = (principals.objects(ledger_rows))[2]
+            local l3 = (principals.objects(ledger_rows))[3]
             test.eq(l1.name, "credentials")
             test.eq(l2.name, "file_sources")
             test.eq(l3.name, "optional_files")

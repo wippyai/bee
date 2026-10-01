@@ -31,7 +31,7 @@ local function fixture(existing_database: boolean?): (artifact.Artifact, preflig
         meta = {type = "migration", target_db = target_db, ordinal = 1}, data = {up = "create table users"}}
     local definitions: {{[string]: unknown}} = {migration}
     local candidate_entries: {preflight.Entry} = {
-        candidate_entry(migration.id :: string, migration.kind :: string, "demo/app", measured(migration))}
+        candidate_entry(migration.id, migration.kind, "demo/app", measured(migration))}
     local host_database = candidate_entry("host:db", "db.sql.sqlite", "host/storage", SHA)
     local destination_entries: {[string]: preflight.Entry} = {["host:db"] = host_database}
     local exact = assert(artifact.create(definitions))

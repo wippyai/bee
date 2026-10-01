@@ -149,7 +149,11 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             roots[#roots + 1] = reference
         end
     end
-    local resolved, graph_error = graph.resolve(roots, source)
+    local selections: {[string]: string} = {}
+    for _, item in ipairs(installed.modules) do
+        if item.version ~= "" then selections[item.component] = item.version end
+    end
+    local resolved, graph_error = graph.resolve(roots, source, selections)
     if not resolved then return nil, graph_error end
     if self_update then
         local compatibility_error = native_compat.check(resolved.packages, baked_identity)

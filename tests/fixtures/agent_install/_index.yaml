@@ -22,12 +22,15 @@ entries:
   kind: library.lua
   source: file://agent.lua
   modules: [funcs, security, system, time, env]
+  imports: {bounds: bee.protocol:bounds}
+
 - name: request
   kind: process.lua
   source: file://request.lua
   method: main
   modules: [logger, time]
   imports:
+    bounds: bee.protocol:bounds
     agent: bee.hub.install.probe:agent
   security:
     policies: [bee.hub.install.probe:probe_policy]

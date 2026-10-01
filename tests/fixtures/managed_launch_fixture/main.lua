@@ -5,6 +5,8 @@
 -- captured stream-json-2 transcript. The broker really spawns a process,
 -- the process really owns a PTY, and the bytes on screen are the ones
 -- that process actually wrote.
+local channel = require("channel")
+local bounds = require("bounds")
 local test = require("test")
 local process = require("process")
 local registry = require("registry")
@@ -24,7 +26,7 @@ end
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
@@ -32,18 +34,18 @@ local function call(target: string, value: unknown): {[string]: unknown}
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
+        local fault = type(result.error) == "table" and assert(bounds.object(result.error)) or {}
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
     return result
 end
 
-local function receive_reply(replies: any, request_id: string, operation: string): {[string]: unknown}
+local function receive_reply(replies: channel.Channel<process.Message>, request_id: string, operation: string): {[string]: unknown}
     while true do
-        local message = assert(replies:receive())
+        local message = assert((replies:receive()))
         local data = message:payload():data()
         if type(data) == "table" and data.request_id == request_id and data.op == operation then
-            return data :: {[string]: unknown}
+            return assert(bounds.object(data))
         end
     end
     return {}
@@ -94,8 +96,9 @@ local function define_tests()
             assert(closed.error_code == "", "fixture provider window close failed")
             local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32})
             local kinds: {[string]: boolean} = {}
-            local value = records.value :: {[string]: unknown}
-            for _, item in ipairs(value.records :: {{[string]: unknown}}) do kinds[tostring(item.kind)] = true end
+            local value = assert(bounds.object(records.value))
+            for _, item in ipairs(assert(bounds.array(value.records))) do
+        local item = assert(bounds.object(item)) kinds[tostring(item.kind)] = true end
             assert(kinds["action.admitted"], "the launch definition was not admitted onto the thread")
             assert(kinds["attempt.prepared"] and kinds["attempt.started"], "placement did not record a real attempt for the fixture provider")
             assert(kinds["receipt"], "the native window did not settle a receipt for the fixture provider")

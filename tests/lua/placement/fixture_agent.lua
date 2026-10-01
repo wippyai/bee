@@ -1,6 +1,7 @@
 -- MIT. A deliberately small third-party driver fixture. Its configure method
 -- proves placement consumes a binding's generic contract rather than a
 -- provider-specific core branch.
+local bounds = require("bounds")
 local hash = require("hash")
 
 local PROVIDER_REF = "bee.placement.native:fixture_agent_provider"
@@ -31,12 +32,12 @@ local function configure(value: unknown): {[string]: unknown}
     end
     local provider = request.provider
     local data = provider.data
-    if type(data) ~= "table" or (data :: {[string]: unknown}).schema_revision ~= "bee.fixture-agent-provider@1" or (data :: {[string]: unknown}).model ~= "terra" then
+    if type(data) ~= "table" or (assert(bounds.object(data))).schema_revision ~= "bee.fixture-agent-provider@1" or (assert(bounds.object(data))).model ~= "terra" then
         return {ok = false, error = "fixture-agent provider is invalid"}
     end
     -- Deliberately try to mutate the provider copy. The placement test checks
     -- that the funcs.call boundary does not expose the registry table itself.
-    (data :: {[string]: unknown}).mutation_probe = "driver-copy"
+    (assert(bounds.object(data))).mutation_probe = "driver-copy"
     local content = '{"provider_ref":"' .. PROVIDER_REF .. '","model":"terra"}\n'
     local digest, digest_error = hash.sha256(content)
     if not digest then return {ok = false, error = tostring(digest_error or "configuration digest failed")} end

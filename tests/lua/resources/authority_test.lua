@@ -2,6 +2,7 @@
 -- grants bound to the authenticated subject and their exact selection,
 -- and resolve refusing everything that no longer holds.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -53,31 +54,32 @@ local outsider = caller("bee.test.outsider", {})
 local function call(client: Principal, method: string, value: unknown): authority.Reply
     local reply, err = executor(client, value):call("bee.resources.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    return reply :: authority.Reply
+    return principals.reply(reply)
 end
 local function value(reply: authority.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: {[string]: unknown}
+    return assert(bounds.object(reply.value))
 end
 local function code(reply: authority.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return reply.error and reply.error.code or ""
 end
-local function await(future: any): authority.Reply
+local function await(future: funcs.Future): authority.Reply
     local response = future:response()
     local payload, open = response:receive()
     local value, err = future:result()
-    if err then error("async associate: " .. tostring(err)) end
+    if err or not value then error("async associate: " .. tostring(err)) end
     if not open or not payload then error("async associate closed without a reply") end
     local data: unknown = value:data()
     if type(data) ~= "table" then error("async associate returned " .. type(data)) end
-    return data :: authority.Reply
+    return principals.reply(data)
 end
 local function admit_roots()
     local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
-    local data = entry.data :: {[string]: unknown}
-    local roots = data.roots :: {{[string]: unknown}}
+    local data = assert(bounds.object(entry.data))
+    local roots = principals.objects(data.roots)
+    data.roots = roots
     local present: {[string]: boolean} = {}
     for _, root in ipairs(roots) do present[tostring(root.root_ref)] = true end
     if present[PROJECT] and present[SHARED] and present[UNRELATED_ENV_ROOT] then return end
@@ -100,7 +102,7 @@ local function define_tests()
             test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "../up"})), "INVALID")
             local first = value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "src", allowed_access = "write"}))
             test.eq(first.revision, 1)
-            test.eq(#(first.root_digest :: string), 64)
+            test.eq(#(first.root_digest), 64)
             local shared = value(call(manager, "associate", {workspace_id = workspace, name = "shared", root_ref = SHARED, allowed_access = "read"}))
             test.eq(shared.allowed_access, "read")
             local replaced = value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "app", allowed_access = "write"}))
@@ -110,7 +112,7 @@ local function define_tests()
             test.eq(replayed.revision, replaced.revision)
             test.eq(replayed.association_id, replaced.association_id)
             local listed = value(call(manager, "list", {workspace_id = workspace}))
-            test.eq(#(listed.associations :: {unknown}), 2)
+            test.eq(#(principals.items(listed.associations)), 2)
             test.eq(code(call(user, "list", {workspace_id = workspace})), "DENIED")
         end)
         test.it("migrates legacy associations and grants once to the shared state identity", function()
@@ -119,9 +121,9 @@ local function define_tests()
                 root_ref = PROJECT, subpath = "src", allowed_access = "write"}))
             local grant = value(call(user, "grant", {workspace_id = workspace, name = "session", access = "write",
                 purpose = "session", audience = legacy, attempt_id = "legacy-attempt"}))
-            local destination = association.owner_node :: string
-            local resource = resources.database()
-            local db, open_error = persist.open({resource = resource :: string, ledger = authority.LEDGER,
+            local destination = association.owner_node
+            local resource = assert(resources.database())
+            local db, open_error = persist.open({resource = resource, ledger = authority.LEDGER,
                 migrations = migrations.all()})
             if not db then error(tostring(open_error or "open resource migration store")) end
             local _, association_error = db:execute(
@@ -138,14 +140,14 @@ local function define_tests()
             db:release()
 
             local local_list = value(call(manager, "list", {workspace_id = workspace}))
-            local local_association = (local_list.associations :: {{[string]: unknown}})[1]
+            local local_association = (principals.objects(local_list.associations))[1]
             test.eq(local_association.owner_node, destination)
             local resolved = value(call(placement, "resolve", {grant_id = grant.grant_id, subject = USER,
                 audience = destination, attempt_id = "legacy-attempt"}))
             test.eq(resolved.workspace_id, workspace)
             test.eq(resolved.name, "session")
 
-            local verify_db = assert(persist.open({resource = resource :: string, ledger = authority.LEDGER,
+            local verify_db = assert(persist.open({resource = resource, ledger = authority.LEDGER,
                 migrations = migrations.all()}))
             local records, record_error = verify_db:query(
                 "SELECT association_count, grant_count FROM bee_resource_node_identity_migrations WHERE source_node = ? AND destination_node = ?",
@@ -174,11 +176,11 @@ local function define_tests()
             end
             test.eq(conflicts, 1)
             if not created then error("association race created nothing") end
-            local association = created.value :: {[string]: unknown}
+            local association = assert(bounds.object(created.value))
             test.eq(association.revision, 1)
             local listed = value(call(manager, "list", {workspace_id = workspace}))
-            test.eq(#(listed.associations :: {unknown}), 1)
-            local current = (listed.associations :: {{[string]: unknown}})[1]
+            test.eq(#(principals.items(listed.associations)), 1)
+            local current = (principals.objects(listed.associations))[1]
             test.eq(current.revision, 1)
             test.eq(current.subpath, association.subpath)
 
@@ -188,7 +190,7 @@ local function define_tests()
                 allowed_access = "write", expected_revision = 0})
             test.eq(code(stale), "CONFLICT")
             local after_stale = value(call(manager, "list", {workspace_id = workspace}))
-            local unchanged = (after_stale.associations :: {{[string]: unknown}})[1]
+            local unchanged = (principals.objects(after_stale.associations))[1]
             test.eq(unchanged.revision, 1)
             test.eq(unchanged.association_id, association.association_id)
             value(call(placement, "resolve", {grant_id = granted.grant_id, subject = USER, audience = USER, attempt_id = "cas-attempt"}))
@@ -204,7 +206,7 @@ local function define_tests()
             test.eq(code(call(manager, "associate", {workspace_id = workspace, name = "secret", root_ref = UNRELATED_ENV_ROOT,
                 subpath = "", allowed_access = "write", expected_revision = 0})), "INVALID")
             local listed = value(call(manager, "list", {workspace_id = workspace}))
-            test.eq(#(listed.associations :: {unknown}), 0)
+            test.eq(#(principals.items(listed.associations)), 0)
         end)
         test.it("lets a principal take grants only in the workspace it is bound to", function()
             local home, foreign = fresh("home"), fresh("foreign")
@@ -214,14 +216,14 @@ local function define_tests()
             local request = {workspace_id = foreign, name = "project", access = "read", purpose = "project", audience = USER}
             local denied, denied_error = bound(user, home):call("bee.resources.binding:grant", request)
             if denied_error then error(tostring(denied_error)) end
-            test.eq(code(denied :: authority.Reply), "DENIED")
+            test.eq(code(principals.reply(denied)), "DENIED")
             local unbound, unbound_error = bound(user, nil):call("bee.resources.binding:grant", request)
             if unbound_error then error(tostring(unbound_error)) end
-            test.eq(code(unbound :: authority.Reply), "DENIED")
+            test.eq(code(principals.reply(unbound)), "DENIED")
             local own, own_error = bound(user, home):call("bee.resources.binding:grant",
                 {workspace_id = home, name = "project", access = "read", purpose = "project", audience = USER})
             if own_error then error(tostring(own_error)) end
-            test.eq((value(own :: authority.Reply)).subject, USER)
+            test.eq((value(principals.reply(own))).subject, USER)
         end)
         test.it("grants bind the authenticated subject and resolve only for the admitted placement, subject and audience", function()
             local workspace = fresh("ws")
@@ -233,7 +235,7 @@ local function define_tests()
             test.eq(granted.audience, USER)
             test.eq(granted.association_revision, 1)
             test.eq(granted.authorization_epoch, 0)
-            local grant_id = granted.grant_id :: string
+            local grant_id = granted.grant_id
             test.eq(code(call(user, "resolve", {grant_id = grant_id, subject = USER, audience = USER, attempt_id = "attempt-1"})), "DENIED")
             local resolved = value(call(placement, "resolve", {grant_id = grant_id, subject = USER, audience = USER, attempt_id = "attempt-1"}))
             test.eq(resolved.root_ref, PROJECT)
@@ -264,7 +266,7 @@ local function define_tests()
             test.eq(granted.thread_id, "thread-1")
             test.eq(granted.audience, THREAD_ACTOR)
             test.eq(granted.attempt_id, "attempt-1")
-            local grant_id = granted.grant_id :: string
+            local grant_id = granted.grant_id
             value(call(placement, "resolve", {grant_id = grant_id, subject = THREAD_ACTOR, audience = THREAD_ACTOR, attempt_id = "attempt-1"}))
             test.eq(code(call(placement, "resolve", {grant_id = grant_id, subject = THREAD_ACTOR, audience = THREAD_ACTOR, attempt_id = "attempt-2"})), "DENIED")
             test.eq(code(call(placement, "resolve", {grant_id = grant_id, subject = USER, audience = THREAD_ACTOR, attempt_id = "attempt-1"})), "DENIED")
@@ -278,7 +280,7 @@ local function define_tests()
                 audience = THREAD_ACTOR, attempt_id = "attempt-1", subject = THREAD_ACTOR, thread_id = "thread-1"}
             local denied, denied_error = bound(consumer, workspace):call("bee.resources.binding:grant", foreign)
             if denied_error then error(tostring(denied_error)) end
-            test.eq(code(denied :: authority.Reply), "DENIED")
+            test.eq(code(principals.reply(denied)), "DENIED")
         end)
         test.it("stops resolving on expiry, revocation, epoch advance, replaced associations, changed roots and foreign nodes", function()
             local workspace = fresh("ws")
@@ -305,7 +307,7 @@ local function define_tests()
             value(call(placement, "resolve", {grant_id = fresh_grant.grant_id, subject = USER, audience = USER}))
             local root_entry = registry.get(PROJECT)
             if not root_entry then error("root entry") end
-            local root_meta = root_entry.meta :: {[string]: unknown}
+            local root_meta = assert(bounds.object(root_entry.meta))
             root_meta.comment = "re-defined " .. fresh("at")
             local changes = registry.snapshot():changes()
             changes:update(root_entry)
@@ -315,8 +317,8 @@ local function define_tests()
             value(call(manager, "associate", {workspace_id = workspace, name = "project", root_ref = PROJECT, subpath = "", allowed_access = "write"}))
             local relocated = value(call(user, "grant", {workspace_id = workspace, name = "project", access = "read", purpose = "project", audience = USER}))
             value(call(placement, "resolve", {grant_id = relocated.grant_id, subject = USER, audience = USER}))
-            local resource = resources.database()
-            local db = persist.open({resource = resource :: string, ledger = authority.LEDGER, migrations = migrations.all()})
+            local resource = assert(resources.database())
+            local db = persist.open({resource = resource, ledger = authority.LEDGER, migrations = migrations.all()})
             if not db then error("store") end
             local _, move_error = db:execute("UPDATE bee_resource_associations SET owner_node = 'node-elsewhere' WHERE workspace_id = ? AND name = 'project'", {workspace})
             db:release()
@@ -335,7 +337,7 @@ local function define_tests()
                 audience = USER, attempt_id = "attempt-2"}))
             value(call(placement, "resolve", {grant_id = first.grant_id, subject = USER, audience = USER, attempt_id = "attempt-1"}))
             local advanced = value(call(manager, "revoke_all", {workspace_id = workspace}))
-            local fenced = advanced.fenced_attempts :: {unknown}
+            local fenced = principals.items(advanced.fenced_attempts)
             test.eq(#fenced, 2)
             local seen: {[string]: boolean} = {}
             for _, attempt in ipairs(fenced) do seen[tostring(attempt)] = true end

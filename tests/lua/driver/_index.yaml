@@ -33,6 +33,9 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [fs, json, funcs]
   imports:
+    driver_types: bee.driver:types
+    universal: bee.driver:universal
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     stream_json: bee.driver.transport:stream_json
     claude: bee.driver.claude:protocol
@@ -50,6 +53,8 @@ entries:
   modules: [registry]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     codex_launch: bee.driver.codex:launch
     claude_launch: bee.driver.claude:launch
@@ -83,6 +88,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     descriptor: bee.driver:descriptor
     login_evidence: bee.driver:login_evidence
@@ -93,6 +99,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     universal: bee.driver:universal
     codec_registry: bee.driver:codec_registry
@@ -122,6 +129,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     registry: registry
     configuration: bee.driver.muse:configuration

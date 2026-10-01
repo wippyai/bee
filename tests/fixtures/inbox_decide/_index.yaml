@@ -31,6 +31,7 @@ entries:
   - process
   - time
   imports:
+    bounds: bee.protocol:bounds
     canonical: bee.sync:canonical
     artifact: bee.gov:artifact
     plan_store: bee.gov.persist:plan_store
@@ -68,6 +69,7 @@ entries:
   - security
   - logger
   imports:
+    bounds: bee.protocol:bounds
     helper: bee.approvals.inbox.decide.probe:helper
   security:
     policies:

@@ -1,5 +1,6 @@
 -- MIT. Prove the documentation corpus travels inside the pack and is read-only:
 -- the embedded volume serves the manifest and a document, and a write is refused.
+local bounds = require("bounds")
 local fs = require("fs")
 local io = require("io")
 local json = require("json")
@@ -8,14 +9,14 @@ local function main()
     assert(volume, "corpus volume is unavailable: " .. tostring(volume_error))
     local manifest, read_error = volume:readfile("/manifest.json")
     assert(manifest, "corpus manifest is unreadable: " .. tostring(read_error))
-    local decoded = json.decode(manifest :: string)
+    local decoded = json.decode(manifest)
     assert(type(decoded) == "table", "corpus manifest is not JSON")
-    local totals = (decoded :: {[string]: unknown}).totals :: {[string]: unknown}
+    local totals = assert(bounds.object((assert(bounds.object(decoded))).totals))
     assert(type(totals.documents) == "number" and totals.documents >= 50 and totals.documents < 100,
         "corpus manifest does not contain the selected app-authoring references")
     local document, document_error = volume:readfile("/toolkit.md")
     assert(document, "toolkit reference is unreadable: " .. tostring(document_error))
-    assert(string.find(document :: string, "one-based", 1, true), "toolkit reference lost its text")
+    assert(string.find(document, "one-based", 1, true), "toolkit reference lost its text")
     local wrote, write_error = volume:writefile("/manifest.json", "changed")
     assert(not wrote and write_error ~= nil, "embedded corpus was writable")
     local retained = volume:readfile("/manifest.json")

@@ -145,7 +145,7 @@ local function configure(workspace_id: string, local_node: string)
 
     local approvers = assert(registry.get("bee:approver_policies"))
     local approver_data = object(approvers.data)
-    local policies = approver_data.policies :: {unknown}
+    local policies = assert(bounds.array(approver_data.policies))
     policies[#policies + 1] = {name = APPROVAL_POLICY,
         approvers = {{definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}
     approver_data.policies = policies
@@ -177,7 +177,7 @@ local function stage(workspace_id: string, component: string, source_workspace: 
     local descriptor = object(prepared.descriptor)
     local available = call_api("bee.gov.binding:destination_call", {operation = "available", workspace_id = workspace_id})
     local found = false
-    for _, raw in ipairs(available.versions :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(available.versions))) do
         local item = object(raw)
         if item.key == descriptor.key and item.digest == descriptor.digest then found = true end
     end
@@ -238,7 +238,7 @@ local function main()
     local changes = call_api("bee.gov.binding:destination_call", {operation = "changes",
         workspace_id = workspace_id, source_node = local_node, source_workspace = READY_WORKSPACE,
         version = VERSION})
-    local added = changes.added :: {unknown}
+    local added = assert(bounds.array(changes.added))
     if #added ~= 1 or object(added[1]).id ~= READY_ENTRY then
         error("the ready plan does not add its single entry: " .. json.encode(changes.added))
     end

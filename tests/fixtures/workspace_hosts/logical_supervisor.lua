@@ -2,6 +2,7 @@
 -- runtime, against one node database. Each host serves exactly its selected
 -- catalog row; neither can read or change the other's workspace state or
 -- resources.
+local bounds = require("bounds")
 local logger = require("logger")
 local process = require("process")
 local channel = require("channel")
@@ -59,7 +60,7 @@ local function await_ready(hosts: Hosts, host: string): Object
         else
             local data: unknown = selected.value:payload():data()
             if type(data) ~= "table" then error("invalid readiness") end
-            hosts.readiness[tostring(selected.value:from())] = data :: Object
+            hosts.readiness[tostring(selected.value:from())] = assert(bounds.object(data))
         end
     end
     local value = hosts.readiness[host]
@@ -130,7 +131,7 @@ local function saved_applications(workspace_id: string): integer
     if not encoded then return 0 end
     local value: unknown = json.decode(encoded)
     if type(value) ~= "table" or type(value.applications) ~= "table" then error("corrupt workspace state") end
-    return #(value.applications :: {unknown})
+    return #(assert(bounds.array(value.applications)))
 end
 
 local function resources(actor: security.Actor, grants: {string}): funcs.Executor
@@ -143,7 +144,7 @@ local function resource_call(client: funcs.Executor, method: string, value: Obje
     local reply, err = client:call("bee.resources.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     if type(reply) ~= "table" then error(method .. ": missing reply") end
-    return reply :: Object
+    return assert(bounds.object(reply))
 end
 
 -- A catalog row in the node database, as the catalog owner operation inserts it.
@@ -218,7 +219,7 @@ local function main()
     eq(own.ok, true, "grant in the principal's own workspace")
     local foreign = resource_call(app, "grant", {workspace_id = right, name = "project", access = "read", purpose = "project", audience = audience})
     eq(foreign.ok, false, "grant in the other workspace")
-    eq((foreign.error :: Object).code, "DENIED", "foreign grant refusal")
+    eq((assert(bounds.object(foreign.error))).code, "DENIED", "foreign grant refusal")
 
     -- Restarting both hosts restores each workspace from its own row.
     stop(hosts, left_host, left)
@@ -228,8 +229,8 @@ local function main()
     local right_ready = await_ready(hosts, right_again)
     eq(left_ready.workspace_id, left, "restarted left workspace")
     eq(right_ready.workspace_id, right, "restarted right workspace")
-    eq(#(((left_ready.saved :: Object).applications) :: {unknown}), 1, "restored left applications")
-    eq(#(((right_ready.saved :: Object).applications) :: {unknown}), 0, "restored right applications")
+    eq(#(assert(bounds.array(((assert(bounds.object(left_ready.saved))).applications)))), 1, "restored left applications")
+    eq(#(assert(bounds.array(((assert(bounds.object(right_ready.saved))).applications)))), 0, "restored right applications")
     stop(hosts, left_again, left)
     stop(hosts, right_again, right)
     for _, subscription in ipairs({hosts.ready, hosts.replies, hosts.checkpoints}) do process.unlisten(subscription) end

@@ -1,5 +1,6 @@
 -- MIT. A supervised owner controller carries only durable route identity.
 local test = require("test")
+local bounds = require("bounds")
 local handoff = require("owner_handoff")
 local workspace = string.rep("a", 32)
 local desktop = string.rep("b", 32)
@@ -13,7 +14,7 @@ local function define_tests()
             test.is_nil(handoff.decode(saved, "another-owner"))
         end)
         test.it("rejects an incompatible schema and extra fields", function()
-            local saved = handoff.pack("owner-pid", workspace, desktop) :: {[string]: unknown}
+            local saved = assert(bounds.object(handoff.pack("owner-pid", workspace, desktop)))
             saved.version = 2
             test.is_nil(handoff.decode(saved, "owner-pid"))
             saved.version = 1

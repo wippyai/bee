@@ -3,6 +3,7 @@
 -- native open are durable work of unbounded length; the broker's startup
 -- deadline bounds surface readiness only, so readiness never waits for them.
 local test = require("test")
+local bounds = require("bounds")
 local registry = require("registry")
 local principals = require("principals")
 local process = require("process")
@@ -28,8 +29,12 @@ local function define_tests()
         test.it("announces " .. (structured and "structured" or "direct") .. " launch readiness before opening the terminal", function()
             local ref = "bee.driver.claude.descriptor:cli"
             local original = assert(registry.get(ref))
+            local original_mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+            local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+            mode.data = {mode = "granted"}
+            apply(mode)
             local fixture = assert(registry.get(ref))
-            local data = fixture.data :: {[string]: unknown}
+            local data = assert(bounds.object(fixture.data))
             -- This fixture tests the file advisory and its Enter continuation,
             -- independently from unobservable host environment/keychain login.
             data.login_evidence = {command = "claude", any_of = {{kind = "file_exists",
@@ -108,6 +113,7 @@ local function define_tests()
             view:close()
             end)
             apply(original)
+            apply(original_mode)
             if not ok then error(tostring(failure)) end
         end)
         end

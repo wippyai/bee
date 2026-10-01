@@ -202,7 +202,7 @@ function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unkno
     local raw_entries = state.entries
     if type(raw_entries) ~= "table" then return nil, "invalid registry entries" end
     local entries: {{id: string, kind: string, bytes: integer}} = {}
-    for _, raw_entry in ipairs(raw_entries :: {unknown}) do
+    for _, raw_entry in ipairs(raw_entries) do
         local entry = bounds.object(raw_entry)
         local owned = entry and bounds.object(entry.registry)
         if owned and owned.owner == name and entry then
@@ -210,7 +210,7 @@ function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unkno
             local data = bounds.object(entry.data)
             local id = bounds.id(entry.id)
             if kind and data and id and type(data.source) == "string" then
-                local source = data.source :: string
+                local source = data.source
                 if wanted == id then
                     return source_page(name, selected, revision, id, source, from, length), nil
                 end

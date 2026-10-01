@@ -130,12 +130,12 @@ local function super_edit_approver_policy(name: string): (boolean, string?)
     local data = entry and bounds.object(entry.data) or nil
     local listed = data and data.policies or nil
     if type(listed) ~= "table" then return false, "approver policies are unavailable" end
-    for _, raw in ipairs(listed :: {unknown}) do
+    for _, raw in ipairs(listed) do
         local policy = bounds.object(raw)
         local declared = policy and bounds.id(policy.name) or nil
         if declared == name then
             local approvers = policy and policy.approvers or nil
-            if type(approvers) ~= "table" or #(approvers :: {unknown}) == 0 then
+            if type(approvers) ~= "table" or #(approvers) == 0 then
                 return false, "super-edit approver policy " .. name .. " names no approvers"
             end
             if policy.confirm ~= "explicit" then
@@ -345,8 +345,8 @@ local function destination_resolver(profile_value: Profile, node_id: string, wor
                 if captured.database_id ~= current_database or captured.table_prefix ~= current_prefix then
                     return nil, "activation profile changes an applied migration database binding: " .. fact.target_db
                 end
-                local frozen = {database_id = captured.database_id :: string,
-                    table_prefix = captured.table_prefix :: string?}
+                local frozen = {database_id = captured.database_id,
+                    table_prefix = captured.table_prefix}
                 local present, ledger_error = migration_runner.is_applied(fact.target_db, fact.id, frozen)
                 if present == nil then return nil, tostring(ledger_error or "read target migration ledger") end
                 if not present then return nil, "target migration ledger differs from Governance facts: " .. fact.id end
@@ -430,7 +430,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         if prior.digest ~= proposed.digest or prior.approval_id ~= approval_id then
             return nil, "installed grant differs from the activated intent"
         end
-        revision = prior.revision :: integer
+        revision = prior.revision
     else
         if (prior and prior.record_digest or nil) ~= intent.grant_predecessor_digest then
             return nil, "installed grant changed since permission review"
@@ -444,7 +444,7 @@ local function generated_install(profile_value: Profile, intent_raw: unknown): (
         elseif intent.grant_reuse_digest ~= nil then
             return nil, "widening cannot reuse an installed grant"
         end
-        if prior then revision = (prior.revision :: integer) + 1 end
+        if prior then revision = (prior.revision) + 1 end
     end
     local record, record_error = capability_grants.record(profile_value.overlay_owner,
         profile_value.workspace_id, identity.definition_id, proposed, approval_id, revision,
@@ -530,7 +530,7 @@ local function plan_changes(plan_store: plans.Store, activation_store: activatio
     local owner_node = bounds.id(plan.owner_node)
     if not owner_node then return failure("INTERNAL", "plan store returned no owner") end
     local resolved = destination_resolver(chosen, owner_node, workspace_id, activation_store)
-    local _, context, resolve_error = (resolved :: Resolver):resolve({owner_node = owner_node,
+    local _, context, resolve_error = (resolved):resolve({owner_node = owner_node,
         workspace_id = workspace_id, source_node = source_node, source_workspace = source_workspace,
         version = version, artifact_bytes = plan.artifact_bytes, artifact_digest = plan.artifact_digest})
     local base = bounds.object(context)
@@ -708,8 +708,9 @@ function M.call(raw: unknown): Result
         return failure("INVALID", "destination request operation is invalid")
     end
     local node_id, actor_id, denied = authorize(request.workspace_id)
-    if not node_id or not actor_id then return denied :: Result end
-    local workspace_id = request.workspace_id :: string
+    if not node_id or not actor_id then return assert(denied) end
+    local workspace_id = bounds.id(request.workspace_id)
+    if not workspace_id then return failure("INVALID", "workspace_id is invalid") end
     local plan_store, activation_store, lease_handle, open_error = stores(node_id, workspace_id)
     if not plan_store or not activation_store or not lease_handle then return failure("UNAVAILABLE", open_error or "open destination stores") end
     local result: Result
@@ -748,7 +749,7 @@ function M.call(raw: unknown): Result
                     if type(names) ~= "table" then
                         result = owners.ok and failure("INTERNAL", "replica source list is malformed") or owners
                     else
-                        for _, owner_raw in ipairs(names :: {unknown}) do
+                        for _, owner_raw in ipairs(names) do
                             local owner = bounds.id(owner_raw)
                             if not owner then result = failure("INTERNAL", "replica source is malformed"); break end
                             add(owner)
@@ -762,7 +763,7 @@ function M.call(raw: unknown): Result
                     local value = bounds.object(found.value)
                     local rows = value and value.items
                     if type(rows) ~= "table" then result = failure("INTERNAL", "available replica list is malformed"); break end
-                    for _, raw_descriptor in ipairs(rows :: {unknown}) do
+                    for _, raw_descriptor in ipairs(rows) do
                         local descriptor = bounds.object(raw_descriptor)
                         local manifest = descriptor and bounds.object(descriptor.manifest) or nil
                         local source_workspace = manifest and bounds.id(manifest.source_workspace) or nil
@@ -790,11 +791,11 @@ function M.call(raw: unknown): Result
                 or not descriptor_digest:match("^[0-9a-f]+$") then
                 result = failure("INVALID", "stage replica identity is invalid")
             else
-                local admitted_source: string = source_owner :: string
-                local admitted_feed: string = feed :: string
-                local admitted_key: string = version_key :: string
-                local admitted_digest: string = descriptor_digest :: string
-                local admitted_receipt: string = idempotency_key :: string
+                local admitted_source: string = source_owner
+                local admitted_feed: string = assert(feed)
+                local admitted_key: string = version_key
+                local admitted_digest: string = descriptor_digest
+                local admitted_receipt: string = idempotency_key
                 local config, config_error = load()
                 local resource, resource_error = sync_resources.database()
                 local replica_store, replica_error
@@ -824,7 +825,7 @@ function M.call(raw: unknown): Result
                             result = destination.stage_replica(plan_store, replica_store, actor_id,
                                 {source_owner = admitted_source, feed = admitted_feed, version_key = admitted_key,
                                     descriptor_digest = admitted_digest, idempotency_key = admitted_receipt},
-                                resolved :: destination.Resolver, chosen.component)
+                                resolved, chosen.component)
                         end
                     end
                     replicas.close(replica_store)
@@ -945,7 +946,7 @@ function M.recover_all(): (boolean, string?)
     local value = bounds.object(listed.value)
     local slots = value and value.slots
     if type(slots) ~= "table" then return false, "desired activation slots are malformed" end
-    for _, raw_slot in ipairs(slots :: {unknown}) do
+    for _, raw_slot in ipairs(slots) do
         local slot = bounds.object(raw_slot)
         local workspace_id = slot and bounds.id(slot.workspace_id) or nil
         local overlay_owner = slot and bounds.id(slot.overlay_owner) or nil

@@ -37,7 +37,7 @@ end
 local function turn_run(request: unknown): unknown
     local input = bounds.object(request)
     local work = input and bounds.id(input.work)
-    if not work or bounds.fields(input :: {[string]: unknown}, {"work"}) then return {ok = false, error = "invalid scheduled work"} end
+    if not work or bounds.fields(input, {"work"}) then return {ok = false, error = "invalid scheduled work"} end
     local err = pass(work)
     return {ok = err == nil, error = err}
 end

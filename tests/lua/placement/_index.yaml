@@ -23,6 +23,33 @@ entries:
   variable: BEE_PLACEMENT_SENTINEL_KEY
   default: placement-sentinel-4e5f6a
   readonly: true
+- name: runner_observation
+  kind: library.lua
+  source: file://runner_observation.lua
+  meta: {type: test_support}
+- name: materialization_runner
+  kind: library.lua
+  source: file://materialization_runner.lua
+  meta: {type: test_support}
+  modules: [process, channel, security, time]
+  imports:
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    observe: bee.placement.native:runner_observation
+    types: bee.placement:types
+    bounds: bee.protocol:bounds
+- name: materialization_runner_process
+  kind: process.lua
+  source: file://materialization_runner.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process, channel, security, time]
+  imports:
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    observe: bee.placement.native:runner_observation
+    types: bee.placement:types
+    bounds: bee.protocol:bounds
 - name: apply_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -236,6 +263,7 @@ entries:
     opencode_launch: bee.driver.opencode:launch
     configuration_protocol: bee.driver:configuration
     test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
     identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
@@ -282,7 +310,8 @@ entries:
     quote: bee.driver.kit:quote
     grok_launch: bee.driver.grok:launch
     grok_configuration: bee.driver.grok:configuration
-    materialization: bee.placement.native.service:materialization
+    placement_service: bee.placement.native.service:service
+    runner_fixture: bee.placement.native:materialization_runner
     homes: bee.placement.native.service:homes
     store: bee.placement.native.persist:store
     request_codec: bee.placement:request

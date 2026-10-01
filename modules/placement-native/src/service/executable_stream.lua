@@ -29,7 +29,7 @@ function M.digest(read: Read, close: Close, expected_size: integer): (StreamDige
         if raw_chunk ~= nil and type(raw_chunk) ~= "string" then
             return close_after_failure(close, "executable read returned an invalid chunk")
         end
-        local chunk = raw_chunk :: string?
+        local chunk = raw_chunk
         if chunk == "" and not eof then
             return close_after_failure(close, "executable read returned an empty chunk before EOF")
         end

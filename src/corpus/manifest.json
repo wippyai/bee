@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10420,
+      "bytes": 10858,
       "id": "docs/gateway",
-      "sha256": "808d25aee2c85ab85ce13f8cefece65c547908cd7f399a6bddf45d56f385e1e3",
+      "sha256": "67704f8d286e034f39398475de889d7a2a5c9aecf5e96722cfb083b98a504413",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8924,
+      "bytes": 9490,
       "id": "component/application",
-      "sha256": "68f222a17329005492594bfbb03585deabf815b2e052333de9b0e483df193c8a",
+      "sha256": "5fc7d4d4e399ef9cca8133b0ab207e488dcce2f9a4556dd4364c44fb4d786272",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8337,
+      "bytes": 8576,
       "id": "component/driver",
-      "sha256": "8910deb143adc7b6dceb48bb853da584b5745b7e69e8eec0a6eda09ce25c6fa7",
+      "sha256": "542f8ffa65cdc3a8e4ffc7297357e6b851984dce6987110055725f8e5357efe8",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
@@ -403,9 +403,9 @@
       "topic": "component"
     },
     {
-      "bytes": 7507,
+      "bytes": 7775,
       "id": "component/gateway",
-      "sha256": "f2068be49afbb487324672fdb009edc7d0e2a2b38ffe6a38ccb27ca66846730c",
+      "sha256": "d25a9f9d247d3d2a75e70f508def1557cd054f1f5a68346dab34bd328686ce54",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -491,9 +491,9 @@
       "topic": "component"
     },
     {
-      "bytes": 24279,
+      "bytes": 24536,
       "id": "component/placement:native",
-      "sha256": "af85c953e72c39a39b86ad31b61f5687617157757bd3de27092289868668f96e",
+      "sha256": "fc579e6f4b97d1627279e1059e6ebf5068ebf32fc6d8aad2cbd85dec973aa2d1",
       "source": "modules/placement-native/src/README.md",
       "title": "bee.placement.native",
       "topic": "component"
@@ -507,9 +507,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3249,
+      "bytes": 4361,
       "id": "component/sessions",
-      "sha256": "9c984b179ad0893bdd419f5b3c9293103ded078ae12e8c960c2e98184647eeb9",
+      "sha256": "23f0754cf150167f3ac255a353a1b41bece4b54d478c03ccc07faf3dec684b30",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 691697,
+    "bytes": 694577,
     "documents": 77
   }
 }

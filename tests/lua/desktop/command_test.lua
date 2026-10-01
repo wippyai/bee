@@ -9,6 +9,7 @@ local function define_tests()
                 x = 4.0, y = 2, width = 20, height = 10, request_id = "move"})
             test.not_nil(versioned)
             if versioned then
+                assert(versioned.op == "place")
                 test.eq(versioned.x, 4)
                 test.eq(versioned.request_id, "move")
             end
@@ -27,6 +28,7 @@ local function define_tests()
                 theme = "ocean", background = "grid", expected_revision = 4})
             test.not_nil(decoded)
             if decoded then
+                assert(decoded.op == "appearance")
                 test.eq(decoded.theme, "ocean")
                 test.eq(decoded.expected_revision, 4)
             end
@@ -40,6 +42,7 @@ local function define_tests()
                 user_title = string.rep("x", 80), accent = "violet"})
             test.not_nil(decoded)
             if decoded then
+                assert(decoded.op == "personalize")
                 test.eq(decoded.user_title, string.rep("x", 80))
                 test.eq(decoded.accent, "violet")
             end

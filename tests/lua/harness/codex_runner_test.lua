@@ -378,7 +378,7 @@ local function define_tests()
             end
             local records = records_of(thread_id)
             for _, item in ipairs(records) do
-                test.is_nil(json.encode(item):find(SENTINEL, 1, true))
+                test.is_nil((json.encode(item):find(SENTINEL, 1, true)))
             end
             if not has(write_phases(records), "refused") then error("no refused write recorded; writes " .. table.concat(write_phases(records), ",")) end
             -- Changed configuration: a plan pinned before placement start no

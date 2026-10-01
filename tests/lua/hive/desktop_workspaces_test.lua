@@ -273,7 +273,7 @@ local function define_tests()
                 request_id = release.request_id, mount = "", error_code = "", error = ""})
             owner.result(h.state, next_message(h.results, "folder release result"), 1)
             silent(h.replies, "a reply to the native client for the release")
-            test.is_nil(next(h.state.retiring))
+            test.is_nil((next(h.state.retiring)))
             local now = current(h)
             if not now.ok then error(tostring(now.error and now.error.message)) end
             local value = now.value :: Object

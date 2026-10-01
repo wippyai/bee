@@ -146,9 +146,11 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
-    if not cleanup then return nil, ref .. ": required_cleanup must name a cleanup capability" end
+    if cleanup ~= "direct_process" and cleanup ~= "process_group" and cleanup ~= "contained_tree" then return nil, ref .. ": required_cleanup must name a cleanup capability" end
+    local required_cleanup: placement_types.Capability = cleanup
     local observation = bounds.member(data.required_exit_observation, placement_types.EXIT_OBSERVATIONS)
-    if not observation then return nil, ref .. ": required_exit_observation must be independent or eof_gated" end
+    if observation ~= "independent" and observation ~= "eof_gated" then return nil, ref .. ": required_exit_observation must be independent or eof_gated" end
+    local required_observation: placement_types.ExitObservation = observation
     local start_ms = bounds.integer(data.start_ms == nil and 15000 or data.start_ms)
     local stop_grace_ms = bounds.integer(data.stop_grace_ms == nil and 5000 or data.stop_grace_ms)
     local drain_ms = bounds.integer(data.drain_ms == nil and 5000 or data.drain_ms)
@@ -323,7 +325,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = cleanup :: placement_types.Capability, required_exit_observation = observation :: placement_types.ExitObservation,
+    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = required_cleanup, required_exit_observation = required_observation,
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_profiles = placement_profiles, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end
@@ -337,7 +339,7 @@ function M.with_workspace(gateway_surface: SurfaceValue?, workspace_id: string):
     local declared = gateway_surface.fixed_context
     if declared ~= nil then
         if type(declared) ~= "table" then return nil end
-        for key, value in pairs(declared :: SurfaceValue) do fixed[key] = value end
+        for key, value in pairs(declared) do fixed[key] = value end
     end
     local result: SurfaceValue = {}
     for key, value in pairs(gateway_surface) do result[key] = value end

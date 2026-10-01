@@ -49,7 +49,7 @@ local function decode_fault(value: unknown, field: string): (Fault?, string?)
     local message = bounds.text(object.message, bounds.MAX_FAULT_MESSAGE_BYTES)
     if not message then return nil, field .. ".message exceeds maximum fault message bytes" end
     if type(object.retryable) ~= "boolean" then return nil, field .. ".retryable must be a boolean" end
-    return {code = code, message = message, retryable = object.retryable :: boolean}, nil
+    return {code = code, message = message, retryable = object.retryable}, nil
 end
 
 local function decode_terminal(value: unknown): (types.Terminal?, string?)
@@ -58,8 +58,9 @@ local function decode_terminal(value: unknown): (types.Terminal?, string?)
     local unknown_field = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
     if unknown_field then return nil, "state.terminal: " .. unknown_field end
     local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
-    if not outcome then return nil, "state.terminal.outcome is not one outcome Bee admits" end
+    if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "state.terminal.outcome is not one outcome Bee admits" end
 
+    local terminal_outcome: types.Outcome = outcome
     local answer: string? = nil
     if object.answer ~= nil then
         answer = bounds.text(object.answer, M.MAX_ANSWER_BYTES)
@@ -78,7 +79,7 @@ local function decode_terminal(value: unknown): (types.Terminal?, string?)
     end
     local fault, fault_error = decode_fault(object.error, "state.terminal.error")
     if fault_error then return nil, fault_error end
-    return {outcome = outcome :: types.Outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
+    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
 end
 
 -- Normalizer state is persisted by the carrier and returns as untrusted input.
@@ -116,18 +117,18 @@ function M.decode_state(value: unknown): (State?, string?)
     end
     return {
         session_id = session_id,
-        resumed = object.resumed :: boolean,
-        command_accepted = object.command_accepted :: boolean,
-        run_started = object.run_started :: boolean,
+        resumed = object.resumed,
+        command_accepted = object.command_accepted,
+        run_started = object.run_started,
         answer = answer,
-        answer_truncated = object.answer_truncated :: boolean,
+        answer_truncated = object.answer_truncated,
         terminal = terminal,
     }, nil
 end
 
 local function payload_of(envelope: {[string]: unknown}): {[string]: unknown}
     local payload: unknown = envelope.payload
-    if type(payload) == "table" then return payload :: {[string]: unknown} end
+    if type(payload) == "table" then return payload end
     return {}
 end
 
@@ -157,7 +158,7 @@ end
 local function terminal_fault(terminal: unknown, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Fault
     local reason = path_reader.read(envelope, paths, "errors")
     if terminal == "failed" and type(reason) == "string" then
-        local normalized = (reason :: string):lower()
+        local normalized = (reason):lower()
         if normalized:find("max_model_steps", 1, true) or normalized:find("max_steps", 1, true)
             or normalized:find("max_turns", 1, true) or normalized:find("max turn requests", 1, true) then
             return events.fault("max_turns", "turn budget reached", false)
@@ -189,7 +190,7 @@ end
 
 local function tool_call(state: State, index: integer, payload: {[string]: unknown}, out: {Observation}): boolean
     local facts: {[string]: unknown} = {}
-    if type(payload.correlation_facts) == "table" then facts = payload.correlation_facts :: {[string]: unknown} end
+    if type(payload.correlation_facts) == "table" then facts = payload.correlation_facts end
     local call_id = bounds.id(first_field(payload, {"call_id", "tool_call_id"}))
     local tool_name = bounds.id(first_field(payload, {"tool_name", "name"}) or facts.tool_name)
     if not call_id or not tool_name then return false end
@@ -210,7 +211,7 @@ end
 
 local function tool_result(state: State, index: integer, payload: {[string]: unknown}, out: {Observation}): boolean
     local facts: {[string]: unknown} = {}
-    if type(payload.correlation_facts) == "table" then facts = payload.correlation_facts :: {[string]: unknown} end
+    if type(payload.correlation_facts) == "table" then facts = payload.correlation_facts end
     local call_id = bounds.id(first_field(payload, {"call_id", "tool_call_id"}))
     if not call_id then return false end
     local raw_outcome = first_field(payload, {"outcome", "status"})

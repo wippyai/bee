@@ -21,12 +21,12 @@ type Caller = {actor_id: string, workspace_id: string, definition_id: string}
 function M.caller(actor_raw: unknown, meta_raw: unknown): (Caller?, string?)
     local meta = bounds.object(meta_raw)
     if type(actor_raw) ~= "string" or not meta then return nil, "caller is not an application" end
-    local matched = (actor_raw :: string):match("^bee%.application:([0-9a-f]+):[^:]+$")
+    local matched = (actor_raw):match("^bee%.application:([0-9a-f]+):[^:]+$")
     local definition = bounds.id(meta.definition_id)
     if not matched or not definition then return nil, "caller is not an application" end
     local workspace: string = matched
     if #workspace ~= 32 or meta.workspace_id ~= workspace then return nil, "caller is not an application" end
-    return {actor_id = actor_raw :: string, workspace_id = workspace, definition_id = definition}, nil
+    return {actor_id = actor_raw, workspace_id = workspace, definition_id = definition}, nil
 end
 
 local function own(record_raw: unknown, caller_raw: unknown, live: unknown): ({unknown}?, string?)
@@ -37,12 +37,12 @@ local function own(record_raw: unknown, caller_raw: unknown, live: unknown): ({u
     end
     local capabilities = record.capabilities
     if type(capabilities) ~= "table" then return nil, "the grant set is malformed" end
-    return capabilities :: {unknown}, nil
+    return capabilities, nil
 end
 
 local function contains(raw: unknown, value: string): boolean
     if type(raw) ~= "table" then return false end
-    for _, item in ipairs(raw :: {unknown}) do if item == value then return true end end
+    for _, item in ipairs(raw) do if item == value then return true end end
     return false
 end
 
@@ -52,7 +52,7 @@ function M.contract(record_raw: unknown, caller_raw: unknown, binding_raw: unkno
     local capabilities, refusal = own(record_raw, caller_raw, live)
     if not capabilities then return nil, refusal end
     local binding = bounds.id(binding_raw)
-    local method = type(method_raw) == "string" and (method_raw :: string):match("^[A-Za-z][A-Za-z0-9_]*$") or nil
+    local method = type(method_raw) == "string" and (method_raw):match("^[A-Za-z][A-Za-z0-9_]*$") or nil
     if not binding or not method then return nil, "contract call is malformed" end
     for _, raw_grant in ipairs(capabilities) do
         local grant = bounds.object(raw_grant)
@@ -68,12 +68,12 @@ end
 -- The origin and path of an absolute HTTPS URL, refusing credentials,
 -- traversal segments and encoded separators a server could reinterpret.
 local function target(url_raw: unknown): (string?, string?)
-    if type(url_raw) ~= "string" or #(url_raw :: string) > 2048 or (url_raw :: string):find("[%c%s\\]") then
+    if type(url_raw) ~= "string" or #(url_raw) > 2048 or (url_raw):find("[%c%s\\]") then
         return nil, nil
     end
-    local url = url_raw :: string
+    local url = url_raw
     local authority, rest = url:match("^https://([^/?#]+)(.*)$")
-    if not authority or authority:find("@", 1, true) then return nil, nil end
+    if not authority or not rest or authority:find("@", 1, true) then return nil, nil end
     local named, port = authority:match("^([A-Za-z0-9.-]+):([0-9]+)$")
     if not named then named = authority:match("^[A-Za-z0-9.-]+$") end
     if not named then return nil, nil end
@@ -117,7 +117,7 @@ function M.http(record_raw: unknown, caller_raw: unknown, method_raw: unknown, u
     live: unknown): (boolean?, string?)
     local capabilities, refusal = own(record_raw, caller_raw, live)
     if not capabilities then return nil, refusal end
-    local method = type(method_raw) == "string" and (method_raw :: string):upper() or nil
+    local method = type(method_raw) == "string" and (method_raw):upper() or nil
     local origin, path = target(url_raw)
     if not method or not origin or not path then return nil, "HTTP request target is malformed" end
     for _, scope in ipairs(http_grants(capabilities, origin, path)) do
@@ -133,7 +133,7 @@ function M.located(record_raw: unknown, url_raw: unknown): (boolean?, string?)
     local capabilities = record and record.capabilities or nil
     local origin, path = target(url_raw)
     if type(capabilities) ~= "table" or not origin or not path then return nil, "response location is malformed" end
-    if #http_grants(capabilities :: {unknown}, origin, path) > 0 then return true, nil end
+    if #http_grants(capabilities, origin, path) > 0 then return true, nil end
     return nil, "response arrived from outside the approved origin and path"
 end
 

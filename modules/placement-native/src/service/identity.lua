@@ -53,8 +53,8 @@ local function lstart_seconds(text: string): (integer?, string?)
     local month_name, day, hour, minute, second, year = text:match("^%a+%s+(%a+)%s+(%d+)%s+(%d+):(%d+):(%d+)%s+(%d+)$")
     local month = month_name and MONTHS[month_name] or nil
     if not month then return nil, "invalid process start time " .. string.format("%q", text) end
-    local y, d = math.floor(tonumber(year) :: number), math.floor(tonumber(day) :: number)
-    local h, mi, s = math.floor(tonumber(hour) :: number), math.floor(tonumber(minute) :: number), math.floor(tonumber(second) :: number)
+    local y, d = math.floor(assert(tonumber(year))), math.floor(assert(tonumber(day)))
+    local h, mi, s = math.floor(assert(tonumber(hour))), math.floor(assert(tonumber(minute))), math.floor(assert(tonumber(second)))
     if d < 1 or d > 31 or h > 23 or mi > 59 or s > 60 then return nil, "invalid process start time " .. string.format("%q", text) end
     -- Days from 1970-01-01 in the proleptic Gregorian calendar.
     if month <= 2 then y = y - 1 end
@@ -72,11 +72,11 @@ function M.decode(output: string): (Facts?, string?)
     for line in output:gmatch("[^\n]+") do
         local label, raw = line:match("^([%w_]+)=(.*)$")
         if not label then return nil, "identity probe returned an unlabeled line" end
-        local text = (raw :: string):match("^%s*(.-)%s*$") :: string
+        local text = (raw):match("^%s*(.-)%s*$")
         if label == "linux_start" then
             if text ~= "" then
                 if not text:match("^%d+$") then return nil, "invalid process start ticks" end
-                facts.start_ticks = math.floor(tonumber(text) :: number)
+                facts.start_ticks = math.floor(assert(tonumber(text)))
             end
         elseif label == "darwin_start" then
             if text ~= "" then
@@ -92,7 +92,7 @@ function M.decode(output: string): (Facts?, string?)
         elseif label == "pgid" then
             if text ~= "" then
                 if not text:match("^%d+$") then return nil, "invalid process group" end
-                facts.pgid = math.floor(tonumber(text) :: number)
+                facts.pgid = math.floor(assert(tonumber(text)))
             end
         else
             return nil, "identity probe returned unknown label " .. label

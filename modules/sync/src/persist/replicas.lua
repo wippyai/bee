@@ -33,9 +33,9 @@ local function key(source: unknown, feed: unknown, version_key: unknown, descrip
         or #descriptor_digest ~= 64 or not descriptor_digest:match("^[0-9a-f]+$") then
         return nil, "replica identity is invalid"
     end
-    local selected_digest: string = descriptor_digest :: string
-    local result: Key = {source_owner = owner :: string, feed = selected_feed :: string,
-        version_key = selected_key :: string, descriptor_digest = selected_digest}
+    local selected_digest: string = descriptor_digest
+    local result: Key = {source_owner = owner, feed = selected_feed,
+        version_key = selected_key, descriptor_digest = selected_digest}
     return result, nil
 end
 local function source(raw_owner: unknown, raw_feed: unknown): (Source?, string?)
@@ -172,7 +172,7 @@ local function assemble(tx: sql.Transaction, selected: Key, expected_bytes: inte
     for index, row in ipairs(rows) do
         if row.byte_offset ~= offset then return nil, fail("CONFLICT", "replica content has a gap") end
         if type(row.content_base64) ~= "string" then return nil, fail("INTERNAL", "replica chunk encoding is corrupt") end
-        local encoded: string = row.content_base64 :: string
+        local encoded: string = row.content_base64
         local bytes, decode_error = base64.decode(encoded)
         local measured = bytes and hash.sha256(bytes) or nil
         if not bytes or decode_error or #bytes ~= row.byte_count or measured ~= row.content_sha256 then return nil, fail("INTERNAL", "replica chunk is corrupt") end
@@ -193,8 +193,8 @@ local function transfer_status(row: {[string]: unknown}, selected: Key): (Status
         or (state == "available" and received_bytes ~= total_bytes) then
         return nil, fail("INTERNAL", "replica transfer size is corrupt")
     end
-    local total: integer = total_bytes :: integer
-    local received: integer = received_bytes :: integer
+    local total: integer = total_bytes
+    local received: integer = received_bytes
     local status: Status = {source_owner = selected.source_owner, feed = selected.feed, key = selected.version_key,
         state = state, received_bytes = received, total_bytes = total}
     return status, nil
@@ -259,7 +259,9 @@ function M.content(store: Store, raw_key: Key): (string?, Result?)
         return transaction.success(content, false)
     end)
     if not result.ok then return nil, result end
-    return result.value :: string, nil
+    local content = result.value
+    if type(content) ~= "string" then return nil, fail("INTERNAL", "replica content is corrupt") end
+    return content, nil
 end
 
 -- Read returns one verified immutable version.  Availability is a durable

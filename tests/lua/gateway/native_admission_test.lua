@@ -24,6 +24,20 @@ type Object = {[string]: unknown}
 type RegistryState = {endpoint_ref: Object, endpoint: Object, listener: Object, database: Object}
 type Reply = {ok: boolean, error: Object?, value: unknown}
 
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function clone(value: unknown): Object
     local encoded, encode_error = json.encode(value)
     if not encoded then error(tostring(encode_error or "encode registry value")) end
@@ -49,7 +63,7 @@ end
 
 local function apply(entries: {Object})
     local changes = registry.snapshot():changes()
-    for _, value in ipairs(entries) do changes:update(value) end
+    for _, value in ipairs(entries) do changes:update(registry_input(value)) end
     local applied, err = changes:apply()
     if not applied then error("registry update: " .. tostring(err)) end
 end

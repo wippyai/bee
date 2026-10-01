@@ -20,7 +20,7 @@ function M.feed(decoder: Decoder, chunk: string): ({Envelope}, {Problem}, string
         if decode_error or type(value) ~= "table" then
             problems[#problems + 1] = {index = decoder.index, message = "frame is not a JSON object", sample = line:sub(1, 120)}
         else
-            envelopes[#envelopes + 1] = {index = decoder.index, value = value :: {[string]: unknown}}
+            envelopes[#envelopes + 1] = {index = decoder.index, value = value}
         end
     end
     return envelopes, problems, nil

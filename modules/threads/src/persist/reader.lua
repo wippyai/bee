@@ -30,7 +30,7 @@ local function single(tx: sql.Transaction, statement: string, params: {unknown},
     if query_err or not rows then return nil, "read " .. what end
     if #rows > 1 then return nil, what .. " rows are corrupt" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: {[string]: unknown}, nil
+    return rows[1], nil
 end
 local HEAD_COLUMNS = "thread_id, owner_actor, title, state, revision, head_sequence, created_at, workspace_id"
 local function head_row(row: {[string]: unknown}): (Head?, string?)
@@ -90,7 +90,7 @@ function M.app_family_member(tx: sql.Transaction, thread_id: string, stable: str
         "ORDER BY (m.actor = ?) DESC LIMIT 1", {thread_id, stable, stable, stable})
     if query_err or not rows then return nil, "read thread app family" end
     if #rows == 0 then return nil, nil end
-    return member_row(rows[1] :: {[string]: unknown})
+    return member_row(rows[1])
 end
 -- Every active member row of the stable family, with its thread head
 -- revision, so revocation fences exactly what the family holds.
@@ -102,7 +102,7 @@ function M.app_family_threads(tx: sql.Transaction, stable: string): ({{thread_id
     if query_err or not rows then return nil, "read thread app family" end
     local result: {{thread_id: string, actor: string, revision: integer}} = {}
     for index, raw in ipairs(rows) do
-        local row = raw :: {[string]: unknown}
+        local row = raw
         local thread_id, actor, revision = text(row.thread_id), text(row.actor), integer(row.revision)
         if not thread_id or not actor or not revision then return nil, "thread app family row is corrupt" end
         result[index] = {thread_id = thread_id, actor = actor, revision = revision}
@@ -426,7 +426,7 @@ function M.action_records(tx: sql.Transaction, thread_id: string, action_id: str
     if query_err or not rows then return nil, "read action records" end
     local stored: {Stored} = {}
     for index, row in ipairs(rows) do
-        local item, item_err = stored_row(row :: {[string]: unknown})
+        local item, item_err = stored_row(row)
         if not item then return nil, item_err end
         stored[index] = item
     end
@@ -440,7 +440,7 @@ function M.attempt_records(tx: sql.Transaction, thread_id: string, attempt_id: s
     if query_err or not rows then return nil, "read attempt records" end
     local stored: {Stored} = {}
     for index, row in ipairs(rows) do
-        local item, item_err = stored_row(row :: {[string]: unknown})
+        local item, item_err = stored_row(row)
         if not item then return nil, item_err end
         stored[index] = item
     end
@@ -481,7 +481,7 @@ function M.pending_notices(tx: sql.Transaction, target_thread_id: string?, limit
     if query_err or not rows then return nil, "read pending notices" end
     local notices: {Notice} = {}
     for index, row in ipairs(rows) do
-        local notice, notice_err = notice_row(row :: {[string]: unknown})
+        local notice, notice_err = notice_row(row)
         if not notice then return nil, notice_err end
         notices[index] = notice
     end

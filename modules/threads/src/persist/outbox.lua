@@ -119,7 +119,7 @@ local function decode_row(raw: unknown): (Row?, string?)
         payload_digest = payload_digest, in_reply_to_thread_id = in_reply_to_thread_id,
         in_reply_to_record_id = in_reply_to_record_id, outcome = outcome, state = state, attempts = attempts,
         next_attempt_ms = next_attempt_ms, lease_owner = lease_owner, lease_until_ms = lease_until_ms,
-        receipt_json = receipt_json, last_error = last_error, created_at = value.created_at :: string, updated_at = updated_at}
+        receipt_json = receipt_json, last_error = last_error, created_at = value.created_at, updated_at = updated_at}
     return row, nil
 end
 local function delivery(row: Row, include_outbox_id: boolean?): (Object?, string?)

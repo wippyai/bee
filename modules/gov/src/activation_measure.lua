@@ -26,10 +26,10 @@ end
 -- remeasure it here so neither a loose digest nor a noncanonical projection
 -- can become durable approval evidence.
 local function admission_blob(value: application_admission.Measurement): (Admission?, string?)
-    if #value.bytes < 1 or #value.bytes > application_admission.MAX_BYTES
-        or #value.digest ~= 64 or not value.digest:match("^[0-9a-f]+$") then
-        return nil, "application admission measurement is invalid"
-    end
+    if #value.bytes < 1 then return nil, "application admission measurement is invalid" end
+    if #value.bytes > application_admission.MAX_BYTES then return nil, "application admission measurement is invalid" end
+    if #value.digest ~= 64 then return nil, "application admission measurement is invalid" end
+    if not value.digest:match("^[0-9a-f]+$") then return nil, "application admission measurement is invalid" end
     local decoded, decode_error = application_admission.decode(value.bytes, value.digest)
     if not decoded then return nil, decode_error end
     return {bytes = decoded.bytes, digest = decoded.digest, record = decoded.record}, nil
@@ -43,16 +43,24 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
     local source, source_workspace, version = bounds.id(plan.source_node), bounds.id(plan.source_workspace), bounds.id(plan.version)
     local plan_digest = bounds.text(plan.plan_digest, 64)
     local revision, selection_revision = bounds.count(plan.revision), bounds.count(plan.selection_revision)
-    if not owner or not workspace or not source or not source_workspace or not version
-        or not plan_digest or #plan_digest ~= 64 or not plan_digest:match("^[0-9a-f]+$")
-        or not revision or revision < 1 or not selection_revision or selection_revision < 1
-        or plan.selected ~= true or plan.review_status ~= "accepted"
-        or type(plan.artifact_bytes) ~= "string" or type(plan.artifact_digest) ~= "string" then
-        return nil, "governance plan is not an accepted current selection"
-    end
-    if candidate.destination_node ~= owner or candidate.source_node ~= source then
-        return nil, "local resolution does not match the selected source and destination"
-    end
+    if not owner then return nil, "governance plan is not an accepted current selection" end
+    if not workspace then return nil, "governance plan is not an accepted current selection" end
+    if not source then return nil, "governance plan is not an accepted current selection" end
+    if not source_workspace then return nil, "governance plan is not an accepted current selection" end
+    if not version then return nil, "governance plan is not an accepted current selection" end
+    if not plan_digest then return nil, "governance plan is not an accepted current selection" end
+    if #plan_digest ~= 64 then return nil, "governance plan is not an accepted current selection" end
+    if not plan_digest:match("^[0-9a-f]+$") then return nil, "governance plan is not an accepted current selection" end
+    if not revision then return nil, "governance plan is not an accepted current selection" end
+    if revision < 1 then return nil, "governance plan is not an accepted current selection" end
+    if not selection_revision then return nil, "governance plan is not an accepted current selection" end
+    if selection_revision < 1 then return nil, "governance plan is not an accepted current selection" end
+    if plan.selected ~= true then return nil, "governance plan is not an accepted current selection" end
+    if plan.review_status ~= "accepted" then return nil, "governance plan is not an accepted current selection" end
+    if type(plan.artifact_bytes) ~= "string" then return nil, "governance plan is not an accepted current selection" end
+    if type(plan.artifact_digest) ~= "string" then return nil, "governance plan is not an accepted current selection" end
+    if candidate.destination_node ~= owner then return nil, "local resolution does not match the selected source and destination" end
+    if candidate.source_node ~= source then return nil, "local resolution does not match the selected source and destination" end
     local entries, artifact_error = artifact.decode(plan.artifact_bytes, plan.artifact_digest)
     if not entries then return nil, artifact_error end
     local measured_entries: {[string]: string} = {}
@@ -67,7 +75,7 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         if not entry_bytes then return nil, tostring(entry_error or "encode resolved entry") end
         local entry_digest, digest_error = digest(entry_bytes)
         if not entry_digest then return nil, digest_error end
-        measured_entries[entry.id :: string] = entry_digest
+        measured_entries[entry.id] = entry_digest
     end
     for _, entry in ipairs(candidate.entries) do
         if measured_entries[entry.id] ~= entry.digest then
@@ -111,16 +119,16 @@ function M.measure(plan_raw: unknown, candidate: preflight.Candidate,
         exact_expansion = context.exact_expansion, migration_barrier = context.migration_barrier,
         auto_start = context.auto_start, protected = context.protected, host_evidence = context.host_evidence}
     local durable_report, durable_error = preflight.check(durable_candidate, durable_context)
-    if not durable_report or not durable_report.ready then
-        return nil, durable_error or "cannot normalize destination preflight"
-    end
+    if not durable_report then return nil, durable_error or "cannot normalize destination preflight" end
+    if not durable_report.ready then return nil, durable_error or "cannot normalize destination preflight" end
     local report_bytes, report_digest, encode_error = preflight.encode_report(durable_report)
-    if not report_bytes or not report_digest then return nil, encode_error end
+    if not report_bytes then return nil, encode_error end
+    if not report_digest then return nil, encode_error end
     local resolution_bytes, resolution_error = canonical.encode(durable_candidate, 1048576)
     if not resolution_bytes then return nil, resolution_error end
     local resolution_digest, measure_error = digest(resolution_bytes)
     if not resolution_digest then return nil, measure_error end
-    local artifact_blob: Blob = {bytes = plan.artifact_bytes :: string, digest = plan.artifact_digest :: string}
+    local artifact_blob: Blob = {bytes = plan.artifact_bytes, digest = plan.artifact_digest}
     local work, work_error = migration_work.capture(durable_candidate,
         {schema_revision = artifact.SCHEMA, entries = entries, bytes = artifact_blob.bytes,
             digest = artifact_blob.digest}, durable_context)

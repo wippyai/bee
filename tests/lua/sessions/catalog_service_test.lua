@@ -24,7 +24,8 @@ local function define_tests()
                 profile_id = "catalog-saved-selection", expected_revision = 0, idempotency_key = "catalog-saved-selection",
                 profile = {title = "Selected container profile", definition_ref = "bee.driver.claude:default_window"}}))
             test.is_true((saved :: Object).ok == true)
-            local page = assert(catalog.list({include_unavailable = true}, "saved-profile-workspace"))
+            local page, page_fault = catalog.list({include_unavailable = true}, "saved-profile-workspace")
+            if not page then error(page_fault and page_fault.message or "catalog list failed") end
             local found = false
             for _, candidate in ipairs(page.items) do
                 if candidate.kind == "profile" and candidate.title == "Selected container profile" then
@@ -54,6 +55,7 @@ local function define_tests()
                 if candidate.ref == "bee.driver.claude:default_window" then found = candidate end
             end
             test.not_nil(found)
+            if found and found.status ~= "ready" then error(table.concat(found.reasons, "; ")) end
             test.eq(found and found.status, "ready")
             local entry = assert(registry.get("bee.driver.claude:default_window"))
             local definition = entry.data :: {binding_ref: string, profile_id: string, policy_ref: string}

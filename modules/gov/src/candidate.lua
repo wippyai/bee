@@ -40,13 +40,17 @@ end
 
 local function normalize(raw: unknown): (Candidate?, string?)
     if type(raw) ~= "table" then return nil, "candidate must be an object" end
-    local value = raw :: {[string]: unknown}
+    local value = raw
     local allowed: {[string]: boolean} = {schema_revision = true, source_node = true, destination_node = true,
         source_workspace = true, destination_workspace = true, revision = true, snapshot_digest = true,
         files_digest = true, file_count = true, total_bytes = true, files = true, digest = true}
     for name in pairs(value) do if type(name) ~= "string" or not allowed[name] then return nil, "candidate has an unknown field" end end
-    if value.schema_revision ~= M.SCHEMA or not identity(value.source_node) or not identity(value.destination_node)
-        or not identity(value.source_workspace) or not identity(value.destination_workspace)
+    local source_node = identity(value.source_node)
+    local destination_node = identity(value.destination_node)
+    local source_workspace = identity(value.source_workspace)
+    local destination_workspace = identity(value.destination_workspace)
+    if value.schema_revision ~= M.SCHEMA or not source_node or not destination_node
+        or not source_workspace or not destination_workspace
         or type(value.revision) ~= "number" or value.revision ~= math.floor(value.revision) or value.revision < 0
         or type(value.snapshot_digest) ~= "string" or not value.snapshot_digest:match("^[0-9a-f]+$") or #value.snapshot_digest ~= 64
         or type(value.files_digest) ~= "string" or not value.files_digest:match("^[0-9a-f]+$") or #value.files_digest ~= 64
@@ -57,16 +61,16 @@ local function normalize(raw: unknown): (Candidate?, string?)
     end
     local files: {MeasuredFile} = {}
     local total = 0
-    for key in pairs(value.files :: table) do
+    for key in pairs(value.files) do
         if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, "candidate files must be a dense list" end
         total = total + 1
     end
     if total ~= value.file_count then return nil, "candidate file count does not match manifest" end
     local previous = ""
     for index = 1, total do
-        local raw_file = (value.files :: table)[index]
+        local raw_file = (value.files)[index]
         if type(raw_file) ~= "table" then return nil, "candidate file is malformed" end
-        local file = raw_file :: {[string]: unknown}
+        local file = raw_file
         for name in pairs(file) do if name ~= "path" and name ~= "bytes" and name ~= "digest" then return nil, "candidate file has an unknown field" end end
         if type(file.path) ~= "string" or file.path == "" or #file.path > 240 or file.path <= previous
             or type(file.bytes) ~= "number" or file.bytes ~= math.floor(file.bytes) or file.bytes < 0 or file.bytes > 4194304
@@ -76,12 +80,12 @@ local function normalize(raw: unknown): (Candidate?, string?)
         previous = file.path
         files[index] = {path = file.path, bytes = math.floor(file.bytes), digest = file.digest}
     end
-    local result: Candidate = {schema_revision = M.SCHEMA, source_node = value.source_node :: string,
-        destination_node = value.destination_node :: string, source_workspace = value.source_workspace :: string,
-        destination_workspace = value.destination_workspace :: string, revision = math.floor(value.revision :: number),
-        snapshot_digest = value.snapshot_digest :: string, files_digest = value.files_digest :: string,
-        file_count = math.floor(value.file_count :: number), total_bytes = math.floor(value.total_bytes :: number),
-        files = files, digest = value.digest :: string}
+    local result: Candidate = {schema_revision = M.SCHEMA, source_node = source_node,
+        destination_node = destination_node, source_workspace = source_workspace,
+        destination_workspace = destination_workspace, revision = math.floor(value.revision),
+        snapshot_digest = value.snapshot_digest, files_digest = value.files_digest,
+        file_count = math.floor(value.file_count), total_bytes = math.floor(value.total_bytes),
+        files = files, digest = value.digest}
     local measured, measure_error = digest({schema_revision = result.schema_revision, source_node = result.source_node,
         destination_node = result.destination_node, source_workspace = result.source_workspace,
         destination_workspace = result.destination_workspace, revision = result.revision,
@@ -102,7 +106,7 @@ end
 function M.decode(bytes_raw: unknown, digest_raw: unknown): (Candidate?, string?)
     if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > M.MAX_BYTES then return nil, "candidate bytes exceed bound" end
     if type(digest_raw) ~= "string" or #digest_raw ~= 64 or not digest_raw:match("^[0-9a-f]+$") then return nil, "candidate byte digest is malformed" end
-    local bytes: string = bytes_raw :: string
+    local bytes: string = bytes_raw
     local measured, measure_error = hash.sha256(bytes)
     if not measured or measure_error or measured ~= digest_raw then return nil, "candidate byte digest does not match" end
     local decoded, decode_error = json.decode(bytes)

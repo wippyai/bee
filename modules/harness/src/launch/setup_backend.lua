@@ -26,7 +26,7 @@ local function ensure(workspace: string, name: string, root: string): (boolean, 
     local data = listed_value and bounds.object(listed_value.value)
     local associations = data and data.associations
     if list_error or not listed_value or listed_value.ok ~= true or type(associations) ~= "table" then return false, "read existing association" end
-    for _, item in ipairs(associations :: {unknown}) do
+    for _, item in ipairs(associations) do
         local association = bounds.object(item)
         if association and association.name == name then
             if association.subpath ~= "" or association.allowed_access ~= "write" then
@@ -108,7 +108,7 @@ local function ensure_credential(workspace: string, name: string, chosen: Creden
     local result = bounds.object(listed)
     local data = result and bounds.object(result.value)
     if list_error or not result or result.ok ~= true or not data or type(data.definitions) ~= "table" then return false, "read existing credential" end
-    for _, item in ipairs(data.definitions :: {unknown}) do
+    for _, item in ipairs(data.definitions) do
         local definition = bounds.object(item)
         if definition and definition.name == name then
             if same_credential(definition, chosen) then return true, nil end

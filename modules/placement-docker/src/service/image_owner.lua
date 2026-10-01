@@ -27,6 +27,9 @@ function M.main()
                 if profile then
                     local completed = channel.new(1)
                     local cancel = channel.new(1)
+                    local built_image: string? = nil
+                    local built_route: string? = nil
+                    local built_error: string? = nil
                     coroutine.spawn(function()
                         local built: string? = nil
                         local interactive: string? = nil
@@ -34,14 +37,14 @@ function M.main()
                         if operation and workspace then
                             built, problem = environment.run(profile.ref, profile.digest, profile.profile.network or "none", workspace, recipient, cancel, operation == "revoke")
                         else built, interactive, problem = image.build(profile, recipient, cancel) end
-                        completed:send({image = built, route = interactive, error = problem})
+                        built_image, built_route, built_error = built, interactive, problem
+                        completed:send(true)
                     end)
                     while true do
                         local event = channel.select({completed:case_receive(), events:case_receive()})
                         if not event.ok then stopping = true; cancel:send(true); break end
                         if event.channel == completed then
-                            local result = event.value :: {image: string?, route: string?, error: string?}
-                            digest, route, failure = result.image, result.route, result.error
+                            digest, route, failure = built_image, built_route, built_error
                             break
                         elseif event.value.kind == process.event.CANCEL then
                             stopping = true

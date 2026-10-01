@@ -43,7 +43,7 @@ local function define_tests()
                 local changed, err = super_edit.enable({profiles = {}}, WORKSPACE, "node-local", {namespace},
                     "2030-01-01T00:00:00.000Z", {"bee.gov", "bee.security"})
                 test.is_nil(changed)
-                test.not_nil(string.find(tostring(err), "kernel namespace", 1, true))
+                test.not_nil((string.find(tostring(err), "kernel namespace", 1, true)))
             end
         end)
 
@@ -53,7 +53,7 @@ local function define_tests()
                     expires_at = "2030-01-01T00:00:00.000Z", overlay_owner = "bee.super_edit:old"}}},
                 WORKSPACE, "node-local", {"vendor.alpha"}, "2030-02-01T00:00:00.000Z", {})
             test.is_nil(changed)
-            test.not_nil(string.find(tostring(err), "disable edit mode", 1, true))
+            test.not_nil((string.find(tostring(err), "disable edit mode", 1, true)))
         end)
 
         test.it("disables only the selected workspace's super-edit rows", function()

@@ -8,7 +8,7 @@ type Capture = ({string}) -> (string?, integer?, string?, boolean?)
 function M.read(path: string, probe: Probe, capture: Capture): (string?, boolean?)
     local argv: {string} = {path}
     if type(probe.argv) == "table" then
-        for _, argument in ipairs(probe.argv :: {unknown}) do
+        for _, argument in ipairs(probe.argv) do
             local text = bounds.text(argument, 128)
             if not text then return nil end
             argv[#argv + 1] = text

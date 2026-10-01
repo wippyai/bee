@@ -105,7 +105,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     -- Hook intake: the gateway's queue for this binding is drained on a
     -- tick and on every wake; nothing it holds decides anything.
     local hooks_ticker = time.ticker("1000ms")
-    local hooking = plan.gateway ~= nil and #(plan.gateway :: {hooks: {string}}).hooks > 0 and session.checkpoint.gateway_binding ~= nil
+    local hooking = plan.gateway ~= nil and #(plan.gateway).hooks > 0 and session.checkpoint.gateway_binding ~= nil
     local function drain_hooks()
         if not hooking then return end
         local _, hooks_error = machine.drain_hooks(io, session)
@@ -141,7 +141,8 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             local selected = channel.select({exits:case_receive(), grace:case_receive()})
             if not selected.ok or selected.channel == grace then break end
             local message = selected.value
-            machine.on_exit(io, session, tostring(message:from()), message:payload():data() :: placement_protocol.Exit)
+            local data = placement_protocol.decode_exit(message:payload():data())
+            if data then machine.on_exit(io, session, tostring(message:from()), data) end
         end
     end
     local function end_session(record: boolean)
@@ -169,25 +170,31 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         if hooking and selected.channel == hooks_ticker:channel() then drain_hooks() end
         if selected.channel == outputs then
             local message = selected.value
-            local data = message:payload():data() :: placement_protocol.Output
-            local ok, err = machine.on_output(io, session, tostring(message:from()), data)
-            if not ok then error("output: " .. tostring(err)) end
+            local data = placement_protocol.decode_output(message:payload():data())
+            if data then
+                local ok, err = machine.on_output(io, session, tostring(message:from()), data)
+                if not ok then error("output: " .. tostring(err)) end
+            end
         elseif selected.channel == exits then
             local message = selected.value
-            local data = message:payload():data() :: placement_protocol.Exit
-            machine.on_exit(io, session, tostring(message:from()), data)
-            if not draining then
-                draining = true
-                drain_timer = time.after(tostring(plan.policy.runner_drain_ms + plan.policy.drain_ms) .. "ms")
+            local data = placement_protocol.decode_exit(message:payload():data())
+            if data then
+                machine.on_exit(io, session, tostring(message:from()), data)
+                if not draining then
+                    draining = true
+                    drain_timer = time.after(tostring(plan.policy.runner_drain_ms + plan.policy.drain_ms) .. "ms")
+                end
             end
         elseif selected.channel == acks then
             local message = selected.value
-            local data = message:payload():data() :: placement_protocol.InputAck
-            local ok, err = machine.on_write_ack(io, session, tostring(message:from()), data)
-            if not ok then error("write ack: " .. tostring(err)) end
+            local data = placement_protocol.decode_input_ack(message:payload():data())
+            if data then
+                local ok, err = machine.on_write_ack(io, session, tostring(message:from()), data)
+                if not ok then error("write ack: " .. tostring(err)) end
+            end
         elseif selected.channel == attached then
             local message = selected.value
-            local data = message:payload():data() :: placement_protocol.Attached
+            local data = message:payload():data()
             if machine.on_attached(session, tostring(message:from()), data) then
                 local ok, err = machine.reconcile_writes(io, session)
                 if not ok then error("reconcile writes: " .. tostring(err)) end
@@ -196,14 +203,16 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             end
         elseif selected.channel == statuses then
             local message = selected.value
-            local data = message:payload():data() :: placement_protocol.WriteStatus
-            local ok, err = machine.on_write_status(io, session, tostring(message:from()), data)
-            if not ok then error("write status: " .. tostring(err)) end
+            local data = placement_protocol.decode_write_status(message:payload():data())
+            if data then
+                local ok, err = machine.on_write_status(io, session, tostring(message:from()), data)
+                if not ok then error("write status: " .. tostring(err)) end
+            end
         elseif selected.channel == inputs then
             local message = selected.value
             local data = message:payload():data()
             if controller and tostring(message:from()) == controller and type(data) == "table" and type(data.write_id) == "string" and type(data.data) == "string" then
-                queued[#queued + 1] = {write_id = data.write_id :: string, data = data.data :: string}
+                queued[#queued + 1] = {write_id = data.write_id, data = data.data}
                 flush_queued()
             end
         elseif draining and selected.channel == drain_timer then
@@ -273,6 +282,6 @@ local function main(request: machine.Request, mode: string, controller: string?)
     local _, unregister_error = process.registry.unregister(name)
     if not ok then error(result) end
     if unregister_error then error("unregister carrier: " .. tostring(unregister_error)) end
-    return result :: {[string]: unknown}
+    return result
 end
 return {main = main, run = run}

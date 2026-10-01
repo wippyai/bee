@@ -358,7 +358,8 @@ local function define_tests()
             local timeline = bindings["bee.threads.timeline:app"]
             if not timeline then error("timeline package binding missing") end
             -- Measured admissions carry sorted distinct policies.
-            local policies = timeline.policies :: {string}
+            local policies = timeline.policies
+            if type(policies) ~= "table" then error("timeline binding has no policy list") end
             test.eq(#policies, 3)
             test.eq(policies[1], "bee.security.threads:thread_workspace_list_policy")
             test.eq(policies[2], "bee.security:ordinary_app_subsystem_boundary")

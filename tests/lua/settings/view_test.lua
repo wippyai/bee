@@ -105,7 +105,7 @@ local function define_tests()
         end)
         test.it("builds a decoder-valid single-line edit-mode confirmation", function()
             local message = view.confirm_message("bee.ux_demo --for 1m")
-            test.is_nil(message:find("%c"))
+            test.is_nil((message:find("%c")))
             local spec = interaction.spec({version = 1, request_id = "r-1", id = "bee.settings:edit",
                 instance_id = "settings", kind = "confirm", title = "Confirm edit mode",
                 message = message, accept = "Enable", initial = ""})

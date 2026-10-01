@@ -73,8 +73,7 @@ entries:
   modules: []
   imports:
     runtime: bee.harness.app:runtime
-    window: bee.placement.native.service:window
-    docker_window: bee.placement.docker.service:window
+    windows: bee.harness.app:windows
   meta:
     type: bee.application
     application:
@@ -90,6 +89,12 @@ entries:
       restart_policy: automatic
       commands:
       - {name: agent, fullscreen: false}
+- name: windows
+  kind: library.lua
+  source: file://windows.lua
+  imports:
+    window: bee.placement.native.service:window
+    docker_window: bee.placement.docker.service:window
 - name: agents
   kind: library.lua
   source: file://agents.lua
@@ -138,6 +143,7 @@ entries:
     view: bee.harness.app:picker_view
     forms: bee.harness.app:profile_form
     profile_view: bee.harness.app:profile_view
+    terminal_view: bee.harness.app:terminal_view
 
 - name: profile_editor
   kind: library.lua
@@ -178,3 +184,13 @@ entries:
     text: bee.application:text
     protocol: bee.application:sessions_protocol
     agents: bee.harness.app:agents
+
+- name: terminal_view
+  kind: library.lua
+  source: file://terminal_view.lua
+  modules: [tty, process, channel]
+  imports:
+    presentation: bee.harness.service:presentation
+    bounds: bee.threads.records:bounds
+    client: bee.application:client
+    input_event: bee.harness.app:input

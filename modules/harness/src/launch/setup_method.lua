@@ -41,6 +41,6 @@ local function handle(raw: unknown): {[string]: unknown}
     if not executor then return {ok = false, error = tostring(executor_error or "setup scope denied")} end
     local result, call_error = executor:call(BACKEND, backend_request)
     if call_error or type(result) ~= "table" then return {ok = false, error = tostring(call_error or "setup reply")} end
-    return result :: {[string]: unknown}
+    return result
 end
 return {handle = handle}

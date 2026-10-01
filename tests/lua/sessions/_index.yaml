@@ -223,3 +223,14 @@ entries:
   method: owner_stop
   modules: [security]
   meta: {type: test_support}
+- name: hook_boundary_probe
+  kind: function.lua
+  source: file://hook_boundary_probe.lua
+  method: handle
+  meta: {type: test_support}
+  imports:
+    boundary: bee.gateway.api:session_boundary
+    bounds: bee.threads.records:bounds
+    subject_call: bee.gateway.security:subject_call
+  security:
+    policies: [bee.gateway.security:execute_policy, bee.gateway.security:session_boundary_resolver_policy, bee.gateway.security:session_boundary_policy]

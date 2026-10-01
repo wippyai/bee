@@ -22,6 +22,7 @@ entries:
     record_types: bee.threads.records:types
     transaction: bee.threads.persist:transaction
     engine: bee.threads.projection:engine
+    bounds: bee.threads.records:bounds
 - name: status
   kind: library.lua
   source: file://status.lua

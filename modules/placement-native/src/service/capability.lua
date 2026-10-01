@@ -15,7 +15,7 @@ function M.measure(): Measurement
         executor:release()
         return {capability = "direct_process", exit_observation = "eof_gated", stdin_close = false, detail = "exec refused: " .. tostring(exec_error)}
     end
-    local handle = proc :: {[string]: unknown}
+    local handle = proc
     local observation: types.ExitObservation = "eof_gated"
     if type(handle.done) == "function" then observation = "independent" end
     local stdin_close = type(handle.close_stdin) == "function"
@@ -30,7 +30,7 @@ function M.measure(): Measurement
         executor:release()
         return {capability = "direct_process", exit_observation = observation, stdin_close = stdin_close, detail = "probe did not start: " .. tostring(start_error)}
     end
-    local pid: unknown = (handle.pid :: (unknown) -> unknown)(proc)
+    local pid: unknown = proc:pid()
     local chunks: {string} = {}
     while true do
         local chunk = stdout:read(256)

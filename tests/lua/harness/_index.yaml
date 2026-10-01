@@ -1572,3 +1572,47 @@ entries:
   imports:
     managed_run: bee.harness.launch:managed_run
     bounds: bee.threads.records:bounds
+
+- name: presentation_scope_probe
+  kind: function.lua
+  source: file://presentation_scope_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [process, security]
+- name: presentation_test
+  kind: function.lua
+  source: file://presentation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, process, tty, time, channel]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
+  imports:
+    test: wippy.test:test
+- name: presentation_viewer
+  kind: process.lua
+  source: file://presentation_view_probe.lua
+  method: viewer
+  meta: {type: test_support}
+  modules: [process, tty, channel]
+  imports:
+    terminal_view: bee.harness.app:terminal_view
+    client: bee.application:client
+- name: presentation_producer
+  kind: process.lua
+  source: file://presentation_view_probe.lua
+  method: producer
+  meta: {type: test_support}
+  modules: [process, tty, channel]
+  imports:
+    terminal_view: bee.harness.app:terminal_view
+    client: bee.application:client
+- name: presentation_view_get
+  kind: function.lua
+  source: file://presentation_view_probe.lua
+  method: get
+  meta: {type: test_support}
+  modules: [process, tty, channel]
+  imports:
+    terminal_view: bee.harness.app:terminal_view
+    client: bee.application:client

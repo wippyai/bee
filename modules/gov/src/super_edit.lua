@@ -27,7 +27,7 @@ end
 
 local function list(value: unknown, label: string): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
-    local source = value :: table
+    local source = value
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then
@@ -82,7 +82,7 @@ end
 function M.is_kernel(namespace_raw: unknown, kernel_raw: unknown): boolean
     local requested = namespace(namespace_raw)
     if not requested or type(kernel_raw) ~= "table" then return true end
-    for _, protected_raw in ipairs(kernel_raw :: {unknown}) do
+    for _, protected_raw in ipairs(kernel_raw) do
         local protected = namespace(protected_raw)
         if not protected then return true end
         if intersects(requested, protected) then return true end
@@ -97,12 +97,12 @@ end
 
 function M.enable(configuration_raw: unknown, workspace_raw: unknown, node_raw: unknown,
     namespaces_raw: unknown, expires_raw: unknown, kernel_raw: unknown, owner_ids_raw: unknown?): (Object?, string?)
-    local configuration = type(configuration_raw) == "table" and configuration_raw :: Object or nil
+    local configuration = type(configuration_raw) == "table" and configuration_raw or nil
     local workspace, node = workspace_id(workspace_raw), type(node_raw) == "string" and node_raw or nil
     local expires = type(expires_raw) == "string" and expires_raw or nil
     local namespaces, namespaces_error = list(namespaces_raw, "namespace list")
     local rows, rows_error = list(configuration and configuration.profiles, "activation profiles")
-    local owner_ids = type(owner_ids_raw) == "table" and owner_ids_raw :: Object or nil
+    local owner_ids = type(owner_ids_raw) == "table" and owner_ids_raw or nil
     if not configuration or not workspace or not node or node == "" or not expires or not namespaces or not rows then
         return nil, namespaces_error or rows_error or "super-edit request is invalid"
     end
@@ -123,10 +123,10 @@ function M.enable(configuration_raw: unknown, workspace_raw: unknown, node_raw: 
     local replacing: {[string]: boolean} = {}
     for _, item in ipairs(checked) do replacing[item] = true end
     for _, raw in ipairs(rows) do
-        local row = type(raw) == "table" and raw :: Object or nil
+        local row = type(raw) == "table" and raw or nil
         if not row then return nil, "activation profiles contain a malformed row" end
         local same = row.workspace_id == workspace and row.source_node == node
-            and type(row.source_workspace) == "string" and replacing[row.source_workspace :: string]
+            and type(row.source_workspace) == "string" and replacing[row.source_workspace]
         if same then
             return nil, "an activation profile already owns namespace " .. tostring(row.source_workspace)
                 .. "; disable edit mode before enabling it again"
@@ -155,13 +155,13 @@ function M.enable(configuration_raw: unknown, workspace_raw: unknown, node_raw: 
 end
 
 function M.disable(configuration_raw: unknown, workspace_raw: unknown): (Object?, string?)
-    local configuration = type(configuration_raw) == "table" and configuration_raw :: Object or nil
+    local configuration = type(configuration_raw) == "table" and configuration_raw or nil
     local workspace = workspace_id(workspace_raw)
     local rows, rows_error = list(configuration and configuration.profiles, "activation profiles")
     if not configuration or not workspace or not rows then return nil, rows_error or "super-edit request is invalid" end
     local result: {unknown} = {}
     for _, raw in ipairs(rows) do
-        local row = type(raw) == "table" and raw :: Object or nil
+        local row = type(raw) == "table" and raw or nil
         if not row then return nil, "activation profiles contain a malformed row" end
         if not (row.workspace_id == workspace and row.expires_at ~= nil) then result[#result + 1] = row end
     end
@@ -175,14 +175,14 @@ end
 -- can fail before local bootstrap learns which workspace failed, so this host
 -- kill switch clears all super-edit owners and preserves ordinary profiles.
 function M.disable_all(configuration_raw: unknown): (Object?, {string}?, string?)
-    local configuration = type(configuration_raw) == "table" and configuration_raw :: Object or nil
+    local configuration = type(configuration_raw) == "table" and configuration_raw or nil
     local rows, rows_error = list(configuration and configuration.profiles, "activation profiles")
     if not configuration or not rows then return nil, nil, rows_error or "super-edit request is invalid" end
     local result: {unknown} = {}
     local owners: {string} = {}
     local seen: {[string]: boolean} = {}
     for _, raw in ipairs(rows) do
-        local row = type(raw) == "table" and raw :: Object or nil
+        local row = type(raw) == "table" and raw or nil
         if not row then return nil, nil, "activation profiles contain a malformed row" end
         if row.expires_at ~= nil then
             local owner = row.overlay_owner

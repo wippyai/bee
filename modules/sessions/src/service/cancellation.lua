@@ -22,7 +22,7 @@ end
 
 local function call(target: unknown, request: Object, actor: security.Actor): (Object?, string?, string?)
     if type(target) ~= "string" or target == "" then return nil, "INVALID", "placement binding omits the required operation" end
-    local raw, call_error = funcs.new():with_actor(actor):call(target :: string, request)
+    local raw, call_error = funcs.new():with_actor(actor):call(target, request)
     if call_error then return nil, "UNAVAILABLE", tostring(call_error) end
     local reply = object(raw)
     if not reply then return nil, "INTERNAL", target .. " returned a malformed reply" end
@@ -46,7 +46,7 @@ local function evidence(summary: string, attempt_id: string, state: string?, exi
     return {summary = summary, artifacts = artifacts}
 end
 
-function M.stop(methods: unknown, attempt_id: string, stored_route: unknown): Result
+function M.stop(methods: unknown, attempt_id: string, stored_route: unknown, allow_exited: boolean?): Result
     local placement = object(methods)
     if not placement then return {state = "uncertain", evidence = evidence("session route has no placement operations", attempt_id, nil, nil)} end
     local route = object(stored_route)
@@ -55,7 +55,7 @@ function M.stop(methods: unknown, attempt_id: string, stored_route: unknown): Re
     if not owner or not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then
         return {state = "uncertain", evidence = evidence("session route has no workspace-bound placement owner", attempt_id, nil, nil)}
     end
-    local actor, actor_error = security.new_actor(owner :: string, {workspace_id = workspace})
+    local actor, actor_error = security.new_actor(owner, {workspace_id = workspace})
     if not actor then return {state = "uncertain", evidence = evidence("placement owner cannot be restored: " .. tostring(actor_error), attempt_id, nil, nil)} end
     local before, before_code, before_error = call(placement.reconcile, {attempt_id = attempt_id}, actor)
     if not before then
@@ -67,6 +67,10 @@ function M.stop(methods: unknown, attempt_id: string, stored_route: unknown): Re
     local before_attempt = attempt_value(before)
     local before_state = before_attempt and bounds.text(before_attempt.execution_state, 32) or nil
     if before_state == "exited" then
+        local source = before_attempt and bounds.text(before_attempt.exit_source, 128)
+        if allow_exited and source then
+            return {state = "stopped", evidence = evidence("placement proved the process exited", attempt_id, before_state, source)}
+        end
         return {state = "uncertain", evidence = evidence("placement had already exited before cancellation", attempt_id, before_state,
             before_attempt and bounds.text(before_attempt.exit_source, 128) or nil)}
     end

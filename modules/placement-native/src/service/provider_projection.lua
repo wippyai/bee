@@ -91,10 +91,12 @@ local function project(home: types.ProviderHome?, format: formats.Format, contex
             if context.strict and clean ~= nil then item.content = clean end
             local decoded: unknown = nil
             local parse_error: unknown = nil
+            local content: unknown = item.content
+            if type(content) ~= "string" then return nil, "container projection content is not text" end
             if item.path:sub(-5) == ".toml" then
-                if item.content == "" then decoded = {} else decoded, parse_error = toml.decode(item.content) end
+                if item.content == "" then decoded = {} else decoded, parse_error = toml.decode(content) end
             elseif item.path:sub(-5) == ".json" then
-                if item.content == "" then decoded = {} else decoded, parse_error = json.decode(item.content) end
+                if item.content == "" then decoded = {} else decoded, parse_error = json.decode(content) end
             elseif not context.strict then
                 goto continue
             else
@@ -106,7 +108,9 @@ local function project(home: types.ProviderHome?, format: formats.Format, contex
                 if not document then return nil, item.path .. ": Docker configuration must be an object" end
                 for _, key in ipairs(omit) do document[key] = nil end
                 local encoded: string? = nil
-                if item.path:sub(-5) == ".toml" then encoded = toml.encode(document) else encoded = json.encode(document) end
+                local content: unknown = item.content
+            if type(content) ~= "string" then return nil, "container projection content is not text" end
+            if item.path:sub(-5) == ".toml" then encoded = toml.encode(document) else encoded = json.encode(document) end
                 if not encoded then return nil, item.path .. ": Docker configuration could not be encoded" end
                 item.content = encoded
             end
@@ -114,6 +118,8 @@ local function project(home: types.ProviderHome?, format: formats.Format, contex
             local projected, reason = dependency(decoded, context, 0)
             if reason then return nil, item.path .. ": " .. reason end
             local encoded: string? = nil
+            local content: unknown = item.content
+            if type(content) ~= "string" then return nil, "container projection content is not text" end
             if item.path:sub(-5) == ".toml" then encoded = toml.encode(projected) else encoded = json.encode(projected) end
             if not encoded then return nil, item.path .. ": projected configuration could not be encoded" end
             if context.changed then item.content = encoded end

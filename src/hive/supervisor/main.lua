@@ -368,7 +368,7 @@ local function main(configuration: unknown)
     local function stop(sender: string, call: types.Call, now_ms: integer)
         local sender_node, sender_host = types.pid_parts(sender)
         local request, refusal = owner_stop.decode(call, node)
-        if not request then send(sender, types.TOPIC_REPLY, types.reply_error(call.request_id, refusal :: types.Fault)); return end
+        if not request then send(sender, types.TOPIC_REPLY, types.reply_error(call.request_id, refusal)); return end
         if sender_host == desktop_protocol.CLIENT_HOST and sender_node and not local_clients[sender_node] then reconcile_enrollment(now_ms) end
         if sender_host ~= desktop_protocol.CLIENT_HOST or not sender_node or not local_clients[sender_node] then
             failed(sender, call.request_id, "DENIED", "only an enrolled local client stops its owner"); return
@@ -376,7 +376,7 @@ local function main(configuration: unknown)
         if not security.can(owner_stop.ACTION, owner_stop.STOP) then
             failed(sender, call.request_id, "DENIED", "the host did not grant owner stop"); return
         end
-        local stopping = owner_stop.stops(request, sender_node :: string, local_clients)
+        local stopping = owner_stop.stops(request, sender_node, local_clients)
         send(sender, types.TOPIC_REPLY, types.reply_ok(call.request_id, {stopping = stopping}))
         if stopping then
             log:info("Owner stop requested by a local client", {node = sender_node})
@@ -661,7 +661,7 @@ local function main(configuration: unknown)
             elseif advertising_response and selected.channel == advertising_response and advertising then
                 local value, result_error = advertising:result()
                 local data: unknown = value and value:data() or nil
-                local result = type(data) == "table" and data :: {ok: boolean, error: string} or nil
+                local result = type(data) == "table" and data or nil
                 advertised = result_error == nil and result ~= nil and result.ok == true
                 if not advertised then
                     log:warn("Hive name publication deferred", {error = result and result.error or tostring(result_error)})

@@ -6,6 +6,20 @@ local test = require("test")
 local registry = require("registry")
 local catalog = require("catalog")
 local classify = require("classify")
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function find(snapshot: {bindings: {classify.Binding}}, id: string): classify.Binding
     for _, item in ipairs(snapshot.bindings) do
         if item.binding_id == id then return item end
@@ -75,7 +89,7 @@ local function define_tests()
             local pinned, pinned_error = registry.snapshot()
             if not pinned then error(tostring(pinned_error)) end
             local changes = pinned:changes()
-            changes:update(edited)
+            changes:update(registry_input(edited))
             local replaced, apply_error = changes:apply()
             if not replaced then error(tostring(apply_error)) end
             local after, after_error = catalog.snapshot()
@@ -100,7 +114,7 @@ local function define_tests()
             test.is_true(has(orphaned.diagnostics, "profiles_ref bee.harness.catalog:fake_profiles does not exist"))
             test.eq(find(after, "bee.harness.catalog:fake_binding").state, "compatible")
             local restore = registry.snapshot():changes()
-            restore:create(original)
+            restore:create(registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             local final, final_error = catalog.snapshot()
@@ -117,7 +131,7 @@ local function define_tests()
             local driver = data.driver :: {[string]: unknown}
             driver.title = "Replaced between reads"
             local changes = registry.snapshot():changes()
-            changes:update(edited)
+            changes:update(registry_input(edited))
             local applied, apply_error = changes:apply()
             if not applied then error(tostring(apply_error)) end
             local from_pinned, read_error = catalog.read(pinned, nil)
@@ -129,7 +143,7 @@ local function define_tests()
             test.eq(current.generation, math.floor(applied:id()))
             test.eq(find(current, "bee.harness.catalog:fake_binding").title, "Replaced between reads")
             local restore = registry.snapshot():changes()
-            restore:update(original)
+            restore:update(registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
         end)
@@ -179,7 +193,7 @@ local function define_tests()
             -- Restore shared fixture state before any assertion can fail. The
             -- captured catalog remains the malformed generation's value.
             local restore = registry.snapshot():changes()
-            restore:update(original)
+            restore:update(registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             if not snapshot then error(tostring(read_error)) end

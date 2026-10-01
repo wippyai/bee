@@ -210,7 +210,7 @@ function M.apply_recap(state: State, reply: Reply)
         local turn = object(checkpoint.last_turn)
         if not turn or bounds.fields(turn, {"turn_id", "outcome"}) or not bounds.id(turn.turn_id)
             or not bounds.member(turn.outcome, {"succeeded", "failed", "cancelled", "uncertain"}) then state.recap = nil; return end
-        last_turn = turn.outcome :: string
+        last_turn = turn.outcome
     end
     for _, key in ipairs({"claimed", "delivered", "released", "uncertain"}) do
         local count = bounds.count(deliveries[key])
@@ -464,18 +464,18 @@ function M.checkpoint(state: State): string
         selected = state.selected, follow = state.follow, technical = state.technical}) or "{}"
 end
 local function optional_string(value: unknown): boolean
-    return value == nil or (type(value) == "string" and #(value :: string) <= 200 and not (value :: string):find("%c"))
+    return value == nil or (type(value) == "string" and #(value) <= 200 and not (value):find("%c"))
 end
 function M.restore(state: State, encoded: string): boolean
     local decoded: unknown = json.decode(encoded)
     if type(decoded) ~= "table" then return false end
-    local saved = decoded :: Object
+    local saved = decoded
     if not optional_string(saved.thread_id) or not optional_string(saved.subscription_id) or not optional_string(saved.attach_key) then return false end
     if saved.selected ~= nil and type(saved.selected) ~= "number" then return false end
     if saved.follow ~= nil and type(saved.follow) ~= "boolean" then return false end
     if saved.technical ~= nil and type(saved.technical) ~= "boolean" then return false end
     if type(saved.thread_id) == "string" and saved.thread_id ~= "" then
-        M.open(state, saved.thread_id :: string, type(saved.subscription_id) == "string" and (saved.subscription_id :: string) or nil)
+        M.open(state, saved.thread_id, type(saved.subscription_id) == "string" and (saved.subscription_id) or nil)
     end
     state.attach_key = type(saved.attach_key) == "string" and saved.attach_key or nil
     state.selected = saved.selected ~= nil and bounds.sequence(saved.selected) or nil

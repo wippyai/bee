@@ -21,15 +21,16 @@ local materialization = require("materialization")
 local output_buffer = require("output_buffer")
 local service = require("service")
 local process_backend = require("process_backend")
+local bounds = require("bounds")
 type Stream = "stdout" | "stderr"
 type Chunk = {stream: Stream, data: string?, eof: boolean}
 type Pending = {sequence: integer, stream: Stream, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
-local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
+local function evidence(db, attempt_id: string, kind: string, detail: string, update: {execution: types.ExecutionState?, fields: {[string]: unknown}?}?): (boolean, string?)
     local execution: types.ExecutionState? = nil
     local fields: {[string]: unknown}? = nil
     if update then
-        execution = update.execution :: types.ExecutionState?
-        fields = update.fields :: {[string]: unknown}?
+        execution = update.execution
+        fields = update.fields
     end
     local result = store.transition(db, attempt_id, {execution = execution, fields = fields,
         evidence = {kind = kind, detail = detail}})
@@ -53,7 +54,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     local function seal_gateway(why: string)
         if not gateway_binding then return end
         local raw, call_error = funcs.call(resources.GATEWAY_SEAL, {binding_id = gateway_binding})
-        local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?} or nil
+        local reply = type(raw) == "table" and raw or nil
         if call_error or not reply or not reply.ok then
             evidence(db, attempt_id, "gateway.seal_failed", why .. "; binding " .. tostring(gateway_binding) .. ": " .. tostring(call_error or (reply and reply.error and reply.error.code) or "no answer"))
             return
@@ -62,10 +63,10 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     end
     local function retire_gateway(why: string)
         if not gateway_binding then return end
-        local binding_id = gateway_binding :: string
+        local binding_id = gateway_binding
         gateway_binding = nil
         local raw, call_error = funcs.call(resources.GATEWAY_REVOKE, {binding_id = binding_id})
-        local reply = type(raw) == "table" and raw :: {ok: boolean, error: {code: string}?} or nil
+        local reply = type(raw) == "table" and raw or nil
         if call_error or not reply or not reply.ok then
             evidence(db, attempt_id, "gateway.revoke_failed", why .. "; binding " .. binding_id .. ": " .. tostring(call_error or (reply and reply.error and reply.error.code) or "no answer"))
             return
@@ -92,8 +93,8 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     if not row then return refuse(row_error or "attempt is not recorded") end
     local request, request_error = store.request(row)
     if not request then return refuse(request_error or "request unreadable") end
-    local recipient: string? = type(row.recipient) == "string" and row.recipient :: string or nil
-    local generation = type(row.attachment_generation) == "number" and math.floor(row.attachment_generation :: number) or 0
+    local recipient: string? = type(row.recipient) == "string" and row.recipient or nil
+    local generation = type(row.attachment_generation) == "number" and math.floor(row.attachment_generation) or 0
     local group = row.capability == "process_group"
     local starting = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting", fields = {runner_pid = process.pid()}, evidence = {kind = "runner.started", detail = "runner " .. process.pid()}})
     if not starting.ok then return refuse(starting.message or "attempt is not intended") end
@@ -168,9 +169,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         fields = identified
     end
     local recorded: identity.Identity? = nil
-    local handle = proc :: {[string]: unknown}
+    local handle = proc
     if type(handle.pid) == "function" then
-        local pid: unknown = (handle.pid :: (unknown) -> unknown)(proc)
+        local pid: unknown = proc:pid()
         if type(pid) == "number" then
             local found = identity.read(executor, math.floor(pid))
             if found then
@@ -219,7 +220,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         end
         if request.launch.stdin_eof == true then
             if accepted and type(handle.close_stdin) == "function" then
-                local closed, close_error = (handle.close_stdin :: (unknown) -> (unknown, unknown))(proc)
+                local closed, close_error = proc:close_stdin()
                 if closed then
                     stdin_closed = true
                     evidence(db, attempt_id, "stdin.closed", "stdin closed after the initial input")
@@ -236,6 +237,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
     -- learned from the runtime's done channel where it exists; otherwise
     -- wait() runs only after both streams end, because wait() consumes the
     -- handle and would end signalling and input.
+    local function chunk_value(value: Chunk): Chunk return {stream = value.stream, data = value.data, eof = value.eof} end
     local chunks = channel.new(4)
     local exits = channel.new(1)
     local function pump(name: Stream, stream)
@@ -243,9 +245,11 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             while true do
                 local data = stream:read(protocol.MAX_CHUNK_BYTES)
                 if not data or #tostring(data) == 0 then break end
-                chunks:send({stream = name, data = tostring(data), eof = false})
+                local chunk: Chunk = {stream = name, data = tostring(data), eof = false}
+                chunks:send(chunk_value(chunk))
             end
-            chunks:send({stream = name, data = nil, eof = true})
+            local chunk: Chunk = {stream = name, data = nil, eof = true}
+            chunks:send(chunk_value(chunk))
         end)
     end
     pump("stdout", stdout)
@@ -257,22 +261,24 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
         waited = true
         coroutine.spawn(function()
             local code, wait_error = proc:wait()
-            exits:send({code = code, error = wait_error})
+            local exit_code = bounds.integer(code)
+            if not exit_code then error("executor returned an invalid exit code") end
+            exits:send({code = exit_code, error = wait_error})
         end)
     end
     if has_done then
-        local done_value: unknown = (handle.done :: (unknown) -> unknown)(proc)
-        local done = done_value :: {receive: (unknown) -> (unknown, boolean)}
+        local done = proc:done()
         coroutine.spawn(function()
-            local outcome = done.receive(done)
-            local table_outcome = type(outcome) == "table" and outcome :: {[string]: unknown} or {}
-            exits:send({code = table_outcome.code, error = table_outcome.error})
+            local outcome = done:receive()
+            local code = bounds.integer(outcome.code)
+            if not code then error("executor returned an invalid exit code") end
+            exits:send({code = code, error = outcome.error})
         end)
     end
     -- The recipient is watched: a carrier that dies while the child lives
     -- has its binding retired here, independently of any replacement.
     if recipient then
-        process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
+        process.send(recipient, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
     end
     local pending: {Pending} = {}
     local spooled = 0
@@ -428,7 +434,12 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             flush_buffers()
             flush()
         elseif selected.channel == chunks then
-            local chunk = selected.value :: Chunk
+            local raw_chunk = bounds.object(selected.value)
+            if not raw_chunk then error("invalid pipe chunk") end
+            local stream, data, eof = raw_chunk.stream, raw_chunk.data, raw_chunk.eof
+            if (stream ~= "stdout" and stream ~= "stderr") or (data ~= nil and type(data) ~= "string")
+                or type(eof) ~= "boolean" then error("invalid pipe chunk") end
+            local chunk: Chunk = {stream = stream, data = data, eof = eof}
             local marked: boolean? = nil
             if chunk.eof and truncated then marked = true end
             if chunk.data then buffer_data(chunk.stream, chunk.data) end
@@ -440,9 +451,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             if eof_seen >= 2 and not has_done and not exited then reap() end
             flush()
         elseif selected.channel == exits then
-            local outcome = selected.value :: {code: unknown, error: unknown}
+            local outcome = selected.value
             exited = true
-            if type(outcome.code) == "number" then exit_code = math.floor(outcome.code :: number) end
+            if type(outcome.code) == "number" then exit_code = math.floor(outcome.code) end
             local detail = exit_code and ("exit code " .. tostring(exit_code)) or ("wait returned no code: " .. tostring(outcome.error))
             store.transition(db, attempt_id, {execution = "exited", fields = {exit_code = exit_code, exit_source = "runner"}, evidence = {kind = "child.exited", detail = detail}})
             -- The child's end seals intake; the carrier drains what was
@@ -465,29 +476,29 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 or recipient ~= nil and sender == recipient and data.command == "write_status") then
                 if data.command == "stop" and not exited then
                     local mode = data.mode == "forced" and "forced" or "cooperative"
-                    local grace = type(data.grace_ms) == "number" and math.floor(data.grace_ms :: number) or request.timeouts.stop_grace_ms
+                    local grace = type(data.grace_ms) == "number" and math.floor(data.grace_ms) or request.timeouts.stop_grace_ms
                     request_stop(mode, grace, mode .. " stop requested")
                 elseif data.command == "attach" and type(data.recipient) == "string" and type(data.generation) == "number" then
-                    local next_generation = math.floor(data.generation :: number)
+                    local next_generation = math.floor(data.generation)
                     local installed = false
                     local refusal_reason: string? = nil
                     if next_generation > generation then
                         local same_recipient = recipient == data.recipient
                         local monitored, monitor_error = true, nil
-                        if not same_recipient then monitored, monitor_error = process.monitor(data.recipient :: string) end
+                        if not same_recipient then monitored, monitor_error = process.monitor(data.recipient) end
                         if monitored then
-                            if recipient and not same_recipient then process.unmonitor(recipient :: string) end
+                            if recipient and not same_recipient then process.unmonitor(recipient) end
                             if takeover_armed then
                                 takeover_armed = false
                                 evidence(db, attempt_id, "carrier.replaced", "generation " .. tostring(next_generation) .. " took over from lost generation " .. tostring(lost_generation) .. "; gateway binding kept")
                             end
                             generation = next_generation
-                            recipient = data.recipient :: string
+                            recipient = data.recipient
                             installed = true
-                            process.send(recipient :: string, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
+                            process.send(recipient, protocol.TOPIC_ATTACHED, {attempt_id = attempt_id, generation = generation})
                             sent_through = consumed_through
                             flush()
-                            if exited then process.send(recipient :: string, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
+                            if exited then process.send(recipient, protocol.TOPIC_EXIT, {attempt_id = attempt_id, generation = generation, code = exit_code, signal = nil, uncertain = exit_code == nil, stopped = stop_requested}) end
                         else
                             refusal_reason = "recipient is not monitorable: " .. tostring(monitor_error)
                             evidence(db, attempt_id, "attach.refused", "generation " .. tostring(next_generation) .. " recipient is not monitorable: " .. tostring(monitor_error))
@@ -500,7 +511,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     process.send(tostring(message:from()), protocol.TOPIC_FENCED, {attempt_id = attempt_id, generation = next_generation,
                         fenced = installed, refused = not installed, reason = refusal_reason})
                 elseif data.command == "write_status" and type(data.write_id) == "string" then
-                    local status = remembered_set[data.write_id :: string] and "accepted" or "unknown"
+                    local status = remembered_set[data.write_id] and "accepted" or "unknown"
                     process.send(tostring(message:from()), protocol.TOPIC_WRITE_STATUS, {attempt_id = attempt_id, generation = generation, write_id = data.write_id, status = status})
                 elseif data.command == "status" and data.attempt_id == attempt_id and type(data.probe) == "string" then
                     local execution = "running"
@@ -520,7 +531,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                         reason = "executor cannot close stdin"
                         evidence(db, attempt_id, "stdin.uncertain", "executor cannot close stdin at the owner's request")
                     else
-                        local closed, close_error = (handle.close_stdin :: (unknown) -> (unknown, unknown))(proc)
+                        local closed, close_error = proc:close_stdin()
                         if closed then
                             stdin_closed = true
                             closed_now = true
@@ -531,9 +542,9 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                         end
                     end
                     process.send(tostring(message:from()), protocol.TOPIC_STDIN, {attempt_id = attempt_id, generation = generation, probe = data.probe, closed = closed_now, reason = reason})
-                elseif data.command == "detach" and type(data.generation) == "number" and math.floor(data.generation :: number) >= generation then
+                elseif data.command == "detach" and type(data.generation) == "number" and math.floor(data.generation) >= generation then
                     recipient = nil
-                    generation = math.floor(data.generation :: number)
+                    generation = math.floor(data.generation)
                 end
             end
         elseif selected.channel == inputs then
@@ -541,15 +552,15 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             local data: unknown = message:payload():data()
             local sender = tostring(message:from())
             if type(data) == "table" and type(data.write_id) == "string" and type(data.data) == "string" then
-                local write_id = data.write_id :: string
+                local write_id = data.write_id
                 -- The answer names the requester's generation so a fenced sender
                 -- can record its refusal; the runner's own generation decides.
                 local asked: integer = generation
-                if type(data.generation) == "number" then asked = math.floor(data.generation :: number) end
+                if type(data.generation) == "number" then asked = math.floor(data.generation) end
                 local reply = {attempt_id = attempt_id, generation = asked, write_id = write_id, accepted = false, reason = nil}
                 if sender ~= recipient or data.generation ~= generation then
                     reply.reason = "not the bound recipient"
-                elseif #(data.data :: string) > protocol.MAX_WRITE_BYTES then
+                elseif #(data.data) > protocol.MAX_WRITE_BYTES then
                     reply.reason = "write exceeds " .. tostring(protocol.MAX_WRITE_BYTES) .. " bytes"
                 elseif remembered_set[write_id] then
                     reply.accepted = true
@@ -558,7 +569,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 elseif request.launch.stdin_eof == true or stdin_closed then
                     reply.reason = "stdin is closed after its input"
                 else
-                    local written, write_error = proc:write_stdin(data.data :: string)
+                    local written, write_error = proc:write_stdin(data.data)
                     if written then
                         reply.accepted = true
                         remembered[#remembered + 1] = write_id
@@ -577,7 +588,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
             local message = selected.value
             local data: unknown = message:payload():data()
             if type(data) == "table" and tostring(message:from()) == recipient and data.generation == generation and type(data.consumed_through) == "number" then
-                acknowledge(math.floor(data.consumed_through :: number))
+                acknowledge(math.floor(data.consumed_through))
                 flush()
             end
         elseif selected.channel == events then
@@ -587,7 +598,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                     signal(9, "signal.kill", "runner cancelled")
                     if not has_done then reap() end
                     local outcome = exits:receive()
-                    if type(outcome) == "table" and type(outcome.code) == "number" then exit_code = math.floor(outcome.code :: number) end
+                    if type(outcome) == "table" and type(outcome.code) == "number" then exit_code = math.floor(outcome.code) end
                     store.transition(db, attempt_id, {execution = "exited", fields = {exit_code = exit_code, exit_source = "runner"}, evidence = {kind = "child.exited", detail = "after runner cancellation, exit code " .. tostring(exit_code)}})
                     exited = true
                 end
@@ -599,7 +610,7 @@ local function main(attempt_id: string, starter: string, reply_topic: string, ex
                 -- not the child has exited, so the order in which the runner
                 -- observes the two exits decides nothing.
                 local result: unknown = event.result
-                local closed = type(result) == "table" and (result :: {[string]: unknown}).error == nil
+                local closed = type(result) == "table" and (result).error == nil
                 if gateway_binding and not takeover_armed and not closed then
                     lost_generation = generation
                     takeover_timer = time.after(tostring(protocol.TAKEOVER_GRACE_MS) .. "ms")

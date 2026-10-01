@@ -29,7 +29,7 @@ local function raw_policy(ref: string): {[string]: unknown}
 end
 
 local function decoded(ref: string): policy.Policy
-    local value, err = policy.decode(ref, registry.get(ref))
+    local value, err = policy.decode(ref, (registry.get(ref)))
     if not value then error(ref .. ": " .. tostring(err)) end
     return value
 end

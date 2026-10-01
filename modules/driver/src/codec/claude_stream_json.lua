@@ -46,9 +46,9 @@ local function text_of(value: unknown): string
     if type(value) == "string" then return value end
     if type(value) == "table" then
         local parts: {string} = {}
-        for _, block in ipairs(value :: {unknown}) do
+        for _, block in ipairs(value) do
             if type(block) == "table" then
-                local piece: unknown = (block :: {[string]: unknown}).text
+                local piece: unknown = (block).text
                 if type(piece) == "string" then parts[#parts + 1] = piece end
             end
         end
@@ -60,16 +60,16 @@ local function text_of(value: unknown): string
 end
 local function usage_of(value: unknown): events.Usage?
     if type(value) ~= "table" then return nil end
-    local usage = value :: {[string]: unknown}
+    local usage = value
     return events.usage(usage.input_tokens, usage.output_tokens, usage.cache_read_input_tokens)
 end
 local function content_blocks(state: State, index: integer, message: unknown, out: {Observation})
     if type(message) ~= "table" then return end
-    local content: unknown = (message :: {[string]: unknown}).content
+    local content: unknown = (message).content
     if type(content) ~= "table" then return end
-    for position, block in ipairs(content :: {unknown}) do
+    for position, block in ipairs(content) do
         if type(block) == "table" then
-            local item = block :: {[string]: unknown}
+            local item = block
             local suffix = "block" .. tostring(position)
             if item.type == "text" and type(item.text) == "string" then
                 local segment = "assistant:" .. tostring(index) .. ":" .. tostring(position)
@@ -133,9 +133,9 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     elseif kind == "stream_event" then
         local event: unknown = envelope.event
         if type(event) == "table" then
-            local inner = event :: {[string]: unknown}
+            local inner = event
             if inner.type == "content_block_delta" and type(inner.delta) == "table" then
-                local delta = inner.delta :: {[string]: unknown}
+                local delta = inner.delta
                 if delta.type == "text_delta" and type(delta.text) == "string" then
                     local segment = "stream:" .. tostring(inner.index)
                     for _, piece in ipairs(events.text(key(index, "delta"), segment, "append", delta.text, "answer")) do out[#out + 1] = piece end
@@ -157,9 +157,9 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         end
         local denials: unknown = envelope.permission_denials
         if type(denials) == "table" then
-            for position, denial in ipairs(denials :: {unknown}) do
+            for position, denial in ipairs(denials) do
                 if type(denial) == "table" then
-                    local item = denial :: {[string]: unknown}
+                    local item = denial
                     out[#out + 1] = events.notice(key(index, "denial" .. tostring(position)), "warning", "permission_denied", tostring(item.tool_name) .. " " .. tostring(item.tool_use_id))
                 end
             end
@@ -168,8 +168,8 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         out[#out + 1] = events.turn(key(index, "turn"), "ended", outcome, usage)
         local answer: string? = nil
         local result = path_reader.read(envelope, paths, "result_text")
-        if outcome == "succeeded" and type(result) == "string" then answer = result :: string end
-        state.terminal = {outcome = outcome :: types.Outcome, answer = answer, resume_ref = state.session_id, usage = usage, error = fault}
+        if outcome == "succeeded" and type(result) == "string" then answer = result end
+        state.terminal = {outcome = outcome, answer = answer, resume_ref = state.session_id, usage = usage, error = fault}
         return {observations = out, terminal = state.terminal}
     else
         local encoded, err = json.encode(envelope)

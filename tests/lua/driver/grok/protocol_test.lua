@@ -287,7 +287,7 @@ local function define_tests()
             local notice = changed.observations[1].data :: {[string]: unknown}
             test.eq(notice.code, "session_mismatch")
 
-            protocol.normalize(state, 3, {type = "text", data = string.rep("x", protocol.MAX_ANSWER_BYTES)})
+            protocol.normalize(state, 3, {type = "text", data = string.rep("x", protocol.max_answer_bytes())})
             test.is_true(state.answer_truncated)
             test.is_nil(state.answer)
             local done = protocol.normalize(state, 4, {type = "end", stopReason = "end_turn", sessionId = "sess-original"})
@@ -306,7 +306,7 @@ local function define_tests()
 
             local overlong = normalize.handle({
                 index = 1,
-                state = {started = false, resumed = false, answer_truncated = false, answer = string.rep("x", protocol.MAX_ANSWER_BYTES + 1)},
+                state = {started = false, resumed = false, answer_truncated = false, answer = string.rep("x", protocol.max_answer_bytes() + 1)},
                 eof = true,
             })
             test.is_false(overlong.ok)

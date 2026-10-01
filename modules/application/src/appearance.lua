@@ -6,6 +6,7 @@ type Theme = {id: string, title: string, ground: string, surface: string, text: 
     on_accent: string?, terminal_text: string?, terminal_surface: string?}
 type Page = {foreground: string, background: string}
 type Preferences = {theme: string, background: string, taskbar: string?}
+local env = require("env")
 local M = {}
 local themes: {Theme} = {
     {id = "honey", title = "Honey", ground = "#0c1119", surface = "#17202c", text = "#d8e2ef", muted = "#8999ad", border = "#6f89a5", accent = "#ffc963", pattern = "#1c2937", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
@@ -137,15 +138,8 @@ function M.set_no_color(value: boolean?) forced = value end
 function M.no_color(): boolean
     if forced ~= nil then return forced end
     if granted == nil then
-        granted = false
-        local ok, library = pcall(require, "env")
-        if ok and type(library) == "table" then
-            local get = (library :: {[string]: unknown}).get
-            if type(get) == "function" then
-                local value: unknown = (get :: (string) -> (unknown, unknown))("bee.env:no_color")
-                granted = type(value) == "string" and value ~= ""
-            end
-        end
+        local value, read_error = env.get("bee.env:no_color")
+        granted = read_error == nil and type(value) == "string" and value ~= ""
     end
     return granted == true
 end

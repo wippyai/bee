@@ -23,7 +23,7 @@ type EventReducer = (State, Event) -> (boolean?, string?)
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
     for key in pairs(value) do if type(key) ~= "string" then return nil end end
-    return value :: Object
+    return value
 end
 local function fields(value: Object, allowed: {string}): string?
     local known: {[string]: boolean} = {}
@@ -129,8 +129,8 @@ function M.page(value: unknown, owner: string, feed: string, decode_payload: Pay
         events[index] = event
     end
     if #events > 0 and events[#events].sequence > next then return nil, "sync page cursor precedes events" end
-    local page: Page = {owner_id = owner, feed = feed, events = events, next_cursor = next :: integer,
-        more = more :: boolean, head_cursor = head :: integer, earliest_cursor = earliest :: integer,
+    local page: Page = {owner_id = owner, feed = feed, events = events, next_cursor = next,
+        more = more, head_cursor = head, earliest_cursor = earliest,
         scope_revision = scope_revision}
     return page, nil
 end
@@ -164,7 +164,7 @@ function M.snapshot(value: unknown, owner: string, feed: string, decode_value: P
     end
     if next_key and #items > 0 and next_key ~= items[#items].key then return nil, "sync snapshot key does not match items" end
     local snapshot: Snapshot = {owner_id = owner, feed = feed, items = items, next_key = next_key,
-        complete = complete :: boolean, cursor = cursor :: integer, earliest_cursor = earliest :: integer,
+        complete = complete, cursor = cursor, earliest_cursor = earliest,
         scope_revision = scope_revision}
     return snapshot, nil
 end

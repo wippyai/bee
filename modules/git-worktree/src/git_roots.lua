@@ -31,7 +31,7 @@ local function metadata_path(content: string?, label: string): (string?, string?
     if type(content) ~= "string" or #content == 0 or #content > M.MAX_METADATA_BYTES then
         return nil, label .. " is empty or too large"
     end
-    local value = (content :: string):gsub("[\r\n]+$", "")
+    local value = (content):gsub("[\r\n]+$", "")
     if value == "" or value:find("[%c]") then return nil, label .. " is malformed" end
     return value, nil
 end

@@ -22,16 +22,16 @@ local function decode_data(value: unknown): (types.ObservationData?, string?)
         local unknown_field = bounds.fields(object, {"type", "state", "resume_ref"})
         if unknown_field then return nil, unknown_field end
         local state = bounds.member(object.state, {"started", "resumed", "ended"})
-        if not state then return nil, "session state is not started, resumed or ended" end
+        if state ~= "started" and state ~= "resumed" and state ~= "ended" then return nil, "session state is not started, resumed or ended" end
         local resume_ref, valid = values.optional_id(object, "resume_ref")
         if not valid then return nil, "resume_ref is not an identifier" end
-        return {type = "session.state", state = state :: types.SessionPhase, resume_ref = resume_ref}, nil
+        return {type = "session.state", state = state, resume_ref = resume_ref}, nil
     elseif tag == "turn.signal" then
         local unknown_field = bounds.fields(object, {"type", "phase", "reported_outcome", "usage"})
         if unknown_field then return nil, unknown_field end
         local phase = bounds.member(object.phase, {"submitted", "started", "ended"})
-        if not phase then return nil, "turn signal phase is not submitted, started or ended" end
-        local signal: types.TurnSignal = {type = "turn.signal", phase = phase :: types.SignalPhase}
+        if phase ~= "submitted" and phase ~= "started" and phase ~= "ended" then return nil, "turn signal phase is not submitted, started or ended" end
+        local signal: types.TurnSignal = {type = "turn.signal", phase = phase}
         if object.reported_outcome ~= nil then
             local outcome = values.outcome(object.reported_outcome)
             if not outcome then return nil, "reported_outcome is not an outcome" end
@@ -51,11 +51,11 @@ local function decode_data(value: unknown): (types.ObservationData?, string?)
         local text = bounds.text(object.text)
         local channel = bounds.member(object.channel, {"answer", "progress", "reasoning_summary"})
         if not segment then return nil, "segment_id is not an identifier" end
-        if not operation then return nil, "text operation is not append, replace or complete" end
+        if operation ~= "append" and operation ~= "replace" and operation ~= "complete" then return nil, "text operation is not append, replace or complete" end
         if not text then return nil, "text is not bounded text" end
-        if not channel then return nil, "text channel is not answer, progress or reasoning_summary" end
-        return {type = "text", segment_id = segment, operation = operation :: types.TextOperation,
-            text = text, channel = channel :: types.TextChannel}, nil
+        if channel ~= "answer" and channel ~= "progress" and channel ~= "reasoning_summary" then return nil, "text channel is not answer, progress or reasoning_summary" end
+        return {type = "text", segment_id = segment, operation = operation,
+            text = text, channel = channel}, nil
     elseif tag == "tool.call" then
         local unknown_field = bounds.fields(object, {"type", "call_id", "tool_name", "input"})
         if unknown_field then return nil, unknown_field end
@@ -86,11 +86,11 @@ local function decode_data(value: unknown): (types.ObservationData?, string?)
         if unknown_field then return nil, unknown_field end
         local level = bounds.member(object.level, {"info", "warning", "error"})
         local code = bounds.id(object.code)
-        if not level then return nil, "notice level is not info, warning or error" end
+        if level ~= "info" and level ~= "warning" and level ~= "error" then return nil, "notice level is not info, warning or error" end
         if not code then return nil, "notice code is not an identifier" end
         local content, content_error = values.content(object.content)
         if not content then return nil, content_error end
-        return {type = "notice", level = level :: types.NoticeLevel, code = code, content = content}, nil
+        return {type = "notice", level = level, code = code, content = content}, nil
     elseif tag == "execution.exit" then
         local unknown_field = bounds.fields(object, {"type", "exit_code", "signal"})
         if unknown_field then return nil, unknown_field end

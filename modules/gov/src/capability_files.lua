@@ -157,7 +157,7 @@ end
 local DATABASE_FILE_PATTERN = "^" .. (M.DATABASE_ROOT:gsub("%p", "%%%0")) .. "/[0-9a-f]+%.db$"
 
 function M.database_file(file: unknown): boolean
-    return type(file) == "string" and (file :: string):find(DATABASE_FILE_PATTERN) ~= nil
+    return type(file) == "string" and file:find(DATABASE_FILE_PATTERN) ~= nil
 end
 
 function M.database_id(owner_raw: unknown, name_raw: unknown): (string?, string?)

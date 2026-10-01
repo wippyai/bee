@@ -88,7 +88,8 @@ function M.request(port: Port, binding: Binding, policy: string, raw: unknown): 
     end
     local proposal, prompt, proposal_error = publishing.proposal(clean, context(binding))
     if not proposal or not prompt then return fail("INCOMPLETE", proposal_error or "publication cannot be approved") end
-    local payload = proposal.payload :: Object
+    local payload = bounds.object(proposal.payload)
+    if not payload then return fail("INCOMPLETE", "publication proposal carries no payload") end
     local digest = tostring(payload.plan_digest)
     local key = publishing.idempotency_key(context(binding), digest)
     if not key then return fail("INVALID", "cannot measure the publication request") end
@@ -204,12 +205,13 @@ function M.drain_approved(): (integer, string?)
     if call_error then return 0, tostring(call_error) end
     local listed = bounds.object(raw)
     local queue = listed and bounds.object(listed.value) or nil
-    if not listed or listed.ok ~= true or not queue or type(queue.effects) ~= "table" then
+    local effects = queue and bounds.array(queue.effects, 64) or nil
+    if not listed or listed.ok ~= true or not effects then
         return 0, "approval owner returned no publication effect queue"
     end
     local count = 0
     local retry_error: string? = nil
-    for _, raw_view in ipairs(queue.effects :: {unknown}) do
+    for _, raw_view in ipairs(effects) do
         local view = bounds.object(raw_view)
         local approval_id = view and bounds.id(view.approval_id) or nil
         local proposal = view and bounds.object(view.proposal) or nil

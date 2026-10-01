@@ -46,6 +46,8 @@ entries:
   modules: [hash, json]
   imports:
     canonical: bee.sync:canonical
+    lists: bee.gov:lists
+    bounds: bee.threads.records:bounds
     protected_kernel: bee.gov:protected_kernel
     application_admission: bee.gov:governed_application_admission
     capability_grants: bee.gov:capability_grants
@@ -133,7 +135,7 @@ entries:
   kind: library.lua
   source: file://artifact.lua
   modules: [hash, json]
-  imports: {canonical: bee.sync:canonical}
+  imports: {canonical: bee.sync:canonical, bounds: bee.threads.records:bounds}
 - name: governed_application_admission
   kind: library.lua
   source: file://application_admission.lua

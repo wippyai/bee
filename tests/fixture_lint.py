@@ -27,7 +27,7 @@ def environment(folder):
 
 def fixture_lint(folder=None):
     if folder is not None:
-        subprocess.run([str(RUNTIME), "lint"], cwd=folder, check=True, env=environment(folder))
+        subprocess.run([str(RUNTIME), "lint", "--strict-any", "--set", "lua.type_system.strict_any=true"], cwd=folder, check=True, env=environment(folder))
         return
     with fixture_workspace(managed_gateway=True) as folder:
         fixture_lint(folder)

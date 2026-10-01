@@ -45,14 +45,14 @@ local function handle(): nil
     if class ~= "hook_engine" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "request metadata is not a hook-engine call (" .. class .. "): " .. reason)); return nil end
     local arguments = call.params.arguments
     if type(arguments) ~= "table" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "arguments must be an object")); return nil end
-    local reply = gateway.submit_hook(binding, arguments :: Object, "codex:" .. class)
+    local reply = gateway.submit_hook(binding, arguments, "codex:" .. class)
     if not reply.ok then
         local fault = reply.error or {code = "STORAGE", message = "hook"}
         answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, fault.code .. ": " .. fault.message)); return nil
     end
     -- Codex reads a hook tool's text content as hook stdout: Stop requires
     -- JSON there, so an empty content list is the proven answer.
-    local outcome = reply.value :: Object
+    local outcome = reply.value
     local context, boundary_error = boundary.deliver(binding, outcome)
     if not context then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, boundary_error or "session boundary failed")); return nil end
     local content: {Object} = {}

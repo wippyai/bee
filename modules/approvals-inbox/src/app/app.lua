@@ -32,7 +32,7 @@ end
 local function admitted_workspaces(): unknown
     local entry = registry.get(WORKSPACES)
     if not entry or type(entry.data) ~= "table" then return nil end
-    return (entry.data :: {[string]: unknown}).workspaces
+    return (entry.data).workspaces
 end
 local function main(value: unknown)
     local launch = client.launch(value)
@@ -63,7 +63,7 @@ local function main(value: unknown)
             if source.local_owner then return funcs.new():call(target, request) end
             if type(request) ~= "table" then return nil, "invalid owner request" end
             local answer = mesh:call({node_id = source.node_id, service_id = "bee.approvals.binding"},
-                {operation_ref = target}, request :: {[string]: unknown}, {timeout = "5s"})
+                {operation_ref = target}, request, {timeout = "5s"})
             if not answer.ok then
                 -- Transport failure cannot say whether an owner mutation committed.
                 if target == "bee.approvals.binding:decide" or target == "bee.approvals.binding:withdraw" then
@@ -252,7 +252,7 @@ local function main(value: unknown)
     perform(function()
         refresh()
         if #launch.arguments == 2 and launch.arguments[1] == "--approval" and state.rows[launch.arguments[2]] then model.select(state, launch.arguments[2]) end
-        if state.selected and state.rows[state.selected :: string] then open_selected() elseif state.selected then model.select(state, nil) end
+        if state.selected and state.rows[state.selected] then open_selected() elseif state.selected then model.select(state, nil) end
     end)
     while running do
         if dirty then

@@ -82,7 +82,7 @@ local function now_ms(): integer
     return math.floor(time.now():unix_nano() / 1000000)
 end
 local function pending(result: Result): boolean
-    return result.ok and not result.replayed and type(result.value) == "table" and (result.value :: {[string]: unknown}).status == "empty"
+    return result.ok and not result.replayed and type(result.value) == "table" and (result.value).status == "empty"
 end
 -- Phase A for a read-only change-wait: one read transaction that reports
 -- whether the thread has moved past the caller's cursor. It claims
@@ -97,11 +97,11 @@ local function watch_check(db: sql.DB, actor: string, thread_id: string, after: 
     end)
 end
 local function watch_pending(result: Result): boolean
-    return result.ok and type(result.value) == "table" and (result.value :: {[string]: unknown}).status == "empty"
+    return result.ok and type(result.value) == "table" and (result.value).status == "empty"
 end
 local function watch_final(result: Result): Result
     if not result.ok then return result end
-    local value = result.value :: {[string]: unknown}
+    local value = result.value
     if value.status == "empty" then value.status = "timeout" end
     return result
 end

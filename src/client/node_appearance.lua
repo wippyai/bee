@@ -40,7 +40,7 @@ function M.advance(reader: Reader, now: integer): Pending?
     if err or not future then return nil end
     -- Runtime response() returns the future's channel; the selected manifest
     -- still leaves its generic element type unspecified.
-    local response = future:response() :: Channel<unknown>
+    local response = future:response()
     if not response then future:cancel(); return nil end
     local next: Pending = {future = future, response = response, deadline = now + 5000}
     reader.pending = next

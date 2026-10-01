@@ -9,6 +9,7 @@ local hash = require("hash")
 local security = require("security")
 local funcs = require("funcs")
 local scheduler = require("scheduler")
+local cancellation = require("cancellation")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -76,13 +77,15 @@ local function snapshot(value: unknown): (Object?, string?)
     local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
     if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
     local route = object(row.route) or {}
-    return {session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
+    return {presentation = route.delivery == "hook" and "window" or "headless", session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
         driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
         revision = row.revision, incarnation = 1, title = row.title,
         lifecycle = lifecycle, activity = activity,
         execution = {state = active > 0 and "running" or "quiescent", evidence_at = at, stale = false},
         queue_count = queued, effective_limits = {}, continuity = {mode = "provider_resume"}, actions = {}}, nil
 end
+
+local finish_closing: (string, string) -> string?
 
 local function describe(session: string): (Object?, string?)
     local value, err = journal.invoke("session_describe", {session = session})
@@ -93,9 +96,11 @@ end
 local function open(request: Object): Reply
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
-    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace"}) then
+    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "presentation"}) then
         return fail("INVALID", "open requires a definition, optional profile/workdir, and operation_key", operation_key)
     end
+    local presentation = spec.presentation == nil and "headless" or spec.presentation
+    if presentation ~= "headless" and presentation ~= "window" then return fail("INVALID", "presentation must be headless or window", operation_key) end
     local definition = ref(spec.definition)
     if not definition then return fail("INVALID", "definition is not a ref", operation_key) end
     local profile = object(spec.profile)
@@ -124,12 +129,36 @@ local function open(request: Object): Reply
             local executor, executor_error = funcs.new():with_actor(actor)
             if not executor then return unavailable(tostring(executor_error), operation_key) end
             local raw, call_error = executor:call("bee.sessions.binding:open", {spec = {definition = definition,
-                profile = profile, workdir = workdir}, operation_key = operation_key})
+                profile = profile, workdir = workdir, presentation = presentation}, operation_key = operation_key})
             if call_error then return unavailable(tostring(call_error), operation_key) end
             local reply = object(raw)
             if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
-            return reply :: Reply
+            return {ok = reply.ok, value = reply.value, error = object(reply.error)}
         end
+    end
+    local prior_raw, prior_error = journal.invoke("operation_lookup", {operation_key = operation_key})
+    local prior = object(prior_raw)
+    if prior_error or not prior then return unavailable(prior_error or "open operation lookup unavailable", operation_key) end
+    if prior.found == true then
+        local receipt = object(prior.receipt)
+        if prior.operation ~= "session_create" or not receipt then return fail("CONFLICT", "open key belongs to another operation", operation_key) end
+        local previous, previous_error = describe(tostring(receipt.session))
+        if not previous then return unavailable(previous_error or "prior session unavailable", operation_key) end
+        if previous.presentation ~= presentation then return fail("CONFLICT", "open key belongs to another presentation", operation_key) end
+    end
+    if presentation == "window" then
+        local raw, call_error = funcs.call("bee.harness.launch:present", {spec = spec, operation_key = operation_key})
+        local reply = object(raw)
+        if call_error or not reply or reply.ok ~= true then
+            local fault = reply and object(reply.error)
+            return fail(fault and tostring(fault.code) or "UNAVAILABLE", tostring(call_error or (fault and fault.message) or "window owner unavailable"), operation_key)
+        end
+        local receipt = object(reply.value)
+        local session = receipt and ref(receipt.session)
+        if not session or not receipt then return unavailable("window owner omitted its session", operation_key) end
+        local current, err = describe(session)
+        if not current then return unavailable(err or "window snapshot unavailable", operation_key) end
+        return succeed({session = session, operation = receipt.operation, snapshot = current})
     end
     local plan, refused = admission.resolve(definition, nil, workspace, profile_id, profile_revision, nil, nil, nil, true)
     if not plan then
@@ -287,9 +316,9 @@ local function hook_boundary(request: Object): Reply
     if err or not route then return unavailable(err or "interactive route unavailable", event_key) end
     if route.delivery ~= "hook" then return succeed({}) end
     if route.native_attempt_id ~= attempt then return fail("STALE", "hook belongs to an earlier native attachment", event_key) end
-    local event_digest, digest_error = hash.sha256(event_key :: string)
+    local event_digest, digest_error = hash.sha256(event_key)
     if not event_digest then return unavailable(tostring(digest_error), event_key) end
-    local boundary_key = event_digest :: string
+    local boundary_key = event_digest
     if event ~= "UserPromptSubmit" then
         local active = stored and object(stored.active_turn)
         if not active then return succeed({}) end
@@ -341,7 +370,7 @@ local function send(request: Object): Reply
     local output_schema = request.output == nil and "bee:Text@1" or ref(request.output)
     if not output_schema then return fail("INVALID", "output must be a schema ref", operation_key) end
     local stored = journal.invoke("session_describe", {session = session})
-    local route = object(stored) and object((object(stored) :: Object).route)
+    local route = object(stored) and object((object(stored)).route)
     if route and route.delivery == "hook" and output_schema ~= "bee:Text@1" then
         return fail("INVALID", "interactive delivery supports Text acknowledgments", operation_key)
     end
@@ -415,12 +444,12 @@ local function work_observation(subject: string): (Object?, string?)
     local row = object(value)
     local state = row and work_value(row)
     if not state then return nil, "Threads returned a malformed work state" end
-    local result = object((state :: Object).result)
-    local cursor = tostring((state :: Object).revision)
+    local result = object((state).result)
+    local cursor = tostring((state).revision)
     if result then
         return {subject_kind = "work", subject = subject, cursor = cursor, tag = "ready", result = result}, nil
     end
-    local uncertainty = object((state :: Object).uncertainty)
+    local uncertainty = object((state).uncertainty)
     if uncertainty then
         return {subject_kind = "work", subject = subject, cursor = cursor, tag = "uncertain", evidence = uncertainty}, nil
     end
@@ -459,9 +488,9 @@ end
 operation_state = function(subject: string): (Object?, string?)
     local description, describe_error = op_descriptor(subject)
     if not description then return nil, describe_error end
-    local receipt, receipt_error = operation_receipt(description :: Object)
+    local receipt, receipt_error = operation_receipt(description)
     if not receipt then return nil, receipt_error end
-    local target = ref((description :: Object).target)
+    local target = ref((description).target)
     if not target then return nil, "operation target is malformed" end
     local observation: Object
     if receipt.effect == "cancel" then
@@ -469,8 +498,8 @@ operation_state = function(subject: string): (Object?, string?)
         if work_error or not value then return nil, work_error or "cancelled work is unavailable" end
         local state, state_error = work_value(value)
         if not state then return nil, state_error end
-        local work_result = object((state :: Object).result)
-        local uncertainty = object((state :: Object).uncertainty)
+        local work_result = object((state).result)
+        local uncertainty = object((state).uncertainty)
         local cursor = "1"
         if work_result then
             local cancelled = work_result.outcome == "cancelled"
@@ -488,6 +517,13 @@ operation_state = function(subject: string): (Object?, string?)
     elseif receipt.effect == "close" then
         local current, read_error = describe(target)
         if not current then return nil, read_error end
+        if current.lifecycle == "closing" then
+            local final_error = finish_closing(target, "observe-close:" .. subject)
+            if final_error then return nil, final_error end
+            local refreshed, refresh_error = describe(target)
+            if not refreshed then return nil, refresh_error end
+            current = refreshed
+        end
         if current.lifecycle == "closed" then
             observation = {subject_kind = "operation", subject = subject, cursor = "1", tag = "ready",
                 result = {kind = "control", value = {effect = "close", state = "closed", session = target, cleanup = "complete"}}}
@@ -502,7 +538,7 @@ operation_state = function(subject: string): (Object?, string?)
         observation = {subject_kind = "operation", subject = subject, cursor = "1", tag = "ready",
             result = {kind = "receipt", value = receipt}}
     end
-    return {operation = subject, operation_key = (description :: Object).operation_key,
+    return {operation = subject, operation_key = (description).operation_key,
         revision = 1, receipt = receipt, observation = observation}, nil
 end
 
@@ -516,7 +552,7 @@ local function await(request: Object): Reply
     elseif subject:sub(1, 3) == "bo:" then
         local state, state_error = operation_state(subject)
         if not state then return unavailable(state_error or "operation is unavailable", nil) end
-        return succeed((state :: Object).observation)
+        return succeed((state).observation)
     end
     return fail("INVALID", "await needs a work or operation ref")
 end
@@ -539,9 +575,61 @@ local function cancel_settle_key(turn: string): string
     return "cancel-settle:" .. turn:sub(-72)
 end
 
-local function finish_closing(session: string, current: Object, operation_key: string): string?
-    if current.lifecycle ~= "closing" or current.queue_count > 0
-        or (object(current.execution) and (object(current.execution) :: Object).state == "running") then return nil end
+finish_closing = function(session: string, operation_key: string): string?
+    local current, current_error = describe(session)
+    if not current then return current_error or "closing session unavailable" end
+    if tostring(current.lifecycle) ~= "closing" then return nil end
+    local raw, read_error = journal.invoke("session_describe", {session = session})
+    local stored = object(raw)
+    local route = stored and object(stored.route)
+    if read_error then return read_error end
+    if route and route.delivery == "hook" and type(route.native_attempt_id) == "string" then
+        local stopped = cancellation.stop(route.placement_methods, route.native_attempt_id, route, true)
+        if stopped.state == "pending" then return nil end
+        if stopped.state ~= "stopped" then return stopped.evidence.summary end
+        local cursor: integer? = nil
+        repeat
+            local page_raw, history_error = journal.invoke("work_history", {session = session, cursor = cursor, limit = 64})
+            local page = object(page_raw)
+            local rows = page and bounds.array(page.items, 64)
+            if history_error or not page or not rows then return history_error or "window work history unavailable" end
+            for _, item_raw in ipairs(rows) do
+                local item = object(item_raw)
+                local work = item and ref(item.work)
+                if not work then return "window history omitted its WorkRef" end
+                local state_raw, state_error = journal.invoke("work_describe", {work = work})
+                local state = object(state_raw)
+                if state_error or not state then return state_error or "window work unavailable" end
+                if state.phase ~= "settled" then
+                    local cancel_key = assert(internal_key("window-close-cancel", work))
+                    local _, cancel_error = journal.invoke("work_cancel", {work = work, operation_key = cancel_key, reason = "session closed"})
+                    if cancel_error then return cancel_error end
+                    if (state.phase == "reserved" or state.phase == "accepted") and type(state.turn) == "string" and type(state.claim) == "string" then
+                        if state.phase == "reserved" then
+                            local pulled_raw, pull_error = journal.invoke("turn_pull", {turn = state.turn, claim = state.claim})
+                            local pulled = object(pulled_raw)
+                            if pull_error or not pulled then return pull_error or "closing window turn unavailable" end
+                            local _, accept_error = journal.invoke("turn_accept", {turn = state.turn, claim = state.claim,
+                                input_digest = pulled.input_digest, checkpoint = {attempt_id = route.native_attempt_id},
+                                operation_key = assert(internal_key("window-close-accept", state.turn))})
+                            if accept_error then return accept_error end
+                        end
+                        local _, settle_error = journal.invoke("work_settle", {turn = state.turn, claim = state.claim,
+                            result = {state = "cancelled", error = {code = "CANCELLED", message = "session closed"}, artifacts = stopped.evidence.artifacts},
+                            operation_key = cancel_settle_key(state.turn)})
+                        if settle_error then return settle_error end
+                    end
+                end
+            end
+            cursor = page.next == nil and nil or bounds.integer(page.next)
+        until cursor == nil
+        local next_snapshot, snapshot_error = describe(session)
+        if not next_snapshot then return snapshot_error end
+        current = next_snapshot
+    else
+        local execution = object(current.execution)
+        if current.queue_count > 0 or (execution and execution.state == "running") then return nil end
+    end
     local close_key, key_error = internal_key("close-final", operation_key)
     if not close_key then return key_error or "cannot derive final close operation key" end
     local _, close_error = journal.invoke("session_transition", {session = session, state = "closed",
@@ -574,7 +662,7 @@ local function close(request: Object): Reply
     if not operation then return unavailable("Threads returned a malformed close receipt", operation_key) end
     current, current_error = describe(session)
     if not current then return unavailable(current_error or "cannot read the closing session", operation_key) end
-    local finish_error = finish_closing(session, current, operation_key)
+    local finish_error = finish_closing(session, operation_key)
     if finish_error then return unavailable(finish_error, operation_key) end
     return succeed(control_receipt(operation, session, "close"))
 end
@@ -588,7 +676,7 @@ local function cancel(request: Object): Reply
         or bounds.fields(request, {"work", "reason", "expected_incarnation", "operation_key"}) then
         return fail("INVALID", "cancel requires a work ref, optional reason, and operation_key", operation_key)
     end
-    local cancel_operation_key = operation_key :: string
+    local cancel_operation_key = operation_key
     if request.expected_incarnation ~= nil and request.expected_incarnation ~= 1 then
         return fail("STALE", "session incarnation changed", operation_key)
     end
@@ -686,8 +774,8 @@ local function join(request: Object): Reply
         works[index] = work
         local observation, observe_error = work_observation(work)
         if not observation then return unavailable(observe_error or "cannot observe joined work", operation_key) end
-        children[index] = observation :: Object
-        local tagged = observation :: Object
+        children[index] = observation
+        local tagged = observation
         if tagged.tag == "pending" then pending = true
         elseif tagged.tag == "blocked" then blocked = object(tagged.blocker)
         elseif tagged.tag == "uncertain" then uncertain = object(tagged.evidence)
@@ -707,14 +795,14 @@ local function join(request: Object): Reply
     elseif blocked then base.tag = "blocked"; base.blocker = blocked
     elseif policy == "first_success" and #successful > 0 then
         base.tag = "ready"; base.result = {succeeded = true, winners = successful, values = values}
-    elseif policy == "quorum" and #successful >= (quorum :: integer) then
+    elseif policy == "quorum" and #successful >= (quorum) then
         base.tag = "ready"; base.result = {succeeded = true, winners = successful, values = values}
     elseif pending then
         base.tag = "pending"; base.reason = "timeout"
     else
         local all_success = #successful == #works
         local succeeded = policy == "all_settled" or policy == "all_success" and all_success
-            or policy == "first_success" and #successful > 0 or policy == "quorum" and #successful >= (quorum :: integer)
+            or policy == "first_success" and #successful > 0 or policy == "quorum" and #successful >= (quorum)
         base.tag = "ready"
         local result: Object = {succeeded = succeeded, winners = successful}
         if succeeded then result.values = values end
@@ -747,7 +835,7 @@ local function list(request: Object): Reply
     local refs = scan and scan.items
     if type(refs) ~= "table" then return unavailable("Threads returned a malformed session page", nil) end
     local items: {Object} = {}
-    for _, raw_ref in ipairs(refs :: {unknown}) do
+    for _, raw_ref in ipairs(refs) do
         local session = ref(raw_ref)
         if not session then return unavailable("Threads returned a malformed session ref", nil) end
         local current, read_error = describe(session)

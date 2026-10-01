@@ -24,14 +24,14 @@ local FINAL: {[string]: boolean} = {
 local function dense_list(value: unknown): {unknown}?
     if type(value) ~= "table" then return nil end
     local count = 0
-    for key in pairs(value :: table) do
+    for key in pairs(value) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil end
         count = count + 1
     end
     if count > M.BATCH then return nil end
     local result: {unknown} = {}
     for index = 1, count do
-        local item = (value :: table)[index]
+        local item = (value)[index]
         if item == nil then return nil end
         result[index] = item
     end
@@ -79,7 +79,7 @@ function M.claimed(result: unknown): ({Delivery}?, string?)
             local record_id = raw_correlation and bounds.id(raw_correlation.record_id)
             if not raw_correlation or bounds.fields(raw_correlation, {"thread_id", "record_id"})
                 or not correlation_thread or not record_id then return nil, prefix .. " has invalid reply correlation" end
-            correlation = {thread_id = correlation_thread :: string, record_id = record_id :: string}
+            correlation = {thread_id = correlation_thread, record_id = record_id}
         end
         local outcome: string? = nil
         if item.outcome ~= nil then
@@ -107,7 +107,7 @@ function M.outcome(reply: unknown, transport_error: unknown): Outcome
     local fault = bounds.object(envelope.error)
     if not fault then return {decision = "unknown", code = "INVALID_REPLY", message = "destination refusal is malformed", receipt = nil} end
     local code = bounds.id(fault.code) or "INTERNAL"
-    local message = type(fault.message) == "string" and (fault.message :: string) or "delivery refused"
+    local message = type(fault.message) == "string" and (fault.message) or "delivery refused"
     if FINAL[code] then return {decision = "failed", code = code, message = message, receipt = nil} end
     return {decision = "unknown", code = code, message = message, receipt = nil}
 end

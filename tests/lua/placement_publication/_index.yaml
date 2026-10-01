@@ -27,6 +27,35 @@ entries:
     credential_protocol: bee.credentials:protocol
     service_reply: bee.protocol:reply
     formats: bee.credentials:formats
+- name: runner_observation
+  kind: library.lua
+  source: file://runner_observation.lua
+  meta: {type: test_support}
+  imports:
+    homes: bee.placement.publication.test:homes
+- name: materialization_runner
+  kind: library.lua
+  source: file://../placement/materialization_runner.lua
+  meta: {type: test_support}
+  modules: [process, channel, security, time]
+  imports:
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.publication.test:materialization
+    observe: bee.placement.publication.test:runner_observation
+    types: bee.placement:types
+    bounds: bee.protocol:bounds
+- name: materialization_runner_process
+  kind: process.lua
+  source: file://../placement/materialization_runner.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process, channel, security, time]
+  imports:
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.publication.test:materialization
+    observe: bee.placement.publication.test:runner_observation
+    types: bee.placement:types
+    bounds: bee.protocol:bounds
 - name: required_file_test
   kind: function.lua
   source: file://required_file_test.lua
@@ -44,13 +73,13 @@ entries:
   source: file://publication_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: '30s'}
-  modules: [process, time, json]
+  modules: [process, time, json, security, sql]
   security:
-    policies: [bee.placement.native.security:placement_store_policy]
+    policies: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_service_policy, bee.placement.native:apply_test_policy]
   imports:
     test: wippy.test:test
     store: bee.placement.native.persist:store
     request: bee.placement:request
     types: bee.placement:types
-    materialization: bee.placement.publication.test:materialization
-    homes: bee.placement.publication.test:homes
+    service: bee.placement.native.service:service
+    runner_fixture: bee.placement.publication.test:materialization_runner

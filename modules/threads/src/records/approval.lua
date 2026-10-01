@@ -18,7 +18,7 @@ function M.request(value: unknown): (types.ApprovalRequest?, string?)
     if not approval_id then return nil, "approval_id is not an identifier" end
     if not requester_id then return nil, "requester_id is not an identifier" end
     local kind = bounds.member(object.request_kind, M.REQUEST_KINDS)
-    if not kind then return nil, "request_kind must be permission or question" end
+    if kind ~= "permission" and kind ~= "question" then return nil, "request_kind must be permission or question" end
     local operation_ref, valid = values.optional_id(object, "operation_ref")
     if not valid then return nil, "operation_ref is not an identifier" end
     local prompt, prompt_error = values.content(object.prompt)
@@ -31,7 +31,7 @@ function M.request(value: unknown): (types.ApprovalRequest?, string?)
     local expires_at = bounds.timestamp(object.expires_at)
     if not expires_at then return nil, "expires_at is not a canonical UTC timestamp" end
     if object.state ~= "pending" then return nil, "a request is recorded pending" end
-    local request_kind = kind :: types.ApprovalKind
+    local request_kind = kind
     return {approval_id = approval_id, request_kind = request_kind, requester_id = requester_id, operation_ref = operation_ref, prompt = prompt,
         response_schema = schema, expires_at = expires_at, state = "pending"}, nil
 end
@@ -45,7 +45,7 @@ function M.transition(value: unknown): (types.ApprovalTransition?, string?)
     local revision = bounds.integer(object.expected_revision)
     if not revision or revision < 0 then return nil, "expected_revision must be a nonnegative integer" end
     local state = bounds.member(object.state, M.STATES)
-    if not state then return nil, "state must be approved, denied, expired or cancelled" end
+    if state ~= "approved" and state ~= "denied" and state ~= "expired" and state ~= "cancelled" then return nil, "state must be approved, denied, expired or cancelled" end
     local decider_id, valid = values.optional_id(object, "decider_id")
     if not valid then return nil, "decider_id is not an identifier" end
     local response: types.Content? = nil
@@ -56,7 +56,7 @@ function M.transition(value: unknown): (types.ApprovalTransition?, string?)
     end
     local reason = bounds.text(object.reason, M.MAX_REASON_BYTES)
     if not reason then return nil, "reason must be bounded text" end
-    local final_state = state :: types.ApprovalState
+    local final_state = state
     return {approval_id = approval_id, expected_revision = revision, state = final_state, decider_id = decider_id, response = response, reason = reason}, nil
 end
 return M

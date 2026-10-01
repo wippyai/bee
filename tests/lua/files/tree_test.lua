@@ -1,60 +1,12 @@
 local test = require("test")
+local memory_source = require("memory_source")
+local source = require("source")
 local tree = require("tree")
 local fs = require("fs")
 local funcs = require("funcs")
 local security = require("security")
 local gitignore = require("gitignore")
 
--- Simple mock filesystem for isolated tree unit tests
-local function make_mock_fs(files: {[string]: {is_dir: boolean, content: string?}})
-    local mock = {}
-
-    function mock:readdir(path: string)
-        local prefix = (path == "" or path == ".") and "" or path .. "/"
-        local entries = {}
-        for p, info in pairs(files) do
-            if p:sub(1, #prefix) == prefix then
-                local rest = p:sub(#prefix + 1)
-                local name = rest:match("^([^/]+)")
-                if name and not entries[name] then
-                    local is_dir = rest:find("/", 1, true) ~= nil or info.is_dir
-                    entries[name] = {
-                        name = name,
-                        type = is_dir and "directory" or "file",
-                    }
-                end
-            end
-        end
-        local list = {}
-        for _, entry in pairs(entries) do
-            list[#list + 1] = entry
-        end
-        local idx = 0
-        return function()
-            idx = idx + 1
-            return list[idx]
-        end, nil
-    end
-
-    function mock:readfile(path: string)
-        local f = files[path]
-        if f and not f.is_dir then
-            return f.content or "", nil
-        end
-        return nil, "not found"
-    end
-
-    function mock:exists(path: string)
-        return files[path] ~= nil, nil
-    end
-
-    function mock:isdir(path: string)
-        local f = files[path]
-        return f and f.is_dir or false, nil
-    end
-
-    return mock
-end
 
 local function define_tests()
     test.describe("File tree lazy loader and scanner", function()
@@ -78,7 +30,7 @@ local function define_tests()
 
         test.it("renders the host-selected read-only workspace with the runtime filesystem", function()
             local volume = assert(fs.get("bee.env:files_root"))
-            local t = tree.new(volume)
+            local t = tree.new(source.volume(volume))
             local rows = tree.flatten(t)
             local found = false
             for _, row in ipairs(rows) do
@@ -88,11 +40,11 @@ local function define_tests()
             test.is_true(found)
             local written = volume:writefile("bee-files-readonly-probe", "must be refused")
             test.is_false(written == true)
-            test.is_false(volume:exists("bee-files-readonly-probe"))
+            test.is_false((volume:exists("bee-files-readonly-probe")))
         end)
 
         test.it("initializes root and lazily expands directories", function()
-            local fs = make_mock_fs({
+            local fs = memory_source.new({
                 ["src"] = {is_dir = true},
                 ["src/main.lua"] = {is_dir = false, content = "print('hello')"},
                 ["src/utils.lua"] = {is_dir = false, content = "return {}"},
@@ -139,7 +91,7 @@ local function define_tests()
         end)
 
         test.it("respects gitignore and drops .wippy and .git", function()
-            local fs = make_mock_fs({
+            local fs = memory_source.new({
                 [".wippy"] = {is_dir = true},
                 [".wippy/private.db"] = {is_dir = false, content = "secret"},
                 [".git"] = {is_dir = true},
@@ -165,7 +117,7 @@ local function define_tests()
         end)
 
         test.it("finds and loads path directly for navigation", function()
-            local fs = make_mock_fs({
+            local fs = memory_source.new({
                 ["src"] = {is_dir = true},
                 ["src/app"] = {is_dir = true},
                 ["src/app/view.lua"] = {is_dir = false, content = "-- view"},
@@ -186,7 +138,7 @@ local function define_tests()
         end)
 
         test.it("searches by name across tree", function()
-            local fs = make_mock_fs({
+            local fs = memory_source.new({
                 ["src"] = {is_dir = true},
                 ["src/app.lua"] = {is_dir = false, content = ""},
                 ["src/view.lua"] = {is_dir = false, content = ""},

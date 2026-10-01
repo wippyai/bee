@@ -93,7 +93,7 @@ function M.inspect(value: unknown, spec: Spec, home_source: string, image_id: st
     if not found then return nil, "container has no provider home mount" end
     local status = bounds.member(state.Status, {"created", "running", "exited"})
     if not status then return nil, "container has an unsupported state" end
-    local observed: Observation = {backend_ref = ref, state = status, attempt_id = attempt, home_source = home_source,
+    local observed: Observation = {backend_ref = ref, state = status, attempt_id = spec.attempt_id, home_source = home_source,
         observed_image_digest = image_id}
     if status == "exited" then
         local code = bounds.integer(state.ExitCode)

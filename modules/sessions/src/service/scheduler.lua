@@ -2,6 +2,7 @@
 -- queue state: boot and periodic scans recover every unsettled turn.
 local canonical = require("canonical")
 local cancellation = require("cancellation")
+local bounds = require("bounds")
 local M = {}
 M.MAX_SCAN = 64
 
@@ -48,7 +49,7 @@ end
 
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
-    return value :: Object
+    return value
 end
 
 local function key(prefix: string, ref: string, run_id: string?): string
@@ -69,10 +70,81 @@ local function finish_close(journal: Journal, pass: Pass, session: string, work:
     if close_error then add_issue(pass, work, "session_close", close_error) end
 end
 
-local function decode_page(value: Page): ({Due}?, string?)
-    if type(value) ~= "table" or type(value.items) ~= "table" then return nil, "work_scan returned a malformed page" end
-    local items = value.items :: {unknown}
-    local count = 0
+local function ref(value: unknown): string?
+    if type(value) ~= "string" or not valid_id(value) then return nil end
+    return value
+end
+local function sender(raw: unknown): Sender?
+    local value = object(raw)
+    local id = value and ref(value.id) or nil
+    local kind = value and value.kind or nil
+    if not id or (kind ~= "session" and kind ~= "principal") then return nil end
+    return {kind = kind, id = id}
+end
+function M.work_receipt(raw: unknown): (WorkReceipt?, string?)
+    local value = object(raw)
+    if not value then return nil, "Threads returned a malformed work receipt" end
+    local work, session, operation = ref(value.work), ref(value.session), ref(value.operation)
+    local committed_at, output_schema = value.committed_at, value.output_schema
+    local sequence, from = bounds.integer(value.sequence), sender(value.sender)
+    if not work or not session or not operation or not sequence or not from or type(committed_at) ~= "string"
+        or type(output_schema) ~= "string" or value.kind ~= "request" or value.state ~= "queued" then
+        return nil, "Threads returned a malformed work receipt"
+    end
+    return {work = work, session = session, operation = operation, sequence = sequence, committed_at = committed_at,
+        output_schema = output_schema, sender = from, kind = "request", state = "queued"}, nil
+end
+function M.reservation(raw: unknown): (Reservation?, string?)
+    local value = object(raw)
+    if not value then return nil, "Threads returned a malformed reservation" end
+    local session, state = ref(value.session), value.state
+    if not session or type(state) ~= "string" then return nil, "Threads returned a malformed reservation" end
+    local work, turn, claim, epoch = ref(value.work), ref(value.turn), ref(value.claim), bounds.integer(value.owner_epoch)
+    if (value.work ~= nil and not work) or (value.turn ~= nil and not turn) or (value.claim ~= nil and not claim)
+        or (value.owner_epoch ~= nil and not epoch) then return nil, "Threads returned a malformed reservation" end
+    return {session = session, state = state, work = work, turn = turn, claim = claim, owner_epoch = epoch}, nil
+end
+function M.turn(raw: unknown): (Turn?, string?)
+    local value = object(raw)
+    if not value then return nil, "Threads returned a malformed turn" end
+    local work, session, turn, claim = ref(value.work), ref(value.session), ref(value.turn), ref(value.claim)
+    local epoch, from, route = bounds.integer(value.owner_epoch), sender(value.sender), object(value.route)
+    local phase, input_digest, output_schema = value.phase, value.input_digest, value.output_schema
+    local context = object(value.context)
+    if not work or not session or not turn or not claim or not epoch or not from or not route
+        or (phase ~= "reserved" and phase ~= "accepted") or type(input_digest) ~= "string"
+        or type(output_schema) ~= "string" or (value.context ~= nil and not context) then return nil, "Threads returned a malformed turn" end
+    return {work = work, session = session, turn = turn, claim = claim, owner_epoch = epoch, sender = from,
+        route = route, phase = phase, input = value.input, input_digest = input_digest, output_schema = output_schema,
+        checkpoint = value.checkpoint, context = context}, nil
+end
+function M.execution(raw: unknown): (Execution?, string?)
+    local value = object(raw)
+    if not value then return nil, "executor returned a malformed execution" end
+    local state, outcome = value.state, value.outcome
+    if state == "pending" or state == "uncertain" then
+        if outcome ~= nil and type(outcome) ~= "string" then return nil, "executor returned a malformed execution" end
+        return {state = state, outcome = outcome, evidence = value.evidence}, nil
+    end
+    if state ~= "settled" or (outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled") then
+        return nil, "executor returned a malformed execution"
+    end
+    local fault: {code: string, message: string}? = nil
+    if value.error ~= nil then
+        local error = object(value.error)
+        if not error or type(error.code) ~= "string" or type(error.message) ~= "string" then return nil, "executor returned a malformed execution" end
+        fault = {code = error.code, message = error.message}
+    end
+    local answer, checkpoint = value.answer, object(value.checkpoint)
+    if (answer ~= nil and type(answer) ~= "string") or (value.checkpoint ~= nil and not checkpoint) then return nil, "executor returned a malformed execution" end
+    return {state = "settled", outcome = outcome, answer = answer, checkpoint = checkpoint,
+        usage = value.usage, error = fault, evidence = value.evidence}, nil
+end
+local function decode_page(raw: unknown): ({Due}?, string?)
+    local value = object(raw)
+    if not value or type(value.items) ~= "table" then return nil, "work_scan returned a malformed page" end
+    local items = value.items
+    local count: integer = 0
     for item_key in pairs(items) do
         if type(item_key) ~= "number" or item_key < 1 or math.floor(item_key) ~= item_key then return nil, "work_scan items are not a list" end
         count = count + 1
@@ -81,16 +153,25 @@ local function decode_page(value: Page): ({Due}?, string?)
     local checked: {Due} = {}
     for index = 1, count do
         local row = object(items[index])
-        if not row or not valid_id(row.work) or not valid_id(row.session)
-            or (row.state ~= "queued" and row.state ~= "reserved" and row.state ~= "accepted") then
-            return nil, "work_scan returned an invalid work row"
-        end
-        if row.state ~= "queued" and (not valid_id(row.turn) or not valid_id(row.claim) or type(row.owner_epoch) ~= "number") then
-            return nil, "work_scan omitted the fenced turn identity"
-        end
-        checked[#checked + 1] = row :: Due
+        if not row then return nil, "work_scan returned an invalid work row" end
+        local work, session, state = ref(row.work), ref(row.session), row.state
+        if not work or not session or (state ~= "queued" and state ~= "reserved" and state ~= "accepted") then return nil, "work_scan returned an invalid work row" end
+        local turn, claim, epoch = ref(row.turn), ref(row.claim), bounds.integer(row.owner_epoch)
+        if state ~= "queued" and (not turn or not claim or not epoch) then return nil, "work_scan omitted the fenced turn identity" end
+        local route, uncertainty = object(row.route), object(row.uncertainty)
+        local cancel_requested, cancel_reason = row.cancel_requested, row.cancel_reason
+        if (row.route ~= nil and not route) or (row.uncertainty ~= nil and not uncertainty)
+            or (cancel_requested ~= nil and type(cancel_requested) ~= "boolean")
+            or (cancel_reason ~= nil and type(cancel_reason) ~= "string") then return nil, "work_scan returned an invalid work row" end
+        checked[#checked + 1] = {work = work, session = session, state = state, turn = turn, claim = claim, owner_epoch = epoch,
+            checkpoint = row.checkpoint, route = route, uncertainty = uncertainty, cancel_requested = cancel_requested, cancel_reason = cancel_reason}
     end
     return checked, nil
+end
+function M.page(raw: unknown): (Page?, string?)
+    local items, err = decode_page(raw)
+    if not items then return nil, err end
+    return {items = items}, nil
 end
 
 local function accepted_turn(journal: Journal, turn: Turn): (boolean, string?)
@@ -104,14 +185,14 @@ end
 
 local function run_cancel(journal: Journal, pass: Pass, due: Due, run_id: string)
     if due.state == "queued" then pass.skipped = pass.skipped + 1; return end
-    local recovered, recover_error = journal.recover_turn({turn = due.turn :: string,
-        operation_key = key("cancel-recover", due.turn :: string, run_id)})
+    local recovered, recover_error = journal.recover_turn({turn = assert(due.turn),
+        operation_key = key("cancel-recover", assert(due.turn), run_id)})
     if recover_error or not recovered or not recovered.turn or not recovered.claim then
         add_issue(pass, due.work, "cancel_recover", recover_error or "Threads returned no cancellation claim"); return
     end
     local raw_turn, pull_error = journal.pull_turn({turn = recovered.turn, claim = recovered.claim})
     if pull_error or not raw_turn then add_issue(pass, due.work, "cancel_pull", pull_error or "Threads returned no turn"); return end
-    local turn = raw_turn :: Turn
+    local turn = raw_turn
     if turn.work ~= due.work or turn.session ~= due.session or turn.turn ~= recovered.turn or turn.claim ~= recovered.claim then
         add_issue(pass, due.work, "cancel_pull", "Threads returned a different fenced turn"); return
     end
@@ -166,8 +247,8 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
         reservation = reserved
         pass.reserved = pass.reserved + 1
     else
-        local recovered, recover_error = journal.recover_turn({turn = due.turn :: string,
-            operation_key = key("recover", due.turn :: string, run_id)})
+        local recovered, recover_error = journal.recover_turn({turn = assert(due.turn),
+            operation_key = key("recover", assert(due.turn), run_id)})
         if recover_error then add_issue(pass, due.work, "turn_recover", recover_error); return end
         if not recovered or not recovered.turn or not recovered.claim then pass.skipped = pass.skipped + 1; return end
         reservation = recovered
@@ -175,15 +256,15 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     end
     local claim = reservation and reservation.claim
     local turn_ref = reservation and reservation.turn
-    if not reservation or not valid_id(claim) or not valid_id(turn_ref) then
+    if not reservation or not claim or not turn_ref or not valid_id(claim) or not valid_id(turn_ref) then
         add_issue(pass, due.work, "turn_reserve", "Threads returned a malformed reservation"); return
     end
     if reservation.work and reservation.work ~= due.work then
         add_issue(pass, due.work, "turn_reserve", "Threads reserved another work item"); return
     end
-    local raw_turn, pull_error = journal.pull_turn({turn = turn_ref :: string, claim = claim :: string})
+    local raw_turn, pull_error = journal.pull_turn({turn = turn_ref, claim = claim})
     if pull_error or not raw_turn then add_issue(pass, due.work, "turn_pull", pull_error or "Threads returned no turn"); return end
-    local turn = raw_turn :: Turn
+    local turn = raw_turn
     if turn.work ~= due.work or turn.session ~= due.session or turn.turn ~= turn_ref or turn.claim ~= claim then
         add_issue(pass, due.work, "turn_pull", "Threads returned a different fenced turn"); return
     end

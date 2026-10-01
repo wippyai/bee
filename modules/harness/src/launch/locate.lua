@@ -58,12 +58,12 @@ local function capture(argv: {string}, timeout_ms: integer?, silent: boolean?): 
         close = function(_self, force) proc:close(force) end,
     }
     local capture_stdout: probe_capture.Stream = {
-        read = function(_self, size) return stdout:read(size) end,
-        close = function(_self) stdout:close() end,
+        read = function(_self: probe_capture.Stream, size: integer): (unknown, unknown) local value, err = stdout:read(size); return value, err end,
+        close = function(_self: probe_capture.Stream): unknown stdout:close(); return nil end,
     }
     local capture_stderr: probe_capture.Stream = {
-        read = function(_self, size) return stderr:read(size) end,
-        close = function(_self) stderr:close() end,
+        read = function(_self: probe_capture.Stream, size: integer): (unknown, unknown) local value, err = stderr:read(size); return value, err end,
+        close = function(_self: probe_capture.Stream): unknown stderr:close(); return nil end,
     }
     local output, code, probe_error = probe_capture.capture(capture_process, capture_stdout, capture_stderr,
         function() executor:release() end, timeout_ms)
@@ -102,9 +102,9 @@ local function environment_names(): {[string]: boolean}?
     local decoded, decode_error = json.decode(raw)
     if decode_error or type(decoded) ~= "table" then return nil end
     local names: {[string]: boolean} = {}
-    for _, name in ipairs(decoded :: {unknown}) do
+    for _, name in ipairs(decoded) do
         if type(name) ~= "string" then return nil end
-        names[name :: string] = true
+        names[name] = true
     end
     return names
 end
@@ -112,7 +112,7 @@ end
 local function has_locate_facet(pinned: registry.Snapshot, binding: {[string]: unknown}): boolean
     local data = bounds.object(binding.data) or {}
     if type(data.contracts) ~= "table" then return false end
-    for _, raw in ipairs(data.contracts :: {unknown}) do
+    for _, raw in ipairs(data.contracts) do
         local contract = bounds.object(raw)
         if contract and contract.contract == "bee.driver:locate_facet" then
             local methods = bounds.object(contract.methods) or {}
@@ -183,8 +183,8 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
 
     local platform = platform_probe(cache)
     local supported = bounds.object(selected.platform) or {}
-    local os_values = type(supported.os) == "table" and supported.os :: {string} or {}
-    local arch_values = type(supported.arch) == "table" and supported.arch :: {string} or {}
+    local os_values = type(supported.os) == "table" and supported.os or {}
+    local arch_values = type(supported.arch) == "table" and supported.arch or {}
     local compatible: boolean? = nil
     if platform.os and platform.arch then
         compatible = bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
@@ -194,7 +194,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     local configured_path, executable_error = env.get(executable_ref)
     local configured = type(configured_path) == "string" and configured_path ~= ""
     local executable_path = executable_name
-    if configured then executable_path = configured_path :: string end
+    if configured then executable_path = configured_path end
     local executable_present: boolean? = nil
     local version: string? = nil
     local docker = false
@@ -258,8 +258,8 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         cache.drivers[cache_key] = fallback
         return fallback
     end
-    cache.drivers[cache_key] = result :: driver_types.LocateResult
-    return result :: driver_types.LocateResult
+    cache.drivers[cache_key] = result
+    return result
 end
 
 return M

@@ -308,7 +308,7 @@ function M.authorize_materialization(attempt: types.Attempt, row: store.Row, req
     if not gateway_binding then return nil, fail("INVALID", "gateway_binding is required for a launch with a gateway binding") end
     local carrier_epoch = bounds.integer(row.attachment_generation) or 0
     local raw, call_error = funcs.call(resources.GATEWAY_AUTHORIZE, {attempt_id = attempt.attempt_id, carrier_epoch = carrier_epoch, binding_id = gateway_binding, ttl_ms = math.max(1000, request.timeouts.start_ms)})
-    local reply = type(raw) == "table" and raw :: {[string]: unknown} or nil
+    local reply = type(raw) == "table" and raw or nil
     if call_error or not reply or reply.ok ~= true then
         local reply_error = reply and bounds.object(reply.error)
         local fault_code = reply_error and type(reply_error.code) == "string" and reply_error.code or "UNAVAILABLE"
@@ -432,7 +432,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     if context then home_directory, home_error = context.home_directory, nil end
     if not home_directory then return fail("UNAVAILABLE", home_error or "configuration home unavailable") end
     local resolved_grants, resources_refused = admit_resources(request)
-    if not resolved_grants then return resources_refused :: Reply end
+    if not resolved_grants then return resources_refused end
     local file_projection = false
     local projected_login_path: string? = nil
     for _, projection_id in ipairs(request.projections) do
@@ -583,7 +583,7 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
         if not gateway_binding then return fail("INVALID", "gateway_binding is not an identifier") end
     end
     local attempt, denied = load(object.attempt_id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     if attempt.execution_state ~= "intended" then return succeed(attempt) end
     local host, host_error = resources.runner_host()
     if not host then return fail("STORAGE", host_error or "runner host") end
@@ -595,9 +595,9 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
     if authority_error or not issued_authority then db:release(); return fail("INTERNAL", "runner authority") end
     local control_token, control_error = store.runner_authority(db, attempt.attempt_id, issued_authority)
     db:release()
-    if not request then return fail("STORAGE", "attempt request unreadable") end
+    if not row or not request then return fail("STORAGE", "attempt request unreadable") end
     if not control_token then return fail("STORAGE", control_error or "runner authority unavailable") end
-    local materialization_key, authorization_denied = M.authorize_materialization(attempt, row :: store.Row, request, gateway_binding)
+    local materialization_key, authorization_denied = M.authorize_materialization(attempt, row, request, gateway_binding)
     if authorization_denied then return authorization_denied end
     local reply_topic = "bee.placement.start." .. (uuid.v7() or attempt.attempt_id)
     local replies = assert(process.listen(reply_topic, {message = true}))
@@ -642,16 +642,16 @@ function M.start_local(value: unknown, runner_ref: string?): Reply
     end
     process.unlisten(replies)
     process.unmonitor(runner)
-    return outcome :: Reply
+    return outcome
 end
 function M.start(value: unknown): Reply
     return M.start_local(value, nil)
 end
 function M.status(value: unknown): Reply
     local id, invalid = named(value)
-    if not id then return invalid :: Reply end
+    if not id then return invalid end
     local attempt, denied, row = load(id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     local liveness: types.Liveness = {observed = false, alive = nil, at = store.now(), detail = "no execution identity recorded"}
     local recorded = recorded_identity(attempt.attempt_id)
     if recorded then
@@ -677,7 +677,7 @@ function M.stop(value: unknown): Reply
     local mode = bounds.member(object.mode == nil and "cooperative" or object.mode, types.STOP_MODES)
     if not mode then return fail("INVALID", "mode must be cooperative or forced") end
     local attempt, denied = load(object.attempt_id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     return M.stop_attempt(attempt, mode)
 end
 -- stop_attempt is the owner-independent core shared with supervision.
@@ -693,7 +693,7 @@ function M.stop_attempt(attempt: types.Attempt, mode: string): Reply
         -- Startup may have won. Use its recorded identity and normal stop
         -- path; never infer that the now-starting child is absent.
         local current, denied = load(attempt.attempt_id)
-        if not current then return denied :: Reply end
+        if not current then return assert(denied) end
         attempt = current
     end
     if not transitions.live(attempt.execution_state) then return succeed(attempt) end
@@ -750,7 +750,7 @@ function M.close_stdin(value: unknown): Reply
     local unknown_field = bounds.fields(object, {"attempt_id"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local attempt, denied = load(object.attempt_id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     if not transitions.live(attempt.execution_state) then return fail("CONFLICT", "the attempt is not live") end
     local _, _, row = recorded_identity(attempt.attempt_id)
     local runner = row and row.runner_pid or nil
@@ -873,6 +873,17 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
             if enforcement then return enforcement end
             return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = tostring(supervised_detail) .. "; no execution identity recorded"}})
         end
+        -- A runner answers status only once its child exists; while it
+        -- prepares the child, its presence is the supervision.
+        if attempt.execution_state == "starting" and row then
+            local present, presence_error = M.runner_present(row)
+            if present == nil then return fail("UNAVAILABLE", presence_error or "runner presence is unknown") end
+            if present then
+                local enforcement = M.enforce_grants(attempt)
+                if enforcement then return enforcement end
+                return transition(attempt.attempt_id, {evidence = {kind = "reconcile.supervised", detail = "runner present while preparing the child; no execution identity recorded"}})
+            end
+        end
         M.retire_gateway(attempt, "attempt uncertain: no execution identity")
         return transition(attempt.attempt_id, {execution = "uncertain", evidence = {kind = "reconcile.unidentified", detail = "no execution identity to prove presence or absence"}})
     end
@@ -898,9 +909,9 @@ function M.reconcile_attempt(attempt: types.Attempt): Reply
 end
 function M.reconcile(value: unknown): Reply
     local id, invalid = named(value)
-    if not id then return invalid :: Reply end
+    if not id then return invalid end
     local attempt, denied = load(id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     return M.reconcile_attempt(attempt)
 end
 -- sweep: placement's own supervision reconciles every live attempt, which
@@ -972,7 +983,7 @@ end
 -- a stale or unrelated grant reference cannot stop an attempt.
 function M.stop_revoked(value: unknown): Reply
     local id, invalid = named(value)
-    if not id then return invalid :: Reply end
+    if not id then return invalid end
     local db, open_error = store.open()
     if not db then return fail("STORAGE", open_error or "open placement store") end
     local attempt, read_error = store.attempt(db, id)
@@ -987,9 +998,9 @@ end
 -- loses its home.
 function M.cleanup(value: unknown): Reply
     local id, invalid = named(value)
-    if not id then return invalid :: Reply end
+    if not id then return invalid end
     local attempt, denied = load(id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     return M.cleanup_attempt(attempt)
 end
 function M.cleanup_attempt(attempt: types.Attempt, preparers_only: boolean?): Reply
@@ -1043,7 +1054,7 @@ function M.evidence(value: unknown): Reply
     local unknown_field = bounds.fields(object, {"attempt_id", "after", "limit"})
     if unknown_field then return fail("INVALID", unknown_field) end
     local attempt, denied = load(object.attempt_id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     local after = bounds.integer(object.after == nil and 0 or object.after)
     if not after or after < 0 then return fail("INVALID", "after must be a nonnegative integer") end
     local limit = bounds.integer(object.limit == nil and store.MAX_EVIDENCE_PAGE or object.limit)
@@ -1069,7 +1080,7 @@ function M.attach(value: unknown): Reply
     local generation = bounds.integer(object.generation)
     if not generation or generation < 1 then return fail("INVALID", "generation must be a positive integer") end
     local attempt, denied = load(object.attempt_id)
-    if not attempt then return denied :: Reply end
+    if not attempt then return assert(denied) end
     -- A runner outlives an exited child while it holds unacknowledged
     -- output or an unanswered write, so an exited attempt is attachable
     -- exactly as long as its runner still answers the fence.

@@ -41,7 +41,7 @@ function M.decode(value: unknown): Page?
     local page = value.value
     if type(page.items) ~= "table" then return nil end
     local items: {Item} = {}
-    for index, raw in ipairs(page.items :: {unknown}) do
+    for index, raw in ipairs(page.items) do
         if index > M.PAGE or type(raw) ~= "table" then return nil end
         local id = contract.workspace_id(raw.workspace_id)
         local label = contract.text(raw.label, M.MAX_LABEL)
@@ -69,7 +69,7 @@ function M.start(reader: Reader, query: Query): (Pending?, string?)
     if err or not future then return nil, tostring(err or "the workspace catalog is unavailable") end
     -- Runtime response() returns the future's channel; the selected manifest
     -- still leaves its generic element type unspecified.
-    local response = future:response() :: Channel<unknown>
+    local response = future:response()
     if not response then future:cancel(); return nil, "the workspace catalog is unavailable" end
     local pending: Pending = {request_id = query.request_id, future = future, response = response}
     reader.pending = pending

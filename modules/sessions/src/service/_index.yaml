@@ -42,6 +42,7 @@ entries:
   source: file://scheduler.lua
   modules: [funcs]
   imports:
+    bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     cancellation: bee.sessions.service:cancellation
 - name: cancellation

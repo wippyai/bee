@@ -54,7 +54,7 @@ function M.names(value: unknown): {[string]: string}
     local names: {[string]: string} = {}
     if type(value) ~= "table" then return names end
     local count = 0
-    for node_id, label in pairs(value :: Object) do
+    for node_id, label in pairs(value) do
         if type(node_id) == "string" and node_id ~= "" and #node_id <= 160 and type(label) == "string" and label ~= "" and #label <= M.LABEL_LIMIT
             and not node_id:find("%c") and not label:find("%c") and count < M.MAX_NAMES then
             names[node_id] = label
@@ -212,7 +212,7 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
     end
     evict(state, reported)
     order(state)
-    if state.wanted_node and state.index[state.wanted_node :: string] then
+    if state.wanted_node and state.index[state.wanted_node] then
         state.selected_node = state.wanted_node
         state.wanted_node = nil
     end
@@ -313,11 +313,11 @@ function M.end_session(state: State, node_id: string, workspace_id: string)
 end
 function M.selected(state: State): Node?
     if not state.selected_node then return nil end
-    return state.index[state.selected_node :: string]
+    return state.index[state.selected_node]
 end
 function M.catalog(state: State): Catalog?
     if not state.selected_node then return nil end
-    return state.catalogs[state.selected_node :: string]
+    return state.catalogs[state.selected_node]
 end
 function M.selected_workspace(state: State): directory.Workspace?
     local catalog = M.catalog(state)
@@ -328,7 +328,7 @@ function M.selected_workspace(state: State): directory.Workspace?
     return nil
 end
 function M.select_node(state: State, node_id: string?)
-    if node_id ~= nil and not state.index[node_id :: string] then return end
+    if node_id ~= nil and not state.index[node_id] then return end
     if state.selected_node ~= node_id then state.selected_workspace = nil end
     state.selected_node = node_id
 end
@@ -508,18 +508,18 @@ function M.checkpoint(state: State): string
     return json.encode({selected_node = state.selected_node, selected_workspace = state.selected_workspace, technical = state.technical}) or "{}"
 end
 local function bounded_string(value: unknown): boolean
-    return value == nil or (type(value) == "string" and #(value :: string) <= 400)
+    return value == nil or (type(value) == "string" and #(value) <= 400)
 end
 function M.restore(state: State, encoded: string): boolean
     local decoded: unknown = json.decode(encoded)
     if type(decoded) ~= "table" then return false end
-    local saved = decoded :: Object
+    local saved = decoded
     if not bounded_string(saved.selected_node) or not bounded_string(saved.selected_workspace) then return false end
     if saved.technical ~= nil and type(saved.technical) ~= "boolean" then return false end
     -- Selection is remembered by identity and resolved against what the
     -- owners report after the next refresh; it never restores a session.
-    state.wanted_node = saved.selected_node ~= nil and (saved.selected_node :: string) or nil
-    state.wanted_workspace = saved.selected_workspace ~= nil and (saved.selected_workspace :: string) or nil
+    state.wanted_node = saved.selected_node ~= nil and (saved.selected_node) or nil
+    state.wanted_workspace = saved.selected_workspace ~= nil and (saved.selected_workspace) or nil
     state.technical = saved.technical == true
     return true
 end

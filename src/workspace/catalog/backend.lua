@@ -65,11 +65,11 @@ local function host_roots(): ({[string]: string}?, string?)
     local roots: {[string]: string} = {}
     local list = type(data) == "table" and data.roots or nil
     if type(list) ~= "table" then return roots, nil end
-    for _, item in ipairs(list :: {unknown}) do
+    for _, item in ipairs(list) do
         if type(item) == "table" then
-            local declared = item :: {[string]: unknown}
+            local declared = item
             if type(declared.root_ref) == "string" and (declared.access == "read" or declared.access == "write") then
-                roots[declared.root_ref :: string] = declared.access :: string
+                roots[declared.root_ref] = declared.access
             end
         end
     end

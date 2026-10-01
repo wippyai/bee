@@ -46,7 +46,7 @@ function M.claim_pump_due(db: sql.DB, request: unknown): Result
     local holder, limit, invalid = claim_request(request)
     if not holder or not limit then return failure("INVALID_ARGUMENT", invalid or "invalid claim") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local deliveries, err = repository.claim_pump_due(tx, holder :: string, limit :: integer)
+        local deliveries, err = repository.claim_pump_due(tx, holder, limit)
         if err then return err end
         return transaction.success({deliveries = deliveries or {}}, false)
     end)
@@ -55,7 +55,7 @@ function M.settle_pump(db: sql.DB, request: unknown): Result
     local outbox_id, delivered, receipt_json, error_text, invalid = settle_request(request)
     if not outbox_id or delivered == nil then return failure("INVALID_ARGUMENT", invalid or "invalid settlement") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local err = repository.settle_pump(tx, outbox_id :: string, delivered :: boolean, receipt_json, error_text)
+        local err = repository.settle_pump(tx, outbox_id, delivered, receipt_json, error_text)
         if err then return err end
         return transaction.success({outbox_id = outbox_id, delivered = delivered}, false)
     end)
@@ -64,7 +64,7 @@ function M.claim_deliveries(db: sql.DB, actor: string, request: unknown): Result
     local holder, limit, invalid = claim_request(request)
     if not holder or not limit then return failure("INVALID_ARGUMENT", invalid or "invalid claim") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local claimed, err = repository.claim(tx, actor, holder :: string, limit :: integer)
+        local claimed, err = repository.claim(tx, actor, holder, limit)
         if err then return err end
         local deliveries: {unknown} = {}
         for _, row in ipairs(claimed or {}) do
@@ -79,7 +79,7 @@ function M.settle_delivery(db: sql.DB, actor: string, request: unknown): Result
     local outbox_id, delivered, receipt_json, error_text, invalid = settle_request(request)
     if not outbox_id or delivered == nil then return failure("INVALID_ARGUMENT", invalid or "invalid settlement") end
     return transaction.write(db, function(tx: sql.Transaction): Result
-        local err = repository.settle(tx, actor, outbox_id :: string, delivered :: boolean, receipt_json, error_text)
+        local err = repository.settle(tx, actor, outbox_id, delivered, receipt_json, error_text)
         if err then return err end
         return transaction.success({outbox_id = outbox_id, delivered = delivered}, false)
     end)

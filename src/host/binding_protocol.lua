@@ -79,7 +79,7 @@ local function object(value: unknown): Object?
     for key in pairs(value) do
         if type(key) ~= "string" then return nil end
     end
-    return value :: Object
+    return value
 end
 
 local function exact(value: Object, allowed: {string}): boolean
@@ -152,7 +152,9 @@ local function prepare(value: unknown, workspace_id: string): PrepareValue?
         access = "observe_post", join_expected_revision = join_expected_revision}
 end
 
-local function transition(value: unknown, expected: State?, extra: string?): Object?
+type Transition = {instance_id: string, expected_revision: integer, expected_state: State,
+    membership_revision: integer?, join_expected_revision: integer?, cleanup_expected_revision: integer?}
+local function transition(value: unknown, expected: State?, extra: string?): Transition?
     local names = {"instance_id", "expected_revision", "expected_state"}
     if extra then names[#names + 1] = extra end
     local input = object(value)
@@ -161,9 +163,12 @@ local function transition(value: unknown, expected: State?, extra: string?): Obj
     local expected_revision = revision(input.expected_revision)
     local expected_state = state(input.expected_state)
     if not instance_id or not expected_revision or not expected_state or (expected and expected_state ~= expected) then return nil end
-    if extra and not revision(input[extra]) then return nil end
+    local extra_revision = extra and revision(input[extra]) or nil
+    if extra and not extra_revision then return nil end
     return {instance_id = instance_id, expected_revision = expected_revision, expected_state = expected_state,
-        [extra or ""] = extra and revision(input[extra]) or nil}
+        membership_revision = extra == "membership_revision" and extra_revision or nil,
+        join_expected_revision = extra == "join_expected_revision" and extra_revision or nil,
+        cleanup_expected_revision = extra == "cleanup_expected_revision" and extra_revision or nil}
 end
 
 local function decode_value(op: Operation, value: unknown, workspace_id: string): Value?
@@ -171,34 +176,34 @@ local function decode_value(op: Operation, value: unknown, workspace_id: string)
     if op == "activate" then
         local decoded = transition(value, "pending", "membership_revision")
         if not decoded then return nil end
-        return {instance_id = decoded.instance_id :: string, expected_revision = decoded.expected_revision :: integer,
-            expected_state = "pending", membership_revision = decoded.membership_revision :: integer}
+        return {instance_id = decoded.instance_id, expected_revision = decoded.expected_revision,
+            expected_state = "pending", membership_revision = assert(decoded.membership_revision)}
     end
     if op == "refresh_join" then
         local decoded = transition(value, "pending", "join_expected_revision")
         if not decoded then return nil end
-        return {instance_id = decoded.instance_id :: string, expected_revision = decoded.expected_revision :: integer,
-            expected_state = "pending", join_expected_revision = decoded.join_expected_revision :: integer}
+        return {instance_id = decoded.instance_id, expected_revision = decoded.expected_revision,
+            expected_state = "pending", join_expected_revision = assert(decoded.join_expected_revision)}
     end
     if op == "begin_revoke" then
         local decoded = transition(value, nil, "cleanup_expected_revision")
         if not decoded or (decoded.expected_state ~= "pending" and decoded.expected_state ~= "active") then return nil end
         if decoded.expected_state == "pending" then
-            return {instance_id = decoded.instance_id :: string, expected_revision = decoded.expected_revision :: integer,
-                expected_state = "pending", cleanup_expected_revision = decoded.cleanup_expected_revision :: integer}
+            return {instance_id = decoded.instance_id, expected_revision = decoded.expected_revision,
+                expected_state = "pending", cleanup_expected_revision = assert(decoded.cleanup_expected_revision)}
         end
-        return {instance_id = decoded.instance_id :: string, expected_revision = decoded.expected_revision :: integer,
-            expected_state = "active", cleanup_expected_revision = decoded.cleanup_expected_revision :: integer}
+        return {instance_id = decoded.instance_id, expected_revision = decoded.expected_revision,
+            expected_state = "active", cleanup_expected_revision = assert(decoded.cleanup_expected_revision)}
     end
     if op == "refresh_cleanup" then
         local decoded = transition(value, "revoked", "cleanup_expected_revision")
         if not decoded then return nil end
-        return {instance_id = decoded.instance_id :: string, expected_revision = decoded.expected_revision :: integer,
-            expected_state = "revoked", cleanup_expected_revision = decoded.cleanup_expected_revision :: integer}
+        return {instance_id = decoded.instance_id, expected_revision = decoded.expected_revision,
+            expected_state = "revoked", cleanup_expected_revision = assert(decoded.cleanup_expected_revision)}
     end
     local decoded = transition(value, "revoked", nil)
     if not decoded then return nil end
-    return {instance_id = decoded.instance_id :: string, expected_revision = decoded.expected_revision :: integer,
+    return {instance_id = decoded.instance_id, expected_revision = decoded.expected_revision,
         expected_state = "revoked"}
 end
 
@@ -264,7 +269,7 @@ function M.recovery(value: unknown, expected_workspace_id: string): Recovery?
     local input = object(value)
     if not input or not exact(input, {"version", "workspace_id", "items"}) or input.version ~= 1
         or not workspace(input.workspace_id, expected_workspace_id) or type(input.items) ~= "table" then return nil end
-    local items = input.items :: {unknown}
+    local items = input.items
     local result: {Binding} = {}
     local seen: {[string]: boolean} = {}
     for index, value in ipairs(items) do
@@ -304,8 +309,8 @@ function M.reply(value: unknown, expected: string | Request): Reply?
     local input = object(value)
     if not input or not exact(input, {"version", "workspace_id", "request_id", "op", "ok", "binding", "error"})
         or input.version ~= 1 or not expected_identity(expected, input) then return nil end
-    local workspace_id: string
-    if type(expected) == "string" then workspace_id = expected else workspace_id = (expected :: Request).workspace_id end
+    local workspace_id = text(input.workspace_id, 32)
+    if not workspace_id then return nil end
     if not workspace(input.workspace_id, workspace_id) then return nil end
     local request_id = text(input.request_id, MAX_REQUEST_ID)
     local op = operation(input.op)

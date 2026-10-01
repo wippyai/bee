@@ -9,7 +9,7 @@ function M.workspaces(launch_workspace: string, admitted: unknown): {string}
     local list: {string} = {launch_workspace}
     local seen: {[string]: boolean} = {[launch_workspace] = true}
     if type(admitted) == "table" then
-        for _, item in ipairs(admitted :: {unknown}) do
+        for _, item in ipairs(admitted) do
             if type(item) == "string" and item ~= "" and #item <= 200 and not item:find("%c") and not seen[item] and #list < 16 then
                 seen[item] = true
                 list[#list + 1] = item

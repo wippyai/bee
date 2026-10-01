@@ -153,11 +153,13 @@ function M.decode_request(value: unknown): (Request?, string?)
         attempt_id = bounds.id(request.attempt_id)
         if not attempt_id then return nil, "configuration request.attempt_id is not an identifier" end
     end
-    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = request.private_home :: boolean?, attempt_id = attempt_id, fixture = request.fixture :: boolean}, nil
+    local private_home = request.private_home
+    if private_home ~= nil and type(private_home) ~= "boolean" then return nil, "configuration request.private_home must be boolean" end
+    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, home_directory = home_directory, private_home = private_home, attempt_id = attempt_id, fixture = request.fixture}, nil
 end
 local function sequence(value: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be a list" end
-    local list = value :: {unknown}
+    local list = value
     local count = 0
     local highest = 0
     for key in pairs(list) do
@@ -290,10 +292,10 @@ function M.decode_delivery(value: unknown): (Delivery?, string?)
     if not raw_arguments then return nil, arguments_error end
     for index, value in ipairs(raw_arguments) do
         if type(value) ~= "string" then return nil, "delivery.arguments[" .. tostring(index) .. "] must be text" end
-        if (value :: string):find("\0", 1, true) then return nil, "delivery.arguments[" .. tostring(index) .. "] must not contain NUL" end
-        argument_bytes = argument_bytes + #(value :: string)
+        if (value):find("\0", 1, true) then return nil, "delivery.arguments[" .. tostring(index) .. "] must not contain NUL" end
+        argument_bytes = argument_bytes + #(value)
         if argument_bytes > M.MAX_DELIVERY_ARGUMENT_BYTES then return nil, "delivery.arguments exceeds " .. tostring(M.MAX_DELIVERY_ARGUMENT_BYTES) .. " bytes" end
-        arguments[index] = value :: string
+        arguments[index] = value
     end
     local files: {Configuration} = {}
     local paths: {[string]: boolean} = {}
@@ -426,7 +428,7 @@ function M.call(target: string, request_value: unknown, configure_renderer: stri
         provider = request.provider,
         gateway = request.gateway,
         home_directory = request.home_directory,
-        private_home = request.private_home,
+        private_home = private_home,
         attempt_id = request.attempt_id,
         fixture = request.fixture,
     }

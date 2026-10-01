@@ -44,7 +44,7 @@ local function key(index: integer, suffix: string): string
 end
 local function usage_of(value: unknown): events.Usage?
     if type(value) ~= "table" then return nil end
-    local usage = value :: {[string]: unknown}
+    local usage = value
     return events.usage(usage.input_tokens, usage.output_tokens, usage.cached_input_tokens)
 end
 local function item_observations(state: State, index: integer, phase: string, item: {[string]: unknown}, envelope: {[string]: unknown}, paths: {[string]: unknown}?, out: {Observation})
@@ -53,8 +53,8 @@ local function item_observations(state: State, index: integer, phase: string, it
     if kind == "agent_message" then
         local answer = path_reader.read(envelope, paths, "result_text")
         if phase == "completed" and type(answer) == "string" then
-            state.answer = answer :: string
-            for _, piece in ipairs(events.text(key(index, "message"), id, "complete", answer :: string, "answer")) do out[#out + 1] = piece end
+            state.answer = answer
+            for _, piece in ipairs(events.text(key(index, "message"), id, "complete", answer, "answer")) do out[#out + 1] = piece end
         end
     elseif kind == "reasoning" then
         if type(item.text) == "string" and #item.text > 0 then
@@ -87,7 +87,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     end
     if kind == "thread.started" then
         local thread_id = path_reader.read(envelope, paths, "resume_id")
-        if type(thread_id) == "string" then state.thread_id = thread_id :: string end
+        if type(thread_id) == "string" then state.thread_id = thread_id end
         local phase = "started"
         if state.resumed then phase = "resumed" end
         out[#out + 1] = events.session(key(index, "thread"), phase, state.thread_id)
@@ -95,7 +95,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
         out[#out + 1] = events.turn(key(index, "turn"), "started", nil, nil)
     elseif kind == "item.started" or kind == "item.updated" or kind == "item.completed" then
         local item: unknown = envelope.item
-        if type(item) == "table" then item_observations(state, index, tostring(kind):sub(6), item :: {[string]: unknown}, envelope, paths, out) end
+        if type(item) == "table" then item_observations(state, index, tostring(kind):sub(6), item, envelope, paths, out) end
     elseif kind == "error" then
         out[#out + 1] = events.notice(key(index, "error"), "warning", "provider_error", tostring(path_reader.read(envelope, paths, "errors")))
     elseif kind == "turn.completed" then
@@ -106,7 +106,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     elseif kind == "turn.failed" then
         local message = "turn failed"
         local detail: unknown = path_reader.read(envelope, paths, "errors")
-        if type(detail) == "string" then message = detail :: string end
+        if type(detail) == "string" then message = detail end
         out[#out + 1] = events.turn(key(index, "turn"), "ended", "failed", usage_of(path_reader.read(envelope, paths, "usage")))
         state.terminal = {outcome = "failed", resume_ref = state.thread_id, error = events.fault("turn_failed", message, false)}
         return {observations = out, terminal = state.terminal}

@@ -351,7 +351,7 @@ local function define_tests()
                 stop_endpoint()
                 local records = records_of(thread_id)
                 for _, item in ipairs(records) do
-                    test.is_nil(json.encode(item):find(SENTINEL, 1, true))
+                    test.is_nil((json.encode(item):find(SENTINEL, 1, true)))
                 end
                 local recorded = shell("cat " .. record)
                 if not recorded:find('"x_api_key":"' .. SENTINEL .. '"', 1, true) then error(name .. ": the endpoint saw no api key") end
@@ -461,7 +461,7 @@ local function define_tests()
                 test.eq(tool_results(records, "succeeded"), 1)
                 test.eq(tool_results(records, "failed"), 0)
                 for _, item in ipairs(records) do
-                    test.is_nil(json.encode(item):find(SENTINEL, 1, true))
+                    test.is_nil((json.encode(item):find(SENTINEL, 1, true)))
                 end
             end
             -- Authority restart between revalidation and consumption.

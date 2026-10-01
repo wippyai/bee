@@ -29,7 +29,7 @@ local function resolve_preparer(binding_ref: string): (Preparer?, string?)
     local plan_target: string? = nil
     local setup_target: string? = nil
     local cleanup_target: string? = nil
-    for _, raw in ipairs(contracts :: {unknown}) do
+    for _, raw in ipairs(contracts) do
         local c = bounds.object(raw)
         if c and c.contract == types.WORKDIR_PREPARER_CONTRACT then
             local methods = bounds.object(c.methods)

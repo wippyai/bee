@@ -48,8 +48,8 @@ local function command(argv: {string}, progress: ((string) -> ())?, cancel: Chan
             if progress then progress(chunk) end
         end
     end
-    local stdout_reader: Reader = {read = function(_self, size) return stdout:read(size) end}
-    local stderr_reader: Reader = {read = function(_self, size) return stderr:read(size) end}
+    local stdout_reader: Reader = {read = function(_self: Reader, size: integer): (unknown, unknown) return stdout:read(size) end}
+    local stderr_reader: Reader = {read = function(_self: Reader, size: integer): (unknown, unknown) return stderr:read(size) end}
     local started, start_error = child:start()
     if not started then child:close(true); executor:release(); return nil, tostring(start_error) end
     local finished = channel.new(2)

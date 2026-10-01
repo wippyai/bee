@@ -10,6 +10,7 @@ local client = require("client")
 local appearance = require("appearance")
 local frame = require("frame")
 local protocol = require("protocol")
+local source = require("source")
 local model = require("model")
 local view = require("view")
 
@@ -39,7 +40,7 @@ local function main(value: unknown)
     local volume, volume_error = fs.get(resource)
     if not volume then error("Workspace filesystem is unavailable: " .. tostring(volume_error)) end
 
-    local state: model.State = model.new(volume, "", launch.arguments)
+    local state: model.State = model.new(source.volume(volume), "", launch.arguments)
     client.ready(launch, {negotiate_close = true})
 
     if state.current_path then

@@ -18,7 +18,10 @@ way to start an agent, give it work (`session_send`) and read its result
 requires `operation_key`; caller identity travels only in the authenticated
 call context, never in a payload; the owner binding opens under the host-linked
 `target_tool_session_policy`, and each owner reply is held to the published
-output schema. The gateway keeps no session state.
+output schema. The gateway keeps no session state. `session_open` and `session_run` accept
+`spec.presentation = "headless" | "window"`, defaulting to `headless`. Window
+sessions receive Work through driver hooks and retain their terminal when the
+person closes the viewer. Snapshots expose the selected `presentation`.
 The host may admit any subset. The
 overlay tool also carries a read-only `guide` operation stating this
 destination's application authoring contract and one minimal example (derived

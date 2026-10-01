@@ -8,6 +8,7 @@ entries:
     tree: bee.files:tree
     syntax: bee.files:syntax
     protocol: bee.files:protocol
+    source: bee.files:source
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -27,8 +28,8 @@ entries:
     client: bee.application:client
     appearance: bee.application:appearance
     syntax: bee.files:syntax
-    tree: bee.files:tree
     protocol: bee.files:protocol
+    source: bee.files:source
     model: bee.files.app:model
     view: bee.files.app:view
   meta:

@@ -83,7 +83,7 @@ local function define_tests()
             test.is_true(all:find("Read workspace files under docs", 1, true) ~= nil)
             test.is_true(all:find("https://api.example.com", 1, true) ~= nil)
             test.is_true(all:find("Workspace files under docs may be sent to https://api.example.com", 1, true) ~= nil)
-            test.is_nil(all:find("app reason", 1, true))
+            test.is_nil((all:find("app reason", 1, true)))
             send[1].scope.path_prefix = "/private"
             test.is_nil(catalog.render(decoded, {read[1], send[1]}))
         end)

@@ -4,6 +4,7 @@
 -- owner reply against the published output schema. It implements no session
 -- logic: every tool is one owner contract method.
 local json = require("json")
+local bounds = require("bounds")
 local json_schema = require("json_schema")
 local bundle_source = require("session_bundle")
 local M = {}
@@ -29,28 +30,28 @@ local TARGETS: {[string]: Target} = {
 M.NAMES = {"session_catalog", "session_open", "session_run", "session_send", "session_await", "session_join",
     "session_get", "session_list", "session_cancel", "session_close"}
 
-local bundle = json.decode(bundle_source) :: Object
-local defs = bundle["$defs"] :: Object
-local declared = bundle.tools :: {Object}
+local bundle = assert(bounds.object((json.decode(bundle_source))))
+local defs = assert(bounds.object(bundle["$defs"]))
+local declared = assert(bounds.dense_list(bundle.tools, 64, "session tools"))
 
 local function copy(value: unknown): unknown
     if type(value) ~= "table" then return value end
     local result: Object = table.create(0, 1)
-    for key, child in pairs(value :: Object) do result[key] = copy(child) end
+    for key, child in pairs(value) do result[key] = copy(child) end
     return result
 end
 
 local function reference_name(node: Object): string?
     local reference = node["$ref"]
     if type(reference) ~= "string" then return nil end
-    return (reference :: string):match("^#/%$defs/([%w_]+)$")
+    return (reference):match("^#/%$defs/([%w_]+)$")
 end
 
 -- dereference: the schema with every local reference replaced by its
 -- definition, so a tool schema stands alone.
 local function dereference(value: unknown): unknown
     if type(value) ~= "table" then return value end
-    local node = value :: Object
+    local node = value
     local name = reference_name(node)
     if name then return dereference(defs[name]) end
     local result: Object = table.create(0, 1)
@@ -61,7 +62,7 @@ end
 -- closure: the definitions a schema reaches, transitively.
 local function collect(value: unknown, into: Object)
     if type(value) ~= "table" then return end
-    local node = value :: Object
+    local node = value
     local name = reference_name(node)
     if name then
         if into[name] == nil then
@@ -76,7 +77,7 @@ end
 local function output_schema(tool: Object): Object
     local selected: Object = {}
     collect(tool.outputSchema, selected)
-    local schema = copy(tool.outputSchema) :: Object
+    local schema = assert(bounds.object(copy(tool.outputSchema)))
     schema.type = "object"
     schema["$schema"] = bundle["$schema"]
     schema["$defs"] = copy(selected)
@@ -86,12 +87,15 @@ end
 local INPUT: {[string]: Object} = {}
 local OUTPUT: {[string]: Object} = {}
 local DESCRIPTIONS: {[string]: string} = {}
-for _, tool in ipairs(declared) do
-    local name = tool.name :: string
+for _, raw_tool in ipairs(declared) do
+    local tool = assert(bounds.object(raw_tool))
+    local name = assert(bounds.id(tool.name))
+    local description = tool.description
+    assert(type(description) == "string", "session tool description is not text")
     assert(TARGETS[name], "unexpected session tool " .. name)
-    INPUT[name] = dereference(tool.inputSchema) :: Object
+    INPUT[name] = assert(bounds.object(dereference(tool.inputSchema)))
     OUTPUT[name] = output_schema(tool)
-    DESCRIPTIONS[name] = tool.description :: string
+    DESCRIPTIONS[name] = description
 end
 for _, name in ipairs(M.NAMES) do assert(INPUT[name], "missing session tool " .. name) end
 M.OUTPUT_SCHEMAS = OUTPUT
@@ -99,7 +103,7 @@ M.OUTPUT_SCHEMAS = OUTPUT
 -- tools: the ten declarations. The host-linked policy reference names the
 -- scope the projection runs under; it never widens the owner's own checks.
 function M.tools(policy: string, read: Object, write: Object): {Tool}
-    local destructive = copy(write) :: Object
+    local destructive = assert(bounds.object(copy(write)))
     destructive.destructiveHint = true
     local result: {Tool} = {}
     for _, name in ipairs(M.NAMES) do
@@ -132,8 +136,8 @@ function M.decode(name: string, params: Object): (Object?, string?)
     if type(arguments) ~= "table" then return nil, "tool arguments must be an object" end
     local failure = json_schema.validate(schema, arguments)
     if failure then return nil, failure end
-    local request = arguments :: Object
-    if name == "session_join" and request.quorum ~= nil and (request.quorum :: number) > #(request.works :: {unknown}) then
+    local request = arguments
+    if name == "session_join" and request.quorum ~= nil and (request.quorum) > #(request.works) then
         return nil, "quorum exceeds the number of works"
     end
     return request, nil
@@ -145,7 +149,7 @@ function M.call(instance: Object, name: string, request: Object): (unknown, unkn
     if not method then return nil, "not a session tool" end
     local invoke = instance[method]
     if type(invoke) ~= "function" then return nil, "owner binding has no method " .. method end
-    return (invoke :: (Object, Object) -> (unknown, unknown))(instance, request)
+    return (invoke)(instance, request)
 end
 
 local resolved: {[string]: Object} = {}
@@ -157,15 +161,15 @@ function M.result(name: string, reply: unknown): (Object?, string?)
     if not declaration then return nil, "not a session tool" end
     local schema = resolved[name]
     if not schema then
-        local body = copy(declaration) :: Object
+        local body = assert(bounds.object(copy(declaration)))
         body["$defs"] = nil
-        schema = dereference(body) :: Object
+        schema = assert(bounds.object(dereference(body)))
         resolved[name] = schema
     end
     if type(reply) ~= "table" then return nil, "owner reply must be an object" end
     local failure = json_schema.validate(schema, reply)
     if failure then return nil, "owner reply violates the published schema: " .. failure end
-    return reply :: Object, nil
+    return reply, nil
 end
 
 return M

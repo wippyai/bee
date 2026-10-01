@@ -45,8 +45,9 @@ function M.publish_config(): (PublishConfig?, string?)
     local cli = config and absolute_path(config.cli) or nil
     if not cli then return nil, "Hub publication names no uploader executable" end
     local roots: {string} = {}
-    if config and type(config.source_roots) == "table" then
-        for _, raw in ipairs(config.source_roots :: {unknown}) do
+    local source_roots = config and bounds.array(config.source_roots, 64) or nil
+    if source_roots then
+        for _, raw in ipairs(source_roots) do
             local root = absolute_path(raw)
             if not root then return nil, "Hub publication source root is not an absolute directory" end
             roots[#roots + 1] = root

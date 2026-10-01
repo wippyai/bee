@@ -73,7 +73,7 @@ function M.register(db: sql.DB, actor: string, request: unknown): Result
             {alias.stable, alias.instance})
         if query_err or not rows then return storage("read application alias") end
         if #rows > 0 then
-            local row = rows[1] :: {[string]: unknown}
+            local row = rows[1]
             if row.stable ~= alias.stable or row.workspace_id ~= alias.workspace_id or row.definition_id ~= alias.definition_id then
                 return failure("CONFLICT", "application alias is already attested")
             end
@@ -105,7 +105,7 @@ function M.retire(db: sql.DB, actor: string, request: unknown): Result
         if #rows == 0 then
             return transaction.success({stable = alias.stable, instance = alias.instance, retired = false}, false)
         end
-        local row = rows[1] :: {[string]: unknown}
+        local row = rows[1]
         if row.stable ~= alias.stable or row.workspace_id ~= alias.workspace_id or row.definition_id ~= alias.definition_id then
             return failure("CONFLICT", "application alias changed before retirement")
         end

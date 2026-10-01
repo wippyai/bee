@@ -57,7 +57,7 @@ local function template_value(raw: unknown, parameters: {[string]: string}): boo
 end
 local function resource_template(raw: unknown, parameters: {[string]: string}): boolean
     if not word(raw, 160) then return false end
-    local parameter = (raw :: string):match("^%$([a-z_]+)$")
+    local parameter = (raw):match("^%$([a-z_]+)$")
     local kind = parameter and parameters[parameter] or nil
     return parameter == nil or (type(kind) == "string" and not collection_kind(kind))
 end
@@ -75,7 +75,8 @@ local function decode_entry(raw: unknown): (Vocabulary?, string?)
     if type(data.revision) ~= "number" or data.revision < 1 or data.revision ~= math.floor(data.revision) then
         return nil, "host capability catalog is malformed: invalid revision"
     end
-    local body = data :: Value
+    local revision = math.floor(data.revision)
+    local body = data
     local never_rows = list(body.never, 64)
     local rows = list(body.capabilities, 32)
     if not never_rows or not rows or #rows == 0 then return nil, "host capability catalog lists are malformed" end
@@ -126,14 +127,14 @@ local function decode_entry(raw: unknown): (Vocabulary?, string?)
                 return nil, "capability resource template is malformed"
             end
         end
-        for placeholder in (row.text :: string):gmatch("{([a-z_]+)}") do
+        for placeholder in (row.text):gmatch("{([a-z_]+)}") do
             if not schema[placeholder] then return nil, "capability text refers to an unknown parameter" end
         end
-        capabilities[id] = {id = id, revision = row.revision :: integer,
-            confirm = row.confirm :: string, parameters = schema, text = row.text :: string,
-            policies = policies :: {Value}, resources = resources :: {Value}}
+        capabilities[id] = {id = id, revision = row.revision,
+            confirm = row.confirm, parameters = schema, text = row.text,
+            policies = policies, resources = resources}
     end
-    return {revision = body.revision :: integer, never = never, capabilities = capabilities}, nil
+    return {revision = revision, never = never, capabilities = capabilities}, nil
 end
 
 function M.decode(raw: unknown): (Vocabulary?, string?)
@@ -257,7 +258,7 @@ local function expand(raw: unknown, parameters: Parameters): unknown
         local key = raw:match("^%$([a-z_]+)$")
         return key and parameters[key] or raw
     end
-    local source = raw :: Value
+    local source = raw
     local result: Value = {}
     for key, value in pairs(source) do result[key] = expand(value, parameters) end
     return result
@@ -274,8 +275,8 @@ local function resolve_parameters(catalog: Vocabulary, id: string, parameters: P
             return nil, "capability operation did not resolve to a grant"
         end
         result[#result + 1] = {capability = id, template_revision = template.revision,
-            operation = operation.operation :: string, resource = resource,
-            scope = scope :: Value, parameters = parameters}
+            operation = operation.operation, resource = resource,
+            scope = scope, parameters = parameters}
     end
     return result, nil
 end
@@ -294,18 +295,18 @@ function M.resolve(catalog: Vocabulary, id_raw: string, raw: unknown): ({Grant}?
 end
 
 local function printable(value: unknown): string
-    if type(value) == "table" then return table.concat(value :: {string}, ", ") end
+    if type(value) == "table" then return table.concat(value, ", ") end
     return tostring(value)
 end
 local function equal(left: unknown, right: unknown, depth: integer): boolean
     if type(left) ~= type(right) then return false end
     if type(left) ~= "table" then return left == right end
     if depth > 8 then return false end
-    for key, value in pairs(left :: table) do
-        if not equal(value, (right :: table)[key], depth + 1) then return false end
+    for key, value in pairs(left) do
+        if not equal(value, (right)[key], depth + 1) then return false end
     end
-    for key in pairs(right :: table) do
-        if (left :: table)[key] == nil then return false end
+    for key in pairs(right) do
+        if (left)[key] == nil then return false end
     end
     return true
 end
@@ -391,11 +392,15 @@ end
 local function normalize_grant(raw: unknown): (Grant?, string?)
     local item = object(raw)
     local scope = item and normalize_scope(item.scope) or nil
-    if not item or not scope or not word(item.capability, 160) or not word(item.operation, 160)
-        or not word(item.resource, 160) or type(item.template_revision) ~= "number"
+    local capability = item and word(item.capability, 160) or nil
+    local operation = item and word(item.operation, 160) or nil
+    local resource = item and word(item.resource, 160) or nil
+    if not item or not scope or not capability or not operation
+        or not resource or type(item.template_revision) ~= "number"
         or item.template_revision < 1 or item.template_revision ~= math.floor(item.template_revision) then
         return nil, "resolved grant is malformed"
     end
+    local template_revision = math.floor(item.template_revision)
     for key in pairs(item) do
         if key ~= "capability" and key ~= "template_revision" and key ~= "operation"
             and key ~= "resource" and key ~= "scope" and key ~= "parameters" then
@@ -404,9 +409,9 @@ local function normalize_grant(raw: unknown): (Grant?, string?)
     end
     local params = item.parameters == nil and nil or object(item.parameters)
     if item.parameters ~= nil and not params then return nil, "resolved grant parameters are malformed" end
-    return {capability = item.capability :: string, template_revision = item.template_revision :: integer,
-        operation = item.operation :: string, resource = item.resource :: string,
-        scope = scope :: Value, parameters = params}, nil
+    return {capability = capability, template_revision = template_revision,
+        operation = operation, resource = resource,
+        scope = scope, parameters = params}, nil
 end
 local function path_contains(parent: string, child: string): boolean
     if parent == child or parent == "/" or parent == "." then return true end
@@ -423,9 +428,9 @@ local function scope_contains(parent: Value, child: Value): boolean
         local next_value = child[key]
         if next_value == nil then return false end
         if key == "subpath" or key == "path_prefix" then
-            if not path_contains(value :: string, next_value :: string) then return false end
+            if not path_contains(value, next_value) then return false end
         elseif SET_FIELDS[key] then
-            if not set_contains(value :: {string}, next_value :: {string}) then return false end
+            if not set_contains(value, next_value) then return false end
         elseif key == "access" then
             if value == "read" and next_value == "write" then return false end
         elseif value ~= next_value then return false end
@@ -456,17 +461,17 @@ local function covered(target: Grant, others: {Grant}): boolean
                     local target_value = target.scope[key]
                     if target_value == nil then compatible = false
                     elseif key == "subpath" or key == "path_prefix" then
-                        if not path_contains(value :: string, target_value :: string) then compatible = false end
+                        if not path_contains(value, target_value) then compatible = false end
                     elseif key == "access" then
                         if value == "read" and target_value == "write" then compatible = false end
                     elseif value ~= target_value then compatible = false end
                 end
             end
             for key in pairs(target.scope) do if key ~= set_key and other.scope[key] == nil then compatible = false end end
-            if compatible then for _, value in ipairs(other.scope[set_key] :: {string}) do members[value] = true end end
+            if compatible then for _, value in ipairs(other.scope[set_key]) do members[value] = true end end
         end
     end
-    for _, value in ipairs(target.scope[set_key] :: {string}) do if not members[value] then return false end end
+    for _, value in ipairs(target.scope[set_key]) do if not members[value] then return false end end
     return true
 end
 local function decode_grants(raw: unknown): ({Grant}?, string?)
@@ -481,16 +486,18 @@ local function decode_grants(raw: unknown): ({Grant}?, string?)
     return result, nil
 end
 
+M.grants = decode_grants
+
 function M.scope_contains(parent_raw: unknown, child_raw: unknown): boolean
     local parent, parent_error = normalize_scope(parent_raw)
     local child, child_error = normalize_scope(child_raw)
-    return parent_error == nil and child_error == nil and scope_contains(parent :: Value, child :: Value)
+    return parent_error == nil and child_error == nil and scope_contains(parent, child)
 end
 function M.contains(parent_raw: unknown, child_raw: unknown): boolean
     local parent = normalize_grant(parent_raw)
     local child = normalize_grant(child_raw)
-    return parent ~= nil and child ~= nil and same_meaning(parent :: Grant, child :: Grant)
-        and scope_contains((parent :: Grant).scope, (child :: Grant).scope)
+    return parent ~= nil and child ~= nil and same_meaning(parent, child)
+        and scope_contains((parent).scope, (child).scope)
 end
 function M.traits(resource_raw: unknown, traits_raw: unknown): (Value?, string?)
     local resource = word(resource_raw, 160)

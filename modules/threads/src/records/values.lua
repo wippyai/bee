@@ -4,18 +4,18 @@ local bounds = require("bounds")
 local M = {}
 function M.source(value: unknown): types.Source?
     local member = bounds.member(value, bounds.SOURCES)
-    if not member then return nil end
-    return member :: types.Source
+    if member ~= "stream" and member ~= "hook" and member ~= "transcript" and member ~= "mcp" and member ~= "bee" then return nil end
+    return member
 end
 function M.outcome(value: unknown): types.Outcome?
     local member = bounds.member(value, bounds.OUTCOMES)
-    if not member then return nil end
-    return member :: types.Outcome
+    if member ~= "succeeded" and member ~= "failed" and member ~= "cancelled" and member ~= "uncertain" then return nil end
+    return member
 end
 function M.kind(value: unknown): types.Kind?
     local member = bounds.member(value, bounds.KINDS)
-    if not member then return nil end
-    return member :: types.Kind
+    if member ~= "observation" and member ~= "message" and member ~= "action.admitted" and member ~= "attempt.prepared" and member ~= "attempt.started" and member ~= "turn.request" and member ~= "turn.end" and member ~= "receipt" and member ~= "delivery.mark" and member ~= "request.answered" and member ~= "approval.request" and member ~= "approval.transition" then return nil end
+    return member
 end
 function M.ref(value: unknown): (types.Ref?, string?)
     local object = bounds.object(value)

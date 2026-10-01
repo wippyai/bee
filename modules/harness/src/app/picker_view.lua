@@ -8,7 +8,7 @@ local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Enter", verb = "open"}, {key = "U", verb = "unavailable"},
     {key = "R", verb = "refresh"}, {key = "Esc", verb = "back"}, {key = "E", verb = "customize copy or edit"},
-    {key = "N", verb = "new profile"}, {key = "S", verb = "setup"}, {key = "M", verb = "manual Terminal attach"}})
+    {key = "N", verb = "new profile"}, {key = "S", verb = "setup"}, {key = "M", verb = "open a window"}})
 function M.draw(width: integer, height: integer, preferences: appearance.Preferences,
     listing: agents.Listing, selected: integer, status: string, busy: boolean?, show_unavailable: boolean?): Frame
     local painter = frame.new(width, height, preferences)

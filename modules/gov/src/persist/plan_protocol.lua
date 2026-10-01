@@ -13,14 +13,17 @@ M.MAX_APPROVAL_BYTES = 160
 M.MAX_RECEIPT_BYTES = 160
 
 type Blob = {bytes: string, digest: string}
-type Request = {
-    operation: "stage" | "get" | "list" | "record_review" | "select" | "bind_approval",
-    version: string?, source_node: string?, source_workspace: string?,
-    candidate: Blob?, artifact: Blob?, preflight: Blob?,
-    expected_revision: integer?, idempotency_key: string?,
-    review_status: "accepted" | "rejected"?, review_reason: string?,
-    approval_id: string?, approval_plan_digest: string?, approval_proposal_digest: string?, approval_owner_incarnation: integer?
-}
+type Identity = {operation: "get", version: string, source_node: string, source_workspace: string}
+type Mutation = {operation: "select", version: string, source_node: string, source_workspace: string,
+    expected_revision: integer, idempotency_key: string}
+type StageRequest = {operation: "stage", version: string, source_node: string, source_workspace: string,
+    candidate: Blob, artifact: Blob, preflight: Blob, expected_revision: integer, idempotency_key: string}
+type ReviewRequest = {operation: "record_review", version: string, source_node: string, source_workspace: string,
+    expected_revision: integer, idempotency_key: string, review_status: "accepted" | "rejected", review_reason: string}
+type ApprovalRequest = {operation: "bind_approval", version: string, source_node: string, source_workspace: string,
+    expected_revision: integer, idempotency_key: string, approval_id: string, approval_plan_digest: string,
+    approval_proposal_digest: string, approval_owner_incarnation: integer}
+type Request = Identity | Mutation | StageRequest | ReviewRequest | ApprovalRequest | {operation: "list"}
 
 local function object(value: unknown): {[string]: unknown}?
     return bounds.object(value)
@@ -31,21 +34,24 @@ local function fields(value: {[string]: unknown}, allowed: {string}): string?
 end
 
 local function digest(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
+    if type(value) ~= "string" then return nil end
+    if #value ~= 64 then return nil end
+    if not value:match("^[0-9a-f]+$") then return nil end
     return value
 end
 
 local function blob(value: unknown, limit: integer, label: string): (Blob?, string?)
     local item = object(value)
+    local bytes_value = item and item.bytes
     if not item then return nil, label .. " must be an object" end
     local extra = fields(item, {"bytes", "digest"})
     if extra then return nil, label .. ": " .. extra end
-    if type(item.bytes) ~= "string" or #item.bytes == 0 or #item.bytes > limit then
-        return nil, label .. ".bytes exceeds its bound"
-    end
+    if type(bytes_value) ~= "string" then return nil, label .. ".bytes exceeds its bound" end
+    if #bytes_value == 0 then return nil, label .. ".bytes exceeds its bound" end
+    if #bytes_value > limit then return nil, label .. ".bytes exceeds its bound" end
     local measured = digest(item.digest)
     if not measured then return nil, label .. ".digest must be a lowercase SHA-256 digest" end
-    local result: Blob = {bytes = item.bytes :: string, digest = measured}
+    local result: Blob = {bytes = bytes_value, digest = measured}
     return result, nil
 end
 
@@ -72,28 +78,31 @@ function M.decode(raw: unknown): (Request?, string?)
     end
 
     local version = bounds.id(value.version)
-    if not version or #version > M.MAX_VERSION_BYTES then return nil, "version is not a bounded identifier" end
+    if not version then return nil, "version is not a bounded identifier" end
+    if #version > M.MAX_VERSION_BYTES then return nil, "version is not a bounded identifier" end
     if operation == "get" then
         local extra = fields(value, {"operation", "version", "source_node", "source_workspace"})
         if extra then return nil, extra end
         local source_node, source_workspace = bounds.id(value.source_node), bounds.id(value.source_workspace)
-        if not source_node or not source_workspace then return nil, "source identity is required" end
+        if not source_node then return nil, "source identity is required" end
+        if not source_workspace then return nil, "source identity is required" end
         local result: Request = {operation = "get", version = version, source_node = source_node, source_workspace = source_workspace}
         return result, nil
     end
 
     local expected = bounds.count(value.expected_revision)
     local key = bounds.id(value.idempotency_key)
-    if not expected or not key or #key > M.MAX_RECEIPT_BYTES then
-        return nil, "expected_revision and idempotency_key are required"
-    end
+    if not expected then return nil, "expected_revision and idempotency_key are required" end
+    if not key then return nil, "expected_revision and idempotency_key are required" end
+    if #key > M.MAX_RECEIPT_BYTES then return nil, "expected_revision and idempotency_key are required" end
     if operation == "stage" and expected ~= 0 then return nil, "stage requires expected_revision zero" end
 
     if operation == "stage" then
         local extra = mutation_fields(value, {"source_node", "source_workspace", "candidate", "artifact", "preflight"})
         if extra then return nil, extra end
         local source_node, source_workspace = bounds.id(value.source_node), bounds.id(value.source_workspace)
-        if not source_node or not source_workspace then return nil, "source identity is invalid" end
+        if not source_node then return nil, "source identity is invalid" end
+        if not source_workspace then return nil, "source identity is invalid" end
         local candidate, candidate_error = blob(value.candidate, M.MAX_CANDIDATE_BYTES, "candidate")
         if not candidate then return nil, candidate_error end
         local artifact, artifact_error = blob(value.artifact, M.MAX_ARTIFACT_BYTES, "artifact")
@@ -110,7 +119,8 @@ function M.decode(raw: unknown): (Request?, string?)
         local extra = mutation_fields(value, {"source_node", "source_workspace", "review_status", "review_reason"})
         if extra then return nil, extra end
         local source_node, source_workspace = bounds.id(value.source_node), bounds.id(value.source_workspace)
-        if not source_node or not source_workspace then return nil, "source identity is required" end
+        if not source_node then return nil, "source identity is required" end
+        if not source_workspace then return nil, "source identity is required" end
         local status = bounds.member(value.review_status, {"accepted", "rejected"})
         local reason_raw = value.review_reason
         local reason = ""
@@ -131,15 +141,18 @@ function M.decode(raw: unknown): (Request?, string?)
         local extra = mutation_fields(value, {"source_node", "source_workspace", "approval_id", "approval_plan_digest", "approval_proposal_digest", "approval_owner_incarnation"})
         if extra then return nil, extra end
         local source_node, source_workspace = bounds.id(value.source_node), bounds.id(value.source_workspace)
-        if not source_node or not source_workspace then return nil, "source identity is required" end
+        if not source_node then return nil, "source identity is required" end
+        if not source_workspace then return nil, "source identity is required" end
         local approval_id = bounds.id(value.approval_id)
-        if not approval_id or #approval_id > M.MAX_APPROVAL_BYTES then return nil, "approval_id is invalid" end
+        if not approval_id then return nil, "approval_id is invalid" end
+        if #approval_id > M.MAX_APPROVAL_BYTES then return nil, "approval_id is invalid" end
         local approval_plan_digest = digest(value.approval_plan_digest)
         if not approval_plan_digest then return nil, "approval_plan_digest must be a lowercase SHA-256 digest" end
         local approval_proposal_digest = digest(value.approval_proposal_digest)
         if not approval_proposal_digest then return nil, "approval_proposal_digest must be a lowercase SHA-256 digest" end
         local approval_owner_incarnation = bounds.count(value.approval_owner_incarnation)
-        if not approval_owner_incarnation or approval_owner_incarnation < 1 then return nil, "approval_owner_incarnation must be positive" end
+        if not approval_owner_incarnation then return nil, "approval_owner_incarnation must be positive" end
+        if approval_owner_incarnation < 1 then return nil, "approval_owner_incarnation must be positive" end
         local result: Request = {operation = "bind_approval", version = version, expected_revision = expected,
             idempotency_key = key, source_node = source_node, source_workspace = source_workspace,
             approval_id = approval_id, approval_plan_digest = approval_plan_digest,
@@ -151,7 +164,8 @@ function M.decode(raw: unknown): (Request?, string?)
     local extra = mutation_fields(value, {"source_node", "source_workspace"})
     if extra then return nil, extra end
     local source_node, source_workspace = bounds.id(value.source_node), bounds.id(value.source_workspace)
-    if not source_node or not source_workspace then return nil, "source identity is required" end
+    if not source_node then return nil, "source identity is required" end
+    if not source_workspace then return nil, "source identity is required" end
     local result: Request = {operation = "select", version = version, expected_revision = expected, idempotency_key = key, source_node = source_node, source_workspace = source_workspace}
     return result, nil
 end

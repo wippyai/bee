@@ -64,7 +64,7 @@ local function references(entry: Entry): ({string}?, string?)
     local function add_all(value: unknown, depth: integer): string?
         if depth > 12 then return "entry reference structure nests too deeply" end
         if type(value) ~= "table" then add(value); return nil end
-        for key, child in pairs(value :: table) do
+        for key, child in pairs(value) do
             if type(key) ~= "string" and type(key) ~= "number" then return "entry reference structure is not encodable" end
             local problem = add_all(child, depth + 1)
             if problem then return problem end
@@ -77,7 +77,7 @@ local function references(entry: Entry): ({string}?, string?)
             if key and (scalar[key] or key:match("_ref$") or key:match("_env$")) then add(value) end
             return nil
         end
-        for child_key, child in pairs(value :: table) do
+        for child_key, child in pairs(value) do
             if type(child_key) == "string" then
                 local problem: string? = nil
                 if collection[child_key] then problem = add_all(child, depth + 1)
@@ -109,7 +109,7 @@ local function measured_entry(entry: Entry, package: string, registry_default_me
     -- An incoming artifact is immutable: its candidate digest must be the
     -- digest of its exact entry bytes, including an omitted `meta` field.
     if registry_default_metadata
-        and (clean.meta == nil or (type(clean.meta) == "table" and next(clean.meta :: table) == nil)) then
+        and (clean.meta == nil or (type(clean.meta) == "table" and next(clean.meta) == nil)) then
         clean.meta = table.create(0, 1)
     end
     local id, kind = bounds.id(clean.id), bounds.id(clean.kind)
@@ -186,11 +186,11 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
     -- start. The generated policy pairs the sessions contract with the launch
     -- action on those names, so each name must be a real launch definition.
     if capability == "agents.launch" and capability_request then
-        local params = capability_request.parameters :: {[string]: unknown}
+        local params = capability_request.parameters
         local definitions = params.definitions
         if type(definitions) ~= "table" then return nil, "managed agent launch parameters are invalid" end
-        for _, ref in ipairs(definitions :: {unknown}) do
-            local candidate = type(ref) == "string" and object(final[ref :: string]) or nil
+        for _, ref in ipairs(definitions) do
+            local candidate = type(ref) == "string" and object(final[ref]) or nil
             local candidate_meta = candidate and object(candidate.meta) or nil
             if not candidate or candidate.kind ~= "registry.entry" or not candidate_meta
                 or candidate_meta.type ~= "bee.launch_definition" then
@@ -203,23 +203,23 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
     -- the requirement appends to one of those operations instead of an app.
     local exposure: {[string]: boolean}? = nil
     if capability == "hive.expose" and capability_request then
-        local params = capability_request.parameters :: {[string]: unknown}
+        local params = capability_request.parameters
         local mode = params.mode
         local operations = params.operations
-        local request_namespace = (entry.id :: string):match("^([^:]+):")
+        local request_namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
         if type(mode) ~= "string" or type(operations) ~= "table" then
             return nil, "Hive exposure parameters are invalid"
         end
         exposure = {}
-        for _, ref in ipairs(operations :: {unknown}) do
-            local candidate = type(ref) == "string" and object(final[ref :: string]) or nil
+        for _, ref in ipairs(operations) do
+            local candidate = type(ref) == "string" and object(final[ref]) or nil
             local candidate_meta = candidate and object(candidate.meta) or nil
-            local candidate_namespace = type(ref) == "string" and (ref :: string):match("^([^:]+):") or nil
+            local candidate_namespace = type(ref) == "string" and (ref):match("^([^:]+):") or nil
             if not candidate or candidate.kind ~= "function.lua" or candidate_namespace ~= request_namespace
                 or not candidate_meta or candidate_meta.hive ~= mode then
                 return nil, "Hive exposure operation " .. tostring(ref) .. " is not this artifact's " .. tostring(mode) .. " operation"
             end
-            exposure[ref :: string] = true
+            exposure[ref] = true
         end
     end
     for _, raw in ipairs(targets) do
@@ -235,7 +235,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
                     return nil, "Hive exposure requirement must append policies to one of its own operations"
                 end
             else
-                local request_namespace = (entry.id :: string):match("^([^:]+):")
+                local request_namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
                 local target_namespace = target_id:match("^([^:]+):")
                 local target_meta = object(destination.meta)
                 if target.path ~= ".security.policies +=" or target_namespace ~= request_namespace
@@ -246,7 +246,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
             capability_request.target = target_id
             capability_request.path = target.path
         else
-            local binding, binding_error = path_value(destination :: Entry, target.path)
+            local binding, binding_error = path_value(destination, target.path)
             local value = bounds.id(binding)
             if not value then return nil, binding_error or "requirement target has no selected binding" end
             if selected and selected ~= value then return nil, "requirement targets disagree on the selected binding" end
@@ -266,13 +266,15 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
     protected: protected_kernel.Manifest, evidence: preflight.HostEvidence): (preflight.Context?, string?)
     if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
-        if type((policy :: Object)[field]) ~= "table" then return nil, "host policy is missing " .. field end
+        local raw: unknown = policy
+        local fields = object(raw)
+        if not fields or type(fields[field]) ~= "table" then return nil, "host policy is missing " .. field end
     end
     local bindings: DatabaseBindings? = nil
     if policy.database_bindings ~= nil then
         if type(policy.database_bindings) ~= "table" then return nil, "host policy database bindings are malformed" end
         bindings = {}
-        for target, raw in pairs(policy.database_bindings :: table) do
+        for target, raw in pairs(policy.database_bindings) do
             local item = object(raw)
             local database_id = item and bounds.id(item.database_id) or nil
             local prefix: string? = nil
@@ -284,7 +286,7 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
             end
             if not bounds.id(target) or not item or bounds.fields(item, {"database_id", "table_prefix"})
                 or not database_id then return nil, "host policy database binding is malformed" end
-            bindings[target :: string] = {database_id = database_id, table_prefix = prefix}
+            bindings[target] = {database_id = database_id, table_prefix = prefix}
         end
     end
     local generated: {[string]: string} = {}
@@ -292,7 +294,7 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
         if type(policy.generated_databases) ~= "table" then
             return nil, "host policy generated databases are malformed"
         end
-        for _, raw in ipairs(policy.generated_databases :: {unknown}) do
+        for _, raw in ipairs(policy.generated_databases) do
             local item = object(raw)
             local database_id = item and bounds.id(item.database_id) or nil
             local target_db = item and bounds.id(item.target_db) or nil
@@ -337,8 +339,10 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     -- Resolve the host policy before measuring the semantic base. The policy
     -- supplies the physical database selected for each logical migration
     -- target, and remains authoritative for the context returned below.
-    local policy, policy_error = deps.policy(spec, captured, root)
+    local policy: Policy?, policy_error: string? = deps.policy(spec, captured, root)
     if not policy then return nil, nil, policy_error or "read destination private-overlay policy" end
+    local original_policy: Policy = policy
+    local database_bindings = policy.database_bindings
     if policy.node_id ~= destination then return nil, nil, "host policy belongs to another destination" end
 
     local incoming: {Entry} = {}
@@ -375,7 +379,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             -- The selected overlay is intentionally absent from the approval
             -- base, but callers still need its measured package-owned view to
             -- compare the staged complete replacement with what is installed.
-            local measured, measured_error = measured_entry(entry, component :: string, true)
+            local measured, measured_error = measured_entry(entry, component, true)
             if not measured then return nil, nil, measured_error end
             installed[id] = measured
         else
@@ -399,7 +403,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     local names: {string} = {}
     for namespace in pairs(namespace_set) do names[#names + 1] = namespace end
     table.sort(names)
-    table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id :: string) < (right.id :: string) end)
+    table.sort(incoming, function(left: Entry, right: Entry): boolean return (left.id) < (right.id) end)
     local candidate_entries: {preflight.Entry} = {}
     local requirements: {preflight.Requirement} = {}
     local candidate_migrations: {preflight.Migration} = {}
@@ -412,8 +416,8 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         -- overlay instruction. Keep the exact public definition ID and body.
         local clean: Entry = {}
         for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
-        final[clean.id :: string] = clean
-        local measured, measured_error = measured_entry(clean, component :: string)
+        final[clean.id] = clean
+        local measured, measured_error = measured_entry(clean, component)
         if not measured then return nil, nil, measured_error end
         candidate_entries[#candidate_entries + 1] = measured
         local meta = object(clean.meta)
@@ -439,7 +443,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 if not decoded then return nil, nil, catalog_error end
                 catalog = decoded
             end
-            local item, item_error = requirement(entry, component :: string, final, catalog)
+            local item, item_error = requirement(entry, component, final, catalog)
             if not item then return nil, nil, item_error end
             requirements[#requirements + 1] = item
         end
@@ -492,14 +496,14 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
             requires_approval = compared.requires_approval or prior == nil, revocation = compared.revocation,
             lines = compared.lines, resolved = compared.resolved, delta = compared.delta}
         local selected_policies: {unknown} = table.create(16, 0)
-        for _, raw_id in ipairs(app_binding.policies :: {unknown}) do
+        for _, raw_id in ipairs(app_binding.policies) do
             if not capability_grants.reserved(raw_id) then selected_policies[#selected_policies + 1] = raw_id end
         end
         for grant_id in pairs(policy.grants) do
             if capability_grants.reserved(grant_id) then policy.grants[grant_id] = nil end
         end
         for _, generated in ipairs(proposed.policies) do
-            local generated_id = generated.id :: string
+            local generated_id = generated.id
             selected_policies[#selected_policies + 1] = generated_id
             policy.grants[generated_id] = true
         end
@@ -518,31 +522,38 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 local database_id, database_error = capability_files.database_id(owner, target)
                 if not database_id then return nil, nil, database_error end
                 policy.databases[target] = true
-                local bindings = policy.database_bindings
+                local bindings = database_bindings
                 if not bindings then
                     bindings = {}
-                    policy.database_bindings = bindings
+                    database_bindings = bindings
                 end
                 bindings[target] = {database_id = database_id}
                 generated_databases[#generated_databases + 1] = {database_id = database_id,
                     target_db = target}
             end
         end
-        local source_binding = app_binding :: Object
-        local prospective_binding: Object = {definition_id = app_id :: string,
+        local source_binding = app_binding
+        local prospective_binding: Object = {definition_id = app_id,
             policies = selected_policies, thread_access = proposed.thread_access,
             appearance_write = source_binding.appearance_write == true,
             application_stop = source_binding.application_stop == true,
             scope_management = source_binding.scope_management == true,
             close_grace_ms = source_binding.close_grace_ms == nil and 250
                 or source_binding.close_grace_ms}
-        policy.applications = {prospective_binding}
+        local applications: {Object} = {prospective_binding}
         local prospective_bytes = canonical.encode({base_policy_digest = policy.base_policy_digest,
-            capability_digest = proposed.digest, database_bindings = policy.database_bindings or {}})
+            capability_digest = proposed.digest, database_bindings = database_bindings or {}})
         local prospective_digest = prospective_bytes and hash.sha256(prospective_bytes) or nil
         if not prospective_digest then return nil, nil, "measure prospective capability policy" end
-        policy.policy_digest = prospective_digest
-        policy.generated_databases = generated_databases
+        policy = {node_id = original_policy.node_id, policy_digest = prospective_digest,
+            packages = original_policy.packages, namespaces = original_policy.namespaces, kinds = original_policy.kinds,
+            databases = original_policy.databases, grants = original_policy.grants, modules = original_policy.modules,
+            applied = original_policy.applied, applied_databases = original_policy.applied_databases,
+            database_bindings = database_bindings, migration_barrier = original_policy.migration_barrier,
+            auto_start = original_policy.auto_start, applications = applications, workspace_id = original_policy.workspace_id,
+            overlay_owner = original_policy.overlay_owner, source_node = original_policy.source_node,
+            source_workspace = original_policy.source_workspace, workspace_application = original_policy.workspace_application,
+            base_policy_digest = original_policy.base_policy_digest, generated_databases = generated_databases}
     end
     -- The approval base is the external registry state that can affect this
     -- candidate. Keep the complete external context above for preflight and
@@ -566,7 +577,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     for _, item in ipairs(candidate_migrations) do
         local raw_bindings = policy.database_bindings
         local binding = type(raw_bindings) == "table"
-            and object((raw_bindings :: table)[item.target_db :: string]) or nil
+            and object((raw_bindings)[item.target_db]) or nil
         local physical = binding and bounds.id(binding.database_id) or item.target_db
         if physical then relevant_ids[physical] = true end
     end
@@ -604,7 +615,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
                 review = capability_review}
         end
     end
-    local context, context_error = policy_context(policy :: Policy, captured, base_digest :: string,
+    local context, context_error = policy_context(policy, captured, base_digest,
         current, installed, kernel, evidence)
     if not context then return nil, nil, context_error end
     local dependencies: {string} = {}

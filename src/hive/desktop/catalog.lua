@@ -73,8 +73,8 @@ local function start(state: State, executor: funcs.Executor, sender: string, cal
         page = future
     end
     state.pending = {recipient = sender, call = call, desktop_id = desktop_id, query = query, key = query_key(query), due = due, listeners = {},
-        identities = identities, identities_response = identities:response() :: Channel<unknown>,
-        page = page, page_response = page and page:response() :: Channel<unknown> or nil}
+        identities = identities, identities_response = identities:response(),
+        page = page, page_response = page and page:response() or nil}
     return true
 end
 function M.list(state: State, executor: funcs.Executor, sender: string, call: types.Call, query: Query, due: integer): ()
@@ -139,7 +139,7 @@ local function decode_page(value: unknown): Page?
     if not object or type(items) ~= "table" then return nil end
     local rows: {Row} = {}
     local seen: {[string]: boolean} = {}
-    for _, raw in ipairs(items :: {unknown}) do
+    for _, raw in ipairs(items) do
         local row = bounds.object(raw)
         local id = row and contract.workspace_id(row.workspace_id)
         local label = row and contract.text(row.label, 240)

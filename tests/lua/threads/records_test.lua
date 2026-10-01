@@ -27,7 +27,7 @@ local function define_tests()
             if not historical then error(tostring(historical_error)) end
             local old_bytes = record.encode(historical)
             if not old_bytes then error("encode historical preparation") end
-            test.is_nil(old_bytes:find("placement_binding_digest", 1, true))
+            test.is_nil((old_bytes:find("placement_binding_digest", 1, true)))
             body.placement_binding_digest = string.rep("a", 64)
             local measured, measured_error = record.decode(base("attempt.prepared", body, {action_id = "action", attempt_id = "attempt"}))
             if not measured then error(tostring(measured_error)) end
@@ -224,7 +224,7 @@ local function define_tests()
             test.eq(addressed.sender_action_id, "action-a")
             local plain = record.decode(base("message", text_message()))
             if not plain then error("plain message") end
-            test.is_nil((record.encode(plain) or ""):find("action_id", 1, true))
+            test.is_nil(((record.encode(plain) or ""):find("action_id", 1, true)))
             local _, empty_error = message.decode({message_id = "m1", message_kind = "request", sender_id = "alice", recipient_ids = {}, recipient_action_ids = {}, content = {text = "x"}})
             test.eq(empty_error, "recipient_action_ids names at least one action")
             local _, repeat_error = message.decode({message_id = "m1", message_kind = "request", sender_id = "alice", recipient_ids = {}, recipient_action_ids = {"a", "a"}, content = {text = "x"}})

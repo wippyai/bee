@@ -21,7 +21,12 @@ AGY_MODEL ?= gemini-3.8-flash
 .PHONY: native-tools native-check native-bootstrap-check portable-pack-atomic-check native-pack portable-deployment-check standalone native-binary-check native-portable-check native-pin-check
 NATIVE_PIN_COMMIT ?= HEAD
 native-tools:
-	$(BUILDER) toolchain "$(BEE_BUILD_MANIFEST)" --output "$(NATIVE_WIPPY)"
+	@if [ -n "$(BEE_NATIVE_LOCAL)" ]; then \
+		build/local_native.sh "$(BEE_BUILD_MANIFEST)" >/dev/null && \
+			$(BUILDER) toolchain ".wippy/local-native/bee.build.json" --output "$(NATIVE_WIPPY)"; \
+	else \
+		$(BUILDER) toolchain "$(BEE_BUILD_MANIFEST)" --output "$(NATIVE_WIPPY)"; \
+	fi
 
 native-pin-check:
 	build/native-pin.sh "$(BEE_BUILD_MANIFEST)" "$(NATIVE_PIN_COMMIT)"

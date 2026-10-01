@@ -222,7 +222,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(defined.destination, "ANTHROPIC_API_KEY")
             test.eq(defined.revision, 1)
             test.eq(defined.optional, false)
-            test.is_nil(tostring(json.encode(defined)):find(SENTINEL, 1, true))
+            test.is_nil((tostring(json.encode(defined)):find(SENTINEL, 1, true)))
             local openai = value(call(manager, "define", {workspace_id = workspace, name = "openai", provider = "codex", source = {kind = "env_variable", ref = OTHER_SOURCE}}))
             test.eq(openai.destination, "OPENAI_API_KEY")
             local listed = value(call(manager, "list", {workspace_id = workspace}))
@@ -1136,14 +1136,14 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
                 if not found then error("query " .. tbl .. ": " .. tostring(qerr)) end
                 for _, row in ipairs(found) do
                     local encoded = tostring(json.encode(row))
-                    test.is_nil(encoded:find(SENTINEL, 1, true))
-                    test.is_nil(encoded:find("sentinel-codex-tok-123", 1, true))
-                    test.is_nil(encoded:find("sentinel-claude-key-456", 1, true))
-                    test.is_nil(encoded:find("chatgpt", 1, true))
-                    test.is_nil(encoded:find("sessionKey", 1, true))
-                    test.is_nil(encoded:find(ONBOARDING_SENTINEL, 1, true))
-                    test.is_nil(encoded:find("grok-config-sentinel-23", 1, true))
-                    test.is_nil(encoded:find("sentinel-grok-token-789", 1, true))
+                    test.is_nil((encoded:find(SENTINEL, 1, true)))
+                    test.is_nil((encoded:find("sentinel-codex-tok-123", 1, true)))
+                    test.is_nil((encoded:find("sentinel-claude-key-456", 1, true)))
+                    test.is_nil((encoded:find("chatgpt", 1, true)))
+                    test.is_nil((encoded:find("sessionKey", 1, true)))
+                    test.is_nil((encoded:find(ONBOARDING_SENTINEL, 1, true)))
+                    test.is_nil((encoded:find("grok-config-sentinel-23", 1, true)))
+                    test.is_nil((encoded:find("sentinel-grok-token-789", 1, true)))
                 end
             end
             db:release()

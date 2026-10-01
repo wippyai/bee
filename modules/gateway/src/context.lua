@@ -33,7 +33,7 @@ local function copy_value(value: unknown, parent_depth: integer, state: CopyStat
 
     local depth = parent_depth + 1
     if depth > M.MAX_DEPTH then return nil, "context nests deeper than " .. tostring(M.MAX_DEPTH) end
-    local source = value :: table
+    local source = value
     if state.active[source] then return nil, "context must not contain a cycle" end
     state.active[source] = true
 
@@ -113,7 +113,7 @@ local function checked_values(value: unknown): (Values?, string?)
     local encoded, encode_error = json.encode(copied)
     if not encoded then return nil, "context JSON encoding failed: " .. tostring(encode_error) end
     if #encoded > M.MAX_BYTES then return nil, "context exceeds " .. tostring(M.MAX_BYTES) .. " encoded bytes" end
-    return copied :: Values, nil
+    return copied, nil
 end
 
 -- Decode an untrusted dynamic context map to a bounded, independently owned
@@ -149,7 +149,7 @@ function M.compose(fixed_value: unknown, dynamic_value: unknown, allowed_dynamic
     for key, value in pairs(dynamic) do combined[key] = value end
     local checked, combined_error = checked_values(combined)
     if not checked then return nil, combined_error end
-    return checked :: Context, nil
+    return checked, nil
 end
 
 -- The endpoint supplies these identities from its authenticated binding, never

@@ -56,6 +56,7 @@ entries:
   source: file://catalog.lua
   modules: [registry, system, hash]
   imports:
+    bounds: bee.protocol:bounds
     contract: bee.protocol:application
     application_admissions: bee.gov:application_admissions
     canonical: bee.protocol:canonical
@@ -96,7 +97,7 @@ entries:
   kind: function.lua
   source: file://open_method.lua
   method: handle
-  modules: [process, security, channel, time, ctx, hash, uuid]
+  modules: [process, security, channel, time, ctx, hash, uuid, registry]
   imports:
     bounds: bee.threads.records:bounds
     arguments: bee.application:arguments

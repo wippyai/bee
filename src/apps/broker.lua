@@ -61,7 +61,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     end
     local function decode_alias_backfill(value: unknown): {AliasBackfill}?
         if type(value) ~= "table" then return nil end
-        local input = value :: {[unknown]: unknown}
+        local input = value
         local count = 0
         for key in pairs(input) do
             if type(key) ~= "number" or key < 1 or key > MAX_ALIAS_BACKFILL or key ~= math.floor(key) then return nil end
@@ -133,7 +133,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if not scoped then return nil, tostring(scope_error or "set thread scope") end
         local reply, call_error = scoped:call(target, request)
         if call_error or not reply then return nil, tostring(call_error or "thread call returned no reply") end
-        return reply :: unknown?, nil
+        return reply, nil
     end
     -- A broker-launched application runs under its own host-issued principal,
     -- so it is not a member of the thread its open names. The broker holds the
@@ -145,7 +145,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     -- use and owns it from birth.
     local function active_principal(reply: unknown, actor_id: string): boolean?
         if type(reply) ~= "table" then return nil end
-        local visible = reply :: {[string]: unknown}
+        local visible = reply
         if visible.ok ~= true then
             local fault = bounds.object(visible.error)
             local code = fault and bounds.id(fault.code) or nil
@@ -171,7 +171,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if read_error or type(read) ~= "table" then
             return false, "permission_denied", "Application thread membership could not be read"
         end
-        local visible = read :: {[string]: unknown}
+        local visible = read
         if visible.ok ~= true then
             local fault = bounds.object(visible.error)
             local code = fault and bounds.id(fault.code) or "DENIED"
@@ -188,7 +188,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if join_error or type(joined) ~= "table" then
             return false, "permission_denied", "Application thread membership could not be admitted"
         end
-        local reply = joined :: {[string]: unknown}
+        local reply = joined
         if reply.ok == true then return true, nil, nil end
         local fault = bounds.object(reply.error)
         local code = fault and bounds.id(fault.code) or nil
@@ -224,7 +224,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         if active_principal(member_reply, actor_id) ~= true then return true end
         local head_revision: integer? = nil
         if type(member_reply) == "table" then
-            local value = bounds.object((member_reply :: {[string]: unknown}).value)
+            local value = bounds.object((member_reply).value)
             local summary = value and bounds.object(value.summary)
             local revision = summary and bounds.integer(summary.revision)
             if revision and revision >= 1 then head_revision = revision end
@@ -235,7 +235,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             workspace_id, "fence:" .. item.instance_id, head_revision)
         if not request then return false end
         local left = funcs.new():with_scope(membership_scope):call("bee.threads.service:leave", request)
-        return type(left) == "table" and (left :: {[string]: unknown}).ok == true
+        return type(left) == "table" and (left).ok == true
     end
     -- Every opened instance receives a live authorization for its app's
     -- stable identity, so a reopened instance inherits family threads only
@@ -260,8 +260,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if type(reply) ~= "table" then
                 return false, "permission_denied", "Application alias attestation is unavailable"
             end
-            if (reply :: {[string]: unknown}).ok ~= true then
-                local fault = bounds.object((reply :: {[string]: unknown}).error)
+            if (reply).ok ~= true then
+                local fault = bounds.object((reply).error)
                 return false, "permission_denied", tostring(fault and fault.message or "the thread owner refused the application alias")
             end
             return true, nil, nil
@@ -280,8 +280,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local reply, call_error = scoped:call("bee.threads.service:retire_app_alias", {stable = stable.id,
             instance = instance_actor, workspace_id = workspace_id, definition_id = item.descriptor.definition_id})
         if call_error then return false, "Application alias retirement call failed: " .. tostring(call_error):sub(1, 300) end
-        if type(reply) ~= "table" or (reply :: {[string]: unknown}).ok ~= true then
-            local fault = type(reply) == "table" and bounds.object((reply :: {[string]: unknown}).error) or nil
+        if type(reply) ~= "table" or (reply).ok ~= true then
+            local fault = type(reply) == "table" and bounds.object((reply).error) or nil
             return false, tostring(fault and fault.message or "the thread owner refused application alias retirement")
         end
         return true, nil
@@ -296,7 +296,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local scoped = funcs.new():with_scope(alias_scope)
         if not scoped then return false end
         local reply, call_error = scoped:call("bee.threads.service:fence_app", {stable = stable_id})
-        return not call_error and type(reply) == "table" and (reply :: {[string]: unknown}).ok == true
+        return not call_error and type(reply) == "table" and (reply).ok == true
     end
     local function backfill_retained_aliases(records: {AliasBackfill})
         local current = admission.current
@@ -401,7 +401,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 descriptors = next_descriptors, scopes = next_scopes, items = next_items}
         end)
         if ok then
-            local selected: Admission = loaded :: Admission
+            local selected: Admission = loaded
             if previous == selected then return true end
             -- A binding the catalog no longer admits fences its stable
             -- family out of every thread: a revoked or uninstalled app
@@ -424,7 +424,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             -- observed, its exact requested revision is a fence: a later
             -- catalog refresh fails closed rather than changing that target.
             for _, value in pairs(instances) do
-                local item: Instance = value :: Instance
+                local item: Instance = value
                 local replacement = selected.descriptors[item.descriptor.definition_id]
                 local replacement_binding: contract.Binding? = nil
                 for _, candidate in ipairs(selected.bindings) do
@@ -988,7 +988,8 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         -- An explicit close wins over a catalog-triggered execution swap.
         -- Once the old producer has exited, there is no process left to
         -- negotiate with or terminate. Settle the logical window directly.
-        item.waiters[#item.waiters + 1] = waiter
+        local waiters = item.waiters
+        waiters[#waiters + 1] = waiter
         local coordinator = binding_engine.coordinators[item.instance_id]
         if item.replacement and item.replacement.exited and coordinator then
             if binding_is_revoked(coordinator) then
@@ -1227,7 +1228,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             local message = selected.value
             if message:from() == owner then
                 local data: unknown = message:payload():data()
-                local object = type(data) == "table" and data :: {[string]: unknown} or nil
+                local object = type(data) == "table" and data or nil
                 local request_id = object and contract.text(object.request_id, 80) or nil
                 local instance_id = object and contract.text(object.instance_id, 160) or nil
                 local thread_id = object and contract.text(object.thread_id, 160) or nil
@@ -1382,7 +1383,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     if title == "" then title = item.descriptor.title end
                     if title ~= (item.announced_title or item.descriptor.title) then
                         item.announced_title = title; item.title_dirty = true
-                        publish_title(item :: Instance)
+                        publish_title(item)
                     end
                 end
             end
@@ -1553,7 +1554,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         elseif selected.channel == requests then
             local raw_request: unknown = selected.value:payload():data()
             local req = contract.request(raw_request)
-            local raw_object = type(raw_request) == "table" and raw_request :: {[string]: unknown} or nil
+            local raw_object = type(raw_request) == "table" and raw_request or nil
             if tostring(selected.value:from()) ~= owner then
                 local source = find_pid(tostring(selected.value:from()))
                 req = source and contract.navigation(raw_request, source.instance_id, source.view_id,
@@ -1597,7 +1598,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                                 -- pending catalog swap before asking its old
                                 -- producer to stop, so an EXIT cannot launch
                                 -- a replacement while cleanup is in progress.
-                                local current: Instance = item :: Instance
+                                local current: Instance = item
                                 if settle_exited_replacement(current, false) then
                                     -- Keep a pending checkpoint write: cleanup
                                     -- must drain it, but the dead producer is
@@ -1678,7 +1679,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                             refresh_admission()
                             return admission.current
                         end)
-                        local selected_admission: Admission? = selected_catalog :: Admission?
+                        local selected_admission: Admission? = selected_catalog
                         local existing: Instance? = nil
                         local count = 0
                         for _, item in pairs(instances) do
@@ -1688,9 +1689,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                         if not selected_admission or not binding or not descriptor then
                             emit(contract.reply(req.request_id, "open", "not_admitted", admission.error ~= "" and ("Application admission unavailable: " .. admission.error) or "Application is not admitted"), true)
                         elseif runtime_provenance then
-                            local admitted: Admission = selected_admission :: Admission
-                            local selected_binding: contract.Binding = binding :: contract.Binding
-                            local selected_descriptor: contract.Descriptor = descriptor :: contract.Descriptor
+                            local admitted: Admission = selected_admission
+                            local selected_binding: contract.Binding = binding
+                            local selected_descriptor: contract.Descriptor = descriptor
                             local scope = admitted.scopes[req.definition_id]
                             if req.restore_instance_id ~= "" then
                                 emit(contract.reply(req.request_id, "open", "permission_denied", "Agent application opens cannot select restored identities"), true)
@@ -1715,9 +1716,9 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                             emit(contract.reply(req.request_id, "open", "identity_conflict", "View identity is already active"), true)
                         elseif count >= 16 then emit(contract.reply(req.request_id, "open", "instance_limit", "Desktop instance limit reached"), true)
                         else
-                            local admitted: Admission = selected_admission :: Admission
-                            local selected_binding: contract.Binding = binding :: contract.Binding
-                            local selected_descriptor: contract.Descriptor = descriptor :: contract.Descriptor
+                            local admitted: Admission = selected_admission
+                            local selected_binding: contract.Binding = binding
+                            local selected_descriptor: contract.Descriptor = descriptor
                             local view_id = req.restore_view_id ~= "" and req.restore_view_id or uuid.v7()
                             local instance_id = req.restore_instance_id ~= "" and req.restore_instance_id or uuid.v7()
                             -- The app reads the thread it was launched for as

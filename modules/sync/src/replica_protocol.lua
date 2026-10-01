@@ -23,7 +23,7 @@ type Request = {
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
     for key in pairs(value) do if type(key) ~= "string" then return nil end end
-    return value :: Object
+    return value
 end
 
 local function exact(value: Object, allowed: {string}): string?
@@ -75,8 +75,8 @@ function M.decode(raw: unknown): (Request?, string?)
         return {action = "put", source_owner = owner, feed = feed, version_key = key,
             descriptor_digest = measured, offset = offset, content_base64 = value.content_base64}, nil
     end
-    if value.action == "finish" or value.action == "status" then
-        local action: string = value.action :: string
+    local action = value.action
+    if action == "finish" or action == "status" then
         return selected_key(value, action)
     end
     return nil, "replica action is unsupported"

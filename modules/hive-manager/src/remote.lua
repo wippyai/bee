@@ -3,6 +3,7 @@
 -- forwards. The view process holds the owner's mount; this window only draws
 -- the rows it is sent and forwards input while it controls the session.
 local appearance = require("appearance")
+local bounds = require("bounds")
 local frame = require("frame")
 local names = require("names")
 local M = {}

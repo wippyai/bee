@@ -21,7 +21,7 @@ local function define_tests()
             test.eq(value.occurrence, "tool:tool-1")
             test.is_false(value.ambiguous)
             local encoded = json.encode(value.fields)
-            test.is_nil(encoded:find("private-command", 1, true))
+            test.is_nil((encoded:find("private-command", 1, true)))
             local digests = value.fields.content_digests :: Object
             test.not_nil(digests.tool_input)
             local start, start_error = hooks.normalize("SessionStart", {sessionId = "s", session_id = "s",
@@ -47,7 +47,7 @@ local function define_tests()
             test.is_nil(value.fields.error)
             local encoded = json.encode(value.fields) or ""
             for _, private in ipairs({"never-store-this", "/private", "secret error", "decision", "stepIdx"}) do
-                test.is_nil(encoded:find(private, 1, true))
+                test.is_nil((encoded:find(private, 1, true)))
             end
             input.toolCall = {name = "view_file", args = {path = "changed"}}
             local changed, changed_error = hooks.normalize("PostToolUse", input)
@@ -133,10 +133,10 @@ local function define_tests()
             local digests = fields.content_digests :: Object
             test.eq(#tostring(digests.tool_response), 64)
             local encoded = json.encode(fields) or ""
-            test.is_nil(encoded:find("sk-live", 1, true))
-            test.is_nil(encoded:find("file", 1, true))
-            test.is_nil(encoded:find("private", 1, true))
-            test.is_nil(encoded:find("/home/someone", 1, true))
+            test.is_nil((encoded:find("sk-live", 1, true)))
+            test.is_nil((encoded:find("file", 1, true)))
+            test.is_nil((encoded:find("private", 1, true)))
+            test.is_nil((encoded:find("/home/someone", 1, true)))
             local same = hooks.normalize("PostToolUse", cleaned)
             test.eq((same :: hooks.Submission).digest, submission.digest)
             cleaned.tool_response = {content = {{type = "text", text = "changed"}}}
@@ -173,7 +173,7 @@ local function define_tests()
             test.eq(handler.type, "http")
             test.eq(handler.timeout, 2)
             test.eq((handler.headers :: Object).Authorization, "Bearer ${BEE_GATEWAY_HOOK_TOKEN}")
-            test.is_nil(settings_json:find("BEE_GATEWAY_HOOK_TOKEN=", 1, true))
+            test.is_nil((settings_json:find("BEE_GATEWAY_HOOK_TOKEN=", 1, true)))
             local codex_gateway: codex_configuration.Gateway = {endpoint = gateway.endpoint, action_id = gateway.action_id, tools = gateway.tools, hooks = gateway.hooks, token_environment = gateway.token_environment, hook_token_environment = gateway.hook_token_environment}
             local section = codex_configuration.gateway_section(codex_gateway)
             test.is_true(section:find('url = "http://127.0.0.1:18790/hook/act-1/mcp"', 1, true) ~= nil)

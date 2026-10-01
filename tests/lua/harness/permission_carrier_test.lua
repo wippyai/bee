@@ -682,14 +682,13 @@ local cases = test.run_cases(define_tests)
 -- prepare_host changes shared host entries; later suites in the same
 -- runtime see the originals.
 return {run = function(options)
-    local originals: {Object} = {}
-    for _, ref in ipairs({ACCEPTANCE, POLICY, PRODUCTION_ACCEPTANCE, PRODUCTION_POLICY, UNPINNED_POLICY,
-        "bee.placement.native:placement_resource_mode", "bee:approver_policies", "bee.placement.native:placement_admitted_roots"}) do
-        originals[#originals + 1] = assert(registry.get(ref)) :: Object
-    end
+    local before = assert(registry.snapshot())
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
-    for _, original in ipairs(originals) do changes:update(original) end
+    for _, ref in ipairs({ACCEPTANCE, POLICY, PRODUCTION_ACCEPTANCE, PRODUCTION_POLICY, UNPINNED_POLICY,
+        "bee.placement.native:placement_resource_mode", "bee:approver_policies", "bee.placement.native:placement_admitted_roots"}) do
+        changes:update(assert(before:get(ref)))
+    end
     assert(changes:apply())
     if not ok then error(tostring(result)) end
     return result

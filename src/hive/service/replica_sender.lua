@@ -27,7 +27,7 @@ end
 
 local function state(value: unknown): (State?, string?)
     if type(value) ~= "table" then return nil, "replica state is not an object" end
-    local raw = value :: Object
+    local raw = value
     for name in pairs(raw) do
         if name ~= "source_owner" and name ~= "feed" and name ~= "key" and name ~= "state"
             and name ~= "received_bytes" and name ~= "total_bytes" then
@@ -40,22 +40,22 @@ local function state(value: unknown): (State?, string?)
         or total ~= math.floor(total) or total < 0 or total > MAX_CONTENT_BYTES or received > total then
         return nil, "replica state is malformed"
     end
-    return {state = raw.state :: string, received_bytes = math.floor(received),
+    return {state = raw.state, received_bytes = math.floor(received),
         total_bytes = math.floor(total)}, nil
 end
 
 local function result(reply: unknown): transaction.Result
     if type(reply) ~= "table" then return failure("UNAVAILABLE", "Hive replica reply is malformed") end
-    local envelope = reply :: Object
+    local envelope = reply
     if envelope.ok ~= true then
-        local fault = type(envelope.error) == "table" and (envelope.error :: Object) or nil
+        local fault = type(envelope.error) == "table" and (envelope.error) or nil
         local code = fault and fault.code
         local message = fault and fault.message
         return failure(type(code) == "string" and code or "UNAVAILABLE",
             type(message) == "string" and message or "Hive replica call failed")
     end
     if type(envelope.value) ~= "table" then return failure("UNAVAILABLE", "replica owner reply is malformed") end
-    local domain = envelope.value :: Object
+    local domain = envelope.value
     if type(domain.ok) ~= "boolean" or type(domain.replayed) ~= "boolean" then
         return failure("UNAVAILABLE", "replica owner reply is malformed")
     end

@@ -47,7 +47,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     -- re-declare it through an ordinary trait or present it as a base tool.
     local declared_traits = value.traits
     if type(declared_traits) ~= "table" then return nil, nil, "expected list" end
-    for _, raw_trait in ipairs(declared_traits :: {unknown}) do
+    for _, raw_trait in ipairs(declared_traits) do
         local trait = bounds.object(raw_trait)
         local trait_tools = trait and bounds.ids(trait.tools, true)
         if trait_tools then
@@ -59,7 +59,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
     local has_open = false
     for _, name in ipairs(ceiling) do if name == "application_open" then has_open = true end end
     local traits: {unknown} = {}
-    for _, trait in ipairs(declared_traits :: {unknown}) do traits[#traits + 1] = trait end
+    for _, trait in ipairs(declared_traits) do traits[#traits + 1] = trait end
     if has_open then traits[#traits + 1] = mcp.APPLICATION_RUNTIME_TRAIT end
     local complete, complete_error = catalog.decode({tools = combined, traits = traits})
     if not complete then return nil, nil, complete_error end

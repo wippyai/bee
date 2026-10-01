@@ -51,7 +51,8 @@ local function decode_terminal(value: unknown): types.Terminal?
     local object = bounds.object(value)
     if not object or bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"}) then return nil end
     local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
-    if not outcome then return nil end
+    if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil end
+    local terminal_outcome: types.Outcome = outcome
     local answer: string? = nil
     if object.answer ~= nil then
         answer = bounds.text(object.answer, M.MAX_ANSWER_BYTES)
@@ -71,9 +72,9 @@ local function decode_terminal(value: unknown): types.Terminal?
         local code = bounds.id(error_object.code)
         local message = bounds.text(error_object.message, 4096)
         if not code or not message or type(error_object.retryable) ~= "boolean" then return nil end
-        fault = {code = code, message = message, retryable = error_object.retryable :: boolean}
+        fault = {code = code, message = message, retryable = error_object.retryable}
     end
-    return {outcome = outcome :: types.Outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}
+    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}
 end
 
 -- Normalizer state is persisted by the carrier and returns as untrusted input.
@@ -104,8 +105,8 @@ function M.decode_state(value: unknown): (State?, string?)
     end
     local usage, usage_error = decode_usage(object.usage)
     if usage_error then return nil, "state." .. usage_error end
-    return {session_id = session_id, started = object.started :: boolean, resumed = object.resumed :: boolean,
-        terminal = terminal, answer = answer, answer_truncated = object.answer_truncated :: boolean, usage = usage}, nil
+    return {session_id = session_id, started = object.started, resumed = object.resumed,
+        terminal = terminal, answer = answer, answer_truncated = object.answer_truncated, usage = usage}, nil
 end
 
 local function key(index: integer, suffix: string): string
@@ -123,7 +124,7 @@ end
 
 local function usage_of(value: unknown): events.Usage?
     if type(value) ~= "table" then return nil end
-    local usage = value :: {[string]: unknown}
+    local usage = value
     local input = usage.input_tokens or usage.prompt_tokens
     local output = usage.output_tokens or usage.completion_tokens
     local cached = usage.cache_read_input_tokens or usage.cached_input_tokens or usage.cached_tokens

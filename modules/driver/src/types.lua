@@ -138,7 +138,8 @@ function M.decode_terminal(value: unknown): (Terminal?, string?)
     local unknown = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
     if unknown then return nil, "terminal: " .. unknown end
     local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
-    if not outcome then return nil, "terminal.outcome is not a carrier outcome" end
+    if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "terminal.outcome is not a carrier outcome" end
+    local terminal_outcome: Outcome = outcome
     local answer: string? = nil
     if object.answer ~= nil then
         answer = bounds.text(object.answer, 32768)
@@ -169,6 +170,6 @@ function M.decode_terminal(value: unknown): (Terminal?, string?)
         fault = {code = code, message = message, retryable = raw_fault.retryable}
     end
     if outcome == "failed" and not fault then return nil, "failed terminal must include an error" end
-    return {outcome = outcome :: Outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
+    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
 end
 return M

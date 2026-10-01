@@ -43,7 +43,7 @@ function M.apply(menu: Menu, value: unknown): boolean
     end
     local items: {Item} = {}
     if type(value.items) == "table" then
-        for index, raw in ipairs(value.items :: {unknown}) do
+        for index, raw in ipairs(value.items) do
             if index > M.MAX_ITEMS or type(raw) ~= "table" then break end
             local id, label = contract.workspace_id(raw.workspace_id), contract.text(raw.label, 240)
             if id and label then items[#items + 1] = {workspace_id = id, label = label} end

@@ -41,13 +41,13 @@ local function stored(tx: sql.Transaction, thread_id: string, attempt_id: string
     local epoch, revision = integer(row.carrier_epoch), integer(row.checkpoint_revision)
     if not epoch or not revision then return nil, "carrier row is corrupt" end
     local checkpoint: string? = nil
-    if type(row.checkpoint_json) == "string" then checkpoint = row.checkpoint_json :: string end
+    if type(row.checkpoint_json) == "string" then checkpoint = row.checkpoint_json end
     return {carrier_epoch = epoch, checkpoint_revision = revision, checkpoint_json = checkpoint}, nil
 end
 local function view(current: Stored): {[string]: unknown}
     local checkpoint: unknown = nil
     if current.checkpoint_json then
-        local decoded, err = json.decode(current.checkpoint_json :: string)
+        local decoded, err = json.decode(current.checkpoint_json)
         if not err then checkpoint = decoded end
     end
     return {carrier_epoch = current.carrier_epoch, checkpoint_revision = current.checkpoint_revision, checkpoint = checkpoint}
@@ -129,7 +129,7 @@ function M.event_key(attempt_id: string, provenance: Provenance): string
 end
 local function control_key(decoded: record_types.Observation): string?
     if decoded.type ~= "extension" then return "a bee-sourced carrier record is an extension observation" end
-    local extension = decoded.data :: record_types.Extension
+    local extension = decoded.data
     local revision = M.CONTROL_EVENTS[extension.event_name]
     if not revision then return "control event " .. extension.event_name .. " is not one the carrier may commit" end
     if extension.event_revision ~= revision then return "control event " .. extension.event_name .. " revision must be " .. revision end
@@ -137,7 +137,7 @@ local function control_key(decoded: record_types.Observation): string?
 end
 local function decode_entries(value: unknown): ({Entry}?, string?)
     if type(value) ~= "table" then return nil, "records must be a list" end
-    local list = value :: {unknown}
+    local list = value
     if #list > M.MAX_RECORDS then return nil, "records exceeds " .. tostring(M.MAX_RECORDS) .. " items" end
     local entries: {Entry} = {}
     for index, item in ipairs(list) do
@@ -170,7 +170,7 @@ local function decode_entries(value: unknown): ({Entry}?, string?)
             turn_id = bounds.id(object.turn_id)
             if not turn_id then return nil, "records[" .. tostring(index) .. "].turn_id is not an identifier" end
         end
-        entries[index] = {source = source :: record_types.Source, decoded = decoded, turn_id = turn_id, provenance = provenance}
+        entries[index] = {source = source, decoded = decoded, turn_id = turn_id, provenance = provenance}
     end
     return entries, nil
 end
@@ -228,7 +228,7 @@ function M.commit(db: sql.DB, actor: string, request: unknown): Result
             if provenance then decoded.event_key = M.event_key(attempt_id, provenance) end
             local result = authority.commit_observation(tx, head, actor, source, decoded, context)
             if not result.ok then return result end
-            local value = result.value :: {record_id: string, sequence: integer}
+            local value = result.value
             if provenance and not result.replayed then
                 local _, map_err = tx:execute("INSERT INTO bee_thread_carrier_events (thread_id, attempt_id, stream_id, envelope_index, event_index, source_first_sequence, source_last_sequence, record_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     {head.thread_id, attempt_id, provenance.stream_id, provenance.envelope_index, provenance.event_index, provenance.source_first_sequence, provenance.source_last_sequence, value.record_id})
@@ -370,7 +370,7 @@ function M.checkpoint(db: sql.DB, actor: string, request: unknown): Result
                 or decoded.action_id ~= attempt.action_id or decoded.record_id ~= prepared.record_id then
                 return storage("prepared attempt record is corrupt")
             end
-            local plan = decoded.body :: record_types.Prepared
+            local plan = decoded.body
             value.placement_binding = plan.placement_binding
             value.placement_binding_digest = plan.placement_binding_digest
             value.placement_attempt_id = plan.placement_attempt_id

@@ -43,7 +43,13 @@ local function define_tests()
         end)
         test.it("selects the shared normalizer from the registry descriptor codec", function()
             local protocol = universal.protocol("bee.driver.opencode.descriptor:cli")
-            test.eq(protocol.PROTOCOL_REVISION, "opencode-run-json-1")
+            test.eq(protocol.revision(), "opencode-run-json-1")
+            local function legacy_property(raw: unknown, name: string): unknown
+                assert(type(raw) == "table")
+                return raw[name]
+            end
+            test.eq(legacy_property(protocol, "PROTOCOL_REVISION"), protocol.revision())
+            test.eq(legacy_property(protocol, "MAX_ANSWER_BYTES"), protocol.max_answer_bytes())
             local handle = universal.normalize("bee.driver.opencode.descriptor:cli")
             local started = handle({index = 0, envelope = {type = "step_start", sessionID = "ses_universal"}})
             local reply = started :: {[string]: unknown}

@@ -358,8 +358,8 @@ local function through_placement(harness: Harness)
     for _, event in ipairs(expected_hooks) do
         if not hook_events[event] then error(harness.name .. ": hook " .. event .. " never became a record; got " .. tostring(json.encode(hook_events))) end
     end
-    test.is_nil(hook_text:find("read the thread", 1, true))
-    test.is_nil(hook_text:find("cursor", 1, true))
+    test.is_nil((hook_text:find("read the thread", 1, true)))
+    test.is_nil((hook_text:find("cursor", 1, true)))
     leak_free(hook_text, harness.name .. " hook records")
     test.eq(checked.valid, false)
     test.eq(checked.reason, "binding is revoked")
@@ -610,8 +610,8 @@ local function hooks_through_gateway(harness: Harness)
     test.is_nil(pre.tool_input)
     test.is_true((tonumber((pre.content_sizes :: Object).tool_input) or 0) > 0)
     local queue_text = json.encode(queue.hooks) or ""
-    test.is_nil(queue_text:find("read the thread", 1, true))
-    test.is_nil(queue_text:find("cursor", 1, true))
+    test.is_nil((queue_text:find("read the thread", 1, true)))
+    test.is_nil((queue_text:find("cursor", 1, true)))
     leak_free(queue_text, harness.name .. " hook queue")
     leak_free(output, harness.name .. " output")
     leak_free(errors, harness.name .. " stderr")

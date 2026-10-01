@@ -30,8 +30,8 @@ type AwaitOptions = {timeout_ms: integer?}
 type CancelOptions = {work: WorkArg?, incarnation: integer?, reason: string?, operation_key: string}
 type CloseOptions = {session: SessionArg?, incarnation: integer?, operation_key: string}
 type SendOptions = {session: SessionArg?, incarnation: integer?, input: Input, output: string?, operation_key: string}
-type OpenOptions = {definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, operation_key: string}
-type CallOptions = {definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, input: Input, output: string?,
+type OpenOptions = {presentation: protocol.Presentation?, definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, operation_key: string}
+type CallOptions = {presentation: protocol.Presentation?, definition: string, profile: ProfileRef?, workdir: string?, workspace: string?, input: Input, output: string?,
     timeout_ms: integer?, operation_key: string}
 type ClientAwaitOptions = {subject: string | Observable, timeout_ms: integer?}
 type JoinOptions = {works: {WorkArg}, policy: JoinPolicy?, quorum: integer?, timeout_ms: integer?,
@@ -83,9 +83,9 @@ local function call_owner(id: string, method: string, request: {[string]: unknow
     if not definition then return nil, "contract " .. id .. ": " .. tostring(get_error) end
     local instance, open_error = definition:open()
     if not instance then return nil, "open " .. id .. ": " .. tostring(open_error) end
-    local entry = (instance :: {[string]: unknown})[method]
+    local entry = (instance)[method]
     if type(entry) ~= "function" then return nil, id .. " has no method " .. method end
-    local raw, call_error = (entry :: (unknown, unknown) -> (unknown, unknown))(instance, request)
+    local raw, call_error = (entry)(instance, request)
     if call_error ~= nil then return nil, tostring(call_error) end
     return raw, nil
 end
@@ -127,9 +127,9 @@ local function ref_of(value: unknown, kind: "session" | "work"): (string?, Fault
     if type(value) == "string" then
         ref = value
     elseif type(value) == "table" then
-        local accessor = (value :: {[string]: unknown}).ref
+        local accessor = (value).ref
         if type(accessor) == "function" then
-            local produced = (accessor :: (unknown) -> unknown)(value)
+            local produced = (accessor)(value)
             if type(produced) == "string" then ref = produced end
         end
     end
@@ -168,7 +168,7 @@ local function output_of(value: unknown): (string?, Fault?)
     return output, nil
 end
 
-local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown): ({[string]: unknown}?, Fault?)
+local function spec_of(definition: unknown, profile: unknown, workdir: unknown, workspace: unknown, presentation: unknown): ({[string]: unknown}?, Fault?)
     local ref = protocol.any_ref(definition)
     if not ref then return nil, invalid("definition must be a ref") end
     local spec: {[string]: unknown} = {definition = ref}
@@ -190,12 +190,16 @@ local function spec_of(definition: unknown, profile: unknown, workdir: unknown, 
         if type(workspace) ~= "string" or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, invalid("workspace must be a canonical workspace ID") end
         spec.workspace = workspace
     end
+    if presentation ~= nil then
+        if presentation ~= "headless" and presentation ~= "window" then return nil, invalid("presentation must be headless or window") end
+        spec.presentation = presentation
+    end
     return spec, nil
 end
 
 local function incarnation_of(explicit: unknown, handle: unknown): (integer?, Fault?)
     local value = explicit
-    if type(handle) == "table" then value = (handle :: {[string]: unknown}).incarnation end
+    if type(handle) == "table" then value = (handle).incarnation end
     if value == nil then return nil, nil end
     local number = protocol.position(value)
     if not number then return nil, invalid("incarnation must be a positive integer") end
@@ -203,7 +207,7 @@ local function incarnation_of(explicit: unknown, handle: unknown): (integer?, Fa
 end
 
 local function new_client(): Client
-    local client: Client = {} :: Client
+    local client: Client
 
     local function observe(ref: string, timeout: unknown): (unknown, Fault?)
         local milliseconds, timeout_fault = timeout_of(timeout)
@@ -213,10 +217,9 @@ local function new_client(): Client
 
     local function operation_handle(receipt: protocol.ControlReceipt): Operation
         local ref = receipt.operation
-        local handle: Operation = {} :: Operation
-        handle.receipt = receipt
-        handle.ref = function(_: Operation): string return ref end
-        handle.await = function(_: Operation, options: AwaitOptions?): (OperationAwait?, Fault?)
+        local handle_receipt = receipt
+        local handle_ref = function(_: Operation): string return ref end
+        local handle_await = function(_: Operation, options: AwaitOptions?): (OperationAwait?, Fault?)
             local value, failure = observe(ref, options and options.timeout_ms)
             if failure then return nil, failure end
             local observed, decode_error = protocol.decode_operation_await(value)
@@ -224,16 +227,15 @@ local function new_client(): Client
             if observed.subject ~= ref then return nil, unreadable("await answered another subject", nil) end
             return observed, nil
         end
-        return handle
+        return {receipt = handle_receipt, ref = handle_ref, await = handle_await}
     end
 
     local function work_handle(ref: string, session: string, incarnation: integer, receipt: protocol.WorkReceipt?): Work
-        local handle: Work = {} :: Work
-        handle.receipt = receipt
-        handle.session = session
-        handle.incarnation = incarnation
-        handle.ref = function(_: Work): string return ref end
-        handle.await = function(_: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
+        local handle_receipt = receipt
+        local handle_session = session
+        local handle_incarnation = incarnation
+        local handle_ref = function(_: Work): string return ref end
+        local handle_await = function(_: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
             local value, failure = observe(ref, options and options.timeout_ms)
             if failure then return nil, failure end
             local observed, decode_error = protocol.decode_work_await(value)
@@ -241,12 +243,12 @@ local function new_client(): Client
             if observed.subject ~= ref then return nil, unreadable("await answered another subject", nil) end
             return observed, nil
         end
-        handle.cancel = function(_: Work, options: CancelOptions): (Operation?, Fault?)
+        local handle_cancel = function(_: Work, options: CancelOptions): (Operation?, Fault?)
             local request: CancelOptions = {work = ref, incarnation = incarnation, reason = options and options.reason,
                 operation_key = options.operation_key}
             return client:cancel(request)
         end
-        handle.state = function(_: Work): (protocol.WorkState?, Fault?)
+        local handle_state = function(_: Work): (protocol.WorkState?, Fault?)
             local value, failure = invoke(M.SESSIONS, "get", {work = ref}, nil)
             if failure then return nil, failure end
             local decoded, decode_error = protocol.decode_get(value)
@@ -255,43 +257,42 @@ local function new_client(): Client
             end
             return decoded.value, nil
         end
-        return handle
+        return {receipt = handle_receipt, session = handle_session, incarnation = handle_incarnation, ref = handle_ref, await = handle_await, cancel = handle_cancel, state = handle_state}
     end
 
     local function session_handle(snapshot: protocol.SessionSnapshot, receipt: protocol.OpenReceipt?): Session
-        local handle: Session = {} :: Session
-        handle.receipt = receipt
-        handle.snapshot = snapshot
-        handle.incarnation = snapshot.incarnation
-        handle.ref = function(_: Session): string return snapshot.session end
-        handle.send = function(_: Session, options: SendOptions): (Work?, Fault?)
+        local handle_receipt = receipt
+        local handle_snapshot = snapshot
+        local handle_incarnation = snapshot.incarnation
+        local handle_ref = function(_: Session): string return snapshot.session end
+        local handle_send = function(_: Session, options: SendOptions): (Work?, Fault?)
             local request: SendOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
                 input = options.input, output = options.output, operation_key = options.operation_key}
             return client:send(request)
         end
-        handle.await = function(_: Session, work: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
+        local handle_await = function(_: Session, work: Work, options: AwaitOptions?): (WorkAwait?, Fault?)
             if work.session ~= snapshot.session then
                 return nil, invalid("work " .. work:ref() .. " does not belong to session " .. snapshot.session)
             end
             return work:await(options)
         end
-        handle.close = function(_: Session, options: CloseOptions): (Operation?, Fault?)
+        local handle_close = function(_: Session, options: CloseOptions): (Operation?, Fault?)
             local request: CloseOptions = {session = snapshot.session, incarnation = snapshot.incarnation,
                 operation_key = options.operation_key}
             return client:close(request)
         end
-        handle.get = function(_: Session): (Session?, Fault?)
+        local handle_get = function(_: Session): (Session?, Fault?)
             return client:get(snapshot.session)
         end
-        handle.history = function(_: Session, options: {cursor: integer?, limit: integer?}?): (protocol.HistoryPage?, Fault?)
+        local handle_history = function(_: Session, options: {cursor: integer?, limit: integer?}?): (protocol.HistoryPage?, Fault?)
             return client:history({session = snapshot.session, cursor = options and options.cursor, limit = options and options.limit})
         end
-        return handle
+        return {receipt = handle_receipt, snapshot = handle_snapshot, incarnation = handle_incarnation, ref = handle_ref, send = handle_send, await = handle_await, close = handle_close, get = handle_get, history = handle_history}
     end
 
     -- Opens a session with its first work in one owner operation.
     local function run(options: CallOptions): (Work?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.presentation)
         if not spec then return nil, spec_fault end
         local input, input_fault = input_of(options.input)
         if input == nil then return nil, input_fault end
@@ -308,8 +309,8 @@ local function new_client(): Client
         return work_handle(receipt.work, receipt.session, 1, receipt), nil
     end
 
-    client.open = function(_: Client, options: OpenOptions): (Session?, Fault?)
-        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace)
+    local client_open = function(_: Client, options: OpenOptions): (Session?, Fault?)
+        local spec, spec_fault = spec_of(options.definition, options.profile, options.workdir, options.workspace, options.presentation)
         if not spec then return nil, spec_fault end
         local request: {[string]: unknown} = {spec = spec}
         local key, key_fault = operation_key(options.operation_key)
@@ -322,7 +323,7 @@ local function new_client(): Client
         return session_handle(receipt.snapshot, receipt), nil
     end
 
-    client.call = function(_: Client, options: CallOptions): (Call?, Fault?)
+    local client_call = function(_: Client, options: CallOptions): (Call?, Fault?)
         local timeout, timeout_fault = timeout_of(options.timeout_ms)
         if timeout_fault then return nil, timeout_fault end
         local work, run_fault = run(options)
@@ -332,7 +333,7 @@ local function new_client(): Client
         return {work = work, observation = observation}, nil
     end
 
-    client.send = function(_: Client, options: SendOptions): (Work?, Fault?)
+    local client_send = function(_: Client, options: SendOptions): (Work?, Fault?)
         local session, session_fault = ref_of(options.session, "session")
         if not session then return nil, session_fault end
         local input, input_fault = input_of(options.input)
@@ -354,7 +355,7 @@ local function new_client(): Client
         return work_handle(receipt.work, receipt.session, incarnation or 1, receipt), nil
     end
 
-    client.cancel = function(_: Client, options: CancelOptions): (Operation?, Fault?)
+    local client_cancel = function(_: Client, options: CancelOptions): (Operation?, Fault?)
         local work, work_fault = ref_of(options.work, "work")
         if not work then return nil, work_fault end
         local reason: string? = nil
@@ -376,8 +377,8 @@ local function new_client(): Client
         return operation_handle(receipt), nil
     end
 
-    client.close = function(_: Client, options: CloseOptions): (Operation?, Fault?)
-        if (options :: {[string]: unknown}).mode ~= nil then return nil, invalid("close does not accept a mode") end
+    local client_close = function(_: Client, options: CloseOptions): (Operation?, Fault?)
+        if (options).mode ~= nil then return nil, invalid("close does not accept a mode") end
         local session, session_fault = ref_of(options.session, "session")
         if not session then return nil, session_fault end
         local incarnation, incarnation_fault = incarnation_of(options.incarnation, options.session)
@@ -394,7 +395,7 @@ local function new_client(): Client
         return operation_handle(receipt), nil
     end
 
-    client.await = function(_: Client, options: ClientAwaitOptions): (AnyAwait?, Fault?)
+    local client_await = function(_: Client, options: ClientAwaitOptions): (AnyAwait?, Fault?)
         local subject = options.subject
         local ref: string? = nil
         if type(subject) == "string" then
@@ -413,8 +414,8 @@ local function new_client(): Client
         return observed, nil
     end
 
-    client.join = function(_: Client, options: JoinOptions): (JoinAwait?, Fault?)
-        if (options :: {[string]: unknown}).losers ~= nil then return nil, invalid("join does not accept a losers option") end
+    local client_join = function(_: Client, options: JoinOptions): (JoinAwait?, Fault?)
+        if (options).losers ~= nil then return nil, invalid("join does not accept a losers option") end
         local rows = bounds.array(options.works, protocol.MAX_ITEMS)
         if not rows or #rows < 1 then return nil, invalid("works must hold 1 to 64 work refs") end
         local works: {string} = {}
@@ -454,7 +455,7 @@ local function new_client(): Client
         return joined, nil
     end
 
-    client.get = function(_: Client, ref: string): (Session?, Fault?)
+    local client_get = function(_: Client, ref: string): (Session?, Fault?)
         local session = protocol.ref("session", ref)
         if not session then return nil, invalid("session must be a session ref") end
         local value, failure = invoke(M.SESSIONS, "get", {session = session}, nil)
@@ -466,7 +467,7 @@ local function new_client(): Client
         return session_handle(decoded.value, nil), nil
     end
 
-    client.work = function(_: Client, ref: string): (Work?, Fault?)
+    local client_work = function(_: Client, ref: string): (Work?, Fault?)
         local work = protocol.ref("work", ref)
         if not work then return nil, invalid("work must be a work ref") end
         local value, failure = invoke(M.SESSIONS, "get", {work = work}, nil)
@@ -480,7 +481,7 @@ local function new_client(): Client
         return work_handle(work, decoded.value.session, owner.incarnation, nil), nil
     end
 
-    client.history = function(_: Client, options: HistoryOptions): (protocol.HistoryPage?, Fault?)
+    local client_history = function(_: Client, options: HistoryOptions): (protocol.HistoryPage?, Fault?)
         local session = protocol.ref("session", options.session)
         local cursor = options.cursor == nil and nil or bounds.count(options.cursor)
         local limit = options.limit == nil and 64 or protocol.position(options.limit)
@@ -492,7 +493,7 @@ local function new_client(): Client
         return page, nil
     end
 
-    client.list = function(_: Client, options: ListOptions?): (protocol.ListPage?, Fault?)
+    local client_list = function(_: Client, options: ListOptions?): (protocol.ListPage?, Fault?)
         local request: {[string]: unknown} = {}
         if options and options.filter ~= nil then
             local filter = bounds.object(options.filter)
@@ -518,7 +519,7 @@ local function new_client(): Client
         return page, nil
     end
 
-    client.catalog = function(_: Client, options: CatalogOptions?): (protocol.CatalogPage?, Fault?)
+    local client_catalog = function(_: Client, options: CatalogOptions?): (protocol.CatalogPage?, Fault?)
         local request: {[string]: unknown} = {}
         if options and options.kind ~= nil then
             if options.kind ~= "definition" and options.kind ~= "profile" then
@@ -542,6 +543,7 @@ local function new_client(): Client
         return page, nil
     end
 
+    client = {open = client_open, call = client_call, send = client_send, cancel = client_cancel, close = client_close, await = client_await, join = client_join, get = client_get, work = client_work, history = client_history, list = client_list, catalog = client_catalog}
     return client
 end
 

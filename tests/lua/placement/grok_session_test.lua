@@ -12,9 +12,10 @@ local exec = require("exec")
 local quote = require("quote")
 local launch = require("grok_launch")
 local configuration = require("grok_configuration")
-local materialization = require("materialization")
 local homes = require("homes")
 local store = require("store")
+local placement_service = require("placement_service")
+local runner_fixture = require("runner_fixture")
 local request_codec = require("request_codec")
 local types = require("types")
 
@@ -130,10 +131,14 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
     local intended = store.intend(db, request, assert(request_codec.digest(request)), assert(json.encode(request)),
         {capability = "direct_process", exit_observation = "eof_gated"})
     test.is_true(intended.ok)
-    test.is_true(store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting",
-        fields = {runner_pid = process.pid()}, evidence = {kind = "test.claimed", detail = "Grok turn materialization"}}).ok)
-    local prepared, err = materialization.prepare(db, request, attempt_id, 0)
-    if not prepared then error(tostring(err)) end
+    local runner = runner_fixture.claim("bee.placement.native:materialization_runner_process", request, 0)
+    -- A sweep inside the materialization window finds the hosted runner
+    -- present and leaves its attempt starting.
+    test.is_true(placement_service.sweep().ok)
+    test.eq(assert(store.attempt(db, attempt_id)).execution_state, "starting")
+    local outcome = runner_fixture.prepare(runner)
+    local prepared = outcome.prepared
+    if not prepared then runner_fixture.release(runner); error(tostring(outcome.error)) end
     if session_ref then
         local key = assert(homes.session_key(OWNER, session_ref))
         test.eq(prepared.home_path, assert(homes.ensure_session(key)))
@@ -145,12 +150,18 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
     test.is_true(store.transition(db, attempt_id, {expected_execution = "starting", execution = "exited", cleanup = "complete",
         fields = {runner_pid = sql.NULL, exit_source = "runner", exit_code = 0},
         evidence = {kind = "test.child_exited", detail = "fixture child wait proves direct-process exit"}}).ok)
+    runner_fixture.release(runner)
     return prepared.home_path, assert(prepared.environment.GROK_HOME)
 end
 
 local function define_tests()
     test.describe("Grok session login homes", function()
         admit_source()
+        local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+        mode.data = {mode = "host_configured"}
+        local changes = assert(registry.snapshot()):changes()
+        changes:update(mode)
+        assert(changes:apply())
         local window = assert(registry.get("bee.driver.grok:default_window"))
         local definition = window.data :: {credentials: {string}, session_resource: string}
         test.eq(definition.credentials[1], "grok_login")
@@ -181,4 +192,16 @@ local function define_tests()
         end)
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local before = assert(registry.snapshot())
+    local ok, result = pcall(cases, options)
+    local changes = assert(registry.snapshot()):changes()
+    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.credentials:credential_sources",
+        "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy"}) do
+        changes:update(assert(before:get(ref)))
+    end
+    assert(changes:apply())
+    if not ok then error(tostring(result)) end
+    return result
+end}

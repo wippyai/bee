@@ -40,7 +40,7 @@ function M.advance(driver: Driver, now: integer): Pending?
         hooks.backoff(state, now)
         return nil
     end
-    local response = future:response() :: Channel<unknown>
+    local response = future:response()
     if not response then
         future:cancel()
         hooks.lost(state, identity)

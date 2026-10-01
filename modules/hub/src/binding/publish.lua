@@ -158,7 +158,7 @@ local function decode_receipt(raw: unknown): Receipt?
     local content = hex(value.pack_digest)
     local hub = value.hub_digest
     if type(hub) ~= "string" then return nil end
-    if (hub :: string) ~= "" and not (hub :: string):match("^sha256:[0-9a-f]+$") then return nil end
+    if hub ~= "" and not hub:match("^sha256:[0-9a-f]+$") then return nil end
     local state = bounds.member(value.state, {"published", "failed"})
     local message = bounds.text(value.message, 4096)
     local action = bounds.member(value.action, {"publish"})
@@ -167,7 +167,7 @@ local function decode_receipt(raw: unknown): Receipt?
         return nil
     end
     return {actor_id = actor, digest = digest, component = component, version = version, visibility = visibility,
-        organization = organization, source = source, pack_digest = content, hub_digest = hub :: string,
+        organization = organization, source = source, pack_digest = content, hub_digest = hub,
         state = state, message = message, action = action}
 end
 
@@ -383,23 +383,25 @@ function M.apply(raw: unknown): Result
         if inspected then seen = inspected.digest end
     end
     local resolution = publishing.resolve_upload(content, reported, seen)
-    if resolution.kind == "published" then
+    local hub_digest = resolution.hub_digest
+    if resolution.kind == "published" and hub_digest then
         local receipt = save_receipt({actor_id = actor:id(), digest = plan_digest, component = measured.component,
             version = measured.version, visibility = measured.visibility,
             organization = measured.organization, source = measured.source,
-            pack_digest = content, hub_digest = resolution.hub_digest :: string, state = "published",
+            pack_digest = content, hub_digest = hub_digest, state = "published",
             message = resolution.replayed and "Version already on Hub; receipt restored" or "Publication completed",
             action = "publish"})
         receipt.replayed = resolution.replayed == true
         return receipt
     end
-    if resolution.kind == "failed" then
+    local failure = resolution.message
+    if resolution.kind == "failed" and failure then
         save_receipt({actor_id = actor:id(), digest = plan_digest, component = measured.component,
             version = measured.version, visibility = measured.visibility,
             organization = measured.organization, source = measured.source,
             pack_digest = content, hub_digest = seen and ("sha256:" .. seen) or "", state = "failed",
-            message = resolution.message :: string, action = "publish"})
-        return transaction.failure("FAILED", resolution.message :: string)
+            message = failure, action = "publish"})
+        return transaction.failure("FAILED", failure)
     end
     if uploaded.code == 0 then
         return transaction.failure("UNCERTAIN", "upload finished without a Hub digest; Hub read: " ..

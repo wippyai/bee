@@ -107,7 +107,7 @@ function M.inspect_window(call: Call, request: Request, ended: boolean): (Previo
     end
     if type(status.private_home) ~= "boolean" then return nil, "previous native process has no durable HOME selection" end
 
-    return {stored = stored, point = point, attempt = attempt, binding = binding, private_home = status.private_home :: boolean}, nil
+    return {stored = stored, point = point, attempt = attempt, binding = binding, private_home = status.private_home}, nil
 end
 -- The previous window's session never began a provider conversation, so there
 -- is nothing to resume; the refusal is permanent for that window.
@@ -130,7 +130,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
             return nil, "invalid continuation page cursor"
         end
         if type(page.records) ~= "table" then return nil, "continuation records must be a list" end
-        local rows = page.records :: {unknown}
+        local rows = page.records
         local count = 0
         for key in pairs(rows) do
             if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "continuation records must be a dense list" end

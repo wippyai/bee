@@ -27,8 +27,9 @@ def exercise(packed):
             ui.resize(48, 16)
             ui.wait("BEE SETTINGS", timeout=10)
             ui.key(b"\x1b[5~" * 60)
-            ui.key(b"\x1b[6~")
             ui.wait("Website", timeout=10)
+            ui.key(b"\x1b[6~")
+            ui.wait("Live Bee packs", timeout=10)
             ui.quit()
         finally:
             ui.close()

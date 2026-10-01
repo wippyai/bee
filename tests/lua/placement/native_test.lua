@@ -230,7 +230,7 @@ end
 local function attempt_of(reply: service.Reply): types.Attempt
     return assert(placement_decode.attempt(value(reply)))
 end
-local function await(future: funcs.Future): service.Reply
+local function await(future: funcs.Future): unknown
     local _, open = future:response():receive()
     if not open then error("prepare race closed without a reply") end
     local payload, result_error = future:result()
@@ -238,7 +238,7 @@ local function await(future: funcs.Future): service.Reply
     if not payload then error("prepare race returned no reply") end
     local data = payload:data()
     if type(data) ~= "table" then error("prepare race reply returned " .. type(data)) end
-    return principals.reply(data)
+    return data
 end
 local function launch(command: {string}, required: string): {[string]: unknown}
     local argv: {string} = {}
@@ -890,7 +890,7 @@ local function define_tests()
                 local a, a_error = caller(OWNER):async("bee.placement.native.binding:" .. first, {attempt_id = prepared.attempt_id})
                 local b, b_error = caller(OWNER):async("bee.placement.native.binding:" .. second, {attempt_id = prepared.attempt_id})
                 if a_error or not a or b_error or not b then error("start/stop race: " .. tostring(a_error or b_error)) end
-                local first_reply, second_reply = await(a), await(b)
+                local first_reply, second_reply = principals.reply(await(a)), principals.reply(await(b))
                 local stop_reply = first == "stop" and first_reply or second_reply
                 if not stop_reply.ok then error("stop after concurrent " .. first .. "/" .. second .. " failed: " .. tostring(json.encode(stop_reply))) end
                 local exited = wait_for(function()
@@ -1642,7 +1642,7 @@ local function define_tests()
             local a, a_error = caller(OWNER, principals.workspace(first)):async("bee.placement.native.binding:prepare", first)
             local b, b_error = caller(OWNER, principals.workspace(second)):async("bee.placement.native.binding:prepare", second)
             if a_error or not a or b_error or not b then error("start prepare race: " .. tostring(a_error or b_error)) end
-            local first_reply, second_reply = await(a), await(b)
+            local first_reply, second_reply = principals.reply(await(a)), principals.reply(await(b))
             local replies = {first_reply, second_reply}
             local admitted = 0
             local refused = 0
@@ -1671,7 +1671,7 @@ local function define_tests()
             local first_retry, first_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native.binding:prepare", replay)
             local second_retry, second_retry_error = caller(OWNER, principals.workspace(replay)):async("bee.placement.native.binding:prepare", replay)
             if first_retry_error or not first_retry or second_retry_error or not second_retry then error("start replay race: " .. tostring(first_retry_error or second_retry_error)) end
-            local replay_a, replay_b = attempt_of(await(first_retry)), attempt_of(await(second_retry))
+            local replay_a, replay_b = attempt_of(principals.reply(await(first_retry))), attempt_of(principals.reply(await(second_retry)))
             test.eq(replay_a.attempt_id, replay.attempt_id)
             test.eq(replay_b.attempt_id, replay.attempt_id)
             if type(replay.attempt_id) ~= "string" then error("invalid fixture replay.attempt_id") end
@@ -2831,7 +2831,7 @@ local function define_tests()
             if fixture_reply.ok ~= true then error("materialization fence fixture failed: " .. tostring(fixture_reply.error)) end
             if fixture_reply.written ~= true then error("materialization fence fixture did not write") end
             test.eq(fixture_reply.stop_state, "stopping")
-            local started = await(start)
+            local started = principals.reply(await(start))
             -- Both asynchronous calls have returned, so remove the source
             -- FIFO before any assertion can abort the test and strand it.
             test.eq(shell("rm -f " .. source_root .. "/auth.json"), "")

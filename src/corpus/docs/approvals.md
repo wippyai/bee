@@ -42,6 +42,9 @@ state. A proposal may describe an operation or an attempt. If it projects to a
 thread, the requester must already be an authorized owner or participant and
 the thread binding is stored when the request is made.
 
+Needs you wraps the opened request's bounded prompt so a provider command and
+effect remain visible after its session and workspace identities.
+
 The proposal and digest are immutable for one decision. Changing an action or
 its parameters creates a new request. Requester/key pairs are idempotent;
 different content under the same key is a conflict. States are `pending`,

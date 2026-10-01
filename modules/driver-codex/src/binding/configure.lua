@@ -12,6 +12,10 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
             local projected, err = configuration.prompt_projection(request.instructions)
             if not projected then return {ok = false, error = tostring(err)} end
             files[#files + 1] = projected
+        elseif request.private_home == true then
+            local projected, err = configuration.login_configuration()
+            if not projected then return {ok = false, error = tostring(err)} end
+            files[#files + 1] = projected
         end
         return {ok = true, delivery = {arguments = arguments, files = files}}
     end

@@ -92,7 +92,7 @@ local function define_tests()
                     {".claude/settings.json", ".claude/settings.json", "config", false},
                     {"", ".claude.json", "state", false}}},
             {provider = "codex", launch = codex.specification(assert(codex.decode({profile_id = "batch", brief = "fixture"}))),
-                paths = {{".codex/auth.json", ".codex/auth.json", "login", true}, {".codex/config.toml", ".codex/config.toml", "config", false}, {".codex/config.toml", ".codex/.bee-user-config.toml", "config", false}}},
+                paths = {{".codex/auth.json", ".codex/auth.json", "login", true}, {".codex/config.toml", ".codex/.bee-user-config.toml", "config", false}}},
             {provider = "agy", launch = agy.specification(assert(agy.decode({profile_id = "batch", brief = "fixture"}))),
                 paths = {{".gemini/antigravity-cli/antigravity-oauth-token", ".gemini/antigravity-cli/antigravity-oauth-token", "login", true},
                     {".gemini/antigravity-cli/cache/onboarding.json", ".gemini/antigravity-cli/cache/onboarding.json", "config", false}}},

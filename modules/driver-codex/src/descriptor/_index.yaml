@@ -392,12 +392,6 @@ entries:
         optional: true
         write_back: true
       - source_path: .codex/config.toml
-        path: .codex/config.toml
-        kind: config
-        optional: true
-        write_back: false
-        container_content: ''
-      - source_path: .codex/config.toml
         path: .codex/.bee-user-config.toml
         kind: config
         optional: true

@@ -49,7 +49,7 @@ local function run_probe(mode: string?)
         :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     -- The catalog is the owner's startup signal. Do not race name registration
     -- by treating successful spawn as service readiness.
-    local ready = assert(catalogs:receive())
+    local ready = assert((catalogs:receive()))
     assert(ready:from() == broker)
     local endpoint = "bee.attachment.probe.host"
     assert(process.registry.lookup(endpoint) == broker)
@@ -96,7 +96,7 @@ local function run_probe(mode: string?)
         assert(wait_reply("open", "attached").error_code == "attachment_failed", "Missing initial mount failure")
     end
     if not saved then
-        local message = assert(checkpoints:receive())
+        local message = assert((checkpoints:receive()))
         assert(message:from() == broker)
         commit(message:payload():data())
     end

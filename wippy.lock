@@ -1,104 +1,104 @@
 directories:
-    modules: .wippy
-    src: ./src
+  modules: .wippy
+  src: ./src
 modules:
-    - name: bee/agents
-      version: 0.1.0-dev
-    - name: bee/application
-      version: 0.1.0-dev
-    - name: bee/approvals
-      version: 0.1.0-dev
-    - name: bee/approvals-inbox
-      version: 0.1.0-dev
-    - name: bee/capability
-      version: 0.1.0-dev
-    - name: bee/console
-      version: 0.1.0-dev
-    - name: bee/credentials
-      version: 0.1.0-dev
-    - name: bee/docs
-      version: 0.1.0-dev
-    - name: bee/driver
-      version: 0.1.0-dev
-    - name: bee/driver-agy
-      version: 0.1.0-dev
-    - name: bee/driver-claude
-      version: 0.1.0-dev
-    - name: bee/driver-codex
-      version: 0.1.0-dev
-    - name: bee/driver-grok
-      version: 0.1.0-dev
-    - name: bee/driver-muse
-      version: 0.1.0-dev
-    - name: bee/driver-opencode
-      version: 0.1.0-dev
-    - name: bee/driver-wippy
-      version: 0.1.0-dev
-    - name: bee/executor-external
-      version: 0.1.0-dev
-    - name: bee/files
-      version: 0.1.0-dev
-    - name: bee/gateway
-      version: 0.1.0-dev
-    - name: bee/git-worktree
-      version: 0.1.0-dev
-    - name: bee/gov
-      version: 0.1.0-dev
-    - name: bee/gov-overlays
-      version: 0.1.0-dev
-    - name: bee/harness
-      version: 0.1.0-dev
-    - name: bee/hive
-      version: 0.1.0-dev
-    - name: bee/hive-manager
-      version: 0.1.0-dev
-    - name: bee/hive-telemetry
-      version: 0.1.0-dev
-    - name: bee/host-processes
-      version: 0.1.0-dev
-    - name: bee/hub
-      version: 0.1.0-dev
-    - name: bee/hub-modules
-      version: 0.1.0-dev
-    - name: bee/node
-      version: 0.1.0-dev
-    - name: bee/persist
-      version: 0.1.0-dev
-    - name: bee/placement
-      version: 0.1.0-dev
-    - name: bee/placement-docker
-      version: 0.1.0-dev
-    - name: bee/placement-native
-      version: 0.1.0-dev
-    - name: bee/resources
-      version: 0.1.0-dev
-    - name: bee/sessions
-      version: 0.1.0-dev
-    - name: bee/settings
-      version: 0.1.0-dev
-    - name: bee/sync
-      version: 0.1.0-dev
-    - name: bee/threads
-      version: 0.1.0-dev
-    - name: bee/threads-timeline
-      version: 0.1.0-dev
-    - name: bee/workspace-manager
-      version: 0.1.0-dev
-    - name: userspace/docker
-      version: 0.5.17
-      hash: ac04ada5befd174f81773606f7ffc14cdc70874002375c04370a541a58fae204
-    - name: wippy/bootloader
-      version: 0.3.16
-      hash: a31e9c64ec482ced0b0095bc0c85b2a69a7b1361c207ab43ffae807da473f6bc
-    - name: wippy/migration
-      version: 0.3.20
-      hash: bb209bb88ee6493884f711e8e0d58300e878783d82813dfeb0f7f2c4d4a0be5c
-    - name: wippy/security
-      version: 0.4.3
-      hash: f636859979e88b23647a78fb9aa8a553799de18750b0fb5fb085cbe21542c86c
-    - name: wippy/terminal
-      version: 0.4.5
-      hash: 028180c6044cdd9bbe15330255a4926770e02a291511930264a615f6388824f0
-    - name: wippy/test
-      version: 0.4.17
-      hash: 37a304cc20aa3005004255e9fda16835a94119db520c0c97e1db044c7844a229
+- name: bee/persist
+  version: 0.1.0-dev
+- name: bee/sync
+  version: 0.1.0-dev
+- name: bee/threads
+  version: 0.1.0-dev
+- name: bee/hub
+  version: 0.1.0-dev
+- name: bee/gov
+  version: 0.1.0-dev
+- name: bee/gateway
+  version: 0.1.0-dev
+- name: bee/docs
+  version: 0.1.0-dev
+- name: bee/hive
+  version: 0.1.0-dev
+- name: bee/hive-telemetry
+  version: 0.1.0-dev
+- name: bee/hive-manager
+  version: 0.1.0-dev
+- name: bee/threads-timeline
+  version: 0.1.0-dev
+- name: bee/workspace-manager
+  version: 0.1.0-dev
+- name: bee/host-processes
+  version: 0.1.0-dev
+- name: bee/hub-modules
+  version: 0.1.0-dev
+- name: bee/gov-overlays
+  version: 0.1.0-dev
+- name: bee/approvals
+  version: 0.1.0-dev
+- name: bee/approvals-inbox
+  version: 0.1.0-dev
+- name: bee/application
+  version: 0.1.0-dev
+- name: bee/node
+  version: 0.1.0-dev
+- name: bee/resources
+  version: 0.1.0-dev
+- name: bee/capability
+  version: 0.1.0-dev
+- name: bee/placement
+  version: 0.1.0-dev
+- name: bee/placement-native
+  version: 0.1.0-dev
+- name: bee/harness
+  version: 0.1.0-dev
+- name: bee/credentials
+  version: 0.1.0-dev
+- name: bee/driver
+  version: 0.1.0-dev
+- name: bee/driver-agy
+  version: 0.1.0-dev
+- name: bee/driver-claude
+  version: 0.1.0-dev
+- name: bee/driver-codex
+  version: 0.1.0-dev
+- name: bee/driver-grok
+  version: 0.1.0-dev
+- name: bee/driver-muse
+  version: 0.1.0-dev
+- name: bee/driver-opencode
+  version: 0.1.0-dev
+- name: bee/driver-wippy
+  version: 0.1.0-dev
+- name: bee/git-worktree
+  version: 0.1.0-dev
+- name: bee/executor-external
+  version: 0.1.0-dev
+- name: bee/agents
+  version: 0.1.0-dev
+- name: bee/files
+  version: 0.1.0-dev
+- name: bee/sessions
+  version: 0.1.0-dev
+- name: bee/placement-docker
+  version: 0.1.0-dev
+- name: userspace/docker
+  version: 0.5.17
+  hash: ac04ada5befd174f81773606f7ffc14cdc70874002375c04370a541a58fae204
+- name: wippy/bootloader
+  version: 0.3.16
+  hash: a31e9c64ec482ced0b0095bc0c85b2a69a7b1361c207ab43ffae807da473f6bc
+- name: wippy/migration
+  version: 0.3.20
+  hash: bb209bb88ee6493884f711e8e0d58300e878783d82813dfeb0f7f2c4d4a0be5c
+- name: wippy/security
+  version: 0.4.3
+  hash: f636859979e88b23647a78fb9aa8a553799de18750b0fb5fb085cbe21542c86c
+- name: wippy/terminal
+  version: 0.4.5
+  hash: 028180c6044cdd9bbe15330255a4926770e02a291511930264a615f6388824f0
+- name: wippy/test
+  version: 0.4.17
+  hash: 37a304cc20aa3005004255e9fda16835a94119db520c0c97e1db044c7844a229
+- name: bee/settings
+  version: 0.1.0-dev
+- name: bee/console
+  version: 0.1.0-dev

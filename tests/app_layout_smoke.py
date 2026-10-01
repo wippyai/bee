@@ -79,6 +79,14 @@ def saved(state):
     return applications, [row[0] for row in ledger]
 
 
+def layout(state):
+    with sqlite3.connect(state / 'workspace.db.client') as database:
+        row = database.execute('SELECT value FROM client_layouts ORDER BY generation DESC LIMIT 1').fetchone()
+    assert row, 'the client did not save its layout'
+    return {(target['workspace_id'], target['instance_id'], target['view_id'])
+            for target in json.loads(row[0])['targets']}
+
+
 def upgrade(previous, binary):
     with tempfile.TemporaryDirectory(prefix='app-layout-upgrade-', dir=ROOT / '.wippy') as temporary:
         folder = Path(temporary)
@@ -95,6 +103,7 @@ def upgrade(previous, binary):
             old.close()
             stop(previous, state)
         before, ledger = saved(state)
+        before_layout = layout(state)
         assert ledger == list(range(1, 12)), ledger
         assert set(before) == {'bee.settings:app', 'bee.gov.overlays:app'}, before.keys()
         new = NativeDesktop(binary, folder, state, 'bee.settings.app:app')
@@ -111,6 +120,7 @@ def upgrade(previous, binary):
         after, ledger = saved(state)
         assert ledger == list(range(1, 13)), ledger
         assert set(after) == {'bee.settings.app:app', 'bee.gov.overlays.app:app'}, after.keys()
+        assert layout(state) == before_layout, 'the client lost saved view targets'
         for definition, prior in before.items():
             assert after[definition.replace(':app', '.app:app')] == prior, (definition, after)
         print('Main 463ac2ea standalone state restart: 2 saved apps retain window/instance/checkpoint identities; workspace ledger 11 → 12', flush=True)

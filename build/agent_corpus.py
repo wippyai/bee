@@ -584,7 +584,7 @@ def build(local: bool = False) -> int:
     for identity, topic, payload, source in reference_app_documents():
         record(identity, topic, payload, source)
     record("toolkit", "terminal", toolkit_reference(),
-           "generated: modules/application/src, src application views, tests/lua/frame")
+           "generated: modules/application/src, modules/*/src/app views, tests/lua/frame")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:
@@ -655,7 +655,7 @@ SELECTION_RULE = (
     "registry, platform), excluding repository process and design pages. "
     "Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in "
     "docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from "
-    "modules/application/src, src/apps and compact examples; visualization examples are extracted from "
+    "modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from "
     "tests/lua/frame. The corpus is digest-checked with the rest."
 )
 

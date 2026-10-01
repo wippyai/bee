@@ -114,7 +114,9 @@ local function define_tests()
             test.eq(#measured.entries, 1)
             test.eq(measured.entries[1].id, guide.DEFINITION_ID)
             test.eq(measured.entries[1].kind, "process.lua")
-            test.eq((measured.entries[1].meta :: {[string]: unknown}).type, "bee.app")
+            local metadata = measured.entries[1].meta
+            if type(metadata) ~= "table" then error("example metadata is not an object") end
+            test.eq(metadata.type, "bee.app")
             local data = measured.entries[1].data :: {[string]: unknown}
             local source = data.source :: string
             local modules = data.modules :: {string}

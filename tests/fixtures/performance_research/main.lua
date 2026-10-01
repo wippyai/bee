@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- SPDX-License-Identifier: MIT
+local bounds = require("bounds")
 local funcs = require("funcs")
 local channel = require("channel")
 local time = require("time")

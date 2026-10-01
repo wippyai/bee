@@ -1,7 +1,7 @@
-local bounds = require("bounds")
 -- SPDX-License-Identifier: MIT
 -- Only fixture credentials cross the private in-memory callback to the host
 -- acceptance driver. Nothing is printed or written to a credential file.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local json = require("json")
 local http_client = require("http_client")

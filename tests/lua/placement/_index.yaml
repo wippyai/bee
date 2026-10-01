@@ -361,7 +361,6 @@ entries:
   meta: {type: test_support}
   modules: [security, ctx, env, exec]
   imports:
-    bounds: bee.protocol:bounds
     store: bee.placement.native.persist:store
 - name: fixture_builder_build
   kind: function.lua
@@ -370,7 +369,6 @@ entries:
   meta: {type: test_support}
   modules: [security, ctx, env, exec]
   imports:
-    bounds: bee.protocol:bounds
     store: bee.placement.native.persist:store
   security:
     policies: [bee.placement.native:fixture_builder_read_policy]

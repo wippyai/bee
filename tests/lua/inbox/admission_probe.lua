@@ -1,9 +1,9 @@
-local principals = require("principals")
-local bounds = require("bounds")
 -- MIT. A process run under the exact scope the broker composes for the
 -- inbox application, reporting what that scope lets it reach: the
 -- approval store directly, the owner's methods, unlisted owner operations
 -- and the store again after an owner call. Test support only.
+local principals = require("principals")
+local bounds = require("bounds")
 local sql = require("sql")
 local funcs = require("funcs")
 type Object = {[string]: unknown}

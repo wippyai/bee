@@ -1,8 +1,8 @@
-local principals = require("principals")
 -- MIT. A thread a workspace owns carries that workspace: the creator's
 -- host-issued identity names it, never the request, and a workspace's
 -- threads are one index range. Threads from before the attribution are
 -- attributed from their application owner.
+local principals = require("principals")
 local test = require("test")
 local bounds = require("bounds")
 local sql = require("sql")

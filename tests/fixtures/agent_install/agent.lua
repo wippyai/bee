@@ -1,7 +1,7 @@
-local bounds = require("bounds")
 -- MIT. The agent side of the installation acceptance: one admitted attempt
 -- with its gateway binding, calling the gateway methods its MCP tools reach
 -- as its bound subject.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local system = require("system")

@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. Test support: replace the host exposure audience table rows.
+local bounds = require("bounds")
 local registry = require("registry")
 local audiences = require("audiences")
 local function install(value: unknown): {ok: boolean}

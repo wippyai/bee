@@ -1,7 +1,7 @@
-local bounds = require("bounds")
 -- MIT. A deliberately small third-party driver fixture. Its configure method
 -- proves placement consumes a binding's generic contract rather than a
 -- provider-specific core branch.
+local bounds = require("bounds")
 local hash = require("hash")
 
 local PROVIDER_REF = "bee.placement.native:fixture_agent_provider"

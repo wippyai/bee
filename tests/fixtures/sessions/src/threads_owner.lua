@@ -1,6 +1,6 @@
-local bounds = require("bounds")
 -- MIT. Test-only journal with the same fenced reserve/accept/settle boundary
 -- used by the production Sessions scheduler.
+local bounds = require("bounds")
 local M = {}
 local scheduler = require("scheduler")
 local STAMP = "2026-09-29T00:00:00.000Z"

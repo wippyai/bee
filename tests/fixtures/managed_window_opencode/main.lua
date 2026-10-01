@@ -1,10 +1,10 @@
-local channel = require("channel")
-local bounds = require("bounds")
 -- MIT. A managed OpenCode window reaches a real native terminal through the
 -- production driver binding and window profile; only the executable is the
 -- fixture. The broker really spawns a process, the process really owns a PTY,
 -- and the frame we see is the one the process wrote. No prompt is submitted
 -- and no login is performed.
+local channel = require("channel")
+local bounds = require("bounds")
 local process = require("process")
 local registry = require("registry")
 local time = require("time")

@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. Test-only host enrollment and calls through the real native Hive route.
+local bounds = require("bounds")
 local registry = require("registry")
 local client = require("client")
 local types = require("types")

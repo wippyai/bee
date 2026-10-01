@@ -1,8 +1,8 @@
-local principals = require("principals")
 -- MIT. One-shot notices: a member asks to be told once, on its own thread,
 -- when an action it can read ends its turn or its attempt exits. The owner
 -- commits one notification after the ending record, wakes a waiter on the
 -- watcher's thread, and never tells twice.
+local principals = require("principals")
 local test = require("test")
 local bounds = require("bounds")
 local harness = require("harness")

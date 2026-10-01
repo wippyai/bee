@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. Deterministic turn executor for scheduler recovery tests.
+local bounds = require("bounds")
 local M = {}
 type Object = {[string]: unknown}
 type State = {stop_after_first: boolean?}

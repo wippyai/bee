@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. An actual child submits hooks and remains interactive on its PTY.
+local bounds = require("bounds")
 local M = {}
 
 local SCRIPT = [[

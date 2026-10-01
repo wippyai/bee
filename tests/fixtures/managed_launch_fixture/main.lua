@@ -1,5 +1,3 @@
-local channel = require("channel")
-local bounds = require("bounds")
 -- MIT. A managed agent reaches a real native terminal with no provider
 -- account: the launch definition, admission, carrier (planning) and
 -- placement path are the same ones a real Claude Code window uses; only
@@ -7,6 +5,8 @@ local bounds = require("bounds")
 -- captured stream-json-2 transcript. The broker really spawns a process,
 -- the process really owns a PTY, and the bytes on screen are the ones
 -- that process actually wrote.
+local channel = require("channel")
+local bounds = require("bounds")
 local test = require("test")
 local process = require("process")
 local registry = require("registry")

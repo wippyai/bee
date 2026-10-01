@@ -1,6 +1,6 @@
-local bounds = require("bounds")
 -- MIT. Prove the documentation corpus travels inside the pack and is read-only:
 -- the embedded volume serves the manifest and a document, and a write is refused.
+local bounds = require("bounds")
 local fs = require("fs")
 local io = require("io")
 local json = require("json")

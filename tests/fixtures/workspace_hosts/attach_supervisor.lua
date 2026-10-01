@@ -1,9 +1,9 @@
-local bounds = require("bounds")
 -- MIT. Bounded acceptance for desktops attached through the node host
 -- manager: a retained desktop supervisor selected by workspace identity takes
 -- a lease, so the manager starts the workspace host; the supervisor admits its
 -- display and an attached recipient through the manager, which owns the host;
 -- ending the supervisor releases the lease and the host stops once idle.
+local bounds = require("bounds")
 local logger = require("logger")
 local process = require("process")
 local channel = require("channel")

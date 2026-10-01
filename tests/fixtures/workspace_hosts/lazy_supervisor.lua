@@ -1,10 +1,10 @@
-local bounds = require("bounds")
 -- MIT. Bounded acceptance for lazily started workspace hosts: the node host
 -- manager starts a host on the first lease for its workspace, keeps it while
 -- a lease holds it, stops it once it has been idle and its shutdown
 -- checkpointed the workspace, starts it again from that checkpoint, and at
 -- its cap stops the least recently used idle host to make room. A workspace
 -- another composition serves stays that composition's.
+local bounds = require("bounds")
 local logger = require("logger")
 local process = require("process")
 local channel = require("channel")

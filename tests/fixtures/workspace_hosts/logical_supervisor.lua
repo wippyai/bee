@@ -1,8 +1,8 @@
-local bounds = require("bounds")
 -- MIT. Bounded acceptance: two logical workspaces served by two hosts in one
 -- runtime, against one node database. Each host serves exactly its selected
 -- catalog row; neither can read or change the other's workspace state or
 -- resources.
+local bounds = require("bounds")
 local logger = require("logger")
 local process = require("process")
 local channel = require("channel")

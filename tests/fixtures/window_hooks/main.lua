@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. Real native-window hook acceptance fixture.
+local bounds = require("bounds")
 local io = require("io")
 local process = require("process")
 local channel = require("channel")

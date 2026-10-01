@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. Real public function dispatch, explicit principals, and a durable second boot.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local logger = require("logger")

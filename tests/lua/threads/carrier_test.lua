@@ -1,8 +1,8 @@
-local principals = require("principals")
 -- MIT. Carrier operations: an epoch fences earlier carriers, a commit
 -- lands records and checkpoint together or not at all, replayed records
 -- deduplicate by key while the checkpoint still advances, and nothing
 -- moves on an ended attempt or without carrier authority.
+local principals = require("principals")
 local test = require("test")
 local bounds = require("bounds")
 local harness = require("harness")

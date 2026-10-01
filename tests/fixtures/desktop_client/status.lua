@@ -1,7 +1,7 @@
-local bounds = require("bounds")
 -- MIT. Physical status acceptance through a host-admitted thread association.
 -- The saved client target contains only the host reply's view identity. The
 -- thread ID reaches the session solely from the fresh host inventory.
+local bounds = require("bounds")
 local process = require("process")
 local security = require("security")
 local tty = require("tty")

@@ -1,7 +1,7 @@
-local bounds = require("bounds")
 -- MIT. Seed the inbox lease smoke: two pending requests of one requester for
 -- the batch, one pending activation request to lease, and one active lease
 -- with a recorded use so the leases view shows usage and can revoke it.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local system = require("system")
 local process = require("process")

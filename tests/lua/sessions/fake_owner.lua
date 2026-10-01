@@ -1,7 +1,7 @@
-local principals = require("principals")
-local bounds = require("bounds")
 -- MIT. A stateless bee.sessions owner: replies follow the request, and a ref's
 -- last segment selects the observation the owner reports for it.
+local principals = require("principals")
+local bounds = require("bounds")
 local sessions = require("sessions")
 local protocol = require("protocol")
 local M = {}

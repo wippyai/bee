@@ -1986,15 +1986,7 @@ local function define_tests()
             local origin = fresh("window-origin")
             local first = value(call("bee.harness.launch:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
                 workspace_id = workspace, brief = ""}))
-            local transport: machine.IO = {
-                call = function(target: string, input: unknown): (unknown, string?)
-                    return funcs.new():with_actor(principals.actor(REQUESTER, workspace)):with_scope(scope()):call(target, input)
-                end,
-                send = function(target: string, topic: string, input: unknown) end,
-                self_pid = function(): string return process.pid() end,
-                now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
-                key = function(): string return fresh("key") end,
-            }
+            local transport = carrier_io(workspace)
             local planned, plan_error = machine.plan(transport, carrier_fixtures.request(first.request))
             if not planned then error(tostring(plan_error)) end
             local prepared, prepare_error = machine.prepare_attempt(transport, planned)

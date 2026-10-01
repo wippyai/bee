@@ -1,6 +1,6 @@
+-- MIT. Mock OpenAI-compatible chat completions server for native Wippy driver testing.
 local principals = require("principals")
 local bounds = require("bounds")
--- MIT. Mock OpenAI-compatible chat completions server for native Wippy driver testing.
 local http = require("http")
 local json = require("json")
 

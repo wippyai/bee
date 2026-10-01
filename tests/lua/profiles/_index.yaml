@@ -125,7 +125,6 @@ entries:
   modules: [tty]
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
     fixtures: bee.tests.sessions:fixtures
     test: wippy.test:test
     directory_view: bee.harness.app:directory_view

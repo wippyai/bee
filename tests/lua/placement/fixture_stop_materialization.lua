@@ -1,7 +1,7 @@
-local bounds = require("bounds")
 -- MIT. The writer opens the fixture login FIFO, waits until the real
 -- credential broker has opened its reader, then stops the attempt before
 -- releasing a valid projection reply to the materialization runner.
+local bounds = require("bounds")
 local fs = require("fs")
 local funcs = require("funcs")
 

@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. Read the installed registry and the broker's admitted policy list.
+local bounds = require("bounds")
 local registry = require("registry")
 local env = require("env")
 local logger = require("logger")

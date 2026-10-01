@@ -1,6 +1,6 @@
-local bounds = require("bounds")
 -- MIT. Consume the inbox decision: bind the approved proposal to one
 -- effect identity and prove a second effect is refused.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local logger = require("logger")
 local helper = require("helper")

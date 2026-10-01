@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. Shared constants and calls for the inbox decide acceptance probe.
+local bounds = require("bounds")
 local system = require("system")
 local hash = require("hash")
 local canonical = require("canonical")

@@ -1,6 +1,6 @@
-local bounds = require("bounds")
 -- MIT. Drives the real manager through its normal broker attachment. This fixture
 -- is packed only into disposable acceptance packs.
+local bounds = require("bounds")
 local process = require("process")
 local time = require("time")
 local security = require("security")

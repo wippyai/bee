@@ -1,5 +1,5 @@
-local bounds = require("bounds")
 -- MIT. The agent's attempt asks the person to install one Hub package.
+local bounds = require("bounds")
 local logger = require("logger")
 local time = require("time")
 local agent = require("agent")

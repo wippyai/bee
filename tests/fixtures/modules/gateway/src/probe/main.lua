@@ -1,10 +1,10 @@
-local bounds = require("bounds")
 -- MIT. Slice 1 of the gateway against the real listener and thread owner:
 -- readiness, admission and revocation, thread_read, bounded read-only
 -- authenticated thread_message append, replay and context
 -- fencing, cross-attempt and expiry refusal, drain and epoch fencing.
 -- It asserts and fails the boot; it prints nothing, so no token bytes can
 -- reach captured output.
+local bounds = require("bounds")
 local funcs = require("funcs")
 local access_probe = require("access_probe")
 local http_client = require("http_client")

@@ -1,6 +1,6 @@
-local bounds = require("bounds")
 -- MIT. Real two-runtime generic binary and application-version replication over
 -- the native Hive route. Receipt of v2 never selects it over v1.
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")

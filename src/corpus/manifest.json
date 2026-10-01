@@ -179,9 +179,9 @@
       "topic": "registry"
     },
     {
-      "bytes": 20728,
+      "bytes": 21674,
       "id": "docs/distributed_app_delivery",
-      "sha256": "6498e78a82e589fcc5f364b357f4e62b3265431c436a46f3dd11856d1bf87b7c",
+      "sha256": "ef7f6bdaa6ceac7e6fc2618d8b13c26a0d1df3f171570ee1bdf6d5a84da2f434",
       "source": "docs/guides/overlays.md",
       "title": "Distributed overlay delivery",
       "topic": "application"
@@ -291,9 +291,9 @@
       "topic": "component"
     },
     {
-      "bytes": 7289,
+      "bytes": 7682,
       "id": "component/approvals",
-      "sha256": "db12944b74cd54c8c88a2f65f9fb0ef91bf26648582222c5e35c3c86ac180464",
+      "sha256": "69bcf786aced6f91ef471f1f2f2a4968bd6e68c7994e8c3e93f719ed35601cbd",
       "source": "modules/approvals/src/README.md",
       "title": "Bee approvals",
       "topic": "component"
@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9756,
+      "bytes": 10059,
       "id": "component/driver",
-      "sha256": "77ae23faadc4da8c7e5b7b4209c0d5ac24381967f7a2776b368870e3275b6f62",
+      "sha256": "5eea8f06c17247182d33aec2ea8d58c108824c47ce8de4e40b62e06c71c5b6cd",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
@@ -443,9 +443,9 @@
       "topic": "component"
     },
     {
-      "bytes": 3016,
+      "bytes": 5164,
       "id": "component/hive:telemetry",
-      "sha256": "bc2f9ad544f1fa87adbf57c0efebab9d624e8ae06fde4382ef1b9e1b1b280acb",
+      "sha256": "cd529647a8bc72e5152677a007c4758866156869439af3f7b33d496128df3d5d",
       "source": "modules/hive-telemetry/src/README.md",
       "title": "bee.hive.telemetry",
       "topic": "component"
@@ -523,9 +523,9 @@
       "topic": "component"
     },
     {
-      "bytes": 10382,
+      "bytes": 10845,
       "id": "component/threads",
-      "sha256": "222caab8e4584be0259e2e829da15a1357b7a22c2b86576776674e9c0515e7fe",
+      "sha256": "11c02957d076084634e509fcff92541386e9484392559dd36f4758c4e424bb81",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 723778,
+    "bytes": 728031,
     "documents": 77
   }
 }

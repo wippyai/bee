@@ -106,6 +106,8 @@ entries:
   parameters:
   - name: target_exposure
     value: bee.security.hive:hive_exposure_policy
+  - name: target_peers
+    value: bee.hive.supervisor:enrollment_nodes
 - name: hive_manager
   kind: ns.dependency
   component: bee/hive-manager

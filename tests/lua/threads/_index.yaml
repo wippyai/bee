@@ -120,6 +120,7 @@ entries:
     - bee.threads.service:session_create
     - bee.threads.service:session_describe
     - bee.threads.service:session_scan
+    - bee.threads.service:node_summary
     - bee.threads.service:session_transition
     - bee.threads.service:work_send
     - bee.threads.service:work_describe
@@ -142,6 +143,13 @@ entries:
     actions:
     - bee.threads.sessions_owner
     resources: '*'
+    effect: allow
+- name: summary_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [bee.threads.sessions.summary]
+    resources: [node]
     effect: allow
 - name: sessions_other_workspace_test_policy
   kind: security.policy
@@ -416,6 +424,7 @@ entries:
   - sql
   - uuid
   imports:
+    events: bee.driver.kit:events
     test: wippy.test:test
     harness: bee.threads:harness
     owner: bee.threads.persist:owner

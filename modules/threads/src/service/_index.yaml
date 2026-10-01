@@ -441,6 +441,12 @@ entries:
   method: session_scan
   imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: node_summary
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: node_summary
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
 - name: session_transition
   kind: function.lua
   source: file://work_store_method.lua

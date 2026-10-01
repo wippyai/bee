@@ -7,7 +7,7 @@ it across peers, and shapes it for presentation.
 
 ## Operations
 
-All three node operations and the aggregate are open Hive operations; the host
+The node operations and cluster aggregate are open Hive operations; the host
 exposes them through its `hive.expose.open` ceiling, and the supervisor
 dispatches them through that same generic ceiling with no per-operation code.
 
@@ -30,10 +30,49 @@ remote socket address seen here. Link state remains separate from whether the
 node's holdings operation answered. Neither operation grants anything or
 changes state.
 
+## Approved application status reads
+
+Workspace applications request `contract.call` for binding
+`bee.hive.telemetry.binding:status`, methods `snapshot` and `detail`. The
+normal delivery review shows that exact binding and method list; the person
+approves it on each destination. Call through the application capability
+gateway, imported as `bee.gov.binding:contract_call` with native module
+`funcs`, rather than importing private stores or using native membership APIs:
+
+```lua
+local reply, err = funcs.call("bee.gov.binding:contract_call", {
+    binding = "bee.hive.telemetry.binding:status", method = "snapshot",
+    arguments = {{}},
+})
+```
+
+The gateway returns `{ok, value, error?}`. A successful snapshot's `value` is
+`{nodes = {...}}`; detail uses `method = "detail", arguments = {{node_id = id}}`
+and returns `{node = {...}}`. Decode all replies as unknown before use. Each
+node has `node_id`, `name`, `online`, and `status` (`ok` or `unavailable`).
+Available rows include numeric `running_sessions` and `pending_approvals`.
+Unavailable rows omit counts; do not display those as zero. `online` reports
+local/runtime link state independently of the summary's availability.
+
+Snapshot accepts only an empty object and lists at most 64 nodes from runtime
+membership plus the host's retained Hive peers, excluding native display
+clients. Detail accepts only `node_id` and refuses identities outside that
+same set. `bee.hive.telemetry:node_summary` reads names through Node and counts
+through the Threads and Approvals owners. Running means a currently accepted
+execution under the current owner epoch; idle or queued sessions do not count.
+Pending approvals exclude expired and settled requests. Counts cover the node's
+workspaces without exposing prompts, request bodies, decisions or credentials.
+
+Refresh by calling snapshot periodically in an asynchronous worker (for example,
+every two seconds); rendering and input read its local cache. Both the gateway and status callee check
+the application's own live approved grant, so
+revocation stops access. No Hive or approval decision authority is granted.
+
 ## Host composition
 
 The package declares its requirements through `ns.dependency` on
-`bee/threads`, `bee/application` and `bee/hive`, and requests its exposure
+`bee/application`, `bee/hive`, `bee/threads`, `bee/approvals`, `bee/node`
+and `bee/gov`, and requests its exposure
 through an `ns.requirement` for the `hive.expose` capability naming its open
 operations. Its operations run under host-selected policies:
 `bee.security.hive:hive_telemetry_policy` for node and cluster membership reads,

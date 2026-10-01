@@ -76,9 +76,7 @@ entries:
   imports: &gateway_imports
     bounds: bee.threads.records:bounds
     capability_gateway: bee.gov:capability_gateway
-    capability_grants: bee.gov:capability_grants
-    capability_model: bee.capability:model
-    workspace_applications: bee.gov:workspace_applications
+    capability_access: bee.gov:capability_access
     capability_files: bee.gov:capability_files
   security: {policies: [bee.gov.security:gateway_policy]}
 - name: http_request

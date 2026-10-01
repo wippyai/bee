@@ -586,6 +586,26 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
     end)
 end
 
+function M.node_summary(db: sql.DB, _: string, request: unknown): Result
+    local input = object(request)
+    if not input or next(input) ~= nil then return failure("INVALID_ARGUMENT", "node summary accepts an empty object") end
+    if not access.may_summarize_sessions() then return failure("DENIED", "caller may not summarize node sessions") end
+    return transaction.read(db, function(tx: sql.Transaction): Result
+        local epoch, epoch_error = current_epoch(tx)
+        if not epoch then return failure("UNAVAILABLE", epoch_error or "thread owner epoch is unavailable") end
+        local rows, count_error = tx:query("SELECT COUNT(DISTINCT s.session_ref) AS count FROM bee_sessions s " ..
+            "JOIN bee_session_work w ON w.session_ref = s.session_ref " ..
+            "JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.session_ref = s.session_ref " ..
+            "WHERE s.state <> 'closed' AND w.phase = 'accepted' AND t.phase = 'accepted' AND t.owner_epoch = ? " ..
+            "AND NOT EXISTS (SELECT 1 FROM bee_session_turns old WHERE old.session_ref = s.session_ref " ..
+            "AND old.phase IN ('reserved','accepted') AND old.owner_epoch <> ?)", {epoch, epoch})
+        if count_error or not rows or #rows ~= 1 then return transaction.storage_failure("count node sessions") end
+        local count = integer(rows[1].count)
+        if not count or count < 0 then return failure("INTERNAL", "node session count is corrupt") end
+        return transaction.success({running_sessions = count}, false)
+    end)
+end
+
 function M.session_scan(db: sql.DB, actor: string, request: unknown): Result
     local _, workspace, denied = authenticated(actor)
     if denied then return denied end

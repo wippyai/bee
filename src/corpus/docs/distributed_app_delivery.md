@@ -133,6 +133,21 @@ Delivery requests retain `workspace_id` for the destination runtime target and
 `source_overlay_id` for the authoring identity. Internal services may use other
 storage fields, but those are not public authoring vocabulary.
 
+A normal saved-profile session may lack the separately gated `publish` tool.
+That does not prevent delivery or Hive sharing: after local review, approval
+and successful apply, the person opens **Modules**, selects **Authored**,
+prepares the same authored overlay/version/frozen snapshot, then publishes the
+locally applied version. This uses Governance's publication owner, not a direct
+registry write. The destination sees it in Overlays and reviews, selects,
+prepares and approves its own activation. Content travels; grants and decisions
+remain destination-local.
+
+For a Hive dashboard, the implemented counts-only status binding is
+`bee.hive.telemetry.binding:status` (`snapshot`, `detail`). Request that exact
+`contract.call` binding and methods using the capability requirement format
+below, and call it through `bee.gov.binding:contract_call`. The Hive telemetry
+component document describes its input and output fields and live refresh.
+
 ## Workspace applications
 
 A fresh install delivers an application a workspace's own agent authors to

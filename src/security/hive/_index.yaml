@@ -36,6 +36,7 @@ entries:
     - bee.hive.telemetry:catalog_list
     - bee.hive.telemetry:holdings
     - bee.hive.telemetry:cluster
+    - bee.hive.telemetry:node_summary
     - bee.hive.api:workspaces
     - bee.threads:capabilities
     effect: allow
@@ -161,6 +162,7 @@ entries:
     - bee.hive.telemetry:catalog_list
     - bee.hive.telemetry:holdings
     - bee.hive.telemetry:cluster
+    - bee.hive.telemetry:node_summary
     - bee.hive.api:workspaces
     - bee.threads:capabilities
     effect: allow

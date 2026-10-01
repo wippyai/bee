@@ -360,3 +360,14 @@ entries:
 - name: workspace_folder_policy_ref
   kind: registry.entry
   meta: {type: bee.resource_ref, comment: Host-selected workspace folder read policy; absent link fails closed}
+
+- name: capability_access
+  kind: library.lua
+  source: file://capability_access.lua
+  modules: [registry, security, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    capability_gateway: bee.gov:capability_gateway
+    capability_grants: bee.gov:capability_grants
+    capability_model: bee.capability:model
+    workspace_applications: bee.gov:workspace_applications

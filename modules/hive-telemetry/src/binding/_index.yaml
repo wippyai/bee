@@ -1,0 +1,31 @@
+version: '1.0'
+namespace: bee.hive.telemetry.binding
+entries:
+- name: status
+  kind: contract.binding
+  contracts:
+  - contract: bee.hive.telemetry:status_contract
+    methods:
+      snapshot: bee.hive.telemetry.binding:snapshot
+      detail: bee.hive.telemetry.binding:detail
+- name: snapshot
+  kind: function.lua
+  source: file://status.lua
+  method: snapshot
+  modules: [system, registry, security, hash]
+  imports: &status_imports
+    bounds: bee.protocol:bounds
+    status: bee.hive.telemetry:status
+    client: bee.hive:client
+    types: bee.hive:types
+    capability_access: bee.gov:capability_access
+    capability_gateway: bee.gov:capability_gateway
+  security: &status_security
+    policies: [bee.security.hive:hive_telemetry_policy, bee.hive.telemetry.security:status_policy, bee.hive.telemetry.security:peer_source_policy, bee.hive.telemetry.security:status_grant_policy]
+- name: detail
+  kind: function.lua
+  source: file://status.lua
+  method: detail
+  modules: [system, registry, security, hash]
+  imports: *status_imports
+  security: *status_security

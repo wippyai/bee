@@ -147,3 +147,10 @@ reserved before new work is admitted.
 An interactive Session may use an existing workspace thread only when its authenticated application has active owner or participant membership, including a live broker-attested application family. Observer membership and workspace visibility alone do not authorize attachment.
 
 Pull scans exclude settled Work, including Work with retained cancellation records, so cancellation does not block later intake.
+
+The host-selected counts-only `bee.threads.service:node_summary` accepts an
+empty object and requires `bee.threads.sessions.summary` on `node`. It returns
+`{ok=true,value={running_sessions=N}}` for sessions with accepted execution in
+the current owner epoch, excluding closed sessions and unreconciled old claims.
+It exposes no session identities, prompts or work records. Applications reach
+Hive-wide counts through the approved Hive telemetry status contract.

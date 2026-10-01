@@ -10,9 +10,7 @@ local contract = require("contract")
 local http_client = require("http_client")
 local bounds = require("bounds")
 local gateway = require("capability_gateway")
-local grants = require("capability_grants")
-local capability_model = require("capability_model")
-local workspace_applications = require("workspace_applications")
+local access = require("capability_access")
 local files = require("capability_files")
 
 type Object = {[string]: unknown}
@@ -30,39 +28,6 @@ local function fail(code: string, message: string): Reply
     return {ok = false, error = {code = code, message = message}, value = nil}
 end
 
--- The caller's authenticated identity and its own decoded, live grant record.
-local function granted(): (unknown?, Object?, boolean, Reply?)
-    local actor = security.actor()
-    if not actor then return nil, nil, false, fail("UNAUTHENTICATED", "the caller is not authenticated") end
-    local caller, caller_error = gateway.caller(actor:id(), actor:meta())
-    if not caller then return nil, nil, false, fail("DENIED", tostring(caller_error)) end
-    local component = caller.definition_id:match("^([^:]+):")
-    local name = workspace_applications.source_of(component)
-    local identity = name and workspace_applications.identity(caller.workspace_id, name) or nil
-    if not identity or identity.definition_id ~= caller.definition_id then
-        return nil, nil, false, fail("DENIED", "the caller holds no installed application grants")
-    end
-    local owner = identity.overlay_owner
-    local grant_id = grants.record_id(owner)
-    if not grant_id then return nil, nil, false, fail("DENIED", "the caller holds no installed application grants") end
-    local raw = registry.get(grant_id)
-    if not raw then
-        local prior_owner = workspace_applications.prior_owner(caller.workspace_id, name)
-        local prior_id = prior_owner and grants.prior_record_id(prior_owner) or nil
-        raw = prior_id and registry.get(prior_id) or nil
-        if raw then owner = prior_owner end
-    end
-    if not raw then return nil, nil, false, fail("DENIED", "the caller holds no installed application grants") end
-    local raw_catalog = registry.get("bee:capability_catalog")
-    local vocabulary, vocabulary_error = capability_model.decode(raw_catalog)
-    if not vocabulary then return nil, nil, false, fail("UNAVAILABLE", tostring(vocabulary_error)) end
-    local record, record_error = grants.decode(raw, owner, caller.workspace_id, caller.definition_id,
-        vocabulary)
-    if not record then return nil, nil, false, fail("DENIED", tostring(record_error)) end
-    local live = grants.live(record, function(id: string): unknown return registry.get(id) end)
-    return caller, record, live, nil
-end
-
 -- Calls one method of an approved contract binding for the calling
 -- application: {binding, method, arguments?}.
 local function contract_call(request_raw: unknown): Reply
@@ -74,7 +39,7 @@ local function contract_call(request_raw: unknown): Reply
     if type(arguments) ~= "table" or #(arguments) > 16 then
         return fail("INVALID", "contract call arguments are malformed")
     end
-    local caller, record, live, refusal = granted()
+    local caller, record, live, refusal = access.granted()
     if refusal then return refusal end
     local allowed, denied = gateway.contract(record, caller, request.binding, request.method, live)
     if not allowed then return fail("DENIED", tostring(denied)) end
@@ -142,7 +107,7 @@ local function http_request(request_raw: unknown): Reply
     if type(timeout) ~= "number" or timeout <= 0 or timeout > 60 then
         return fail("INVALID", "HTTP timeout is malformed")
     end
-    local caller, record, live, refusal = granted()
+    local caller, record, live, refusal = access.granted()
     if refusal then return refusal end
     local allowed, denied = gateway.http(record, caller, request.method, request.url, live)
     if not allowed then return fail("DENIED", tostring(denied)) end
@@ -162,7 +127,7 @@ end
 -- an application addresses its grants on any node without embedding
 -- host-generated identities.
 local function granted_resources(_request: unknown): Reply
-    local _, record, live, refusal = granted()
+    local _, record, live, refusal = access.granted()
     if refusal then return refusal end
     if not live or not record then return fail("DENIED", "the caller holds no live application grants") end
     local volumes: {[string]: string} = {}

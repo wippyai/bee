@@ -22,6 +22,13 @@ check: $(TOOLCHAIN_CURRENT)
 setup: native-tools
 
 .PHONY: hub-inspect-check
+.PHONY: hive-status-check
+hive-status-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.hive.telemetry status_test
+.PHONY: hive-status-owner-check
+hive-status-owner-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.threads work_store_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.approvals service_test
 # Explicit live-Hub proof; ordinary checks do not require Hub network access.
 hub-inspect-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/hub_inspect.go

@@ -298,7 +298,7 @@ function M.variable(ref: string): ({[string]: unknown}?, string?)
     local entry, err = registry.get(ref)
     if err or not entry then return nil, "source " .. ref .. " is not in the registry" end
     if entry.kind ~= "env.variable" then return nil, "source " .. ref .. " is not an env.variable" end
-    local data = type(entry.data) == "table" and entry.data :: {[string]: unknown} or {}
+    local data = type(entry.data) == "table" and entry.data or {}
     return {kind = entry.kind, storage = data.storage, variable = data.variable, readonly = data.readonly}, nil
 end
 -- The fs.directory entry behind a login file source, as configuration only.
@@ -306,7 +306,7 @@ function M.directory(ref: string): ({[string]: unknown}?, string?)
     local entry, err = registry.get(ref)
     if err or not entry then return nil, "source " .. ref .. " is not in the registry" end
     if entry.kind ~= "fs.directory" then return nil, "source " .. ref .. " is not an fs.directory" end
-    local data = type(entry.data) == "table" and entry.data :: {[string]: unknown} or {}
+    local data = type(entry.data) == "table" and entry.data or {}
     local directory = type(data.directory) == "string" and data.directory or nil
     if not directory or directory == "" then return nil, "source " .. ref .. " has no directory" end
     return {kind = entry.kind, directory = directory, mode = data.mode, readonly = data.readonly}, nil

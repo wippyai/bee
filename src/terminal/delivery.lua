@@ -40,13 +40,15 @@ type FailureNotification = {
     error: string,
 }
 
+type ViewportUpdates = {receive: () -> (integer, boolean)}
+type Updates = {channel: Channel<unknown>, receive: (Updates) -> (boolean?, boolean)}
 type Entry = {
     id: string,
     mount: string,
     mount_generation: integer,
     observer: boolean,
     view: tty.Viewport?,
-    view_updates: Channel<integer>?,
+    view_updates: ViewportUpdates?,
     retired: boolean,
     failed: boolean,
     error: string,
@@ -77,18 +79,18 @@ local is_shutdown: boolean = false
 local completion_dirty: boolean = false
 local failure_notifications: {FailureNotification} = {}
 local next_mount_generation: integer = 0
-local changed_events = channel.new(1) :: Channel<boolean>
+local changed_events = channel.new(1)
 
 local function signal_change()
     if is_shutdown then return end
     channel.select({changed_events:case_send(true), default = true})
 end
 
-local function watch_view(entry: Entry, updates: Channel<integer>)
+local function watch_view(entry: Entry, updates: ViewportUpdates)
     coroutine.spawn(function()
         while not entry.retired do
-            local selected = channel.select({updates:case_receive()})
-            if not selected.ok then
+            local _, ok = updates.receive()
+            if not ok then
                 signal_change()
                 break
             end
@@ -360,7 +362,11 @@ function M.attach(id: string, mount: string, observer: boolean?): (boolean, stri
             check_release(entry)
             return
         end
-        local update_channel: Channel<integer> = updates :: Channel<integer>
+        local update_channel: ViewportUpdates = {receive = function(): (integer, boolean)
+            local value = updates:receive()
+            if value == nil then return 0, false end
+            return value, true
+        end}
         entry.view_updates = update_channel
         watch_view(entry, update_channel)
         completion_dirty = true
@@ -596,8 +602,13 @@ function M.shutdown(): ()
     end
 end
 
-function M.updates(): Channel<boolean>
-    return changed_events
+function M.updates(): Updates
+    return {channel = changed_events, receive = function(_self: Updates): (boolean?, boolean)
+        local value, ok = changed_events:receive()
+        if not ok then return nil, false end
+        if type(value) ~= "boolean" then error("invalid delivery update") end
+        return value, true
+    end}
 end
 
 function M.poll(visible_ids: {string}): boolean

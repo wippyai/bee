@@ -48,10 +48,10 @@ end
 
 function M.decode_command(value: unknown): ApplicationCommand?
     if type(value) ~= "table" then return nil end
-    local raw = value :: {[string]: unknown}
+    local raw = value
     local data = raw
     if type(raw.data) == "table" then
-        data = raw.data :: {[string]: unknown}
+        data = raw.data
     end
     local name = data.name
     if type(name) ~= "string" or #name == 0 or #name > 40 or not name:match("^[a-z][a-z0-9_-]*$") then
@@ -72,8 +72,8 @@ function M.decode_command(value: unknown): ApplicationCommand?
     if not prefix then
         return nil
     end
-    local name_str: string = name :: string
-    local def_id_str: string = definition_id :: string
+    local name_str: string = name
+    local def_id_str: string = definition_id
     local result: ApplicationCommand = {
         name = name_str,
         definition_id = def_id_str,

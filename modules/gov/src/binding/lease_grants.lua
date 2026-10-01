@@ -34,7 +34,7 @@ local function coerce(vocabulary: capability_model.Vocabulary, capability: strin
         local kind = template.parameters[name]
         if kind and capability_model.collection_kind(kind) and type(value) == "string" then
             local members: {string} = {}
-            for member in (value :: string):gmatch("[^|]+") do members[#members + 1] = member end
+            for member in (value):gmatch("[^|]+") do members[#members + 1] = member end
             result[name] = members
         else
             result[name] = value
@@ -132,9 +132,9 @@ function M.grant(executor: Executor, lease_handle: lease_store.Store, vocabulary
         or payload.target ~= chosen.overlay_owner or payload.source_workspace ~= chosen.source_workspace or not proposal_digest or not incarnation or incarnation < 1 then
         return failure("DENIED", "approval is not a decided lease grant for this application")
     end
-    local envelope = bounds.dense_list(payload.envelope, lease_model.MAX_ENVELOPE, "lease envelope")
+    local envelope = capability_model.grants(payload.envelope)
     if not envelope then return failure("INVALID", "approved lease envelope is malformed") end
-    local checked, checked_error = lease_model.envelope(vocabulary, {}, envelope :: {capability_model.Grant})
+    local checked, checked_error = lease_model.envelope(vocabulary, {}, envelope)
     if not checked then return failure("INVALID", checked_error or "approved lease envelope is invalid") end
     local effect_seed = hash.sha256("bee.gov.lease_grant\n" .. approval_id)
     if not effect_seed then return failure("INTERNAL", "measure lease effect") end

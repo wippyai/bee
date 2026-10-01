@@ -99,16 +99,16 @@ function M.handle(raw: unknown): {[string]: unknown}
         if not kernel_entry then return failure("UNAVAILABLE", kernel_error or "protected kernel entry is unavailable") end
         local manifest, manifest_error = protected_kernel.decode(kernel_entry)
         if not manifest then return failure("UNAVAILABLE", tostring(manifest_error or "protected kernel map is unavailable")) end
-        local owners, owner_error = owner_ids(namespaces, workspace_id :: string)
+        local owners, owner_error = owner_ids(namespaces, assert(workspace_id))
         if not owners then return failure("UNAVAILABLE", owner_error or "allocate overlay identities") end
         local expires = time.now():add(duration):utc():format(FORMAT)
-        updated, parse_error = super_edit.enable(data, workspace_id :: string, node, namespaces, expires, manifest.namespaces, owners)
+        updated, parse_error = super_edit.enable(data, workspace_id, node, namespaces, expires, manifest.namespaces, owners)
         if not updated then return failure("INVALID", parse_error or "super-edit profile is invalid") end
         local decoded, decode_error = activation_profiles.decode(updated)
         if not decoded then return failure("INVALID", tostring(decode_error or "activation profiles are invalid")) end
         notice = "Enabled until " .. expires .. " for " .. table.concat(namespaces, ", ")
     elseif operation == "disable" then
-        local rows = type(data.profiles) == "table" and data.profiles :: {unknown} or {}
+        local rows = type(data.profiles) == "table" and data.profiles or {}
         for _, raw_row in ipairs(rows) do
             local row = bounds.object(raw_row)
             if row and row.workspace_id == workspace_id and row.expires_at ~= nil then
@@ -140,7 +140,7 @@ function M.handle(raw: unknown): {[string]: unknown}
     end
     profile_entry.data = updated
     local changes = snapshot:changes()
-    local _, update_error = changes:update(profile_entry)
+    local _, update_error = changes:update({id = PROFILE_ID, kind = "registry.entry", data = updated, meta = bounds.object(profile_entry.meta)})
     if update_error then return failure("CONFLICT", tostring(update_error)) end
     local _, apply_error = changes:apply()
     if apply_error then return failure("CONFLICT", tostring(apply_error)) end

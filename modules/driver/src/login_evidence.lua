@@ -13,7 +13,7 @@ type Probe = {file: (string, string?, string?) -> boolean?, environment: (string
 
 local function array(raw: unknown, limit: integer): {unknown}?
     if type(raw) ~= "table" then return nil end
-    local source = raw :: {[unknown]: unknown}
+    local source = raw
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil end
@@ -137,7 +137,7 @@ function M.decode_checks(raw: unknown, declaration: Declaration): ({Check}?, str
         local evidence = declaration.any_of[index]
         if item.exit_code ~= nil and (not code or code > 255 or evidence.kind ~= "auth_status") then return nil, "login check exit code is invalid" end
         if evidence.kind == "auth_status" and item.present ~= nil and (code == nil or item.present ~= (code == evidence.success_exit_code)) then return nil, "login status check disagrees with its exit code" end
-        local present = item.present :: boolean?
+        local present = item.present
         if evidence.kind == "auth_status" and code ~= nil then present = code == evidence.success_exit_code end
         checks[index] = {present = present, exit_code = code}
     end

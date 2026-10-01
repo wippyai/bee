@@ -52,7 +52,7 @@ function M.action(decoded: Decoded, installed_raw: unknown): (string?, string?)
     if decoded.kind == "uninstall" then return "uninstall", nil end
     local installed = bounds.object(installed_raw)
     if not installed or type(installed.roots) ~= "table" then return nil, "installed inventory is malformed" end
-    for _, raw_root in ipairs(installed.roots :: {unknown}) do
+    for _, raw_root in ipairs(installed.roots) do
         local root = bounds.object(raw_root)
         local id = root and bounds.id(root.id) or nil
         if root and id and id:sub(1, 13) == "bee.hub.deps:" and root.component == decoded.component then
@@ -67,7 +67,7 @@ function M.latest(details_raw: unknown): (string?, string?)
     local details = bounds.object(details_raw)
     if not details or type(details.versions) ~= "table" then return nil, "package details are malformed" end
     local selected: string? = nil
-    for _, raw_version in ipairs(details.versions :: {unknown}) do
+    for _, raw_version in ipairs(details.versions) do
         local item = bounds.object(raw_version)
         local version = item and bounds.line(item.version, 128) or nil
         if item and version and item.yanked == false and semver.parse(version) then
@@ -93,7 +93,7 @@ end
 local function joined(raw: unknown): string
     if type(raw) ~= "table" then return "" end
     local parts: {string} = {}
-    for _, item in ipairs(raw :: {unknown}) do
+    for _, item in ipairs(raw) do
         if type(item) == "string" then parts[#parts + 1] = item end
     end
     return table.concat(parts, ", ")
@@ -159,26 +159,26 @@ function M.proposal(plan_raw: unknown, context: Context): (Object?, string?, str
     local version = action == "uninstall" and "" or bounds.line(request.version, 128)
     if not version then return nil, nil, "Hub plan version is malformed" end
     local dependencies, policies, migrations, starts = lines(), lines(), lines(), lines()
-    for _, raw in ipairs((plan.modules or {}) :: {unknown}) do
+    for _, raw in ipairs((plan.modules or {})) do
         local item = bounds.object(raw)
         local shown = item and dependency_line(item) or nil
         if not shown then return nil, nil, "Hub plan module is malformed" end
         if shown ~= "" then dependencies[#dependencies + 1] = shown end
     end
-    for _, raw in ipairs((plan.policy_changes or {}) :: {unknown}) do
+    for _, raw in ipairs((plan.policy_changes or {})) do
         local item = bounds.object(raw)
         local shown = item and policy_line(item) or nil
         if not shown then return nil, nil, "Hub plan policy change is malformed" end
         policies[#policies + 1] = shown
     end
-    for _, raw in ipairs((plan.migrations or {}) :: {unknown}) do
+    for _, raw in ipairs((plan.migrations or {})) do
         local item = bounds.object(raw)
         local id = item and bounds.line(item.id, 160) or nil
         local target = item and bounds.line(item.target_db, 160) or nil
         if not id or not target then return nil, nil, "Hub plan migration is malformed" end
         migrations[#migrations + 1] = (action == "uninstall" and "blocks removal: " or "runs: ") .. id .. " on " .. target
     end
-    for _, raw in ipairs((plan.starts or {}) :: {unknown}) do
+    for _, raw in ipairs((plan.starts or {})) do
         local id = bounds.line(raw, 160)
         if not id then return nil, nil, "Hub plan auto start is malformed" end
         starts[#starts + 1] = id

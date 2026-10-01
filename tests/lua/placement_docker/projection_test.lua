@@ -25,7 +25,7 @@ local function run()
             for _, content in ipairs({'key_command = ["cat", "/host/key"]', 'include = "/host/key"', 'file = "~/host-key"', 'file = "/workspace/../host/key"'}) do
                 local result, reason = projection.container(home(nil), format(content), {"/workspace"})
                 test.is_nil(result); test.not_nil(reason)
-                test.is_nil(assert(reason):find("/host/key", 1, true))
+                test.is_nil((assert(reason):find("/host/key", 1, true)))
             end
         end)
         test.it("keeps portable admitted inline config and mounted container paths", function()

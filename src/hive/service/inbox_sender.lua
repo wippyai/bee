@@ -29,7 +29,7 @@ local function deliver(delivery: Object, options: Options?): (Outcome?, string?)
         if name ~= "outbox_id" then input[name] = item end
     end
     local reply = client:call({node_id = destination_node, service_id = M.OWNER_SERVICE}, {operation_ref = M.OPERATION}, input,
-        {idempotency_key = type(delivery.idempotency_key) == "string" and (delivery.idempotency_key :: string) or nil,
+        {idempotency_key = type(delivery.idempotency_key) == "string" and (delivery.idempotency_key) or nil,
             timeout = options and options.timeout or nil})
     client:close()
     if reply.ok then return {ok = true, value = reply.value, error = nil}, nil end

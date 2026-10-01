@@ -35,7 +35,7 @@ end
 -- An optional list: absent or empty both decode as an empty set.
 local function optional_names(raw: unknown, pattern: string, maximum: integer): ({string}?, string?)
     if raw == nil then return {}, nil end
-    if type(raw) == "table" and next(raw :: table) == nil then return {}, nil end
+    if type(raw) == "table" and next(raw) == nil then return {}, nil end
     local values = names(raw, pattern, maximum)
     if not values then return nil, "protected kernel manifest is malformed" end
     return values, nil

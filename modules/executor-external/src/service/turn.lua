@@ -35,7 +35,7 @@ type IO = {
 
 
 local function object(value: unknown): {[string]: unknown}?
-    if type(value) == "table" then return value :: {[string]: unknown} end
+    if type(value) == "table" then return value end
     return nil
 end
 
@@ -66,16 +66,23 @@ local function decode(value: unknown): (Request?, string?)
     end
     if type(request.prompt) ~= "string" or #request.prompt == 0 or #request.prompt > 16384 then return nil, "prompt must be nonempty bounded text" end
     if request.recovery ~= nil and type(request.recovery) ~= "boolean" then return nil, "recovery must be boolean" end
+    local generation = math.floor(request.generation)
+    local prompt: string = request.prompt
     local sender = object(request.sender)
     if not sender or (sender.kind ~= "session" and sender.kind ~= "principal") or not id(sender.id) then
         return nil, "sender must be an authenticated session or principal identity"
     end
+    local sender_id = assert(id(sender.id))
+    local sender_kind = sender.kind
+    if sender_kind ~= "session" and sender_kind ~= "principal" then return nil, "sender must be an authenticated session or principal identity" end
+    local decoded_sender = {kind = sender_kind, id = sender_id}
     local driver_binding_ref = id(request.driver_binding_ref)
     if not driver_binding_ref then return nil, "driver_binding_ref is invalid" end
     local profile_id = id(request.profile_id)
     if not profile_id then return nil, "profile_id is invalid" end
     local driver_methods = object(request.driver_methods)
     if not driver_methods then return nil, "driver_methods must be an object" end
+    local resolved_driver: {[string]: string} = {}
     local binding_prefix = driver_binding_ref:gsub(":", ".") .. ":"
     for _, method in ipairs({"prepare", "dispatch", "normalize"}) do
         local target = id(driver_methods[method])
@@ -83,6 +90,7 @@ local function decode(value: unknown): (Request?, string?)
             or not target:match("^bee[.]driver[.][A-Za-z0-9_.-]+[.]binding:" .. method .. "$") then
             return nil, "driver_methods." .. method .. " is not an operation of the selected bee.driver binding"
         end
+        resolved_driver[method] = target
     end
     local placement_methods = object(request.placement_methods)
     if not placement_methods then return nil, "placement_methods must be an object" end
@@ -94,6 +102,8 @@ local function decode(value: unknown): (Request?, string?)
             return nil, "placement_methods." .. method .. " differs from the selected placement binding"
         end
     end
+    local resolved_placement: {[string]: string} = {}
+    for method, target in pairs(PLACEMENT_METHODS) do resolved_placement[method] = target end
     local admission = object(request.admission)
     if not admission or admission.attempt_id ~= attempt_id then return nil, "session admission attempt differs from the turn" end
     if admission.profile_id ~= profile_id then return nil, "session admission profile differs from the selected profile" end
@@ -109,11 +119,11 @@ local function decode(value: unknown): (Request?, string?)
     local sender_label = "[Bee sender " .. tostring(sender.kind) .. " " .. tostring(sender.id) .. "]\n"
     if #sender_label + #request.prompt > 16384 then return nil, "prompt and sender identity exceed 16384 bytes" end
     return {
-        attempt_id = attempt_id, claim = claim, observation_target = request.observation_target :: string,
-        generation = request.generation :: integer, recovery = request.recovery == true, prompt = sender_label .. (request.prompt :: string),
-        sender = sender :: {kind: "session" | "principal", id: string},
-        driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = driver_methods :: {[string]: string},
-        placement_methods = placement_methods :: {[string]: string}, admission = admission,
+        attempt_id = attempt_id, claim = claim, observation_target = "bee.threads.service:turn_observation",
+        generation = generation, recovery = request.recovery == true, prompt = sender_label .. prompt,
+        sender = decoded_sender,
+        driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = resolved_driver,
+        placement_methods = resolved_placement, admission = admission,
         previous_attempt_id = previous_attempt_id, checkpoint = checkpoint,
     }, nil
 end

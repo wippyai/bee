@@ -62,7 +62,9 @@ function M.decode(value: unknown): (Profile?, string?)
         local item = bounds.object(value)
         if not item or bounds.fields(item, {"resource", "target", "access"}) then return nil, "Docker mount requires resource, target and access" end
         local resource, target = bounds.id(item.resource), absolute(item.target)
-        if not resource or not target or (item.access ~= "read" and item.access ~= "write") then return nil, "Docker mount is invalid" end
+        local access: Access? = nil
+        if item.access == "read" then access = "read" elseif item.access == "write" then access = "write" end
+        if not resource or not target or not access then return nil, "Docker mount is invalid" end
         if names[resource] then return nil, "Docker resource mounted twice" end
         for _, existing in ipairs(targets) do
             if target == existing or (existing ~= "/" and (target:sub(1, #existing + 1) == existing .. "/" or existing:sub(1, #target + 1) == target .. "/")) then
@@ -70,7 +72,7 @@ function M.decode(value: unknown): (Profile?, string?)
             end
         end
         targets[#targets + 1] = target; names[resource] = true
-        mounts[#mounts + 1] = {resource = resource, target = target, access = item.access :: Access}
+        mounts[#mounts + 1] = {resource = resource, target = target, access = access}
     end
     return {placement_binding = binding, image_ref = image, image_recipe_ref = recipe, user = user, network = network,
         limits = {memory = memory, cpu = cpu, pids = pids}, interactive_route_ref = route, mounts = mounts}, nil

@@ -143,10 +143,12 @@ function M.find(loaded: Loaded): (spec_codec.Observation?, string?, boolean?)
     end
     if not found then return nil, nil, true end
     if not known then
-        local recorded = M.change(loaded.attempt.attempt_id, {fields = {placement_identity_json = json.encode(found)},
+        local identity_json = json.encode(found)
+        local recorded = M.change(loaded.attempt.attempt_id, {fields = {placement_identity_json = identity_json},
             evidence = {kind = "docker.identified", detail = "container " .. found.backend_ref .. " matches attempt environment, provider home and image digest"}})
         if not recorded.ok then return nil, "container identity could not be recorded" end
-        loaded.row.placement_identity_json = json.encode(found)
+        local row: store.Row = loaded.row
+        row.placement_identity_json = identity_json
     end
     return found, nil, false
 end

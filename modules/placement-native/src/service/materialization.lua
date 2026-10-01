@@ -85,9 +85,9 @@ function M.write_back(home_path: string, writebacks: {WriteBack}, owner_id: stri
     end
     return results
 end
-local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
-    local result = store.transition(db, attempt_id, {execution = update and update.execution :: types.ExecutionState? or nil,
-        fields = update and update.fields :: {[string]: unknown}? or nil, evidence = {kind = kind, detail = detail}})
+local function evidence(db, attempt_id: string, kind: string, detail: string, update: {execution: types.ExecutionState?, fields: {[string]: unknown}?}?): (boolean, string?)
+    local result = store.transition(db, attempt_id, {execution = update and update.execution or nil,
+        fields = update and update.fields or nil, evidence = {kind = kind, detail = detail}})
     if not result.ok then return false, result.message end
     return true, nil
 end

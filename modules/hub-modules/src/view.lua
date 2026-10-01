@@ -16,8 +16,8 @@ local function request_lines(request: {[string]: unknown}): {string}
         .. "  migrations " .. model.text(request.migration_policy, 16)}
     if request.version ~= nil then lines[1] = lines[1] .. "  version " .. model.text(request.version, 128) end
     if type(request.parameters) == "table" then
-        for index, raw in ipairs(request.parameters :: {unknown}) do
-            local parameter = type(raw) == "table" and raw :: {[string]: unknown} or {}
+        for index, raw in ipairs(request.parameters) do
+            local parameter = type(raw) == "table" and raw or {}
             local encoded = json.encode(parameter.value) or "[unavailable]"
             lines[#lines + 1] = "  parameter " .. model.text(parameter.name, 256) .. " = " .. model.text(encoded, #encoded)
             if index >= model.MAX_PARAMETERS then break end

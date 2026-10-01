@@ -52,6 +52,17 @@ local function migration_blob(): ({[string]: string}, string)
 end
 local function define_tests()
     test.describe("Governance activation store", function()
+        test.it("rejects invalid revisions at the direct revert boundary", function()
+            local state = assert(store.open("bee.gov:activation_test_db", "node-a", "workspace-revert-revision"))
+            local input: store.Request = {operation = "revert_activation"}
+            test.eq(store.revert_activation(state, "actor-a", input).code, "INVALID")
+            for _, revision in ipairs({"1", -1, 0.5, 9007199254740992}) do
+                input.expected_revision = revision
+                test.eq(store.revert_activation(state, "actor-a", input).code, "INVALID")
+            end
+            test.eq(store.get(state, "intent-v1").code, "NOT_FOUND")
+            assert(store.close(state))
+        end)
         test.it("changes the catalog revision token when an activation slot is added", function()
             local workspace = assert(uuid.v7())
             local state = assert(store.open("bee.gov:activation_test_db", "node-revision", workspace))

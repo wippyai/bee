@@ -12,7 +12,7 @@ type Methods = {prepare: string, dispatch: string, normalize: string, configure:
 
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
-    return value :: Object
+    return value
 end
 
 local function method_id(value: unknown, prefix: string, method: string): string?
@@ -30,7 +30,7 @@ function M.decode(binding_ref: string, raw_binding: unknown, lookup: Lookup): (M
     end
     local prefix = binding_ref:gsub(":", ".") .. ":"
     local selected: Object? = nil
-    for _, raw_contract in ipairs(contracts :: {unknown}) do
+    for _, raw_contract in ipairs(contracts) do
         local contract = object(raw_contract)
         if contract and contract.contract == M.CONTRACT then
             if selected then return nil, "selected driver binding declares its contract twice" end
@@ -40,7 +40,7 @@ function M.decode(binding_ref: string, raw_binding: unknown, lookup: Lookup): (M
     if not selected then return nil, "selected binding does not implement " .. M.CONTRACT end
     local resolved: {[string]: string} = {}
     for _, name in ipairs(M.METHODS) do
-        local target = method_id((selected :: Object)[name], prefix, name)
+        local target = method_id((selected)[name], prefix, name)
         if not target then return nil, "selected driver binding omits its " .. name .. " method" end
         local entry, entry_error = lookup(target)
         local target_entry = object(entry)
@@ -49,14 +49,14 @@ function M.decode(binding_ref: string, raw_binding: unknown, lookup: Lookup): (M
         end
         resolved[name] = target
     end
-    return {prepare = resolved.prepare :: string, dispatch = resolved.dispatch :: string,
-        normalize = resolved.normalize :: string, configure = resolved.configure :: string}, nil
+    return {prepare = assert(resolved.prepare), dispatch = assert(resolved.dispatch),
+        normalize = assert(resolved.normalize), configure = assert(resolved.configure)}, nil
 end
 
 function M.resolve(binding_ref: string): (Methods?, string?)
     local pinned, pin_error = registry.snapshot()
     if pin_error or not pinned then return nil, "driver registry snapshot is unavailable" end
-    local snapshot = pinned :: Snapshot
+    local snapshot = pinned
     local binding, binding_error = snapshot:get(binding_ref)
     if binding_error or not binding then return nil, "selected driver binding is unavailable" end
     return M.decode(binding_ref, binding, function(target: string): (unknown?, string?)

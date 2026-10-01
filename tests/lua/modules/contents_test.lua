@@ -29,7 +29,7 @@ local function define_tests()
             contents.apply(state, "read_file", {ok = true, replayed = false, value = {component = "bee/example", version = "1.0.0", digest = string.rep("a", 64), offset = 0,
                 content_base64 = base64.encode("hello\n\27[31munsafe"), next_offset = 18}})
             test.eq(state.lines[1], "hello")
-            test.is_nil(state.lines[2]:find("\27", 1, true))
+            test.is_nil((state.lines[2]:find("\27", 1, true)))
             local next = contents.next(state)
             test.not_nil(next)
             if next then test.eq(next.request.offset, 18); test.eq(next.request.expected_digest, string.rep("a", 64)) end

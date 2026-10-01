@@ -94,7 +94,7 @@ function M.row(db: sql.DB, attempt_id: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_placement_attempts WHERE attempt_id = ?", {attempt_id})
     if err or not rows then return nil, "read attempt" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: Row, nil
+    return rows[1], nil
 end
 -- Runner controls carry a private per-attempt token. The caller can create it
 -- once at start; later owner operations only read the recorded value.
@@ -108,7 +108,7 @@ function M.runner_authority(db: sql.DB, attempt_id: string, issued: string?): (s
     local rows, query_error = db:query("SELECT control_token FROM bee_placement_runner_authorities WHERE attempt_id = ?", {attempt_id})
     if query_error or not rows then return nil, "read runner authority" end
     if #rows == 0 then return nil, "runner authority is unavailable" end
-    local token = bounds.id((rows[1] :: Row).control_token)
+    local token = bounds.id((rows[1]).control_token)
     if not token then return nil, "runner authority is corrupt" end
     return token, nil
 end
@@ -122,7 +122,7 @@ function M.by_key(db: sql.DB, owner_id: string, key: string): (Row?, string?)
     local rows, err = db:query("SELECT * FROM bee_placement_attempts WHERE owner_id = ? AND idempotency_key = ?", {owner_id, key})
     if err or not rows then return nil, "read attempt by key" end
     if #rows == 0 then return nil, nil end
-    return rows[1] :: Row, nil
+    return rows[1], nil
 end
 -- Immutable composition-base identity is stored outside the provider-writable
 -- retained HOME. A later attempt reuses this digest instead of adopting current
@@ -132,7 +132,7 @@ function M.session_file_digest(db: sql.DB, owner_id: string, session_ref: string
         WHERE owner_id = ? AND session_ref = ? AND path = ?]], {owner_id, session_ref, path})
     if err or not rows then return nil, "read retained configuration binding" end
     if #rows == 0 then return nil, nil end
-    local digest = text((rows[1] :: Row).digest)
+    local digest = text((rows[1]).digest)
     if not digest or not digest:match("^[0-9a-f]+$") or #digest ~= 64 then
         return nil, "retained configuration binding is invalid"
     end
@@ -163,7 +163,7 @@ function M.request(row: Row): (types.LaunchRequest?, string?)
     if err or type(decoded) ~= "table" then return nil, "attempt request is unreadable" end
     -- Persisted JSON is another typed boundary. Decode the original admitted
     -- request separately from the private delivery callers cannot supply.
-    local stored = decoded :: {[string]: unknown}
+    local stored = decoded
     local admitted: {[string]: unknown} = {}
     for key, value in pairs(stored) do
         if key ~= "delivery" then admitted[key] = value end
@@ -290,7 +290,7 @@ function M.transition(db: sql.DB, attempt_id: string, update: Update): Result
         rollback(tx)
         return {ok = false, code = "NOT_FOUND", message = "attempt is not recorded"}
     end
-    local row = rows[1] :: Row
+    local row = rows[1]
     local execution = placement_decode.execution(row.execution_state)
     local cleanup = placement_decode.cleanup(row.cleanup_state)
     if not execution or not cleanup then

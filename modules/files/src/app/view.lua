@@ -34,7 +34,7 @@ function M.render(state: model.State, width: integer, height: integer, preferenc
     local summary = ""
     if state.current_path then
         summary = state.current_path
-        local doc = state.doc :: any
+        local doc = state.doc
         if doc then
             summary = summary .. " · line " .. tostring(state.preview_selected) .. " of " .. tostring(doc.total_lines)
             if doc.language then

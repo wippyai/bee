@@ -54,6 +54,9 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     ui = NativeDesktop(BINARY, folder, state, "bee.console:app", home=home)
     try:
         ui.wait("Terminal")
+        # The wide taskbar caps status text at 18 cells. Use its compact layout
+        # so the full clipboard acknowledgement remains visible for assertion.
+        ui.resize(79, 30)
         ui.key(b"printf '\\102\\105\\105\\137\\116\\101\\124\\111\\126\\105\\137\\117\\113\\n'\r")
         ui.wait("BEE_NATIVE_OK")
         x, y = begin(ui, "BEE_NATIVE_OK")

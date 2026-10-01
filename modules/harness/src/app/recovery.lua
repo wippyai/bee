@@ -48,7 +48,7 @@ end
 -- checkpoint acknowledgement. Everything else is ignored by the caller.
 function M.acknowledged(launch: Launch, sender: string, value: unknown, request_id: string): (boolean, string?)
     if sender ~= launch.broker_pid or type(value) ~= "table" then return false, nil end
-    local result = value :: {[string]: unknown}
+    local result = value
     if result.version ~= 1 or result.request_id ~= request_id then return false, nil end
     local code = result.error_code
     local message = result.error

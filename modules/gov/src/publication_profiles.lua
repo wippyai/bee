@@ -21,7 +21,7 @@ function M.decode(raw: unknown): (Configuration?, string?)
     if enabled ~= nil and type(enabled) ~= "boolean" then
         return nil, "publication workspace_applications must be a boolean"
     end
-    local source = rows :: table
+    local source = rows
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "publication profiles must be a dense list" end

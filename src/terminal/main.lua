@@ -428,7 +428,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         local cases = {attention_updates:case_receive(), attention_ticker:channel():case_receive(), input:case_receive(), lifecycle:case_receive(),
             replies:case_receive(), scenes:case_receive(), acknowledgements:case_receive(), retire:case_receive(), clipboard_results:case_receive(),
             transfer_updates:case_receive(), transfer_results:case_receive(), attachment_updates:case_receive(),
-            dialog_states:case_receive(), dialog_results:case_receive(), delivery_updates:case_receive(),
+            dialog_states:case_receive(), dialog_results:case_receive(), delivery_updates.channel:case_receive(),
             workspace_pages:case_receive(), switch_results:case_receive()}
         if clipboard_timeout then cases[#cases + 1] = clipboard_timeout:channel():case_receive() end
         local selected = channel.select(cases)
@@ -436,7 +436,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
         if selected.channel == attention_updates then
             attention_pending = false
             local update: unknown = selected.value
-            local row = type(update) == "table" and update :: {[string]: unknown} or nil
+            local row = type(update) == "table" and update or nil
             local count = row and row.count
             attention_count = type(count) == "number" and count >= 0 and count == math.floor(count) and math.floor(count) or nil
             dirty = true
@@ -638,7 +638,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 status = "Clipboard request unavailable: timed out"
                 dirty = true
             end
-        elseif selected.channel == delivery_updates then
+        elseif selected.channel == delivery_updates.channel then
             local visible_ids: {string} = {}
             for _, win in ipairs(model.visible(scene)) do
                 if win.mode ~= "collapsed" then table.insert(visible_ids, win.id) end

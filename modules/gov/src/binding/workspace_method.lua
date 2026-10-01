@@ -28,7 +28,7 @@ local function decode_reply(value: unknown): Result?
     end
     if stored and type(stored.overlays) == "table" then
         local overlays: {{[string]: unknown}} = {}
-        for index, raw in ipairs(stored.overlays :: {unknown}) do
+        for index, raw in ipairs(stored.overlays) do
             local row = bounds.object(raw)
             if not row or type(row.workspace_id) ~= "string" then return nil end
             overlays[index] = {overlay_id = row.workspace_id, revision = row.revision}

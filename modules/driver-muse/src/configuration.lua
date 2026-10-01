@@ -51,7 +51,7 @@ function M.settings_file(gateway: Gateway, hook_token_source: string?): (Configu
     if #gateway.hooks > 0 and not hook_token then return nil, "muse hooks require a separate hook credential environment" end
     if #gateway.hooks > 0 and not hook_token_source then return nil, "muse hooks require an attempt credential file" end
     for _, event in ipairs(gateway.hooks) do
-        local command = quote.line({executable :: string, "hook-post", gateway.endpoint, gateway.action_id, hook_token_source :: string, event})
+        local command = quote.line({assert(executable), "hook-post", gateway.endpoint, gateway.action_id, assert(hook_token_source), event})
         selected[event] = {{hooks = {{type = "command", command = command, timeout = M.HOOK_TIMEOUT}}}}
         operations[#operations + 1] = {kind = "append", path = {"hooks", event}}
     end

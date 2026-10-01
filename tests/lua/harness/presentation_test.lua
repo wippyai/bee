@@ -65,7 +65,8 @@ local function define_tests()
                             instance_id = identity, view_id = identity, definition_id = "bee.harness.app:app",
                             execution_generation = 1, definition_revision = "1", registry_revision = "1",
                             launch_token = identity, resume_schema = "bee.agent.window@1", resume_state = "", arguments = {}}, self))
-                    assert(ready:receive())
+                    local announced = ready:receive()
+                    test.not_nil(announced)
                     coroutine.spawn(function()
                         while true do
                             local message = requests:receive()
@@ -95,7 +96,8 @@ local function define_tests()
                         assert(event.ok and event.channel == poll, "viewer closed or failed before publishing the retained frame")
                     end
                     assert(output:send({type = "close"}))
-                    assert(finished:receive())
+                    local done = finished:receive()
+                    test.not_nil(done)
                     test.is_true(content:snapshot() ~= nil)
                     output:close()
                 end

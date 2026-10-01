@@ -14,7 +14,7 @@ local function handle(request: unknown): service.Reply
     if unknown_field then return fail("INVALID_ARGUMENT", unknown_field) end
     local read = service.read({approval_id = object.approval_id})
     if not read.ok then return read end
-    local view = read.value :: {[string]: unknown}
+    local view = read.value
     local approval_id = tostring(view.approval_id)
     local db, open_error = service.open()
     if not db then return fail("STORAGE", open_error or "open approval store") end

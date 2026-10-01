@@ -143,7 +143,7 @@ function M.gateway_section(gateway: Gateway): string
         local hook_url = "http://" .. gateway.endpoint .. "/hook/" .. gateway.action_id .. "/mcp"
         lines[#lines + 1] = "[mcp_servers.bee_hooks]"
         lines[#lines + 1] = "url = " .. toml.string(hook_url)
-        lines[#lines + 1] = "bearer_token_env_var = " .. toml.string(gateway.hook_token_environment :: string)
+        lines[#lines + 1] = "bearer_token_env_var = " .. toml.string(gateway.hook_token_environment)
         lines[#lines + 1] = 'omit_tools_from = ["direct", "deferred", "code_mode"]'
         lines[#lines + 1] = ""
     end

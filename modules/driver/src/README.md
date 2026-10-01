@@ -91,7 +91,10 @@ JSONL, OpenCode JSON events, Agy stream-json, Grok streaming-json, and Muse
 record JSONL. Claude and Agy both use newline-delimited JSON but have different
 event schemas and terminal reports; OpenCode has no terminal event and uses
 process EOF; Grok and Muse also use distinct event envelopes. The codec
-registry selects these implementations by descriptor ID. `driver-wippy` is a
+registry selects these implementations by descriptor ID. Normalization decodes
+state once into the selected codec's state record before applying events.
+The lazy protocol adapter exposes typed `revision()` and `max_answer_bytes()`
+accessors and preserves the legacy scalar properties at runtime. `driver-wippy` is a
 separate non-CLI driver and does not use this external-driver registry.
 
 A window launch may declare `login`: a provider identifier, a display-only

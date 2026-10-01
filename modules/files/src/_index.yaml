@@ -31,12 +31,17 @@ entries:
 - name: gitignore
   kind: library.lua
   source: file://gitignore.lua
+- name: source
+  kind: library.lua
+  source: file://source.lua
+  modules: [fs]
 - name: tree
   kind: library.lua
   source: file://tree.lua
   imports:
     protocol: bee.files:protocol
     gitignore: bee.files:gitignore
+    source: bee.files:source
 - name: syntax
   kind: library.lua
   source: file://syntax.lua

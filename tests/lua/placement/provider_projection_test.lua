@@ -25,12 +25,13 @@ local function run()
             for _, content in ipairs({'key_command = ["cat", "/host/key"]', 'include = "/host/key"', 'file = "~/host-key"', 'file = "/workspace/../host/key"'}) do
                 local result, reason = projection.container(home(nil), format(content), {"/workspace"})
                 test.is_nil(result); test.not_nil(reason)
-                test.is_nil(assert(reason):find("/host/key", 1, true))
+                test.is_nil((assert(reason):find("/host/key", 1, true)))
             end
         end)
         test.it("projects only declared materialized file dependencies into a private native home", function()
-            local selected = home(nil)
-            selected.files[#selected.files + 1] = {source_path = ".config/provider/access.key", path = ".config/provider/access.key", kind = "config", optional = false, write_back = false}
+            local files = home(nil).files
+            files[#files + 1] = {source_path = ".config/provider/access.key", path = ".config/provider/access.key", kind = "config", optional = false, write_back = false}
+            local selected: types.ProviderHome = {provider = "fixture", private = true, variable = nil, directory = nil, files = files}
             local original: formats.Format = {schema_revision = "bee.credential-format@1", file = {path = "login.json", content_format = "json", initialize = {
                 {path = "config.json", source_path = "config.json", content = '{"key":"{file:/host/.config/provider/access.key}"}'},
                 {path = ".config/provider/access.key", source_path = ".config/provider/access.key", content = "fixture-key"}}}}
@@ -41,7 +42,7 @@ local function run()
             local absent = format('key = "{file:/host/.config/provider/access.key}"')
             local refused, reason = projection.native(selected, absent, "/host", "/private")
             test.is_nil(refused); test.not_nil(reason)
-            test.is_nil(assert(reason):find("fixture-key", 1, true))
+            test.is_nil((assert(reason):find("fixture-key", 1, true)))
         end)
         test.it("preserves native descriptive text containing a home path", function()
             local original = format('environment = ["User files live under ~/Documents"]')
@@ -52,7 +53,7 @@ local function run()
             for _, content in ipairs({'file = "{file:/host/secret}"', 'file = "~/secret"', 'file = "${SECRET}"', 'file = "{env:SECRET}"', 'file = "{file:/host/../secret}"'}) do
                 local result, reason = projection.native(home(nil), format(content), "/host", "/private")
                 test.is_nil(result); test.not_nil(reason)
-                test.is_nil(assert(reason):find("/host/secret", 1, true))
+                test.is_nil((assert(reason):find("/host/secret", 1, true)))
             end
         end)
         test.it("keeps portable admitted inline config and mounted container paths", function()

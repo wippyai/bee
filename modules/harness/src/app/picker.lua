@@ -30,6 +30,7 @@ local function ask(target: string, request: {[string]: unknown}): caller.Reply
     if err then return caller.unknown() end
     return caller.decode(raw) or caller.unknown()
 end
+type Loaded = {serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
 type Opened = {serial: integer, conversation: agents.Conversation?, error: string?}
 type Progress = {conversation: agents.Conversation, error: string?}
 local function fault(reply: admission.Reply?): string
@@ -69,6 +70,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local running = true
     local load_serial = 0
     local loads = channel.new(1)
+    local loads_pending: {[integer]: Loaded} = {}
+    local function send_loads(value: Loaded)
+        loads_pending[value.serial] = value
+        loads:send(value.serial)
+    end
     local ticker: time.Ticker? = nil
     local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?)
         running = false
@@ -100,8 +106,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local ticks = 0
     local opening = false
     local open_serial = 0
-    local opens = channel.new(1) :: Channel<Opened>
-    local progress = channel.new(1) :: Channel<Progress>
+    local opens = channel.new(1)
+    local progress = channel.new(1)
     local open_key, open_target = "", ""
     local close_key: string? = nil
     local reload_pending = false
@@ -126,7 +132,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         coroutine.spawn(function()
             if catalog_requested then
                 local found, load_error = agents.list(sessions.client(), include)
-                if running and serial == load_serial then loads:send({serial = serial, listing = found, error = load_error}) end
+                if running and serial == load_serial then
+                    local sent: Loaded = {serial = serial, listing = found, error = load_error}
+                    send_loads(sent)
+                end
             else
                 local rows, load_error = agents.directory(sessions.client(), workspace_filter)
                 local names: {[string]: agents.Workspace} = {}
@@ -136,7 +145,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     local id = agents.home(row.session)
                     if id and not names[id] then names[id] = agents.workspace(id, ask) end
                 end
-                if running and serial == load_serial then loads:send({serial = serial, directory = rows, workspaces = names, error = load_error}) end
+                if running and serial == load_serial then
+                    local sent: Loaded = {serial = serial, directory = rows, workspaces = names, error = load_error}
+                    send_loads(sent)
+                end
             end
         end)
     end
@@ -267,7 +279,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if decoded and type(payload) == "table" and payload.version == 1 then preferences = decoded; dirty = true end
             end
         elseif event.channel == loads then
-            local result = event.value :: {serial: integer, listing: agents.Listing?, directory: {sessions_protocol.SessionSnapshot}?, workspaces: {[string]: agents.Workspace}?, error: string?}
+            local serial = event.value
+            if type(serial) ~= "number" then error("invalid completion identity") end
+            local result = assert(loads_pending[math.floor(serial)], "missing completion")
+            loads_pending[math.floor(serial)] = nil
             if result.serial == load_serial then
                 loading = false
                 listed = no_agents()
@@ -281,7 +296,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 if reload_pending then reload_pending = false; load() end
             end
         elseif event.channel == opens then
-            local result = event.value :: Opened
+            local result = event.value
             if result.serial == open_serial then
                 opening = false
                 if result.conversation then
@@ -314,7 +329,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 dirty = true
             end
         elseif event.channel == progress then
-            local result = event.value :: Progress
+            local result = event.value
             if result.conversation == conversation then
                 session_busy = false; dirty = true
                 if result.error then status = "Session operation failed: " .. result.error end

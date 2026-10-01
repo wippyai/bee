@@ -29,12 +29,12 @@ local function publication_call(value: unknown, fields: {string}): (Binding?, st
 end
 function M.publish_request(value: unknown): Reply
     local binding, policy_name, request, refusal = publication_call(value, {"component", "version", "visibility", "source"})
-    if not binding or not policy_name then return refusal :: Reply end
+    if not binding or not policy_name then return assert(refusal) end
     return hubpublish.request(hubpublish.port(binding), binding, policy_name, request)
 end
 function M.publish_status(value: unknown): Reply
     local binding, policy_name, request, refusal = publication_call(value, {"request_id"})
-    if not binding or not policy_name then return refusal :: Reply end
+    if not binding or not policy_name then return assert(refusal) end
     return hubpublish.status(hubpublish.port(binding), binding, policy_name, request)
 end
 return M

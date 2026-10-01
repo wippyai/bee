@@ -217,7 +217,7 @@ end
 -- parse_digest: the Hub digest the uploader reports for the uploaded bytes.
 function M.parse_digest(output: unknown): string?
     if type(output) ~= "string" then return nil end
-    local digest = (output :: string):match("Digest:%s+(sha256:[0-9a-f]+)")
+    local digest = output:match("Digest:%s+(sha256:[0-9a-f]+)")
     if not digest or #digest ~= 7 + 64 then return nil end
     return digest
 end

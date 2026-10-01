@@ -452,7 +452,7 @@ function M.value(request: {[string]: unknown}?): {[string]: unknown}
     local section_id: string? = nil
     local include_example = false
     if request ~= nil then
-        if type(request.section) == "string" then section_id = request.section :: string end
+        if type(request.section) == "string" then section_id = request.section end
         if request.include_example == true then include_example = true end
     end
     if section_id ~= nil then

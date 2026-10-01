@@ -89,7 +89,7 @@ end
 -- hook, option or delegate declaration: the CLI route proves none of them.
 local function required(value: unknown): boolean
     if value == nil then return false end
-    if type(value) == "table" then return next(value :: {[unknown]: unknown}) ~= nil end
+    if type(value) == "table" then return next(value) ~= nil end
     return true
 end
 local function decode_tool(ref: string, entry: {[string]: unknown}): (Tool?, string?)
@@ -111,7 +111,7 @@ local function decode_tool(ref: string, entry: {[string]: unknown}): (Tool?, str
         if type(meta.output_schema) ~= "string" then return nil, ref .. ": output_schema must be a JSON object" end
         local decoded, output_error = json.decode(meta.output_schema)
         if output_error or type(decoded) ~= "table" then return nil, ref .. ": output_schema must be a JSON object" end
-        output_schema = decoded :: {[string]: unknown}
+        output_schema = decoded
     end
     local mcp = bounds.object(meta.mcp == nil and {} or meta.mcp)
     if not mcp then return nil, ref .. ": mcp must be an object" end
@@ -134,7 +134,7 @@ local function decode_tool(ref: string, entry: {[string]: unknown}): (Tool?, str
     end
     local digest, digest_error = entry_digest(ref, entry)
     if not digest then return nil, ref .. ": " .. tostring(digest_error) end
-    return {ref = ref, digest = digest, alias = alias_name, description = description, input_schema = input_schema :: {[string]: unknown},
+    return {ref = ref, digest = digest, alias = alias_name, description = description, input_schema = input_schema,
         output_schema = output_schema, scopes = scopes, annotations = annotations}, nil
 end
 local function decode_trait(ref: string, entry: {[string]: unknown}): (Trait?, string?)

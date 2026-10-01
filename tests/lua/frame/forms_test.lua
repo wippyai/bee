@@ -119,7 +119,7 @@ local function define_tests()
             local painter = frame.new(20, 1, appearance.defaults())
             forms.text_draw(painter, 2, 1, 18, field, false, 1)
             test.eq(field.value, "secret")
-            test.is_nil(text(painter)[1]:find("secret", 1, true))
+            test.is_nil((text(painter)[1]:find("secret", 1, true)))
             test.eq(text(painter)[1]:sub(2, 19), string.rep("•", 6))
         end)
     end)
@@ -263,7 +263,7 @@ local function define_tests()
                 end
                 for _, row in ipairs(frame.rows(painter)) do
                     local rendered = plain(row)
-                    test.is_nil(rendered:find("\27", 1, true))
+                    test.is_nil((rendered:find("\27", 1, true)))
                 end
                 sized(painter)
             end

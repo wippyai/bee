@@ -23,7 +23,7 @@ local function storage(detail: string): Result return transaction.storage_failur
 local function rows(tx: sql.Transaction, statement: string, params: {unknown}): ({InboxRow}?, Result?)
     local found, err = tx:query(statement, params)
     if err or not found then return nil, storage("read action inbox") end
-    return found :: {InboxRow}, nil
+    return found, nil
 end
 local function execute(tx: sql.Transaction, statement: string, params: {unknown}): Result?
     local _, err = tx:execute(statement, params)
@@ -47,7 +47,7 @@ local function principal(tx: sql.Transaction, thread_id: string, action_id: stri
     if not admission then return nil, failure("INTERNAL", "action admission is missing") end
     local decoded, decode_err = record.decode_json(admission.record_json)
     if not decoded then return nil, failure("INTERNAL", decode_err or "action admission is corrupt") end
-    local body = decoded.body :: {principal_id: string}
+    local body = decoded.body
     return body.principal_id, nil
 end
 local function target(tx: sql.Transaction, thread_id: string, action_id: string): (reader.Head?, string?, Result?)
@@ -70,7 +70,7 @@ end
 local function delivery_status(item: InboxRow): string
     local state = tostring(item.state)
     if state == "acknowledged" or state == "replied" then return state end
-    return type(item.delivery_block) == "string" and item.delivery_block :: string or state
+    return type(item.delivery_block) == "string" and item.delivery_block or state
 end
 -- Lifecycle receipts and inbox status commit in the same owner transaction.
 -- A late carrier can no longer claim a settled attempt; an unacknowledged
@@ -118,9 +118,9 @@ function M.accept(db: sql.DB, actor: string, request: unknown): Result
         if replay_err then return storage(replay_err) end
         if replayed then return replayed end
         if head.state ~= "open" then return failure("INVALID_STATE", "thread is closed") end
-        local recipient, recipient_err = principal(tx, mutation.thread_id, action_id :: string)
+        local recipient, recipient_err = principal(tx, mutation.thread_id, action_id)
         if not recipient then return recipient_err or failure("NOT_FOUND", "action is missing") end
-        local current, current_err = epoch(tx, mutation.thread_id, action_id :: string)
+        local current, current_err = epoch(tx, mutation.thread_id, action_id)
         if current_err then return current_err end
         if current ~= expected then return failure("CONFLICT", "grant epoch is stale") end
         local existing, existing_err = rows(tx, "SELECT sender_value FROM bee_thread_inbox_rules WHERE thread_id = ? AND action_id = ? AND sender_kind = ? AND sender_value = ?",
@@ -202,7 +202,7 @@ function M.describe(db: sql.DB, actor: string, request: unknown): Result
         -- gate below still decides. The workspace travels in the answer so
         -- a forwarded send can bind it.
         if head.workspace_id ~= access.workspace() and not access.forwarded(actor) then return failure("NOT_FOUND", "target unavailable") end
-        local resource = address(head.workspace_id :: string, node_id, action_id)
+        local resource = address(head.workspace_id, node_id, action_id)
         if actor ~= owner and not access.may_discover(resource) then return failure("DENIED", "target is not discoverable") end
         local current, current_err = epoch(tx, thread_id, action_id)
         if current_err then return current_err end
@@ -315,7 +315,7 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
             -- the authenticated mapped principal against its own acceptance,
             -- grant, action and epoch when the reply arrives.
             if is_reply and reply_ref then
-                local source, source_err = own_action(tx, actor, sender_thread :: string, sender_action :: string)
+                local source, source_err = own_action(tx, actor, sender_thread, sender_action)
                 if not source then return source_err or failure("DENIED", "reply action unavailable") end
                 local origin, origin_err = rows(tx, "SELECT * FROM bee_thread_inbox_items WHERE thread_id = ? AND record_id = ?",
                     {reply_ref.thread_id, reply_ref.record_id})
@@ -335,9 +335,9 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
                     {reply_ref.thread_id, reply_ref.record_id})
                 if settled then return storage("mark forwarded reply") end
             end
-            return forward_enqueue(tx, actor, mutation, {target_action = target_action :: string, sender_thread = sender_thread :: string,
-                sender_action = sender_action :: string, node_id = node_id :: string, workspace_id = claimed_workspace, grant_epoch = grant_epoch :: integer,
-                message_id = message_id :: string, content = object.content, digest = digest :: string,
+            return forward_enqueue(tx, actor, mutation, {target_action = target_action, sender_thread = sender_thread,
+                sender_action = sender_action, node_id = node_id, workspace_id = claimed_workspace, grant_epoch = grant_epoch,
+                message_id = message_id, content = object.content, digest = digest,
                 in_reply_to = reply_ref, outcome = is_reply and object.outcome or nil})
         end
         -- A hive-forwarded send arrives with the authenticated caller node.
@@ -389,7 +389,7 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
             if not source_record then return failure("INTERNAL", "original inbox record is missing") end
             local source_message, source_decode_err = record.decode_json(source_record.record_json)
             if not source_message then return failure("INTERNAL", source_decode_err or "original inbox record is corrupt") end
-            if source_message.kind ~= "message" or (source_message.body :: {message_kind: string}).message_kind ~= "request" then
+            if source_message.kind ~= "message" or (source_message.body).message_kind ~= "request" then
                 return failure("INVALID_ARGUMENT", "reply reference must name an inbox request")
             end
             if original.state == "replied" then return failure("CONFLICT", "inbox request already has a reply") end
@@ -409,7 +409,7 @@ local function send(db: sql.DB, actor: string, request: unknown, is_reply: boole
         -- The sender node is the authenticated caller node for a forwarded
         -- send and this node otherwise; the sender action itself is
         -- attested by the caller node for a forward and owned locally.
-        local sender_node = forwarded and (caller_node :: string) or (node_id :: string)
+        local sender_node = forwarded and (caller_node) or (node_id)
         local insert_err = execute(tx, "INSERT INTO bee_thread_inbox_items (thread_id, action_id, inbox_sequence, record_id, payload_digest, sender_actor, sender_action_id, sender_node_id, sender_thread_id, message_id, state, delivery_block, in_reply_to_thread_id, in_reply_to_record_id) " ..
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?, ?, ?)",
             {mutation.thread_id, target_action, sequence, committed.record_id, digest, actor, sender_action, sender_node, sender_thread, message_id,
@@ -454,7 +454,7 @@ function M.list(db: sql.DB, actor: string, request: unknown): Result
             local item = found[index]
             local decoded, decode_err = record.decode_json(tostring(item.record_json))
             if not decoded then return failure("INTERNAL", decode_err or "stored inbox record is corrupt") end
-            local body = decoded.body :: Object
+            local body = decoded.body
             local view: Object = {thread_id = thread_id, inbox_sequence = item.inbox_sequence, record_id = item.record_id, thread_sequence = decoded.sequence,
                 payload_digest = item.payload_digest, state = item.state, delivery_status = delivery_status(item), sender_action_id = item.sender_action_id,
                 sender_node_id = item.sender_node_id, sender_thread_id = item.sender_thread_id, message_id = item.message_id,
@@ -548,7 +548,7 @@ function M.offer(db: sql.DB, actor: string, request: unknown): Result
         end
         local decoded, decode_err = record.decode_json(tostring(item.record_json))
         if not decoded then return failure("INTERNAL", decode_err or "stored inbox record is corrupt") end
-        local body = decoded.body :: Object
+        local body = decoded.body
         local view: Object = {thread_id = thread_id, action_id = action_id, inbox_sequence = item.inbox_sequence, record_id = item.record_id,
             payload_digest = item.payload_digest, message_id = item.message_id, message_kind = body.message_kind, content = body.content,
             sender_action_id = item.sender_action_id, sender_thread_id = item.sender_thread_id, sender_node_id = item.sender_node_id,

@@ -114,7 +114,7 @@ local function define_tests()
             local created = value(call(manager, "create", {label = "Fresh", root_ref = PROJECTS, subpath = subpath, create_directory = true}))
             test.eq(created.subpath, subpath)
             local volume = assert(fs.get(PROJECTS))
-            test.is_true(volume:isdir(subpath))
+            test.is_true((volume:isdir(subpath)))
             test.eq(code(call(manager, "create", {label = "Twice", root_ref = PROJECTS, subpath = subpath, create_directory = true})), "CONFLICT")
             test.eq(code(call(manager, "create", {label = "Orphan", root_ref = PROJECTS, subpath = fresh("missing") .. "/child",
                 create_directory = true})), "NOT_FOUND")

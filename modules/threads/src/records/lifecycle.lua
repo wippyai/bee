@@ -65,10 +65,10 @@ function M.started(value: unknown): (types.Started?, string?)
     local kind = bounds.member(object.execution_kind, {"process", "runner"})
     local ref = bounds.id(object.execution_ref)
     local epoch = bounds.integer(object.owner_epoch)
-    if not kind then return nil, "execution_kind is not process or runner" end
+    if kind ~= "process" and kind ~= "runner" then return nil, "execution_kind is not process or runner" end
     if not ref then return nil, "execution_ref is not an identifier" end
     if not epoch or epoch < 1 then return nil, "owner_epoch must be a positive integer" end
-    return {execution_kind = kind :: types.ExecutionKind, execution_ref = ref, owner_epoch = epoch}, nil
+    return {execution_kind = kind, execution_ref = ref, owner_epoch = epoch}, nil
 end
 function M.turn_request(value: unknown): (types.TurnRequest?, string?)
     local object = bounds.object(value)
@@ -121,11 +121,11 @@ function M.receipt(value: unknown): (types.Receipt?, string?)
     if unknown_field then return nil, unknown_field end
     local scope = bounds.member(object.scope, {"attempt", "action"})
     local outcome = values.outcome(object.outcome)
-    if not scope then return nil, "receipt scope is not attempt or action" end
+    if scope ~= "attempt" and scope ~= "action" then return nil, "receipt scope is not attempt or action" end
     if not outcome then return nil, "receipt outcome is not an outcome" end
     local evidence, evidence_error = bounds.ids(object.evidence_refs, true)
     if not evidence then return nil, "evidence_refs: " .. tostring(evidence_error) end
-    local receipt: types.Receipt = {scope = scope :: types.ReceiptScope, outcome = outcome, evidence_refs = evidence}
+    local receipt: types.Receipt = {scope = scope, outcome = outcome, evidence_refs = evidence}
     if object.error ~= nil then
         local fault, fault_error = values.fault(object.error)
         if not fault then return nil, fault_error end

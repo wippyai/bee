@@ -106,14 +106,14 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
         end
         local actual = digest(bytes)
         if not actual or actual ~= measured then return nil, failure("INTERNAL", label .. " digest is corrupt") end
-        local result: Blob = {bytes = bytes, digest = measured :: string}
+        local result: Blob = {bytes = bytes, digest = measured}
         return result, nil
     end
-    local candidate, candidate_error = row_blob(raw.candidate_bytes, raw.candidate_digest, protocol.MAX_CANDIDATE_BYTES :: integer, "candidate")
+    local candidate, candidate_error = row_blob(raw.candidate_bytes, raw.candidate_digest, protocol.MAX_CANDIDATE_BYTES, "candidate")
     if not candidate then return nil, candidate_error end
-    local artifact, artifact_error = row_blob(raw.artifact_bytes, raw.artifact_digest, protocol.MAX_ARTIFACT_BYTES :: integer, "artifact")
+    local artifact, artifact_error = row_blob(raw.artifact_bytes, raw.artifact_digest, protocol.MAX_ARTIFACT_BYTES, "artifact")
     if not artifact then return nil, artifact_error end
-    local preflight, preflight_error = row_blob(raw.preflight_bytes, raw.preflight_digest, protocol.MAX_PREFLIGHT_BYTES :: integer, "preflight")
+    local preflight, preflight_error = row_blob(raw.preflight_bytes, raw.preflight_digest, protocol.MAX_PREFLIGHT_BYTES, "preflight")
     if not preflight then return nil, preflight_error end
     local plan_digest_value = bounds.text(raw.plan_digest, 64)
     if not plan_digest_value or #plan_digest_value ~= 64 or not plan_digest_value:match("^[0-9a-f]+$") then return nil, failure("INTERNAL", "governance plan digest is corrupt") end
@@ -133,6 +133,7 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
     end
     local status = raw.status
     if status ~= "staged" and status ~= "reviewed" and status ~= "rejected" and status ~= "approval_bound" then return nil, failure("INTERNAL", "governance plan status is corrupt") end
+    local row_status: string = status
     local selected = raw.selected == 1 or raw.selected == true
     local selection_revision: integer? = nil
     if selected then
@@ -141,25 +142,37 @@ local function decode_row(raw: {[string]: unknown}): (Row?, Result?)
     elseif raw.selection_revision ~= nil then return nil, failure("INTERNAL", "unselected governance plan has a selection revision") end
     local review_status: string? = nil
     if raw.review_status ~= nil then
-        if raw.review_status ~= "accepted" and raw.review_status ~= "rejected" then return nil, failure("INTERNAL", "governance review status is corrupt") end
-        review_status = raw.review_status :: string
+        local value = raw.review_status
+        if value ~= "accepted" and value ~= "rejected" then return nil, failure("INTERNAL", "governance review status is corrupt") end
+        review_status = value
     end
     local approval_owner_incarnation = integer(raw.approval_owner_incarnation)
     if status == "approval_bound" and (not approval_plan_digest or not approval_proposal_digest
         or not approval_owner_incarnation or approval_owner_incarnation < 1) then
         return nil, failure("INTERNAL", "bound governance approval identity is incomplete")
     end
-    local verified_plan_digest = plan_digest_value :: string
-    return {source_node = source_node, source_workspace = source_workspace, version = version,
+    local approval_id: string? = nil
+    if raw.approval_id ~= nil then
+        local value = raw.approval_id
+        if type(value) ~= "string" then return nil, failure("INTERNAL", "bound governance approval identity is incomplete") end
+        approval_id = value
+    end
+    local review_reason, reviewer_id = raw.review_reason, raw.reviewer_id
+    if (review_reason ~= nil and type(review_reason) ~= "string") or (reviewer_id ~= nil and type(reviewer_id) ~= "string") then
+        return nil, failure("INTERNAL", "governance review status is corrupt")
+    end
+    local verified_plan_digest = plan_digest_value
+    local decoded: Row = {source_node = source_node, source_workspace = source_workspace, version = version,
         identity_digest_owner_node = identity_digest_owner_node,
         identity_digest_source_node = identity_digest_source_node,
-        candidate = candidate :: Blob, artifact = artifact :: Blob, preflight = preflight :: Blob,
-        plan_digest = verified_plan_digest, revision = revision, status = status :: string, review_status = review_status,
-        review_reason = raw.review_reason :: string?, reviewer_id = raw.reviewer_id :: string?,
-        approval_id = raw.approval_id :: string?, approval_plan_digest = approval_plan_digest,
+        candidate = candidate, artifact = artifact, preflight = preflight,
+        plan_digest = verified_plan_digest, revision = revision, status = row_status, review_status = review_status,
+        review_reason = review_reason, reviewer_id = reviewer_id,
+        approval_id = approval_id, approval_plan_digest = approval_plan_digest,
         approval_proposal_digest = approval_proposal_digest,
         approval_owner_incarnation = approval_owner_incarnation, selected = selected,
-        selection_revision = selection_revision}, nil
+        selection_revision = selection_revision}
+    return decoded, nil
 end
 
 local function view(store: Store, row: Row, include_bytes: boolean): {[string]: unknown}
@@ -205,7 +218,7 @@ local function receipt(store: Store, tx: sql.Transaction, actor: string, input: 
     if row.operation ~= input.operation or row.request_digest ~= measured or row.version ~= input.version or row.source_node ~= input.source_node or row.source_workspace ~= input.source_workspace then
         return nil, failure("CONFLICT", "idempotency key was used by a different governance plan request")
     end
-    local plan, plan_error = find(tx, store, row.source_node :: string, row.source_workspace :: string, row.version :: string)
+    local plan, plan_error = find(tx, store, input.source_node, input.source_workspace, input.version)
     if plan_error then return nil, plan_error end
     if not plan then return nil, failure("INTERNAL", "governance plan receipt has no plan") end
     return transaction.success(view(store, plan, false), true), nil
@@ -223,7 +236,7 @@ local function insert_receipt(store: Store, tx: sql.Transaction, actor: string, 
 end
 
 local function load_by_version(tx: sql.Transaction, store: Store, input: Identity): (Row?, Result?)
-    local row, err = find(tx, store, input.source_node :: string, input.source_workspace :: string, input.version :: string)
+    local row, err = find(tx, store, input.source_node, input.source_workspace, input.version)
     if err then return nil, err end
     if not row then return nil, failure("NOT_FOUND", "governance plan does not exist") end
     return row, nil
@@ -234,22 +247,22 @@ function M.stage(store: Store, actor_raw: string, input: StageRequest): Result
     local actor = bounds.id(actor_raw)
     if not actor then return failure("INVALID", "plan actor is invalid") end
     local measured, measure_error = request_digest(input)
-    if not measured then return measure_error :: Result end
+    if not measured then return measure_error end
     return transaction.write(store.db, "governance plan", function(tx: sql.Transaction): Result
-        local replay, replay_error = receipt(store, tx, actor, input, measured :: string)
+        local replay, replay_error = receipt(store, tx, actor, input, measured)
         if replay then return replay end
         if replay_error then return replay_error end
-        local candidate_error = checked_blob(input.candidate :: Blob, "candidate")
+        local candidate_error = checked_blob(input.candidate, "candidate")
         if candidate_error then return candidate_error end
-        local artifact_error = checked_blob(input.artifact :: Blob, "artifact")
+        local artifact_error = checked_blob(input.artifact, "artifact")
         if artifact_error then return artifact_error end
-        local preflight_error = checked_blob(input.preflight :: Blob, "preflight")
+        local preflight_error = checked_blob(input.preflight, "preflight")
         if preflight_error then return preflight_error end
-        local measured_plan = plan_digest(store.node, store.workspace, input.source_node :: string,
-            input.source_workspace :: string, input.version :: string, input.candidate :: Blob,
-            input.artifact :: Blob, input.preflight :: Blob)
+        local measured_plan = plan_digest(store.node, store.workspace, input.source_node,
+            input.source_workspace, input.version, input.candidate,
+            input.artifact, input.preflight)
         if not measured_plan then return failure("INTERNAL", "measure governance plan") end
-        local existing, existing_error = find(tx, store, input.source_node :: string, input.source_workspace :: string, input.version :: string)
+        local existing, existing_error = find(tx, store, input.source_node, input.source_workspace, input.version)
         if existing_error then return existing_error end
         if existing then
             if existing.source_workspace ~= input.source_workspace or existing.candidate.digest ~= input.candidate.digest
@@ -258,7 +271,7 @@ function M.stage(store: Store, actor_raw: string, input: StageRequest): Result
                 or existing.plan_digest ~= measured_plan then
                 return failure("CONFLICT", "version already contains different governance plan bytes")
             end
-            local receipt_error = insert_receipt(store, tx, actor, input, measured :: string, existing)
+            local receipt_error = insert_receipt(store, tx, actor, input, measured, existing)
             if receipt_error then return receipt_error end
             return transaction.success(view(store, existing, false), false)
         end
@@ -270,9 +283,9 @@ function M.stage(store: Store, actor_raw: string, input: StageRequest): Result
         local now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
         local _, insert_error = tx:execute("INSERT INTO bee_governance_plans (owner_node, workspace_id, source_node, source_workspace, version, candidate_bytes, candidate_digest, artifact_bytes, artifact_digest, preflight_bytes, preflight_digest, plan_digest, identity_digest_owner_node, identity_digest_source_node, revision, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'staged', " .. now .. ", " .. now .. ")", {store.node, store.workspace, input.source_node, input.source_workspace, input.version, input.candidate.bytes, input.candidate.digest, input.artifact.bytes, input.artifact.digest, input.preflight.bytes, input.preflight.digest, measured_plan, store.node, input.source_node})
         if insert_error then return storage(insert_error, "stage governance plan") end
-        local row, row_error = find(tx, store, input.source_node :: string, input.source_workspace :: string, input.version :: string)
+        local row, row_error = find(tx, store, input.source_node, input.source_workspace, input.version)
         if row_error or not row then return row_error or failure("INTERNAL", "read staged governance plan") end
-        local receipt_error = insert_receipt(store, tx, actor, input, measured :: string, row)
+        local receipt_error = insert_receipt(store, tx, actor, input, measured, row)
         if receipt_error then return receipt_error end
         return transaction.success(view(store, row, false), false)
     end)
@@ -280,9 +293,9 @@ end
 
 local function transition(store: Store, actor: string, input: Mutation, change: (sql.Transaction, Row) -> Result): Result
     local measured, measure_error = request_digest(input)
-    if not measured then return measure_error :: Result end
+    if not measured then return measure_error end
     return transaction.write(store.db, "governance plan", function(tx: sql.Transaction): Result
-        local replay, replay_error = receipt(store, tx, actor, input, measured :: string)
+        local replay, replay_error = receipt(store, tx, actor, input, measured)
         if replay then return replay end
         if replay_error then return replay_error end
         local row, row_error = load_by_version(tx, store, input)
@@ -300,7 +313,7 @@ function M.record_review(store: Store, actor_raw: string, input: ReviewRequest):
     if not actor then return failure("INVALID", "plan actor is invalid") end
     return transition(store, actor, input, function(tx: sql.Transaction, row: Row): Result
         if row.status ~= "staged" then return failure("CONFLICT", "governance plan cannot be reviewed in its current status") end
-        local next_revision: integer = (row.revision :: integer) + 1
+        local next_revision: integer = (row.revision) + 1
         local _, err = tx:execute("UPDATE bee_governance_plans SET revision = ?, status = ?, review_status = ?, review_reason = ?, reviewer_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND source_node = ? AND source_workspace = ? AND version = ? AND revision = ?", {next_revision, input.review_status == "accepted" and "reviewed" or "rejected", input.review_status, input.review_reason, actor, store.node, store.workspace, row.source_node, row.source_workspace, row.version, row.revision})
         if err then return storage(err, "record governance review") end
         if not _ or integer(_.rows_affected) ~= 1 then return failure("CONFLICT", "governance plan changed during review") end
@@ -308,7 +321,7 @@ function M.record_review(store: Store, actor_raw: string, input: ReviewRequest):
         if changed_error or not changed then return changed_error or failure("INTERNAL", "read reviewed governance plan") end
         local measured = request_digest(input)
         if not measured then return failure("INTERNAL", "measure review receipt") end
-        local receipt_error = insert_receipt(store, tx, actor, input, measured :: string, changed)
+        local receipt_error = insert_receipt(store, tx, actor, input, measured, changed)
         if receipt_error then return receipt_error end
         return transaction.success(view(store, changed, false), false)
     end)
@@ -328,7 +341,7 @@ function M.bind_approval(store: Store, actor_raw: string, input: ApprovalRequest
             or row.approval_owner_incarnation ~= input.approval_owner_incarnation) then
             return failure("CONFLICT", "governance plan is bound to another approval")
         end
-        local next_revision: integer = (row.revision :: integer) + 1
+        local next_revision: integer = (row.revision) + 1
         local _, err = tx:execute("UPDATE bee_governance_plans SET revision = ?, status = 'approval_bound', approval_id = ?, approval_digest = ?, approval_proposal_digest = ?, approval_owner_incarnation = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND source_node = ? AND source_workspace = ? AND version = ? AND revision = ?", {next_revision, input.approval_id, input.approval_plan_digest, input.approval_proposal_digest, input.approval_owner_incarnation, store.node, store.workspace, row.source_node, row.source_workspace, row.version, row.revision})
         if err then return storage(err, "bind governance approval") end
         if not _ or integer(_.rows_affected) ~= 1 then return failure("CONFLICT", "governance plan changed during approval binding") end
@@ -336,7 +349,7 @@ function M.bind_approval(store: Store, actor_raw: string, input: ApprovalRequest
         if changed_error or not changed then return changed_error or failure("INTERNAL", "read bound governance plan") end
         local measured = request_digest(input)
         if not measured then return failure("INTERNAL", "measure approval receipt") end
-        local receipt_error = insert_receipt(store, tx, actor, input, measured :: string, changed)
+        local receipt_error = insert_receipt(store, tx, actor, input, measured, changed)
         if receipt_error then return receipt_error end
         return transaction.success(view(store, changed, false), false)
     end)
@@ -348,7 +361,7 @@ function M.select(store: Store, actor_raw: string, input: Mutation): Result
     if not actor then return failure("INVALID", "plan actor is invalid") end
     return transition(store, actor, input, function(tx: sql.Transaction, row: Row): Result
         if row.status ~= "reviewed" and row.status ~= "approval_bound" then return failure("CONFLICT", "governance plan is not eligible for selection") end
-        local next_revision: integer = (row.revision :: integer) + 1
+        local next_revision: integer = (row.revision) + 1
         local _, plan_error = tx:execute("UPDATE bee_governance_plans SET revision = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE owner_node = ? AND workspace_id = ? AND source_node = ? AND source_workspace = ? AND version = ? AND revision = ?", {next_revision, store.node, store.workspace, row.source_node, row.source_workspace, row.version, row.revision})
         if plan_error then return storage(plan_error, "select governance plan") end
         local _, selection_error = tx:execute("INSERT INTO bee_governance_plan_slots (owner_node, workspace_id, source_node, source_workspace, version, plan_revision, selected_by, selected_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) ON CONFLICT(owner_node, workspace_id, source_node, source_workspace) DO UPDATE SET version = excluded.version, plan_revision = excluded.plan_revision, selected_by = excluded.selected_by, selected_at = excluded.selected_at", {store.node, store.workspace, row.source_node, row.source_workspace, row.version, next_revision, actor})
@@ -357,7 +370,7 @@ function M.select(store: Store, actor_raw: string, input: Mutation): Result
         if changed_error or not changed then return changed_error or failure("INTERNAL", "read selected governance plan") end
         local measured = request_digest(input)
         if not measured then return failure("INTERNAL", "measure selection receipt") end
-        local receipt_error = insert_receipt(store, tx, actor, input, measured :: string, changed)
+        local receipt_error = insert_receipt(store, tx, actor, input, measured, changed)
         if receipt_error then return receipt_error end
         return transaction.success(view(store, changed, false), false)
     end)
@@ -391,11 +404,11 @@ end
 function M.call(store: Store, actor: string, raw: unknown): Result
     local input, decode_error = protocol.decode(raw)
     if not input then return failure("INVALID", decode_error or "invalid governance plan request") end
-    if input.operation == "stage" then return M.stage(store, actor, input :: StageRequest) end
-    if input.operation == "record_review" then return M.record_review(store, actor, input :: ReviewRequest) end
-    if input.operation == "bind_approval" then return M.bind_approval(store, actor, input :: ApprovalRequest) end
-    if input.operation == "select" then return M.select(store, actor, input :: Mutation) end
-    if input.operation == "get" then return M.get(store, input :: Identity) end
+    if input.operation == "stage" then return M.stage(store, actor, input) end
+    if input.operation == "record_review" then return M.record_review(store, actor, input) end
+    if input.operation == "bind_approval" then return M.bind_approval(store, actor, input) end
+    if input.operation == "select" then return M.select(store, actor, input) end
+    if input.operation == "get" then return M.get(store, input) end
     return M.list(store)
 end
 

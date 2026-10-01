@@ -66,28 +66,28 @@ local function migration_key(item: Migration): string
 end
 local function normalize_report(raw: unknown): (Report?, string?)
     if type(raw) ~= "table" then return nil, "preflight report must be an object" end
-    local value = raw :: {[string]: unknown}
+    local value = raw
     local allowed: {[string]: boolean} = {schema_revision = true, plan_digest = true, destination_node = true,
         base_revision = true, policy_digest = true, ready = true, diagnostics = true, pending_migrations = true}
     for name in pairs(value) do if type(name) ~= "string" or not allowed[name] then return nil, "preflight report has an unknown field" end end
     if value.schema_revision ~= "bee.governance-preflight@1" or type(value.plan_digest) ~= "string" or not digest(value.plan_digest)
-        or not identifier(value.destination_node :: string) or type(value.base_revision) ~= "number"
-        or value.base_revision ~= math.floor(value.base_revision :: number) or (value.base_revision :: number) < 0
+        or type(value.destination_node) ~= "string" or not identifier(value.destination_node) or type(value.base_revision) ~= "number"
+        or value.base_revision ~= math.floor(value.base_revision) or (value.base_revision) < 0
         or type(value.policy_digest) ~= "string" or not digest(value.policy_digest)
         or type(value.ready) ~= "boolean" or type(value.diagnostics) ~= "table" or type(value.pending_migrations) ~= "table" then
         return nil, "preflight report is malformed"
     end
     local diagnostics: {Diagnostic} = {}
     local diagnostic_count = 0
-    for key in pairs(value.diagnostics :: table) do
+    for key in pairs(value.diagnostics) do
         if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, "preflight diagnostics must be a dense list" end
         diagnostic_count = diagnostic_count + 1
     end
     if diagnostic_count > 128 then return nil, "preflight diagnostics exceed bound" end
     for index = 1, diagnostic_count do
-        local raw_diagnostic = (value.diagnostics :: table)[index]
+        local raw_diagnostic = (value.diagnostics)[index]
         if type(raw_diagnostic) ~= "table" then return nil, "preflight diagnostic is malformed" end
-        local item = raw_diagnostic :: {[string]: unknown}
+        local item = raw_diagnostic
         for name in pairs(item) do if name ~= "code" and name ~= "target" and name ~= "message" and name ~= "remedy" then return nil, "preflight diagnostic has an unknown field" end end
         if type(item.code) ~= "string" or not identifier(item.code) or type(item.target) ~= "string" or #item.target > 512
             or type(item.message) ~= "string" or #item.message > 2048 or type(item.remedy) ~= "string" or #item.remedy > 2048 then
@@ -98,20 +98,20 @@ local function normalize_report(raw: unknown): (Report?, string?)
     if value.ready ~= (diagnostic_count == 0) then return nil, "preflight readiness does not match diagnostics" end
     local pending: {string} = {}
     local pending_count = 0
-    for key in pairs(value.pending_migrations :: table) do
+    for key in pairs(value.pending_migrations) do
         if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, "pending migrations must be a dense list" end
         pending_count = pending_count + 1
     end
     if pending_count > 128 then return nil, "pending migrations exceed bound" end
     local prior = ""
     for index = 1, pending_count do
-        local item = (value.pending_migrations :: table)[index]
+        local item = (value.pending_migrations)[index]
         if type(item) ~= "string" or #item == 0 or #item > 400 or item <= prior then return nil, "pending migrations are malformed" end
         pending[index], prior = item, item
     end
-    return {schema_revision = "bee.governance-preflight@1", plan_digest = value.plan_digest :: string,
-        destination_node = value.destination_node :: string, base_revision = math.floor(value.base_revision :: number),
-        policy_digest = value.policy_digest :: string, ready = value.ready :: boolean,
+    return {schema_revision = "bee.governance-preflight@1", plan_digest = value.plan_digest,
+        destination_node = value.destination_node, base_revision = math.floor(value.base_revision),
+        policy_digest = value.policy_digest, ready = value.ready,
         diagnostics = diagnostics, pending_migrations = pending}, nil
 end
 
@@ -128,7 +128,7 @@ end
 function M.decode_report(bytes_raw: unknown, digest_raw: unknown): (Report?, string?)
     if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > 131072 then return nil, "preflight report bytes exceed bound" end
     if type(digest_raw) ~= "string" or not digest(digest_raw) then return nil, "preflight report digest is malformed" end
-    local bytes: string = bytes_raw :: string
+    local bytes: string = bytes_raw
     local measured, measure_error = hash.sha256(bytes)
     if not measured or measure_error or measured ~= digest_raw then return nil, "preflight report digest does not match bytes" end
     local decoded, decode_error = json.decode(bytes)
@@ -143,13 +143,13 @@ local CANDIDATE_LIMIT = 1048576
 local function dense_count(raw: unknown, label: string, maximum: integer): (integer?, string?)
     if type(raw) ~= "table" then return nil, label .. " must be a list" end
     local count = 0
-    for key in pairs(raw :: table) do
-        if type(key) ~= "number" or key ~= math.floor(key :: number) or (key :: number) < 1 then return nil, label .. " must be a dense list" end
+    for key in pairs(raw) do
+        if type(key) ~= "number" or key ~= math.floor(key) or (key) < 1 then return nil, label .. " must be a dense list" end
         count = count + 1
     end
     if count > maximum then return nil, label .. " exceeds its bound" end
     for index = 1, count do
-        if (raw :: table)[index] == nil then return nil, label .. " must be a dense list" end
+        if (raw)[index] == nil then return nil, label .. " must be a dense list" end
     end
     return count, nil
 end
@@ -158,9 +158,9 @@ local function identifiers(raw: unknown, label: string, maximum: integer): ({str
     if not count then return nil, count_error end
     local result: {string} = {}
     for index = 1, count do
-        local value = (raw :: table)[index]
-        if type(value) ~= "string" or not identifier(value :: string) then return nil, label .. " has a malformed value" end
-        result[index] = value :: string
+        local value = (raw)[index]
+        if type(value) ~= "string" or not identifier(value) then return nil, label .. " has a malformed value" end
+        result[index] = value
     end
     return result, nil
 end
@@ -174,8 +174,8 @@ local function candidate_parameters(raw: unknown): ({[string]: string | {string}
     if type(raw) ~= "table" then return nil, "capability request parameters are malformed" end
     local result: {[string]: string | {string}} = {}
     local count = 0
-    for key, value in pairs(raw :: table) do
-        if type(key) ~= "string" or not identifier(key :: string) then
+    for key, value in pairs(raw) do
+        if type(key) ~= "string" or not identifier(key) then
             return nil, "capability request parameter name is malformed"
         end
         count = count + 1
@@ -205,9 +205,9 @@ local function candidate_artifacts(raw: unknown): ({Artifact}?, string?)
         dependencies = true, namespaces = true}
     local result: {Artifact} = {}
     for index = 1, count do
-        local row = (raw :: table)[index]
+        local row = (raw)[index]
         if type(row) ~= "table" then return nil, "candidate artifact is malformed" end
-        local item = row :: {[string]: unknown}
+        local item = row
         local extra = only(item, allowed, "candidate artifact")
         if extra then return nil, extra end
         local dependencies, dependencies_error = identifiers(item.dependencies, "artifact dependencies", 32)
@@ -215,13 +215,13 @@ local function candidate_artifacts(raw: unknown): ({Artifact}?, string?)
         local namespaces, namespaces_error = identifiers(item.namespaces, "artifact namespaces", 64)
         if not namespaces then return nil, namespaces_error end
         if #namespaces == 0 then return nil, "candidate artifact declares no namespace" end
-        if type(item.component) ~= "string" or not identifier(item.component :: string)
-            or type(item.version) ~= "string" or not identifier(item.version :: string)
-            or type(item.digest) ~= "string" or not digest(item.digest :: string) then
+        if type(item.component) ~= "string" or not identifier(item.component)
+            or type(item.version) ~= "string" or not identifier(item.version)
+            or type(item.digest) ~= "string" or not digest(item.digest) then
             return nil, "candidate artifact is malformed"
         end
-        result[index] = {component = item.component :: string, version = item.version :: string,
-            digest = item.digest :: string, dependencies = dependencies, namespaces = namespaces}
+        result[index] = {component = item.component, version = item.version,
+            digest = item.digest, dependencies = dependencies, namespaces = namespaces}
     end
     if #result < 1 then return nil, "candidate declares no artifact" end
     return result, nil
@@ -235,9 +235,9 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         security_actor = true, security_groups = true}
     local result: {Entry} = {}
     for index = 1, count do
-        local row = (raw :: table)[index]
+        local row = (raw)[index]
         if type(row) ~= "table" then return nil, "candidate entry is malformed" end
-        local item = row :: {[string]: unknown}
+        local item = row
         local extra = only(item, allowed, "candidate entry")
         if extra then return nil, extra end
         local references, references_error = identifiers(item.references, "entry references", 64)
@@ -252,20 +252,20 @@ local function candidate_entries(raw: unknown): ({Entry}?, string?)
         if not config_lists then return nil, lists_error end
         local config_empty, empty_error = identifiers(item.config_empty, "entry config empty fields", 32)
         if not config_empty then return nil, empty_error end
-        if type(item.id) ~= "string" or not identifier(item.id :: string)
-            or type(item.kind) ~= "string" or not identifier(item.kind :: string)
-            or type(item.package) ~= "string" or not identifier(item.package :: string)
-            or type(item.digest) ~= "string" or not digest(item.digest :: string)
+        if type(item.id) ~= "string" or not identifier(item.id)
+            or type(item.kind) ~= "string" or not identifier(item.kind)
+            or type(item.package) ~= "string" or not identifier(item.package)
+            or type(item.digest) ~= "string" or not digest(item.digest)
             or type(item.auto_start) ~= "boolean"
             or (item.security_actor ~= nil and type(item.security_actor) ~= "boolean")
             or (item.security_groups ~= nil and type(item.security_groups) ~= "boolean") then
             return nil, "candidate entry is malformed"
         end
-        local entry: Entry = {id = item.id :: string, kind = item.kind :: string, package = item.package :: string,
-            digest = item.digest :: string, references = references, auto_start = item.auto_start :: boolean,
+        local entry: Entry = {id = item.id, kind = item.kind, package = item.package,
+            digest = item.digest, references = references, auto_start = item.auto_start,
             grants = grants, modules = modules, config_objects = config_objects, config_lists = config_lists,
             config_empty = config_empty}
-        local measured = entry :: {[string]: unknown}
+        local measured = entry
         if item.security_actor ~= nil then measured.security_actor = item.security_actor end
         if item.security_groups ~= nil then measured.security_groups = item.security_groups end
         result[index] = entry
@@ -279,45 +279,45 @@ local function candidate_requirements(raw: unknown): ({Requirement}?, string?)
         expected_kind = true, targets = true, capability_request = true}
     local result: {Requirement} = {}
     for index = 1, count do
-        local row = (raw :: table)[index]
+        local row = (raw)[index]
         if type(row) ~= "table" then return nil, "candidate requirement is malformed" end
-        local item = row :: {[string]: unknown}
+        local item = row
         local extra = only(item, allowed, "candidate requirement")
         if extra then return nil, extra end
         local targets, targets_error = identifiers(item.targets, "requirement targets", 64)
         if not targets then return nil, targets_error end
-        if type(item.id) ~= "string" or not identifier(item.id :: string)
-            or type(item.package) ~= "string" or not identifier(item.package :: string)
-            or (item.value ~= nil and (type(item.value) ~= "string" or not identifier(item.value :: string)))
-            or (item.expected_kind ~= nil and (type(item.expected_kind) ~= "string" or not identifier(item.expected_kind :: string))) then
+        if type(item.id) ~= "string" or not identifier(item.id)
+            or type(item.package) ~= "string" or not identifier(item.package)
+            or (item.value ~= nil and (type(item.value) ~= "string" or not identifier(item.value)))
+            or (item.expected_kind ~= nil and (type(item.expected_kind) ~= "string" or not identifier(item.expected_kind))) then
             return nil, "candidate requirement is malformed"
         end
         local request: CapabilityRequest? = nil
         if item.capability_request ~= nil then
             local raw_request = item.capability_request
             if type(raw_request) ~= "table" then return nil, "capability request is malformed" end
-            local value = raw_request :: {[string]: unknown}
+            local value = raw_request
             if only(value, {capability = true, parameters = true, reason = true, target = true,
                 path = true, catalog_revision = true, template_revision = true}, "capability request")
-                or type(value.capability) ~= "string" or not (value.capability :: string):match("^[a-z][a-z0-9_.-]*$")
+                or type(value.capability) ~= "string" or not (value.capability):match("^[a-z][a-z0-9_.-]*$")
                 or type(value.reason) ~= "string" or #value.reason == 0 or #value.reason > 512
-                or (value.reason :: string):find("%c") or type(value.target) ~= "string"
+                or (value.reason):find("%c") or type(value.target) ~= "string"
                 or value.path ~= ".security.policies +=" or value.target ~= targets[1] or #targets ~= 1
                 or item.expected_kind ~= "security.policy" or item.value ~= nil
                 or type(value.catalog_revision) ~= "number" or value.catalog_revision < 1
-                or value.catalog_revision ~= math.floor(value.catalog_revision :: number)
+                or value.catalog_revision ~= math.floor(value.catalog_revision)
                 or type(value.template_revision) ~= "number" or value.template_revision < 1
-                or value.template_revision ~= math.floor(value.template_revision :: number)
+                or value.template_revision ~= math.floor(value.template_revision)
                 or type(value.parameters) ~= "table" then return nil, "capability request is malformed" end
             local parameters, parameters_error = candidate_parameters(value.parameters)
             if not parameters then return nil, parameters_error end
-            request = {capability = value.capability :: string, parameters = parameters,
-                reason = value.reason :: string, target = value.target :: string,
-                path = ".security.policies +=", catalog_revision = value.catalog_revision :: integer,
-                template_revision = value.template_revision :: integer}
+            request = {capability = value.capability, parameters = parameters,
+                reason = value.reason, target = value.target,
+                path = ".security.policies +=", catalog_revision = math.floor(value.catalog_revision),
+                template_revision = math.floor(value.template_revision)}
         end
-        local requirement: Requirement = {id = item.id :: string, package = item.package :: string,
-            value = item.value :: string?, expected_kind = item.expected_kind :: string?, targets = targets,
+        local requirement: Requirement = {id = item.id, package = item.package,
+            value = item.value, expected_kind = item.expected_kind, targets = targets,
             capability_request = request}
         result[index] = requirement
     end
@@ -329,35 +329,35 @@ local function candidate_migrations(raw: unknown): ({Migration}?, string?)
     local allowed: {[string]: boolean} = {id = true, target_db = true, checksum = true, ordinal = true}
     local result: {Migration} = {}
     for index = 1, count do
-        local row = (raw :: table)[index]
+        local row = (raw)[index]
         if type(row) ~= "table" then return nil, "candidate migration is malformed" end
-        local item = row :: {[string]: unknown}
+        local item = row
         local extra = only(item, allowed, "candidate migration")
         if extra then return nil, extra end
-        if type(item.id) ~= "string" or not identifier(item.id :: string)
-            or type(item.target_db) ~= "string" or not identifier(item.target_db :: string)
-            or type(item.checksum) ~= "string" or not digest(item.checksum :: string)
-            or type(item.ordinal) ~= "number" or item.ordinal ~= math.floor(item.ordinal :: number)
-            or (item.ordinal :: number) < 1 then
+        if type(item.id) ~= "string" or not identifier(item.id)
+            or type(item.target_db) ~= "string" or not identifier(item.target_db)
+            or type(item.checksum) ~= "string" or not digest(item.checksum)
+            or type(item.ordinal) ~= "number" or item.ordinal ~= math.floor(item.ordinal)
+            or (item.ordinal) < 1 then
             return nil, "candidate migration is malformed"
         end
-        result[index] = {id = item.id :: string, target_db = item.target_db :: string,
-            checksum = item.checksum :: string, ordinal = math.floor(item.ordinal :: number)}
+        result[index] = {id = item.id, target_db = item.target_db,
+            checksum = item.checksum, ordinal = math.floor(item.ordinal)}
     end
     return result, nil
 end
 local function normalize_candidate(raw: unknown): (Candidate?, string?)
     if type(raw) ~= "table" then return nil, "candidate must be an object" end
-    local value = raw :: {[string]: unknown}
+    local value = raw
     local allowed: {[string]: boolean} = {destination_node = true, source_node = true, base_revision = true,
         base_digest = true, artifacts = true, entries = true, requirements = true, migrations = true}
     local extra = only(value, allowed, "candidate")
     if extra then return nil, extra end
-    if type(value.destination_node) ~= "string" or not identifier(value.destination_node :: string)
-        or type(value.source_node) ~= "string" or not identifier(value.source_node :: string)
-        or type(value.base_revision) ~= "number" or value.base_revision ~= math.floor(value.base_revision :: number)
-        or (value.base_revision :: number) < 0
-        or type(value.base_digest) ~= "string" or not digest(value.base_digest :: string) then
+    if type(value.destination_node) ~= "string" or type(value.destination_node) ~= "string" or not identifier(value.destination_node)
+        or type(value.source_node) ~= "string" or not identifier(value.source_node)
+        or type(value.base_revision) ~= "number" or value.base_revision ~= math.floor(value.base_revision)
+        or (value.base_revision) < 0
+        or type(value.base_digest) ~= "string" or not digest(value.base_digest) then
         return nil, "candidate identity is malformed"
     end
     local artifacts, artifacts_error = candidate_artifacts(value.artifacts)
@@ -368,8 +368,8 @@ local function normalize_candidate(raw: unknown): (Candidate?, string?)
     if not requirements then return nil, requirements_error end
     local migrations, migrations_error = candidate_migrations(value.migrations)
     if not migrations then return nil, migrations_error end
-    return {destination_node = value.destination_node :: string, source_node = value.source_node :: string,
-        base_revision = math.floor(value.base_revision :: number), base_digest = value.base_digest :: string,
+    return {destination_node = value.destination_node, source_node = value.source_node,
+        base_revision = math.floor(value.base_revision), base_digest = value.base_digest,
         artifacts = artifacts, entries = entries, requirements = requirements, migrations = migrations}, nil
 end
 
@@ -378,8 +378,8 @@ end
 -- that does not re-encode to them.
 function M.decode_candidate(bytes_raw: unknown, digest_raw: unknown): (Candidate?, string?)
     if type(bytes_raw) ~= "string" or #bytes_raw == 0 or #bytes_raw > CANDIDATE_LIMIT then return nil, "candidate bytes exceed bound" end
-    if type(digest_raw) ~= "string" or not digest(digest_raw :: string) then return nil, "candidate digest is malformed" end
-    local bytes: string = bytes_raw :: string
+    if type(digest_raw) ~= "string" or not digest(digest_raw) then return nil, "candidate digest is malformed" end
+    local bytes: string = bytes_raw
     local measured, measure_error = hash.sha256(bytes)
     if not measured or measure_error or measured ~= digest_raw then return nil, "candidate digest does not match bytes" end
     local decoded, decode_error = json.decode(bytes)
@@ -507,7 +507,7 @@ function M.check(candidate: Candidate, context: Context): (Report?, string?)
         if namespace and namespace_owners[namespace] ~= item.package then issue("NAMESPACE_OWNER", item.id, "entry namespace is not declared by its package", "include the exact child namespace in the package ownership manifest") end
         if not artifacts[item.package] then issue("UNKNOWN_OWNER", item.id, "entry is not owned by the measured package closure", "repair the ownership manifest") end
         if not context.kinds[item.kind] then issue("KIND_DENIED", item.id, "entry kind is outside host policy", "remove the entry or request host policy review") end
-        local selectors = item :: {[string]: unknown}
+        local selectors = item
         if selectors.security_actor == true or selectors.security_groups == true then
             issue("SECURITY_DENIED", item.id, "application content selects an actor or security groups",
                 "remove security.actor and security.groups; the host selects application identity")

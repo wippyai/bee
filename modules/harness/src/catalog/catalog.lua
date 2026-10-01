@@ -45,7 +45,7 @@ local function adapter_entries(pinned: Pinned, declaration: Entry?): {[string]: 
     local driver = bounds.object(data.driver) or {}
     local profiles = driver.profiles
     if type(profiles) ~= "table" then return adapters end
-    for _, raw in ipairs(profiles :: {unknown}) do
+    for _, raw in ipairs(profiles) do
         local item = bounds.object(raw) or {}
         local exchange = bounds.object(item.permission_exchange) or {}
         local adapter_ref = bounds.id(exchange.adapter_ref)
@@ -58,7 +58,7 @@ local function method_targets(pinned: Pinned, candidate: Entry): {[string]: Entr
     local data = bounds.object(candidate.data) or {}
     local contracts: unknown = data.contracts
     if type(contracts) ~= "table" then return methods end
-    for _, item in ipairs(contracts :: {unknown}) do
+    for _, item in ipairs(contracts) do
         local declared = bounds.object(item)
         if declared then
             local mapping = bounds.object(declared.methods) or {}
@@ -73,6 +73,11 @@ end
 -- Reads the catalog from one pinned registry snapshot. A limit below the
 -- number of bindings leaves the catalog incomplete: an unseen binding could
 -- share a driver_id with a visible one, so uniqueness is not certified.
+type BindingSortKey = {binding_id: string}
+local function binding_order(left: BindingSortKey, right: BindingSortKey): boolean
+    return left.binding_id < right.binding_id
+end
+
 function M.read(pinned: Pinned, limit: integer?): (Snapshot?, string?)
     local current, generation_error = generation(pinned)
     if not current then return nil, generation_error end
@@ -102,7 +107,7 @@ function M.read(pinned: Pinned, limit: integer?): (Snapshot?, string?)
             end
         end
     end
-    table.sort(snapshot.bindings, function(left: classify.Binding, right: classify.Binding): boolean return left.binding_id < right.binding_id end)
+    table.sort(snapshot.bindings, binding_order)
     classify.disambiguate(snapshot.bindings)
     return snapshot, nil
 end

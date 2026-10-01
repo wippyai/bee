@@ -262,7 +262,7 @@ function M.resolve_agent(pinned: registry.Snapshot, agent_ref: string, host_conf
     })
     if not checked then return nil, route_err or route_code or "route check failed" end
 
-    return closure :: {[string]: unknown}, nil
+    return closure, nil
 end
 
 -- A tool runs under a fresh per-attempt actor narrowed to the tool's own
@@ -589,7 +589,7 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
         closure = resolved
         instructions = tostring(closure.instructions or instructions)
 
-        local mem_list = closure.memory :: {string}?
+        local mem_list = closure.memory
         if mem_list and #mem_list > 0 and #messages == 0 then
             for _, mem_ref in ipairs(mem_list) do
                 local mem_record = {
@@ -612,7 +612,7 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
             end
         end
 
-        local tools = closure.tools :: {{[string]: unknown}}? or {}
+        local tools = closure.tools or {}
         for _, t in ipairs(tools) do
             local alias = tostring(t.alias)
             tool_map[alias] = t

@@ -25,8 +25,8 @@ type Export = {feed: string, content_kinds: {[string]: boolean}}
 
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
-    for key in pairs(value :: table) do if type(key) ~= "string" then return nil end end
-    return value :: Object
+    for key in pairs(value) do if type(key) ~= "string" then return nil end end
+    return value
 end
 
 local function fields(value: Object, allowed: {string}): string?
@@ -42,7 +42,7 @@ end
 
 local function dense(raw: unknown, label: string, maximum: integer): ({unknown}?, string?)
     if type(raw) ~= "table" then return nil, label .. " must be a list" end
-    local source = raw :: table
+    local source = raw
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then
@@ -119,7 +119,7 @@ local function snapshot(feed_store: sync.Store, replica_store: replicas.Store, d
             return nil, failure("INTERNAL", "Sync export snapshot is malformed")
         end
         pinned = cursor
-        for _, raw in ipairs(items :: {unknown}) do
+        for _, raw in ipairs(items) do
             local projection = object(raw)
             if not projection then return nil, failure("INTERNAL", "Sync export projection is malformed") end
             if projection.tombstone ~= true then
@@ -160,7 +160,7 @@ function M.distribute(resource: string, source: string, destination: string, exp
             local next_cursor = value and bounds.count(value.next_cursor, 9007199254740991) or nil
             if type(rows) ~= "table" or next_cursor == nil then outcome = failure("INTERNAL", "Sync export page is malformed"); break end
             local failed: Result? = nil
-            for _, raw in ipairs(rows :: {unknown}) do
+            for _, raw in ipairs(rows) do
                 local event = object(raw)
                 local sequence = event and bounds.count(event.sequence, 9007199254740991) or nil
                 if not event or sequence == nil then failed = failure("INTERNAL", "Sync export event is malformed"); break end
@@ -197,7 +197,7 @@ function M.run_once(): (boolean, string?)
         return false, tostring(source_error or resource_error or members_error or exports_error or "Hive membership is unavailable")
     end
     local failures: {string} = {}
-    for _, raw in ipairs(members :: {unknown}) do
+    for _, raw in ipairs(members) do
         local member = object(raw)
         local destination = member and bounds.id(member.id) or nil
         local meta = member and object(member.meta) or nil

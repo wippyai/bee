@@ -141,10 +141,14 @@ function M.decode_page(value: unknown, expected_node_id: string): ({workspace_co
 end
 local function link_fields(node_id: string, links: LinkStates): LinkFields
     local state = links[node_id]
-    if not state or not state.connected then
-        return {connected = false, direction = nil, remote_address = nil}
+    if state then
+        if state.connected then
+            local direction: Direction = assert(state.direction)
+            local remote_address: string = assert(state.remote_address)
+            return {connected = true, direction = direction, remote_address = remote_address}
+        end
     end
-    return {connected = true, direction = state.direction, remote_address = state.remote_address}
+    return {connected = false, direction = nil, remote_address = nil}
 end
 local function unavailable(node_id: string, link: LinkFields): NodeHoldings
     if link.connected then

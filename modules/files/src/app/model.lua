@@ -4,6 +4,7 @@
 local tree = require("tree")
 local syntax = require("syntax")
 local protocol = require("protocol")
+local source = require("source")
 
 local M = {}
 
@@ -20,7 +21,7 @@ type Document = {
 }
 
 type State = {
-    volume: unknown,
+    source: source.Source,
     root_path: string,
 
     -- Tree state
@@ -72,22 +73,15 @@ function M.open_file(state: State, path: string, range: Range?): boolean
         return false
     end
 
-    local vol = state.volume :: any
-    if not vol or not vol.readfile then
-        state.preview_error = "Filesystem volume is unavailable"
-        state.status = state.preview_error
-        return false
-    end
-
     -- Check if file exists and is not a directory
-    if vol.isdir and vol:isdir(clean) then
+    if state.source.is_dir(clean) then
         state.preview_error = clean .. " is a directory"
         state.status = state.preview_error
         return false
     end
 
-    local raw_content, read_err = vol:readfile(clean)
-    if type(raw_content) ~= "string" or read_err then
+    local raw_content, read_err = state.source.read(clean)
+    if not raw_content then
         state.preview_error = "Could not read " .. clean .. ": " .. tostring(read_err or "not found")
         state.status = state.preview_error
         return false
@@ -122,10 +116,10 @@ function M.open_file(state: State, path: string, range: Range?): boolean
     return true
 end
 
-function M.new(volume: unknown, root_path: string?, launch_args: {string}?): State
-    local t = tree.new(volume, root_path)
+function M.new(files: source.Source, root_path: string?, launch_args: {string}?): State
+    local t = tree.new(files, root_path)
     local state: State = {
-        volume = volume,
+        source = files,
         root_path = root_path or "",
         tree = t,
         tree_rows = {},
@@ -196,7 +190,7 @@ function M.move(state: State, delta: integer)
         if count == 0 then return end
         state.tree_selected = math.floor(math.max(1, math.min(count, state.tree_selected + delta)))
     else
-        local doc = state.doc :: any
+        local doc = state.doc
         if not doc then return end
         state.preview_selected = math.floor(math.max(1, math.min(doc.total_lines, state.preview_selected + delta)))
     end

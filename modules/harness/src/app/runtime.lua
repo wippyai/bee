@@ -70,9 +70,9 @@ local function call(target: string, value: unknown): (boolean, string?)
     local raw, call_error = funcs.call(target, value)
     if call_error then return false, tostring(call_error) end
     if type(raw) ~= "table" then return false, target .. " returned no reply" end
-    local reply = raw :: {[string]: unknown}
+    local reply = raw
     if reply.ok ~= true then
-        local fault = type(reply.error) == "table" and reply.error :: {[string]: unknown} or {}
+        local fault = type(reply.error) == "table" and reply.error or {}
         return false, tostring(fault.code or "INTERNAL") .. ": " .. tostring(fault.message or "operation refused")
     end
     return true, nil
@@ -429,7 +429,14 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         local menu = frame_ui.menu()
         local cancelled = false
         local states = assert(process.listen("bee.appearance.state", {message = true}))
+        type Completion = {kind: "resolve" | "admission", serial: integer, plan: admission.Plan?, choice: admission.Admitted?,
+            refused: admission.Reply?, admission_refusal: admission.Reply?}
         local completed = channel.new(1)
+        local completed_pending: {[integer]: Completion} = {}
+        local function send_completed(value: Completion)
+            completed_pending[value.serial] = value
+            completed:send(value.serial)
+        end
         local phase: string = "initial"
         local reviewed: admission.Plan? = nil
         local operation: integer = 0
@@ -467,7 +474,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 -- the UI has gone away. It never hands an admitted request to
                 -- the native preparation path in that case.
                 if cancelled or serial ~= operation then return end
-                completed:send({kind = "admission", serial = serial, choice = choice, refused = refused})
+                local sent: Completion = {kind = "admission", serial = serial, choice = choice, refused = refused}
+                send_completed(sent)
             end)
         end
         local function start_resolve(refusal: admission.Reply?)
@@ -485,7 +493,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                 end)
                 if not ok then refused = {ok = false, error = {code = "UNAVAILABLE", message = tostring(unexpected)}, value = nil} end
                 if cancelled or serial ~= operation then return end
-                completed:send({kind = "resolve", serial = serial, plan = plan, refused = refused, admission_refusal = refusal})
+                local sent: Completion = {kind = "resolve", serial = serial, plan = plan, refused = refused, admission_refusal = refusal}
+                send_completed(sent)
             end)
         end
 
@@ -519,8 +528,10 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
                     end
                 end
             elseif event.channel == completed then
-                local result = event.value :: {kind: string, serial: integer, choice: admission.Admitted?,
-                    refused: admission.Reply?, plan: admission.Plan?, admission_refusal: admission.Reply?}
+                local serial = event.value
+                if type(serial) ~= "number" then error("invalid completion identity") end
+                local result = assert(completed_pending[math.floor(serial)], "missing completion")
+                completed_pending[math.floor(serial)] = nil
                 if result.kind == "resolve" and result.serial == operation then
                     if result.plan then
                         -- A conflict that did not change the measured plan is
@@ -670,15 +681,18 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     local progress_events = assert(process.listen("bee.placement.image_progress", {message = true}))
     local completed = channel.new(1)
     type Preparation = {prepared: machine.PreparedAttempt?, error: string?, failed: machine.FailedPreparation?}
+    local attempt_plan: machine.Plan = plan
+    local finished: Preparation? = nil
     coroutine.spawn(function()
-        local result, reason, failed = machine.prepare_attempt(transport, plan)
-        completed:send({prepared = result, error = reason, failed = failed})
+        local result, reason, failed = machine.prepare_attempt(transport, attempt_plan)
+        finished = {prepared = result, error = reason, failed = failed}
+        completed:send(true)
     end)
     local preparation: Preparation? = nil
     while preparation == nil do
         local selected_event = channel.select({progress_events:case_receive(), completed:case_receive()})
         if selected_event.channel == completed then
-            preparation = selected_event.value :: Preparation
+            preparation = finished
         elseif selected_event.channel == progress_events then
             local message = selected_event.value
             local data = bounds.object(message:payload():data())
@@ -703,7 +717,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         if failed_preparation then attempt = failed_preparation.attempt end
         if failed_preparation then
             show_failure(reason, function(): string
-                return settle_failure(admitted :: admission.Admitted, epoch, reason, binding, attempt)
+                return settle_failure(admitted, epoch, reason, binding, attempt)
             end)
         else
             show_failure(reason)
@@ -712,7 +726,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         return
     end
     if prepared.notice and not show_login(prepared.notice) then
-        settle_failure(admitted :: admission.Admitted, prepared.epoch, "the login notice was closed before the provider started",
+        settle_failure(admitted, prepared.epoch, "the login notice was closed before the provider started",
             prepared.gateway_binding, true, true)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -738,7 +752,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     if not checkpointed then
         local reason = "native window checkpoint did not persist: " .. tostring(checkpoint_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
+            return settle_failure(admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -754,7 +768,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     if not attached then
         local reason = "native placement attachment was not confirmed: " .. tostring(attachment_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
+            return settle_failure(admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -766,7 +780,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     if not terminal then
         local reason = "managed window did not open: " .. tostring(terminal_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
+            return settle_failure(admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return
@@ -783,7 +797,7 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
         terminal:finish()
         local reason = "native window started but thread start was refused: " .. tostring(started_error)
         show_failure(reason, function(): string
-            return settle_failure(admitted :: admission.Admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
+            return settle_failure(admitted, prepared.epoch, reason, prepared.gateway_binding, true, true)
         end)
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)
         return

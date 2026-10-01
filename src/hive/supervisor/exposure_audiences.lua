@@ -21,11 +21,11 @@ local function decode_row(item: unknown, position: integer): (Audience?, string?
     if type(row.peers) ~= "table" then return nil, "audiences[" .. tostring(position) .. "] peers must be a list" end
     local peers: {[string]: boolean} = {}
     local count = 0
-    for _, raw in ipairs(row.peers :: {unknown}) do
-        if type(raw) ~= "string" or not (raw :: string):match("^[A-Za-z][A-Za-z0-9_.-]*$") or peers[raw :: string] then
+    for _, raw in ipairs(row.peers) do
+        if type(raw) ~= "string" or not (raw):match("^[A-Za-z][A-Za-z0-9_.-]*$") or peers[raw] then
             return nil, "audiences[" .. tostring(position) .. "] peer is invalid or repeated"
         end
-        peers[raw :: string] = true
+        peers[raw] = true
         count = count + 1
     end
     if count == 0 or count > M.MAX_PEERS then
@@ -39,7 +39,7 @@ function M.decode(value: unknown): (Audiences?, string?)
     local unknown_field = bounds.fields(object, {"audiences"})
     if unknown_field then return nil, unknown_field end
     if type(object.audiences) ~= "table" then return nil, "audiences must be a list" end
-    local raw = object.audiences :: {unknown}
+    local raw = object.audiences
     if #raw > M.MAX_OPERATIONS then return nil, "audiences exceeds " .. tostring(M.MAX_OPERATIONS) .. " operations" end
     local list: {Audience} = {}
     local by_operation: {[string]: Audience} = {}

@@ -43,6 +43,7 @@ entries:
     materialization: bee.placement.publication.test:materialization
     observe: bee.placement.publication.test:runner_observation
     types: bee.placement:types
+    bounds: bee.protocol:bounds
 - name: materialization_runner_process
   kind: process.lua
   source: file://../placement/materialization_runner.lua
@@ -54,6 +55,7 @@ entries:
     materialization: bee.placement.publication.test:materialization
     observe: bee.placement.publication.test:runner_observation
     types: bee.placement:types
+    bounds: bee.protocol:bounds
 - name: required_file_test
   kind: function.lua
   source: file://required_file_test.lua

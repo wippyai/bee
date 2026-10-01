@@ -96,7 +96,7 @@ function M.request(port: Port, binding: Binding, policy: string, kind: "install"
     if plan_error then return plan_error end
     local proposal, prompt, proposal_error = installation.proposal(planned, context(binding))
     if not proposal or not prompt then return fail("INCOMPLETE", proposal_error or "plan cannot be approved") end
-    local payload = proposal.payload :: Object
+    local payload = proposal.payload
     local digest = tostring(payload.plan_digest)
     local key = installation.idempotency_key(context(binding), digest)
     if not key then return fail("INVALID", "cannot measure the installation request") end
@@ -206,7 +206,7 @@ function M.drain_approved(): (integer, string?)
     end
     local count = 0
     local retry_error: string? = nil
-    for _, raw_view in ipairs(queue.effects :: {unknown}) do
+    for _, raw_view in ipairs(queue.effects) do
         local view = bounds.object(raw_view)
         local approval_id = view and bounds.id(view.approval_id) or nil
         local proposal = view and bounds.object(view.proposal) or nil

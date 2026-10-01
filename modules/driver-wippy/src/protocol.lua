@@ -70,7 +70,7 @@ function M.normalize(state: State, index: integer, envelope: {[string]: unknown}
     if bounds.fields(envelope, {"observations", "terminal"}) then return nil, "envelope carries an unknown field" end
     local raw = envelope.observations == nil and {} or envelope.observations
     if type(raw) ~= "table" then return nil, "observations must be a list" end
-    local list = raw :: {unknown}
+    local list = raw
     local count = 0
     for key in pairs(list) do
         if type(key) ~= "number" or key < 1 or math.floor(key) ~= key then return nil, "observations must be a list" end

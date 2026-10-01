@@ -95,7 +95,18 @@ function M.contract(binding: Binding, policies: {security.Policy}, values: Objec
     if not scoped then return nil, M.fail("DENIED", tostring(scope_error)) end
     local instance, open_error = scoped:open()
     if not instance then return nil, M.fail("UNAVAILABLE", tostring(open_error)) end
-    return instance :: Object, nil
+    if type(instance) ~= "table" and type(instance) ~= "userdata" then
+        return nil, M.fail("UNAVAILABLE", "owner binding is not an object")
+    end
+    local methods: Object = {}
+    for _, method in ipairs(definition:methods()) do
+        local invoke = instance[method.name]
+        if type(invoke) ~= "function" then return nil, M.fail("UNAVAILABLE", "owner binding has no method " .. method.name) end
+        methods[method.name] = function(_self: unknown, request: Object): (unknown, unknown)
+            return invoke(instance, request)
+        end
+    end
+    return methods, nil
 end
 
 -- raw_call: one call as the bound subject under exactly these policies; the
@@ -134,7 +145,7 @@ end
 function M.approvals(binding: Binding, call_policy: string, extra: {string}?): Approvals
     return function(operation: string, value: Object): Reply
         local linked, link_error = M.approval_policies()
-        if not linked then return link_error :: Reply end
+        if not linked then return assert(link_error) end
         local ids: {string} = {call_policy, linked[1], linked[2]}
         for _, id in ipairs(extra or {}) do ids[#ids + 1] = id end
         return M.call(binding, ids, "bee.approvals.binding:" .. operation, value)

@@ -52,8 +52,9 @@ function M.open(value: unknown): Object
     local actor = security.actor()
     local meta = actor and bounds.object(actor:meta())
     local workspace = meta and bounds.id(meta.workspace_id)
-    if not body or not spec or not actor or not workspace or type(body.operation_key) ~= "string" then return fail("window admission identity is missing") end
-    local digest = assert(hash.sha256(actor:id() .. "\n" .. workspace .. "\n" .. body.operation_key))
+    local operation_key = body and body.operation_key
+    if not body or not spec or not actor or not workspace or type(operation_key) ~= "string" then return fail("window admission identity is missing") end
+    local digest = assert(hash.sha256(actor:id() .. "\n" .. workspace .. "\n" .. operation_key))
     local profile = bounds.object(spec.profile)
     local plan, refused = admission.resolve(tostring(spec.definition), "window", workspace,
         profile and bounds.id(profile.id), profile and bounds.integer(profile.revision))
@@ -71,8 +72,8 @@ function M.open(value: unknown): Object
     local name = OWNER .. digest
     local owner = process.registry.lookup(name)
     local reply: Object
-    if owner then reply = rpc(tostring(owner), {op = "open", request = request, operation_key = body.operation_key})
-    else reply = rpc(nil, {op = "open", request = request, operation_key = body.operation_key}, request, name, body.operation_key :: string) end
+    if owner then reply = rpc(tostring(owner), {op = "open", request = request, operation_key = operation_key})
+    else reply = rpc(nil, {op = "open", request = request, operation_key = operation_key}, request, name, operation_key) end
     local receipt = reply.ok == true and bounds.object(reply.value) or nil
     if receipt and type(receipt.session) == "string" and meta.definition_id ~= "bee.harness.app:app" then
         -- The existing host path chooses a live display and checks the caller's runtime grant.

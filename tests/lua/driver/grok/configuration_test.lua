@@ -26,8 +26,8 @@ local function define_tests()
                 token_environment = "BEE_GATEWAY_TOKEN",
             }
             local toml = configuration.render_gateway(gateway)
-            test.is_nil(toml:find("[permission]", 1, true))
-            test.is_nil(toml:find('"MCPTool(bee__*)"', 1, true))
+            test.is_nil((toml:find("[permission]", 1, true)))
+            test.is_nil((toml:find('"MCPTool(bee__*)"', 1, true)))
             test.is_true(toml:find("[mcp_servers.bee]", 1, true) ~= nil)
             test.is_true(toml:find('url = "http://127.0.0.1:4321/mcp/act-test-123"', 1, true) ~= nil)
             test.is_true(toml:find("enabled = true", 1, true) ~= nil)

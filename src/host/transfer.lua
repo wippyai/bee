@@ -60,7 +60,7 @@ function M.result(value: unknown): Result?
     local raw_error: unknown = value.error
     if not workspace_id or not connection_id or not request_id or not view_id or not instance_id or not target_display_id or not current or not error_code or type(raw_error) ~= "string" or #raw_error > 4096 or (error_code == "" and (current < 1 or raw_error ~= "")) then return nil end
     local error_text: string = raw_error
-    return {version = 1, workspace_id = workspace_id, connection_id = connection_id, request_id = request_id, view_id = view_id, instance_id = instance_id, target_display_id = target_display_id, assignment_revision = current, error_code = error_code, error = error_text} :: Result
+    return {version = 1, workspace_id = workspace_id, connection_id = connection_id, request_id = request_id, view_id = view_id, instance_id = instance_id, target_display_id = target_display_id, assignment_revision = current, error_code = error_code, error = error_text}
 end
 
 function M.request(value: unknown): Request?

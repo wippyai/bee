@@ -36,7 +36,7 @@ end
 
 local function sequence(value: unknown, label: string, limit: integer): ({unknown}?, string?)
     if type(value) ~= "table" then return nil, label .. " must be an array" end
-    local source = value :: {[unknown]: unknown}
+    local source = value
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then return nil, label .. " must be a dense array" end
@@ -64,26 +64,26 @@ end
 
 function M.decode_option(field: string, spec: Object, value: unknown): (OptionValue?, string?)
     if spec.type == "enum" then
-        local values = type(spec.values) == "table" and spec.values :: {string} or {}
+        local values = type(spec.values) == "table" and spec.values or {}
         local selected = bounds.member(value, values)
         if not selected then return nil, field_error(spec, field, "is not one Bee admits") end
-        return selected :: string, nil
+        return selected, nil
     elseif spec.type == "boolean" then
         if type(value) ~= "boolean" then return nil, field_error(spec, field, "must be a boolean") end
         return value, nil
     elseif spec.type == "id" then
-        if spec.forbid_option == true and type(value) == "string" and (value :: string):sub(1, 1) == "-" then
+        if spec.forbid_option == true and type(value) == "string" and (value):sub(1, 1) == "-" then
             return nil, field_error(spec, field, "must not be a command-line option")
         end
         local selected = bounds.id(value)
         if not selected then return nil, field_error(spec, field, "is not an identifier") end
-        return selected :: string, nil
+        return selected, nil
     elseif spec.type == "model" then
         local selected = bounds.text(value, 128)
         if not selected or selected == "" or not selected:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then
             return nil, field_error(spec, field, "is not one bounded model identifier")
         end
-        return selected :: string, nil
+        return selected, nil
     elseif spec.type == "budget" then
         local selected, budget_error = turn_budget.decode(value, field)
         if not selected then return nil, budget_error or field_error(spec, field, "is invalid") end
@@ -93,27 +93,27 @@ function M.decode_option(field: string, spec: Object, value: unknown): (OptionVa
     elseif spec.type == "duration" then
         local selected = bounds.text(value, 32)
         if not selected or not selected:match("^[1-9][0-9]*[smh]$") then return nil, field_error(spec, field, "must be a positive duration string") end
-        return selected :: string, nil
+        return selected, nil
     elseif spec.type == "codex_profile" then
         local selected = bounds.text(value, 64)
         if not selected or not selected:match("^[A-Za-z0-9_][A-Za-z0-9_-]*$") then return nil, field_error(spec, field, "must be a plain Codex profile name") end
-        return selected :: string, nil
+        return selected, nil
     elseif spec.type == "ids" then
         local selected, ids_error = bounds.ids(value, true)
         if not selected then return nil, field .. ": " .. tostring(ids_error) end
         if type(spec.pattern) == "string" then
             for _, entry in ipairs(selected) do
-                if not entry:match(spec.pattern :: string) then return nil, field_error(spec, field, "contains invalid value") end
+                if not entry:match(spec.pattern) then return nil, field_error(spec, field, "contains invalid value") end
             end
         end
         if type(spec.values) == "table" then
             for _, entry in ipairs(selected) do
-                if not bounds.member(entry, spec.values :: {string}) then return nil, field_error(spec, field, "contains unsupported value " .. entry) end
+                if not bounds.member(entry, spec.values) then return nil, field_error(spec, field, "contains unsupported value " .. entry) end
             end
         end
         if spec.transform == "presence" then return #selected > 0, nil end
         if spec.transform == "sorted" then table.sort(selected) end
-        return selected :: {string}, nil
+        return selected, nil
     end
     return nil, "CLI descriptor has an unsupported " .. field .. " decoder"
 end
@@ -122,7 +122,7 @@ local function validate_template(value: unknown, label: string, depth: integer):
     if depth > M.MAX_TEMPLATE_DEPTH then return label .. " exceeds the template nesting bound" end
     if type(value) == "string" then return nil end
     if type(value) ~= "table" then return label .. " contains an invalid template node" end
-    local item = value :: Object
+    local item = value
     local fields = bounds.fields(item, {"field", "format", "if", "if_any", "if_none", "equals", "not_equals", "starts_with", "then", "else", "option", "join"})
     if fields then return label .. ": " .. fields end
     local selected = 0
@@ -296,7 +296,7 @@ local function validate_json_references(value: unknown, label: string, fields: O
         if bounds.fields(item, {"field"}) then return label .. " field template is malformed" end
         return check_reference(item.field, fields, label .. ".field")
     end
-    for key, child in pairs(value :: {[unknown]: unknown}) do
+    for key, child in pairs(value) do
         local child_error = validate_json_references(child, label .. "." .. tostring(key), fields, depth + 1)
         if child_error then return child_error end
     end
@@ -319,7 +319,7 @@ local function flag_options(value: unknown, output: {[string]: boolean}, depth: 
             end
         end
     else
-        for _, child in ipairs(value :: {unknown}) do
+        for _, child in ipairs(value) do
             local child_error = flag_options(child, output, depth + 1)
             if child_error then return child_error end
         end
@@ -390,7 +390,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if paths[name] ~= nil then
             local path, path_error = sequence(paths[name], "CLI descriptor.json_paths." .. name, 12)
             if not path then
-                if type(paths[name]) ~= "string" or (paths[name] :: string) == "" or (paths[name] :: string):find("[%c%z]") then return nil, path_error end
+                if type(paths[name]) ~= "string" or (paths[name]) == "" or (paths[name]):find("[%c%z]") then return nil, path_error end
             else
                 if #path == 0 then return nil, "CLI descriptor.json_paths." .. name .. " is empty" end
                 for _, segment in ipairs(path) do if not bounds.id(segment) then return nil, "CLI descriptor.json_paths." .. name .. " contains an invalid path segment" end end
@@ -459,19 +459,19 @@ function M.decode(value: unknown): (Descriptor?, string?)
             local rule_fields, rule_fields_error = sequence(rule.fields, "CLI descriptor profile_fields.fields", 32)
             if not rule_fields or #rule_fields == 0 then return nil, rule_fields_error or "CLI descriptor profile_fields.fields is empty" end
             for _, field in ipairs(rule_fields) do
-                if not bounds.id(field) or fields[field :: string] == nil then return nil, "CLI descriptor profile_fields names an undeclared option" end
+                if not bounds.id(field) or fields[field] == nil then return nil, "CLI descriptor profile_fields names an undeclared option" end
             end
         elseif rule.kind == "values" then
-            if not bounds.id(rule.field) or fields[rule.field :: string] == nil then return nil, "CLI descriptor values rule names an undeclared option" end
+            if not bounds.id(rule.field) or fields[rule.field] == nil then return nil, "CLI descriptor values rule names an undeclared option" end
             local rule_values, rule_values_error = sequence(rule.values, "CLI descriptor values rule.values", 32)
             if not rule_values or #rule_values == 0 then return nil, rule_values_error or "CLI descriptor values rule is empty" end
             for _, value in ipairs(rule_values) do if not bounds.text(value, 128) then return nil, "CLI descriptor values rule has an invalid value" end end
         elseif rule.kind == "requires_empty" or rule.kind == "forbid_pair" then
             local field = bounds.id(rule.field)
-            if not field or (field ~= "brief" and fields[field] == nil) or not bounds.id(rule.other) or fields[rule.other :: string] == nil then
+            if not field or (field ~= "brief" and fields[field] == nil) or not bounds.id(rule.other) or fields[rule.other] == nil then
                 return nil, "CLI descriptor option rule names an undeclared option"
             end
-        elseif rule.kind == "forbid_nonempty" and (not bounds.id(rule.field) or fields[rule.field :: string] == nil) then
+        elseif rule.kind == "forbid_nonempty" and (not bounds.id(rule.field) or fields[rule.field] == nil) then
             return nil, "CLI descriptor option rule names an undeclared option"
         end
     end
@@ -483,7 +483,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
         local flag, flag_error = object(raw_flag, "CLI descriptor.flags." .. tostring(name))
         if not flag then return nil, flag_error end
         if bounds.fields(flag, {"field", "argv", "emit_default"}) then return nil, "CLI descriptor.flags." .. tostring(name) .. " has unknown fields" end
-        if not bounds.id(flag.field) or fields[flag.field :: string] == nil or type(flag.emit_default) ~= "boolean" then return nil, "CLI descriptor.flags." .. tostring(name) .. " is malformed or names an undeclared option" end
+        if not bounds.id(flag.field) or fields[flag.field] == nil or type(flag.emit_default) ~= "boolean" then return nil, "CLI descriptor.flags." .. tostring(name) .. " is malformed or names an undeclared option" end
         local flag_argv, flag_argv_error = sequence(flag.argv, "CLI descriptor.flags." .. tostring(name) .. ".argv", 8)
         if not flag_argv or #flag_argv == 0 then return nil, flag_argv_error or "CLI descriptor flag argv is empty" end
         for index, token in ipairs(flag_argv) do
@@ -568,7 +568,9 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if template_error then return nil, template_error end
     end
 
-    return item :: Descriptor, nil
+    return {schema_revision = M.SCHEMA, provider = provider, executable = executable, version_probe = probe,
+        login_evidence = login, platform = platform, codec = codec, json_paths = paths, argv_templates = templates,
+        options = options, flags = flags, provider_home = home, configure = configure}, nil
 end
 
 function M.find_provider(pinned: registry.Snapshot, provider: string): (Descriptor?, string?)

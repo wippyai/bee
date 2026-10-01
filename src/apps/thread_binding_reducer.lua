@@ -98,7 +98,7 @@ local function host_result(state: State, event: HostEvent): Result
     if event.outcome ~= "success" or not event.binding then return host_failure(state, event.op) end
     local binding, expected = event.binding, pending.value
     if event.op == "prepare" then
-        if binding.state ~= "pending" or binding.cleanup_pending ~= 0 or not same_prepare(expected :: Prepare, binding) then
+        if binding.state ~= "pending" or binding.cleanup_pending ~= 0 or not same_prepare(expected, binding) then
             return finish(state, "failed")
         end
         local next: State = copy(state, binding, nil, nil)
@@ -128,7 +128,7 @@ local function host_result(state: State, event: HostEvent): Result
     if event.op == "refresh_cleanup" then
         if binding.state ~= "revoked" or binding.cleanup_pending ~= 1
             or binding.cleanup_expected_revision ~= expected.cleanup_expected_revision then return finish(state, "cleanup_pending") end
-        return issue(copy(state, binding, nil, nil), {kind = "leave", expected_revision = binding.cleanup_expected_revision :: integer})
+        return issue(copy(state, binding, nil, nil), {kind = "leave", expected_revision = assert(binding.cleanup_expected_revision)})
     end
     if binding.state ~= "revoked" or binding.cleanup_pending ~= 0 then return finish(state, "cleanup_pending") end
     return finish(copy(state, binding, nil, nil), "fenced")
@@ -149,13 +149,13 @@ local function membership_result(state: State, event: MembershipEvent): Result
             local next: State = copy(state, binding, nil, nil); next.join_refresh_used = true
             return host(next, "refresh_join", {instance_id = binding.instance_id,
                 expected_revision = binding.binding_revision, expected_state = "pending",
-                join_expected_revision = event.head_revision :: integer})
+                join_expected_revision = event.head_revision})
         end
         if event.state ~= "active" or state.cleanup_refresh_used then return finish(state, "cleanup_pending") end
         local next: State = copy(state, binding, nil, nil); next.cleanup_refresh_used = true
         return host(next, "refresh_cleanup", {instance_id = binding.instance_id,
             expected_revision = binding.binding_revision, expected_state = "revoked",
-            cleanup_expected_revision = event.head_revision :: integer})
+            cleanup_expected_revision = event.head_revision})
     end
     if event.state == "unknown" then
         if state.intent == "revoke" then return begin_revoke(state) end
@@ -171,7 +171,7 @@ local function membership_result(state: State, event: MembershipEvent): Result
             if event.membership_revision ~= binding.membership_revision then
                 return finish(state, "cleanup_pending")
             end
-            return issue(state, {kind = "leave", expected_revision = binding.cleanup_expected_revision :: integer})
+            return issue(state, {kind = "leave", expected_revision = assert(binding.cleanup_expected_revision)})
         end
         return finish_revoke(state)
     end

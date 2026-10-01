@@ -47,19 +47,25 @@ local function storage(err: unknown, action: string): Result
     return failure("INTERNAL", action)
 end
 local function integer(value: unknown): integer?
-    if type(value) ~= "number" or value ~= math.floor(value) or value < 0 or value > 9007199254740991 then return nil end
+    if type(value) ~= "number" then return nil end
+    if value ~= math.floor(value) then return nil end
+    if value < 0 then return nil end
+    if value > 9007199254740991 then return nil end
     return math.floor(value)
 end
 local function one(tx: sql.Transaction, statement: string, params: {unknown}, label: string): ({[string]: unknown}?, Result?)
     local rows, err = tx:query(statement, params)
-    if err or not rows then return nil, storage(err, "read " .. label) end
+    if err then return nil, storage(err, "read " .. label) end
+    if not rows then return nil, storage(err, "read " .. label) end
     if #rows > 1 then return nil, failure("INTERNAL", label .. " rows are corrupt") end
     return rows[1], nil
 end
 local function workspace_row(row: {[string]: unknown}?): (WorkspaceRow?, Result?)
     if not row then return nil, nil end
     local actor, revision = bounds.id(row.actor_id), integer(row.revision)
-    if not actor or not revision or revision < 1 then return nil, failure("INTERNAL", "workspace row is corrupt") end
+    if not actor then return nil, failure("INTERNAL", "workspace row is corrupt") end
+    if not revision then return nil, failure("INTERNAL", "workspace row is corrupt") end
+    if revision < 1 then return nil, failure("INTERNAL", "workspace row is corrupt") end
     return {actor = actor, revision = revision}, nil
 end
 local function load_workspace(store: Store, tx: sql.Transaction, id: string): (WorkspaceRow?, Result?)
@@ -69,7 +75,8 @@ local function load_workspace(store: Store, tx: sql.Transaction, id: string): (W
 end
 local function owner(store: Store, tx: sql.Transaction, actor: string, id: string): (WorkspaceRow?, Result?)
     local current, err = load_workspace(store, tx, id)
-    if err or not current then return current, err or failure("NOT_FOUND", "workspace does not exist") end
+    if err then return current, err or failure("NOT_FOUND", "workspace does not exist") end
+    if not current then return current, err or failure("NOT_FOUND", "workspace does not exist") end
     if current.actor ~= actor then return nil, failure("DENIED", "workspace belongs to another actor") end
     return current, nil
 end
@@ -80,14 +87,16 @@ local function value(store: Store, id: string, revision: integer, extra: {[strin
 end
 local function digest(content: string): (string?, Result?)
     local result, err = hash.sha256(content)
-    if not result or err then return nil, failure("INTERNAL", "calculate workspace content digest") end
+    if not result then return nil, failure("INTERNAL", "calculate workspace content digest") end
+    if err then return nil, failure("INTERNAL", "calculate workspace content digest") end
     return result, nil
 end
 local function request_identity(input: protocol.Request): (string?, Result?)
     local path = input.path
     local content_digest: string? = nil
     if input.operation == "put" or input.operation == "append" then
-        if type(input.content) ~= "string" or #input.content > MAX_FILE_BYTES then return nil, failure("INVALID", "put content is missing or exceeds the workspace limit") end
+        if type(input.content) ~= "string" then return nil, failure("INVALID", "put content is missing or exceeds the workspace limit") end
+        if #input.content > MAX_FILE_BYTES then return nil, failure("INVALID", "put content is missing or exceeds the workspace limit") end
         local receipt_bytes = input.content
         if input.operation == "append" then
             receipt_bytes = tostring(input.offset) .. ":" .. (input.result_digest or "") .. ":" .. input.content
@@ -99,34 +108,41 @@ local function request_identity(input: protocol.Request): (string?, Result?)
 end
 local function matching_receipt(store: Store, tx: sql.Transaction, actor: string, input: protocol.Request, content_digest: string?): (Result?, Result?)
     local key, expected = input.idempotency_key, input.expected_revision
-    if not key or expected == nil then return nil, failure("INVALID", "mutation lacks idempotency fields") end
+    if not key then return nil, failure("INVALID", "mutation lacks idempotency fields") end
+    if expected == nil then return nil, failure("INVALID", "mutation lacks idempotency fields") end
     local row, err = one(tx, "SELECT actor_id, operation, expected_revision, path, content_sha256, result_revision, snapshot_digest, files_digest, file_count, total_bytes FROM bee_governance_receipts WHERE owner_node = ? AND workspace_id = ? AND idempotency_key = ?", {store.node, input.workspace_id, key}, "workspace receipt")
-    if err or not row then return nil, err end
+    if err then return nil, err end
+    if not row then return nil, err end
     local receipt_actor, operation = bounds.id(row.actor_id), row.operation
     local received_expected, revision = integer(row.expected_revision), integer(row.result_revision)
     local row_path, row_digest = row.path, row.content_sha256
-    if not receipt_actor or type(operation) ~= "string" or received_expected == nil or not revision
-        or (row_path ~= nil and type(row_path) ~= "string") or (row_digest ~= nil and type(row_digest) ~= "string") then
-        return nil, failure("INTERNAL", "workspace receipt is corrupt")
-    end
+    if not receipt_actor then return nil, failure("INTERNAL", "workspace receipt is corrupt") end
+    if type(operation) ~= "string" then return nil, failure("INTERNAL", "workspace receipt is corrupt") end
+    if received_expected == nil then return nil, failure("INTERNAL", "workspace receipt is corrupt") end
+    if not revision then return nil, failure("INTERNAL", "workspace receipt is corrupt") end
+    if (row_path ~= nil and type(row_path) ~= "string") then return nil, failure("INTERNAL", "workspace receipt is corrupt") end
+    if (row_digest ~= nil and type(row_digest) ~= "string") then return nil, failure("INTERNAL", "workspace receipt is corrupt") end
     if receipt_actor ~= actor then return nil, failure("DENIED", "workspace belongs to another actor") end
-    if operation ~= input.operation or received_expected ~= expected or row_path ~= input.path or row_digest ~= content_digest then
-        return nil, failure("CONFLICT", "idempotency_key was used by a different workspace request")
-    end
+    if operation ~= input.operation then return nil, failure("CONFLICT", "idempotency_key was used by a different workspace request") end
+    if received_expected ~= expected then return nil, failure("CONFLICT", "idempotency_key was used by a different workspace request") end
+    if row_path ~= input.path then return nil, failure("CONFLICT", "idempotency_key was used by a different workspace request") end
+    if row_digest ~= content_digest then return nil, failure("CONFLICT", "idempotency_key was used by a different workspace request") end
     local extra: {[string]: unknown} = {}
     if operation == "freeze" then
         local snapshot_digest, files_digest = row.snapshot_digest, row.files_digest
         local count, total = integer(row.file_count), integer(row.total_bytes)
-        if type(snapshot_digest) ~= "string" or type(files_digest) ~= "string" or not count or not total then
-            return nil, failure("INTERNAL", "workspace freeze receipt is corrupt")
-        end
+        if type(snapshot_digest) ~= "string" then return nil, failure("INTERNAL", "workspace freeze receipt is corrupt") end
+        if type(files_digest) ~= "string" then return nil, failure("INTERNAL", "workspace freeze receipt is corrupt") end
+        if not count then return nil, failure("INTERNAL", "workspace freeze receipt is corrupt") end
+        if not total then return nil, failure("INTERNAL", "workspace freeze receipt is corrupt") end
         extra.digest, extra.files_digest, extra.file_count, extra.total_bytes = snapshot_digest, files_digest, count, total
     end
     return shared.success(value(store, input.workspace_id, revision, extra), true), nil
 end
 local function receipt_capacity(store: Store, tx: sql.Transaction, id: string): Result?
     local row, err = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_receipts WHERE owner_node = ? AND workspace_id = ?", {store.node, id}, "workspace receipt count")
-    if err or not row then return err or failure("INTERNAL", "read workspace receipt count") end
+    if err then return err or failure("INTERNAL", "read workspace receipt count") end
+    if not row then return err or failure("INTERNAL", "read workspace receipt count") end
     local count = integer(row.count)
     if count == nil then return failure("INTERNAL", "workspace receipt count is corrupt") end
     if count >= MAX_RECEIPTS then return failure("CAPACITY_EXHAUSTED", "workspace receipt capacity is exhausted") end
@@ -134,7 +150,8 @@ local function receipt_capacity(store: Store, tx: sql.Transaction, id: string): 
 end
 local function record_receipt(store: Store, tx: sql.Transaction, actor: string, input: protocol.Request, content_digest: string?, revision: integer, snapshot: Snapshot?): Result?
     local key, expected = input.idempotency_key, input.expected_revision
-    if not key or expected == nil then return failure("INTERNAL", "mutation receipt is incomplete") end
+    if not key then return failure("INTERNAL", "mutation receipt is incomplete") end
+    if expected == nil then return failure("INTERNAL", "mutation receipt is incomplete") end
     local inserted: unknown
     local err: unknown
     if snapshot then
@@ -143,7 +160,8 @@ local function record_receipt(store: Store, tx: sql.Transaction, actor: string, 
             snapshot.digest, snapshot.files_digest, snapshot.file_count, snapshot.total_bytes})
     elseif input.operation == "put" or input.operation == "append" then
         local path = bounds.text(input.path, MAX_PATH_BYTES)
-        if not path or not content_digest then return failure("INTERNAL", "put receipt is incomplete") end
+        if not path then return failure("INTERNAL", "put receipt is incomplete") end
+        if not content_digest then return failure("INTERNAL", "put receipt is incomplete") end
         inserted, err = tx:execute("INSERT INTO bee_governance_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, expected_revision, path, content_sha256, result_revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             {store.node, input.workspace_id, key, actor, input.operation, expected, path, content_digest, revision})
     elseif input.operation == "remove" then
@@ -155,27 +173,33 @@ local function record_receipt(store: Store, tx: sql.Transaction, actor: string, 
         inserted, err = tx:execute("INSERT INTO bee_governance_receipts (owner_node, workspace_id, idempotency_key, actor_id, operation, expected_revision, result_revision) VALUES (?, ?, ?, ?, ?, ?, ?)",
             {store.node, input.workspace_id, key, actor, input.operation, expected, revision})
     end
-    if not inserted or err then return storage(err, "record workspace receipt") end
+    if not inserted then return storage(err, "record workspace receipt") end
+    if err then return storage(err, "record workspace receipt") end
     return nil
 end
 local function decode_file(row: {[string]: unknown}): (File?, Result?)
     local path_value = bounds.text(row.path, MAX_PATH_BYTES)
-    if not path_value or #path_value == 0 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+    if not path_value then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+    if #path_value == 0 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
     local encoded_value = bounds.text(row.content_base64, MAX_BASE64_BYTES)
     if not encoded_value then return nil, failure("INTERNAL", "workspace file row is corrupt") end
     local digest_value = bounds.text(row.content_sha256, 64)
-    if not digest_value or #digest_value ~= 64 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+    if not digest_value then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+    if #digest_value ~= 64 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
     local bytes_value = integer(row.bytes)
-    if bytes_value == nil or bytes_value > MAX_FILE_BYTES then
-        return nil, failure("INTERNAL", "workspace file row is corrupt")
-    end
+    if bytes_value == nil then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+    if bytes_value > MAX_FILE_BYTES then return nil, failure("INTERNAL", "workspace file row is corrupt") end
     local path: string, encoded: string, stored_digest: string, bytes: integer = path_value, encoded_value, digest_value, bytes_value
     local content, decode_error = base64.decode(encoded)
-    if not content or decode_error or #content ~= bytes then return nil, failure("INTERNAL", "workspace file content is corrupt") end
+    if not content then return nil, failure("INTERNAL", "workspace file content is corrupt") end
+    if decode_error then return nil, failure("INTERNAL", "workspace file content is corrupt") end
+    if #content ~= bytes then return nil, failure("INTERNAL", "workspace file content is corrupt") end
     local normalized, encode_error = base64.encode(content)
-    if encode_error or normalized ~= encoded then return nil, failure("INTERNAL", "workspace file encoding is corrupt") end
+    if encode_error then return nil, failure("INTERNAL", "workspace file encoding is corrupt") end
+    if normalized ~= encoded then return nil, failure("INTERNAL", "workspace file encoding is corrupt") end
     local actual, digest_error = hash.sha256(content)
-    if digest_error or actual ~= stored_digest then return nil, failure("INTERNAL", "workspace file digest is corrupt") end
+    if digest_error then return nil, failure("INTERNAL", "workspace file digest is corrupt") end
+    if actual ~= stored_digest then return nil, failure("INTERNAL", "workspace file digest is corrupt") end
     return {path = path, content = content, content_base64 = encoded, digest = stored_digest, bytes = bytes}, nil
 end
 -- The selector is an internal closed variant, never a request field.  Keeping
@@ -192,14 +216,18 @@ local function files(store: Store, tx: sql.Transaction, id: string, source: File
         if not snapshot_digest then return nil, failure("INTERNAL", "snapshot file selector is incomplete") end
         totals, totals_err = tx:query("SELECT COUNT(*) AS count, COALESCE(SUM(bytes), 0) AS total_bytes, COALESCE(SUM(length(CAST(content_base64 AS BLOB))), 0) AS encoded_total FROM bee_governance_snapshot_files WHERE owner_node = ? AND workspace_id = ? AND snapshot_digest = ?", {store.node, id, snapshot_digest})
     end
-    if totals_err or not totals or #totals ~= 1 then return nil, storage(totals_err, "measure workspace files") end
+    if totals_err then return nil, storage(totals_err, "measure workspace files") end
+    if not totals then return nil, storage(totals_err, "measure workspace files") end
+    if #totals ~= 1 then return nil, storage(totals_err, "measure workspace files") end
     local count = integer(totals[1].count)
     local total_bytes = integer(totals[1].total_bytes)
     local encoded_total = integer(totals[1].encoded_total)
-    if count == nil or total_bytes == nil or encoded_total == nil or count > MAX_FILES
-        or total_bytes > MAX_TOTAL_BYTES or encoded_total > MAX_BASE64_TOTAL_BYTES then
-        return nil, failure("INTERNAL", "workspace file rows exceed capacity")
-    end
+    if count == nil then return nil, failure("INTERNAL", "workspace file rows exceed capacity") end
+    if total_bytes == nil then return nil, failure("INTERNAL", "workspace file rows exceed capacity") end
+    if encoded_total == nil then return nil, failure("INTERNAL", "workspace file rows exceed capacity") end
+    if count > MAX_FILES then return nil, failure("INTERNAL", "workspace file rows exceed capacity") end
+    if total_bytes > MAX_TOTAL_BYTES then return nil, failure("INTERNAL", "workspace file rows exceed capacity") end
+    if encoded_total > MAX_BASE64_TOTAL_BYTES then return nil, failure("INTERNAL", "workspace file rows exceed capacity") end
     local shape_rows: {{[string]: unknown}}?
     local shape_err: unknown
     if source == "workspace" then
@@ -207,17 +235,22 @@ local function files(store: Store, tx: sql.Transaction, id: string, source: File
     else
         shape_rows, shape_err = tx:query("SELECT path, content_sha256, bytes, length(CAST(content_base64 AS BLOB)) AS encoded_bytes FROM bee_governance_snapshot_files WHERE owner_node = ? AND workspace_id = ? AND snapshot_digest = ? ORDER BY path LIMIT 257", {store.node, id, snapshot_digest})
     end
-    if shape_err or not shape_rows then return nil, storage(shape_err, "list workspace file metadata") end
+    if shape_err then return nil, storage(shape_err, "list workspace file metadata") end
+    if not shape_rows then return nil, storage(shape_err, "list workspace file metadata") end
     if #shape_rows > MAX_FILES then return nil, failure("INTERNAL", "workspace file rows exceed capacity") end
     for _, row in ipairs(shape_rows) do
         local path = bounds.text(row.path, MAX_PATH_BYTES)
-        if not path or #path == 0 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if not path then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if #path == 0 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
         local stored_digest = bounds.text(row.content_sha256, 64)
-        if not stored_digest or #stored_digest ~= 64 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if not stored_digest then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if #stored_digest ~= 64 then return nil, failure("INTERNAL", "workspace file row is corrupt") end
         local raw_bytes = integer(row.bytes)
-        if raw_bytes == nil or raw_bytes > MAX_FILE_BYTES then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if raw_bytes == nil then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if raw_bytes > MAX_FILE_BYTES then return nil, failure("INTERNAL", "workspace file row is corrupt") end
         local raw_encoded_bytes = integer(row.encoded_bytes)
-        if raw_encoded_bytes == nil or raw_encoded_bytes > MAX_BASE64_BYTES then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if raw_encoded_bytes == nil then return nil, failure("INTERNAL", "workspace file row is corrupt") end
+        if raw_encoded_bytes > MAX_BASE64_BYTES then return nil, failure("INTERNAL", "workspace file row is corrupt") end
     end
     local rows: {{[string]: unknown}}?
     local err: unknown
@@ -226,7 +259,8 @@ local function files(store: Store, tx: sql.Transaction, id: string, source: File
     else
         rows, err = tx:query("SELECT path, content_base64, content_sha256, bytes FROM bee_governance_snapshot_files WHERE owner_node = ? AND workspace_id = ? AND snapshot_digest = ? ORDER BY path LIMIT 257", {store.node, id, snapshot_digest})
     end
-    if err or not rows then return nil, storage(err, "read workspace file content") end
+    if err then return nil, storage(err, "read workspace file content") end
+    if not rows then return nil, storage(err, "read workspace file content") end
     if #rows ~= #shape_rows then return nil, failure("INTERNAL", "workspace file rows changed during read") end
     local result: {File} = {}
     for index, row in ipairs(rows) do
@@ -239,15 +273,20 @@ end
 local function snapshot_row(row: {[string]: unknown}?): (Snapshot?, Result?)
     if not row then return nil, nil end
     local digest_value = bounds.text(row.digest, 64)
-    if not digest_value or #digest_value ~= 64 then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if not digest_value then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if #digest_value ~= 64 then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
     local files_digest_value = bounds.text(row.files_digest, 64)
-    if not files_digest_value or #files_digest_value ~= 64 then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if not files_digest_value then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if #files_digest_value ~= 64 then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
     local revision_value = integer(row.revision)
-    if revision_value == nil or revision_value < 1 then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if revision_value == nil then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if revision_value < 1 then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
     local count_value = integer(row.file_count)
-    if count_value == nil or count_value > MAX_FILES then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if count_value == nil then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if count_value > MAX_FILES then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
     local total_value = integer(row.total_bytes)
-    if total_value == nil or total_value > MAX_TOTAL_BYTES then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if total_value == nil then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
+    if total_value > MAX_TOTAL_BYTES then return nil, failure("INTERNAL", "workspace snapshot is corrupt") end
     local digest: string = digest_value
     local files_digest: string = files_digest_value
     local revision: integer = revision_value
@@ -257,7 +296,8 @@ local function snapshot_row(row: {[string]: unknown}?): (Snapshot?, Result?)
 end
 local function load_snapshot(store: Store, tx: sql.Transaction, id: string, raw_digest: string?): (Snapshot?, Result?)
     local requested = bounds.text(raw_digest, 64)
-    if not requested or #requested ~= 64 then return nil, failure("INVALID", "snapshot_digest is invalid") end
+    if not requested then return nil, failure("INVALID", "snapshot_digest is invalid") end
+    if #requested ~= 64 then return nil, failure("INVALID", "snapshot_digest is invalid") end
     local row, row_error = one(tx, "SELECT digest, revision, files_digest, file_count, total_bytes FROM bee_governance_snapshots WHERE owner_node = ? AND workspace_id = ? AND digest = ?", {store.node, id, requested}, "workspace snapshot")
     if row_error then return nil, row_error end
     local snapshot, decode_error = snapshot_row(row)
@@ -271,11 +311,11 @@ local function measure_snapshot(id: string, snapshot: Snapshot, stored: {File}):
     for index, file in ipairs(stored) do input.files[index] = {path = file.path, content = file.content} end
     local frozen, freeze_error = workspace.freeze(input)
     if not frozen then return nil, failure("INTERNAL", freeze_error or "cannot verify workspace snapshot") end
-    if frozen.digest ~= snapshot.digest or frozen.files_digest ~= snapshot.files_digest
-        or frozen.file_count ~= snapshot.file_count or frozen.total_bytes ~= snapshot.total_bytes
-        or frozen.revision ~= snapshot.revision then
-        return nil, failure("INTERNAL", "workspace snapshot content is corrupt")
-    end
+    if frozen.digest ~= snapshot.digest then return nil, failure("INTERNAL", "workspace snapshot content is corrupt") end
+    if frozen.files_digest ~= snapshot.files_digest then return nil, failure("INTERNAL", "workspace snapshot content is corrupt") end
+    if frozen.file_count ~= snapshot.file_count then return nil, failure("INTERNAL", "workspace snapshot content is corrupt") end
+    if frozen.total_bytes ~= snapshot.total_bytes then return nil, failure("INTERNAL", "workspace snapshot content is corrupt") end
+    if frozen.revision ~= snapshot.revision then return nil, failure("INTERNAL", "workspace snapshot content is corrupt") end
     return snapshot, nil
 end
 local function load_verified_snapshot(store: Store, tx: sql.Transaction, id: string, raw_digest: string?): (Snapshot?, {File}?, Result?)
@@ -312,14 +352,16 @@ local function create(store: Store, tx: sql.Transaction, actor: string, input: p
     local actor_count_row, actor_count_error = one(tx,
         "SELECT COUNT(*) AS count FROM bee_governance_workspaces WHERE owner_node = ? AND actor_id = ?",
         {store.node, actor}, "author workspace count")
-    if actor_count_error or not actor_count_row then return actor_count_error or failure("INTERNAL", "read author workspace count") end
+    if actor_count_error then return actor_count_error or failure("INTERNAL", "read author workspace count") end
+    if not actor_count_row then return actor_count_error or failure("INTERNAL", "read author workspace count") end
     local actor_count = integer(actor_count_row.count)
     if actor_count == nil then return failure("INTERNAL", "author workspace count is corrupt") end
     if actor_count >= MAX_ACTOR_WORKSPACES then
         return failure("CAPACITY_EXHAUSTED", "author workspace capacity is exhausted")
     end
     local count_row, count_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_workspaces WHERE owner_node = ?", {store.node}, "workspace count")
-    if count_error or not count_row then return count_error or failure("INTERNAL", "read workspace count") end
+    if count_error then return count_error or failure("INTERNAL", "read workspace count") end
+    if not count_row then return count_error or failure("INTERNAL", "read workspace count") end
     local count = integer(count_row.count)
     if count == nil then return failure("INTERNAL", "workspace count is corrupt") end
     if count >= MAX_WORKSPACES then return failure("CAPACITY_EXHAUSTED", "node workspace capacity is exhausted") end
@@ -340,9 +382,11 @@ local function mutation(store: Store, tx: sql.Transaction, actor: string, input:
     if input.expected_revision ~= current.revision then return failure("CONFLICT", "expected_revision does not match workspace") end
     if current.revision >= MAX_REVISION then return failure("CAPACITY_EXHAUSTED", "workspace revision capacity is exhausted") end
     local path = bounds.text(input.path, MAX_PATH_BYTES)
-    if not path or #path == 0 then return failure("INVALID", "workspace path is missing") end
+    if not path then return failure("INVALID", "workspace path is missing") end
+    if #path == 0 then return failure("INVALID", "workspace path is missing") end
     if input.operation == "put" or input.operation == "append" then
-        if type(input.content) ~= "string" or not content_digest then return failure("INVALID", "put content is missing") end
+        if type(input.content) ~= "string" then return failure("INVALID", "put content is missing") end
+        if not content_digest then return failure("INVALID", "put content is missing") end
         local content = input.content
         local file_digest = content_digest
         if input.operation == "append" then
@@ -353,9 +397,8 @@ local function mutation(store: Store, tx: sql.Transaction, actor: string, input:
             local file, decode_error = decode_file(row)
             if not file then return decode_error or failure("INTERNAL", "workspace file is corrupt") end
             if input.offset ~= file.bytes then return failure("CONFLICT", "append offset does not match file length") end
-            if #content == 0 or file.bytes + #content > MAX_FILE_BYTES then
-                return failure("INVALID", "append exceeds the 4 MiB file bound or is empty")
-            end
+            if #content == 0 then return failure("INVALID", "append exceeds the 4 MiB file bound or is empty") end
+            if file.bytes + #content > MAX_FILE_BYTES then return failure("INVALID", "append exceeds the 4 MiB file bound or is empty") end
             content = file.content .. content
             local measured, measure_error = digest(content)
             if measure_error then return measure_error end
@@ -365,22 +408,23 @@ local function mutation(store: Store, tx: sql.Transaction, actor: string, input:
             file_digest = measured
         end
         local encoded, encode_error = base64.encode(content)
-        if encode_error or not encoded then return failure("INTERNAL", "encode workspace content") end
+        if encode_error then return failure("INTERNAL", "encode workspace content") end
+        if not encoded then return failure("INTERNAL", "encode workspace content") end
         local _, put_error = tx:execute("INSERT INTO bee_governance_workspace_files (owner_node, workspace_id, path, content_base64, content_sha256, bytes) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_node, workspace_id, path) DO UPDATE SET content_base64 = excluded.content_base64, content_sha256 = excluded.content_sha256, bytes = excluded.bytes", {store.node, input.workspace_id, path, encoded, file_digest, #content})
         if put_error then return storage(put_error, "write workspace file") end
     else
         local removed, remove_error = tx:execute("DELETE FROM bee_governance_workspace_files WHERE owner_node = ? AND workspace_id = ? AND path = ?", {store.node, input.workspace_id, path})
         if remove_error then return storage(remove_error, "remove workspace file") end
-        if not removed or integer(removed.rows_affected) ~= 1 then return failure("NOT_FOUND", "workspace file does not exist") end
+        if not removed then return failure("NOT_FOUND", "workspace file does not exist") end
+        if integer(removed.rows_affected) ~= 1 then return failure("NOT_FOUND", "workspace file does not exist") end
     end
     local revision = current.revision + 1
     local validation_error = validate_files(store, tx, input.workspace_id, revision)
     if validation_error then return validation_error end
     local advanced, revision_error = tx:execute("UPDATE bee_governance_workspaces SET revision = ? WHERE owner_node = ? AND workspace_id = ? AND actor_id = ? AND revision = ?", {revision, store.node, input.workspace_id, actor, current.revision})
     if revision_error then return storage(revision_error, "advance workspace revision") end
-    if not advanced or integer(advanced.rows_affected) ~= 1 then
-        return failure("CONFLICT", "workspace changed during mutation")
-    end
+    if not advanced then return failure("CONFLICT", "workspace changed during mutation") end
+    if integer(advanced.rows_affected) ~= 1 then return failure("CONFLICT", "workspace changed during mutation") end
     local receipt_error = record_receipt(store, tx, actor, input, content_digest, revision, nil)
     if receipt_error then return receipt_error end
     return shared.success(value(store, input.workspace_id, revision), false)
@@ -405,13 +449,17 @@ local function freeze(store: Store, tx: sql.Transaction, actor: string, input: p
     local snapshot_value: Snapshot = {digest = snapshot.digest, files_digest = snapshot.files_digest, file_count = snapshot.file_count, total_bytes = snapshot.total_bytes, revision = snapshot.revision}
     if existing then
         local revision, count, total = integer(existing.revision), integer(existing.file_count), integer(existing.total_bytes)
-        if not revision or not count or not total or existing.files_digest ~= snapshot.files_digest or revision ~= snapshot.revision
-            or count ~= snapshot.file_count or total ~= snapshot.total_bytes then
-            return failure("INTERNAL", "workspace snapshot is corrupt")
-        end
+        if not revision then return failure("INTERNAL", "workspace snapshot is corrupt") end
+        if not count then return failure("INTERNAL", "workspace snapshot is corrupt") end
+        if not total then return failure("INTERNAL", "workspace snapshot is corrupt") end
+        if existing.files_digest ~= snapshot.files_digest then return failure("INTERNAL", "workspace snapshot is corrupt") end
+        if revision ~= snapshot.revision then return failure("INTERNAL", "workspace snapshot is corrupt") end
+        if count ~= snapshot.file_count then return failure("INTERNAL", "workspace snapshot is corrupt") end
+        if total ~= snapshot.total_bytes then return failure("INTERNAL", "workspace snapshot is corrupt") end
     else
         local count_row, count_error = one(tx, "SELECT COUNT(*) AS count FROM bee_governance_snapshots WHERE owner_node = ? AND workspace_id = ?", {store.node, input.workspace_id}, "workspace snapshot count")
-        if count_error or not count_row then return count_error or failure("INTERNAL", "read workspace snapshot count") end
+        if count_error then return count_error or failure("INTERNAL", "read workspace snapshot count") end
+        if not count_row then return count_error or failure("INTERNAL", "read workspace snapshot count") end
         local count = integer(count_row.count)
         if count == nil then return failure("INTERNAL", "workspace snapshot count is corrupt") end
         if count >= MAX_SNAPSHOTS then return failure("CAPACITY_EXHAUSTED", "workspace snapshot capacity is exhausted") end
@@ -435,7 +483,8 @@ local function list(store: Store, tx: sql.Transaction, actor: string, input: pro
     local files_error: Result?
     if input.snapshot_digest then
         snapshot, stored, files_error = load_verified_snapshot(store, tx, input.workspace_id, input.snapshot_digest)
-        if not snapshot or not stored then return files_error or failure("INTERNAL", "read workspace snapshot") end
+        if not snapshot then return files_error or failure("INTERNAL", "read workspace snapshot") end
+        if not stored then return files_error or failure("INTERNAL", "read workspace snapshot") end
         revision = snapshot.revision
     else
         stored, files_error = files(store, tx, input.workspace_id, "workspace", nil)
@@ -453,12 +502,14 @@ end
 local function list_owned(store: Store, tx: sql.Transaction, actor: string): Result
     local rows, query_error = tx:query("SELECT workspace_id, revision FROM bee_governance_workspaces WHERE owner_node = ? AND actor_id = ? ORDER BY workspace_id LIMIT ?",
         {store.node, actor, MAX_ACTOR_WORKSPACES + 1})
-    if query_error or not rows then return storage(query_error, "list owned workspaces") end
+    if query_error then return storage(query_error, "list owned workspaces") end
+    if not rows then return storage(query_error, "list owned workspaces") end
     if #rows > MAX_ACTOR_WORKSPACES then return failure("INTERNAL", "owned workspace count exceeds limit") end
     local overlays: {{workspace_id: string, revision: integer}} = {}
     for _, row in ipairs(rows) do
         local id, revision = bounds.id(row.workspace_id), integer(row.revision)
-        if not id or not revision then return failure("INTERNAL", "owned workspace row is corrupt") end
+        if not id then return failure("INTERNAL", "owned workspace row is corrupt") end
+        if not revision then return failure("INTERNAL", "owned workspace row is corrupt") end
         overlays[#overlays + 1] = {workspace_id = id, revision = revision}
     end
     return shared.success({overlays = overlays}, false)
@@ -467,22 +518,25 @@ local function read(store: Store, tx: sql.Transaction, actor: string, input: pro
     local current, owner_error = owner(store, tx, actor, input.workspace_id)
     if not current then return owner_error or failure("NOT_FOUND", "workspace does not exist") end
     local path = bounds.text(input.path, MAX_PATH_BYTES)
-    if not path or #path == 0 then return failure("INVALID", "workspace path is missing") end
+    if not path then return failure("INVALID", "workspace path is missing") end
+    if #path == 0 then return failure("INVALID", "workspace path is missing") end
     local function window(file: File): ({[string]: unknown}?, Result?)
         local offset = input.offset or 0
         local limit = input.limit or 16384
-        if offset > file.bytes or limit < 1 or limit > 16384 then
-            return nil, failure("INVALID", "read window is outside the file")
-        end
+        if offset > file.bytes then return nil, failure("INVALID", "read window is outside the file") end
+        if limit < 1 then return nil, failure("INVALID", "read window is outside the file") end
+        if limit > 16384 then return nil, failure("INVALID", "read window is outside the file") end
         local content = file.content:sub(offset + 1, offset + limit)
         local encoded, encode_error = base64.encode(content)
-        if not encoded or encode_error then return nil, failure("INTERNAL", "encode workspace read window") end
+        if not encoded then return nil, failure("INTERNAL", "encode workspace read window") end
+        if encode_error then return nil, failure("INTERNAL", "encode workspace read window") end
         return {path = file.path, content_base64 = encoded, bytes = file.bytes, digest = file.digest,
             offset = offset, chunk_bytes = #content, eof = offset + #content >= file.bytes}, nil
     end
     if input.snapshot_digest then
         local snapshot, stored, snapshot_error = load_verified_snapshot(store, tx, input.workspace_id, input.snapshot_digest)
-        if not snapshot or not stored then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
+        if not snapshot then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
+        if not stored then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
         for _, file in ipairs(stored) do
             if file.path == path then
                 local part, part_error = window(file)
@@ -512,17 +566,20 @@ function M.read_frozen(store: Store, workspace_raw: string, path_raw: string, di
     local workspace_id = bounds.id(workspace_raw)
     local path = bounds.text(path_raw, MAX_PATH_BYTES)
     local snapshot_digest = bounds.id(digest_raw)
-    if not workspace_id or not path or #path == 0 or not snapshot_digest
-        or #snapshot_digest ~= 64 or not snapshot_digest:match("^[0-9a-f]+$") then
-        return failure("INVALID", "frozen overlay file identity is invalid")
-    end
-    local selected_workspace: string = workspace_id :: string
-    local selected_digest: string = snapshot_digest :: string
+    if not workspace_id then return failure("INVALID", "frozen overlay file identity is invalid") end
+    if not path then return failure("INVALID", "frozen overlay file identity is invalid") end
+    if #path == 0 then return failure("INVALID", "frozen overlay file identity is invalid") end
+    if not snapshot_digest then return failure("INVALID", "frozen overlay file identity is invalid") end
+    if #snapshot_digest ~= 64 then return failure("INVALID", "frozen overlay file identity is invalid") end
+    if not snapshot_digest:match("^[0-9a-f]+$") then return failure("INVALID", "frozen overlay file identity is invalid") end
+    local selected_workspace: string = workspace_id
+    local selected_digest: string = snapshot_digest
     return shared.read(store.db, "governance", function(tx: sql.Transaction): Result
         local current, workspace_error = load_workspace(store, tx, selected_workspace)
         if not current then return workspace_error or failure("NOT_FOUND", "workspace does not exist") end
         local snapshot, stored, snapshot_error = load_verified_snapshot(store, tx, selected_workspace, selected_digest)
-        if not snapshot or not stored then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
+        if not snapshot then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
+        if not stored then return snapshot_error or failure("INTERNAL", "read workspace snapshot") end
         for _, file in ipairs(stored) do
             if file.path == path then
                 return shared.success(value(store, selected_workspace, snapshot.revision, {path = file.path,
@@ -549,7 +606,9 @@ function M.call(store: Store, actor_raw: string, input: protocol.Request): Resul
         local content_digest, digest_error = request_identity(input)
         if digest_error then return digest_error end
         if input.operation == "create" then return create(store, tx, actor, input, content_digest) end
-        if input.operation == "put" or input.operation == "append" or input.operation == "remove" then return mutation(store, tx, actor, input, content_digest) end
+        if input.operation == "put" then return mutation(store, tx, actor, input, content_digest) end
+        if input.operation == "append" then return mutation(store, tx, actor, input, content_digest) end
+        if input.operation == "remove" then return mutation(store, tx, actor, input, content_digest) end
         if input.operation == "freeze" then return freeze(store, tx, actor, input, content_digest) end
         return failure("INVALID", "unknown workspace operation")
     end)
@@ -558,11 +617,13 @@ function M.close(store: Store): (boolean, string?)
     if store.closed then return true, nil end
     store.closed = true
     local released, err = store.db:release()
-    if released ~= true or err then return false, "close governance database" end
+    if released ~= true then return false, "close governance database" end
+    if err then return false, "close governance database" end
     return true, nil
 end
 function M.open(resource: string, node_raw: string): (Store?, string?)
-    if type(resource) ~= "string" or resource == "" then return nil, "governance database is not linked" end
+    if type(resource) ~= "string" then return nil, "governance database is not linked" end
+    if resource == "" then return nil, "governance database is not linked" end
     local node = bounds.id(node_raw)
     if not node then return nil, "governance node identity is invalid" end
     local db, err = database.open({resource = resource,

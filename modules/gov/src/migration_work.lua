@@ -41,7 +41,10 @@ local function dense(value: unknown, label: string, maximum: integer): ({unknown
 end
 
 local function identifier(value: unknown): string?
-    if type(value) ~= "string" or #value == 0 or #value > 160 or value:find("%c") then return nil end
+    if type(value) ~= "string" then return nil end
+    if #value == 0 then return nil end
+    if #value > 160 then return nil end
+    if value:find("%c") then return nil end
     return value
 end
 
@@ -49,13 +52,16 @@ end
 -- provenance and is compared exactly on recovery; unlike authored package
 -- identities, it does not need to be nonempty.
 local function owner(value: unknown): string?
-    if type(value) ~= "string" or #value > 160 or value:find("%c") then return nil end
+    if type(value) ~= "string" then return nil end
+    if #value > 160 then return nil end
+    if value:find("%c") then return nil end
     return value
 end
 
 local function registry_id(value: unknown): string?
     local id = identifier(value)
-    if not id or not id:match("^[A-Za-z0-9][A-Za-z0-9_.-]*:[A-Za-z0-9][A-Za-z0-9_.-]*$") then return nil end
+    if not id then return nil end
+    if not id:match("^[A-Za-z0-9][A-Za-z0-9_.-]*:[A-Za-z0-9][A-Za-z0-9_.-]*$") then return nil end
     return id
 end
 
@@ -63,13 +69,19 @@ local function package_name(value: unknown): string?
     local name = identifier(value)
     if not name then return nil end
     local organization, module = name:match("^([%w_.-]+)/([%w_.-]+)$")
-    if not organization or not module or organization == "." or organization == ".."
-        or module == "." or module == ".." then return nil end
+    if not organization then return nil end
+    if not module then return nil end
+    if organization == "." then return nil end
+    if organization == ".." then return nil end
+    if module == "." then return nil end
+    if module == ".." then return nil end
     return name
 end
 
 local function sha(value: unknown): string?
-    if type(value) ~= "string" or #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
+    if type(value) ~= "string" then return nil end
+    if #value ~= 64 then return nil end
+    if not value:match("^[0-9a-f]+$") then return nil end
     return value
 end
 
@@ -106,10 +118,12 @@ local function normalize(raw: unknown): (Payload?, string?)
     if value.schema_revision == M.SCHEMA then schema = M.SCHEMA
     elseif value.schema_revision == M.LEGACY_SCHEMA then schema = M.LEGACY_SCHEMA end
     if not schema then return nil, "migration work schema is invalid" end
-    if not destination or not source then return nil, "migration work identity is invalid" end
-    if type(revision) ~= "number" or revision ~= math.floor(revision) or revision < 0 or revision > 9007199254740991 then
-        return nil, "migration work base revision is invalid"
-    end
+    if not destination then return nil, "migration work identity is invalid" end
+    if not source then return nil, "migration work identity is invalid" end
+    if type(revision) ~= "number" then return nil, "migration work base revision is invalid" end
+    if revision ~= math.floor(revision) then return nil, "migration work base revision is invalid" end
+    if revision < 0 then return nil, "migration work base revision is invalid" end
+    if revision > 9007199254740991 then return nil, "migration work base revision is invalid" end
     if not base_digest then return nil, "migration work base digest is invalid" end
     if not policy_digest then return nil, "migration work policy digest is invalid" end
     if not candidate_digest then return nil, "migration work candidate digest is invalid" end
@@ -131,24 +145,30 @@ local function normalize(raw: unknown): (Payload?, string?)
         local id, target_db = registry_id(item.id), registry_id(item.target_db)
         local ordinal, checksum, package = item.ordinal, sha(item.checksum), package_name(item.package)
         local definition = object(item.definition)
-        if not id or not target_db or type(ordinal) ~= "number" or ordinal ~= math.floor(ordinal)
-            or ordinal < 1 or ordinal > 9007199254740991 or not checksum or not package or not definition then
-            return nil, "migration work contains an invalid migration definition"
-        end
+        if not id then return nil, "migration work contains an invalid migration definition" end
+        if not target_db then return nil, "migration work contains an invalid migration definition" end
+        if type(ordinal) ~= "number" then return nil, "migration work contains an invalid migration definition" end
+        if ordinal ~= math.floor(ordinal) then return nil, "migration work contains an invalid migration definition" end
+        if ordinal < 1 then return nil, "migration work contains an invalid migration definition" end
+        if ordinal > 9007199254740991 then return nil, "migration work contains an invalid migration definition" end
+        if not checksum then return nil, "migration work contains an invalid migration definition" end
+        if not package then return nil, "migration work contains an invalid migration definition" end
+        if not definition then return nil, "migration work contains an invalid migration definition" end
         local key = target_db .. "\n" .. id
         local ordinal_key = target_db .. "\n" .. tostring(ordinal)
-        if seen_migrations[key] or seen_ids[id] or seen_ordinals[ordinal_key] or target_db < previous_target
-            or (target_db == previous_target and (ordinal < previous_ordinal
-                or (ordinal == previous_ordinal and id <= previous_id))) then
-            return nil, "migration work migrations are duplicated or out of order"
-        end
-        if definition.id ~= id or definition.kind ~= "function.lua" then
-            return nil, "migration work definition identity or kind differs"
-        end
+        if seen_migrations[key] then return nil, "migration work migrations are duplicated or out of order" end
+        if seen_ids[id] then return nil, "migration work migrations are duplicated or out of order" end
+        if seen_ordinals[ordinal_key] then return nil, "migration work migrations are duplicated or out of order" end
+        if target_db < previous_target then return nil, "migration work migrations are duplicated or out of order" end
+        if (target_db == previous_target and (ordinal < previous_ordinal
+                or (ordinal == previous_ordinal and id <= previous_id))) then return nil, "migration work migrations are duplicated or out of order" end
+        if definition.id ~= id then return nil, "migration work definition identity or kind differs" end
+        if definition.kind ~= "function.lua" then return nil, "migration work definition identity or kind differs" end
         local meta = object(definition.meta)
-        if not meta or meta.type ~= "migration" or meta.target_db ~= target_db or meta.ordinal ~= ordinal then
-            return nil, "migration work definition metadata differs"
-        end
+        if not meta then return nil, "migration work definition metadata differs" end
+        if meta.type ~= "migration" then return nil, "migration work definition metadata differs" end
+        if meta.target_db ~= target_db then return nil, "migration work definition metadata differs" end
+        if meta.ordinal ~= ordinal then return nil, "migration work definition metadata differs" end
         local validated, artifact_error = artifact.create({definition})
         if not validated then return nil, artifact_error end
         definition = object(validated.entries[1])
@@ -184,9 +204,9 @@ local function normalize(raw: unknown): (Payload?, string?)
         local prefix: string? = nil
         if schema ~= M.LEGACY_SCHEMA and item.table_prefix ~= nil then
             prefix = identifier(item.table_prefix)
-            if not prefix or #prefix > 64 or not prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then
-                return nil, "migration work contains an invalid database prefix"
-            end
+            if not prefix then return nil, "migration work contains an invalid database prefix" end
+            if #prefix > 64 then return nil, "migration work contains an invalid database prefix" end
+            if not prefix:match("^[A-Za-z][A-Za-z0-9_]*$") then return nil, "migration work contains an invalid database prefix" end
         end
         local kind, package, measured = database_kind(item.kind), owner(item.package), sha(item.digest)
         if not target_db then return nil, "migration work database has an invalid logical target" end
@@ -195,15 +215,14 @@ local function normalize(raw: unknown): (Payload?, string?)
         if not package then return nil, "migration work database has no trusted owner" end
         if not measured then return nil, "migration work database has an invalid definition digest" end
         if type(item.planned) ~= "boolean" then return nil, "migration work database has no planned-state evidence" end
-        if seen_targets[target_db] or target_db <= previous_target then
-            return nil, "migration work database targets are duplicated or out of order"
-        end
+        if seen_targets[target_db] then return nil, "migration work database targets are duplicated or out of order" end
+        if target_db <= previous_target then return nil, "migration work database targets are duplicated or out of order" end
         local definition: Object? = nil
         if item.planned then
             definition = object(item.definition)
-            if not definition or definition.id ~= database_id or definition.kind ~= kind then
-                return nil, "planned migration database definition differs"
-            end
+            if not definition then return nil, "planned migration database definition differs" end
+            if definition.id ~= database_id then return nil, "planned migration database definition differs" end
+            if definition.kind ~= kind then return nil, "planned migration database definition differs" end
             local definition_measure, measure_error = definition_digest(definition)
             if not definition_measure then return nil, measure_error end
             if definition_measure ~= measured then return nil, "planned migration database digest differs" end
@@ -214,7 +233,7 @@ local function normalize(raw: unknown): (Payload?, string?)
         elseif item.definition ~= nil then
             return nil, "existing migration database must not carry a package definition"
         end
-        local evidence = table.concat({kind :: string, package :: string, measured,
+        local evidence = table.concat({kind, package, measured,
             item.planned and "1" or "0", definition and assert(canonical.encode(definition, artifact.MAX_BYTES)) or ""}, "\n")
         if physical_evidence[database_id] and physical_evidence[database_id] ~= evidence then
             return nil, "migration work physical database evidence differs"
@@ -240,7 +259,7 @@ local function normalize(raw: unknown): (Payload?, string?)
         if not required_databases[id] then return nil, "migration work contains an unused database " .. id end
     end
     local payload: Payload = {schema_revision = schema, destination_node = destination, source_node = source,
-        base_revision = math.floor(revision :: number), base_digest = base_digest, policy_digest = policy_digest,
+        base_revision = math.floor(revision), base_digest = base_digest, policy_digest = policy_digest,
         candidate_digest = candidate_digest, artifact_digest = artifact_digest, plan_digest = plan_digest,
         migrations = migrations, databases = databases}
     return payload, nil
@@ -250,7 +269,8 @@ local function seal(payload: Payload): (Work?, string?)
     local normalized, normalize_error = normalize(payload)
     if not normalized then return nil, normalize_error end
     local bytes, encode_error = canonical.encode(normalized, M.MAX_BYTES)
-    if not bytes or #bytes > M.MAX_BYTES then return nil, encode_error or "migration work exceeds byte bound" end
+    if not bytes then return nil, encode_error or "migration work exceeds byte bound" end
+    if #bytes > M.MAX_BYTES then return nil, encode_error or "migration work exceeds byte bound" end
     local measured, measure_error = digest(bytes)
     if not measured then return nil, measure_error end
     local work: Work = {schema_revision = normalized.schema_revision, destination_node = normalized.destination_node,
@@ -271,7 +291,8 @@ local function full_artifact(raw: unknown): (artifact.Artifact?, string?)
     if not entries then return nil, decode_error end
     local copied, copy_error = artifact.create(entries)
     if not copied then return nil, copy_error end
-    if copied.bytes ~= value.bytes or copied.digest ~= value.digest then return nil, "migration work artifact changed during capture" end
+    if copied.bytes ~= value.bytes then return nil, "migration work artifact changed during capture" end
+    if copied.digest ~= value.digest then return nil, "migration work artifact changed during capture" end
     return copied, nil
 end
 
@@ -301,7 +322,8 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
         if not entry then return nil, "migration work artifact contains an invalid entry" end
         if entry.kind == "ns.dependency" then return nil, "dependency directives cannot be migration work" end
         local id = registry_id(entry.id)
-        if not id or artifact_entries[id] then return nil, "migration work artifact contains duplicate or invalid IDs" end
+        if not id then return nil, "migration work artifact contains duplicate or invalid IDs" end
+        if artifact_entries[id] then return nil, "migration work artifact contains duplicate or invalid IDs" end
         artifact_entries[id] = entry
     end
     local candidate_entries, entry_error = dense(candidate.entries, "candidate entries", artifact.MAX_ENTRIES)
@@ -312,10 +334,11 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
         local selected = object(raw_entry)
         local id = selected and registry_id(selected.id) or nil
         local full = id and artifact_entries[id] or nil
-        if not selected or not id or selected_ids[id] then
-            return nil, "migration candidate omits or changes an artifact entry"
-        end
-        if not full or selected.kind ~= full.kind then return nil, "migration candidate omits or changes an artifact entry" end
+        if not selected then return nil, "migration candidate omits or changes an artifact entry" end
+        if not id then return nil, "migration candidate omits or changes an artifact entry" end
+        if selected_ids[id] then return nil, "migration candidate omits or changes an artifact entry" end
+        if not full then return nil, "migration candidate omits or changes an artifact entry" end
+        if selected.kind ~= full.kind then return nil, "migration candidate omits or changes an artifact entry" end
         local measured, measure_error = definition_digest(full)
         if not measured then return nil, measure_error end
         if selected.digest ~= measured then return nil, "migration candidate entry digest differs from artifact" end
@@ -329,10 +352,12 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
         migrations_by_key[key] = item
         local entry = artifact_entries[item.id]
         local meta = entry and object(entry.meta) or nil
-        if not entry or entry.kind ~= "function.lua" or not meta or meta.type ~= "migration"
-            or meta.target_db ~= item.target_db or meta.ordinal ~= item.ordinal then
-            return nil, "migration candidate differs from its exact artifact definition: " .. item.id
-        end
+        if not entry then return nil, "migration candidate differs from its exact artifact definition: " .. item.id end
+        if entry.kind ~= "function.lua" then return nil, "migration candidate differs from its exact artifact definition: " .. item.id end
+        if not meta then return nil, "migration candidate differs from its exact artifact definition: " .. item.id end
+        if meta.type ~= "migration" then return nil, "migration candidate differs from its exact artifact definition: " .. item.id end
+        if meta.target_db ~= item.target_db then return nil, "migration candidate differs from its exact artifact definition: " .. item.id end
+        if meta.ordinal ~= item.ordinal then return nil, "migration candidate differs from its exact artifact definition: " .. item.id end
         local measured, measure_error = definition_digest(entry)
         if not measured then return nil, measure_error end
         if measured ~= item.checksum then return nil, "migration checksum differs from its exact artifact definition: " .. item.id end
@@ -364,9 +389,9 @@ function M.capture(candidate: preflight.Candidate, artifact_raw: unknown,
         end
         local database_id = binding and binding.database_id or target_db
         local summary = context.entries[database_id]
-        if not summary or not context.databases[target_db] or not summary.kind:match("^db%.sql%.") then
-            return nil, "migration database is not an admitted host SQL resource: " .. target_db
-        end
+        if not summary then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
+        if not context.databases[target_db] then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
+        if not summary.kind:match("^db%.sql%.") then return nil, "migration database is not an admitted host SQL resource: " .. target_db end
         databases[#databases + 1] = {target_db = target_db, database_id = database_id,
             table_prefix = binding and binding.table_prefix or nil, kind = summary.kind,
             package = summary.package, digest = summary.digest, planned = false, definition = nil}
@@ -397,7 +422,8 @@ function M.decode(bytes_raw: unknown, digest_raw: unknown): (Work?, string?)
         return nil, "migration work bytes exceed bound"
     end
     local bytes = bytes_raw
-    if #bytes == 0 or #bytes > M.MAX_BYTES then return nil, "migration work bytes exceed bound" end
+    if #bytes == 0 then return nil, "migration work bytes exceed bound" end
+    if #bytes > M.MAX_BYTES then return nil, "migration work bytes exceed bound" end
     local recorded = sha(digest_raw)
     if not recorded then return nil, "migration work digest is malformed" end
     local measured, measure_error = digest(bytes)
@@ -406,9 +432,8 @@ function M.decode(bytes_raw: unknown, digest_raw: unknown): (Work?, string?)
     local decoded, decode_error = json.decode(bytes)
     if decode_error then return nil, "migration work bytes are not JSON" end
     local canonical_input, input_error = canonical.encode(decoded, M.MAX_BYTES)
-    if not canonical_input or canonical_input ~= bytes then
-        return nil, input_error or "migration work bytes are not canonical"
-    end
+    if not canonical_input then return nil, input_error or "migration work bytes are not canonical" end
+    if canonical_input ~= bytes then return nil, input_error or "migration work bytes are not canonical" end
     local normalized, normalize_error = normalize(decoded)
     if not normalized then return nil, normalize_error end
     local work: Work = {schema_revision = normalized.schema_revision, destination_node = normalized.destination_node,
@@ -449,42 +474,43 @@ function M.forward_only(applied: unknown, migrations: unknown): (boolean, string
     if type(migrations) ~= "table" then return false, "compensating migrations must be a table" end
     local highest: {[string]: integer} = {}
     local occupied: {[string]: boolean} = {}
-    for key, raw in pairs(applied :: {[string]: unknown}) do
+    for key, raw in pairs(applied) do
         if type(key) ~= "string" then return false, "applied migration keys must be strings" end
         local row = object(raw)
         if not row then return false, "applied migration evidence is malformed" end
         local target, ordinal = registry_id(row.target_db), row.ordinal
-        if not target or type(ordinal) ~= "number" or ordinal ~= math.floor(ordinal) or ordinal < 1 then
-            return false, "applied migration evidence is malformed"
-        end
+        if not target then return false, "applied migration evidence is malformed" end
+        if type(ordinal) ~= "number" then return false, "applied migration evidence is malformed" end
+        if ordinal ~= math.floor(ordinal) then return false, "applied migration evidence is malformed" end
+        if ordinal < 1 then return false, "applied migration evidence is malformed" end
         local id = registry_id(row.id)
         if not id then return false, "applied migration evidence is malformed" end
-        local target_key = target :: string
+        local target_key = target
         local seen = highest[target_key]
         if seen == nil or ordinal > seen then highest[target_key] = ordinal end
         occupied[target_key .. "\n" .. id] = true
     end
     local previous_target, previous_ordinal, previous_id = "", 0, ""
-    for index, raw in ipairs(migrations :: {unknown}) do
+    for index, raw in ipairs(migrations) do
         local item = object(raw)
         if not item then return false, "compensating migration " .. tostring(index) .. " is malformed" end
         local id, target, ordinal = registry_id(item.id), registry_id(item.target_db), item.ordinal
-        if not id or not target or type(ordinal) ~= "number" or ordinal ~= math.floor(ordinal) or ordinal < 1 then
-            return false, "compensating migration identity is invalid"
-        end
+        if not id then return false, "compensating migration identity is invalid" end
+        if not target then return false, "compensating migration identity is invalid" end
+        if type(ordinal) ~= "number" then return false, "compensating migration identity is invalid" end
+        if ordinal ~= math.floor(ordinal) then return false, "compensating migration identity is invalid" end
+        if ordinal < 1 then return false, "compensating migration identity is invalid" end
         if occupied[target .. "\n" .. id] then
             return false, "compensating migration re-runs an applied migration: " .. id
         end
-        local target_key = target :: string
+        local target_key = target
         local floor = highest[target_key]
         if floor ~= nil and ordinal <= floor then
             return false, "compensating migration does not move forward on " .. target .. ": " .. id
         end
-        if target < previous_target
-            or (target == previous_target and (ordinal < previous_ordinal
-                or (ordinal == previous_ordinal and id <= previous_id))) then
-            return false, "compensating migrations are duplicated or out of order"
-        end
+        if target < previous_target then return false, "compensating migrations are duplicated or out of order" end
+        if (target == previous_target and (ordinal < previous_ordinal
+                or (ordinal == previous_ordinal and id <= previous_id))) then return false, "compensating migrations are duplicated or out of order" end
         previous_target, previous_ordinal, previous_id = target, ordinal, id
     end
     return true, nil
@@ -505,12 +531,12 @@ function M.verify(raw: unknown, candidate: preflight.Candidate, artifact_raw: un
     local normalized, normalize_error = normalize(payload)
     if not normalized then return false, normalize_error end
     local supplied_bytes, encode_error = canonical.encode(normalized, M.MAX_BYTES)
-    if not supplied_bytes or supplied_bytes ~= bytes then return false, encode_error or "migration work fields differ from its bytes" end
+    if not supplied_bytes then return false, encode_error or "migration work fields differ from its bytes" end
+    if supplied_bytes ~= bytes then return false, encode_error or "migration work fields differ from its bytes" end
     local expected, capture_error = M.capture(candidate, artifact_raw, context)
     if not expected then return false, capture_error end
-    if expected.bytes ~= decoded.bytes or expected.digest ~= decoded.digest then
-        return false, "migration work differs from the destination candidate, artifact or context"
-    end
+    if expected.bytes ~= decoded.bytes then return false, "migration work differs from the destination candidate, artifact or context" end
+    if expected.digest ~= decoded.digest then return false, "migration work differs from the destination candidate, artifact or context" end
     return true, nil
 end
 

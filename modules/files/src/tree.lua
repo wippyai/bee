@@ -3,6 +3,7 @@
 -- Only navigates permitted workspace trees and never accesses private .wippy state.
 local protocol = require("protocol")
 local gitignore = require("gitignore")
+local source = require("source")
 
 local M = {}
 
@@ -23,9 +24,9 @@ type Node = {
 }
 
 type Tree = {
-    volume: unknown,
+    source: source.Source,
     root: Node,
-    matcher: unknown,
+    matcher: gitignore.Matcher,
 }
 
 type TreeRow = {
@@ -53,25 +54,19 @@ local function new_node(name: string, path: string, is_dir: boolean, depth: inte
     }
 end
 
--- Creates a new tree anchored at root_path in the given volume.
-function M.new(volume: unknown, root_path: string?, matcher: gitignore.Matcher?): Tree
+-- Creates a new tree anchored at root_path in the given file source.
+function M.new(files: source.Source, root_path: string?, matcher: gitignore.Matcher?): Tree
     local clean_root = root_path and protocol.verify_path(root_path) or ""
     local gm = matcher or gitignore.new("")
 
     -- If root has .gitignore, read it
-    local vol = volume :: any
-    if vol and vol.readfile then
-        local gi_path = clean_root == "" and ".gitignore" or clean_root .. "/.gitignore"
-        local content, err = vol:readfile(gi_path)
-        if type(content) == "string" and not err then
-            gm:add_rules(content, clean_root)
-        end
-    end
+    local content = files.read(clean_root == "" and ".gitignore" or clean_root .. "/.gitignore")
+    if content then gm:add_rules(content, clean_root) end
 
     local root = new_node(clean_root == "" and "workspace" or clean_root, clean_root, true, -1, nil)
 
     return {
-        volume = volume,
+        source = files,
         root = root,
         matcher = gm,
     }
@@ -84,50 +79,32 @@ function M.expand(tree: Tree, node: Node): boolean
     end
 
     if not node.loaded then
-        local vol = tree.volume :: any
-        if not vol or not vol.readdir then
-            node.loaded = true
-            node.expanded = true
-            return true
-        end
-
         -- Check for a sub-directory .gitignore
-        if node.path ~= "" and vol.readfile then
-            local gi_path = node.path .. "/.gitignore"
-            local content, err = vol:readfile(gi_path)
-            if content and not err then
-                tree.matcher:add_rules(content, node.path)
-            end
+        if node.path ~= "" then
+            local content = tree.source.read(node.path .. "/.gitignore")
+            if content then tree.matcher:add_rules(content, node.path) end
         end
 
-        local iterator, iterator_state = vol:readdir(node.path == "" and "." or node.path)
+        -- An unreadable directory loads with no children.
+        local entries = tree.source.list(node.path == "" and "." or node.path, MAX_ENTRIES_PER_DIR + 1)
         local dirs: {Node} = {}
         local files: {Node} = {}
-        local count = 0
-
-        if iterator then
-            for entry in iterator, iterator_state do
-                count = count + 1
-                if count > MAX_ENTRIES_PER_DIR then
+        if entries then
+            for index, entry in ipairs(entries) do
+                if index > MAX_ENTRIES_PER_DIR then
                     node.truncated = true
                     break
                 end
-
-                local entry_name = entry.name
-                if type(entry_name) == "string" and entry_name ~= "." and entry_name ~= ".." then
-                    local child_path = node.path == "" and entry_name or node.path .. "/" .. entry_name
+                local name: string = entry.name
+                if name ~= "." and name ~= ".." then
+                    local child_path: string = node.path == "" and name or node.path .. "/" .. name
                     local verified, err = protocol.verify_path(child_path)
-                    local is_directory = entry.type == "directory"
-
-                    if verified and not err then
-                        -- Check gitignore
-                        if not tree.matcher:ignored(child_path, is_directory) then
-                            local child = new_node(entry_name, child_path, is_directory, node.depth + 1, node)
-                            if is_directory then
-                                dirs[#dirs + 1] = child
-                            else
-                                files[#files + 1] = child
-                            end
+                    if verified and not err and not tree.matcher:ignored(child_path, entry.directory) then
+                        local child = new_node(name, child_path, entry.directory, node.depth + 1, node)
+                        if entry.directory then
+                            dirs[#dirs + 1] = child
+                        else
+                            files[#files + 1] = child
                         end
                     end
                 end

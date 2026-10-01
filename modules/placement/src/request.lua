@@ -55,10 +55,10 @@ local function decode_grant(value: unknown, index: integer): (types.ResourceGran
     local subpath, subpath_error = M.subpath(object.subpath == nil and "" or object.subpath)
     if not subpath then return nil, "resources[" .. tostring(index) .. "]: " .. tostring(subpath_error) end
     local access = bounds.member(object.access, types.ACCESS)
-    if not access then return nil, "resources[" .. tostring(index) .. "].access must be read or write" end
+    if access ~= "read" and access ~= "write" then return nil, "resources[" .. tostring(index) .. "].access must be read or write" end
     local purpose = bounds.member(object.purpose, types.PURPOSES)
-    if not purpose then return nil, "resources[" .. tostring(index) .. "].purpose is not one placement knows" end
-    return {name = name, grant_ref = grant_ref, root_ref = root_ref, subpath = subpath, access = access :: types.Access, purpose = purpose :: types.Purpose}, nil
+    if purpose ~= "project" and purpose ~= "output" and purpose ~= "cache" and purpose ~= "session" then return nil, "resources[" .. tostring(index) .. "].purpose is not one placement knows" end
+    return {name = name, grant_ref = grant_ref, root_ref = root_ref, subpath = subpath, access = access, purpose = purpose}, nil
 end
 local function decode_files(value: unknown, field: string, nonempty: boolean): ({driver_types.RequiredFile}?, string?)
     local raw, array_error = bounds.array(value, M.MAX_REQUIRED_FILES)
@@ -285,7 +285,7 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     if object.stdin_eof ~= nil then
         if type(object.stdin_eof) ~= "boolean" then return nil, "launch.stdin_eof must be a boolean" end
         if object.stdin_eof == true and not stdin then return nil, "launch.stdin_eof needs launch.stdin" end
-        stdin_eof = object.stdin_eof :: boolean
+        stdin_eof = object.stdin_eof
     end
     local session_end: string? = nil
     if object.session_end ~= nil then
@@ -498,10 +498,15 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
         session_ref = bounds.id(object.session_ref)
         if not session_ref then return nil, "session_ref is not an identifier" end
     end
-    local required = bounds.member(object.required_cleanup, types.CAPABILITIES)
-    if not required then return nil, "required_cleanup must name a cleanup capability" end
+    local required = object.required_cleanup
+    local required_cleanup: types.Capability? = nil
+    if required == "direct_process" then required_cleanup = "direct_process"
+    elseif required == "process_group" then required_cleanup = "process_group"
+    elseif required == "contained_tree" then required_cleanup = "contained_tree" end
+    if not required_cleanup then return nil, "required_cleanup must name a cleanup capability" end
     local observation = bounds.member(object.required_exit_observation == nil and "independent" or object.required_exit_observation, types.EXIT_OBSERVATIONS)
-    if not observation then return nil, "required_exit_observation must be independent or eof_gated" end
+    if observation ~= "independent" and observation ~= "eof_gated" then return nil, "required_exit_observation must be independent or eof_gated" end
+    local required_observation: types.ExitObservation = observation
     local timeouts, timeouts_error = decode_timeouts(object.timeouts)
     if not timeouts then return nil, timeouts_error end
     local options, options_error = M.decode_options(object.options)
@@ -510,7 +515,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
         preferences = selected,
         binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_profile_ref = placement_profile_ref, placement_profile_digest = placement_profile_digest, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
-        required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts, options = options}
+        required_cleanup = required_cleanup, required_exit_observation = required_observation, timeouts = timeouts, options = options}
     return decoded, nil
 end
 -- The canonical digest of a decoded request: two requests with one

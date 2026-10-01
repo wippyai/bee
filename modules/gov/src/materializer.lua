@@ -13,29 +13,29 @@ local capability_files = require("capability_files")
 local M = {}
 
 type Entry = {[string]: unknown}
-type Snapshot = {
-    entries: (Snapshot) -> ({unknown}?, unknown?),
-    changes: (Snapshot) -> unknown,
-}
 type Changes = {
     create: (Changes, Entry) -> (unknown?, unknown?),
     update: (Changes, Entry) -> (unknown?, unknown?),
     delete: (Changes, string) -> (unknown?, unknown?),
     apply: (Changes) -> (unknown?, unknown?),
 }
-type Open = (string) -> (unknown?, unknown?)
+type Snapshot = {
+    entries: (Snapshot) -> ({unknown}?, unknown?),
+    changes: (Snapshot) -> Changes?,
+}
+type Open = (string) -> (Snapshot?, unknown?)
 type Conflict = (unknown) -> boolean
 
 local function encoded(value: unknown): (string?, string?)
     if type(value) ~= "table" then return nil, "registry entry is not an object" end
-    local source = value :: Entry
+    local source = value
     local normalized: Entry = {}
     for field, item in pairs(source) do normalized[field] = item end
     -- The registry's author-facing snapshot always emits an empty metadata
     -- object. Treat omitted metadata in an artifact as that same canonical
     -- default; every non-default field remains byte-for-byte significant.
     if normalized.meta == nil
-        or (type(normalized.meta) == "table" and next(normalized.meta :: table) == nil) then
+        or (type(normalized.meta) == "table" and next(normalized.meta) == nil) then
         normalized.meta = table.create(0, 1)
     end
     local result, err = canonical.encode(normalized, artifact.MAX_BYTES)
@@ -49,7 +49,7 @@ local function current_entries(snapshot: Snapshot): ({[string]: Entry}?, string?
     local result: {[string]: Entry} = {}
     for _, raw in ipairs(rows) do
         if type(raw) ~= "table" then return nil, "governance overlay contains a malformed entry" end
-        local row = raw :: Entry
+        local row = raw
         local id = bounds.id(row.id)
         if not id then return nil, "governance overlay contains an invalid entry id" end
         if result[id] then return nil, "governance overlay contains duplicate entry " .. id end
@@ -61,12 +61,12 @@ end
 local function stage(snapshot: Snapshot, desired: {Entry}): (Changes?, boolean?, string?)
     local current, current_error = current_entries(snapshot)
     if not current then return nil, nil, current_error end
-    local changes = snapshot:changes() :: Changes
+    local changes = snapshot:changes()
     if not changes then return nil, nil, "open governance overlay changes" end
     local wanted: {[string]: boolean} = {}
     local changed = false
     for _, entry in ipairs(desired) do
-        local id = entry.id :: string
+        local id = entry.id
         wanted[id] = true
         local present = current[id]
         if not present then
@@ -105,7 +105,7 @@ local function matches_snapshot(snapshot: Snapshot, desired: {Entry}): (boolean?
         return false, nil
     end
     for _, entry in ipairs(desired) do
-        local present = current[entry.id :: string]
+        local present = current[entry.id]
         if not present then return false, nil end
         local before, before_error = encoded(present)
         local after, after_error = encoded(entry)
@@ -119,7 +119,7 @@ end
 -- a publishable application artifact. Measure it with the artifact envelope
 -- without weakening artifact.create's nonempty publication contract.
 local function desired(raw: unknown): ({Entry}?, string?, string?)
-    if type(raw) == "table" and next(raw :: table) == nil then
+    if type(raw) == "table" and next(raw) == nil then
         local entries: {Entry} = {}
         local bytes, encode_error = canonical.encode({schema_revision = artifact.SCHEMA,
             entries = canonical.empty_like(raw)}, artifact.MAX_BYTES)
@@ -171,7 +171,7 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             return nil, nil, nil, "generated capability entries are invalid"
         end
         local volume_ids: {[string]: boolean} = {}
-        for _, raw_volume in ipairs((volumes or {}) :: {unknown}) do
+        for _, raw_volume in ipairs((volumes or {})) do
             local volume = bounds.object(raw_volume)
             local id = volume and bounds.id(volume.id) or nil
             local config = volume and bounds.object(volume.data) or nil
@@ -183,7 +183,7 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
                 or (config.readonly and config.auto_init) then
                 return nil, nil, nil, "generated capability volume is invalid"
             end
-            local location: string = directory :: string
+            local location: string = directory
             if location == "." or location == "/" then
                 return nil, nil, nil, "generated capability volume exposes private state"
             end
@@ -197,7 +197,7 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             complete[#complete + 1] = volume
         end
         local database_ids: {[string]: boolean} = {}
-        for _, raw_database in ipairs((databases or {}) :: {unknown}) do
+        for _, raw_database in ipairs((databases or {})) do
             local database = bounds.object(raw_database)
             local id = database and bounds.id(database.id) or nil
             local database_config = database and bounds.object(database.data) or nil
@@ -211,7 +211,7 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             complete[#complete + 1] = database
         end
         local policy_ids: {[string]: boolean} = {}
-        for _, raw_policy in ipairs(policies :: {unknown}) do
+        for _, raw_policy in ipairs(policies) do
             local policy = bounds.object(raw_policy)
             local id = policy and bounds.id(policy.id) or nil
             if not id or (not id:match("^bee%.gov%.grants:policy%.[0-9a-f]+$")
@@ -224,12 +224,12 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             local inner = data and bounds.object(data.policy) or nil
             local resources = inner and inner.resources or nil
             if type(resources) == "table" then
-                for _, resource in ipairs(resources :: {unknown}) do
+                for _, resource in ipairs(resources) do
                     if type(resource) == "string"
-                        and ((resource :: string):match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
-                            or (resource :: string):match("^bee%.gov%.grants:database%.[0-9a-f]+$"))
-                        and not volume_ids[resource :: string]
-                        and not database_ids[resource :: string] then
+                        and ((resource):match("^bee%.gov%.grants:volume%.[0-9a-f]+$")
+                            or (resource):match("^bee%.gov%.grants:database%.[0-9a-f]+$"))
+                        and not volume_ids[resource]
+                        and not database_ids[resource] then
                         return nil, nil, nil, "generated capability policy references an absent resource"
                     end
                 end
@@ -237,7 +237,7 @@ local function composed(raw: unknown, admission_raw: unknown, generated_raw: unk
             complete[#complete + 1] = policy
         end
         local requirement_ids: {[string]: boolean} = {}
-        for _, raw_binding in ipairs(bindings :: {unknown}) do
+        for _, raw_binding in ipairs(bindings) do
             local binding = bounds.object(raw_binding)
             local requirement_id = binding and bounds.id(binding.requirement_id) or nil
             local policy_id = binding and bounds.id(binding.policy_id) or nil
@@ -282,7 +282,7 @@ local function reconcile_wanted_with(open: Open, conflict: Conflict, owner_raw: 
     if not owner then return nil, "governance overlay owner is invalid" end
     local raw_snapshot, open_error = open(owner)
     if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
-    local snapshot = raw_snapshot :: Snapshot
+    local snapshot = raw_snapshot
     local changes, changed, stage_error = stage(snapshot, wanted)
     if not changes or changed == nil then return nil, stage_error end
     if not changed then
@@ -305,7 +305,7 @@ local function matches_wanted_with(open: Open, owner_raw: unknown, wanted: {Entr
     if not owner then return nil, "governance overlay owner is invalid" end
     local raw_snapshot, open_error = open(owner)
     if not raw_snapshot then return nil, tostring(open_error or "open governance overlay") end
-    return matches_snapshot(raw_snapshot :: Snapshot, wanted)
+    return matches_snapshot(raw_snapshot, wanted)
 end
 
 function M.reconcile_with(open: Open, conflict: Conflict, owner_raw: unknown, entries_raw: unknown): ({[string]: unknown}?, string?)
@@ -334,13 +334,31 @@ function M.matches_composed_with(open: Open, owner_raw: unknown, entries_raw: un
     return matches_wanted_with(open, owner_raw, complete)
 end
 
-local function open(owner: string): (unknown?, unknown?)
-    return registry.overlay(owner)
+local function open(owner: string): (Snapshot?, unknown?)
+    local snapshot, open_error = registry.overlay(owner)
+    if not snapshot then return nil, open_error end
+    local function input(entry: Entry): {id: string, kind: string, meta: Entry, data: Entry, dependency_root: boolean}
+        local id, kind = bounds.id(entry.id), bounds.id(entry.kind)
+        assert(id and kind, "registry entry identity is invalid")
+        return {id = assert(id), kind = assert(kind), meta = bounds.object(entry.meta) or {}, data = assert(bounds.object(entry.data)), dependency_root = entry.dependency_root == true}
+    end
+    local function changes(_self: Snapshot): Changes?
+        local native = snapshot:changes()
+        if not native then return nil end
+        return {
+            create = function(_self: Changes, entry: Entry): (unknown?, unknown?) return native:create(input(entry)) end,
+            update = function(_self: Changes, entry: Entry): (unknown?, unknown?) return native:update(input(entry)) end,
+            delete = function(_self: Changes, id: string): (unknown?, unknown?) return native:delete(id) end,
+            apply = function(_self: Changes): (unknown?, unknown?) return native:apply() end,
+        }
+    end
+    return {entries = function(_self: Snapshot): ({unknown}?, unknown?) return snapshot:entries() end,
+        changes = changes}, nil
 end
 
 local function conflict(err: unknown): boolean
     if (type(err) ~= "userdata" and type(err) ~= "table") or errors == nil or errors.CONFLICT == nil then return false end
-    local value = err :: any
+    local value = err
     return value:kind() == errors.CONFLICT
 end
 

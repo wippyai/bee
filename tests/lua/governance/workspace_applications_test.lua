@@ -42,7 +42,7 @@ local function define_tests()
             for _, name in ipairs({"Tally", "2tally", "tally-app", "tally.app", "", string.rep("a", 49)}) do
                 local identity, refused = naming.identity(WORKSPACE, name)
                 test.is_nil(identity)
-                test.not_nil(string.find(refused :: string, "app.<overlay_id>:app", 1, true))
+                test.not_nil((string.find(refused :: string, "app.<overlay_id>:app", 1, true)))
             end
         end)
     end)
@@ -72,11 +72,11 @@ local function define_tests()
             test.is_true(profile.kinds["process.lua"] and profile.kinds["library.lua"])
             test.is_nil(profile.kinds["security.policy"])
             test.is_true(profile.modules.tty)
-            test.is_nil(next(profile.grants))
+            test.is_nil((next(profile.grants)))
             -- An application under the default rule runs only when the app
             -- broker launches it; nothing in it starts on its own.
             test.is_false(profile.auto_start)
-            test.is_nil(next(profile.databases))
+            test.is_nil((next(profile.databases)))
             local applications = profile.applications :: {Object}
             test.eq(#applications, 1)
             test.eq(applications[1].definition_id, "app.tally:app")
@@ -139,28 +139,28 @@ local function define_tests()
             local hijack, hijack_refusal = profiles.select(config, WORKSPACE, "node-remote", "tally", nil, nil,
                 nil, NODE)
             test.is_nil(hijack)
-            test.not_nil(string.find(hijack_refusal :: string, "cannot replace it", 1, true))
+            test.not_nil((string.find(hijack_refusal :: string, "cannot replace it", 1, true)))
             local displaced, displaced_refusal = profiles.select(config, WORKSPACE, NODE, "tally", nil, nil, nil,
                 "node-remote")
             test.is_nil(displaced)
-            test.not_nil(string.find(displaced_refusal :: string, "installed from node node-remote", 1, true))
+            test.not_nil((string.find(displaced_refusal :: string, "installed from node node-remote", 1, true)))
             local closed = configured()
             local closed_rule = closed.workspace_applications :: Object
             closed_rule.hive = false
             local refused, refusal = profiles.select(
                 assert(profiles.configuration(closed, NODE)), WORKSPACE, "node-remote", "tally")
             test.is_nil(refused)
-            test.not_nil(string.find(refusal :: string, "bee.env:gov_activation_profiles", 1, true))
+            test.not_nil((string.find(refusal :: string, "bee.env:gov_activation_profiles", 1, true)))
         end)
         test.it("grants nothing to an ineligible name or a missing rule", function()
             local config = assert(profiles.configuration(configured(), NODE))
             local invalid, invalid_refusal = profiles.select(config, WORKSPACE, NODE, "Tally App")
             test.is_nil(invalid)
-            test.not_nil(string.find(invalid_refusal :: string, "app.<overlay_id>", 1, true))
+            test.not_nil((string.find(invalid_refusal :: string, "app.<overlay_id>", 1, true)))
             local disabled = assert(profiles.configuration({profiles = {}}, NODE))
             local none, none_refusal = profiles.select(disabled, WORKSPACE, NODE, "tally")
             test.is_nil(none)
-            test.not_nil(string.find(none_refusal :: string, "no activation profile for overlay tally", 1, true))
+            test.not_nil((string.find(none_refusal :: string, "no activation profile for overlay tally", 1, true)))
         end)
         test.it("keeps an explicit host row ahead of the rule", function()
             local config = configured()
@@ -228,7 +228,7 @@ local function define_tests()
                     namespaces = {"vendor.app"}, kinds = {"process.lua"}, databases = {}, grants = {grant}, modules = {},
                     auto_start = false}})}}, NODE)
                 test.is_nil(refused)
-                test.not_nil(string.find(refusal :: string, "may not grant", 1, true))
+                test.not_nil((string.find(refusal :: string, "may not grant", 1, true)))
             end
             -- An ordinary row may still carry what a super-edit row may not.
             local allowed = assert(profiles.configuration({profiles = {{workspace_id = WORKSPACE, source_node = NODE,

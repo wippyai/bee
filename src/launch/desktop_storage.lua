@@ -68,7 +68,7 @@ function M.start(request: Request): (Pending?, string?)
     if not future then return nil, tostring(err) end
     -- The pinned manifest exposes this native response channel as any. Its
     -- payload remains unknown until complete validates the function reply.
-    return {request = request, future = future, response = future:response() :: Channel<unknown>, deadline = time.after("5s")}
+    return {request = request, future = future, response = future:response(), deadline = time.after("5s")}
 end
 function M.complete(pending: Pending): Reply
     local result, err = pending.future:result()

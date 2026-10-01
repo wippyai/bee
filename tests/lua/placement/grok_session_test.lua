@@ -194,14 +194,13 @@ local function define_tests()
 end
 local cases = test.run_cases(define_tests)
 return {run = function(options)
-    local originals: {{[string]: unknown}} = {}
-    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.credentials:credential_sources",
-        "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy"}) do
-        originals[#originals + 1] = assert(registry.get(ref))
-    end
+    local before = assert(registry.snapshot())
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
-    for _, entry in ipairs(originals) do changes:update(entry) end
+    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.credentials:credential_sources",
+        "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy"}) do
+        changes:update(assert(before:get(ref)))
+    end
     assert(changes:apply())
     if not ok then error(tostring(result)) end
     return result

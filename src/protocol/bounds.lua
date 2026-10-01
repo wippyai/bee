@@ -94,7 +94,7 @@ end
 function M.object(value: unknown): {[string]: unknown}?
     if type(value) ~= "table" then return nil end
     for key in pairs(value) do if type(key) ~= "string" then return nil end end
-    return value :: {[string]: unknown}
+    return value
 end
 
 function M.optional_id(value: {[string]: unknown}, name: string): (string?, boolean)

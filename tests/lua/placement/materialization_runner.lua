@@ -10,6 +10,7 @@ local store = require("store")
 local materialization = require("materialization")
 local observe = require("observe")
 local types = require("types")
+local bounds = require("bounds")
 local M = {}
 local CLAIMED = "bee.test.runner.claimed"
 local PREPARED = "bee.test.runner.prepared"
@@ -19,8 +20,7 @@ local TIMEOUT = "30s"
 type Job = {attempt_id: string, generation: integer, request: types.LaunchRequest, reply_to: string,
     claim_as: string?, inject_binding_failure: string?}
 type Runner = {pid: string, attempt_id: string}
--- The prepared configuration crosses the process boundary from the trusted
--- test runner as a value with the materialization's shape.
+-- The prepared configuration the runner reports, decoded at the boundary.
 type Prepared = {environment: {[string]: string}, working_directory: string, arguments: {string}, home_path: string}
 type Outcome = {prepared: Prepared?, error: string?, observed: {[string]: unknown}}
 
@@ -63,7 +63,8 @@ local function await(replies: Channel<process.Message>, topic: string, attempt_i
         local selected = channel.select({replies:case_receive(), deadline:case_receive()})
         if selected.channel == deadline then process.unlisten(replies); error("materialization runner did not answer " .. topic) end
         local data = selected.value:payload():data()
-        if type(data) == "table" and data.attempt_id == attempt_id then found = data :: {[string]: unknown} end
+        local object = bounds.object(data)
+        if object and object.attempt_id == attempt_id then found = object end
     end
     process.unlisten(replies)
     return assert(found)
@@ -82,6 +83,26 @@ function M.claim(entry: string, request: types.LaunchRequest, generation: intege
     return {pid = tostring(pid), attempt_id = request.attempt_id}
 end
 
+local function decode_prepared(raw: unknown): Prepared?
+    local object = bounds.object(raw)
+    local environment_raw = object and bounds.object(object.environment)
+    local arguments_raw = object and bounds.array(object.arguments, 256)
+    if not object or not environment_raw or not arguments_raw then return nil end
+    local working_directory, home_path = object.working_directory, object.home_path
+    if type(working_directory) ~= "string" or type(home_path) ~= "string" then return nil end
+    local environment: {[string]: string} = {}
+    for name, value in pairs(environment_raw) do
+        if type(value) ~= "string" then return nil end
+        environment[name] = value
+    end
+    local arguments: {string} = {}
+    for index, value in ipairs(arguments_raw) do
+        if type(value) ~= "string" then return nil end
+        arguments[index] = value
+    end
+    return {environment = environment, working_directory = working_directory, arguments = arguments, home_path = home_path}
+end
+
 -- Runs the claimed runner's prepare and returns its outcome.
 function M.prepare(runner: Runner): Outcome
     local replies = assert(process.listen(PREPARED, {message = true}))
@@ -90,9 +111,8 @@ function M.prepare(runner: Runner): Outcome
     local prepared = reply.prepared
     local failure = reply.error
     local observed = reply.observed
-    return {prepared = type(prepared) == "table" and prepared :: Prepared or nil,
-        error = type(failure) == "string" and failure or nil,
-        observed = type(observed) == "table" and observed :: {[string]: unknown} or {}}
+    return {prepared = decode_prepared(prepared), error = type(failure) == "string" and failure or nil,
+        observed = bounds.object(observed) or {}}
 end
 
 function M.release(runner: Runner)

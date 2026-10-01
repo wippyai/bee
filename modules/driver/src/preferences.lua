@@ -32,14 +32,14 @@ local RESERVED_OPTIONS: {[string]: boolean} = {
 local function scalar(value: unknown, label: string): (Scalar?, string?)
     local kind = type(value)
     if kind == "string" then
-        local text = value :: string
+        local text = value
         if #text > M.MAX_OPTION_VALUE_BYTES or text:find("%c") then
             return nil, label .. " must contain at most 512 printable bytes"
         end
         return text, nil
     end
     if kind == "number" then
-        local number = value :: number
+        local number = value
         if number ~= number or number == math.huge or number == -math.huge then
             return nil, label .. " must be finite"
         end
@@ -78,7 +78,7 @@ end
 
 local function decode_allowed(value: unknown, name: string): ({Scalar}?, string?)
     if type(value) ~= "table" then return nil, "profile_options." .. name .. " must be a list" end
-    local list = value :: {unknown}
+    local list = value
     local count = 0
     local highest = 0
     for key in pairs(list) do
@@ -104,7 +104,7 @@ local function decode_option(value: unknown, name: string): (Option?, string?)
     if type(value) ~= "table" then
         return nil, "profile_options." .. name .. " must be an enum list or descriptor"
     end
-    local object = value :: {[string]: unknown}
+    local object = value
     if object.kind == nil then
         local values, values_error = decode_allowed(value, name)
         if not values then return nil, values_error end

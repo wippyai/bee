@@ -43,7 +43,7 @@ end
 local function object(value: unknown): {[string]: unknown}?
     if type(value) ~= "table" then return nil end
     for key in pairs(value) do if type(key) ~= "string" then return nil end end
-    return value :: {[string]: unknown}
+    return value
 end
 local function fields(value: {[string]: unknown}, allowed: {string}): string?
     local known: {[string]: boolean} = {}
@@ -86,7 +86,7 @@ local function query_one(tx: sql.Transaction, statement: string, params: {unknow
     local rows, query_error = tx:query(statement, params)
     if query_error or not rows then return nil, storage(query_error, "read " .. label) end
     if #rows > 1 then return nil, failure("INTERNAL", label .. " rows are corrupt") end
-    return rows[1] :: {[string]: unknown}?, nil
+    return rows[1], nil
 end
 local function feed_row(row: {[string]: unknown}?): (Feed?, Result?)
     if not row then return nil, nil end
@@ -249,7 +249,7 @@ function M.read_after_in(store: Store, tx: sql.Transaction, feed_raw: unknown, c
     local cursor = bounds.count(cursor_raw, 9007199254740991)
     local parsed_limit = bounds.count(limit_raw, bounds.MAX_PAGE)
     if not feed or cursor == nil or parsed_limit == nil or parsed_limit < 1 then return failure("INVALID_ARGUMENT", "feed, cursor and limit are invalid") end
-    local limit = parsed_limit :: integer
+    local limit = parsed_limit
     local head, head_error = feed_for_read(store, tx, feed)
     if not head then return head_error or failure("INTERNAL", "read sync feed") end
     if cursor > head.head then return failure("INVALID_ARGUMENT", "cursor is ahead of the feed") end
@@ -268,7 +268,7 @@ function M.read_after_in(store: Store, tx: sql.Transaction, feed_raw: unknown, c
         local event, event_error = event_value(store, feed, row)
         if not event then return event_error or failure("INTERNAL", "decode sync event") end
         events[#events + 1] = event
-        last = event.sequence :: integer
+        last = event.sequence
     end
     return shared.success({schema = "bee.sync-page@1", owner_id = store.owner, feed = feed, events = events, next_cursor = last,
         more = more, head_cursor = head.head, earliest_cursor = head.earliest - 1, reset_required = false}, false)
@@ -283,7 +283,7 @@ function M.snapshot_in(store: Store, tx: sql.Transaction, feed_raw: unknown, lim
     local after = after_raw == nil and "" or bounds.id(after_raw)
     local parsed_limit = bounds.count(limit_raw, bounds.MAX_PAGE)
     if not feed or not after or parsed_limit == nil or parsed_limit < 1 then return failure("INVALID_ARGUMENT", "snapshot feed, after_key or limit is invalid") end
-    local limit = parsed_limit :: integer
+    local limit = parsed_limit
     local head, head_error = feed_for_read(store, tx, feed)
     if not head then return head_error or failure("INTERNAL", "read sync feed") end
     if expected_cursor_raw ~= nil then

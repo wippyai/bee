@@ -37,6 +37,7 @@ entries:
     materialization: bee.placement.native.service:materialization
     observe: bee.placement.native:runner_observation
     types: bee.placement:types
+    bounds: bee.protocol:bounds
 - name: materialization_runner_process
   kind: process.lua
   source: file://materialization_runner.lua
@@ -48,6 +49,7 @@ entries:
     materialization: bee.placement.native.service:materialization
     observe: bee.placement.native:runner_observation
     types: bee.placement:types
+    bounds: bee.protocol:bounds
 - name: apply_test_policy
   kind: security.policy
   meta: {type: test_support}

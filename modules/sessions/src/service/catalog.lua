@@ -141,7 +141,7 @@ local function profile_rows(workspace: string): ({ProfileRow}?, integer?, Fault?
             rows[#rows + 1] = row
         end
         if page.complete then return rows, expected_cursor, nil end
-        after_key = page.next_key :: string
+        after_key = page.next_key
         if page_number == M.MAX_PROFILE_PAGES then
             return rows, expected_cursor, fault("UNAVAILABLE", "Saved profile snapshot exceeds its page bound.", "refresh")
         end
@@ -244,7 +244,7 @@ local function valid_cursor(value: unknown): integer?
     if not digits then return nil end
     local offset = tonumber(digits)
     if not offset or offset < 0 or offset ~= math.floor(offset) or offset > 1000000 then return nil end
-    return offset
+    return math.floor(offset)
 end
 
 function M.list(raw: unknown, workspace: string): (locate.Page?, Fault?)
@@ -274,7 +274,7 @@ function M.list(raw: unknown, workspace: string): (locate.Page?, Fault?)
 
     if kind == nil or kind == "definition" then
         local found, find_error = pinned:find({["meta.type"] = definition.TYPE})
-        if find_error or not found then return nil, fault("UNAVAILABLE", find_error or "Launch definitions could not be read.", "refresh") end
+        if find_error or not found then return nil, fault("UNAVAILABLE", find_error and tostring(find_error) or "Launch definitions could not be read.", "refresh") end
         if #found > M.MAX_DEFINITIONS then return nil, fault("UNAVAILABLE", "Launch definition catalog exceeds its bound.", "refresh") end
         for _, raw_entry in ipairs(found) do
             local entry = object(raw_entry)

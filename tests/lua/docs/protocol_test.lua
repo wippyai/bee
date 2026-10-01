@@ -74,8 +74,8 @@ local function define_tests()
             local properties = schema.properties :: {[string]: unknown}
             local limit = properties.limit :: {[string]: unknown}
             test.eq(limit.maximum, protocol.MAX_READ_BYTES)
-            test.not_nil(string.find(limit.description :: string, tostring(protocol.MAX_LIST), 1, true))
-            test.not_nil(string.find(limit.description :: string, tostring(protocol.MAX_RESULTS), 1, true))
+            test.not_nil((string.find(limit.description :: string, tostring(protocol.MAX_LIST), 1, true)))
+            test.not_nil((string.find(limit.description :: string, tostring(protocol.MAX_RESULTS), 1, true)))
             test.is_true(#(schema.examples :: {unknown}) >= 3)
         end)
     end)

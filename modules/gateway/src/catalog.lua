@@ -57,11 +57,11 @@ local function valid_schema(value: unknown, depth: integer, applicator: boolean)
     for _, key in ipairs(SCHEMA_LISTS) do
         if schema[key] ~= nil then
             local branches = schema[key]
-            if type(branches) ~= "table" or #(branches :: {unknown}) == 0 then return false end
+            if type(branches) ~= "table" or #(branches) == 0 then return false end
             local count = 0
-            for _ in pairs(branches :: {[unknown]: unknown}) do count = count + 1 end
-            if count ~= #(branches :: {unknown}) then return false end
-            for _, branch in ipairs(branches :: {unknown}) do
+            for _ in pairs(branches) do count = count + 1 end
+            if count ~= #(branches) then return false end
+            for _, branch in ipairs(branches) do
                 if not valid_schema(branch, depth + 1, true) then return false end
             end
         end

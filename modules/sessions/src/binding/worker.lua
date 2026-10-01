@@ -9,7 +9,7 @@ type Object = {[string]: unknown}
 
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
-    return value :: Object
+    return value
 end
 
 local function fault_code(message: string): string

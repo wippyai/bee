@@ -144,7 +144,7 @@ local function retained_content(vol: fs.FS, path: string, content: string): stri
     while #found <= M.MAX_REPLAY_BYTES do
         local chunk: unknown = file:read(math.min(M.REPLAY_CHUNK_BYTES, M.MAX_REPLAY_BYTES + 1 - #found))
         if type(chunk) ~= "string" or chunk == "" then break end
-        found = found .. (chunk :: string)
+        found = found .. (chunk)
     end
     local closed, close_error = file:close()
     if closed == false then return "close retained configuration: " .. tostring(close_error) end
@@ -262,7 +262,7 @@ local function read_handle_bounded(file: fs.File, bound: integer, what: string):
         end
         if type(chunk) ~= "string" then return nil, "read " .. what .. " returned invalid data" end
         if chunk == "" then break end
-        found = found .. (chunk :: string)
+        found = found .. (chunk)
     end
     if #found > bound then return nil, what .. " exceeds bound" end
     return found, nil

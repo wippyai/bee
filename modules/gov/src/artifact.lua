@@ -5,6 +5,7 @@
 -- applies an overlay.  The bytes are the immutable handoff between a resolver
 -- and the owner that will perform those separately authorized operations.
 local canonical = require("canonical")
+local bounds = require("bounds")
 local hash = require("hash")
 local json = require("json")
 
@@ -22,11 +23,7 @@ type Entry = {[string]: unknown}
 type Artifact = {schema_revision: string, entries: {Entry}, bytes: string, digest: string}
 
 local function object(value: unknown): Entry?
-    if type(value) ~= "table" then return nil end
-    for key in pairs(value) do
-        if type(key) ~= "string" then return nil end
-    end
-    return value :: Entry
+    return bounds.object(value)
 end
 
 local function fields(value: Entry, allowed: {string}): string?
@@ -78,7 +75,7 @@ local function copy(value: unknown, depth: integer, active: {[table]: boolean}, 
         return value, nil
     end
     if value_type ~= "table" then return nil, "artifact contains an unsupported value" end
-    local source = value :: table
+    local source = value
     if active[source] then return nil, "artifact contains a cyclic value" end
     active[source] = true
     local total = 0
@@ -127,7 +124,7 @@ end
 
 local function entries(value: unknown): ({Entry}?, string?)
     if type(value) ~= "table" then return nil, "artifact entries must be a list" end
-    local source = value :: table
+    local source = value
     local count = 0
     for key in pairs(source) do
         if type(key) ~= "number" or key ~= math.floor(key) or key < 1 then
@@ -175,7 +172,7 @@ end
 -- table across as neither.
 local function reaching_shape(item: unknown): string
     if type(item) ~= "table" then return "value" end
-    local source = item :: table
+    local source = item
     if next(source) == nil then return "empty" end
     for key in pairs(source) do
         if type(key) == "number" then return "array" end
@@ -190,7 +187,7 @@ function M.config_shapes(value: unknown): ({string}?, {string}?, {string}?, stri
     local empty: {string} = {}
     if value ~= nil then
         if type(value) ~= "table" then return nil, nil, nil, "registry entry configuration is not an object" end
-        for field, item in pairs(value :: {[string]: unknown}) do
+        for field, item in pairs(value) do
             if type(field) ~= "string" then return nil, nil, nil, "registry entry configuration field is not a name" end
             local shape = reaching_shape(item)
             if shape == "object" then objects[#objects + 1] = field

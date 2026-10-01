@@ -17,7 +17,7 @@ type RuntimeRegistry = scheduler.Registry
 
 local function object(value: unknown): Entry?
     if type(value) ~= "table" then return nil end
-    return value :: Entry
+    return value
 end
 
 local function id(value: unknown): string?
@@ -38,7 +38,7 @@ local function selected_binding(ref: string, raw: unknown): (Binding?, string?)
     local contracts = data and data.contracts
     if type(contracts) ~= "table" then return nil, "INVALID: selected executor binding " .. ref .. " has no contracts" end
     local methods: Entry? = nil
-    for _, raw_contract in ipairs(contracts :: {unknown}) do
+    for _, raw_contract in ipairs(contracts) do
         local contract = object(raw_contract)
         if contract and contract.contract == M.CONTRACT then
             if methods then return nil, "INVALID: selected executor binding " .. ref .. " declares its contract twice" end
@@ -87,7 +87,7 @@ local function invoke(target: string, request: unknown): (unknown?, string?)
     local owner = admission and id(admission.owner_id)
     local workspace = admission and id(admission.workspace_id)
     if not owner or not workspace or #workspace ~= 32 or workspace:find("[^0-9a-f]") then return nil, "turn admission omitted its workspace-bound owner" end
-    local actor, actor_error = security.new_actor(owner :: string, {workspace_id = workspace})
+    local actor, actor_error = security.new_actor(owner, {workspace_id = workspace})
     if not actor then return nil, tostring(actor_error) end
     local contextual, context_error = funcs.new():with_actor(actor):with_context({["bee.workspace_id"] = workspace})
     if not contextual then return nil, tostring(context_error) end
@@ -112,19 +112,19 @@ function M.runtime(): (RuntimeRegistry?, string?)
     if type(refs) ~= "table" then return nil, "host executor selection is not a list" end
     local snapshot, snapshot_error = registry_api.snapshot()
     if snapshot_error or not snapshot then return nil, "executor registry snapshot is unavailable" end
-    local pinned = snapshot :: Snapshot
+    local pinned = snapshot
     local entries: {[string]: unknown} = {}
-    for _, raw_ref in ipairs(refs :: {unknown}) do
+    for _, raw_ref in ipairs(refs) do
         local ref = id(raw_ref)
         if not ref then return nil, "host executor selection contains a malformed binding ref" end
         local entry, entry_error = pinned:get(ref)
         if entry_error or not entry then return nil, "selected executor binding " .. ref .. " is unavailable" end
-        entries[ref] = entry :: unknown
+        entries[ref] = entry
     end
-    local built, build_error = M.build(entries, refs :: {string})
+    local built, build_error = M.build(entries, refs)
     if not built then return nil, build_error end
     local executors: {[string]: scheduler.Executor} = {}
-    for executor_id, binding in pairs((built :: Registry).by_id) do
+    for executor_id, binding in pairs((built).by_id) do
         local target_entry, target_error = pinned:get(binding.run_turn)
         local target = object(target_entry)
         if target_error or not target or target.kind ~= "function.lua" then
@@ -133,7 +133,8 @@ function M.runtime(): (RuntimeRegistry?, string?)
         local run_target = binding.run_turn
         executors[executor_id] = {run_turn = function(turn: scheduler.Turn): (scheduler.Execution?, string?)
             local value, err = invoke(run_target, turn)
-            return value :: scheduler.Execution?, err
+            if err then return nil, err end
+            return scheduler.execution(value)
         end}
     end
     local runtime: RuntimeRegistry = {get = function(executor_id: string): (scheduler.Executor?, string?)

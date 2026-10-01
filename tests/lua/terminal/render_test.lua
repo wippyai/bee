@@ -242,8 +242,8 @@ local function define_tests()
                 local frame = render.draw(scene, {"one", "two"}, contents, nil, nil, "", "workspace", nil, nil, false,
                     nil, nil, nil, nil, active)
                 for _, row in ipairs(frame.rows) do
-                    test.is_nil(row:find("38;2", 1, true))
-                    test.is_nil(row:find("48;2", 1, true))
+                    test.is_nil((row:find("38;2", 1, true)))
+                    test.is_nil((row:find("48;2", 1, true)))
                 end
                 local marked = false
                 for _, row in ipairs(frame.rows) do

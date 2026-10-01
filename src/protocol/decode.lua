@@ -104,16 +104,14 @@ local function window(value: unknown): model.Window?
     if value.accent ~= nil and selected_accent == nil then return nil end
     local workspace_id = contract.workspace_id(value.workspace_id)
     if value.workspace_id ~= nil and not workspace_id then return nil end
+    local side = value.snap_side
     local snap_side: string? = nil
-    if value.snap_side ~= nil then
-        if value.snap_side ~= "left" and value.snap_side ~= "right" then return nil end
-        snap_side = value.snap_side
-    end
+    if side == "left" or side == "right" then snap_side = side
+    elseif side ~= nil then return nil end
+    local ratio = value.snap_ratio
     local snap_ratio: number? = nil
-    if value.snap_ratio ~= nil then
-        if type(value.snap_ratio) ~= "number" or not (value.snap_ratio > 0 and value.snap_ratio <= 1) then return nil end
-        snap_ratio = value.snap_ratio
-    end
+    if type(ratio) == "number" and ratio > 0 and ratio <= 1 then snap_ratio = ratio
+    elseif ratio ~= nil then return nil end
     if (snap_side == nil) ~= (snap_ratio == nil) then return nil end
     return {id = value.id, instance_id = value.instance_id, workspace_id = workspace_id, title = value.title,
         user_title = user_title, accent = selected_accent, icon = icon,

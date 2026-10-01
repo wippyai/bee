@@ -210,8 +210,8 @@ local function define_tests()
                 version_key = item.key, descriptor_digest = item.digest})
             test.is_true(receiving_status.ok)
             test.eq((receiving_status.value :: {[string]: unknown}).state, "receiving")
-            test.is_nil(replicas.content(store, {source_owner = item.owner_id, feed = item.feed,
-                version_key = key, descriptor_digest = item.digest}))
+            test.is_nil((replicas.content(store, {source_owner = item.owner_id, feed = item.feed,
+                version_key = key, descriptor_digest = item.digest})))
             test.eq(replicas.read(store, {source_owner = item.owner_id, feed = item.feed,
                 version_key = key, descriptor_digest = item.digest}).code, "NOT_FOUND")
             test.is_true(replicas.put(store, {source_owner = item.owner_id, feed = item.feed,

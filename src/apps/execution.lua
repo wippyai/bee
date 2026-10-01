@@ -67,7 +67,7 @@ function M.stop(pids: {string}, events: Channel<process.Event>, grace: string): 
         local selected = channel.select(cases)
         if not selected.ok then error("Execution events closed while stopping") end
         if selected.channel == events then
-            local event = selected.value :: process.Event
+            local event = selected.value
             local from = tostring(event.from)
             if event.kind == process.event.EXIT and live[from] then
                 live[from] = nil

@@ -305,7 +305,7 @@ local function main(value: unknown)
                     process.send(current.pid, desktop_protocol.VIEW_RESIZE, {version = 1, width = width, height = math.max(1, height - 1)})
                     dirty = true
                 else
-                    local decision, forwarded = remote.forward(current, data :: {[string]: unknown})
+                    local decision, forwarded = remote.forward(current, data)
                     if decision == "leave" and not current.leaving then
                         current.leaving = true
                         process.send(current.pid, desktop_protocol.VIEW_CLOSE, {version = 1})

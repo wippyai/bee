@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.files.test
 entries:
+- name: memory_source
+  kind: library.lua
+  source: file://memory_source.lua
+  meta: {type: test_support}
+  imports:
+    source: bee.files:source
 - name: syntax_test
   kind: function.lua
   source: file://syntax_test.lua
@@ -35,6 +41,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    memory_source: bee.files.test:memory_source
+    source: bee.files:source
     tree: bee.files:tree
     gitignore: bee.files:gitignore
 - name: model_test
@@ -45,6 +53,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    memory_source: bee.files.test:memory_source
     model: bee.files.app:model
 - name: view_test
   kind: function.lua
@@ -54,6 +63,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    memory_source: bee.files.test:memory_source
     model: bee.files.app:model
     view: bee.files.app:view
     appearance: bee.application:appearance

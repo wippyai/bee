@@ -61,7 +61,17 @@ local function decode_row(raw: unknown): (Row?, string?)
         if type(value.context_json) ~= "string" then return nil, "delivery row has invalid fields" end
         context_json = value.context_json
     end
-    local lease_owner, last_error = value.lease_owner, value.last_error
+    local lease_owner: string? = nil
+    if value.lease_owner ~= nil then
+        lease_owner = bounds.id(value.lease_owner)
+        if not lease_owner then return nil, "delivery row has invalid fields" end
+    end
+    local last_error: string? = nil
+    if value.last_error ~= nil then
+        local raw_error = value.last_error
+        if type(raw_error) ~= "string" then return nil, "delivery row has invalid fields" end
+        last_error = raw_error
+    end
     local lease_until_ms = value.lease_until_ms == nil and nil or integer(value.lease_until_ms)
     local acknowledged_at = value.acknowledged_at == nil and nil or bounds.timestamp(value.acknowledged_at)
     local exhausted_at = value.exhausted_at == nil and nil or bounds.timestamp(value.exhausted_at)
@@ -74,10 +84,10 @@ local function decode_row(raw: unknown): (Row?, string?)
         return nil, "delivery row has invalid fields"
     end
     local row: Row = {event_id = event_id, approval_id = approval_id, revision = revision, thread_id = thread_id,
-        kind = kind, body_json = body_json, context_json = context_json :: string?, attempts = attempts,
-        next_attempt_ms = next_attempt_ms, lease_owner = lease_owner :: string?, lease_until_ms = lease_until_ms,
-        acknowledged_at = acknowledged_at, exhausted_at = exhausted_at, last_error = last_error :: string?,
-        created_at = value.created_at :: string}
+        kind = kind, body_json = body_json, context_json = context_json, attempts = attempts,
+        next_attempt_ms = next_attempt_ms, lease_owner = lease_owner, lease_until_ms = lease_until_ms,
+        acknowledged_at = acknowledged_at, exhausted_at = exhausted_at, last_error = last_error,
+        created_at = value.created_at}
     return row, nil
 end
 -- Leases the due rows for this pass under the holder's name; a lease left

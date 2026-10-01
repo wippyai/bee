@@ -20,6 +20,20 @@ local ATTEMPT = "stable-run-attempt-1"
 local THREADS_POLICY = "bee.security.threads:thread_authority_client_policy"
 local WORKSPACE = string.rep("a", 32)
 
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function unwrap(raw: unknown): {[string]: unknown}
     local reply = raw :: {[string]: unknown}
     if reply.ok ~= true then
@@ -79,7 +93,7 @@ local function set_admission_for(definition_id: string, admitted: boolean)
         if admitted or binding.definition_id ~= definition_id then bindings[#bindings + 1] = binding end
     end
     local changes = snap:changes()
-    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = record.meta, data = {bindings = bindings}})
+    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = registry_input(record).meta, data = {bindings = bindings}})
     local applied, apply_error = changes:apply()
     if not applied then error("apply application admission: " .. tostring(apply_error)) end
 end
@@ -91,7 +105,7 @@ local function set_duplicate_admission()
     for _, binding in ipairs(baseline_bindings or {}) do bindings[#bindings + 1] = binding end
     bindings[#bindings + 1] = bindings[1]
     local changes = snap:changes()
-    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = record.meta, data = {bindings = bindings}})
+    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = registry_input(record).meta, data = {bindings = bindings}})
     local applied, apply_error = changes:apply()
     if not applied then error("apply duplicate application admission: " .. tostring(apply_error)) end
 end
@@ -206,7 +220,7 @@ local function define_tests()
             end
             local fenced_ok, fence_error = pcall(revoked_refused)
             set_admission(true)
-            assert(fenced_ok, fence_error)
+            assert(fenced_ok, tostring(fence_error))
 
             -- Boot can read its initial catalog before governance has
             -- reapplied a retained definition. Backfill must preserve this

@@ -17,6 +17,20 @@ local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
 local BINDING = "bee.driver.claude:binding"
 local counter = 0
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
@@ -56,7 +70,7 @@ local function install_policy()
     local data = entry.data :: {[string]: unknown}
     data.executables = {claude = fixture_bin() .. "/claude"}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("install fixture policy: " .. tostring(err)) end
 end
@@ -77,7 +91,7 @@ local function admit_root()
     end
     roots[#roots + 1] = {root_ref = ROOT, access = "write"}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("admit root: " .. tostring(err)) end
 end
@@ -714,7 +728,7 @@ return {run = function(options)
     for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots"}) do originals[#originals + 1] = assert(registry.get(ref)) end
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
-    for _, original in ipairs(originals) do changes:update(original) end
+    for _, original in ipairs(originals) do changes:update(registry_input(original)) end
     assert(changes:apply())
     if not ok then error(tostring(result)) end
     return result

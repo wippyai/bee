@@ -102,13 +102,13 @@ function M.open(): Started?
             return edit_mode_recovery.handle({operation = "disable_all"})
         end)
         if not ok then return nil, tostring(reply) end
-        local result = type(reply) == "table" and reply :: {[string]: unknown} or nil
+        local result = type(reply) == "table" and reply or nil
         if not result or result.ok ~= true then
             return nil, tostring(result and (result.message or result.code) or "edit-mode recovery returned an invalid reply")
         end
-        local value = type(result.value) == "table" and result.value :: {[string]: unknown} or nil
+        local value = type(result.value) == "table" and result.value or nil
         if not value or type(value.changed) ~= "boolean" then return nil, "edit-mode recovery returned an invalid result" end
-        return value.changed :: boolean, nil
+        return value.changed, nil
     end
 
     local result, startup_error = boot_fallback.run(readiness, disable_super_edit, cleanup_readiness_failure)

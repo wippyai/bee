@@ -93,6 +93,7 @@ entries:
   - channel
   - time
   imports:
+    placement_decode: bee.placement:decode
     test: wippy.test:test
     principals: bee.test.principals:bound
     profiles: bee.placement:profiles
@@ -149,6 +150,7 @@ entries:
   meta: {type: test_support}
   modules: [process, channel, funcs, registry, security, time]
   imports:
+    placement_decode: bee.placement:decode
     test: wippy.test:test
     principals: bee.test.principals:bound
     profiles: bee.placement:profiles

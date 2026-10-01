@@ -136,5 +136,7 @@ imports.
 
 Workspace migrations 10 and 11 move saved application definition IDs to their
 application child namespaces. Migration 10 covers Timeline, Workspaces and Hive
-Manager; migration 11 covers Modules. Both preserve opaque application state
-and layout generations. Workspace recovery also recognizes the earlier IDs.
+Manager; migration 11 covers Modules. Migration 12 covers Settings, Terminal,
+Process Manager and Overlays, alongside older application definition spellings.
+These migrations preserve opaque application state and layout generations.
+Workspace recovery also recognizes the earlier IDs.

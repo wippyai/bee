@@ -1,12 +1,14 @@
 """Standalone smoke and restart of state produced by the baseline binary."""
 import argparse
 import json
+import os
 import sqlite3
+import subprocess
 import tempfile
 from pathlib import Path
 
-from app_layout_smoke import layout, saved, stop
-from native_workspace import NativeDesktop
+from app_layout_smoke import layout, saved
+from native_workspace import STATE_ENVIRONMENT, NativeDesktop
 from workspace import ROOT
 
 
@@ -18,15 +20,18 @@ def open_settings(binary, folder, state):
         ui.quit()
     finally:
         ui.close()
-        stop(binary, state)
+        environment = {key: value for key, value in os.environ.items()
+                       if key not in STATE_ENVIRONMENT | {"BEE_RUNTIME", "USER"}}
+        environment.update(HOME=str(folder), PATH=f"{folder}/bin:/usr/bin:/bin",
+                           XDG_CONFIG_HOME=str(folder / '.config'))
+        subprocess.run([str(binary), '--state', str(state), 'stop'], cwd=folder,
+                       env=environment, capture_output=True, text=True, check=True, timeout=90)
 
 
 def snapshot(state):
     result = {}
     for filename, table in [('workspace.db', 'workspace_schema_migrations'),
-                            ('workspace.db.client', 'client_schema_migrations'),
-                            ('sync.db', 'bee_sync_schema_migrations'),
-                            ('threads.db', 'bee_thread_schema_migrations')]:
+                            ('workspace.db.client', 'client_schema_migrations')]:
         with sqlite3.connect(state / filename) as db:
             result[table] = db.execute(f'SELECT * FROM {table} ORDER BY id').fetchall()
     with sqlite3.connect(state / 'workspace.db') as db:

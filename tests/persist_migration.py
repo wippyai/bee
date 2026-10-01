@@ -1,6 +1,5 @@
 """Real SQLite migration opens, concurrent writers and SIGKILL recovery."""
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 import hashlib
 import os
 import re

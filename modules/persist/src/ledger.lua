@@ -2,7 +2,7 @@
 -- hands in its ledger table, a label for its messages and its immutable
 -- migration list; every open replays the ledger against that list: a
 -- changed name or checksum, a gap, or a newer schema refuses the store
--- before any table is touched.
+-- before pending schema migrations run.
 local sql = require("sql")
 local hash = require("hash")
 local M = {}
@@ -46,7 +46,7 @@ local function create_ledger(db: Connection, ledger: Ledger): string?
     checksum TEXT NOT NULL,
 ]] .. timestamp .. [[    UNIQUE (name)
 )]])
-    if create_err then return  "create " .. ledger.label .. " migration ledger: " .. tostring(create_err) end
+    if create_err then return "create " .. ledger.label .. " migration ledger: " .. tostring(create_err) end
     return nil
 end
 local function read_ledger(db: Connection, ledger: Ledger, expected: {Migration}): ({[integer]: boolean}?, string?)

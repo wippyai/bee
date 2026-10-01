@@ -1,9 +1,14 @@
-"""Run strict lint against the same disposable composition used by Lua tests."""
+"""Strict lint for disposable unit and acceptance fixture compositions."""
 from pathlib import Path
 import os
+import shutil
 import subprocess
 
-from workspace import RUNTIME, TEST_CACHE, database_environment, fixture_workspace
+import yaml
+
+from workspace import ROOT, RUNTIME, TEST_CACHE, database_environment, fixture_workspace
+
+ACCEPTANCE_FIXTURES = ("window_hooks",)
 
 
 def environment(folder):
@@ -36,9 +41,20 @@ def environment(folder):
 
 def fixture_lint(folder=None):
     if folder is not None:
-        subprocess.run([str(RUNTIME), "lint", "--strict-any", "--set", "lua.type_system.strict_any=true"], cwd=folder, check=True, env=environment(folder))
+        subprocess.run([str(RUNTIME), "lint", "--strict-any", "--set", "lua.type_system.enabled=true",
+                        "--set", "lua.type_system.strict=true", "--set", "lua.type_system.strict_any=true"], cwd=folder, check=True, env=environment(folder))
         return
     with fixture_workspace(managed_gateway=True) as folder:
+        for name in ACCEPTANCE_FIXTURES:
+            shutil.copytree(ROOT / "tests/fixtures" / name, folder / "src/tests" / name)
+        # The Go window harness substitutes this source at the real gateway entry.
+        binding = folder / "modules/gateway/src/binding"
+        shutil.copy2(ROOT / "tests/fixtures/window_hooks/claim.lua", binding / "hook_claim_method.lua")
+        index = binding / "_index.yaml"
+        document = yaml.safe_load(index.read_text())
+        claim = next(entry for entry in document["entries"] if entry["name"] == "hook_claim")
+        claim.setdefault("modules", []).append("time")
+        index.write_text(yaml.safe_dump(document, sort_keys=False))
         fixture_lint(folder)
 
 

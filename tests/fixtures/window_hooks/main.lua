@@ -113,7 +113,9 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local scope = security.new_scope({broker_policy, boundary})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = WORKSPACE})
         :with_scope(scope):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
-    assert(catalogs:receive():from() == broker)
+    local catalog, catalog_ok = catalogs:receive()
+    assert(catalog_ok, "broker catalog channel closed before catalog arrived")
+    assert(catalog:from() == broker)
 
     -- 4. Resolve plan and open bee.harness.app:app
     local plan, refused = admission.resolve(definition, "window")
@@ -139,7 +141,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local opened: {[string]: unknown}? = nil
     while not opened do
-        local message = assert((replies:receive()))
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before window opened")
         if tostring(message:from()) == broker then
             local data = message:payload():data()
             if type(data) == "table" and data.request_id == "open" and data.op == "open" then
@@ -177,7 +180,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local mounted = ""
     while mounted == "" do
-        local message = assert((replies:receive()))
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before window attached")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-one" and data.op == "attached" then
             assert(data.error_code == "")
@@ -188,14 +192,12 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     local view = assert(tty.attach(mounted))
     assert(view:send({type = "resize", width = 240, height = 24}))
 
-    local checkpoint_deadline = time.after("3s")
-    local checkpoint_event = channel.select({checkpoints:case_receive(), checkpoint_deadline:case_receive()})
-    if checkpoint_event.channel == checkpoint_deadline or not checkpoint_event.ok then
+    local checkpoint_message, checkpoint_ok = checkpoints:receive()
+    if not checkpoint_ok then
         local frame = view:snapshot()
         local diagnosis = frame and table.concat(frame.rows, "\n"):match("Managed window[^\n]*") or ""
         error("window checkpoint was not delivered: " .. diagnosis .. " " .. placement_report())
     end
-    local checkpoint_message = checkpoint_event.value
     assert(tostring(checkpoint_message:from()) == broker, "window checkpoint came from an unauthenticated sender")
     local checkpoint_data = checkpoint_message:payload():data()
     assert(type(checkpoint_data) == "table" and checkpoint_data.version == 1
@@ -371,7 +373,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     end
     local closed = false
     while not closed do
-        local message = assert((replies:receive()))
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before window closed")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close" and data.op == "close" then
             assert(data.error_code == "", "managed window close failed: " .. tostring(data.error))
@@ -434,7 +437,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     local continued: {[string]: unknown}? = nil
     while not continued do
-        local message = assert((replies:receive()))
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before continuation opened")
         if tostring(message:from()) == broker then
             local data = message:payload():data()
             if type(data) == "table" and data.request_id == "continuation-open" and data.op == "open" then
@@ -465,7 +469,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     }))
     local mounted_two = ""
     while mounted_two == "" do
-        local message = assert((replies:receive()))
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before continuation attached")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "bind-two" and data.op == "attached" then
             assert(data.error_code == "")
@@ -609,7 +614,8 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "close-two", op = "close", workspace_id = WORKSPACE, id = continued.id}))
     local closed_two = false
     while not closed_two do
-        local message = assert((replies:receive()))
+        local message, ok = replies:receive()
+        assert(ok, "broker reply channel closed before continuation closed")
         local data = message:payload():data()
         if tostring(message:from()) == broker and type(data) == "table" and data.request_id == "close-two" and data.op == "close" then
             assert(data.error_code == "", "window continuation close failed: " .. tostring(data.error))

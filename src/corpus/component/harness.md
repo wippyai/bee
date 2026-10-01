@@ -94,7 +94,9 @@ Sessions opens as the empty desktop's landing page. The people-facing catalog
 uses the `presentation:start_menu` feature, while programmatic definitions stay
 callable through the Sessions contract. Conversation text preserves paragraphs
 and wraps at spaces; tool activity is compact, and CLI diagnostics and technical
-references are in Details. Lists refresh activity during work and name sessions
+references are in Details. Tool results and diagnostics remain available when
+historical work has settled, without replacing its final answer with streamed
+fragments. Lists refresh activity during work and name sessions
 with their first prompt. Closed conversations show history and offer a fresh
 session using the agent definition's defaults. CLI write refusals explain that
 they are separate from Bee approvals. Advanced Docker profiles expose Revoke

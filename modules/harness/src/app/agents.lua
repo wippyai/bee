@@ -126,7 +126,7 @@ local function render(value: unknown): string
     if object and type(object.text) == "string" then return object.text end
     if object and type(object.message) == "string" then return object.message end
     if value == nil then return "Completed" end
-    return "Completed · structured result available in Details"
+    return "Completed · structured result"
 end
 
 local function settle(turn: Turn, observed: unknown)
@@ -170,10 +170,11 @@ local function observe_thread(conv: Conversation)
                 local data = observation and bounds.object(observation.data)
                 if event and event.kind == "turn.observation" and observation and data then
                     for _, turn in ipairs(conv.turns) do
-                        if detail and event.subject == turn.work:ref() and (turn.state == "queued" or turn.state == "working") then
+                        if detail and event.subject == turn.work:ref() then
                             if observation.type == "text" and data.segment_id == "executor-stderr" and type(data.text) == "string" then
                                 turn.diagnostics = ((turn.diagnostics or "") .. data.text):sub(-4096)
-                            elseif observation.type == "text" and data.channel ~= "progress" and type(data.text) == "string" and #data.text <= 65536 then
+                            elseif observation.type == "text" and (turn.state == "queued" or turn.state == "working")
+                                and data.channel ~= "progress" and type(data.text) == "string" and #data.text <= 65536 then
                                 local segment = bounds.id(data.segment_id) or "answer"
                                 turn.segments = turn.segments or {}
                                 local pieces = turn.segments

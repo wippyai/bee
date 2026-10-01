@@ -200,6 +200,13 @@ local function define_tests()
             agents.refresh(conv)
             test.eq(conv.turns[1].text, "hello\nworld")
         end)
+        test.it("labels other structured results without promising unavailable Details content", function()
+            local produced = work("bw:1", {{tag = "ready", result = {outcome = "succeeded", value = {count = 3}, artifacts = {}, usage = {}}}}, "accepted")
+            local conv = must_open(client_of({open = function(): (unknown, nil) return session("idle", 0, {}, {works = {produced}}), nil end}), "d:x", nil, "k")
+            agents.submit(conv, "Count the items", key_source())
+            agents.refresh(conv)
+            test.eq(conv.turns[1].text, "Completed · structured result")
+        end)
         test.it("shows unsuccessful, blocked and uncertain observations", function()
             local sent: {Object} = {}
             local failed: Object = {tag = "ready", result = {outcome = "failed", error = {code = "TIMEOUT", message = "slow", retry = "never"}, artifacts = {}}}

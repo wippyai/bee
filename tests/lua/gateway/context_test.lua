@@ -1,5 +1,7 @@
 -- MIT. Focused tests for the pure bounded MCP context decoder and composer.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local context = require("context")
 type Object = {[string]: unknown}
 
@@ -29,15 +31,15 @@ local function run()
             if not first then error(tostring(first_error)) end
             local second, second_error = context.bind(values, identity)
             if not second then error(tostring(second_error)) end
-            (first[context.BINDING_KEY] :: Object).thread_id = "changed"
+            (assert(bounds.object(first[context.BINDING_KEY]))).thread_id = "changed"
             first.value1 = 99
-            test.eq((second[context.BINDING_KEY] :: Object).thread_id, "thread-a")
+            test.eq((assert(bounds.object(second[context.BINDING_KEY]))).thread_id, "thread-a")
             test.eq(identity.thread_id, "thread-a")
             test.eq(values.value1, 1)
             test.eq(second.value32, 32)
-            test.eq(((second[context.BINDING_KEY] :: Object).origin_view :: Object).view_id, "view-a")
-            test.eq(((second[context.BINDING_KEY] :: Object).origin_view :: Object).instance_id, "instance-a")
-            test.eq((second[context.BINDING_KEY] :: Object).subject, "subject-a")
+            test.eq((assert(bounds.object((assert(bounds.object(second[context.BINDING_KEY]))).origin_view))).view_id, "view-a")
+            test.eq((assert(bounds.object((assert(bounds.object(second[context.BINDING_KEY]))).origin_view))).instance_id, "instance-a")
+            test.eq((assert(bounds.object(second[context.BINDING_KEY]))).subject, "subject-a")
             local invalid_origin, invalid_origin_error = context.bind({}, {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a",
                 origin_view = {view_id = "", instance_id = "instance-a"}})
             test.is_nil(invalid_origin)
@@ -50,7 +52,7 @@ local function run()
                     access_approval_id = "approval-a", access_proposal_digest = string.rep("a", 64), surface_revision = 2, surface_digest = string.rep("b", 64)}}
             local bound, bound_error = context.bind({}, identity)
             if not bound then error(tostring(bound_error)) end
-            local runtime = ((bound[context.BINDING_KEY] :: Object).application_runtime :: Object)
+            local runtime = (assert(bounds.object((assert(bounds.object(bound[context.BINDING_KEY]))).application_runtime)))
             test.eq(runtime.access_approval_id, "approval-a")
             test.eq(runtime.surface_revision, 2)
             identity.application_runtime.binding_id = "foreign"
@@ -64,7 +66,7 @@ local function run()
             if not composed then error(tostring(compose_error)) end
             test.eq(composed.action_id, "action-host")
             test.eq(composed.attempt_id, "attempt-host")
-            test.eq((composed.labels :: Object).phase, "review")
+            test.eq((assert(bounds.object(composed.labels))).phase, "review")
 
             local conflict, conflict_error = context.compose(fixed, {action_id = "caller-action"}, {"action_id"})
             test.is_nil(conflict)
@@ -84,12 +86,18 @@ local function run()
             if not first then error(tostring(first_error)) end
             if not second then error(tostring(second_error)) end
 
-            ((first.host :: Object).tags :: {string})[1] = "first-only"
-            ((first.metadata :: Object).labels :: {string})[1] = "first-only"
-            test.eq(((second.host :: Object).tags :: {string})[1], "bee")
-            test.eq(((second.metadata :: Object).labels :: {string})[1], "one")
-            test.eq(((fixed.host :: Object).tags :: {string})[1], "bee")
-            test.eq(((raw.metadata :: Object).labels :: {string})[1], "one")
+            local first_host = assert(bounds.object(first.host))
+            local tags = principals.strings(first_host.tags)
+            first_host.tags = tags
+            tags[1] = "first-only"
+            local first_metadata = assert(bounds.object(first.metadata))
+            local labels = principals.strings(first_metadata.labels)
+            first_metadata.labels = labels
+            labels[1] = "first-only"
+            test.eq((principals.strings((assert(bounds.object(second.host))).tags))[1], "bee")
+            test.eq((principals.strings((assert(bounds.object(second.metadata))).labels))[1], "one")
+            test.eq((principals.strings((assert(bounds.object(fixed.host))).tags))[1], "bee")
+            test.eq((principals.strings((assert(bounds.object(raw.metadata))).labels))[1], "one")
         end)
 
         test.it("rejects non-finite, nested, sparse, and oversized context values", function()

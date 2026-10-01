@@ -31,7 +31,7 @@ end
 local function one(db: sql.DB, statement: string, args: {unknown}?): Row
     local rows, err = db:query(statement, args or {})
     if err or not rows or #rows ~= 1 then error(statement .. ": " .. tostring(err or ("rows " .. tostring(rows and #rows)))) end
-    return rows[1] :: Row
+    return rows[1]
 end
 local function define_tests()
     test.describe("Gateway store upgrade", function()

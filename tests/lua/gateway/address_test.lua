@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: MIT
 local test = require("test")
+local bounds = require("bounds")
 local registry = require("registry")
 local funcs = require("funcs")
 local configuration = require("configuration")
@@ -33,7 +34,7 @@ local function await_listener(reference: string)
         end
         local raw_event = selected.value
         if type(raw_event) == "table" then
-            local event = raw_event :: Object
+            local event = assert(bounds.object(raw_event))
             if event.system == "supervisor" and event.kind == "service.update" and event.path == reference then
                 state, state_error = system.supervisor.state(reference)
                 if state_error or not state then

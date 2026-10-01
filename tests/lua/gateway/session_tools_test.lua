@@ -2,6 +2,8 @@
 -- keys, identity refused in payloads, exact projection onto a fake owner
 -- binding, and owner replies held to the published output schema.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local mcp = require("mcp")
 local catalog = require("catalog")
 local surface = require("surface")
@@ -86,14 +88,14 @@ local function define_tests()
                 local contract, method = session_tools.target(name)
                 test.eq(tool.operation, tostring(contract) .. "." .. tostring(method))
                 test.eq(tool.policies[1], mcp.TOOL_POLICY_REFS.session)
-                local outputs = mcp.OUTPUT_SCHEMAS :: {[string]: Object}
+                local outputs = mcp.OUTPUT_SCHEMAS
                 test.not_nil(outputs[name])
-                test.eq((outputs[name] :: Object).type, "object")
+                test.eq((assert(bounds.object(outputs[name]))).type, "object")
                 test.eq(tool.schema.additionalProperties, false)
                 test.eq(tool.schema.type, "object")
             end
-            test.eq((seen.session_catalog :: mcp.Tool).operation, "bee.sessions:catalog.list")
-            test.eq((seen.session_send :: mcp.Tool).operation, "bee.sessions:contract.send")
+            test.eq((seen.session_catalog).operation, "bee.sessions:catalog.list")
+            test.eq((seen.session_send).operation, "bee.sessions:contract.send")
             for _, name in ipairs({"thread_launch", "run_status", "run_wait", "run_cancel", "thread_sessions",
                 "session_directory", "session_inbox_send", "session_inbox", "session_ack", "session_reply",
                 "launch_definitions"}) do
@@ -103,26 +105,26 @@ local function define_tests()
         end)
         test.it("advertises operation_key as required on every mutation and annotations that match", function()
             for _, name in ipairs(MUTATIONS) do
-                local tool = mcp.tool(name) :: mcp.Tool
-                local required = tool.schema.required :: {string}
+                local tool = mcp.tool(name)
+                local required = principals.strings(tool.schema.required)
                 local found = false
                 for _, item in ipairs(required) do if item == "operation_key" then found = true end end
                 test.is_true(found)
                 test.eq(tool.annotations.readOnlyHint, false)
                 test.eq(tool.annotations.idempotentHint, true)
             end
-            for _, name in ipairs(READS) do test.eq((mcp.tool(name) :: mcp.Tool).annotations.readOnlyHint, true) end
+            for _, name in ipairs(READS) do test.eq((mcp.tool(name)).annotations.readOnlyHint, true) end
             for _, name in ipairs({"session_join", "session_cancel", "session_close"}) do
-                test.eq((mcp.tool(name) :: mcp.Tool).annotations.destructiveHint, true)
+                test.eq((mcp.tool(name)).annotations.destructiveHint, true)
             end
-            test.eq((mcp.tool("session_send") :: mcp.Tool).annotations.destructiveHint, false)
+            test.eq((mcp.tool("session_send")).annotations.destructiveHint, false)
         end)
         test.it("steers use in the descriptions", function()
-            local send = (mcp.tool("session_send") :: mcp.Tool).description
+            local send = (mcp.tool("session_send")).description
             test.is_true(send:find("Submit work", 1, true) ~= nil)
-            test.is_true((mcp.tool("session_open") :: mcp.Tool).description:find("session_send", 1, true) ~= nil)
-            test.is_true((mcp.tool("session_run") :: mcp.Tool).description:find("not the answer", 1, true) ~= nil)
-            local await = (mcp.tool("session_await") :: mcp.Tool).description
+            test.is_true((mcp.tool("session_open")).description:find("session_send", 1, true) ~= nil)
+            test.is_true((mcp.tool("session_run")).description:find("not the answer", 1, true) ~= nil)
+            local await = (mcp.tool("session_await")).description
             test.is_true(await:find("work or operation", 1, true) ~= nil)
             test.is_true(await:find("timeout never cancels", 1, true) ~= nil)
         end)
@@ -155,12 +157,12 @@ local function define_tests()
             for _, name in ipairs({"session_open", "session_run"}) do
                 for _, mode in ipairs({"headless", "window"}) do
                     local request = valid(name)
-                    local spec = request.spec :: Object
+                    local spec = assert(bounds.object(request.spec))
                     spec.presentation = mode
                     test.not_nil(session_tools.decode(name, {arguments = request}))
                 end
                 local request = valid(name)
-                local spec = request.spec :: Object
+                local spec = assert(bounds.object(request.spec))
                 spec.presentation = "screen"
                 test.is_nil(session_tools.decode(name, {arguments = request}))
             end
@@ -240,12 +242,12 @@ local function define_tests()
             for _, name in ipairs(session_tools.NAMES) do
                 local log: {Object} = {}
                 local owner = fake_owner(log)
-                local request = session_tools.decode(name, {arguments = valid(name)}) :: Object
+                local request = assert(bounds.object(session_tools.decode(name, {arguments = valid(name)})))
                 local reply, failure = session_tools.call(owner, name, request)
                 test.is_nil(failure)
                 test.not_nil(reply)
                 test.eq(#log, 1)
-                local call = log[1] :: Object
+                local call = assert(bounds.object(log[1]))
                 test.eq(call.method, expected[name])
                 test.eq(call.request, request)
             end
@@ -298,7 +300,7 @@ local function define_tests()
             test.is_nil(session_tools.result("session_await", settled_pending))
             test.is_nil(session_tools.result("session_get", "text"))
             local bad_cancel = success("session_cancel")
-            ;(bad_cancel.value :: Object).effect = "close"
+            ;(assert(bounds.object(bad_cancel.value))).effect = "close"
             test.is_nil(session_tools.result("session_cancel", bad_cancel))
         end)
     end)

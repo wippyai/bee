@@ -2,6 +2,8 @@
 -- tool catalog filtered by the binding, bounded tool arguments with the
 -- transport budget, and binding validity under an epoch.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local mcp = require("mcp")
 local gateway = require("gateway")
 local registry = require("registry")
@@ -11,17 +13,17 @@ type Object = {[string]: unknown}
 local function entry(id: string): Object
     local found, err = registry.get(id)
     if err or not found then error(id .. ": " .. tostring(err or "missing registry entry")) end
-    return found :: Object
+    return assert(bounds.object(found))
 end
 
 local function conforms(value: unknown, schema_value: unknown, location: string)
-    local schema = schema_value :: Object
+    local schema = assert(bounds.object(schema_value))
     local kind = schema.type
     if kind == "object" then
         if type(value) ~= "table" then error(location .. " must be an object") end
-        local object = value :: Object
-        local properties = schema.properties :: Object
-        for _, name in ipairs((schema.required :: {string}?) or {}) do
+        local object = assert(bounds.object(value))
+        local properties = assert(bounds.object(schema.properties))
+        for _, name in ipairs(principals.strings(schema.required or {})) do
             if object[name] == nil then error(location .. " is missing " .. name) end
         end
         for name, child in pairs(object) do
@@ -33,11 +35,11 @@ local function conforms(value: unknown, schema_value: unknown, location: string)
         if type(value) ~= "table" then error(location .. " must be an array") end
         local item_schema = schema.items
         if item_schema == nil then error(location .. " has no item schema") end
-        for index, child in ipairs(value :: {unknown}) do conforms(child, item_schema, location .. "[" .. tostring(index) .. "]") end
+        for index, child in ipairs(principals.items(value)) do conforms(child, item_schema, location .. "[" .. tostring(index) .. "]") end
     elseif kind == "string" then
         if type(value) ~= "string" then error(location .. " must be a string") end
     elseif kind == "integer" then
-        if type(value) ~= "number" or value ~= math.floor(value :: number) then error(location .. " must be an integer") end
+        if type(value) ~= "number" or value ~= math.floor(value) then error(location .. " must be an integer") end
     elseif kind == "boolean" then
         if type(value) ~= "boolean" then error(location .. " must be a boolean") end
     else
@@ -52,16 +54,16 @@ local function define_tests()
             -- properties arrive as a list makes it drop every tool.
             local names: {string} = {}
             for _, tool in ipairs(mcp.TOOLS) do names[#names + 1] = tool.name end
-            local listed = mcp.list(names).tools :: {{[string]: unknown}}
+            local listed = principals.objects(mcp.list(names).tools)
             test.eq(#listed, #names)
             for _, tool in ipairs(listed) do
-                local schema = tool.inputSchema :: {[string]: unknown}
+                local schema = assert(bounds.object(tool.inputSchema))
                 local encoded = assert(json.encode(schema.properties))
                 test.eq(tostring(tool.name) .. " " .. encoded:sub(1, 1), tostring(tool.name) .. " {")
             end
         end)
         test.it("publishes nested unconstrained session schemas as JSON objects", function()
-            local listed = mcp.list({"session_send", "session_run"}).tools :: {{[string]: unknown}}
+            local listed = principals.objects(mcp.list({"session_send", "session_run"}).tools)
             for _, tool in ipairs(listed) do
                 local encoded = assert(json.encode(tool.inputSchema))
                 test.is_nil((encoded:find('"value":[]', 1, true)))
@@ -77,18 +79,18 @@ local function define_tests()
             }) do
                 local trait = entry(expected.id)
                 test.eq(trait.kind, "registry.entry")
-                test.eq((trait.meta :: Object).type, "agent.trait")
-                local data = trait.data :: Object
-                test.eq(#(data.tools :: {string}), #expected.tools)
-                for index, tool in ipairs(expected.tools) do test.eq((data.tools :: {string})[index], tool) end
+                test.eq((assert(bounds.object(trait.meta))).type, "agent.trait")
+                local data = assert(bounds.object(trait.data))
+                test.eq(#(principals.strings(data.tools)), #expected.tools)
+                for index, tool in ipairs(expected.tools) do test.eq((principals.strings(data.tools))[index], tool) end
             end
             local overlay = entry("bee.gov.binding:overlay_call")
-            local metadata = overlay.meta :: Object
+            local metadata = assert(bounds.object(overlay.meta))
             local encoded = metadata.input_schema
             if type(encoded) ~= "string" then error("overlay input schema is missing") end
             local schema, schema_error = json.decode(encoded)
             if schema_error or type(schema) ~= "table" then error("decode overlay input schema: " .. tostring(schema_error)) end
-            local properties = (schema :: Object).properties :: Object
+            local properties = assert(bounds.object((assert(bounds.object(schema))).properties))
             for _, name in ipairs({"operation", "overlay_id", "expected_revision", "idempotency_key"}) do
                 test.not_nil(properties[name])
             end
@@ -97,14 +99,14 @@ local function define_tests()
             local tool = mcp.tool("request_capability")
             if not tool then error("request_capability tool") end
             test.eq(tool.operation, "bee.gateway.binding:request_capability")
-            local properties = tool.schema.properties :: Object
+            local properties = assert(bounds.object(tool.schema.properties))
             for _, name in ipairs({"capability", "parameters", "ttl_ms"}) do test.not_nil(properties[name]) end
             local chosen = mcp.capability_arguments({arguments = {capability = "app.database",
                 parameters = {name = "journal"}, ttl_ms = 60000}})
             test.eq(chosen and chosen.capability, "app.database")
             test.eq(chosen and chosen.ttl_ms, 60000)
             local defaulted = mcp.capability_arguments({arguments = {capability = "threads.read"}})
-            test.eq(defaulted and (defaulted.parameters :: Object) ~= nil, true)
+            test.eq(defaulted and (assert(bounds.object(defaulted.parameters))) ~= nil, true)
             local _, missing = mcp.capability_arguments({arguments = {parameters = {}}})
             test.eq(missing, "capability is required and must be an identifier")
             local _, bad_ttl = mcp.capability_arguments({arguments = {capability = "threads.read", ttl_ms = 0}})
@@ -122,10 +124,10 @@ local function define_tests()
             test.not_nil(mcp.OUTPUT_SCHEMAS.capability_status)
         end)
         test.it("offers installation requests as write tools apart from the read-only components tool", function()
-            local listed = mcp.list({"components", "install_request", "uninstall_request", "install_status"}).tools :: {Object}
+            local listed = principals.objects(mcp.list({"components", "install_request", "uninstall_request", "install_status"}).tools)
             test.eq(#listed, 4)
             for _, item in ipairs(listed) do
-                local annotations = item.annotations :: Object
+                local annotations = assert(bounds.object(item.annotations))
                 test.eq(annotations.readOnlyHint, item.name == "components")
                 test.eq(annotations.destructiveHint, false)
             end
@@ -153,10 +155,10 @@ local function define_tests()
             test.eq(no_id, "request_id is required and must be an identifier")
         end)
         test.it("offers publication requests as one write tool and one read-only status", function()
-            local listed = mcp.list({"components", "publish_request", "publish_status"}).tools :: {Object}
+            local listed = principals.objects(mcp.list({"components", "publish_request", "publish_status"}).tools)
             test.eq(#listed, 3)
             for _, item in ipairs(listed) do
-                local annotations = item.annotations :: Object
+                local annotations = assert(bounds.object(item.annotations))
                 test.eq(annotations.readOnlyHint, item.name ~= "publish_request")
                 test.eq(annotations.destructiveHint, false)
             end
@@ -210,13 +212,13 @@ local function define_tests()
             -- The HTTP adapter applies this whole-request limit through http.request(max_body=...).
             -- It leaves room for JSON escaping a full 64 KiB text value while bounding its envelope.
 
-            local workspace_tools = mcp.list({"overlay"}).tools :: {{[string]: unknown}}
-            local input_schema = workspace_tools[1].inputSchema :: {[string]: unknown}
-            local properties = input_schema.properties :: {[string]: unknown}
+            local workspace_tools = principals.objects(mcp.list({"overlay"}).tools)
+            local input_schema = assert(bounds.object(workspace_tools[1].inputSchema))
+            local properties = assert(bounds.object(input_schema.properties))
             test.not_nil(properties.overlay_id)
             test.is_nil(properties.workspace_id)
-            local text_property = properties.content :: {[string]: unknown}
-            local base64_property = properties.content_base64 :: {[string]: unknown}
+            local text_property = assert(bounds.object(properties.content))
+            local base64_property = assert(bounds.object(properties.content_base64))
             test.eq(text_property.maxLength, mcp.MAX_WORKSPACE_TEXT_BYTES)
             test.eq(base64_property.maxLength, mcp.MAX_WORKSPACE_BASE64_BYTES)
 
@@ -264,71 +266,71 @@ local function define_tests()
             if not proof then error("proof") end
             test.is_true((gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 1, proof = proof})))
             local _, other_nonce = gateway.verify("listener-secret", generation, "nonce-2", {epoch = 3, restarts = 1, proof = proof})
-            test.eq((other_nonce :: {error: {code: string}}).error.code, "DENIED")
+            test.eq((other_nonce).error.code, "DENIED")
             local _, other_restart = gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 2, proof = proof})
-            test.eq((other_restart :: {error: {code: string}}).error.code, "CONFLICT")
+            test.eq((other_restart).error.code, "CONFLICT")
             local _, other_epoch = gateway.verify("listener-secret", generation, "nonce-1", {epoch = 2, restarts = 1, proof = proof})
-            test.eq((other_epoch :: {error: {code: string}}).error.code, "CONFLICT")
+            test.eq((other_epoch).error.code, "CONFLICT")
             local _, stale_restart = gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 0, proof = proof})
-            test.eq((stale_restart :: {error: {code: string}}).error.code, "CONFLICT")
+            test.eq((stale_restart).error.code, "CONFLICT")
             local stale_generation = {epoch = 2, restarts = 1}
             local stale_proof = gateway.proof("listener-secret", stale_generation, "nonce-1")
             local _, stale_proof_reply = gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 1, proof = stale_proof})
-            test.eq((stale_proof_reply :: {error: {code: string}}).error.code, "DENIED")
+            test.eq((stale_proof_reply).error.code, "DENIED")
             local forged = gateway.proof("another-secret", generation, "nonce-1")
             local _, forgery = gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 1, proof = forged})
-            test.eq((forgery :: {error: {code: string}}).error.code, "DENIED")
+            test.eq((forgery).error.code, "DENIED")
             local _, missing = gateway.verify("listener-secret", generation, "nonce-1", {epoch = 3, restarts = 1})
-            test.eq((missing :: {error: {code: string}}).error.code, "DENIED")
+            test.eq((missing).error.code, "DENIED")
             local _, unopened = gateway.verify("", generation, "nonce-1", {epoch = 3, restarts = 1, proof = proof})
-            test.eq((unopened :: {error: {code: string}}).error.code, "UNAVAILABLE")
+            test.eq((unopened).error.code, "UNAVAILABLE")
         end)
         test.it("advertises only admitted tools from the closed catalog and bounds their arguments", function()
             test.eq(#mcp.list({"thread_read"}).tools, 1)
-            local advertised = mcp.list({"thread_read"}).tools :: {{[string]: unknown}}
-            local annotations = advertised[1].annotations :: {[string]: unknown}
+            local advertised = principals.objects(mcp.list({"thread_read"}).tools)
+            local annotations = assert(bounds.object(advertised[1].annotations))
             test.eq(annotations.readOnlyHint, true)
             test.eq(annotations.destructiveHint, false)
             test.eq(#mcp.list({"thread_read", "thread_post"}).tools, 1)
-            local message_tools = mcp.list({"thread_message"}).tools :: {{[string]: unknown}}
+            local message_tools = principals.objects(mcp.list({"thread_message"}).tools)
             test.eq(#message_tools, 1)
-            local message_annotations = message_tools[1].annotations :: {[string]: unknown}
+            local message_annotations = assert(bounds.object(message_tools[1].annotations))
             test.eq(message_annotations.readOnlyHint, false)
             test.eq(message_annotations.idempotentHint, true)
             test.eq(#mcp.list({}).tools, 0)
-            local workspace_tools = mcp.list({"overlay"}).tools :: {{[string]: unknown}}
+            local workspace_tools = principals.objects(mcp.list({"overlay"}).tools)
             test.eq(#workspace_tools, 1)
             test.eq(workspace_tools[1].name, "overlay")
-            local workspace_annotations = workspace_tools[1].annotations :: {[string]: unknown}
+            local workspace_annotations = assert(bounds.object(workspace_tools[1].annotations))
             test.eq(workspace_annotations.readOnlyHint, false)
             test.eq(mcp.tool("overlay") and mcp.tool("overlay").operation, "bee.gov.binding:overlay_call")
-            local delivery_tools = mcp.list({"delivery"}).tools :: {{[string]: unknown}}
+            local delivery_tools = principals.objects(mcp.list({"delivery"}).tools)
             test.eq(#delivery_tools, 1)
             test.eq(delivery_tools[1].name, "delivery")
             test.eq(mcp.tool("delivery") and mcp.tool("delivery").operation, "bee.gov.binding:delivery_call")
-            local delivery_schema = delivery_tools[1].inputSchema :: {[string]: unknown}
-            local delivery_required = delivery_schema.required :: {string}
-            local delivery_properties = delivery_schema.properties :: {[string]: unknown}
-            local delivery_operation = delivery_properties.operation :: {[string]: unknown}
+            local delivery_schema = assert(bounds.object(delivery_tools[1].inputSchema))
+            local delivery_required = principals.strings(delivery_schema.required)
+            local delivery_properties = assert(bounds.object(delivery_schema.properties))
+            local delivery_operation = assert(bounds.object(delivery_properties.operation))
             test.eq(#delivery_required, 3)
             for _, field in ipairs(delivery_required) do test.is_true(field ~= "workspace_id") end
             test.not_nil(delivery_properties.workspace_id)
             test.not_nil(delivery_properties.source_overlay_id)
             test.is_nil(delivery_properties.source_workspace)
-            test.eq(#(delivery_operation.enum :: {string}), 3)
+            test.eq(#(principals.strings(delivery_operation.enum)), 3)
             local preflight_found = false
-            for _, operation in ipairs(delivery_operation.enum :: {string}) do
+            for _, operation in ipairs(principals.strings(delivery_operation.enum)) do
                 if operation == "preflight" then preflight_found = true end
             end
             test.is_true(preflight_found)
-            local delivery_annotations = delivery_tools[1].annotations :: {[string]: unknown}
+            local delivery_annotations = assert(bounds.object(delivery_tools[1].annotations))
             test.eq(delivery_annotations.readOnlyHint, false)
-            local components_tools = mcp.list({"components"}).tools :: {{[string]: unknown}}
+            local components_tools = principals.objects(mcp.list({"components"}).tools)
             test.eq(#components_tools, 1)
             test.eq(mcp.tool("components") and mcp.tool("components").operation, "bee.hub.binding:call")
-            local components_schema = components_tools[1].inputSchema :: {[string]: unknown}
-            local components_operation = (components_schema.properties :: {[string]: unknown}).operation :: {[string]: unknown}
-            local read_operations = components_operation.enum :: {string}
+            local components_schema = assert(bounds.object(components_tools[1].inputSchema))
+            local components_operation = assert(bounds.object((assert(bounds.object(components_schema.properties))).operation))
+            local read_operations = principals.strings(components_operation.enum)
             test.eq(#read_operations, 9)
             local found_installed_source = false
             for _, operation in ipairs(read_operations) do
@@ -355,11 +357,11 @@ local function define_tests()
             end
             local _, authority_error = mcp.components_arguments({arguments = {operation = "catalog", registry = "caller-selected"}})
             test.eq(authority_error, "unknown field registry")
-            local publish_tools = mcp.list({"publish"}).tools :: {{[string]: unknown}}
+            local publish_tools = principals.objects(mcp.list({"publish"}).tools)
             test.eq(#publish_tools, 1)
             test.eq(mcp.tool("publish") and mcp.tool("publish").operation, "bee.gov.binding:delivery_call")
-            local publish_schema = publish_tools[1].inputSchema :: {[string]: unknown}
-            test.eq(#(publish_schema.required :: {string}), 2)
+            local publish_schema = assert(bounds.object(publish_tools[1].inputSchema))
+            test.eq(#(principals.strings(publish_schema.required)), 2)
             local publish_request = mcp.publish_arguments({arguments = {workspace_id = "ws", source_overlay_id = "src", version = "1.0.1"}})
             test.eq(publish_request and publish_request.operation, "publish")
             -- An omitted destination is the binding's own workspace; the
@@ -414,7 +416,7 @@ local function define_tests()
             test.eq(attempt_override, "unknown field attempt_id")
             local message = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", content = {text = "hello"}}})
             test.eq(message and message.idempotency_key, "key")
-            test.eq(message and (message.body :: {[string]: unknown}).message_kind, "notification")
+            test.eq(message and (assert(bounds.object(message.body))).message_kind, "notification")
             local _, missing_key = mcp.message_arguments({arguments = {message_id = "m1", message_kind = "notification", content = {text = "hello"}}})
             test.is_true(tostring(missing_key):find("idempotency_key", 1, true) ~= nil)
             local _, sender_override = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "notification", content = {text = "hello"}, sender_id = "foreign"}})
@@ -431,13 +433,13 @@ local function define_tests()
             end
             local _, request_kind = mcp.message_arguments({arguments = {idempotency_key = "key", message_id = "m1", message_kind = "request", content = {text = "hello"}}})
             test.eq(request_kind, "message_kind is not progress or notification")
-            local note_schema = (mcp.tool("thread_message") :: mcp.Tool)
+            local note_schema = (mcp.tool("thread_message"))
             test.contains(note_schema.description, "does not schedule execution")
             local workspace = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "finding-1", path = "findings/one.md", content = "evidence"}})
             test.eq(workspace and workspace.operation, "put")
             test.eq(workspace and workspace.overlay_id, "research-candidate")
-            test.is_nil(workspace and (workspace :: {[string]: unknown}).workspace_id)
+            test.is_nil(workspace and (assert(bounds.object(workspace))).workspace_id)
             test.eq(workspace and workspace.content, "evidence")
             local binary = mcp.overlay_arguments({arguments = {operation = "put", overlay_id = "research-candidate",
                 expected_revision = 1, idempotency_key = "binary-1", path = "assets/proof.bin", content_base64 = "AP8="}})
@@ -464,10 +466,10 @@ local function define_tests()
             test.eq(mcp.initialize().capabilities.tools.listChanged, true)
             local names: {string} = {}
             for _, tool in ipairs(mcp.TOOLS) do names[#names + 1] = tool.name end
-            local listed = mcp.list(names).tools :: {{[string]: unknown}}
+            local listed = principals.objects(mcp.list(names).tools)
             for _, tool in ipairs(listed) do
                 test.not_nil(tool.outputSchema)
-                local output = tool.outputSchema :: {[string]: unknown}
+                local output = assert(bounds.object(tool.outputSchema))
                 test.eq(output.type, "object")
                 test.not_nil(mcp.OUTPUT_SCHEMAS[tostring(tool.name)])
             end
@@ -477,7 +479,7 @@ local function define_tests()
             test.eq(fault.error.retryable, false)
             test.eq(fault.error.remedy, "call session_list")
             local structured = mcp.tool_result("{}", false, {ok = true})
-            test.eq((structured.structuredContent :: {[string]: unknown}).ok, true)
+            test.eq((assert(bounds.object(structured.structuredContent))).ok, true)
             local capabilities = mcp.tool("capabilities")
             if not capabilities then error("capabilities tool") end
             test.eq(capabilities.annotations.readOnlyHint, true)
@@ -493,12 +495,12 @@ local function define_tests()
                 authoring = {guide_tool = "overlay", guide_operation = "guide", preflight_tool = "delivery",
                     preflight_operation = "preflight", note = "read first"}}}
             conforms(capabilities, mcp.OUTPUT_SCHEMAS.capabilities, "capabilities")
-            local envelope = mcp.OUTPUT_SCHEMAS.capabilities.properties :: Object
-            local value = envelope.value :: Object
-            local capabilities_schema = value.properties :: Object
-            local traits = capabilities_schema.traits :: Object
+            local envelope = assert(bounds.object(mcp.OUTPUT_SCHEMAS.capabilities.properties))
+            local value = assert(bounds.object(envelope.value))
+            local capabilities_schema = assert(bounds.object(value.properties))
+            local traits = assert(bounds.object(capabilities_schema.traits))
             test.eq(traits.type, "array")
-            test.not_nil(((traits.items :: Object).properties :: Object).id)
+            test.not_nil((assert(bounds.object((assert(bounds.object(traits.items))).properties))).id)
         end)
         test.it("refuses workspace identity in capability arguments", function()
             local empty = mcp.capabilities_arguments({arguments = {}})

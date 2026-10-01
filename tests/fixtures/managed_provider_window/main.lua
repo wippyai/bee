@@ -1,3 +1,5 @@
+local channel = require("channel")
+local bounds = require("bounds")
 -- Actual provider startup through the broker; no prompt or authentication.
 local process = require("process")
 local registry = require("registry")
@@ -17,7 +19,7 @@ end
 
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("missing reply") end
-    return value :: {[string]: unknown}
+    return assert(bounds.object(value))
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
@@ -25,18 +27,18 @@ local function call(target: string, value: unknown): {[string]: unknown}
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
-        local fault = type(result.error) == "table" and result.error :: {[string]: unknown} or {}
+        local fault = type(result.error) == "table" and assert(bounds.object(result.error)) or {}
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
     return result
 end
 
-local function receive_reply(replies: any, request_id: string, operation: string): {[string]: unknown}
+local function receive_reply(replies: channel.Channel<process.Message>, request_id: string, operation: string): {[string]: unknown}
     while true do
-        local message = assert(replies:receive())
+        local message = assert((replies:receive()))
         local data = message:payload():data()
         if type(data) == "table" and data.request_id == request_id and data.op == operation then
-            return data :: {[string]: unknown}
+            return assert(bounds.object(data))
         end
     end
     return {}
@@ -109,7 +111,7 @@ local function run(provider: string, definition: string, marker: string, title: 
     local rebound_frame = plain(table.concat(next_view:snapshot().rows))
     assert(rebound_frame:find(marker, 1, true), provider .. " detach lost the provider UI")
     if provider == "claude" then
-        assert(tonumber(rebound_frame:match("❯%s+(%d+)%s*%.")) == (selected :: number) + 1, "Claude detach reset the provider selection")
+        assert(tonumber(rebound_frame:match("❯%s+(%d+)%s*%.")) == assert(selected) + 1, "Claude detach reset the provider selection")
     else
         assert(rebound_frame:find("managed-input", 1, true), "Codex detach lost typed input")
     end
@@ -118,9 +120,10 @@ local function run(provider: string, definition: string, marker: string, title: 
     assert(closed.error_code == "", "managed " .. provider .. " close failed")
     local records = call("bee.threads.service:read_after", {thread_id = thread, cursor = 0, limit = 32})
     local kinds: {[string]: boolean} = {}
-    local value = records.value :: {[string]: unknown}
+    local value = assert(bounds.object(records.value))
     local receipts = 0
-    for _, item in ipairs(value.records :: {{[string]: unknown}}) do
+    for _, item in ipairs(assert(bounds.array(value.records))) do
+        local item = assert(bounds.object(item))
         kinds[tostring(item.kind)] = true
         if item.kind == "action.admitted" then
             local admitted = reply(item.body)
@@ -147,7 +150,7 @@ end
 
 local function run_all()
     local expected = assert(registry.get("bee.managed.provider.fixture:expectation"))
-    local data = expected.data :: {[string]: unknown}
+    local data = assert(bounds.object(expected.data))
     run("claude", "bee.managed.provider.fixture:definition_claude", tostring(data.claude_marker), "Open Claude Code window", "managed_claude_thread")
     run("codex", "bee.managed.provider.fixture:definition_codex", tostring(data.codex_marker), "Open Codex CLI window", "managed_codex_thread")
 end

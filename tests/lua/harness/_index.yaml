@@ -1726,6 +1726,7 @@ entries:
     - bee.security.approvals:approval_store_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
+    placement_decode: bee.placement:decode
     principals: bee.test.principals:bound
     bounds: bee.protocol:bounds
     test: wippy.test:test

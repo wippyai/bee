@@ -69,9 +69,10 @@ local function run()
     local function publish(bindings: unknown)
         local snapshot = assert(registry.snapshot())
         local entry = assert(snapshot:get("bee.security:application_admission"))
-        entry.data = {bindings = bindings}
+        assert(type(entry.id) == "string" and type(entry.kind) == "string")
+        local updated = {id = entry.id, kind = entry.kind, data = {bindings = bindings}}
         local changes = snapshot:changes()
-        changes:update(entry)
+        changes:update(updated)
         assert(changes:apply())
     end
     catalog_contains(false)

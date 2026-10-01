@@ -374,7 +374,7 @@ local function define_tests()
             if not manager then error("hive manager package binding missing") end
             test.eq(#(manager.policies :: {string}), 3)
             test.is_true(has(selected, "bee.workspace.manager.app:app"))
-            test.is_true(has(selected, "bee.hub.modules:app"))
+            test.is_true(has(selected, "bee.hub.modules.app:app"))
             test.is_true(has(selected, "bee.gov.overlays:app"))
             local files = bindings["bee.files.app:app"]
             if not files then error("Files package binding missing") end

@@ -88,8 +88,6 @@ function M.rows(painter: Painter, background: string?): {string}
     local rows: {string} = {}
     for y = 1, painter.height do
         local row = painted[y] or ""
-        -- The compositor may omit trailing blank cells. A frame publishes a
-        -- complete rectangle, including its surface at the right edge.
         local gap = maximum(0, painter.width - tty.text.width(row))
         rows[y] = row .. appearance.style(painter.theme.text, background or painter.theme.surface) .. string.rep(" ", gap) .. RESET
     end

@@ -141,6 +141,22 @@ local function define_tests()
             test.eq(decoded.last_result and decoded.last_result.outcome, "budget_exceeded")
         end)
 
+        test.it("retains the saved profile revision and rejects malformed profile references", function()
+            local snapshot: {[string]: unknown} = {session = "bs:n:w:s1", revision = 1, incarnation = 1, title = "saved",
+                lifecycle = "closed", activity = "idle", execution = {state = "quiescent",
+                    evidence_at = "2026-09-30T12:00:00.000Z", stale = false}, queue_count = 0, effective_limits = {},
+                continuity = {mode = "provider_resume"}, actions = {}, saved_profile = {id = "careful", revision = 3}}
+            local decoded, err = protocol.decode_snapshot(snapshot)
+            if not decoded then error(tostring(err)) end
+            test.eq(decoded.saved_profile and decoded.saved_profile.id, "careful")
+            test.eq(decoded.saved_profile and decoded.saved_profile.revision, 3)
+            for _, invalid in ipairs({{id = "careful", revision = 0}, {id = "careful", revision = 1.5},
+                {id = "", revision = 3}, {id = "careful", revision = 3, extra = true}}) do
+                snapshot.saved_profile = invalid
+                test.is_nil(protocol.decode_snapshot(snapshot))
+            end
+        end)
+
         test.it("checks qualified refs by kind", function()
             test.eq(protocol.ref("work", "bw:n:w:w1"), "bw:n:w:w1")
             test.is_nil(protocol.ref("work", "bs:n:w:s1"))

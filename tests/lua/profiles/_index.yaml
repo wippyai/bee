@@ -169,3 +169,13 @@ entries:
   modules: [registry, json]
   security: {policies: [bee.harness.profiles:repair_policy]}
   imports: {test: wippy.test:test, form: bee.harness.app:profile_form, editor: bee.harness.app:profile_editor, bounds: bee.threads.records:bounds}
+- name: reopen_test
+  kind: function.lua
+  source: file://reopen_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    agents: bee.harness.app:agents
+    sessions: bee.application:sessions
+    protocol: bee.application:sessions_protocol

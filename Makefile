@@ -277,7 +277,7 @@ CHECK_JOBS ?= 4
 .PHONY: check-parallel
 check-parallel:
 	python3 build/parallel_check.py --jobs "$(CHECK_JOBS)"
-check-shard-foundation: check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
+check-shard-foundation: $(TOOLCHAIN_CURRENT) check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
 check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check kernel-bare-check package-drop-check retained-owner-check hive-supervisor-check
 check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check thread-storage-check resources-check
 check-shard-services-storage: workspace-storage-check

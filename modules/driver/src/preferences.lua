@@ -7,8 +7,6 @@ local instructions = require("instructions")
 local profile_access = require("profile_access")
 local canonical = require("canonical")
 local M = {}
--- Nine leaves room for one historical top-level option translated by the
--- profile owner while keeping the bounded scalar map small.
 M.MAX_OPTIONS = 64
 M.MAX_OPTION_VALUES = 32
 M.MAX_OPTION_VALUE_BYTES = 512

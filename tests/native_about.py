@@ -47,8 +47,11 @@ with tempfile.TemporaryDirectory(prefix="bee-native-about-") as temporary:
         ui.wait("https://bee.wippy.ai")
         ui.resize(48, 16)
         ui.key(b"\x1b[5~" * 30)
-        ui.key(b"\x1b[6~")
         ui.wait("Website")
+        ui.wait("https://bee.wippy.ai")
+        ui.key(b"\x1b[6~")
+        ui.wait("Live Bee packs")
+        ui.wait("installed")
         ui.quit()
     finally:
         ui.close()

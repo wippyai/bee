@@ -157,7 +157,7 @@ entries:
         application_stop: true
         thread_access: none
       - component: bee.hub.modules
-        definition_id: bee.hub.modules:app
+        definition_id: bee.hub.modules.app:app
         capabilities: [hub.manage, hub.self_update]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.hub.modules:client_policy,
           bee.hub.modules:hub_policy, bee.hub.modules:self_update_policy, bee.hub.modules:publication_policy]

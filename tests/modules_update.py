@@ -127,7 +127,7 @@ return {handle = handle}
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-update-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules.app:app",))
         try:
             ui.resize(150, 40)
             ui.wait("MODULES", timeout=20)
@@ -173,7 +173,7 @@ def exercise(project, packed, pack):
 def exercise_self_update(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-self-update-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules.app:app",))
         try:
             ui.wait("MODULES", timeout=20)
             for y, line in enumerate(ui.screen.display, 1):

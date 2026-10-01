@@ -87,10 +87,15 @@ end
 -- The key identifies one open operation: retrying the same key returns the
 -- same session, never a second one.
 function M.open(client: sessions.Client, definition: string, profile: {id: string, revision: integer}?,
-    key: string, presentation: sessions_protocol.Presentation?): (Conversation?, string?)
-    local session, fault = client:open({definition = definition, profile = profile, presentation = presentation, operation_key = key})
+    key: string, presentation: sessions_protocol.Presentation?, workspace: string?): (Conversation?, string?)
+    local session, fault = client:open({definition = definition, profile = profile, presentation = presentation, workspace = workspace, operation_key = key})
     if not session then return nil, describe(fault) end
     return conversation(session), nil
+end
+
+function M.reopen(client: sessions.Client, previous: sessions_protocol.SessionSnapshot, key: string): (Conversation?, string?)
+    if not previous.definition then return nil, "This session has no agent definition" end
+    return M.open(client, previous.definition, previous.saved_profile, key, previous.presentation, previous.workspace)
 end
 
 -- Sends text as one unit of work. A failed send keeps its key, so submitting

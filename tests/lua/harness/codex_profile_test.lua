@@ -54,11 +54,11 @@ end
 local function define_tests()
     test.describe("Saved Codex config profile reachability", function()
         test.it("offers the field only on Codex policies and keeps the window's inherited home", function()
-            test.eq((raw_policy(CODEX_WINDOW).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"].kind, "text")
-            test.eq((raw_policy(CODEX_NAMED_BATCH).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"].kind, "text")
+            test.eq(assert(preferences.decode_profile_restrictions(raw_policy(CODEX_WINDOW).profile_restrictions))["provider.options.config_profile"].kind, "text")
+            test.eq(assert(preferences.decode_profile_restrictions(raw_policy(CODEX_NAMED_BATCH).profile_restrictions))["provider.options.config_profile"].kind, "text")
             -- A Claude policy must never advertise a Codex-only field.
-            test.is_nil((raw_policy(CLAUDE_WINDOW).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"])
-            test.is_nil((raw_policy(CLAUDE_BATCH).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"])
+            test.is_nil(assert(preferences.decode_profile_restrictions(raw_policy(CLAUDE_WINDOW).profile_restrictions))["provider.options.config_profile"])
+            test.is_nil(assert(preferences.decode_profile_restrictions(raw_policy(CLAUDE_BATCH).profile_restrictions))["provider.options.config_profile"])
             -- The Codex window profile inherits the host home, so the named
             -- file it declares can resolve there.
             local codex, codex_error = registry.get("bee.driver.codex:profiles")
@@ -106,7 +106,7 @@ local function define_tests()
         end)
 
         test.it("projects the selected named profile into each private Codex route", function()
-            test.eq((raw_policy(CODEX_BATCH).profile_restrictions :: {[string]: unknown})["provider.options.config_profile"].kind, "text")
+            test.eq(assert(preferences.decode_profile_restrictions(raw_policy(CODEX_BATCH).profile_restrictions))["provider.options.config_profile"].kind, "text")
             local cases: {{profile_id: string, resume_ref: string?}} = {
                 {profile_id = "batch"},
                 {profile_id = "batch", resume_ref = "session-1"},

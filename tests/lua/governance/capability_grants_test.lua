@@ -325,12 +325,12 @@ local function define_tests()
         test.it("grants Bee self-update only to the host Modules app", function()
             local vocabulary_value = vocabulary()
             local request_value = request("hub.self_update", {})
-            request_value.targets = {"bee.hub.modules:app"}
+            request_value.targets = {"bee.hub.modules.app:app"}
             local cap = request_value.capability_request
             if type(cap) ~= "table" then error("missing capability request") end
-            cap.target = "bee.hub.modules:app"
+            cap.target = "bee.hub.modules.app:app"
             local proposed = assert(grants.propose(vocabulary_value, OWNER,
-                "bee.hub.modules:app", {request_value}))
+                "bee.hub.modules.app:app", {request_value}))
             local data = proposed.policies[1].data
             if type(data) ~= "table" then error("missing policy data") end
             local body = data.policy

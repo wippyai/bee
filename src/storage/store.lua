@@ -323,6 +323,14 @@ UPDATE workspace_state SET value = replace(replace(replace(value,
 WHERE instr(value, '"definition_id":"bee.') > 0;
 ]]
 
+local MODULES_APPLICATION_NAMES_SQL = [[
+UPDATE workspace_application_thread_bindings SET definition_id = 'bee.hub.modules.app:app'
+WHERE definition_id = 'bee.hub.modules:app';
+UPDATE workspace_state SET value = replace(value,
+    '"definition_id":"bee.hub.modules:app"', '"definition_id":"bee.hub.modules.app:app"')
+WHERE instr(value, '"definition_id":"bee.hub.modules:app"') > 0;
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
@@ -334,6 +342,7 @@ local migrations: {Migration} = {
     {id = 8, name = "workspace_folder_on_open_v1", sql = FOLDER_ON_OPEN_SQL},
     {id = 9, name = "nested_bee_names_v1", sql = NESTED_NAMES_SQL},
     {id = 10, name = "application_child_names_v1", sql = APPLICATION_NAMES_SQL},
+    {id = 11, name = "modules_application_child_names_v1", sql = MODULES_APPLICATION_NAMES_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string

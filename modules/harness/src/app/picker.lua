@@ -189,7 +189,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         local key = assert(uuid.v7())
         opening = true; status = "Opening new session…"; dirty = true
         coroutine.spawn(function()
-            local conv, err = agents.open(sessions.client(), definition, nil, key)
+            local conv, err = agents.reopen(sessions.client(), current.session.snapshot, key)
             if running and serial == open_serial then opens:send({serial = serial, conversation = conv, error = err}) end
         end)
     end

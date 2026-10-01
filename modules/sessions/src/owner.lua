@@ -101,13 +101,19 @@ local function snapshot(value: unknown): (Object?, string?)
     local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
     if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
     local route = object(row.route) or {}
+    local saved_profile: Object? = nil
+    if route.saved_profile_id ~= nil or route.saved_profile_revision ~= nil then
+        local id, revision = ref(route.saved_profile_id), bounds.integer(route.saved_profile_revision)
+        if not id or not revision or revision < 1 then return nil, "Session saved profile is malformed" end
+        saved_profile = {id = id, revision = revision}
+    end
     return {presentation = route.delivery == "hook" and "window" or "headless", session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
         driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
         revision = row.revision, incarnation = 1, title = row.title,
         lifecycle = lifecycle, activity = activity, activity_evidence = activity_evidence,
         execution = {state = row.execution_running == true and "running" or "quiescent", evidence_at = at, stale = false},
         queue_count = queued, effective_limits = route.budgets or {},
-        effective_profile = route.effective_profile, profile_digest = route.profile_digest, budget_consumption = row.budget_consumption, continuity = {mode = "provider_resume"}, actions = {}}, nil
+        saved_profile = saved_profile, effective_profile = route.effective_profile, profile_digest = route.profile_digest, budget_consumption = row.budget_consumption, continuity = {mode = "provider_resume"}, actions = {}}, nil
 end
 
 local finish_closing: (string, string) -> string?

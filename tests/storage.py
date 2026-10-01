@@ -545,12 +545,12 @@ def main():
         with sqlite3.connect(database) as connection:
             connection.execute(
                 "INSERT INTO workspace_schema_migrations (id, name, checksum, applied_at) "
-                "VALUES (10, 'future_schema', 'future', 'now')"
+                "VALUES (12, 'future_schema', 'future', 'now')"
             )
             connection.commit()
         assert "newer than this Bee build" in run_probe(project, folder, expect_success=False)
         with sqlite3.connect(database) as connection:
-            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 10")
+            connection.execute("DELETE FROM workspace_schema_migrations WHERE id = 12")
             connection.commit()
         run_probe(project, folder)
 

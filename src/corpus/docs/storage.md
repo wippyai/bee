@@ -127,3 +127,8 @@ Recovery lists only pending and active rows, while revoked rows remain as
 tombstones. The row contains no process, launch, mount, scope, execution,
 database or application-data fields, and the helper is not part of ordinary app
 imports.
+
+Workspace migrations 10 and 11 move saved application definition IDs to their
+application child namespaces. Migration 10 covers Timeline, Workspaces and Hive
+Manager; migration 11 covers Modules. Both preserve opaque application state
+and layout generations. Workspace recovery also recognizes the earlier IDs.

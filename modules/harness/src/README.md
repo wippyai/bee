@@ -105,3 +105,8 @@ with their first prompt. Closed conversations show history and offer a fresh
 session using the agent definition's defaults. CLI write refusals explain that
 they are separate from Bee approvals. Advanced Docker profiles expose Revoke
 Docker access with the existing confirmation and Ctrl+R shortcut.
+
+Starting a new session from a closed conversation reuses its saved profile ID and
+revision, presentation and workspace through the public Sessions open operation.
+Admission revalidates the saved revision; a changed or removed profile refuses
+the new session instead of falling back to definition defaults.

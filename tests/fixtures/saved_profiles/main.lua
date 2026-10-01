@@ -35,7 +35,7 @@ local function value(reply: Object): Object
 end
 
 local function profile(title: string): Object
-    return {schema_revision = "bee.agent-profile@2", name = title, definition_ref = "bee:codex", driver_binding_ref = "bee.driver.codex:binding", provider = {options = {mode = "offline"}, system_prompt_append = "persisted profile"}, bee = {mcp = {}}}
+    return {schema_revision = "bee.agent-profile@2", name = title, definition_ref = "bee.saved.profiles.probe:agent", driver_binding_ref = "bee.saved.profiles.probe:binding", provider = {options = {sandbox = "read-only"}, system_prompt_append = "persisted profile"}, bee = {mcp = {}}}
 end
 
 local function native_node(): string
@@ -67,6 +67,10 @@ local function probe(phase: string?, expected_node: string?)
     assert(saved.revision == 1 and saved.tombstone == false, "saved profile revision or state was lost")
     local saved_profile = bounds.object(saved.profile)
     assert(saved_profile and saved_profile.name == "Persisted", "saved profile value was lost")
+    local provider = saved_profile and bounds.object(saved_profile.provider)
+    local options = provider and bounds.object(provider.options)
+    assert(provider and provider.system_prompt_append == "persisted profile" and options and options.sandbox == "read-only",
+        "saved provider options were lost")
     local tombstone = value(call(reader, {operation = "get", workspace_id = WORKSPACE, profile_id = DELETED}))
     assert(tombstone.revision == 2 and tombstone.tombstone == true and tombstone.profile == nil, "tombstone was lost across restart")
     local historical = {operation = "put", workspace_id = WORKSPACE, profile_id = DELETED,

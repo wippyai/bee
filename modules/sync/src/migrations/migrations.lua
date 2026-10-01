@@ -113,7 +113,7 @@ CREATE TABLE bee_sync_distribution_cursors (
   cursor INTEGER NOT NULL CHECK(cursor >= 0),
   PRIMARY KEY(source_owner, feed, destination_node)
 );
- ]]},
+]]},
         {id = 5, name = "owner_projection_data_migrations", rebuild = false, sql = [[
 CREATE TABLE bee_sync_projection_migrations (
   owner_id TEXT NOT NULL,

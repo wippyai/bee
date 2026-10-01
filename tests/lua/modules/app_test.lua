@@ -41,9 +41,9 @@ local function open(width: integer, height: integer): Window
     local events = assert(process.events())
     local self = tostring(process.pid())
     local instance_id = "modules-" .. uuid.v7()
-    local pid, spawn_error = process.with_options({terminal = grant}):spawn_monitored("bee.hub.modules:app", "bee:workers", {version = 1,
+    local pid, spawn_error = process.with_options({terminal = grant}):spawn_monitored("bee.hub.modules.app:app", "bee:workers", {version = 1,
         broker_pid = self, workspace_pid = self, workspace_id = WORKSPACE, instance_id = instance_id, view_id = instance_id,
-        definition_id = "bee.hub.modules:app", execution_generation = 1, definition_revision = "1", registry_revision = "1",
+        definition_id = "bee.hub.modules.app:app", execution_generation = 1, definition_revision = "1", registry_revision = "1",
         launch_token = uuid.v7(), resume_schema = "", resume_state = "", arguments = {}})
     if not pid then error("modules spawn failed: " .. tostring(spawn_error)) end
     return {view = view, pid = tostring(pid), events = events}

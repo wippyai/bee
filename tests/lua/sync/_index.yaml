@@ -1,6 +1,30 @@
 version: '1.0'
 namespace: bee.sync
 entries:
+- name: migration_test_db
+  kind: db.sql.sqlite
+  meta: {type: test_support}
+  file: .wippy/sync-migration-test.db
+  lifecycle: {auto_start: true}
+- name: migration_test_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [db.get]
+    resources: [bee.sync:migration_test_db]
+    effect: allow
+- name: migration_test
+  kind: function.lua
+  source: file://migration_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    migrations: bee.sync.migrations:migrations
+    ledger: bee.persist:ledger
+    persist: bee.persist:database
+    database: bee.sync.persist:database
+  security: {policies: [bee.sync:migration_test_policy]}
 - name: sync_test_db
   kind: db.sql.sqlite
   meta: {type: test_support}

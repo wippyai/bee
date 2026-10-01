@@ -24,6 +24,10 @@ entries:
   kind: ns.dependency
   component: bee/persist
   version: 0.1.0-dev
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: 0.1.0-dev
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -71,7 +75,7 @@ entries:
   kind: security.policy
   policy:
     actions: [db.get, registry.get, system.read]
-    resources: [bee.node:db, bee.harness.profiles:database_ref, node]
+    resources: [bee.node:db, bee.harness.profiles:database_ref, node, bee.saved.profiles.probe:agent, bee.saved.profiles.probe:binding, bee.driver.codex.descriptor:cli]
     effect: allow
 `
 
@@ -249,13 +253,22 @@ entries:
 	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "threads"), filepath.Join(source, "modules", "threads")); err != nil {
 		return err
 	}
+	if err := savedProfilesCopyTree(filepath.Join(root, "modules", "driver"), filepath.Join(source, "modules", "driver")); err != nil {
+		return err
+	}
+	if err := savedProfilesCopyTree(filepath.Join(root, "src", "driver", "codex", "descriptor"), filepath.Join(source, "modules", "driver-codex", "src", "descriptor")); err != nil {
+		return err
+	}
+	if err := savedProfilesCopyFile(filepath.Join(root, "src", "security", "threads", "_index.yaml"), filepath.Join(source, "src", "security", "threads", "_index.yaml")); err != nil {
+		return err
+	}
 	if err := savedProfilesCopyTree(filepath.Join(root, "src", "saved_profiles_probe"), filepath.Join(source, "tests", "fixtures", "saved_profiles")); err != nil {
 		return fmt.Errorf("copy saved profile fixture: %w", err)
 	}
-	if err := savedProfilesWrite(filepath.Join(root, "wippy.lock"), "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n"); err != nil {
+	if err := savedProfilesWrite(filepath.Join(root, "wippy.lock"), "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n- name: bee/driver\n  version: 0.1.0-dev\n"); err != nil {
 		return err
 	}
-	if err := savedProfilesWrite(filepath.Join(root, ".wippy.yaml"), "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/hive: ./modules/hive\n    bee/threads: ./modules/threads\n"); err != nil {
+	if err := savedProfilesWrite(filepath.Join(root, ".wippy.yaml"), "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/hive: ./modules/hive\n    bee/threads: ./modules/threads\n    bee/driver: ./modules/driver\n"); err != nil {
 		return err
 	}
 	return nil

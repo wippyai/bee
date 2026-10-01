@@ -77,7 +77,8 @@ type LastResult = {work: string, outcome: LastOutcome, summary: string, at: stri
 type HistoryItem = {work: string, sequence: integer, input: unknown, created_at: string}
 type HistoryPage = {items: {HistoryItem}, next: integer?}
 type Presentation = "headless" | "window"
-type SessionSnapshot = {effective_profile: profile_values.Profile?, profile_digest: string?,
+type ProfileRef = {id: string, revision: integer}
+type SessionSnapshot = {saved_profile: ProfileRef?, effective_profile: profile_values.Profile?, profile_digest: string?,
     budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, presentation: Presentation?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, activity_evidence: ActivityEvidence?, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
@@ -562,7 +563,7 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation", "effective_profile", "profile_digest", "budget_consumption"})
+        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation", "effective_profile", "profile_digest", "budget_consumption", "saved_profile"})
     if not object then return nil, failure end
     local presentation: Presentation = "headless"
     if object.presentation == "window" then presentation = "window"
@@ -640,6 +641,13 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     if continuity_mode == "provider_resume" then decoded_continuity = "provider_resume"
     elseif continuity_mode == "reconstructed" then decoded_continuity = "reconstructed"
     elseif continuity_mode == "fresh" then decoded_continuity = "fresh" end
+    local saved_profile: ProfileRef? = nil
+    if object.saved_profile ~= nil then
+        local saved = shape(object.saved_profile, "saved profile", {"id", "revision"})
+        local id, revision = saved and bounds.id(saved.id), saved and M.position(saved.revision)
+        if not id or not revision then return nil, "saved profile is malformed" end
+        saved_profile = {id = id, revision = revision}
+    end
     local profile: profile_values.Profile? = nil
     if object.effective_profile ~= nil then
         local err: string?
@@ -659,7 +667,7 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
         if not steps or not tools or not tokens or not wall then return nil, "session consumption is malformed" end
         consumed = {provider_steps = steps, tool_calls = tools, tokens = tokens, wall_time_ms = wall}
     end
-    return {effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, presentation = presentation, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
+    return {saved_profile = saved_profile, effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, presentation = presentation, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
         definition = extras.definition, last_result = last_result,
         session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
         activity = decoded_activity, activity_evidence = activity_evidence,

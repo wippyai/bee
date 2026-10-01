@@ -57,10 +57,3 @@ entries:
 - name: fixture_terminal
   kind: terminal.host
   lifecycle: {auto_start: true}
-
-- name: hub_publish_configuration
-  kind: registry.entry
-  data: {}
-- name: protected_kernel
-  kind: registry.entry
-  data: {namespaces: []}

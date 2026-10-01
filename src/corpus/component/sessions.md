@@ -23,6 +23,7 @@ An accepted turn becomes `stalled` when its thread has no new live observation f
 
 Managed open/call and MCP open/run accept an optional canonical `placement` override. Both the definition and host policy must admit that override; Docker template selection and native machine-home access retain their existing ceilings. The override persists in the Threads route and the scheduler reuses it for every turn. Window placement overrides require a saved profile.
 
+Snapshots expose the optional `saved_profile` reference `{id, revision}` used at admission.
 Snapshots carry the resolved `effective_profile`, including presentation, budgets and supervision, and its canonical SHA-256 `profile_digest`. They expose `presentation` and the canonical `thread_ref`, driver/provider, definition, workspace
 and last result summary. `history{session,cursor?}` pages immutable Work inputs;
 clients observe results with `get` or `await`. SDK open/call and MCP open/run accept

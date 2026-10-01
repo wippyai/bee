@@ -34,21 +34,22 @@ Agent window and the `bee claude`, `bee codex`, `bee agy`, `bee grok`,
 `bee muse` and `bee opencode` shortcuts pass the selected definition back
 through admission before execution.
 
-Saved profiles contain bounded options, MCP tool names, instructions, optional
-`bee.permission_answers` (`provider`, `ask` or `deny`) and
-optional workdir or thread preferences. The picker carries the selected
-profile ID and revision into `session_open`; a changed profile must be selected
-again. Profile contents do not add authority. Provider credentials are
-projected by the host credential broker and are never returned through the
-catalog.
+Saved profiles use `bee.agent-profile@2`, owned by the existing Harness/Sync profile feed. Stock resolved defaults and saved copies share this shape:
 
-Profiles may select a host-admitted `placement_profile_ref`. Admission freezes
-its digest alongside the placement binding and refuses a changed profile before
-dispatch. The Agent profile form lists only placements admitted by its launch
-policy. For Docker, readiness inspects the selected image's platform and runtime
-artifact metadata and checks host login evidence through the same locator;
-it never runs a host binary as proof of a container runtime. Missing images
-appear with a concrete reason in the unavailable catalog.
+- Identity: `schema_revision`, `definition_ref`, `driver_binding_ref`, `name`; optional `agent_ref`, `owner_component_revision`, `spec_digest` fence the closure. Revisions stay in the CAS store envelope.
+- `provider`: `model`, `effort`, `permission_mode`, `tool_allow`, `tool_deny`, `system_prompt_append`, `env`, `options`. Driver-specific values such as Codex sandbox and config profile use descriptor-declared `options` keys.
+- `bee`: scoped `mcp`, `files`, `workspaces`, `credential_refs`, `approval_leases`, `permission_answers` (`provider`, `ask`, `deny`). References describe requested authority and never grant it.
+- `placement`: `{kind="native", home="private"|"machine"}` or `{kind="docker", profile_ref=Ref, overrides?}`; `presentation`: `headless` or `window`; optional `workdir`, `thread`, `budgets={turn?,session?}`, `supervision={quiet_period_ms?,on_stall?}`.
+
+The strict model preserves bounded grant requests. Launch currently refuses nonempty explicit MCP scopes, extra file/workspace grants, credential selections, approval leases, provider environment and provider tool rules when no admitted renderer/authority mechanism exists. Runtime approval leases remain a proposal. Machine home requires host permission; native execution retains OS-user authority.
+
+`bee.driver.cli-descriptor@3` declares each configurable field's canonical path, value schema, label, section, order, contexts, support evidence and renders. The generated Basic/Advanced form intersects these fields with canonical host `profile_restrictions`; locate reports version/help support and launch checks explicit saved values again. A supported version range is `>=major.minor.patch`. Config-only support names the descriptor's schema evidence. The catalog accepts `definition_ref`, `query` and stable `sort="name"|"driver"`; the picker exposes search and sorting without a catalog-wide page cap. Customize copy creates a fresh ID at revision zero. Conflicts preserve the draft and offer reload/copy; an uncertain save retries the same key.
+
+Prompt additions stay in the placement's private home. Claude uses `--append-system-prompt-file` and `--strict-mcp-config`, Grok uses `--rules`, Codex reads additive `developer_instructions` from private projected TOML, OpenCode references the prompt file through projected `instructions`; agy and Muse declare private-home guidance files. Real installed-harness consumption is separately validated by acceptance evidence. The turn brief remains separate.
+
+Docker uses the existing reusable `bee.placement.docker` templates. Overrides narrow host memory bytes, CPU millicpus, pids and admitted mounts, or retain the exact pinned image/non-root user. Network/tmpfs/directory/environment overrides reject when the template has no admitting mechanism. Revoke Docker access is an Advanced action. Passive readiness never provisions an image.
+
+A transactional migration rewrites historical payloads to v2 once for the profile owner. Unknown fields, missing definitions, unsupported options and conflicting aliases produce `bee.agent-profile-migration@1` with original source, editable draft and reasons. Diagnostics block launch and repair through normal CAS. Projection revisions, tombstones, receipt/event bytes and other owners remain intact; feed cursors advance and fence old snapshots. Applied SQL migrations remain unchanged. Session snapshots carry `effective_profile`, `profile_digest` and durable `budget_consumption`.
 
 ## Boundaries
 

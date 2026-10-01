@@ -35,8 +35,8 @@ file or config existence and environment presence are setup evidence, not proof 
 
 The six external CLI packages use the shared `bee.driver:universal`
 implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
-entry (`bee.driver.cli-descriptor@2`) with executable and version probe, an any-of login evidence declaration, launch templates,
-option and flag templates, JSON paths, and a codec ID. The host validates the
+entry (`bee.driver.cli-descriptor@3`) with executable and version probe, an any-of login evidence declaration, launch templates,
+OptionSpec value schemas, form labels, contexts, capability evidence and renders, JSON paths, and a codec ID. The same declaration supplies form choices and launch arguments; there is no separate profile-options map. Locate reports capabilities established by version/help probes. The host validates the
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
 

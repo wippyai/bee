@@ -57,22 +57,22 @@ deviation is a Fault, never a partial value.
 ```lua
 local c = sessions.call{definition = "research:quick", input = "Summarize the repository", operation_key = "call/summary", timeout_ms = 30000}
 -- c.work is the Work handle; c.observation.tag is ready, pending, blocked or uncertain.
-local s = sessions.open{definition = "research:worker", budget = {max_turns = 12, max_tokens = 20000},
-    progress_quiet_ms = 45000, operation_key = "open/worker"}
-local w = s:send{input = "Check the baseline", budget = {max_tokens = 5000}, operation_key = "send/baseline"}
+local s = sessions.open{definition = "research:worker", budgets = {turn = {provider_steps = 12, tokens = 20000}},
+    supervision = {quiet_period_ms = 45000, on_stall = "report"}, operation_key = "open/worker"}
+local w = s:send{input = "Check the baseline", budgets = {turn = {tokens = 5000}}, operation_key = "send/baseline"}
 local a = w:await{timeout_ms = 30000}
 local closing = s:close{operation_key = "close/worker"}
 ```
 
-- `call{definition, input, operation_key, output?, profile?, workdir?, budget?, progress_quiet_ms?, timeout_ms?}` opens a session with its first work in one owner operation and awaits it once. It returns `{work, observation}` on every observation branch. An unsuccessful settlement is a `ready` observation whose `result.outcome` is not `succeeded`.
-- `open{definition, profile?, workdir?, budget?, progress_quiet_ms?, operation_key}` returns a Session. `send{session?, input, output?, budget?, operation_key}` (or `session:send`) returns a Work whose `receipt` proves intake only. Work is queued; nothing runs inside the call.
-- `budget = {max_turns?, max_tokens?, wall_time_ms?}` is opt-in on open and send. A session budget applies to each Work; a send budget tightens matching session fields. Exceeding a budget returns `outcome = "budget_exceeded"` with `BUDGET_EXCEEDED` and placement exit evidence.
+- `call{definition, input, operation_key, output?, profile?, workdir?, budgets?, supervision?, timeout_ms?}` opens a session with its first work in one owner operation and awaits it once. It returns `{work, observation}` on every observation branch. An unsuccessful settlement is a `ready` observation whose `result.outcome` is not `succeeded`.
+- `open{definition, profile?, workdir?, budgets?, supervision?, operation_key}` returns a Session. `send{session?, input, output?, budgets?, operation_key}` (or `session:send`) returns a Work whose `receipt` proves intake only. Work is queued; nothing runs inside the call.
+- `budgets = {turn?: Budget, session?: Budget}` is opt-in on open. Send accepts `budgets.turn` and tightens the session turn defaults. Session totals are durable; token intake uses descriptor-declared accounting and may overshoot within a provider step. Cost and window limits currently reject as unsupported. Exceeding a budget returns `outcome = "budget_exceeded"` with `BUDGET_EXCEEDED` and placement exit evidence.
 - `cancel{work, operation_key}` and `close{session, operation_key}` return an Operation whose `await` reports `stopped`/`already_terminal` or `closed`, or an uncertain evidence branch.
 - `await{subject}`, `work:await` and `operation:await` observe one work or operation; `timeout_ms` is at most 60000 and bounds observation, never execution. `session:await(work)` also checks that the work belongs to the session.
 - `join{works, operation_key, policy?, quorum?, timeout_ms?}` takes 1 to 64 distinct works, returns one `JoinAwait` with every child's observation in input order, and validates `quorum` against the set.
 - `get(session_ref)` and `work(work_ref)` rehydrate a Session or Work from a ref; `work:state()` reads the `WorkState`, which carries `sender`, the owner-set authenticated sender of the work (a SessionRef when the caller is a session, else the principal). Callers never supply a sender. Refs (`bs:`, `bw:`, `bo:`, `bj:` qualified strings) are the only addresses; `:ref()` returns one.
 - Handles capture the session incarnation and send it as `expected_incarnation`; a session reset makes them fail with `STALE` rather than act on the new incarnation.
-- `list{filter?, cursor?}` filters by `workspace`, `definition`, `lifecycle` and `activity` (`idle`, `working`, `blocked`, `stalled`); session snapshots include quiet-period evidence when stalled. `progress_quiet_ms` on open selects the period, defaulting to 60000. Stalled reports inactivity and does not stop or fail work. `catalog{kind?, include_unavailable?, cursor?}` returns the owner's candidates.
+- `list{filter?, cursor?}` filters by `workspace`, `definition`, `lifecycle` and `activity` (`idle`, `working`, `blocked`, `stalled`); session snapshots include quiet-period evidence when stalled. `supervision.quiet_period_ms` on open selects the period, defaulting to 60000. Stalled reports inactivity; `supervision.on_stall="cancel_work"` requests a stop with placement evidence. `catalog{kind?, definition_ref?, query?, sort?, include_unavailable?, cursor?}` returns the owner's candidates.
 
 Requests are validated before dispatch (`INVALID`): bounded text and refs, JSON inputs of at most 64 KiB and depth 16.
 

@@ -23,7 +23,7 @@ fenced Threads observation operation. Caller identity comes from the canonical
 Session route, under host-selected admission policies.
 
 There is no default work ceiling. A Session or one Work may opt into
-`{max_turns?, max_tokens?, wall_time_ms?}`. The executor counts normalized
+`Budget = {provider_steps?, tool_calls?, tokens?, wall_time_ms?, cost_usd?}`. The executor counts normalized
 turn signals and usage from the selected driver's codec, and checks elapsed
 wall time while observing the process. When a field is exceeded, it requests a
 placement stop and settles `budget_exceeded` only after placement proves exit;

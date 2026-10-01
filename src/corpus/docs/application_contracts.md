@@ -150,17 +150,17 @@ local ready = sessions.catalog{}                        -- definitions whose exe
 local s, fault = sessions.open{definition = "bee.driver.codex:research_batch", operation_key = "research/open"}
 if not s then return fault.code .. ": " .. fault.message end
 local work = s:send{input = "Summarize the build scripts in this folder.",
-    budget = {max_turns = 8, wall_time_ms = 120000}, operation_key = "research/send"}
+    budgets = {turn = {provider_steps = 8, wall_time_ms = 120000}}, operation_key = "research/send"}
 local seen = work:await{timeout_ms = 30000}             -- ready, pending, blocked or uncertain
 if seen and seen.tag == "ready" then show(seen.result) end
 s:close{operation_key = "research/close"}
 ```
 
-`sessions.open` accepts an optional session `budget` and `progress_quiet_ms`;
-`sessions.send` accepts an optional per-Work `budget`. The budget shape is
-`{max_turns?, max_tokens?, wall_time_ms?}` and all fields are opt-in. A Work
+`sessions.open` accepts optional `budgets={turn?,session?}` and `supervision={quiet_period_ms?,on_stall?}`;
+`sessions.send` accepts an optional per-Work `budgets.turn`. The budget shape is
+`Budget = {provider_steps?, tool_calls?, tokens?, wall_time_ms?, cost_usd?}` and all fields are opt-in. A Work
 budget tightens matching session budget fields. Quiet accepted turns appear as
-`stalled` with evidence and are not stopped automatically. Exceeding a budget
+`stalled` with evidence. The default `on_stall="report"` keeps work running; `cancel_work` requests a placement stop. Session counters survive restart and receipts replay without spending twice. Cost and window limits reject as unsupported. Exceeding a budget
 returns `budget_exceeded` with typed placement exit evidence.
 
 `sessions.call{definition, input}` opens a session with its first work and

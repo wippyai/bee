@@ -8,11 +8,7 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
         local arguments, argument_error = configuration.session_arguments(request.gateway)
         if not arguments then return {ok = false, error = tostring(argument_error)} end
         local files: {configure_protocol.Configuration} = {}
-        if request.instructions then
-            local projected, err = configuration.prompt_projection(request.instructions)
-            if not projected then return {ok = false, error = tostring(err)} end
-            files[#files + 1] = projected
-        elseif request.private_home == true then
+        if request.private_home == true or request.instructions then
             local projected, err = configuration.login_configuration()
             if not projected then return {ok = false, error = tostring(err)} end
             files[#files + 1] = projected
@@ -23,8 +19,7 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     local provider, decode_error = configuration.decode(request.provider_ref, request.provider)
     if not provider then return {ok = false, error = tostring(decode_error)} end
     if provider.loopback_fixture and request.fixture ~= true then return {ok = false, error = "loopback fixture provider needs a fixture policy"} end
-    local instructions = request.instructions
-    if instructions and provider.developer_instructions then instructions = provider.developer_instructions .. "\n\n" .. instructions end
+    local instructions = provider.developer_instructions
     local section: string? = nil
     if request.gateway then
         local generated = configuration.gateway_section(request.gateway)

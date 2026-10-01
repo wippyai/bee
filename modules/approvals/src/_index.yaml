@@ -76,11 +76,16 @@ entries:
   file: ${env:bee.approvals:db_path}
   lifecycle:
     auto_start: true
+- name: runtime_lease
+  kind: library.lua
+  source: file://runtime_lease.lua
+  imports: {bounds: bee.threads.records:bounds}
 - name: service
   kind: library.lua
   source: file://service.lua
   modules: [sql, hash, uuid, json, security, system, process, funcs]
   imports:
+    runtime_lease: bee.approvals:runtime_lease
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     values: bee.threads.records:values
@@ -101,6 +106,8 @@ entries:
     description: Snapshot authorized inbox projections with an owner cursor and visibility revision
   - name: feed_read_after
     description: Catch up authorized approval changes using the shared sync envelope
+  - name: runtime_lease
+    description: Grant an approved exact runtime lease, check references, consume one effect idempotently, list or revoke
   - name: request
     description: Ask for a decision on one exact proposal under a host approver policy; the same key replays and a different request under it conflicts
   - name: decide
@@ -140,6 +147,7 @@ entries:
     methods:
       feed_snapshot: bee.approvals.binding:feed_snapshot
       feed_read_after: bee.approvals.binding:feed_read_after
+      runtime_lease: bee.approvals.binding:runtime_lease
       request: bee.approvals.binding:request
       decide: bee.approvals.binding:decide
       decide_batch: bee.approvals.binding:decide_batch

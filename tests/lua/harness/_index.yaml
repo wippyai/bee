@@ -1229,6 +1229,7 @@ entries:
   - exec
   - time
   - hash
+  - json
   security:
     policies:
     - bee.harness.catalog:apply_test_policy
@@ -1237,6 +1238,7 @@ entries:
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
+    bounds: bee.threads.records:bounds
     admission: bee.harness.launch:admission
     definitions: bee.harness.launch:definitions
     launch_policy: bee.harness.carrier:policy
@@ -1335,7 +1337,7 @@ entries:
     - bee.harness.security:launch_locate_probe_policy
   imports:
     test: wippy.test:test
-    probe_capture: bee.harness.launch:probe_capture
+    probe_capture: bee.driver:probe_capture
     probe_version: bee.harness.launch:probe_version
     driver_locate: bee.driver:locate
 - name: profile_environment_isolation_test

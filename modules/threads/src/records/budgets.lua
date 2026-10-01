@@ -78,4 +78,23 @@ function M.minimum(left: Budget?, right: Budget?): Budget?
     end
     return result
 end
+function M.accounting(limits: Budgets?, coverage: unknown, presentation: string?, codec: string?): string?
+    if not limits then return nil end
+    if presentation == "window" then return "budgets: window hooks cannot account provider usage or prove budget cancellation" end
+    local declared = bounds.object(coverage)
+    for _, scope in ipairs({"turn", "session"}) do
+        local ceiling = scope == "turn" and limits.turn or limits.session
+        if ceiling then
+            for _, unit in ipairs({"cost_usd", "tokens", "tool_calls", "wall_time_ms", "provider_steps"}) do
+                if ceiling[unit] ~= nil then
+                    if unit == "cost_usd" or not declared or (unit ~= "provider_steps" and declared[unit] ~= true)
+                        or (unit == "provider_steps" and declared.provider_steps ~= "agent_turn") then
+                        return "budgets." .. scope .. "." .. unit .. ": usage codec " .. (codec or "unknown") .. " cannot account this unit"
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
 return M

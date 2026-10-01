@@ -16,7 +16,7 @@ local M = {}
 -- What a profile form opens: a definition for a new profile, or a saved
 -- profile, whose own definition applies.
 type Subject = {definition_ref: string?, title: string, saved_profile_id: string?, saved_profile_revision: integer?}
-type Form = {conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
+type Form = {leases: {string}?, readiness: string?, credentials: {string}?,conflict: boolean?, workspace_id: string, profile_id: string, revision: integer, draft: editor.Draft,
     save_key: string, remove_key: string, pending: string?, submitted: protocol.Profile?,
     fields: {[string]: {label: string, section: string, order: integer}}?, unsupported: {string}?,
     migration_diagnostic: {[string]: unknown}?, repair_json: string?}
@@ -36,6 +36,17 @@ local function call(request: unknown): ({[string]: unknown}?, string?)
 end
 
 -- The saved profile at the selected revision, or the reason it cannot be used.
+function M.refresh(form: Form): (Form?, string?)
+    if form.pending or form.repair_json then return nil, "Finish the pending save or definition repair first" end
+    local profile, err = editor.result(form.draft)
+    if not profile then return nil, err end
+    local refreshed, refresh_error = M.load(form.workspace_id, {definition_ref = profile.definition_ref, title = profile.name}, false, profile)
+    if not refreshed then return nil, refresh_error end
+    refreshed.profile_id, refreshed.revision = form.profile_id, form.revision
+    refreshed.save_key, refreshed.remove_key = form.save_key, form.remove_key
+    return refreshed, nil
+end
+
 function M.saved(workspace: string, id: string, revision: integer): (protocol.Profile?, string?, {[string]: unknown}?)
     local saved, read_error = call({operation = "get", workspace_id = workspace, profile_id = id})
     if not saved then return nil, read_error end
@@ -47,9 +58,9 @@ function M.saved(workspace: string, id: string, revision: integer): (protocol.Pr
     return protocol.profile(saved.profile)
 end
 
-function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?, string?)
+function M.load(workspace: string, choice: Subject, duplicate: boolean, initial: protocol.Profile?): (Form?, string?)
     local id, revision = choice.saved_profile_id or "", choice.saved_profile_revision or 0
-    local profile: protocol.Profile? = nil
+    local profile: protocol.Profile? = initial
     local diagnostic: {[string]: unknown}? = nil
     if choice.saved_profile_id then
         local value, value_error, repair = M.saved(workspace, id, revision)
@@ -60,8 +71,12 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?,
     end
     local migration_draft = diagnostic and bounds.object(diagnostic.draft)
     local definition_ref = profile and profile.definition_ref or choice.definition_ref or (migration_draft and bounds.id(migration_draft.definition_ref))
-    local function repair_only(): (Form?, string?)
-        if not diagnostic or not migration_draft then return nil, "Agent definition is missing" end
+    local function repair_only(reason: string?): (Form?, string?)
+        if not migration_draft and profile then
+            migration_draft = profile
+            diagnostic = {source = profile, reasons = {reason or "Agent definition is missing"}}
+        end
+        if not diagnostic or not migration_draft then return nil, reason or "Agent definition is missing" end
         local base: protocol.Profile = {schema_revision = protocol.SCHEMA, definition_ref = definition_ref or "migration:repair", driver_binding_ref = "migration:repair", name = bounds.line(migration_draft.name, 80) or "Migration repair", provider = {}, bee = {}}
         local draft, err = editor.new(base, {options = {}, mcp_tools = {}, instructions = false, placements = {}})
         if not draft then return nil, err end
@@ -78,19 +93,19 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?,
     end
     if not definition_ref then return repair_only() end
     local pinned = catalog.pin()
-    if not pinned then return nil, "Agent definitions could not be read" end
+    if not pinned then return repair_only("Agent definitions could not be read") end
     local entry = catalog.entry(pinned, definition_ref)
     if not entry then
-        if diagnostic then return repair_only() end
-        return nil, "Agent definition is no longer available"
+        return repair_only("Agent definition is no longer available")
     end
     local decoded, decode_error = definition.decode(definition_ref, entry)
-    if not decoded then return nil, decode_error end
+    if not decoded then return repair_only(decode_error) end
+    if profile and profile.driver_binding_ref ~= decoded.binding_ref then return repair_only("Saved driver differs from the current definition") end
     local policy_entry = catalog.entry(pinned, decoded.policy_ref)
     local policy_data = policy_entry and bounds.object(policy_entry.data) or nil
-    if not policy_data then return nil, "Agent policy could not be read" end
+    if not policy_data then return repair_only("Agent policy could not be read") end
     local tools, tools_error = bounds.ids(policy_data.gateway_tools or {}, true)
-    if not tools then return nil, tools_error end
+    if not tools then return repair_only(tools_error) end
     local mcp: {protocol.Mcp} = {}
     for _, tool in ipairs(tools) do mcp[#mcp + 1] = {tool = tool, scope = {}} end
     local base: protocol.Profile = {schema_revision = protocol.SCHEMA, name = choice.title,
@@ -110,14 +125,14 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?,
     local binding_entry = catalog.entry(pinned, decoded.binding_ref)
     local binding_meta = binding_entry and bounds.object(binding_entry.meta)
     local descriptor_ref = binding_meta and bounds.id(binding_meta.descriptor_ref)
-    if not descriptor_ref then return nil, "Driver descriptor is missing" end
+    if not descriptor_ref then return repair_only("Driver descriptor is missing") end
     local descriptor, descriptor_error = descriptors.load_from(pinned, descriptor_ref)
-    if not descriptor then return nil, descriptor_error end
-    local probed = readiness.probe(decoded.binding_ref, decoded.session_profile_id or decoded.profile_id, readiness.new_cache())
+    if not descriptor then return repair_only(descriptor_error) end
+    local probed = readiness.probe(decoded.binding_ref, decoded.session_profile_id or decoded.profile_id, readiness.new_cache(), editor.placement_ref(base))
     local capabilities = probed.result and probed.result.capabilities or {}
     local declared = bounds.object((bounds.object(descriptor.options) or {}).fields) or {}
     local restrictions, restriction_error = preferences.decode_profile_restrictions(policy_data.profile_restrictions)
-    if not restrictions then return nil, restriction_error end
+    if not restrictions then return repair_only(restriction_error) end
     local metadata: {[string]: {label: string, section: string, order: integer}} = {}
     local unsupported: {string} = {}
     local form_options: {[string]: unknown} = {}
@@ -142,6 +157,11 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?,
                         if checked ~= nil then values[#values + 1] = candidate end
                     end
                     if #values > 0 then form_options[name] = values else unsupported[#unsupported + 1] = label .. ": no admitted values" end
+                elseif restriction.kind == "declared" then
+                    if spec.type == "enum" then form_options[name] = spec.values
+                    elseif spec.type == "boolean" then form_options[name] = {false, true}
+                    elseif spec.type == "json" or spec.type == "ids" then form_options[name] = {kind = "declared"}
+                    else form_options[name] = {kind = "text", max_bytes = bounds.count(spec.max) or 512} end
                 elseif spec.type ~= "ids" then
                     form_options[name] = {kind = "text", max_bytes = math.floor(math.min(restriction.max_bytes, bounds.count(spec.max) or restriction.max_bytes))}
                 end
@@ -165,8 +185,21 @@ function M.load(workspace: string, choice: Subject, duplicate: boolean): (Form?,
     local save_key, save_error = uuid.v7()
     local remove_key, remove_error = uuid.v7()
     if not save_key or not remove_key then return nil, tostring(save_error or remove_error) end
+    local leases: {string} = {}
+    local raw_leases, lease_error = funcs.call("bee.approvals.binding:runtime_lease", {operation = "list", workspace_id = workspace})
+    local lease_reply = not lease_error and bounds.object(raw_leases)
+    local lease_value = lease_reply and lease_reply.ok == true and bounds.object(lease_reply.value)
+    for _, raw in ipairs(lease_value and bounds.array(lease_value.leases, 64) or {}) do
+        local row = bounds.object(raw)
+        local ref = row and bounds.id(row.lease_ref)
+        if ref and row and row.revoked_at == nil then leases[#leases + 1] = ref end
+    end
+    for _, ref in ipairs(base.bee.approval_leases or {}) do if not bounds.member(ref, leases) then leases[#leases + 1] = ref end end
+    local credential_choices = decoded.credentials
+    if base.presentation ~= "window" or (base.placement and base.placement.kind == "docker") then credential_choices = decoded.session_credentials or decoded.credentials end
     return {workspace_id = workspace, profile_id = id, revision = revision, draft = draft,
-        save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported,
+        leases = leases, readiness = probed.result and (probed.result.reason or ("Runtime " .. (probed.result.executable.version or "version unavailable"))) or probed.error,
+        save_key = save_key, remove_key = remove_key, fields = metadata, unsupported = unsupported, credentials = credential_choices,
         migration_diagnostic = diagnostic, repair_json = migration_draft and canonical.encode(migration_draft) or nil}, nil
 end
 

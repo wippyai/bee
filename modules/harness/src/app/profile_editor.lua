@@ -9,13 +9,15 @@ local preferences = require("preferences")
 local protocol = require("protocol")
 local budgets = require("budgets")
 
+local json = require("json")
+local canonical = require("canonical")
 local M = {}
 M.MAX_TITLE_BYTES = 80
 M.MAX_INSTRUCTIONS_BYTES = preferences.MAX_INSTRUCTIONS_BYTES
 
 type Scalar = string | number | boolean
 type Profile = protocol.Profile
-type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer}
+type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer} | {kind: "declared"}
 -- workdir and thread: whether the launch admits choosing a folder and a
 -- thread, as its definition and launch policy allow the override.
 type Allowed = {
@@ -85,9 +87,9 @@ local function decode_allowed(value: unknown): (Allowed?, string?)
             local copied: {Scalar} = {}
             for index, item in ipairs(declared.values) do copied[index] = item end
             options[name] = {kind = "enum", values = copied}
-        else
+        elseif declared.kind == "text" then
             options[name] = {kind = "text", max_bytes = declared.max_bytes}
-        end
+        else options[name] = {kind = "declared"} end
     end
     local tools: {string} = {}
     for index, tool in ipairs(raw.mcp_tools) do tools[index] = tool end
@@ -111,8 +113,12 @@ local function option_value(provider: protocol.Provider, name: string): Scalar?
     if name == "model" then return provider.model end
     if name == "effort" then return provider.effort end
     if name == "permission_mode" then return provider.permission_mode end
+    if name == "tool_allow" then return provider.tool_allow and canonical.encode(provider.tool_allow) end
+    if name == "tool_deny" then return provider.tool_deny and canonical.encode(provider.tool_deny) end
+    if name == "env" then return provider.env and canonical.encode(provider.env) end
     local value = (provider.options or {})[name]
     if type(value) == "string" or type(value) == "number" or type(value) == "boolean" then return value end
+    if type(value) == "table" then return canonical.encode(value) end
     return nil
 end
 local function set_option(provider: protocol.Provider, name: string, value: Scalar?)
@@ -242,6 +248,29 @@ function M.set_text_option(draft: Draft, raw_name: unknown, value: unknown): (bo
     if not name then return false, "option name is not an identifier" end
     local declared = draft._allowed.options[name]
     if not declared then return false, "option " .. name .. " is not allowed by the host" end
+    if declared.kind == "declared" then
+        local text = bounds.text(value, 8192)
+        if not text then return false, "option " .. name .. " requires bounded JSON" end
+        local decoded: unknown = nil
+        if text ~= "" then
+            local err: unknown = nil
+            decoded, err = json.decode(text)
+            if err or decoded == nil then return false, "option " .. name .. " requires JSON" end
+        end
+        local raw: {[string]: unknown} = {}
+        for key, item in pairs(base.provider) do raw[key] = item end
+        if bounds.member(name, {"tool_allow", "tool_deny", "env"}) then raw[name] = decoded
+        else
+            local options: {[string]: unknown} = {}
+            for key, item in pairs(base.provider.options or {}) do options[key] = item end
+            options[name] = decoded; raw.options = options
+        end
+        local provider, err = protocol.provider(raw)
+        if not provider then return false, err end
+        base.provider = provider
+        draft.provider = provider
+        return true, nil
+    end
     if declared.kind ~= "text" then return false, "option " .. name .. " is an enum" end
     local text = bounds.text(value, declared.max_bytes)
     if value == nil or text == "" then
@@ -321,7 +350,12 @@ function M.options(draft: Draft): ({OptionRow}?, string?)
             for index, value in ipairs(declared.values) do copied[index] = value end
             rows[#rows + 1] = {name = name, kind = "enum", values = copied, max_bytes = nil, value = option_value(base.provider, name)}
         else
-            rows[#rows + 1] = {name = name, kind = "text", values = nil, max_bytes = declared.max_bytes, value = option_value(base.provider, name)}
+            local value = option_value(base.provider, name)
+            if declared.kind == "declared" and name ~= "tool_allow" and name ~= "tool_deny" and name ~= "env" then
+                local raw = (base.provider.options or {})[name]
+                if raw ~= nil then value = canonical.encode(raw) end
+            end
+            rows[#rows + 1] = {name = name, kind = "text", values = nil, max_bytes = declared.kind == "text" and declared.max_bytes or 8192, value = value}
         end
     end
     table.sort(rows, option_order)

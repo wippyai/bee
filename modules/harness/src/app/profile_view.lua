@@ -104,6 +104,16 @@ local function fields(state: State): {Field}
             result[#result + 1] = {kind = "tool", name = tool.name,
                 label = (tool.selected and "[x] " or "[ ] ") .. (TOOL_NAMES[tool.name] or human(tool.name))}
         end
+        for _, ref in ipairs(state.form.credentials or {}) do
+            local chosen = state.form.draft.bee.credential_refs
+            result[#result + 1] = {kind = "credential", name = ref,
+                label = ((chosen == nil or bounds.member(ref, chosen)) and "[x] " or "[ ] ") .. "Credential: " .. ref}
+        end
+        for _, ref in ipairs(state.form.leases or {}) do
+            result[#result + 1] = {kind = "lease", name = ref,
+                label = (bounds.member(ref, state.form.draft.bee.approval_leases or {}) and "[x] " or "[ ] ") .. "Approval lease: " .. ref}
+        end
+        result[#result + 1] = {kind = "refresh", name = "", label = "Refresh runtime options: " .. (state.form.readiness or "not probed")}
         for _, field in ipairs(settings.fields(state.form.draft)) do result[#result + 1] = field end
         result[#result + 1] = {kind = "stall", name = "", label = "When stalled: " ..
             (state.form.draft.supervision and state.form.draft.supervision.on_stall == "cancel_work" and "Cancel work" or "Report")}
@@ -289,7 +299,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    if field.kind == "stall" or field.kind == "home" or field.kind == "presentation" or field.kind == "answers" or field.kind == "placement" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
+    if field.kind == "stall" or field.kind == "home" or field.kind == "presentation" or field.kind == "answers" or field.kind == "placement" or field.kind == "credential" or field.kind == "lease" or field.kind == "refresh" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
         if event.type == "key" and event.action == "press" and
             (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
@@ -305,6 +315,26 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
                 local current = state.form.draft.bee.permission_answers
                 state.form.draft.bee.permission_answers = current == "provider" and "ask" or current == "ask" and "deny" or "provider"; ok = true
             elseif field.kind == "placement" then ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
+            elseif field.kind == "refresh" then
+                local ready = M.action(state, "save") == "save"
+                if not ready then return nil end
+                local refreshed, refresh_error = forms.refresh(state.form)
+                if refreshed then state.form = refreshed; ok = true else err = refresh_error end
+            elseif field.kind == "lease" then
+                local refs: {string} = {}
+                local chosen = false
+                for _, ref in ipairs(state.form.draft.bee.approval_leases or {}) do
+                    if ref == field.name then chosen = true else refs[#refs + 1] = ref end
+                end
+                if not chosen then refs[#refs + 1] = field.name end
+                state.form.draft.bee.approval_leases = refs; ok = true
+            elseif field.kind == "credential" then
+                local refs: {string} = {}
+                for _, ref in ipairs(state.form.draft.bee.credential_refs or state.form.credentials or {}) do refs[#refs + 1] = ref end
+                local found = false
+                for index, ref in ipairs(refs) do if ref == field.name then table.remove(refs, index); found = true; break end end
+                if not found then refs[#refs + 1] = field.name end
+                state.form.draft.bee.credential_refs = refs; ok = true
             elseif field.kind == "tool" then ok, err = editor.toggle_tool(state.form.draft, field.name)
             else ok, err = editor.cycle_option(state.form.draft, field.name, event.key_type == "left" and -1 or 1) end
             state.status = ok and "" or (err or "Option is unavailable")

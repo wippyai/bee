@@ -133,14 +133,6 @@ function M.projection(provider: Provider, gateway_section: string?, instructions
     if hash_error or not digest then return nil, "configuration digest failed" end
     return {revision = M.REVISION, path = M.PATH, content = content, digest = digest, provider_ref = provider.ref, provider_digest = provider.digest}, nil
 end
-function M.prompt_projection(text: string): (shared_configuration.Configuration?, string?)
-    local content = "developer_instructions = " .. toml.string(text) .. "\n"
-    local digest, err = hash.sha256(content)
-    if not digest then return nil, tostring(err or "Prompt configuration digest failed") end
-    return {revision = "bee.codex-prompt@1", path = M.PATH, content = content, digest = digest,
-        provider_ref = shared_configuration.INSTRUCTIONS_PROVIDER_REF,
-        composition = {kind = "toml_insert", base_path = ".codex/.bee-user-config.toml", path = {"developer_instructions"}, append_text = true}}, nil
-end
 function M.login_configuration(): (shared_configuration.Configuration?, string?)
     local digest, err = hash.sha256("")
     if not digest then return nil, tostring(err or "Login configuration digest failed") end

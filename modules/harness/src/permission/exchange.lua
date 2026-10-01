@@ -6,11 +6,12 @@ local bounds = require("bounds")
 local permission = require("permission")
 local checkpoint = require("checkpoint")
 local service_reply = require("service_reply")
+local preferences = require("preferences")
 local M = {}
 M.MAX_CONSUME_ATTEMPTS = 3
 type Object = {[string]: unknown}
 type Request = {owner_id: string, attempt_id: string, action_id: string, thread_id: string,
-    workspace_id: string?, session_ref: string?}
+    workspace_id: string?, session_ref: string?, preferences: preferences.Value?}
 type Exchange = {answer_mode: string?, adapter: permission.Adapter, approver_policy: string, poll_ms: integer, ttl_ms: integer}
 type State = {request: Request, plan_digest: string, exchange: Exchange?, permissions: {checkpoint.Permission},
     epoch: integer, turn_id: string?, proposal_kind: "operation" | "attempt"?}
@@ -203,6 +204,20 @@ end
 -- recording it replays the same approval.
 local function request_approval(ctx: Context, session: State, exchange: Exchange, state: checkpoint.Permission): (boolean, string?)
     local request = session.request
+    for _, ref in ipairs(request.preferences and request.preferences.bee and request.preferences.bee.approval_leases or {}) do
+        local raw, call_error = ctx.call(ctx.approvals .. ":runtime_lease", {operation = "use", lease_ref = ref, workspace_id = request.workspace_id,
+            tool = state.tool_name, input_digest = state.input_digest, effect_key = state.effect_key})
+        local reply, err = reply_of(raw, call_error)
+        if not reply then return false, "runtime lease: " .. tostring(err) end
+        if reply.ok then
+            local value = bounds.object(reply.value)
+            if not value or value.lease_ref ~= ref or value.consumed ~= true then return false, "runtime lease owner returned a different effect" end
+            state.lease_ref = ref; state.decision = "approved"; state.phase = "decided"
+            return ctx.commit({permission_record(session, state, "decided", {lease_ref = ref, decision = "approved"})})
+        end
+        local fault = reply.error
+        if not fault or (fault.code ~= "DENIED" and fault.code ~= "NOT_FOUND") then return false, "runtime lease: " .. (fault and fault.message or "invalid owner reply") end
+    end
     local value, err = must(ctx, ctx.approvals .. ":request", {workspace_id = request.workspace_id, idempotency_key = state.idempotency_key, request_kind = "permission", policy = exchange.approver_policy,
         proposal = proposal_of(session, exchange, request_of(state)), prompt = {text = state.prompt}, thread_id = request.thread_id, ttl_ms = exchange.ttl_ms})
     if err then return false, err end
@@ -265,6 +280,11 @@ end
 -- and asks again. Replays are safe, so a resumed carrier repeats this
 -- before creating its write intent.
 local function consume_effect(ctx: Context, session: State, state: checkpoint.Permission): (boolean, string?)
+    if state.lease_ref then
+        local _, err = must(ctx, ctx.approvals .. ":runtime_lease", {operation = "use", lease_ref = state.lease_ref,
+            workspace_id = session.request.workspace_id, tool = state.tool_name, input_digest = state.input_digest, effect_key = state.effect_key})
+        return err == nil, err
+    end
     if not state.approval_id or not state.incarnation then return false, "approval identity or incarnation is missing" end
     for _ = 1, ctx.max_consume_attempts do
         local raw, call_error = ctx.call(ctx.approvals .. ":consume", {approval_id = state.approval_id, proposal_digest = state.proposal_digest, effect_key = state.effect_key, owner_incarnation = state.incarnation})

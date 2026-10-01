@@ -24,6 +24,7 @@ local interrupted = require("interrupted")
 local profiles = require("profiles")
 local profile_validation = require("profile_validation")
 local descriptors = require("descriptors")
+local budgets = require("budgets")
 local M = {}
 M.CARRIER = "bee.harness.carrier:process"
 M.CARRIER_HOST_REF = "bee.harness:carrier_host_ref"
@@ -366,6 +367,26 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         resolved_profile = tuned
     end
     if resolved_profile and resolved_profile.profile.placement_binding == "bee.placement.docker.binding:binding" and launch.session_credentials then launch.credentials = launch.session_credentials end
+    if selected and selected.profile.bee.credential_refs then
+        local admitted: {string} = {}
+        for _, ref in ipairs(selected.profile.bee.credential_refs) do
+            if not bounds.member(ref, launch.credentials) then return nil, fail("DENIED", "bee.credential_refs: definition does not admit " .. ref) end
+            admitted[#admitted + 1] = ref
+        end
+        launch.credentials = admitted
+    end
+    if selected then
+        for name, value in pairs(selected.profile.provider.env or {}) do
+            if value.kind == "credential" and not bounds.member(value.credential_ref, launch.credentials) then return nil, fail("DENIED", "provider.env." .. name .. ": credential reference is outside the selected definition/credential_refs") end
+        end
+    end
+    if selected then
+        for _, destination in ipairs(selected.profile.bee.workspaces or {}) do
+            for _, operation in ipairs(destination.operations) do
+                if not security.can("funcs.call", operation) then return nil, fail("DENIED", "bee.workspaces: host does not admit owner operation " .. operation .. " for destination " .. destination.workspace_id) end
+            end
+        end
+    end
     local selected_binding = launch_policy.placement_binding
     if resolved_profile then selected_binding = resolved_profile.profile.placement_binding end
     local placement, placement_error = placement_resolver.resolve(pinned, selected_binding)
@@ -431,7 +452,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
     if launch_policy.instructions then effective_profile.provider.system_prompt_append = launch_policy.instructions end
     local tools: {profiles.Mcp} = {}
     for _, tool in ipairs(launch_policy.gateway_tools) do tools[#tools + 1] = {tool = tool, scope = {}} end
-    effective_profile.bee.mcp = tools
+    if effective_profile.bee.mcp == nil then effective_profile.bee.mcp = tools end
     if bounds.member(launch_policy.permission_answers, {"provider", "ask", "deny"}) then
         if launch_policy.permission_answers == "ask" then effective_profile.bee.permission_answers = "ask"
         elseif launch_policy.permission_answers == "deny" then effective_profile.bee.permission_answers = "deny"
@@ -442,6 +463,8 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         else effective_profile.placement = {kind = "native", home = default_private_home and "private" or "machine"} end
     end
     if not effective_profile.presentation then effective_profile.presentation = chosen == "window" and "window" or "headless" end
+    local budget_error = budgets.accounting(effective_profile.budgets, descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile.presentation, descriptor and descriptor.codec)
+    if budget_error then return nil, fail("UNSUPPORTED_CAPABILITY", budget_error) end
     return {budget_capabilities = descriptor and descriptor.capabilities and descriptor.capabilities.budgets, effective_profile = effective_profile,
         effective_profile_digest = digest_of(effective_profile),
         title = selected and selected.profile.name or launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
@@ -738,6 +761,10 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         if not typed then return nil, fail("UNAVAILABLE", grant_error or "resource grant is invalid") end
         resources[#resources + 1] = typed
     end
+    for _, ref in ipairs(plan.effective_profile and plan.effective_profile.bee.approval_leases or {}) do
+        local _, refused = call("bee.approvals.binding:runtime_lease", {operation = "check", lease_ref = ref, workspace_id = request.workspace_id})
+        if refused then return nil, refused end
+    end
     if not thread_id then
         local created, create_refused = call(M.THREADS .. ":create", {thread_id = "thread:" .. request.request_id, idempotency_key = "launch:" .. request.request_id .. ":thread", title = request.thread_title or launch.title})
         if not created then return nil, create_refused end
@@ -762,6 +789,17 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
         resources[#resources + 1] = typed
         working = workdir_name
     end
+    local profile_grants: {carrier.ProfileGrant} = {}
+    for index, file in ipairs(plan.effective_profile and plan.effective_profile.bee.files or {}) do
+        local granted, refused = call(M.RESOURCES .. ":grant", {workspace_id = file.workspace_id, name = file.resource, subpath = file.subpath,
+            access = file.access, purpose = "project", audience = requester, attempt_id = ids.attempt_id,
+            idempotency_key = "launch:" .. request.request_id .. ":file:" .. tostring(index)})
+        if not granted then return nil, refused end
+        local grant_id, root = bounds.id(granted.grant_id), bounds.id(granted.root_ref)
+        if not grant_id or not root or granted.subpath ~= file.subpath or granted.workspace_id ~= file.workspace_id or granted.name ~= file.resource
+            or granted.access ~= file.access or granted.attempt_id ~= ids.attempt_id or granted.audience ~= requester then return nil, fail("UNAVAILABLE", "bee.files: owner returned a different grant") end
+        profile_grants[#profile_grants + 1] = {workspace_id = file.workspace_id, name = file.resource, subpath = file.subpath, access = file.access, grant_ref = grant_id}
+    end
     local projections: {string} = {}
     local credentials = launch.credentials
     for index, credential in ipairs(credentials) do
@@ -769,9 +807,18 @@ local function admit_request(value: unknown, session_turn: SessionTurnContext?, 
             profile_id = plan.profile_id, profile_digest = plan.profile_digest, binding_digest = plan.binding_digest, launch_policy_digest = plan.policy_digest,
             idempotency_key = "launch:" .. request.request_id .. ":credential:" .. tostring(index)})
         if not issued then return nil, issue_refused end
+        if selected then
+            for name, value in pairs(selected.profile.provider.env or {}) do
+                if value.kind == "credential" and value.credential_ref == credential and (issued.projection_kind ~= "environment" or issued.destination ~= name) then
+                    return nil, fail("DENIED", "provider.env." .. name .. ": credential broker destination differs; references cannot retarget credentials")
+                elseif value.kind == "literal" and issued.projection_kind == "environment" and issued.destination == name then
+                    return nil, fail("DENIED", "provider.env." .. name .. ": literal conflicts with an admitted credential projection")
+                end
+            end
+        end
         projections[index] = tostring(issued.projection_id)
     end
-    local carrier_request: carrier.Request = {thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
+    local carrier_request: carrier.Request = {profile_grants = profile_grants, thread_id = thread_id, action_id = ids.action_id, attempt_id = ids.attempt_id, owner_id = requester, owner_incarnation = 1, parent_action_id = request.parent_action_id,
         preferences = preferences or preference_value(selected),
         binding_ref = plan.binding_ref, profile_id = plan.profile_id, brief = request.brief, policy_ref = plan.policy_ref,
         placement_profile_ref = plan.placement_profile_ref, placement_profile_digest = plan.placement_profile_digest, placement_binding_ref = plan.placement_binding_ref, placement_binding_digest = plan.placement_binding_digest, placement_methods = plan.placement_methods, resources = resources, environment = {},

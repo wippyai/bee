@@ -24,6 +24,7 @@ entries:
     paths: bee.placement:paths
     resources: bee.placement.native:resources
     image: bee.placement.docker.service:image
+    runtime_probe: bee.placement.docker.service:runtime_probe
     environment: bee.placement.docker.service:environment
 - name: execution
   kind: library.lua
@@ -149,3 +150,13 @@ entries:
     resources: bee.placement.native:resources
     image: bee.placement.docker.service:image
     docker_client: userspace.docker:docker_client
+
+- name: runtime_probe
+  kind: library.lua
+  source: file://runtime_probe.lua
+  modules: [exec, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    quote: bee.driver.kit:quote
+    resources: bee.placement.native:resources
+    capture: bee.driver:probe_capture

@@ -33,7 +33,7 @@ type Outcome = "succeeded" | "failed" | "cancelled" | "uncertain"
 -- response the carrier wrote: every key is derived once and kept, so a
 -- replacement asks the approval owner and the runner about the same
 -- request, effect and write rather than inventing new ones.
-type Permission = {
+type Permission = {lease_ref: string?,
     permission_request_id: string,
     correlation_id: string,
     acknowledgment_id: string?,
@@ -342,7 +342,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
             if index > M.MAX_PERMISSIONS then return nil, "permissions exceeds " .. tostring(M.MAX_PERMISSIONS) end
             local permission = bounds.object(item)
             if not permission then return nil, "permissions[" .. tostring(index) .. "] must be an object" end
-            local permission_field = bounds.fields(permission, {"permission_request_id", "correlation_id", "acknowledgment_id", "tool_name", "input_digest", "prompt", "proposal_digest", "idempotency_key", "effect_key", "write_id", "phase", "approval_id", "decision", "incarnation", "response", "deadline_ms"})
+            local permission_field = bounds.fields(permission, {"permission_request_id", "correlation_id", "acknowledgment_id", "tool_name", "input_digest", "prompt", "proposal_digest", "idempotency_key", "effect_key", "write_id", "phase", "lease_ref", "approval_id", "decision", "incarnation", "response", "deadline_ms"})
             if permission_field then return nil, "permissions[" .. tostring(index) .. "]: " .. permission_field end
             local request_id, correlation = bounds.id(permission.permission_request_id), bounds.id(permission.correlation_id)
             local tool, input_digest = bounds.id(permission.tool_name), bounds.id(permission.input_digest)
@@ -358,6 +358,8 @@ function M.decode(value: unknown): (Checkpoint?, string?)
                 acknowledgment_id = bounds.id(permission.acknowledgment_id)
                 if not acknowledgment_id then return nil, "permissions[" .. tostring(index) .. "] acknowledgment_id is not an identifier" end
             end
+            local lease_ref = permission.lease_ref == nil and nil or bounds.id(permission.lease_ref)
+            if permission.lease_ref ~= nil and not lease_ref then return nil, "permission lease_ref is invalid" end
             local approval_id: string? = nil
             if permission.approval_id ~= nil then
                 approval_id = bounds.id(permission.approval_id)
@@ -384,7 +386,7 @@ function M.decode(value: unknown): (Checkpoint?, string?)
                 if not deadline_ms then return nil, "permission deadline is malformed" end
             end
             permissions[index] = {deadline_ms = deadline_ms, permission_request_id = request_id, correlation_id = correlation, acknowledgment_id = acknowledgment_id, tool_name = tool, input_digest = input_digest, prompt = prompt, proposal_digest = proposal_digest,
-                idempotency_key = idempotency_key, effect_key = effect_key, write_id = write_id, phase = phase, approval_id = approval_id, decision = decision, incarnation = incarnation, response = response}
+                idempotency_key = idempotency_key, effect_key = effect_key, write_id = write_id, phase = phase, lease_ref = lease_ref, approval_id = approval_id, decision = decision, incarnation = incarnation, response = response}
         end
     end
     local retained_session: string? = nil

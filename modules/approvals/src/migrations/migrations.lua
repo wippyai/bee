@@ -133,11 +133,32 @@ CREATE TABLE bee_approval_node_identity_migrations (
     CHECK (source_node <> destination_node)
 );
 ]]
+local RUNTIME_LEASE_SQL = [[
+CREATE TABLE bee_approval_runtime_leases (
+    lease_ref TEXT PRIMARY KEY,
+    owner_node TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    workspace_id TEXT NOT NULL,
+    tool TEXT NOT NULL,
+    input_digest TEXT NOT NULL,
+    expires_ms INTEGER NOT NULL,
+    max_uses INTEGER NOT NULL CHECK (max_uses > 0),
+    revoked_at TEXT,
+    source_digest TEXT NOT NULL
+);
+CREATE TABLE bee_approval_runtime_lease_uses (
+    lease_ref TEXT NOT NULL REFERENCES bee_approval_runtime_leases(lease_ref),
+    effect_key TEXT NOT NULL,
+    request_digest TEXT NOT NULL,
+    PRIMARY KEY (lease_ref, effect_key)
+);
+]]
 local list: {Migration} = {
     {id = 1, name = "approvals", sql = APPROVALS_SQL, rebuild = false},
     {id = 2, name = "decision_notice", sql = NOTICE_SQL, rebuild = true},
     {id = 3, name = "effect_completion", sql = INSTALLATION_EFFECT_SQL, rebuild = false},
     {id = 4, name = "approvals_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
+    {id = 5, name = "approval_runtime_leases", sql = RUNTIME_LEASE_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

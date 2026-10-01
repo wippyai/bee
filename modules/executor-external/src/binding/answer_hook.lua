@@ -13,6 +13,7 @@ local policy = require("policy")
 local machine = require("machine")
 local descriptor = require("descriptor")
 local classify = require("classify")
+local profiles = require("profiles")
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value?: unknown, error?: {code: string, message: string}}
 local function fail(message: string): Reply return {ok = false, error = {code = "PERMISSION_REFUSED", message = message}} end
@@ -122,7 +123,7 @@ local function handle(raw: unknown): Reply
         point = recovered
     end
     local state: exchange.State = {request = {owner_id = session, session_ref = session, workspace_id = workspace, thread_id = thread_id,
-            action_id = action_id, attempt_id = attempt_id}, plan_digest = plan_digest, epoch = 1, permissions = point.permissions, proposal_kind = "operation",
+            preferences = pinned.effective_profile and profiles.preferences(pinned.effective_profile), action_id = action_id, attempt_id = attempt_id}, plan_digest = plan_digest, epoch = 1, permissions = point.permissions, proposal_kind = "operation",
         exchange = {adapter = accepted.adapter, approver_policy = declaration.approver_policy, poll_ms = declaration.poll_ms,
             ttl_ms = declaration.ttl_ms, answer_mode = pinned.permission_answers}}
     local response: string? = nil
@@ -166,6 +167,11 @@ local function handle(raw: unknown): Reply
             if item.correlation_id == event_id and item.phase == "written" and item.response then
                 local refusal = revalidate()
                 if refusal then return fail(refusal) end
+                if item.lease_ref then
+                    local _, err = value("bee.approvals.binding:runtime_lease", {operation = "use", lease_ref = item.lease_ref,
+                        workspace_id = workspace, tool = item.tool_name, input_digest = item.input_digest, effect_key = item.effect_key})
+                    if err then return fail(err) end
+                end
                 return {ok = true, value = {permission_response = item.response}}
             end
         end

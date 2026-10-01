@@ -239,8 +239,14 @@ end
 function M.grant(value: unknown): Reply
     local object = bounds.object(value)
     if not object then return fail("INVALID", "request must be an object") end
-    local unknown_field = bounds.fields(object, {"workspace_id", "name", "access", "purpose", "audience", "attempt_id", "ttl_ms", "idempotency_key", "subject", "thread_id"})
+    local unknown_field = bounds.fields(object, {"workspace_id", "name", "access", "purpose", "audience", "attempt_id", "ttl_ms", "idempotency_key", "subject", "thread_id", "subpath"})
     if unknown_field then return fail("INVALID", unknown_field) end
+    local selected_subpath: string? = nil
+    if object.subpath ~= nil then
+        local path, err = bounds.subpath(object.subpath)
+        if not path then return fail("INVALID", err or "invalid grant subpath") end
+        selected_subpath = path
+    end
     local idempotency_key: string? = nil
     if object.idempotency_key ~= nil then
         idempotency_key = bounds.id(object.idempotency_key)
@@ -284,6 +290,7 @@ function M.grant(value: unknown): Reply
     local issuer_node, node_error = node()
     if not issuer_node then return fail("UNAVAILABLE", node_error or "node identity is unavailable") end
     local digest_input: {[string]: unknown} = {workspace_id = workspace_id, name = name, access = access, purpose = purpose, audience = audience, attempt_id = attempt_id}
+    if selected_subpath ~= nil then digest_input.subpath = selected_subpath end
     if named_subject then
         digest_input.subject = named_subject
         digest_input.thread_id = named_thread
@@ -312,6 +319,11 @@ function M.grant(value: unknown): Reply
         db:release()
         return refused
     end
+    local base_path = text(association.subpath) or ""
+    local grant_subpath = selected_subpath or base_path
+    if base_path ~= "" and grant_subpath ~= base_path and grant_subpath:sub(1, #base_path + 1) ~= base_path .. "/" then
+        db:release(); return fail("DENIED", "grant subpath is outside the resource association")
+    end
     local epoch, epoch_error = epoch_of(db, workspace_id)
     if not epoch then
         db:release()
@@ -326,7 +338,7 @@ function M.grant(value: unknown): Reply
     local _, insert_error = db:execute([[INSERT INTO bee_resource_grants (grant_id, workspace_id, name, association_id, association_revision, issuer_owner, subject, thread_id, audience,
         root_ref, root_digest, subpath, access, purpose, attempt_id, expires_at, authorization_epoch, idempotency_key, request_digest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)]],
         {grant_id, workspace_id, name, association.association_id, association.revision, issuer_node, subject, named_thread, audience, association.root_ref, association.root_digest,
-            association.subpath, access, purpose, attempt_id, stamp(created + ttl), epoch, idempotency_key, request_digest, stamp(created)})
+            grant_subpath, access, purpose, attempt_id, stamp(created + ttl), epoch, idempotency_key, request_digest, stamp(created)})
     if insert_error then
         db:release()
         return fail("STORAGE", "record grant")

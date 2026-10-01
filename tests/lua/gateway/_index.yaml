@@ -229,3 +229,22 @@ entries:
     test: wippy.test:test
     harness: bee.threads:harness
     bounds: bee.threads.records:bounds
+- name: profile_scope_test
+  kind: function.lua
+  source: file://profile_scope_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [security]
+  security: {policies: [bee.gateway:profile_context_policy, bee.gateway.security:execute_policy]}
+  imports: {test: wippy.test:test, access: bee.driver:profile_access, scope: bee.gateway:profile_scope, context: bee.gateway:context, subject_call: bee.gateway.security:subject_call, bounds: bee.threads.records:bounds}
+- name: profile_context_probe
+  kind: function.lua
+  source: file://profile_context_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [ctx]
+  imports: {bounds: bee.threads.records:bounds}
+- name: profile_context_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy: {actions: [funcs.call, security.policy.get], resources: '*', effect: allow}

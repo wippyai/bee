@@ -110,7 +110,7 @@ function M.configure(pinned: registry.Snapshot, binding_ref: string): (string?, 
     return target, nil, driver_id
 end
 
-function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?): (string?, string?)
+function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, target: string?): (string?, string?, descriptor.Descriptor?)
     local namespace = binding_ref:match("^(.*):binding$")
     if not namespace or (target ~= nil and target ~= namespace .. ".binding:configure") then return nil, nil end
     local binding = M.entry(pinned, binding_ref)
@@ -125,10 +125,10 @@ function M.configure_renderer(pinned: registry.Snapshot, binding_ref: string, ta
     local selected, descriptor_error = descriptor.load_from(pinned, descriptor_ref)
     if descriptor_error then return nil, descriptor_error end
     if selected and selected.provider ~= provider then return nil, "driver binding descriptor provider does not match driver_id" end
-    return selected and selected.configure or nil, nil
+    return selected and selected.configure or nil, nil, selected
 end
 
-function M.configure_renderer_for_target(pinned: registry.Snapshot, target: string): (string?, string?)
+function M.configure_renderer_for_target(pinned: registry.Snapshot, target: string): (string?, string?, descriptor.Descriptor?)
     local namespace = target:match("^(.*)%.binding:configure$")
     if not namespace then return nil, nil end
     return M.configure_renderer(pinned, namespace .. ":binding", target)

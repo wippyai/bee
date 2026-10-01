@@ -93,6 +93,38 @@ local function run()
             test.eq(decision.behavior, "deny")
             test.eq(decision.message, "person denied")
         end)
+        test.it("uses a referenced runtime lease and refuses its revoked replay", function()
+            local decoded = assert(adapter.decode("fixture:lease-adapter", {
+                schema_revision = "bee.permission-adapter@2", event_name = "fixture.permission", event_revision = "1",
+                request = {correlation = "id", tool = "tool", input = "input"},
+                response = {correlation_field = "id", decision_field = "decision", allow_value = "allow", deny_value = "deny"},
+                acknowledgment = {mode = "continued_output"}, deny_acknowledgment = {mode = "unproven"},
+                cancellation = "deny_before_close", proof_fixture = "fixture"}))
+            local point: exchange.State = {request = {owner_id = "owner", attempt_id = "attempt", action_id = "action", thread_id = "thread", workspace_id = "workspace",
+                preferences = {options = {}, instructions = "", mcp_tools = {}, bee = {approval_leases = {"lease"}}}},
+                plan_digest = string.rep("a", 64), epoch = 1, permissions = {}, exchange = {adapter = decoded, approver_policy = "policy", poll_ms = 50, ttl_ms = 1000, answer_mode = "ask"}}
+            local writes, uses, revoked = 0, 0, false
+            local ctx: exchange.Context = {state = point, now_ms = function(): integer return 0 end, approvals = "approvals", max_consume_attempts = 3,
+                digest_of = digest, step = function(_: string) end, waiting = function(): boolean return true end, settled = function(): boolean return false end,
+                revalidate = function(): string? return nil end, commit = function(_: {Object}): (boolean, string?) return true, nil end,
+                write = function(_: string, line: string): (boolean, string?) writes = writes + 1; test.eq(assert(bounds.object(json.decode(line))).decision, "allow"); return true, nil end,
+                call = function(target: string, raw: unknown): (unknown, string?)
+                    test.eq(target, "approvals:runtime_lease")
+                    local input = assert(bounds.object(raw))
+                    test.eq(input.lease_ref, "lease"); test.eq(input.tool, "Bash"); test.eq(input.workspace_id, "workspace")
+                    uses = uses + 1
+                    if revoked then return {ok = false, error = {code = "DENIED", message = "revoked"}}, nil end
+                    return {ok = true, value = {lease_ref = "lease", consumed = true}}, nil
+                end}
+            local records: {Object} = {{body = {type = "extension", event_key = "lease-request", data = {event_name = "fixture.permission", event_revision = "1",
+                payload_json = json.encode({id = "req", tool = "Bash", input = {command = "ls"}})}}}}
+            test.eq(exchange.detect(ctx, records), 1)
+            test.is_true(exchange.advance(ctx, true))
+            test.eq(writes, 1); test.eq(uses, 2); test.eq(point.permissions[1].lease_ref, "lease")
+            point.permissions[1].phase = "consumed"; revoked = true
+            test.is_false(exchange.advance(ctx, true))
+            test.eq(writes, 1)
+        end)
         test.it("checkpoints the command and consumes only Allow before writing", function()
             local decoded = assert(adapter.decode("fixture:adapter", {
                 schema_revision = "bee.permission-adapter@2", event_name = "fixture.permission", event_revision = "1",

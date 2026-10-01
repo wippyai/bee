@@ -20,7 +20,7 @@ type ExitResult = {kind: "exit", code: integer?, error: string?}
 type Result = ReadResult | ExitResult
 type Object = {[string]: unknown}
 
-local function read_stream(stream: Stream): (string?, string?)
+local function read_stream(stream: Stream, maximum: integer): (string?, string?)
     local chunks: {string} = {}
     local size = 0
     while true do
@@ -29,13 +29,15 @@ local function read_stream(stream: Stream): (string?, string?)
         if chunk == nil or chunk == "" then break end
         if type(chunk) ~= "string" then return nil, "host probe stream returned invalid data" end
         size = size + #(chunk)
-        if size > M.MAX_OUTPUT_BYTES then return nil, "host probe output exceeds its bound" end
+        if size > maximum then return nil, "host probe output exceeds its bound" end
         chunks[#chunks + 1] = chunk
     end
     return table.concat(chunks), nil
 end
 
-function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Release, timeout_ms: integer?): (string?, integer?, string?)
+function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Release, timeout_ms: integer?, maximum_bytes: integer?): (string?, integer?, string?)
+    local maximum: integer = maximum_bytes or math.floor(M.MAX_OUTPUT_BYTES)
+    if maximum < 1 or maximum > 65536 then return nil, nil, "invalid host probe output bound" end
     local timeout = timeout_ms or M.DEADLINE_MS
     local finished = false
     local function cleanup(force: boolean)
@@ -56,7 +58,7 @@ function M.capture(proc: Process, stdout: Stream, stderr: Stream, release: Relea
     end
     local function pump(name: "stdout" | "stderr", stream: Stream)
         coroutine.spawn(function()
-            local output, read_error = read_stream(stream)
+            local output, read_error = read_stream(stream, maximum)
             local sent: Result = {kind = "stream", name = name, output = output, error = read_error}
             send_results(sent)
         end)

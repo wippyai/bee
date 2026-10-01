@@ -148,7 +148,9 @@ entries:
 - name: profile_editor
   kind: library.lua
   source: file://profile_editor.lua
+  modules: [json]
   imports:
+    canonical: bee.threads.records:canonical
     bounds: bee.threads.records:bounds
     preferences: bee.driver:preferences
     budgets: bee.threads.records:budgets

@@ -26,6 +26,20 @@ entries:
   source: file://login_evidence.lua
   imports:
     bounds: bee.threads.records:bounds
+- name: probe_capture
+  kind: library.lua
+  source: file://probe_capture.lua
+  modules: [channel, time]
+- name: profile_access
+  kind: library.lua
+  source: file://profile_access.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: schema_values
+  kind: library.lua
+  source: file://schema_values.lua
+  imports:
+    bounds: bee.threads.records:bounds
 - name: descriptor
   kind: library.lua
   source: file://descriptor.lua
@@ -34,6 +48,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     login_evidence: bee.driver:login_evidence
+    schema_values: bee.driver:schema_values
 - name: locate
   kind: library.lua
   source: file://locate.lua
@@ -52,6 +67,14 @@ entries:
     agy_stream_json: bee.driver.codec:agy_stream_json
     grok_streaming_json: bee.driver.codec:grok_streaming_json
     muse_record_jsonl: bee.driver.codec:muse_record_jsonl
+- name: option_render
+  kind: library.lua
+  source: file://option_render.lua
+  modules: [json, toml, hash]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    configuration: bee.driver:configuration
 - name: universal
   kind: library.lua
   source: file://universal.lua
@@ -65,6 +88,7 @@ entries:
     types: bee.driver:types
     locate: bee.driver:locate
     codec_registry: bee.driver:codec_registry
+    option_render: bee.driver:option_render
     normalizer: bee.driver.kit:normalize
 - name: instructions
   kind: library.lua
@@ -107,6 +131,8 @@ entries:
   kind: library.lua
   source: file://preferences.lua
   imports:
+    profile_access: bee.driver:profile_access
+    canonical: bee.threads.records:canonical
     bounds: bee.threads.records:bounds
     instructions: bee.driver:instructions
 - name: driver

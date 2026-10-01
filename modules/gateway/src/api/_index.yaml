@@ -64,6 +64,7 @@ entries:
   method: handle
   modules: [http, json, funcs, security, registry, contract]
   imports:
+    profile_scope: bee.gateway:profile_scope
     gateway: bee.gateway.binding:gateway
     mcp: bee.gateway:mcp
     admission: bee.gateway.api:admission
@@ -73,4 +74,4 @@ entries:
     bounds: bee.threads.records:bounds
     subject_call: bee.gateway.security:subject_call
   security:
-    policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy, bee.gateway.security:session_contract_policy]
+    policies: [bee.resources.security:resource_resolve_policy,bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy, bee.gateway.security:session_contract_policy]

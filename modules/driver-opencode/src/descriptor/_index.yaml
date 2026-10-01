@@ -129,6 +129,14 @@ entries:
             merge: append
             value:
               field: provider.system_prompt_append
+          - kind: config
+            contexts: [window, first_turn, resume]
+            file: .config/opencode/opencode.json
+            format: json
+            path: [instructions]
+            merge: append
+            value:
+              field: provider.system_prompt_files
         model:
           path: provider.model
           value_schema:

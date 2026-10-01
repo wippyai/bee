@@ -16,6 +16,7 @@ entries:
   source: file://protocol.lua
   modules: [json]
   imports:
+    access: bee.driver:profile_access
     bounds: bee.threads.records:bounds
     budgets: bee.threads.records:budgets
     canonical: bee.threads.records:canonical
@@ -24,6 +25,7 @@ entries:
   source: file://validation.lua
   modules: [registry]
   imports:
+    budgets: bee.threads.records:budgets
     bounds: bee.threads.records:bounds
     descriptors: bee.driver:descriptor
     protocol: bee.harness.profiles:protocol

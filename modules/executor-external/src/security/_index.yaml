@@ -13,6 +13,7 @@ entries:
     - bee.driver.*.binding:normalize
     - bee.threads.service:turn_observation
     - bee.harness.profiles:call
+    - bee.approvals.binding:runtime_lease
     - bee.resources.binding:grant
     - bee.credentials.binding:issue_projection
     - bee.placement.native.binding:prepare

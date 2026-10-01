@@ -68,6 +68,7 @@ entries:
     checkpoint: bee.harness.carrier:checkpoint
     admission: bee.harness.launch:admission
     catalog: bee.harness.catalog:catalog
+    profiles: bee.harness.profiles:protocol
     classify: bee.harness.catalog:classify
     policy: bee.harness.carrier:policy
     machine: bee.harness.carrier:machine

@@ -2,6 +2,7 @@
 local bounds = require("bounds")
 local registry = require("registry")
 local login_evidence = require("login_evidence")
+local schema_values = require("schema_values")
 local M = {}
 type PermissionAnswer = {transport: string, adapter_ref: string?, reason: string?}
 type BudgetCapabilities = {provider_steps: "agent_turn" | "model_step", tokens: boolean, cost_usd: boolean, tool_calls: boolean, wall_time_ms: boolean}
@@ -41,7 +42,7 @@ M.MAX_TEMPLATE_DEPTH = 8
 M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}
 
 type Object = {[string]: unknown}
-type OptionValue = string | boolean | {string}
+type OptionValue = string | number | boolean | {[string]: unknown} | {unknown}
 type Descriptor = {
     schema_revision: string,
     provider: string,
@@ -100,14 +101,18 @@ function M.runtime_spec(spec: Object): Object
     for _, name in ipairs({"default", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) do result[name] = spec[name] end
     if schema.enum ~= nil then result.type = "enum"; result.values = schema.enum
     elseif schema.type == "boolean" then result.type = "boolean"
-    elseif schema.type == "array" then result.type = "ids"; result.max = schema.maxItems
+    elseif schema.type == "array" and spec.transform ~= nil then result.type = "ids"; result.values = (bounds.object(schema.items) or {}).enum
+    elseif schema.type == "array" then result.type = "json"; result.schema = schema
+    elseif schema.type == "object" or schema.type == "number" or schema.type == "integer" then result.type = "json"; result.schema = schema
     else result.type = schema.format or "text"; result.max = schema.maxLength end
     return result
 end
 
 function M.decode_option(field: string, declaration: Object, value: unknown): (OptionValue?, string?)
     local spec = M.runtime_spec(declaration)
-    if spec.type == "text" then
+    if spec.type == "json" then
+        return schema_values.decode(spec.schema, value, field)
+    elseif spec.type == "text" then
         local text = bounds.text(value, bounds.count(spec.max) or 4096)
         if not text or text:find("%z") then return nil, field .. " must be bounded text" end
         return text, nil
@@ -264,7 +269,8 @@ end
 local function check_reference(value: unknown, fields: Object, label: string): string?
     local name = bounds.id(value)
     if not name then return label .. " is not an identifier" end
-    if fields[name] ~= true then return label .. " names undeclared field " .. name end
+    local short = name:match("^provider%.options%.(.+)$") or name:match("^provider%.(.+)$") or name
+    if fields[short] ~= true then return label .. " names undeclared field " .. name end
     return nil
 end
 
@@ -475,7 +481,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
             local path = bounds.line(declaration.path, 128)
             if not path or (path ~= "provider." .. name and path ~= "provider.options." .. name) then return nil, "OptionSpec path must name its canonical provider field" end
             local schema = bounds.object(declaration.value_schema)
-            if not schema or bounds.fields(schema, {"type", "enum", "format", "items", "maxItems", "maxLength"}) or not bounds.member(schema.type, {"string", "boolean", "array"}) then return nil, "OptionSpec value_schema is invalid" end
+            if not schema or bounds.fields(schema, {"type", "enum", "format", "items", "maxItems", "maxLength", "properties", "additionalProperties", "required", "minimum", "maximum"}) or not bounds.member(schema.type, {"string", "boolean", "array", "object", "number", "integer"}) then return nil, "OptionSpec value_schema is invalid" end
             if not bounds.line(declaration.label, 80) or not bounds.line(declaration.description, 512) or not bounds.member(declaration.section, {"basic", "advanced"}) or not bounds.count(declaration.order) then return nil, "OptionSpec form declaration is invalid" end
             local contexts = bounds.ids(declaration.contexts, true)
             if not contexts or #contexts == 0 then return nil, "OptionSpec contexts are invalid" end
@@ -511,7 +517,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
                     if bounds.fields(render, {"kind", "contexts", "file", "format", "path", "merge", "value"}) then return nil, "OptionSpec config render has unknown fields" end
                     local key_path = sequence(render.path, "OptionSpec configuration path", 12)
                     local value = bounds.object(render.value)
-                    if not key_path or not value or bounds.fields(value, {"field"}) or value.field ~= declaration.path then return nil, "OptionSpec config value must name its canonical field" end
+                    if not key_path or not value or bounds.fields(value, {"field", "literal"}) or (value.literal == nil and value.field ~= declaration.path and value.field ~= "provider.system_prompt_files") or (value.literal ~= nil and (type(value.literal) ~= "string" or value.field ~= nil)) then return nil, "OptionSpec config value must name its canonical field" end
                     for _, key in ipairs(key_path) do if not bounds.id(key) then return nil, "OptionSpec config path is invalid" end end
                     local file = bounds.line(render.file, 512)
                     if not file or not safe_relative(file) or not bounds.member(render.format, {"json", "toml", "text"}) or not bounds.member(render.merge, {"set", "append"}) then return nil, "OptionSpec config render is invalid" end
@@ -519,12 +525,12 @@ function M.decode(value: unknown): (Descriptor?, string?)
                     if bounds.fields(render, {"kind", "contexts", "name", "value"}) then return nil, "OptionSpec environment render has unknown fields" end
                     local name = bounds.line(render.name, 128)
                     local value = bounds.object(render.value)
-                    if not name or not name:match("^[A-Z][A-Z0-9_]*$") or name == "HOME" or name == "PATH" or name:match("^BEE_") or not value or value.field ~= declaration.path then return nil, "OptionSpec environment render is invalid" end
+                    if not name or not name:match("^[A-Z][A-Z0-9_]*$") or name == "HOME" or name == "PATH" or name:match("^BEE_") or name:match("_HOME$") or not value or bounds.fields(value, {"field", "literal"}) or (value.literal ~= nil and (type(value.literal) ~= "string" or value.field ~= nil)) or (value.literal == nil and value.field ~= declaration.path and value.field ~= "provider.env." .. name) then return nil, "OptionSpec environment render is invalid" end
                 end
             end
         elseif bounds.fields(declaration, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "Runtime option has unknown fields" end
         local spec = M.runtime_spec(declaration)
-        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "duration", "ids", "codex_profile", "text"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
+        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "duration", "ids", "codex_profile", "text", "json"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
         if spec.type == "enum" and spec.values == nil then return nil, "CLI descriptor.options." .. tostring(name) .. ".values is required for an enum" end
         if spec.values ~= nil then
             local values, values_error = sequence(spec.values, "CLI descriptor.options." .. tostring(name) .. ".values", 32)

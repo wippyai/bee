@@ -27,10 +27,10 @@ type Timeouts = {start_ms: integer, stop_grace_ms: integer, drain_ms: integer, r
 -- rendered by the driver at admission, created in an attempt home or atomically
 -- published in a retained session home. Provider state has separate ownership.
 type SecretField = {path: {string}, environment: string, prefix: string}
-type JsonOperation = {kind: "default" | "insert" | "append", path: {string}}
-type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}, append_text: boolean?} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
+type JsonOperation = {kind: "default" | "insert" | "append" | "set", path: {string}}
+type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}, append_text: boolean?} | {kind: "json_patch" | "toml_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
-type ConfigurationDelivery = {arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
+type ConfigurationDelivery = {environment: {[string]: string}?,arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
 -- The plan's measurement of the launch executable, verified by the runner
 -- immediately before exec.
 type ExecutableMeasurement = {revision: string, kind: string, digest: string}
@@ -56,6 +56,7 @@ type LaunchRequest = {
     binding_digest: string,
     profile_digest: string,
     launch: driver_types.Launch,
+    configuration_context: string?,
     configuration_digest: string?,
     -- Placement-owned output, never accepted by the request decoder.
     delivery: ConfigurationDelivery?,

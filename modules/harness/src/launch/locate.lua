@@ -18,6 +18,8 @@ local login_evidence = require("login_evidence")
 local funcs = require("funcs")
 local placement_profiles = require("placement_profiles")
 local placement_resolver = require("placement_resolver")
+local canonical = require("canonical")
+local hash = require("hash")
 local M = {}
 local LOGIN_SOURCE = "bee.env:machine_login_source"
 
@@ -66,7 +68,7 @@ local function capture(argv: {string}, timeout_ms: integer?, silent: boolean?): 
         close = function(_self: probe_capture.Stream): unknown stderr:close(); return nil end,
     }
     local output, code, probe_error = probe_capture.capture(capture_process, capture_stdout, capture_stderr,
-        function() executor:release() end, timeout_ms)
+        function() executor:release() end, timeout_ms, 65536)
     if probe_error then return nil, nil, probe_error, false end
     return output, code, nil, false
 end
@@ -147,7 +149,6 @@ end
 
 function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: string, cache: Cache, placement_profile_ref: string?): driver_types.LocateResult?
     local cache_key = binding_ref .. "\n" .. profile_id .. "\n" .. (placement_profile_ref or "")
-    if cache.drivers[cache_key] then return cache.drivers[cache_key] end
     local binding_raw, binding_error = pinned:get(binding_ref)
     local binding = not binding_error and bounds.object(binding_raw) or nil
     local meta = binding and bounds.object(binding.meta) or nil
@@ -169,6 +170,8 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         end
         return nil
     end
+    cache_key = cache_key .. "\n" .. assert(hash.sha256(assert(canonical.encode(selected))))
+    if not placement_profile_ref and cache.drivers[cache_key] then return cache.drivers[cache_key] end
     if not has_locate_facet(pinned, binding) then
         local result = unsupported(selected, "the active driver does not bind bee.driver:locate_facet", nil)
         cache.drivers[cache_key] = result
@@ -198,6 +201,18 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
     local executable_present: boolean? = nil
     local version: string? = nil
     local docker = false
+    local docker_target: string? = nil
+    local function runtime_capture(argv: {string}): (string?, integer?, string?, boolean?)
+        if not docker_target then return capture(argv, 3000, false) end
+        local args: {string} = {}
+        for index, argument in ipairs(argv) do if index > 1 then args[#args + 1] = argument end end
+        local raw, err = funcs.call(docker_target, {placement_profile_ref = placement_profile_ref, runtime_name = executable_name, probe_argv = args})
+        local reply = not err and bounds.object(raw)
+        local value = reply and reply.ok == true and bounds.object(reply.value)
+        local output = value and bounds.text(value.probe_output, 131072)
+        if not output then return nil, nil, "Docker runtime probe is unavailable", false end
+        return output, 0, nil, false
+    end
     if placement_profile_ref then
         local placement_profile = placement_profiles.resolve(pinned, placement_profile_ref)
         local placement = placement_profile and placement_resolver.resolve(pinned, placement_profile.profile.placement_binding) or nil
@@ -215,17 +230,20 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
                 return result
             end
             if not image or type(image.present) ~= "boolean" or type(image.runtime_present) ~= "boolean" then
-                local result = unknown(provider, "Docker runtime readiness is unavailable")
+                local result = unknown(provider, capability_error and tostring(capability_error) or "Docker runtime readiness is unavailable")
                 cache.drivers[cache_key] = result; return result
             end
-            if (image.present ~= true and image.buildable ~= true) or image.runtime_present ~= true then
+            if image.present ~= true or image.runtime_present ~= true then
                 local result = unknown(provider, bounds.line(image.reason, 1024) or (image.present == true and "Docker image does not declare this runtime artifact" or "Docker runtime image is missing; a registry digest is fetched on first launch"))
                 cache.drivers[cache_key] = result; return result
             end
             executable_present = true
-            if placement_profile and placement_profile.profile.image_recipe_ref then
-                version = executable_version(executable_path, bounds.object(selected.version_probe) or {})
-            end
+            docker_target = target
+            local image_digest = bounds.line(image.image_digest, 128)
+            if not image_digest then return unknown(provider, "Docker image has no immutable cache identity") end
+            cache_key = cache_key .. "\n" .. image_digest
+            if cache.drivers[cache_key] then return cache.drivers[cache_key] end
+            version = probe_version.read(executable_name, bounds.object(selected.version_probe) or {}, runtime_capture)
             platform = {os = bounds.line(image.os, 32), arch = bounds.line(image.arch, 32)}
             compatible = platform.os ~= nil and platform.arch ~= nil and bounds.member(platform.os, os_values) ~= nil and bounds.member(platform.arch, arch_values) ~= nil
         end
@@ -269,7 +287,7 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
             local help = support and bounds.object(support.help_probe)
             local supported = result.status == "ready"
             local reason: string? = supported and nil or "Installed version and login are not established"
-            if supported and help and not docker then
+            if supported and help then
                 local args = bounds.array(help.argv, 8)
                 local flag = bounds.line(help.flag, 128)
                 local argv: {string} = {executable_path}
@@ -281,13 +299,11 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
                 local key = table.concat(argv, "\n")
                 local output = help_cache[key]
                 if not output then
-                    output = capture(argv, 3000, false) or ""
+                    output = runtime_capture(argv) or ""
                     help_cache[key] = output
                 end
                 supported = args ~= nil and flag ~= nil and output:find(flag, 1, true) ~= nil
                 if not supported then reason = "Installed CLI help does not advertise " .. (flag or path) end
-            elseif supported and help then
-                supported = false; reason = "Docker runtime help has not been probed"
             elseif supported and not (support and support.config_schema_ref) then
                 supported = false; reason = "Option has no declared capability evidence"
             end

@@ -36,7 +36,7 @@ file or config existence and environment presence are setup evidence, not proof 
 The six external CLI packages use the shared `bee.driver:universal`
 implementation. Each contributes a strict `bee.driver.cli_descriptor` registry
 entry (`bee.driver.cli-descriptor@3`) with executable and version probe, an any-of login evidence declaration, launch templates,
-OptionSpec value schemas, form labels, contexts, capability evidence and renders, JSON paths, and a codec ID. The same declaration supplies form choices and launch arguments; there is no separate profile-options map. Locate reports capabilities established by version/help probes. The host validates the
+OptionSpec value schemas, form labels, contexts, capability evidence and renders, JSON paths, and a codec ID. The same declaration supplies form choices, argv, structured configuration and environment delivery; there is no separate profile-options map. Locate reports capabilities established by version/help probes. The host validates the
 descriptor before using it. CLI-specific configuration rendering remains in
 the provider package where formats and hook protocols differ.
 
@@ -142,3 +142,5 @@ adapter's edit-capable CLI mode. Configure replies and launch callers cannot
 select the adapter or its paths. Placement discovers Git metadata and checks
 the exact directories against host-admitted write roots before asking the CLI
 to use its provider-specific option.
+
+Descriptor config renders encode bounded declared objects, arrays, numbers and booleans as JSON/TOML values, or text files in the admitted private home. Set and append operations extend the existing placement composition recipes, preserving ambient configuration. Literal tokens and canonical field tokens use the same renderer. The owner-derived `provider.system_prompt_files` token supplies the prompt-file array for OpenCode; it is not a saved option. Configuration delivery may contain a bounded `environment` map of nonreserved literal variables, persisted with files and arguments. Credential values remain broker references and are never stringified or returned by the driver.

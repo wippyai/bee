@@ -389,7 +389,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
             token_environment = gateway_configuration.DESTINATION,
             hook_token_environment = #hooks > 0 and gateway_configuration.HOOK_DESTINATION or nil}
     end
-    return {instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
+    return {option_values = bounds.object(data.prepare_options), context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
         selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil, configure_renderer
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
@@ -474,7 +474,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     if not selected_digest then return fail("DENIED", selected_error or "configuration inputs are not measurable") end
     if request.configuration_digest then
         if request.configuration_digest ~= selected_digest then return fail("CONFLICT", "host configuration inputs changed since the launch plan") end
-    elseif configuration.provider_ref or configuration.gateway or configuration.instructions or configuration.instruction_builder then
+    elseif configuration.provider_ref or configuration.gateway or configuration.instructions or configuration.instruction_builder or (configuration.option_values and next(configuration.option_values) ~= nil) then
         return fail("DENIED", "configured launches require the selected configuration digest")
     end
     local selected_gateway = configuration.gateway

@@ -4,10 +4,12 @@
 local bounds = require("bounds")
 local instructions = require("instructions")
 
+local profile_access = require("profile_access")
+local canonical = require("canonical")
 local M = {}
 -- Nine leaves room for one historical top-level option translated by the
 -- profile owner while keeping the bounded scalar map small.
-M.MAX_OPTIONS = 9
+M.MAX_OPTIONS = 64
 M.MAX_OPTION_VALUES = 32
 M.MAX_OPTION_VALUE_BYTES = 512
 M.MAX_MCP_TOOLS = 64
@@ -15,9 +17,9 @@ M.MAX_INSTRUCTIONS_BYTES = instructions.MAX_BYTES
 
 type Object = {[string]: unknown}
 type Scalar = string | number | boolean
-type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer}
-type Bee = {permission_answers: string?}
-type Value = {docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: {[string]: Scalar}, mcp_tools: {string}, instructions: string}
+type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer} | {kind: "declared"}
+type Bee = profile_access.Bee
+type Value = {docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: Object, mcp_tools: {string}, instructions: string}
 
 local RESERVED_OPTIONS: {[string]: boolean} = {
     profile_id = true,
@@ -59,10 +61,10 @@ local function option_name(value: unknown): string?
     return value
 end
 
-local function decode_options(value: unknown, label: string): ({[string]: Scalar}?, string?)
+local function decode_options(value: unknown, label: string): (Object?, string?)
     local object = bounds.object(value)
     if not object then return nil, label .. " must be an object" end
-    local result: {[string]: Scalar} = {}
+    local result: Object = {}
     local count = 0
     for name, item in pairs(object) do
         count = count + 1
@@ -71,9 +73,10 @@ local function decode_options(value: unknown, label: string): ({[string]: Scalar
             if RESERVED_OPTIONS[name] then return nil, label .. " contains reserved option " .. name end
             return nil, label .. " contains an invalid option name"
         end
-        local selected, selected_error = scalar(item, label .. "." .. name)
-        if selected == nil then return nil, selected_error end
-        result[name] = selected
+        if bounds.member(name, {"model", "effort", "permission_mode"}) and type(item) ~= "string" then return nil, label .. "." .. name .. " must be text" end
+        local encoded = canonical.encode(item)
+        if not encoded or #encoded > 8192 then return nil, label .. "." .. name .. " exceeds JSON value bounds" end
+        result[name] = item
     end
     return result, nil
 end
@@ -112,6 +115,7 @@ local function decode_option(value: unknown, name: string): (Option?, string?)
         if not values then return nil, values_error end
         return {kind = "enum", values = values}, nil
     end
+    if object.kind == "declared" and not bounds.fields(object, {"kind"}) then return {kind = "declared"}, nil end
     local kind = bounds.member(object.kind, {"enum", "text"})
     if not kind then return nil, "profile_restrictions." .. name .. ".kind must be enum or text" end
     if kind == "enum" then
@@ -191,14 +195,9 @@ function M.decode(value: unknown): (Value?, string?)
     if not text then return nil, instructions_error end
     local bee: Bee? = nil
     if object.bee ~= nil then
-        local declared = bounds.object(object.bee)
-        if not declared or bounds.fields(declared, {"permission_answers"}) then return nil, "bee preferences must name only permission_answers" end
-        local mode: string? = nil
-        if declared.permission_answers ~= nil then
-            mode = bounds.member(declared.permission_answers, {"provider", "ask", "deny"})
-            if not mode then return nil, "bee.permission_answers must be provider, ask or deny" end
-        end
-        bee = {permission_answers = mode}
+        local decoded, err = profile_access.decode(object.bee)
+        if not decoded then return nil, err end
+        bee = decoded
     end
     local home: "private" | "machine"? = nil
     if object.home == "private" then home = "private"
@@ -216,8 +215,12 @@ local function allowed_value(values: {Scalar}, selected: Scalar): boolean
     return false
 end
 
-local function allowed_option(option: Option, selected: Scalar): boolean
-    if option.kind == "enum" then return allowed_value(option.values, selected) end
+local function allowed_option(option: Option, selected: unknown): boolean
+    if option.kind == "declared" then return canonical.encode(selected) ~= nil end
+    if option.kind == "enum" then
+        if type(selected) ~= "string" and type(selected) ~= "number" and type(selected) ~= "boolean" then return false end
+        return allowed_value(option.values, selected)
+    end
     if type(selected) ~= "string" then return false end
     return #selected > 0 and #selected <= option.max_bytes and not selected:find("%c")
 end

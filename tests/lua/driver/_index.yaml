@@ -129,3 +129,49 @@ entries:
     configure: bee.driver.muse.binding:configure
     placement_configuration: bee.placement.native:configuration
     placement_types: bee.placement:types
+
+- name: option_render_test
+  kind: function.lua
+  source: file://option_render_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, toml, hash, registry]
+  security: {policies: [bee.harness.profiles:repair_policy]}
+  imports:
+    universal: bee.driver:universal
+    test: wippy.test:test
+    render: bee.driver:option_render
+    descriptor: bee.driver:descriptor
+    configuration: bee.driver:configuration
+    materializer: bee.placement.native:configuration
+    bounds: bee.threads.records:bounds
+- name: budget_accounting_test
+  kind: function.lua
+  source: file://budget_accounting_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports: {test: wippy.test:test, budgets: bee.threads.records:budgets, descriptor: bee.driver:descriptor}
+- name: docker_probe_test
+  kind: function.lua
+  source: file://docker_probe_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry, json]
+  security: {policies: [bee.driver:docker_probe_policy, bee.harness.security:launch_locate_probe_policy]}
+  imports: {test: wippy.test:test, probe: bee.placement.docker.service:runtime_probe, bounds: bee.threads.records:bounds, locate: bee.harness.launch:locate}
+- name: docker_probe_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy: {actions: [registry.get, registry.snapshot, registry.apply, funcs.call], resources: '*', effect: allow}
+- name: docker_probe_facts
+  kind: registry.entry
+  meta: {type: test_support}
+  data: {present: true, calls: 0, digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, help: '--model --permission-mode --allowedTools --disallowedTools --append-system-prompt-file'}
+- name: docker_capabilities_fixture
+  kind: function.lua
+  source: file://docker_capabilities_fixture.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [registry]
+  security: {policies: [bee.driver:docker_probe_policy]}
+  imports: {bounds: bee.threads.records:bounds}

@@ -24,6 +24,8 @@ local placement_store = require("placement_store")
 local capability_grants = require("capability_grants")
 local capability_catalog = require("capability_catalog")
 local sends = require("sends")
+local bounds = require("bounds")
+local json = require("json")
 local REQUESTER = "bee.test.launcher"
 local DEFINITION = "bee.harness.catalog:fixture_definition"
 local SHIPPED_SHAPE_DEFINITION = "bee.harness.catalog:shipped_shape_definition"
@@ -389,6 +391,69 @@ local function define_tests()
             local unsafe = call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace_id,
                 saved_profile_id = saved_id, saved_profile_revision = 3})
             test.is_false(unsafe.ok)
+        end)
+        test.it("applies credential selectors and independent narrowed gateway file grants", function()
+            for _, refs in ipairs({{}, {"anthropic"}}) do
+                local saved_id = fresh("credential-profile")
+                value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Selected credentials",
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {},
+                        bee = {mcp = {}, credential_refs = refs, files = {{workspace_id = workspace, resource = "project", subpath = "", access = "read"}}}}}))
+                local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace,
+                    saved_profile_id = saved_id, saved_profile_revision = 1}))
+                local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("credential-admit"), definition_ref = DEFINITION,
+                    workspace_id = workspace, brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest}))
+                local request = assert(bounds.object(admitted.request))
+                test.eq(#assert(bounds.array(request.projections, 64)), #refs)
+                local grants = assert(bounds.array(request.profile_grants, 64))
+                test.eq(#grants, 1)
+                test.eq(assert(bounds.object(grants[1])).access, "read")
+                test.eq(assert(bounds.object(grants[1])).workspace_id, workspace)
+                local resources = assert(bounds.array(request.resources, 64))
+                test.eq(#resources, 1)
+                test.eq(assert(bounds.object(resources[1])).access, "write")
+            end
+            local saved_id = fresh("undeclared-credential")
+            value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Undeclared",
+                    definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {}, bee = {credential_refs = {"undeclared"}, mcp = {}}}}))
+            local refused = call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1})
+            test.eq(code(refused), "DENIED")
+        end)
+        test.it("honors credential environment destinations and rejects retargeting or literal conflicts", function()
+            local listed = value(call("bee.credentials.binding:list", {workspace_id = workspace}))
+            local definitions = assert(bounds.array(listed.definitions, 64))
+            local destination = assert(bounds.id(assert(bounds.object(definitions[1])).destination))
+            local descriptor_ref = "bee.driver.claude.descriptor:cli"
+            local declaration = assert(registry.get(descriptor_ref))
+            local policy_entry = assert(registry.get(POLICY))
+            local saved_descriptor, saved_policy = assert(json.encode(declaration.data)), assert(json.encode(policy_entry.data))
+            local fields = assert(bounds.object(assert(bounds.object(assert(bounds.object(declaration.data)).options)).fields))
+            local properties: {[string]: unknown} = {}
+            local value_schema = {type = "object", additionalProperties = false, required = {"kind"}, properties = {
+                kind = {type = "string", enum = {"credential", "literal"}}, credential_ref = {type = "string", maxLength = 128}, value = {type = "string", maxLength = 128}}}
+            properties[destination], properties.OTHER_PROVIDER_TOKEN = value_schema, value_schema
+            fields.env = {path = "provider.env", value_schema = {type = "object", additionalProperties = false, properties = properties},
+                label = "Environment", description = "Fixture environment", section = "advanced", order = 999, contexts = {"first_turn"},
+                support = {config_schema_ref = "fixture:environment"}, render = {{kind = "env", contexts = {"first_turn"}, name = destination, value = {field = "provider.env." .. destination}}}}
+            assert(bounds.object(policy_entry.data)).profile_restrictions = {["provider.env"] = {kind = "declared"}}
+            apply(declaration); apply(policy_entry)
+            local replies: {admission.Reply} = {}
+            for index, item in ipairs({{name = destination, literal = false}, {name = "OTHER_PROVIDER_TOKEN", literal = false}, {name = destination, literal = true}}) do
+                local saved_id = fresh("credential-env")
+                local environment: {[string]: unknown} = {}
+                environment[item.name] = item.literal and {kind = "literal", value = "fixture-value"} or {kind = "credential", credential_ref = "anthropic"}
+                value(call("bee.harness.profiles:call", {operation = "put", workspace_id = workspace, profile_id = saved_id,
+                    expected_revision = 0, idempotency_key = fresh("save"), profile = {schema_revision = "bee.agent-profile@2", name = "Environment",
+                        definition_ref = DEFINITION, driver_binding_ref = "bee.driver.claude:binding", provider = {env = environment}, bee = {credential_refs = {"anthropic"}, mcp = {}}}}))
+                local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION, workspace_id = workspace, saved_profile_id = saved_id, saved_profile_revision = 1}))
+                replies[index] = call("bee.harness.launch:admit", {request_id = fresh("env-admit"), definition_ref = DEFINITION, workspace_id = workspace,
+                    brief = "Fixture", saved_profile_id = saved_id, saved_profile_revision = 1, expected_plan_digest = plan.plan_digest})
+            end
+            declaration.data = assert(json.decode(saved_descriptor)); policy_entry.data = assert(json.decode(saved_policy))
+            apply(declaration); apply(policy_entry)
+            test.eq(replies[1].ok, true)
+            test.eq(code(replies[2]), "DENIED"); test.eq(code(replies[3]), "DENIED")
         end)
         test.it("admits placement overrides only at both host ceilings and pins the selected home", function()
             local resolved = admission.resolve(DEFINITION)

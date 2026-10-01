@@ -207,10 +207,8 @@ local function open(request: Object): Reply
         if supervision_error then return unavailable(supervision_error, operation_key) end
     end
     local coverage = object(plan_value.budget_capabilities)
-    for _, ceiling in pairs(session_budgets or {}) do
-        if ceiling.cost_usd then return fail("UNSUPPORTED_CAPABILITY", "cost_usd requires trustworthy provider cost accounting", operation_key) end
-        if ceiling.tokens and (not coverage or coverage.tokens ~= true) then return fail("UNSUPPORTED_CAPABILITY", "budgets.tokens: this driver declares no trustworthy token accounting", operation_key) end
-    end
+    local accounting_error = budget_values.accounting(session_budgets, coverage, presentation)
+    if accounting_error then return fail("UNSUPPORTED_CAPABILITY", accounting_error, operation_key) end
     if presentation == "window" and (session_budgets or (supervision and supervision.on_stall == "cancel_work")) then
         return fail("UNSUPPORTED_CAPABILITY", "Window sessions do not expose proven budget or stall cancellation accounting", operation_key)
     end
@@ -475,10 +473,8 @@ local function send(request: Object): Reply
     local route = object(stored) and object((object(stored)).route)
     if stored_error or not route then return unavailable(stored_error or "Threads omitted the retained session route", operation_key) end
     if work_budget then
-        local coverage = object(route.budget_capabilities)
-        if work_budget.cost_usd or (work_budget.tokens and (not coverage or coverage.tokens ~= true)) then
-            return fail("UNSUPPORTED_CAPABILITY", "Work budget requires accounting the driver does not declare", operation_key)
-        end
+        local accounting_error = budget_values.accounting({turn = work_budget}, route.budget_capabilities, bounds.member(route.presentation, {"headless", "window"}))
+        if accounting_error then return fail("UNSUPPORTED_CAPABILITY", accounting_error, operation_key) end
     end
     local session_budgets, route_budget_error = budget_values.budgets(route.budgets)
     local session_budget = session_budgets and session_budgets.turn or nil

@@ -18,6 +18,7 @@ local paths = require("paths")
 local resources = require("resources")
 local image_service = require("image")
 local environment = require("environment")
+local runtime_probe = require("runtime_probe")
 local M = {}
 type Fault = {code: string, message: string}
 type Reply = {ok: boolean, value: unknown, error: Fault?}
@@ -408,7 +409,7 @@ function M.capabilities(value: unknown): Reply
         credential_broker = true, credential_projections = {"file", "environment"}}
     local request = bounds.object(value)
     if request and request.placement_profile_ref ~= nil then
-        if bounds.fields(request, {"placement_profile_ref", "runtime_name"}) then return fail("INVALID", "invalid Docker readiness request") end
+        if bounds.fields(request, {"placement_profile_ref", "runtime_name", "probe_argv"}) then return fail("INVALID", "invalid Docker readiness request") end
         local ref, runtime_name = bounds.id(request.placement_profile_ref), bounds.id(request.runtime_name)
         if not ref or not runtime_name or not runtime_name:match("^[A-Za-z0-9_.%-]+$") then return fail("INVALID", "Docker readiness requires a profile and runtime name") end
         local pinned = registry.snapshot()
@@ -429,6 +430,13 @@ function M.capabilities(value: unknown): Reply
             local readiness, readiness_error = image_service.readiness(selected.profile.image_recipe_ref, runtime_name)
             if not readiness then return fail("UNAVAILABLE", readiness_error or "runtime artifact discovery unavailable") end
             report.image_readiness = readiness
+            local image_ref = bounds.line(readiness.image_ref, 128)
+            if request.probe_argv ~= nil then
+                if not image_ref then return fail("UNAVAILABLE", "Docker image is not cached; launch once to build it before option help is available") end
+                local output, err = runtime_probe.run(client, image_ref, runtime_name, request.probe_argv)
+                if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
+                report.probe_output = output
+            end
             return succeed(report)
         end
         if not image_ref then return fail("INVALID", "Docker profile has no image") end
@@ -437,7 +445,14 @@ function M.capabilities(value: unknown): Reply
         local config = object and bounds.object(object.Config) or nil
         local labels = config and bounds.object(config.Labels) or nil
         local digest = labels and bounds.line(labels["bee.runtime." .. runtime_name], 64) or nil
-        report.image_readiness = {present = object ~= nil, runtime_present = digest ~= nil and #digest == 64 and digest:match("^[0-9a-f]+$") ~= nil,
+        local immutable = object and bounds.line(object.Id, 128)
+        if request.probe_argv ~= nil then
+            if not immutable or not digest then return fail("UNAVAILABLE", "Docker image is missing or has no runtime evidence") end
+            local output, err = runtime_probe.run(client, immutable, runtime_name, request.probe_argv)
+            if not output then return fail("UNAVAILABLE", err or "Docker help probe failed") end
+            report.probe_output = output
+        end
+        report.image_readiness = {image_ref = immutable, image_digest = immutable, present = object ~= nil, runtime_present = digest ~= nil and #digest == 64 and digest:match("^[0-9a-f]+$") ~= nil,
             os = object and bounds.line(object.Os, 32) or nil, arch = object and bounds.line(object.Architecture, 32) or nil,
             reason = object and "runtime image is installed" or "Docker runtime image is missing or unavailable"}
     end

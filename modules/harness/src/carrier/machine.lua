@@ -61,6 +61,7 @@ type Object = {[string]: unknown}
 type Reply = service_reply.Reply
 type IO = carrier_types.IO
 type Request = carrier_types.Request
+type ProfileGrant = carrier_types.ProfileGrant
 type Exchange = carrier_types.Exchange
 type Acceptance = carrier_types.Acceptance
 type Plan = carrier_types.Plan
@@ -302,7 +303,7 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
         local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)
         local capabilities = probed.result and probed.result.capabilities or {}
         for name in pairs(request.preferences.options) do
-            local path = (name == "model" or name == "effort" or name == "permission_mode") and ("provider." .. name) or ("provider.options." .. name)
+            local path = (name == "model" or name == "effort" or name == "permission_mode" or name == "tool_allow" or name == "tool_deny" or name == "env") and ("provider." .. name) or ("provider.options." .. name)
             local evidence = capabilities[path]
             if not evidence or not evidence.supported then return nil, path .. ": " .. (evidence and evidence.reason or "Installed CLI support is not established") end
         end
@@ -321,7 +322,7 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
-        provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        option_values = launch_policy.prepare_options, context = profile.mode == "window" and "window" or (resumed and "resume" or "first_turn"), provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
         gateway = gateway_input, fixture = launch_policy.fixture}, configure_target, configure_renderer)
     if not configuration_digest then return nil, configuration_error end
     return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
@@ -527,7 +528,7 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
         preferences = request.preferences,
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
-        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
+        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_context = profile.mode == "window" and "window" or (resume_ref and "resume" or "first_turn"), configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
         options = request.options,
@@ -644,6 +645,24 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
         end
         surface_value = policy.with_workspace(surface_value, request.workspace_id)
         if not surface_value then return nil, "gateway admit: cannot compose the launch workspace" end
+    end
+    if request.preferences and request.preferences.bee then
+        local composed: Object = {}
+        for key, value in pairs(surface_value or {tools = {}, traits = {}, base_tools = gateway.tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}) do composed[key] = value end
+        composed.profile = request.preferences.bee
+        local grants: {Object} = {}
+        for _, file in ipairs(request.preferences.bee.files or {}) do
+            local found = false
+            for _, resource in ipairs(request.profile_grants or {}) do
+                if resource.workspace_id == file.workspace_id and resource.name == file.resource and resource.subpath == file.subpath and resource.access == file.access then
+                    grants[#grants + 1] = {workspace_id = file.workspace_id, name = file.resource, subpath = file.subpath,
+                        access = file.access, grant_ref = resource.grant_ref, subject = request.owner_id}; found = true
+                end
+            end
+            if not found then return nil, "gateway profile file has no admitted resource grant" end
+        end
+        composed.resource_grants = grants
+        surface_value = composed
     end
     local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.session_ref and request.session_ref:match("^bs:") and request.session_ref or request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
         owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = surface_value,

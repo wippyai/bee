@@ -161,11 +161,20 @@ local function rebuild_patch_source(source: Object, operations: {types.JsonOpera
     return rebuilt, nil
 end
 
-local function compose_json_patch(base: string, source: string, operations: {types.JsonOperation}): (string?, string?)
-    local document, document_error = decode_json_object(base, "base JSON configuration", true)
-    if not document then return nil, "decode base JSON: " .. tostring(document_error) end
-    local overlay, overlay_error = decode_json_object(source, "source JSON configuration", false)
-    if not overlay then return nil, "decode source JSON: " .. tostring(overlay_error) end
+local function compose_json_patch(base: string, source: string, operations: {types.JsonOperation}, format: string?): (string?, string?)
+    local document: Object?
+    local overlay: Object?
+    local document_error: string?
+    local overlay_error: string?
+    if format == "toml" then
+        document, document_error = decode_toml(base, true)
+        overlay, overlay_error = decode_toml(source, false)
+    else
+        document, document_error = decode_json_object(base, "base JSON configuration", true)
+        overlay, overlay_error = decode_json_object(source, "source JSON configuration", false)
+    end
+    if not document then return nil, "decode base configuration: " .. tostring(document_error) end
+    if not overlay then return nil, "decode source configuration: " .. tostring(overlay_error) end
     local patch, patch_error = rebuild_patch_source(overlay, operations)
     if not patch then return nil, patch_error end
     for _, operation in ipairs(operations) do
@@ -184,9 +193,15 @@ local function compose_json_patch(base: string, source: string, operations: {typ
                     return nil, "base JSON recipe default path differs"
                 end
             end
+        elseif operation.kind == "set" then
+            parent[key] = selected
         elseif operation.kind == "insert" then
             if parent[key] ~= nil then return nil, "base JSON recipe insert path already exists" end
             parent[key] = selected
+        elseif type(selected) == "string" then
+            local prior = parent[key]
+            if prior ~= nil and type(prior) ~= "string" then return nil, "base recipe append path must contain text" end
+            parent[key] = type(prior) == "string" and prior ~= "" and (prior .. "\n\n" .. selected) or selected
         else
             local additions, additions_error = json_array(selected, "source JSON recipe append path")
             if not additions then return nil, additions_error end
@@ -200,7 +215,10 @@ local function compose_json_patch(base: string, source: string, operations: {typ
             end
         end
     end
-    local encoded, encode_error = canonical.encode(document)
+    local encoded: string?
+    local encode_error: unknown
+    if format == "toml" then encoded, encode_error = toml.encode(document)
+    else encoded, encode_error = canonical.encode(document) end
     if not encoded then return nil, "encode composed JSON configuration: " .. tostring(encode_error) end
     return encoded .. "\n", nil
 end
@@ -249,8 +267,8 @@ function M.render(file: types.Configuration, environment: {[string]: string}, ga
         elseif file.composition.kind == "toml_insert" then
             composed, compose_error = compose_toml(base, file.composition.path, content, file.composition.append_text)
             if not composed then return nil, "compose TOML configuration: " .. tostring(compose_error) end
-        elseif file.composition.kind == "json_patch" then
-            composed, compose_error = compose_json_patch(base, content, file.composition.operations)
+        elseif file.composition.kind == "json_patch" or file.composition.kind == "toml_patch" then
+            composed, compose_error = compose_json_patch(base, content, file.composition.operations, file.composition.kind == "toml_patch" and "toml" or "json")
             if not composed then return nil, "compose JSON configuration: " .. tostring(compose_error) end
         else
             return nil, "configuration composition is unsupported"

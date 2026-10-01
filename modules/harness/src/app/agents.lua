@@ -270,7 +270,13 @@ function M.directory(client: sessions.Client, workspace: string?): ({Snapshot}?,
             local home = M.home(item.session)
             if not workspace or home == workspace then rows[#rows + 1] = item end
         end
-        if not page.next then return rows, nil end
+        if not page.next then
+            table.sort(rows, function(left: Snapshot, right: Snapshot): boolean
+                if (left.lifecycle == "closed") ~= (right.lifecycle == "closed") then return left.lifecycle ~= "closed" end
+                return left.execution.evidence_at > right.execution.evidence_at
+            end)
+            return rows, nil
+        end
         cursor = page.next
     end
     return rows, "More sessions are available; narrow the workspace filter"

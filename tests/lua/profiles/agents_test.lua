@@ -10,7 +10,7 @@ local function candidate(ref: string, title: string, status: string, reasons: {s
 end
 local function snapshot(activity: string, queued: integer): Object
     return {session = "bs:n:w:s1", revision = 1, incarnation = 1, title = "Worker", lifecycle = "active", activity = activity,
-        queue_count = queued}
+        queue_count = queued, execution = {state = "quiescent", evidence_at = "2026-09-30T12:00:00Z", stale = false}}
 end
 local function work(ref: string, observations: {Object}, phase: string): any
     local index = 0

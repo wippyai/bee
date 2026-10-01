@@ -104,6 +104,16 @@ local function define_tests()
             test.eq(lines[3].text, "  delta")
             test.eq(lines[4].text, "  next paragraph")
         end)
+        test.it("offers a new session from closed history instead of a composer", function()
+            local conv = conversation("idle", {{input = "hello", state = "ready", text = "done"}})
+            conv.lifecycle = "closed"
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local shown = session_view.draw(size[1], size[2], appearance.defaults(), conv, "", "")
+                test.is_true(screen(shown.rows):find("Start new session from this", 1, true) ~= nil)
+                test.is_true(screen(shown.rows):find("Closed · history remains available", 1, true) ~= nil)
+                test.is_true(screen(shown.rows):find("done", 1, true) ~= nil)
+            end
+        end)
         test.it("shows activity, the transcript and the draft", function()
             local conv = conversation("working", {
                 {input = "hello", state = "ready", text = "line one\nline two"},

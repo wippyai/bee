@@ -84,6 +84,23 @@ local function define_tests()
             test.eq(view.action(s, "save"), "save")
             test.is_nil(s.form.draft.budgets)
         end)
+        test.it("describes the basic fields that this agent supports", function()
+            local shown = view.draw(80, 24, appearance.defaults(), state())
+            test.is_nil((shown.rows[1]:find("model", 1, true)))
+        end)
+
+        test.it("shows Docker revoke under Advanced at both frame sizes", function()
+            local current = state()
+            current.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding"}
+            current.advanced = true
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local shown = view.draw(size[1], size[2], appearance.defaults(), current)
+                test.is_true(shown.rows[size[2] - 1]:find("Revoke Docker access", 1, true) ~= nil)
+            end
+            view.action(current, "revoke_docker")
+            test.is_true(current.confirming_revoke == true)
+        end)
+
         test.it("requires confirmation before the person revokes Docker access", function()
             local s = state()
             s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding"}
@@ -139,7 +156,7 @@ local function define_tests()
             view.input(s, key("enter"), drawn)
             test.not_nil(s.browsing)
             drawn = view.draw(60, 16, appearance.defaults(), s)
-            test.is_true(table.concat(drawn.rows, "\n"):find("bee.env:workspace_root", 1, true) ~= nil)
+            test.is_true(table.concat(drawn.rows, "\n"):find("Workspace root", 1, true) ~= nil)
             view.input(s, key("enter"), drawn)
             view.input(s, key("enter"), drawn)
             test.eq(s.browsing and s.browsing.path, "legacy")

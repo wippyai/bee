@@ -1,0 +1,61 @@
+version: '1.0'
+namespace: bee.threads.timeline.app
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - time
+  - uuid
+  - funcs
+  imports:
+    frame: bee.application:frame
+    client: bee.application:client
+    appearance: bee.application:appearance
+    caller: bee.application:caller
+    model: bee.threads.timeline.app:model
+    view: bee.threads.timeline.app:view
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Timeline
+      icon: L
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: timeline
+      resume_schema: timeline.v1
+      restart_policy: manual
+- name: format
+  kind: library.lua
+  source: file://format.lua
+  imports:
+    text: bee.application:text
+    record_types: bee.threads.records:types
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules:
+  - json
+  imports:
+    text: bee.application:text
+    caller: bee.application:caller
+    session: bee.threads.delivery:session
+    record: bee.threads.records:record
+    record_types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    contract: bee.protocol:application
+    format: bee.threads.timeline.app:format
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    model: bee.threads.timeline.app:model

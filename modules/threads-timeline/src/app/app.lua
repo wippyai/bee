@@ -29,6 +29,7 @@ local function main(value: unknown)
     local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
+    local navigation = assert(process.listen("bee.application.navigate", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface())
     local width, height = tty.screen_size()
@@ -148,7 +149,7 @@ local function main(value: unknown)
             end
             dirty = false
         end
-        local cases = {input:case_receive(), lifecycle:case_receive(), states:case_receive(), ticks:case_receive()}
+        local cases = {input:case_receive(), lifecycle:case_receive(), states:case_receive(), navigation:case_receive(), ticks:case_receive()}
         if wait_channel then cases[#cases + 1] = wait_channel:case_receive() end
         local event = channel.select(cases)
         if not event.ok then break end
@@ -167,6 +168,12 @@ local function main(value: unknown)
         elseif event.channel == ticks then
             if state.thread_id and state.phase ~= "attached" then attach()
             elseif state.thread_id and state.session and state.session.state == "detached" then model.reconnect(state); drain(); arm_wait() end
+        elseif event.channel == navigation then
+            local args = client.navigation(launch, tostring(event.value:from()), event.value:payload():data())
+            local thread = args and args[1]
+            if args and #args == 1 and thread and thread ~= "" and #thread <= 200 and not thread:find("%c") then
+                model.open(state, thread, nil); dirty = true
+            end
         elseif event.channel == states then
             local message = event.value
             if broker and message:from() == broker then
@@ -222,6 +229,7 @@ local function main(value: unknown)
     cancel_wait()
     ticker:stop()
     process.unlisten(states)
+    process.unlisten(navigation)
     output:close()
     tty.stop()
 end

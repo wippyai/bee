@@ -240,7 +240,12 @@ local function candidate_for_definition(pinned: harness_catalog.Pinned, ref: str
     else
         plan, refused = admission.read(pinned, ref, nil, true)
     end
-    return measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
+    local candidate, candidate_error = measured_candidate(cache, readiness_cache, kind, candidate_ref, title, revision, decoded, plan, refused, generation)
+    if candidate and decoded.presentation.start_menu then
+        local features: {string} = candidate.features
+        features[#features + 1] = "presentation:start_menu"
+    end
+    return candidate, candidate_error
 end
 
 local function valid_cursor(value: unknown): integer?

@@ -402,7 +402,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if picker then return draw_folders(painter, state, picker) end
     local threads = state.threads
     if threads then return draw_threads(painter, state, threads) end
-    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced" or "Name · folder · model")
+    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced" or "Name · agent settings")
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))
     local window = frame.window(#listed, capacity, state.selected, 0)
@@ -424,6 +424,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         state.confirming_remove and painter.theme.text or painter.theme.muted)
     if height >= 3 then
         local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not state.confirming_remove and state.form.pending ~= "remove", primary = true}}
+        if state.advanced and editor.placement_ref(state.form.draft) == "bee.placement.docker:coding" then
+            buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
+        end
         if state.form.revision > 0 then
             buttons[#buttons + 1] = {kind = "remove", key = "Ctrl+D", label = state.confirming_remove and "Confirm" or "Remove",
                 enabled = state.form.pending ~= "save", primary = state.confirming_remove}

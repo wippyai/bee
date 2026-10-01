@@ -52,7 +52,7 @@ bee
 ```
 
 Each project directory gets its own state and background owner. The first frame
-is an empty desktop; **F1** opens Start. **Alt+Tab** switches apps, **F11**
+opens Sessions; **N** chooses an agent. Close Sessions to use the desktop; **F1** opens Start. **Alt+Tab** switches apps, **F11**
 maximizes, **F12** replaces the presenter, and **Ctrl+Q** detaches with the
 message `Bee is still running; bee stop ends it`. Stop the owner with:
 

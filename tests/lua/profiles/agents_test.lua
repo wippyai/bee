@@ -6,11 +6,11 @@ type Object = {[string]: unknown}
 local function client_of(value: unknown): sessions.Client return value :: sessions.Client end
 local function candidate(ref: string, title: string, status: string, reasons: {string}, kind: string?): Object
     return {ref = ref, kind = kind or "definition", title = title, status = status, checked_at = "t", reasons = reasons,
-        features = {}, actions = {}}
+        features = {"presentation:start_menu"}, actions = {}}
 end
 local function snapshot(activity: string, queued: integer): Object
     return {session = "bs:n:w:s1", revision = 1, incarnation = 1, title = "Worker", lifecycle = "active", activity = activity,
-        queue_count = queued}
+        queue_count = queued, execution = {state = "quiescent", evidence_at = "2026-09-30T12:00:00Z", stale = false}}
 end
 local function work(ref: string, observations: {Object}, phase: string): any
     local index = 0
@@ -66,10 +66,10 @@ local function define_tests()
                     candidate("x:exec", "Exec", "ready", {}, "executor")}, complete = true, unavailable_count = 2, diagnostics = {}}, nil
             end}
             local listing = must_list(client_of(client), false)
-            test.eq(at(asked, 1).include_unavailable, false)
+            test.eq(at(asked, 1).include_unavailable, true)
             test.eq(#listing.items, 2)
             test.eq(listing.items[1].ref, "a:one")
-            test.eq(listing.unavailable, 2)
+            test.eq(listing.unavailable, 0)
         end)
         test.it("shows unavailable candidates after ready ones with their reason and follows pages", function()
             local pages = {
@@ -93,6 +93,16 @@ local function define_tests()
             test.eq(listing.items[2].reason, "codex is not installed")
             test.is_false(listing.items[2].ready)
             test.eq(listing.notes[1], "UNAVAILABLE: probe skipped")
+        end)
+        test.it("hides programmatic routes from the person catalog", function()
+            local hidden = candidate("c:batch", "Research batch", "ready", {})
+            hidden.features = {}
+            local scripted: Object = {catalog = function(_self: unknown, _options: Object): (Object, nil)
+                return {items = {candidate("c:window", "Claude", "ready", {}), hidden}, complete = true, unavailable_count = 0, diagnostics = {}}, nil
+            end}
+            local listing = must_list(client_of(scripted), true)
+            test.eq(#listing.items, 1)
+            test.eq(listing.items[1].title, "Claude")
         end)
         test.it("reports a catalog fault", function()
             local client: any = {catalog = function(): (nil, Object) return nil, {code = "DENIED", message = "no", retry = "never"} end}
@@ -182,6 +192,20 @@ local function define_tests()
             test.eq(conv.turns[1].text, "done")
             test.eq(conv.activity, "idle")
             test.is_false(agents.pending(conv))
+        end)
+        test.it("displays a structured text outcome with real newlines", function()
+            local produced = work("bw:1", {{tag = "ready", result = {outcome = "succeeded", value = {text = "hello\nworld"}, artifacts = {}, usage = {}}}}, "accepted")
+            local conv = must_open(client_of({open = function(): (unknown, nil) return session("idle", 0, {}, {works = {produced}}), nil end}), "d:x", nil, "k")
+            agents.submit(conv, "hello", key_source())
+            agents.refresh(conv)
+            test.eq(conv.turns[1].text, "hello\nworld")
+        end)
+        test.it("labels other structured results without promising unavailable Details content", function()
+            local produced = work("bw:1", {{tag = "ready", result = {outcome = "succeeded", value = {count = 3}, artifacts = {}, usage = {}}}}, "accepted")
+            local conv = must_open(client_of({open = function(): (unknown, nil) return session("idle", 0, {}, {works = {produced}}), nil end}), "d:x", nil, "k")
+            agents.submit(conv, "Count the items", key_source())
+            agents.refresh(conv)
+            test.eq(conv.turns[1].text, "Completed · structured result")
         end)
         test.it("shows unsuccessful, blocked and uncertain observations", function()
             local sent: {Object} = {}

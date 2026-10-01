@@ -186,7 +186,7 @@ function M.apply_members(state: State, members: {directory.Member}, problem: str
         if not was_member then node.status, node.detail = "unknown", "" end
         node.client_only = member.client_only == true
         if node.client_only then
-            node.label = state.names[node.node_id] or ("Display " .. node.node_id:sub(-6))
+            node.label = state.names[node.node_id] or ("Display · " .. names.label(node.node_id))
             state.catalogs[node.node_id] = nil
             state.sessions[node.node_id] = nil
         else node.label = label_of(state, node.node_id) end

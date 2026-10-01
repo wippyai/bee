@@ -30,7 +30,7 @@ local function tabstrip(scene: model.Scene, order: {string}, width: integer, ico
     for _, id in ipairs(order) do
         for _, win in ipairs(scene.windows) do
             if win.id == id then
-                local title = tty.text.truncate(string.gsub(model.display_title(win), "%c", " "), math.floor(math.max(1, math.min(22, width - 7))), "…")
+                local title = tty.text.truncate(string.gsub(model.display_title(win), "%c", " "), math.floor(math.max(1, math.min(22, width - 4))), "…")
                 if icons then
                     title = tty.text.truncate(win.icon ~= nil and win.icon ~= "" and win.icon or title, 2, "")
                     if tty.text.width(title) == 0 then title = "•" end
@@ -88,7 +88,7 @@ function M.draw(scene: model.Scene, order: {string}, status: string, label: stri
     if status ~= "" and width >= 36 then right = " " .. status .. " "
     elseif width >= 60 then right = " " .. label .. " ▾ "
     elseif width >= 24 then right = " Status ▾ " end
-    right = tty.text.truncate(right, math.floor(math.max(0, width >= 80 and 18 or width // 2)))
+    right = tty.text.truncate(right, math.floor(math.max(0, width >= 100 and 18 or (width >= 80 and 12 or width // 2))))
     local attention = " Needs you " .. (attention_count ~= nil and tostring(attention_count) or "—") .. " "
     local places = width >= 80 and (" Sessions " .. attention .. " Apps  Help ") or ""
     local origin = 7 + tty.text.width(places)

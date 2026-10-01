@@ -9,6 +9,7 @@ local thread_record = require("thread_record")
 local sessions_protocol = require("sessions_protocol")
 local bounds = require("bounds")
 local caller = require("caller")
+local names = require("names")
 local M = {}
 type Snapshot = sessions_protocol.SessionSnapshot
 type Workspace = {label: string, folder: string}
@@ -23,10 +24,10 @@ type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, t
 type EntrySortKey = {ref: string, title: string, ready: boolean, driver: string?}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
-type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?}
+type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
-    activity_evidence: sessions_protocol.ActivityEvidence?, turns: {Turn}, unsent: Unsent?, notice: string, thread_cursor: integer?}
+    activity_evidence: sessions_protocol.ActivityEvidence?, turns: {Turn}, details: boolean?, unsent: Unsent?, notice: string, thread_cursor: integer?}
 
 local function describe(fault: Fault?): string
     if not fault then return "sessions contract returned no reason" end
@@ -39,20 +40,29 @@ M.describe = describe
 function M.list(client: sessions.Client, include_unavailable: boolean, query: string?, sort: "name" | "driver"?): (Listing?, string?)
     local listing: Listing = {items = {}, unavailable = 0, notes = {}}
     local cursor: string? = nil
-    while true do
-        local page, fault = client:catalog({include_unavailable = include_unavailable, cursor = cursor, query = query ~= "" and query or nil, sort = sort})
+    for _ = 1, M.MAX_PAGES do
+        local page, fault = client:catalog({include_unavailable = true, cursor = cursor, query = query ~= "" and query or nil, sort = sort})
         if not page then return nil, describe(fault) end
         for _, candidate in ipairs(page.items) do
-            if candidate.kind ~= "executor" then
+            local person_launchable = false
+            for _, feature in ipairs(candidate.features) do if feature == "presentation:start_menu" then person_launchable = true end end
+            if candidate.kind ~= "executor" and person_launchable then
                 local ready = candidate.status == "ready"
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
-                local driver: string? = nil
-                for _, feature in ipairs(candidate.features) do driver = feature:match("^driver:(.+)$") or driver end
+                local provider = ""
+                for _, feature in ipairs(candidate.features) do provider = feature:match("^driver:(.+)$") or provider end
+                if provider ~= "" then
+                    if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
+                    elseif candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
+                    elseif reason:find("bee.", 1, true) then reason = "This agent cannot run with the current setup. Check its folder and permissions." end
+                elseif reason:find("bee.", 1, true) then reason = "This agent's setup is unavailable. Check installation, folder and permissions." end
+                if not ready then listing.unavailable = listing.unavailable + 1 end
+                if ready or include_unavailable then
                 listing.items[#listing.items + 1] = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,
-                    title = candidate.title, status = candidate.status, ready = ready, reason = reason, driver = driver}
+                    title = candidate.title, status = candidate.status, ready = ready, reason = reason, driver = provider ~= "" and provider or nil}
+                end
             end
         end
-        listing.unavailable = page.unavailable_count
         for _, diagnostic in ipairs(page.diagnostics) do listing.notes[#listing.notes + 1] = describe(diagnostic) end
         if not page.next then break end
         cursor = page.next
@@ -114,8 +124,11 @@ end
 
 local function render(value: unknown): string
     if type(value) == "string" then return value end
-    local encoded = json.encode(value)
-    return encoded or "(unreadable result)"
+    local object = bounds.object(value)
+    if object and type(object.text) == "string" then return object.text end
+    if object and type(object.message) == "string" then return object.message end
+    if value == nil then return "Completed" end
+    return "Completed · structured result"
 end
 
 local function settle(turn: Turn, observed: unknown)
@@ -161,8 +174,11 @@ local function observe_thread(conv: Conversation)
                 local data = observation and bounds.object(observation.data)
                 if event and event.kind == "turn.observation" and observation and data then
                     for _, turn in ipairs(conv.turns) do
-                        if detail and event.subject == turn.work:ref() and (turn.state == "queued" or turn.state == "working") then
-                            if observation.type == "text" and type(data.text) == "string" and #data.text <= 65536 then
+                        if detail and event.subject == turn.work:ref() then
+                            if observation.type == "text" and data.segment_id == "executor-stderr" and type(data.text) == "string" then
+                                turn.diagnostics = ((turn.diagnostics or "") .. data.text):sub(-4096)
+                            elseif observation.type == "text" and (turn.state == "queued" or turn.state == "working")
+                                and data.channel ~= "progress" and type(data.text) == "string" and #data.text <= 65536 then
                                 local segment = bounds.id(data.segment_id) or "answer"
                                 turn.segments = turn.segments or {}
                                 local pieces = turn.segments
@@ -173,6 +189,13 @@ local function observe_thread(conv: Conversation)
                                 local values: {string} = {}
                                 for _, key in ipairs(keys) do values[#values + 1] = pieces[key] end
                                 turn.text = table.concat(values, "\n"):sub(-65536)
+                            elseif observation.type == "tool.call" and type(data.call_id) == "string" and type(data.tool_name) == "string" then
+                                turn.tools = turn.tools or {}
+                                turn.tools[data.call_id] = "Tool: " .. data.tool_name
+                            elseif observation.type == "tool.result" and type(data.call_id) == "string" and type(data.outcome) == "string" then
+                                turn.tools = turn.tools or {}
+                                local previous = turn.tools[data.call_id] or "Tool"
+                                turn.tools[data.call_id] = previous .. " · " .. data.outcome
                             end
                         end
                     end
@@ -253,7 +276,7 @@ function M.workspace(id: string, ask: Ask): Workspace?
     local label = bounds.line(row.label, 240)
     local path = bounds.subpath(row.subpath)
     if not label or not path then return nil end
-    return {label = label ~= "" and label or "Workspace", folder = path ~= "" and path or "Workspace root"}
+    return {label = label ~= "" and label or names.label(id), folder = path ~= "" and path or "Workspace root"}
 end
 
 function M.directory(client: sessions.Client, workspace: string?): ({Snapshot}?, string?)
@@ -266,7 +289,13 @@ function M.directory(client: sessions.Client, workspace: string?): ({Snapshot}?,
             local home = M.home(item.session)
             if not workspace or home == workspace then rows[#rows + 1] = item end
         end
-        if not page.next then return rows, nil end
+        if not page.next then
+            table.sort(rows, function(left: Snapshot, right: Snapshot): boolean
+                if (left.lifecycle == "closed") ~= (right.lifecycle == "closed") then return left.lifecycle ~= "closed" end
+                return left.execution.evidence_at > right.execution.evidence_at
+            end)
+            return rows, nil
+        end
         cursor = page.next
     end
     return rows, "More sessions are available; narrow the workspace filter"

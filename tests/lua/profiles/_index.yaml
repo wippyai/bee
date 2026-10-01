@@ -85,6 +85,32 @@ entries:
     test: wippy.test:test
     agents: bee.harness.app:agents
     sessions: bee.application:sessions
+- name: observations_test
+  kind: function.lua
+  source: file://observations_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    agents: bee.harness.app:agents
+    sessions: bee.application:sessions
+    protocol: bee.application:sessions_protocol
+    bounds: bee.threads.records:bounds
+- name: observations_probe
+  kind: function.lua
+  source: file://observations_test.lua
+  method: probe
+  meta: {type: test_support}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    agents: bee.harness.app:agents
+    sessions: bee.application:sessions
+    protocol: bee.application:sessions_protocol
+    bounds: bee.threads.records:bounds
 - name: agent_view_test
   kind: function.lua
   source: file://agent_view_test.lua

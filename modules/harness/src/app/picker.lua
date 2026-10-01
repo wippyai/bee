@@ -66,6 +66,7 @@ end
 function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channel<process.Event>,
     closes: Channel<process.Message>): (admission.Admitted?, string?)
     local states = assert(process.listen("bee.appearance.state", {message = true}))
+    local navigation = assert(process.listen("bee.application.navigate", {message = true}))
     local output = assert(tty.surface())
     local running = true
     local load_serial = 0
@@ -75,11 +76,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         loads_pending[value.serial] = value
         loads:send(value.serial)
     end
-    local ticker: time.Ticker? = nil
+    local ticker: time.Ticker? = time.ticker("1s")
     local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?)
         running = false
         load_serial = load_serial + 1
         process.unlisten(states)
+        process.unlisten(navigation)
         if ticker then ticker:stop(); ticker = nil end
         local closed, close_error = output:close()
         return admitted, not closed and ("Close profile screen: " .. tostring(close_error)) or err
@@ -171,13 +173,25 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end)
     end
     local function leave_session()
-        if ticker then ticker:stop(); ticker = nil end
         conversation, draft, status, session_busy = nil, "", "", false
         queued_tasks, queued_text = {}, nil
         catalog_open = false
         client.title(launch, "Sessions")
         load()
         dirty = true
+    end
+    local function start_from_session()
+        local current = conversation
+        local definition = current and current.session.snapshot.definition
+        if not current or not definition or opening then return end
+        open_serial = open_serial + 1
+        local serial = open_serial
+        local key = assert(uuid.v7())
+        opening = true; status = "Opening new session…"; dirty = true
+        coroutine.spawn(function()
+            local conv, err = agents.open(sessions.client(), definition, nil, key)
+            if running and serial == open_serial then opens:send({serial = serial, conversation = conv, error = err}) end
+        end)
     end
     local function submit()
         if conversation and conversation.lifecycle ~= "active" then status = "This session is closed to new work. Esc returns to Sessions."; dirty = true; return end
@@ -263,7 +277,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end
         if load_serial == 0 then load() end
         local cases = {input = input:case_receive(), lifecycle = lifecycle:case_receive(), closes = closes:case_receive(),
-            states = states:case_receive(), loads = loads:case_receive(),
+            states = states:case_receive(), navigation = navigation:case_receive(), loads = loads:case_receive(),
             opens = opens:case_receive(), progress = progress:case_receive()}
         if ticker then cases.ticks = ticker:channel():case_receive() end
         local event = channel.select(cases)
@@ -276,6 +290,18 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         elseif event.channel == closes then
             local close = client.close_request(launch, tostring(event.value:from()), event.value:payload():data())
             if close then client.close_reply(launch, close.request_id, {action = "accept"}); return finish(nil, nil) end
+        elseif event.channel == navigation then
+            local args = client.navigation(launch, tostring(event.value:from()), event.value:payload():data())
+            local target = args and args[1] == "--session" and sessions_protocol.ref("session", args[2]) or nil
+            if target and not opening then
+                open_serial = open_serial + 1
+                local serial = open_serial
+                opening = true; status = "Opening session…"; dirty = true
+                coroutine.spawn(function()
+                    local conv, err = agents.resume(sessions.client(), target)
+                    if running and serial == open_serial then opens:send({serial = serial, conversation = conv, error = err}) end
+                end)
+            end
         elseif event.channel == states then
             if event.value:from() == launch.broker_pid then
                 local payload: unknown = event.value:payload():data()
@@ -326,7 +352,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     ticks = 0
                     if ticker then ticker:stop() end
                     ticker = time.ticker("1s")
-                    client.title(launch, result.conversation.title)
+                    client.title(launch, conversation.title)
                 else
                     status = result.error or "Agent session did not open"
                 end
@@ -334,8 +360,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         elseif event.channel == progress then
             local result = event.value
-            if result.conversation == conversation then
+            if conversation and result.conversation == conversation then
                 session_busy = false; dirty = true
+                for index, row in ipairs(directory) do
+                    if row.session == conversation.session:ref() then directory[index] = conversation.session.snapshot end
+                end
+                client.title(launch, conversation.title)
                 if result.error then status = "Session operation failed: " .. result.error end
                 local next_task = table.remove(queued_tasks, 1)
                 if next_task then start_task(next_task) end
@@ -343,6 +373,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         elseif ticker and event.channel == ticker:channel() then
             local shown = conversation
             ticks = ticks + 1
+            if not catalog_open and not editing and ticks % 5 == 0 then load() end
             if shown and not session_busy and (agents.pending(shown) or shown.activity ~= "idle" or ticks % 5 == 0) then
                 start_task(function(current: agents.Conversation) agents.refresh(current) end)
             end
@@ -382,8 +413,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     elseif data.type == "key" and data.action == "press" and data.key_type == "enter" then
                         if confirming == "stop" then confirming = ""; status = ""; stop_work()
                         elseif confirming == "close" then confirming = ""; status = ""; close_session()
+                        elseif conversation.lifecycle == "closed" then start_from_session()
                         else submit() end
-                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then status = "Details · " .. conversation.session:ref(); dirty = true
+                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then conversation.details = not conversation.details; dirty = true
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then confirming = "close"; status = "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it"; dirty = true
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "k" then confirming = "stop"; status = "Stop current work? Session stays available. Enter confirms · Esc keeps it"; dirty = true
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
@@ -392,6 +424,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         if kind == "sidebar_session" and hit and not session_busy then
                             selected = hit.index; open_existing(selected)
                         elseif kind == "back" then leave_session()
+                        elseif kind == "details" then conversation.details = not conversation.details; dirty = true
+                        elseif kind == "new_from_session" then start_from_session()
                         elseif kind == "send" then submit()
                         elseif kind == "close_session" then confirming = "close"; status = "Close session? Enter confirms · Esc keeps it"; dirty = true
                         elseif kind == "stop_work" then confirming = "stop"; status = "Stop current work? Enter confirms · Esc keeps it"; dirty = true end

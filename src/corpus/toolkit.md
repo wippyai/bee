@@ -72,7 +72,7 @@ to one rectangle when a detail pane shares the screen.
 
 ```lua
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
-type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?}
+type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?, more: boolean?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
 type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?}

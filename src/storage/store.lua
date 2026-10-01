@@ -309,6 +309,20 @@ UPDATE workspace_state SET value =
 WHERE instr(value, '"definition_id":"bee.') > 0;
 ]]
 
+-- Migration 10 moves only saved definition identities for the UI child namespaces.
+local APPLICATION_NAMES_SQL = [[
+UPDATE workspace_application_thread_bindings SET definition_id = CASE definition_id
+    WHEN 'bee.threads.timeline:app' THEN 'bee.threads.timeline.app:app'
+    WHEN 'bee.workspace.manager:app' THEN 'bee.workspace.manager.app:app'
+    WHEN 'bee.hive.manager:app' THEN 'bee.hive.manager.app:app'
+    ELSE definition_id END;
+UPDATE workspace_state SET value = replace(replace(replace(value,
+    '"definition_id":"bee.threads.timeline:app"', '"definition_id":"bee.threads.timeline.app:app"'),
+    '"definition_id":"bee.workspace.manager:app"', '"definition_id":"bee.workspace.manager.app:app"'),
+    '"definition_id":"bee.hive.manager:app"', '"definition_id":"bee.hive.manager.app:app"')
+WHERE instr(value, '"definition_id":"bee.') > 0;
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
@@ -319,6 +333,7 @@ local migrations: {Migration} = {
     {id = 7, name = "workspace_catalog_order_v1", sql = CATALOG_ORDER_SQL},
     {id = 8, name = "workspace_folder_on_open_v1", sql = FOLDER_ON_OPEN_SQL},
     {id = 9, name = "nested_bee_names_v1", sql = NESTED_NAMES_SQL},
+    {id = 10, name = "application_child_names_v1", sql = APPLICATION_NAMES_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string

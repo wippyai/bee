@@ -12,13 +12,13 @@ type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capa
 local M = {}
 
 -- Every action's key, in bar order; wider canvases also name the tab switch.
-local HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "I", verb = "inspect"},
+local HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "serve"}, {key = "I", verb = "inspect"},
     {key = "N", verb = "new"}, {key = "/", verb = "search"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
-local WIDE_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "PgUp PgDn", verb = "page"}, {key = "Enter", verb = "open"},
+local WIDE_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "PgUp PgDn", verb = "page"}, {key = "Enter", verb = "serve"},
     {key = "I", verb = "inspect"}, {key = "N", verb = "new"}, {key = "/", verb = "search"}, {key = "Tab", verb = "switch"},
     {key = "R", verb = "refresh"}, {key = "A", verb = "archive"}, {key = "Esc", verb = "close"}})
 local EDIT_HINTS = frame.hints({{key = "Enter", verb = "search"}, {key = "Esc", verb = "stop editing"}})
-local FOLDER_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "open"}, {key = "U", verb = "use folder"},
+local FOLDER_HINTS = frame.hints({{key = "↑↓", verb = "move"}, {key = "Enter", verb = "serve"}, {key = "U", verb = "use folder"},
     {key = "⌫", verb = "up"}, {key = "Esc", verb = "cancel"}})
 local DETAIL_HINTS = frame.hints({{key = "↑↓", verb = "field"}, {key = "Enter", verb = "create"}, {key = "Esc", verb = "back"}})
 
@@ -83,7 +83,10 @@ local function detail(painter: frame.Painter, rect: frame.Rect, state: model.Sta
     field("Folder", model.folder(selected))
     field("Used", selected.last_used_at)
     field("Created", selected.created_at)
-    field("ID", selected.workspace_id)
+    if state.technical then
+        field("ID", selected.workspace_id)
+        field("Root", selected.root_ref)
+    end
     y = y + 1
     if not shown or shown.workspace_id ~= selected.workspace_id then
         if y <= last then frame.empty(painter, y, "Loading what this workspace holds", "R refresh", {x = body.x, y = y, width = body.width, height = last - y + 1}) end
@@ -94,9 +97,10 @@ local function detail(painter: frame.Painter, rect: frame.Rect, state: model.Sta
         return
     end
     local area: frame.Rect = {x = body.x, y = y, width = body.width, height = last - y + 1}
-    y = section(painter, area, y, "Applications", tostring(#shown.applications), shown.applications, nil)
+    y = section(painter, area, y, "Applications", tostring(#shown.applications), state.technical and shown.applications or {}, nil)
     area = {x = body.x, y = y, width = body.width, height = last - y + 1}
     y = section(painter, area, y, "Threads", tostring(#shown.threads) .. (shown.more_threads and "+" or ""), shown.threads, shown.threads_error)
+    if not state.technical then return end
     for _, part in ipairs(shown.sections) do
         area = {x = body.x, y = y, width = body.width, height = last - y + 1}
         y = section(painter, area, y, part.title, part.error and "" or tostring(part.total), part.items, part.error)
@@ -233,11 +237,13 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local selected = model.selected(state) ~= nil
         local archived = state.tab == "archived"
         frame.actions(painter, layout.actions, {
-            {kind = "open", label = state.showing and "Back" or "Open", key = state.showing and "Esc" or "Enter", enabled = selected, primary = not state.confirming},
+            {kind = "open", label = "Serve", key = "Enter", enabled = selected and not archived, primary = not state.confirming},
+            {kind = "back", label = "Back", key = "Esc", enabled = state.showing, more = not state.showing},
             {kind = "inspect", label = "Inspect", key = "I", enabled = selected},
             {kind = "new", label = "New", key = "N", enabled = true},
             {kind = "search", label = "Search", key = "/", enabled = true},
             {kind = "refresh", label = "Refresh", key = "R", enabled = true},
+            {kind = "details", label = state.technical and "Hide details" or "Details", key = "D", enabled = selected, more = true},
             {kind = "change", label = archived and "Restore" or "Archive", key = "A", enabled = selected, primary = state.confirming},
         })
     end

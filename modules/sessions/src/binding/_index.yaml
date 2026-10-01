@@ -52,6 +52,8 @@ entries:
     path: .security.policies
   - entry: bee.sessions.binding:join
     path: .security.policies
+  - entry: bee.sessions.binding:attention_count
+    path: .security.policies
   - entry: bee.sessions.binding:list
     path: .security.policies
   - entry: bee.sessions.binding:history
@@ -172,3 +174,10 @@ entries:
     path: .security.policies
   - entry: bee.sessions.binding:get
     path: .security.policies
+- name: attention_count
+  kind: function.lua
+  source: file://owner_method.lua
+  method: attention_count
+  modules: [security]
+  imports: {owner: bee.sessions:owner}
+  security: {policies: []}

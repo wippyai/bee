@@ -104,6 +104,20 @@ local PALETTE: {string} = {
     "                              "}
 
 local function define_tests()
+    test.describe("Advanced actions", function()
+        test.it("keeps explicit secondary actions in More at both frame sizes", function()
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local painter = frame.new(size[1], size[2], appearance.defaults())
+                frame.actions(painter, size[2] - 1, {{kind = "approve", key = "A", label = "Approve", enabled = true, primary = true},
+                    {kind = "deny", key = "D", label = "Deny", enabled = true},
+                    {kind = "lease", key = "L", label = "Lease", enabled = true, more = true}})
+                local controls = frame.controls(painter)
+                test.eq(#controls.overflow, 1)
+                test.eq(controls.overflow[1].kind, "lease")
+            end
+        end)
+    end)
+
     test.describe("Application frame", function()
         test.it("fits every responsive geometry and strips hostile text", function()
             for _, width in ipairs({1, 20, 40, 80, 120}) do

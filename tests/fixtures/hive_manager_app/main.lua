@@ -30,7 +30,7 @@ local function main(mode: string?)
         :with_scope(security.new_scope({broker_policy, boundary})):spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})))
     assert(catalogs:receive())
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.hive.manager:app", arguments = {}}))
+        definition_id = "bee.hive.manager.app:app", arguments = {}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
         local message = assert(replies:receive())

@@ -245,7 +245,7 @@ local function define_tests()
             if text120:find("bcc35ad9-330b-5d50-846a-a24873771ac6", 1, true) then error("UUID should not be in text120") end
             if text120:find("Raft role", 1, true) then error("Raft role should not be in text120") end
             if not text120:find("online", 1, true) then error("missing online in text120:\n" .. text120) end
-            if not text120:find("◫ Display 17d52a", 1, true) then error("missing ◫ Display 17d52a in text120:\n" .. text120) end
+            if not text120:find("◫ Display ·", 1, true) then error("missing ◫ Display · in text120:\n" .. text120) end
             if not text120:find("display", 1, true) then error("missing display in text120:\n" .. text120) end
             if not text120:find("primary work  served", 1, true) then error("missing primary work  served in text120:\n" .. text120) end
 
@@ -257,7 +257,7 @@ local function define_tests()
             if not text80:find("HIVE MANAGER", 1, true) then error("missing HIVE MANAGER in text80") end
             if not text80:find("COMPUTER", 1, true) then error("missing COMPUTER in text80") end
             if not text80:find("online", 1, true) then error("missing online in text80") end
-            if not text80:find("◫ Display 17d52a", 1, true) then error("missing ◫ Display 17d52a in text80:\n" .. text80) end
+            if not text80:find("◫ Display ·", 1, true) then error("missing ◫ Display · in text80:\n" .. text80) end
             if text80:find("bcc35ad9-330b-5d50-846a-a24873771ac6", 1, true) then error("UUID should not be in text80") end
 
             -- 3. Details View at 120x36

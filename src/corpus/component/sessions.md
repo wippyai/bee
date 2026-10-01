@@ -8,7 +8,7 @@ worker contract.
 
 A launch definition may select `session_profile_id` for structured executor
 turns and `session_credentials` for their explicit broker projections. Sessions admission pins that driver profile while native manual windows
-retain the definition's window profile. Catalog readiness measures the same
+retain the definition's window profile. Person-facing catalogs filter the `presentation:start_menu` feature; programmatic routes remain addressable. Catalog readiness measures the same
 structured route that `open` admits. The real owner and catalog bindings are
 defaults; the kit starts the pull scheduler against the Threads journal.
 
@@ -65,3 +65,9 @@ Gateway workspace catalog views project the public Sessions list.
 Cancellation first commits the authenticated caller’s authorized request in Threads, then restores the persisted workspace-bound execution owner for placement stop and reconciliation. Placement retains its owner checks; callers cannot supply the execution identity.
 
 Owner admission reads only the host-declared nonsecret executable and configuration-directory variables through the shared harness environment policy, including callers entering through MCP. Provider credential reads remain broker operations.
+
+The read-only `bee.sessions.binding:attention_count` display binding returns
+`{count}` for blocked and stalled sessions in the authenticated caller's
+workspace. It refuses a different workspace and bounds scanning to 16 pages;
+it creates no approval and grants no authority. Desktop Needs you adds this
+count to pending approvals and opens Sessions when only sessions need attention.

@@ -51,8 +51,9 @@ entries:
     comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application
       also resolves the public sessions contracts, whose owner authorizes each operation
   policy:
-    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding"))
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.workspace.catalog:read") || (action == "bee.workspace.manager.read" && resource == actor.meta.workspace_id)
     actions:
+    - bee.workspace.manager.read
     - bee.harness.setup
     - funcs.call
     - contract.get

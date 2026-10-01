@@ -536,6 +536,19 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
             local summary = value and text(value.text, 65536) or fault and text(fault.message, 16384) or tostring(result.state)
             last_result = {work = last.work_ref, outcome = result.state, summary = (summary or ""):sub(1, 4096), at = last.created_at}
         end
+        local first, first_error = query_one(tx, "SELECT input_json FROM bee_session_work WHERE session_ref = ? ORDER BY sequence LIMIT 1", {session_ref}, "first session work")
+        if first_error then return transaction.storage_failure(first_error) end
+        local title = session.title
+        if first then
+            local decoded, decode_error = decode_json(tostring(first.input_json or ""))
+            if decode_error then return failure("INTERNAL", "first session work is corrupt") end
+            local input = object(decoded)
+            local prompt = type(decoded) == "string" and decoded or input and text(input.text, 16384)
+            if prompt then
+                local line = prompt:match("[^\r\n]+")
+                if line then title = tostring(session.title) .. " · " .. line:gsub("%c", " "):sub(1, 160) end
+            end
+        end
         local active_turn, turn_error = query_one(tx, "SELECT turn_ref, claim_token, work_ref, owner_epoch, phase, last_progress_at_ms " ..
             "FROM bee_session_turns WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active session turn")
         if turn_error then return transaction.storage_failure(turn_error) end
@@ -564,7 +577,7 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
         return transaction.success({session = session.session_ref, thread_ref = session.thread_id, workspace = session.workspace_id,
             active_turn = active_turn and {turn = active_turn.turn_ref, claim = active_turn.claim_token, work = active_turn.work_ref,
                 owner_epoch = active_turn.owner_epoch, phase = active_turn.phase, last_progress_at_ms = active_turn.last_progress_at_ms} or nil,
-            last_result = last_result, title = session.title, state = session.state, route = route,
+            last_result = last_result, title = title, state = session.state, route = route,
             revision = session.revision, created_at = session.created_at, updated_at = session.updated_at,
             queued = queued, active = reserved + accepted, execution_running = execution_running,
             settled = settled, uncertain = uncertain, recovery_blocked = recovery_blocked,

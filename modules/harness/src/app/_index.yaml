@@ -82,7 +82,7 @@ entries:
       icon: A
       lifetime: view
       revision: '1'
-      instance_policy: multiple
+      instance_policy: singleton
       group: ''
       role: sessions
       resume_schema: bee.agent.window@1
@@ -100,6 +100,7 @@ entries:
   source: file://agents.lua
   modules: [json, funcs]
   imports:
+    names: bee.application:names
     sessions: bee.application:sessions
     sessions_protocol: bee.application:sessions_protocol
     thread_record: bee.threads.records:record

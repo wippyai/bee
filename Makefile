@@ -275,7 +275,7 @@ check-shard-services-workspace: workspace-hosts-check leased-host-fallback-check
 check-shard-windows: window-native-check managed-window-app-check window-hooks-check window-recovery-check
 check-shard-window-failure: managed-window-failure-check
 check-shard-desktop-shell: desktop-shell-start-check
-check-shard-desktop-shell-smoke: desktop-shell-smoke-check
+check-shard-desktop-shell-smoke: desktop-shell-smoke-check no-color-check
 check-shard-desktop-shell-workflow: desktop-shell-interactions-check
 check-shard-desktop-shell-close: desktop-shell-close-confirmation-check
 check-shard-desktop-shell-control: desktop-shell-control-delivery-check
@@ -644,3 +644,8 @@ DOCKER_PROOF_MODE ?= window
 docker-placement-live-check:
 	test -n "$(DOCKER_IMAGE)" -a -n "$(DOCKER_EVIDENCE)"
 	TMPDIR="$(abspath .wippy/docker-work/tmp)" python3 tests/docker_placement_live.py --image "$(DOCKER_IMAGE)" --evidence "$(DOCKER_EVIDENCE)" --provider "$(DOCKER_PROVIDER)" --mode "$(DOCKER_PROOF_MODE)" --standalone "$(abspath dist/bee)" $(if $(DOCKER_OPENCODE_MODEL),--opencode-model "$(DOCKER_OPENCODE_MODEL)")
+
+.PHONY: no-color-check
+check: no-color-check
+no-color-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/no_color.py

@@ -171,10 +171,10 @@ entries:
 - name: profile_view
   kind: library.lua
   source: file://profile_view.lua
-  modules: [tty, json]
+  modules: [tty]
   imports:
     canonical: bee.threads.records:canonical
-    budget_values: bee.threads.records:budgets
+    settings: bee.harness.app:profile_settings
     bounds: bee.threads.records:bounds
     frame: bee.application:frame
     appearance: bee.application:appearance
@@ -203,3 +203,11 @@ entries:
     bounds: bee.threads.records:bounds
     client: bee.application:client
     input_event: bee.harness.app:input
+
+- name: profile_settings
+  kind: library.lua
+  source: file://profile_settings.lua
+  imports:
+    budgets: bee.threads.records:budgets
+    bounds: bee.threads.records:bounds
+    editor: bee.harness.app:profile_editor

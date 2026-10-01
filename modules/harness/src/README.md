@@ -79,8 +79,10 @@ Manual `M` attach remains in the catalog.
 The unavailable Setup action explains the owner-reported reason and the
 install/sign-in/refresh steps; it executes no provider commands.
 
-Stock definitions offer Customize copy. Name, admitted folder and model are
-basic fields. Ctrl+P opens Advanced permissions for instructions, conversation
+Stock definitions offer Customize copy. Name, admitted folder, model, effort,
+placement and presentation are basic fields. Advanced uses named turn/session
+limits, a quiet period and stall action, and Docker memory/CPU/process limits
+with explicit units. Empty limits inherit the host defaults. Ctrl+P opens Advanced permissions for instructions, conversation
 selection, other options and tool grants with human-readable names. Saving uses
 the existing profile revision and operation keys and grants no new authority.
 

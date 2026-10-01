@@ -11,8 +11,7 @@ local folder_picker = require("folder_picker")
 local editor = require("editor")
 local forms = require("forms")
 local canonical = require("canonical")
-local json = require("json")
-local budget_values = require("budget_values")
+local settings = require("settings")
 local bounds = require("bounds")
 local M = {}
 M.THREADS = "bee.threads.service:list"
@@ -35,11 +34,7 @@ function M.new(form: forms.Form, ask: Ask): State
             option_text[option.name] = type(option.value) == "string" and option.value or ""
         end
     end
-    local placement = form.draft.placement
-    local settings: {[string]: string} = {budgets = form.draft.budgets and (canonical.encode(form.draft.budgets) or "") or "",
-        supervision = form.draft.supervision and (canonical.encode(form.draft.supervision) or "") or "",
-        docker = placement and placement.kind == "docker" and placement.overrides and (canonical.encode(placement.overrides) or "") or ""}
-    return {settings = settings, form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
+    return {settings = settings.read(form.draft), form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
         option_text = option_text, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirming_remove = false, confirming_revoke = false, ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
 end
@@ -104,16 +99,14 @@ local function fields(state: State): {Field}
                     max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
             end
         end
-        result[#result + 1] = {kind = "settings", name = "budgets", label = "Budgets (turn/session JSON)"}
-        result[#result + 1] = {kind = "settings", name = "supervision", label = "Supervision (JSON)"}
-        if state.form.draft.placement and state.form.draft.placement.kind == "docker" then
-            result[#result + 1] = {kind = "settings", name = "docker", label = "Docker overrides (JSON)"}
-        end
         for index, reason in ipairs(state.form.unsupported or {}) do result[#result + 1] = {kind = "unsupported", name = tostring(index), label = reason} end
         for _, tool in ipairs(editor.tools(state.form.draft) or {}) do
             result[#result + 1] = {kind = "tool", name = tool.name,
                 label = (tool.selected and "[x] " or "[ ] ") .. (TOOL_NAMES[tool.name] or human(tool.name))}
         end
+        for _, field in ipairs(settings.fields(state.form.draft)) do result[#result + 1] = field end
+        result[#result + 1] = {kind = "stall", name = "", label = "When stalled: " ..
+            (state.form.draft.supervision and state.form.draft.supervision.on_stall == "cancel_work" and "Cancel work" or "Report")}
     end
     return result
 end
@@ -158,30 +151,8 @@ function M.action(state: State, action: string): string?
             local changed, option_error = editor.set_text_option(state.form.draft, name, value)
             if not changed then state.status = option_error or "Invalid option"; return nil end
         end
-        for name, text in pairs(state.settings) do
-            local value: unknown = nil
-            if text ~= "" then
-                local decoded, err = json.decode(text)
-                if err then state.status = name .. " requires valid JSON"; return nil end
-                value = decoded
-            end
-            if name == "budgets" then
-                local checked, err = budget_values.budgets(value)
-                if err then state.status = err; return nil end
-                state.form.draft.budgets = checked
-            elseif name == "supervision" then
-                local checked, err = budget_values.supervision(value)
-                if err then state.status = err; return nil end
-                state.form.draft.supervision = checked
-            elseif name == "docker" then
-                local placement = state.form.draft.placement
-                if placement and placement.kind == "docker" then
-                    local overrides = bounds.object(value)
-                    if value ~= nil and not overrides then state.status = "Docker overrides require an object"; return nil end
-                    placement.overrides = overrides
-                end
-            end
-        end
+        local settings_error = settings.apply(state.form.draft, state.settings)
+        if settings_error then state.status = settings_error; return nil end
         return "save"
     end
     return nil
@@ -318,12 +289,16 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         end
         return nil
     end
-    if field.kind == "home" or field.kind == "presentation" or field.kind == "answers" or field.kind == "placement" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
+    if field.kind == "stall" or field.kind == "home" or field.kind == "presentation" or field.kind == "answers" or field.kind == "placement" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
         if event.type == "key" and event.action == "press" and
             (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
             local err: string? = nil
-            if field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
+            if field.kind == "stall" then
+                local supervision = state.form.draft.supervision or {}
+                supervision.on_stall = supervision.on_stall == "cancel_work" and "report" or "cancel_work"
+                state.form.draft.supervision = supervision; ok = true
+            elseif field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
             elseif field.kind == "presentation" then
                 state.form.draft.presentation = state.form.draft.presentation == "window" and "headless" or "window"; ok = true
             elseif field.kind == "answers" then
@@ -338,7 +313,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     end
     local value = field.kind == "settings" and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
         or (field.kind == "option" and (state.option_text[field.name] or "") or state.guidance)
-    local limit = field.kind == "settings" and 8192 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
+    local limit = field.kind == "settings" and 32 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
         or (field.kind == "option" and (field.max_bytes or editor.MAX_INSTRUCTIONS_BYTES) or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text
     elseif event.type == "key" and event.action == "press" then
@@ -409,7 +384,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if field.kind == "title" then label = label .. ": " .. state.title
         elseif field.kind == "option" and field.option_kind == "text" then
             label = human(field.name) .. ": " .. (state.option_text[field.name] or "Default")
-        elseif field.kind == "settings" then label = label .. ": " .. (state.settings[field.name] or "")
+        elseif field.kind == "settings" then label = label .. ": " .. (state.settings[field.name] ~= "" and state.settings[field.name] or "Default")
         elseif field.kind == "repair" then label = label .. ": " .. (state.form.repair_json or "")
         elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end
         frame.row(painter, slot + 2, text.bound(label, 4096), index == state.selected, "field", index, "")

@@ -45,6 +45,45 @@ local function key(name: string, rune: string?)
 end
 local function define_tests()
     test.describe("Agent profile form input", function()
+        test.it("loads session limits without inventing turn limits", function()
+            local s = state()
+            s.form.draft.budgets = {session = {tokens = 100}}
+            local loaded = view.new(s.form, ask)
+            test.eq(loaded.settings["session.tokens"], "100")
+            test.eq(loaded.settings["turn.tokens"], "")
+            test.eq(view.action(loaded, "save"), "save")
+            test.is_nil(loaded.form.draft.budgets and loaded.form.draft.budgets.turn)
+        end)
+        test.it("edits named budgets and supervision with units and preserves unrelated Docker requests", function()
+            local s = state()
+            s.form.draft._allowed.placements = {"bee.placement.docker:coding"}
+            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding", overrides = {user = "1000:1000"}}
+            s.settings["turn.wall_time_ms"] = "2000"
+            s.settings["session.tokens"] = "10000"
+            s.settings.quiet_period_ms = "5000"
+            s.settings["docker.memory_bytes"] = "33554432"
+            view.action(s, "advanced")
+            local rendered = table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n")
+            test.is_true(rendered:find("Time limit (ms)", 1, true) ~= nil)
+            test.is_true(rendered:find("Docker memory (bytes)", 1, true) ~= nil)
+            test.is_false(rendered:find("JSON", 1, true) ~= nil)
+            test.eq(view.action(s, "save"), "save")
+            local limits = s.form.draft.budgets
+            test.eq(limits and limits.turn and limits.turn.wall_time_ms, 2000)
+            test.eq(limits and limits.session and limits.session.tokens, 10000)
+            test.is_nil(limits and limits.turn and limits.turn.tokens)
+            test.eq(s.form.draft.supervision and s.form.draft.supervision.quiet_period_ms, 5000)
+            local placement = s.form.draft.placement
+            test.eq(placement and placement.kind == "docker" and placement.overrides and placement.overrides.user, "1000:1000")
+            s.settings["turn.wall_time_ms"] = "2.5"
+            test.is_nil(view.action(s, "save"))
+            test.is_true(s.status:find("whole number", 1, true) ~= nil)
+            test.eq(limits and limits.turn and limits.turn.wall_time_ms, 2000)
+            s.settings["turn.wall_time_ms"] = ""
+            s.settings["session.tokens"] = ""
+            test.eq(view.action(s, "save"), "save")
+            test.is_nil(s.form.draft.budgets)
+        end)
         test.it("requires confirmation before the person revokes Docker access", function()
             local s = state()
             s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding"}

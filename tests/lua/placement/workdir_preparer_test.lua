@@ -12,8 +12,12 @@ local migrations = require("migrations")
 local request_codec = require("request_codec")
 local quote = require("quote")
 local types = require("types")
+local env = require("env")
+local process = require("process")
+local channel = require("channel")
 
 local counter = 0
+local owners: {string} = {}
 local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
@@ -34,7 +38,8 @@ local function run_cmd(args: {string}): (string?, integer?, string?)
 end
 
 local function temp_dir(): string
-    local dir = "/tmp/bee-test-preparer-" .. fresh("dir")
+    local root = assert(env.get("bee.placement.native:preparer_temp_root"))
+    local dir = root .. "/bee-test-preparer-" .. fresh("dir")
     run_cmd({"mkdir", "-p", dir})
     return dir
 end
@@ -86,6 +91,8 @@ local function make_request(attempt_id: string, options: types.WorkdirOptions?):
 end
 
 local function claim_attempt(db, request: types.LaunchRequest)
+    local owner = assert(process.spawn("bee.placement.native:preparer_owner", "bee:workers"))
+    owners[#owners + 1] = tostring(owner)
     local digest, digest_error = request_codec.digest(request)
     if not digest then error(tostring(digest_error)) end
     local encoded, encode_error = json.encode(request)
@@ -96,6 +103,7 @@ local function claim_attempt(db, request: types.LaunchRequest)
     local starting = store.transition(db, request.attempt_id, {
         expected_execution = "intended",
         execution = "starting",
+        fields = {runner_pid = tostring(owner)},
         evidence = {kind = "test.started", detail = "test setup"},
     })
     if not starting.ok then error(tostring(starting.message)) end
@@ -130,6 +138,18 @@ end
 
 local function define_tests()
     test.describe("Workdir preparers extension point", function()
+        test.it("keeps the fixture's live preparation owner supervised during reconciliation", function()
+            local db = assert(store.open())
+            local req = make_request(fresh("supervised-fixture"))
+            claim_attempt(db, req)
+            local result = service.reconcile_attempt(assert(store.attempt(db, req.attempt_id)))
+            local observed = assert(store.attempt(db, req.attempt_id)).execution_state
+            store.transition(db, req.attempt_id, {execution = "exited", fields = {exit_source = "runner"},
+                evidence = {kind = "child.not_started", detail = "fixture supervision complete"}})
+            db:release()
+            test.is_true(result.ok)
+            test.eq(observed, "starting", "the fixture owns setup until it records completion")
+        end)
         test.it("registry metadata alone never selects a preparer", function()
             local preparers = workdir_preparers.authorized_preparers()
             if not preparers then error("resolve preparers") end
@@ -412,4 +432,24 @@ local function define_tests()
     end)
 end
 
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local ok, result = pcall(cases, options)
+    local events = assert(process.events())
+    local pending: {[string]: boolean} = {}
+    for _, owner in ipairs(owners) do
+        assert(process.monitor(owner))
+        pending[owner] = true
+        assert(process.cancel(owner, "preparer fixture complete"))
+    end
+    local deadline = time.after("5s")
+    while next(pending) ~= nil do
+        local selected = channel.select({events:case_receive(), deadline:case_receive()})
+        assert(selected.ok and selected.channel == events, "preparer fixture owners did not exit")
+        local event = selected.value
+        if event.kind == process.event.EXIT then pending[tostring(event.from)] = nil end
+    end
+    owners = {}
+    if not ok then error(tostring(result)) end
+    return result
+end}

@@ -50,6 +50,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local open_error: string?
     if mode == "resume" then session, open_error = machine.resume(io, plan) else session, open_error = machine.open(io, plan) end
     if not session then error(mode .. ": " .. tostring(open_error)) end
+    if session.runner then assert(process.monitor(session.runner)) end
     if mode == "resume" then
         local reconciled, reconcile_error = machine.reconcile_writes(io, session)
         if not reconciled then error("reconcile writes: " .. tostring(reconcile_error)) end
@@ -115,7 +116,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
     local drain_timer = time.after("1ms")
     local draining = false
     local drain_elapsed = false
-    if session.exit then
+    if session.exit and not session.runner then
         draining = true
         drain_timer = time.after(tostring(plan.policy.runner_drain_ms + plan.policy.drain_ms) .. "ms")
     end
@@ -165,7 +166,15 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             cases[#cases + 1] = hints:case_receive()
         end
         if hooking then cases[#cases + 1] = hooks_ticker:channel():case_receive() end
-        local selected = channel.select(cases)
+        -- Accepted delivery precedes the fallback deadline after runner loss.
+        local selected
+        if session.runner_ended then
+            selected = channel.select({outputs:case_receive(), exits:case_receive(), acks:case_receive(),
+                statuses:case_receive(), default = true})
+            if selected.default then selected = channel.select(cases) end
+        else
+            selected = channel.select(cases)
+        end
         if not selected.ok then break end
         if hooking and selected.channel == hooks_ticker:channel() then drain_hooks() end
         if selected.channel == outputs then
@@ -180,10 +189,6 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             local data = placement_protocol.decode_exit(message:payload():data())
             if data then
                 machine.on_exit(io, session, tostring(message:from()), data)
-                if not draining then
-                    draining = true
-                    drain_timer = time.after(tostring(plan.policy.runner_drain_ms + plan.policy.drain_ms) .. "ms")
-                end
             end
         elseif selected.channel == acks then
             local message = selected.value
@@ -223,6 +228,10 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
             refresh(false)
         elseif selected.channel == events then
             if selected.value.kind == process.event.CANCEL then break end
+            if selected.value.kind == process.event.EXIT and machine.on_runner_exit(session, tostring(selected.value.from)) and not draining then
+                draining = true
+                drain_timer = time.after(tostring(plan.policy.drain_ms) .. "ms")
+            end
         end
         if selected.channel ~= poll_timer:channel() and selected.channel ~= hints then advance(false) end
         if plan.launch.session_end == "stdin_close" and not session.exit and session.runner and not ended and machine.ready_to_settle(session, drain_elapsed) then
@@ -247,6 +256,7 @@ local function drive(request: machine.Request, mode: Mode, controller: string?, 
         end
     end
     if settlement then end_session(false) end
+    if session.runner then process.unmonitor(session.runner) end
     process.unlisten(outputs)
     process.unlisten(exits)
     process.unlisten(acks)

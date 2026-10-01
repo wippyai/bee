@@ -518,7 +518,7 @@ local function define_tests()
             test.is_true(expected_deltas * #fixture_delta > 256 * 1024,
                 "the emitted frames exceed the placement output spool")
             local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected_deltas),
-                BEE_FIXTURE_FLOOD_PACE = "0.001", BEE_FIXTURE_FLOOD_EXIT = "1"}
+                BEE_FIXTURE_FLOOD_PACE = "0", BEE_FIXTURE_FLOOD_EXIT = "1"}
             local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
                 "open", nil, nil, nil, 40, 150000)
             if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end

@@ -103,12 +103,24 @@ entries:
     test: wippy.test:test
     writable_roots_adapter: bee.placement.native.service:writable_roots_adapter
     driver_types: bee.driver:types
+- name: preparer_owner
+  kind: process.lua
+  source: file://preparer_owner.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process]
+- name: preparer_temp_root
+  kind: env.variable
+  meta: {type: test_support}
+  storage: bee.placement.native:environment
+  variable: TMPDIR
+  readonly: true
 - name: workdir_preparer_test
   kind: function.lua
   source: file://workdir_preparer_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "60s"}
-  modules: [time, exec, json, funcs, sql, registry]
+  modules: [time, exec, json, funcs, sql, registry, env, process, channel]
   security:
     policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.placement.native.security:placement_runner_policy, bee.git_worktree:worktree_policy]
   imports:

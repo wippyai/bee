@@ -193,7 +193,9 @@ def client_layout(database, workspace_id, desktop_id=None):
 
 @contextmanager
 def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=True):
-    with tempfile.TemporaryDirectory(prefix="bee-fixtures-") as temporary:
+    fixtures = ROOT / ".wippy/fixtures"
+    fixtures.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="bee-fixtures-", dir=fixtures) as temporary:
         folder = Path(temporary)
         shutil.copytree(ROOT / "src", folder / "src")
         shutil.copytree(ROOT / "modules", folder / "modules")

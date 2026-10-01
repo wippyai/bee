@@ -19,9 +19,9 @@ end
 
 local function main(owner: string)
     local requests = assert(process.listen("bee.app.request", {message = true}))
-    local recovery = assert(process.listen("bee.application.binding.recovery", {message = true}))
+    local recovery = assert(process.listen("bee.app.binding.recovery", {message = true}))
     local events = assert(process.events())
-    assert(process.send(owner, "bee.application.catalog", {version = 1, items = {}}))
+    assert(process.send(owner, "bee.app.catalog", {version = 1, items = {}}))
     assert(process.send(owner, "bee.app.ready", {version = 1}))
     local delayed = false
     local late_timer: time.Timer? = nil
@@ -36,7 +36,7 @@ local function main(owner: string)
             reply(owner, "late-open", "late-view", "late-instance")
         elseif selected.channel == recovery then
             if tostring(selected.value:from()) == owner then
-                assert(process.send(owner, "bee.application.binding.recovered",
+                assert(process.send(owner, "bee.app.binding.recovered",
                     {version = 1, workspace_id = tostring(ctx.get("bee.workspace_id"))}))
             end
         elseif selected.channel == events then

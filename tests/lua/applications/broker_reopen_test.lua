@@ -11,7 +11,7 @@ local WORKSPACE = string.rep("d", 32)
 local function journey(definition: string, check: (tty.Viewport, string, integer, integer) -> ())
     local owner = tostring(process.pid())
     local events = assert(process.events())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner,
         ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({

@@ -20,7 +20,7 @@ local function main(value: unknown)
     local saved = launch.resume_state ~= "" and count or -1
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
-    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local receipts = assert(process.listen("bee.app.checkpoint_result", {message = true}))
     local pending: {number} = {}
     assert(tty.start())
     local output = assert(tty.surface())

@@ -584,7 +584,7 @@ def build(local: bool = False) -> int:
     for identity, topic, payload, source in reference_app_documents():
         record(identity, topic, payload, source)
     record("toolkit", "terminal", toolkit_reference(),
-           "generated: modules/application/src, modules/*/src/app views, tests/lua/frame")
+           "generated: modules/application/src, module app views, tests/lua/frame")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:

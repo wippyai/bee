@@ -21,7 +21,7 @@ local function main(value: unknown)
     local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
-    local replies = assert(process.listen("bee.application.result", {message = true}))
+    local replies = assert(process.listen("bee.app.result", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface())
     local ticker = assert(time.ticker("1s"))
@@ -136,7 +136,7 @@ local function main(value: unknown)
                         if key == "enter" and broker then
                             local request_id = uuid.v7()
                             pending = stop_request.begin(request_id)
-                            local sent, send_error = process.send(broker, "bee.application.control", {version = 1, request_id = request_id, op = "stop", execution_pid = selected})
+                            local sent, send_error = process.send(broker, "bee.app.control", {version = 1, request_id = request_id, op = "stop", execution_pid = selected})
                             confirming = false
                             if sent and not send_error then status = "Stopping application…"
                             else pending = nil; status = "Stop request failed: " .. tostring(send_error) end

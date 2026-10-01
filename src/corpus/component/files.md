@@ -24,7 +24,7 @@ An agent with approved `bee.app:runtime` access opens Files through
 `arguments: ["src/clock.lua:2-4"]`. The preview marks the requested range.
 Files uses singleton admission; opening an existing instance with new arguments
 moves its retained preview to the requested file and range. The shared reopen
-navigation uses the `bee.application.navigate` topic. Files calls
+navigation uses the `bee.app.navigate` topic. Files calls
 `client.navigation` to authenticate the broker, instance, view, execution
 generation and launch token before decoding its bounded arguments. Other
 senders, stale payloads and unsafe paths are ignored. This message is not an

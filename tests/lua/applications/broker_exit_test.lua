@@ -16,7 +16,7 @@ local function define_tests()
         test.it("reports a clean return of a ready application as closed", function()
             local owner = tostring(process.pid())
             local events = assert(process.events())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),

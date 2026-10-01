@@ -21,13 +21,13 @@ local function define_tests()
             local workspace = string.rep("a", 32)
             local request: {[string]: unknown} = {version = 1, workspace_id = workspace, request_id = "present-1",
                 definition_id = "bee.harness.app:app", arguments = {"--session", "bs:n:" .. workspace .. ":s"},
-                caller_token = "bee.application.presentation/abc-123", presentation = true}
+                caller_token = "bee.app.presentation/abc-123", presentation = true}
             test.not_nil(protocol.request(request, workspace))
-            request.caller_token = "bee.application.open/abc-123"
+            request.caller_token = "bee.app.open/abc-123"
             test.is_nil(protocol.request(request, workspace))
             request.caller_token = "ordinary/app"
             test.is_nil(protocol.request(request, workspace))
-            request.caller_token = "bee.application.presentation/abc-123"
+            request.caller_token = "bee.app.presentation/abc-123"
             request.provenance = provenance(workspace)
             test.is_nil(protocol.request(request, workspace))
         end)
@@ -35,7 +35,7 @@ local function define_tests()
         test.it("accepts only the bound workspace and bounded literal arguments", function()
             local workspace = string.rep("a", 32)
             local request = protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",
-                definition_id = "bee.example:app", arguments = {"one", "two"}, caller_token = "bee.application.open/abc-123", provenance = provenance(workspace)}, workspace)
+                definition_id = "bee.example:app", arguments = {"one", "two"}, caller_token = "bee.app.open/abc-123", provenance = provenance(workspace)}, workspace)
             if not request then error("valid open request rejected") end
             test.eq(request.definition_id, "bee.example:app")
             test.eq(request.arguments[2], "two")
@@ -43,13 +43,13 @@ local function define_tests()
                 definition_id = "bee.example:app", arguments = {}, caller_token = "ordinary/app", provenance = provenance(workspace)}, workspace))
             test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",
                 definition_id = "bee.example:app", arguments = {}, thread_id = "caller-selected",
-                caller_token = "bee.application.open/abc-123", provenance = provenance(workspace)}, workspace))
+                caller_token = "bee.app.open/abc-123", provenance = provenance(workspace)}, workspace))
             test.is_nil(protocol.request({version = 1, workspace_id = string.rep("b", 32), request_id = "open-1",
-                definition_id = "bee.example:app", arguments = {}, caller_token = "bee.application.open/abc-123", provenance = provenance(workspace)}, workspace))
+                definition_id = "bee.example:app", arguments = {}, caller_token = "bee.app.open/abc-123", provenance = provenance(workspace)}, workspace))
             test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",
-                definition_id = "bee.example:app", arguments = {}, caller_token = "bee.application.open/abc-123", provenance = provenance(workspace), extra = true}, workspace))
+                definition_id = "bee.example:app", arguments = {}, caller_token = "bee.app.open/abc-123", provenance = provenance(workspace), extra = true}, workspace))
             test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",
-                definition_id = "bee.example:app", arguments = {string.rep("x", 1025)}, caller_token = "bee.application.open/abc-123", provenance = provenance(workspace)}, workspace))
+                definition_id = "bee.example:app", arguments = {string.rep("x", 1025)}, caller_token = "bee.app.open/abc-123", provenance = provenance(workspace)}, workspace))
         end)
         test.it("requires sealed runtime provenance and refuses mismatched identities", function()
             local workspace = string.rep("a", 32)
@@ -68,13 +68,13 @@ local function define_tests()
             local partial = provenance(workspace)
             partial.thread_id = nil
             test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1", definition_id = "bee.example:app",
-                arguments = {}, caller_token = "bee.application.open/abc-123", provenance = partial}, workspace))
+                arguments = {}, caller_token = "bee.app.open/abc-123", provenance = partial}, workspace))
             local extra = provenance(workspace)
             extra.workspace_id = "caller-selected"
             test.is_nil(protocol.request({version = 1, workspace_id = workspace, request_id = "open-1", definition_id = "bee.example:app",
-                arguments = {}, caller_token = "bee.application.open/abc-123", provenance = extra}, workspace))
+                arguments = {}, caller_token = "bee.app.open/abc-123", provenance = extra}, workspace))
             local forwarded = protocol.request({version = 1, workspace_id = workspace, request_id = "open-2", definition_id = "bee.example:app",
-                arguments = {}, caller_token = "bee.application.open/abc-123", provenance = provenance(workspace)}, workspace)
+                arguments = {}, caller_token = "bee.app.open/abc-123", provenance = provenance(workspace)}, workspace)
             if not forwarded then error("valid forwarded provenance rejected") end
             test.eq(forwarded.provenance.binding_id, "binding-1")
             test.eq(forwarded.provenance.access_proposal_digest, string.rep("a", 64))

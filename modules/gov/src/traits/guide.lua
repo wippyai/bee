@@ -78,7 +78,7 @@ local function main(value: unknown)
     if not launch then error("Invalid launch") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
-    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local receipts = assert(process.listen("bee.app.checkpoint_result", {message = true}))
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     local count = 0
     if launch.resume_state ~= "" then

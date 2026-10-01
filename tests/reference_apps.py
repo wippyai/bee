@@ -15,7 +15,7 @@ from workspace import RUNTIME, fixture_workspace
 def main():
     entries = test_entries({"reference_apps"})
     with fixture_workspace(managed_gateway=True) as folder:
-        subprocess.run([str(RUNTIME), "lint", "--ns", "bee.application.reference.test", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"],
+        subprocess.run([str(RUNTIME), "lint", "--ns", "bee.app.reference.test", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"],
                        cwd=folder, check=True, env={**os.environ, **environment(folder)})
         result = run_shard(0, folder, entries)
         report_shard(result)

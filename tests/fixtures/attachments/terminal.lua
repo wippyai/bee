@@ -10,7 +10,7 @@ local M = {}
 function M.main()
     local owner = tostring(process.pid())
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local controller_status = assert(process.listen("bee.controller.status", {message = true}))
     local database = assert(store.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())

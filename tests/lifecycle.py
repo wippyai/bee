@@ -22,7 +22,7 @@ local function main(value: unknown)
     assert(tty.start())
     if launch.definition_id == "probe:early" then return end
     if launch.definition_id == "probe:never" then
-        process.send(launch.broker_pid, "bee.application.ready", {version = 1, instance_id = launch.instance_id,
+        process.send(launch.broker_pid, "bee.app.ready", {version = 1, instance_id = launch.instance_id,
             view_id = launch.view_id, launch_token = "forged"})
         time.sleep("10s")
         return

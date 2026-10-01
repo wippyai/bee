@@ -75,9 +75,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local request_id = retained_id or (natural and "managed-window-natural-request" or "managed-window-request")
     call("bee.threads.service:create", {thread_id = THREAD, idempotency_key = "managed-window-create", title = "Managed window fixture"})
     local owner = tostring(process.pid())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
+    local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
     local function receive_reply()
         local deadline = time.after("5s")
         local received = channel.select({replies:case_receive(), deadline:case_receive()})
@@ -284,7 +284,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     assert(field_count == 5, "Agent checkpoint is incomplete")
     assert(application_state.thread_id == THREAD, "Agent checkpoint switched threads")
     if not selected then assert(application_state.origin_request_id == request_id, "Agent checkpoint changed origin") end
-    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = application_checkpoint.request_id,
+    assert(process.send(broker, "bee.app.persisted", {version = 1, request_id = application_checkpoint.request_id,
         error_code = natural and "persistence_refused" or "", error = natural and "Fixture refused Agent save" or ""}))
     -- The native process is already accepting input. Recovery metadata must
     -- exist while it runs, rather than first appearing in the close path.
@@ -399,9 +399,9 @@ end
 -- for the actual acknowledgement instead of relying on channel ordering.
 local function checkpoint_ack_body(original_admission: {[string]: unknown})
     local owner = tostring(process.pid())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
+    local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
     local receipts = assert(process.listen("bee.fixture.checkpoint.receipt", {message = true}))
     local app_ready = assert(process.listen("bee.fixture.checkpoint.ready", {message = true}))
     local sent = assert(process.listen("bee.fixture.checkpoint.sent", {message = true}))
@@ -434,9 +434,9 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
         local data: unknown = message:payload():data()
         assert(type(data) == "table" and data.resume_state == state, "unexpected checkpoint state")
         if action == "accept" then
-            assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = data.request_id, error_code = "", error = ""}))
+            assert(process.send(broker, "bee.app.persisted", {version = 1, request_id = data.request_id, error_code = "", error = ""}))
         elseif action == "refuse" then
-            assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = data.request_id,
+            assert(process.send(broker, "bee.app.persisted", {version = 1, request_id = data.request_id,
                 error_code = "persistence_refused", error = "Fixture owner refused checkpoint"}))
         end
         return data.request_id :: string
@@ -607,7 +607,7 @@ local function checkpoint_ack_body(original_admission: {[string]: unknown})
     time.sleep("500ms")
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "checkpoint-replacement-shutdown",
         op = "shutdown", workspace_id = WORKSPACE}))
-    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = pending_shutdown_write,
+    assert(process.send(broker, "bee.app.persisted", {version = 1, request_id = pending_shutdown_write,
         error_code = "", error = ""}))
     local shutdown_deadline = time.after("5s")
     while true do

@@ -35,7 +35,7 @@ def exercise(packed):
                         {id = launch.view_id, token = launch.launch_token, title = "\27[31m"},
                         {id = launch.view_id, token = launch.launch_token, title = string.rep("x", 81)},
                     }) do
-                        assert(process.send(launch.broker_pid, "bee.application.title", {version = 1,
+                        assert(process.send(launch.broker_pid, "bee.app.title", {version = 1,
                             instance_id = launch.instance_id, id = request.id, launch_token = request.token, title = request.title}))
                     end
                     status = "Invalid attempts sent"

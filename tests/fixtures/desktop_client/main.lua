@@ -839,7 +839,7 @@ local function main(mode: string?)
     assert(denied_state and denied_state.preferences.theme == other_before.preferences.theme,
         "Client without appearance permission changed its theme")
     local function prepare_shutdown(): interaction.Spec
-        assert(process.send(host, "bee.application.shutdown", {version = 1, op = "prepare"}))
+        assert(process.send(host, "bee.app.shutdown", {version = 1, op = "prepare"}))
         while true do
             local message = assert(host_questions:receive())
             assert(tostring(message:from()) == host)

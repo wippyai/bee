@@ -209,7 +209,7 @@ dispatch or multi-workspace clients.
 
 An authorized open may carry a bounded `thread_id` association. It is a
 printable descriptive thread record ID of at most 160 bytes; it grants no
-membership or operation permission. `bee.application.open` rejects a caller
+membership or operation permission. `bee.app.open` rejects a caller
 chosen association, and applications cannot infer one from arguments. The
 broker carries the selected association through launch, replies, inventory and
 checkpoints. A singleton opened with a different live association returns
@@ -221,7 +221,7 @@ Arguments participate in open deduplication, are not accepted on
 close/bind/shutdown, and are not automatically persisted. A ready singleton
 reopen with nonempty arguments queues `{version = 1, instance_id, view_id,
 execution_generation, launch_token, arguments}` from the authenticated broker
-to the retained producer on the fixed `bee.application.navigate` topic before
+to the retained producer on the fixed `bee.app.navigate` topic before
 returning focus. The receiver calls `client.navigation(launch, sender, payload)`;
 it accepts only the current broker, instance, view, generation and launch token,
 then decodes bounded arguments. Queued delivery does not acknowledge successful
@@ -293,8 +293,8 @@ user may set a separate window label and named accent; applications cannot
 submit those private desktop commands. Native PTY OSC title forwarding is not
 implemented.
 
-Process control uses `bee.application.control` (`stop|force_stop`,
-`execution_pid`) and `bee.application.result`. The broker checks the caller's
+Process control uses `bee.app.control` (`stop|force_stop`,
+`execution_pid`) and `bee.app.result`. The broker checks the caller's
 grant and target ownership; a successful stop is reported only after EXIT.
 `termination_pending` is not success. Desktop command messages are private to
 the owning workspace and acknowledge committed scene, tabs, preferences and
@@ -312,7 +312,7 @@ keeps the saved record rather than feeding it to a different definition.
 
 `client.checkpoint(launch, json_string)` queues at most 64 KiB of opaque,
 application-owned JSON and returns a request ID. A successful
-`bee.application.checkpoint_result` means the workspace transaction committed;
+`bee.app.checkpoint_result` means the workspace transaction committed;
 one pending request is retained per app, superseded requests report
 `superseded`, and a five-second wait may end with an unknown result. Only an
 acknowledged receipt changes the saved resume state.
@@ -341,7 +341,7 @@ questions are not persisted, are canceled on app exit, and F12 retains the
 question while resetting transient input and focus. They are plain text, not
 password fields. A positive answer is not a capability grant.
 The options are `{kind = "confirm"|"text", title = string, message?, accept?,
-initial?}`. Listen on `bee.application.query.result` before calling `query`;
+initial?}`. Listen on `bee.app.query.result` before calling `query`;
 it returns `request_id, error`. Decode the broker message with
 `client.query_result(launch, tostring(message:from()), message:payload():data())`
 and match its `request_id`. The decoded reply is `{request_id, action =

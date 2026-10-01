@@ -15,7 +15,7 @@ CASES = {
     "restore": ("host", 'topic == "bee.app.request" and type(value) == "table" and value.op == "open"'),
     "shutdown": ("launch", 'topic == "bee.app.request" and type(value) == "table" and value.op == "shutdown"'),
     "scene": ("client", 'topic == "bee.desktop.command" and type(value) == "table" and value.op == "add"'),
-    "receipt": ("host", 'topic == "bee.application.persisted"'),
+    "receipt": ("host", 'topic == "bee.app.persisted"'),
 }
 
 
@@ -122,8 +122,8 @@ def routine(packed, cases=("open", "close", "prepare")):
             if case == "prepare":
                 actor = project / "src/host/main.lua"
                 source = actor.read_text().replace("local function main(", "local reject_command = true\nlocal function main(")
-                anchor = '                        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
-                operation = 'process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
+                anchor = '                        local sent, err = process.send(broker, "bee.app.shutdown", {version = 1, op = "prepare"})'
+                operation = 'process.send(broker, "bee.app.shutdown", {version = 1, op = "prepare"})'
                 condition = "reject_command"
             else:
                 actor = project / "src/host/clients.lua"

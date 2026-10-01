@@ -50,7 +50,7 @@ application answers. Manual instances resume when opened. Restored launches carr
 `resume_schema` and `resume_state`, stable logical IDs and fresh capabilities.
 
 `client.checkpoint(launch, json_string)` returns a queued request ID. Only a
-successful `bee.application.checkpoint_result` means database commit. The broker
+successful `bee.app.checkpoint_result` means database commit. The broker
 checks sender, identities and token; the workspace validates and writes the
 envelope. One pending request per app is retained; supersession and timeouts have
 explicit outcomes. A timeout is not proof the transaction never committed.
@@ -87,10 +87,12 @@ Historical journal records keep their original evidence.
 Sync migration 7 updates SDK references in saved profiles, feed events and
 idempotency receipts. Gateway migration 15 updates stored surfaces, active
 traits and grant receipt trait lists. Both owners translate exact SDK reference
-strings without changing approval proposal digests, actor identities or wire
-topics. The version-1 `bee.application.*` lifecycle protocol and
-`bee.application:<workspace>:…` principals are independent of registry namespace
-`bee.app` and retain their identities.
+strings without changing approval proposal digests or actor identities.
+Process topics use `bee.app.*` and change with all senders and receivers in one
+deployment followed by a full node owner restart. Topics are not persisted.
+Application principals retain `bee.application:<workspace_id>:<instance_id>`
+because Threads records and command receipts persist that identity. Workspace
+thread bindings also store it, and recovery compares it with stored memberships.
 
 Workspace database schema, registry revision, app revision and app resume schema
 are different version domains. Apps own interpretation of their opaque state;

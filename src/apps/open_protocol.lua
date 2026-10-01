@@ -94,8 +94,8 @@ function M.request(value: unknown, workspace_id: string): Request?
     if not request_id or not definition_id or not caller_token or not args then return nil end
     local presentation = value.presentation == true
     if presentation then
-        if not caller_token:match("^bee%.application%.presentation/[0-9a-f-]+$") or value.provenance ~= nil or value.origin_view ~= nil then return nil end
-    elseif value.presentation ~= nil or not caller_token:match("^bee%.application%.open/[0-9a-f-]+$") then return nil end
+        if not caller_token:match("^bee%.app%.presentation/[0-9a-f-]+$") or value.provenance ~= nil or value.origin_view ~= nil then return nil end
+    elseif value.presentation ~= nil or not caller_token:match("^bee%.app%.open/[0-9a-f-]+$") then return nil end
     local origin = M.origin(value.origin_view)
     if value.origin_view ~= nil and not origin then return nil end
     local provenance = M.provenance(value.provenance)

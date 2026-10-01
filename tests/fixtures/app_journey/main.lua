@@ -48,8 +48,8 @@ local function main(value: unknown)
     if not launch then error("Invalid launch") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
-    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
-    local thread_results = assert(process.listen("bee.application.thread.result", {message = true}))
+    local receipts = assert(process.listen("bee.app.checkpoint_result", {message = true}))
+    local thread_results = assert(process.listen("bee.app.thread.result", {message = true}))
     local rechecks = assert(process.listen("bee.app.journey.probe.recheck", {message = true}))
     local revocations = assert(process.listen("bee.app.open.probe.access.revoke.result", {message = true}))
     local stale_status = "n/a"

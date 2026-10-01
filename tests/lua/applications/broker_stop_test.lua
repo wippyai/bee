@@ -29,7 +29,7 @@ local function define_tests()
             local marker = "bee-broker-stop-" .. uuid.v7()
             local owner = tostring(process.pid())
             local events = assert(process.events())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
@@ -74,7 +74,7 @@ local function define_tests()
             local marker = "bee-broker-fence-" .. uuid.v7()
             local owner = tostring(process.pid())
             local events = assert(process.events())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
@@ -102,7 +102,7 @@ local function define_tests()
             local opened = wait_reply("open", "fence-open")
             test.eq(opened.error_code, "")
             test.is_true(running(marker), "the terminal child is not running")
-            assert(process.send(broker, "bee.application.fence", {version = 1, request_id = "fence-1", instance_id = opened.instance_id}))
+            assert(process.send(broker, "bee.app.fence", {version = 1, request_id = "fence-1", instance_id = opened.instance_id}))
             local acked = wait_reply("fence", "fence-1")
             test.eq(acked.error_code, "")
             local waited = 0
@@ -111,7 +111,7 @@ local function define_tests()
                 waited = waited + 1
             end
             test.is_false(running(marker), "the fenced child is still running")
-            assert(process.send(broker, "bee.application.fence", {version = 1, request_id = "fence-bad"}))
+            assert(process.send(broker, "bee.app.fence", {version = 1, request_id = "fence-bad"}))
             local refused = wait_reply("fence", "fence-bad")
             test.eq(refused.error_code, "invalid")
             assert(process.cancel(broker))

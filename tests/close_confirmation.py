@@ -45,13 +45,13 @@ def exercise(packed, responsive=True):
 '''
         if responsive:
             code = code.replace('    local input = assert(tty.events())',
-                '    local query_results = assert(process.listen("bee.application.query.result", {message = true}))\n'
+                '    local query_results = assert(process.listen("bee.app.query.result", {message = true}))\n'
                 '    local input = assert(tty.events())')
             code = code.replace('closes:case_receive()})', 'closes:case_receive(), query_results:case_receive()})')
             handler += '''            if request then
                 assert(client.title(launch, "Terminal reviewing"))
                 assert(client.query(launch, {kind = "confirm", title = "Must not open while closing"}))
-                assert(process.send(launch.broker_pid, "bee.application.close.reply", {version = 1,
+                assert(process.send(launch.broker_pid, "bee.app.close.reply", {version = 1,
                     request_id = request.request_id, id = launch.view_id, instance_id = launch.instance_id,
                     launch_token = "forged", action = "accept"}))
                 assert(client.close_reply(launch, request.request_id, {action = "confirm", title = "Close terminal?",

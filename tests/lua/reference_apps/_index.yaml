@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.application.reference.test
+namespace: bee.app.reference.test
 entries:
 - name: deploy_board
   kind: library.lua
@@ -65,12 +65,12 @@ entries:
     frame: bee.app:frame
     forms: bee.app:forms
     appearance: bee.app:appearance
-    deploy_board: bee.application.reference.test:deploy_board
-    ci_bench: bee.application.reference.test:ci_bench
-    inbox: bee.application.reference.test:inbox
-    log_viewer: bee.application.reference.test:log_viewer
-    topology: bee.application.reference.test:topology
-    workflow: bee.application.reference.test:workflow
-    metrics: bee.application.reference.test:metrics
-    deploy_form: bee.application.reference.test:deploy_form
-    overlays: bee.application.reference.test:overlays
+    deploy_board: bee.app.reference.test:deploy_board
+    ci_bench: bee.app.reference.test:ci_bench
+    inbox: bee.app.reference.test:inbox
+    log_viewer: bee.app.reference.test:log_viewer
+    topology: bee.app.reference.test:topology
+    workflow: bee.app.reference.test:workflow
+    metrics: bee.app.reference.test:metrics
+    deploy_form: bee.app.reference.test:deploy_form
+    overlays: bee.app.reference.test:overlays

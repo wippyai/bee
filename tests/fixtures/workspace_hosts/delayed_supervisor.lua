@@ -56,7 +56,7 @@ local function main()
     local claimed = assert(database.assignments:claim({view_id = origin_id, instance_id = origin_instance, display_id = "display-late"}))
     assert(claimed.display_id == "display-late")
 
-    local token = "bee.application.open/00000000-0000-7000-8000-000000000001"
+    local token = "bee.app.open/00000000-0000-7000-8000-000000000001"
     assert(process.registry.register(token))
     -- Runtime opens carry the gateway's approved-trait provenance; this
     -- regression's stub broker records none of it.

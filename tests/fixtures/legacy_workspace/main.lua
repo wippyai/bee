@@ -32,10 +32,10 @@ local function main(initial_application: string?, secondary_application: string?
     local dialog_answers = assert(process.listen("bee.interaction.response", {message = true}))
     local dialog_items: {interaction.Wire} = {}
     local shutdown_dialog: interaction.Wire? = nil
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local appearance_pending: {[string]: boolean} = {}
     local catalog_items: {decode.CatalogItem} = {}
-    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
+    local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
     local display = physical.open()
     local width, height = display.width, display.height
@@ -123,7 +123,7 @@ local function main(initial_application: string?, secondary_application: string?
         return sent == true
     end
     local function prepare_quit()
-        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})
+        local sent, err = process.send(broker, "bee.app.shutdown", {version = 1, op = "prepare"})
         if not sent then
             local reply = contract.reply("", "quit", "delivery_failed", tostring(err))
             reply.workspace_id = workspace_id
@@ -422,7 +422,7 @@ local function main(initial_application: string?, secondary_application: string?
                         if not previous then table.remove(record_order) end
                     end
                 end
-                send_control(broker, "bee.application.persisted", {version = 1, request_id = data.request_id,
+                send_control(broker, "bee.app.persisted", {version = 1, request_id = data.request_id,
                     error_code = ok and "" or "persistence_failed", error = err or ""})
             end
         elseif selected.channel == acknowledgements then

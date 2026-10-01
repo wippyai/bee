@@ -100,9 +100,9 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
 
     -- 3. Spawn real native application broker
     local owner = tostring(process.pid())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
+    local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
     local broker_policy, broker_error = security.policy("bee.security.desktop:broker_policy")
     if not broker_policy then error(tostring(broker_error)) end
     local boundary, boundary_error = security.policy("bee.security:core_spawn_boundary")
@@ -200,7 +200,7 @@ local function execute(crashed: boolean, cancel_recovery: boolean, pending_hook:
         "window checkpoint has an invalid persisted state")
     assert(view:send({type = "resize", width = 80, height = 24}))
     local saved_state = checkpoint_data.resume_state :: string
-    assert(process.send(broker, "bee.application.persisted", {version = 1, request_id = checkpoint_data.request_id,
+    assert(process.send(broker, "bee.app.persisted", {version = 1, request_id = checkpoint_data.request_id,
         error_code = "", error = ""}))
 
 

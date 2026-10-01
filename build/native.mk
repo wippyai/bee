@@ -159,6 +159,11 @@ native-upgrade-check:
 	@test -n "$(PREVIOUS_BEE)" || { echo "PREVIOUS_BEE must name a Bee binary predating Hive Manager" >&2; exit 1; }
 	python3 tests/native_upgrade.py "$(PREVIOUS_BEE)" "$(BEE_BINARY)"
 
+.PHONY: native-self-update-check
+native-self-update-check:
+	@test -n "$(SELF_UPDATE_FROM)" -a -n "$(SELF_UPDATE_TO)" -a -n "$(SELF_UPDATE_MARKER)" -a -n "$(SELF_UPDATE_EVIDENCE)" || { echo "Set SELF_UPDATE_FROM, SELF_UPDATE_TO, SELF_UPDATE_MARKER and SELF_UPDATE_EVIDENCE" >&2; exit 1; }
+	python3 tests/native_self_update.py "$(abspath $(BEE_BINARY))" --from-version "$(SELF_UPDATE_FROM)" --to-version "$(SELF_UPDATE_TO)" --marker "$(SELF_UPDATE_MARKER)" --evidence "$(SELF_UPDATE_EVIDENCE)"
+
 .PHONY: native-client-check
 native-client-check:
 	python3 tests/native_client.py "$(BEE_BINARY)"

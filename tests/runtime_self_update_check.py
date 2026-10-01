@@ -32,15 +32,20 @@ def main():
         copied = Path(directory) / "runtime"
         shutil.copytree(module, copied)
         (copied / "cmd/app").chmod(0o700)
+        (copied / "boot/deps/hub").chmod(0o700)
         (copied / "go.mod").chmod(0o600)
         (copied / "go.sum").chmod(0o600)
         shutil.copy2(ROOT / "tests/runtime_seeded_root_test.go", copied / "cmd/app/bee_seeded_root_test.go")
+        shutil.copy2(ROOT / "tests/runtime_root_closure_test.go", copied / "boot/deps/hub/bee_root_closure_test.go")
         # Dependency-module replacements are ignored by Bee's native build.
         # The module zip also omits the nested third_party/ansi module.
         subprocess.run(["go", "mod", "edit", "-dropreplace=github.com/charmbracelet/x/ansi"],
                        cwd=copied, env=env, check=True)
         subprocess.run(["go", "test", "-mod=mod", "./cmd/app",
                         "-run", "^TestBeeSeededStandaloneRootVisibleInLuaSnapshot$", "-count=1"],
+                       cwd=copied, env=env, check=True)
+        subprocess.run(["go", "test", "-mod=mod", "./boot/deps/hub",
+                        "-run", "^TestBeeDeploymentRootUpdateChangesNestedVersions$", "-count=1"],
                        cwd=copied, env=env, check=True)
     print("Pinned runtime proves standalone root visibility, cached history restore, nested roots, and newer-baseline reconciliation.")
 

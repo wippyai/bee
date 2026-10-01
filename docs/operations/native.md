@@ -191,6 +191,28 @@ its original lock pins separately. Standalone root identity comes from the
 permission-gated resolution lock, so Modules offers **Update Bee** through the
 same approved Hub plan and apply operation used for other packages.
 
+The pinned runtime currently retains the old root application's composed
+dependency declarations as independent version constraints during apply. A
+release that changes those nested versions together with `bee/bee` fails
+dependency resolution. `make hub-self-update-runtime-check` includes that
+regression; completing this update requires a runtime correction in a new
+executable. The plan can be ready while this apply failure remains.
+
+The opt-in published-pack acceptance runs on Linux:
+
+```sh
+make native-self-update-check BEE_BINARY=PATH \
+  SELF_UPDATE_FROM=VERSION SELF_UPDATE_TO=VERSION \
+  SELF_UPDATE_MARKER='visible About text' SELF_UPDATE_EVIDENCE=DIR
+```
+
+Build the baseline executable and publish both versions first; the target
+version adds the visible Lua About marker and uses the baseline native manifest.
+The check supplies Hub auth through a Wippy config symlink in a disposable
+HOME, captures the update, confirmation and result frames, records the unchanged
+owner PID, then stops the owner and relaunches the baseline executable in a
+loopback-only network namespace. About must retain the updated version and
+marker. The check removes its scratch HOME and state after stopping both owners.
 
 Bee packs that need native support declare `native_requirements` on an
 `ns.definition` entry's metadata, for example

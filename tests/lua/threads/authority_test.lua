@@ -2,6 +2,7 @@
 -- dedupe, bounded reads and rollback on storage failure.
 local test = require("test")
 local harness = require("harness")
+local bounds = require("bounds")
 local function define_tests()
     test.describe("Thread authority", function()
         local alice = harness.principal("alice", harness.ALL)
@@ -138,7 +139,7 @@ local function define_tests()
         test.it("commits concurrent writers with contiguous sequences and unique ids", function()
             local thread_id = harness.thread(alice, "Concurrent")
             harness.value(alice:call("join", {thread_id = thread_id, idempotency_key = harness.key(), member_id = "bob", role = "participant", expected_revision = 1}))
-            local futures: {any} = {}
+            local futures: {funcs.Future} = {}
             for index = 1, 24 do
                 local writer = index % 2 == 0 and alice or bob
                 futures[index] = writer:start("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.message("c" .. tostring(index), "concurrent")})
@@ -201,7 +202,7 @@ local function define_tests()
             test.eq(harness.code(bob:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.reply("a1", "done", "other-thread", request.record_id, "succeeded")})), "UNSUPPORTED_CAPABILITY")
             test.eq(harness.code(bob:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.reply("a1", "done", thread_id, "missing", "succeeded")})), "NOT_FOUND")
             local answer = harness.value(bob:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.reply("a1", "done", thread_id, request.record_id, "succeeded")}))
-            test.eq(answer.sequence, request.sequence + 1)
+            test.eq(answer.sequence, assert(bounds.sequence(request.sequence)) + 1)
             test.eq(harness.code(bob:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.reply("a2", "again", thread_id, request.record_id, "failed")})), "CONFLICT")
             test.eq(harness.code(carol:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.reply("a3", "reply to a reply", thread_id, answer.record_id, "succeeded")})), "INVALID_ARGUMENT")
             local check = harness.open()

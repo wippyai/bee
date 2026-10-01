@@ -2,6 +2,7 @@
 -- release only before dispatch intent, expiry to uncertain, reconciliation,
 -- stale incarnations refused, and a reply acknowledging its own live claim.
 local test = require("test")
+local bounds = require("bounds")
 local time = require("time")
 local harness = require("harness")
 local owner = require("owner")
@@ -14,7 +15,7 @@ local function define_tests()
             local thread_id = harness.thread(alice, "Delivery")
             harness.value(alice:call("join", {thread_id = thread_id, idempotency_key = harness.key(), member_id = "bob", role = "participant", expected_revision = 1}))
             harness.value(alice:call("join", {thread_id = thread_id, idempotency_key = harness.key(), member_id = "carol", role = "participant", expected_revision = 2}))
-            local request = harness.value(alice:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.request("q1", "please", {"bob", "carol"})})) :: {[string]: unknown}
+            local request = assert(bounds.object(harness.value(alice:call("record", {thread_id = thread_id, idempotency_key = harness.key(), kind = "message", body = harness.request("q1", "please", {"bob", "carol"})}))))
             return thread_id, request
         end
         test.it("claims a batch for the caller only and replays it by key", function()

@@ -35,7 +35,7 @@ local function define_tests()
             if not encoded then error("encode measured preparation") end
             local decoded, decode_error = record.decode_json(encoded)
             if not decoded then error(tostring(decode_error)) end
-            test.eq((decoded.body :: types.Prepared).placement_binding_digest, string.rep("a", 64))
+            test.eq(assert(lifecycle.prepared(decoded.body)).placement_binding_digest, string.rep("a", 64))
             test.eq(record.encode(decoded), encoded)
             for _, invalid in ipairs({"", "digest", string.rep("A", 64), string.rep("a", 65)}) do
                 body.placement_binding_digest = invalid
@@ -65,7 +65,7 @@ local function define_tests()
             test.is_true(encoded:find('\\"hi\\"\\u000a\\u0009tab \\\\ slash \\u0001', 1, true) ~= nil)
             local again = record.decode_json(encoded)
             if not again then error("round trip failed") end
-            local content = (again.body :: types.Message).content
+            local content = assert(message.decode(again.body)).content
             test.eq(content.text, 'say "hi"\n\ttab \\ slash \1')
         end)
         test.it("rejects unknown fields, foreign revisions and unsupported families", function()
@@ -201,7 +201,7 @@ local function define_tests()
             test.eq(epoch_error, "owner_epoch must be a positive integer")
             local answered = record.decode(base("request.answered", {request_message_id = "m1", recipient_id = "bob", reply_message_id = "m2", outcome = "succeeded"}))
             if not answered then error("answered") end
-            test.eq((answered.body :: types.Answered).reply_message_id, "m2")
+            test.eq(assert(delivery.answered(answered.body)).reply_message_id, "m2")
             local _, outcome_error = delivery.answered({request_message_id = "m1", recipient_id = "bob", reply_message_id = "m2", outcome = "done"})
             test.eq(outcome_error, "answered outcome is not an outcome")
             test.is_nil(record.decode(base("recap.checkpoint", {through_sequence = 1})))
@@ -219,8 +219,8 @@ local function define_tests()
             local again = record.decode_json(encoded)
             if not again then error("round trip") end
             test.eq(record.encode(again), encoded)
-            local addressed = again.body :: types.Message
-            test.eq((addressed.recipient_action_ids :: {string})[1], "action-b")
+            local addressed = assert(message.decode(again.body))
+            test.eq(assert(addressed.recipient_action_ids)[1], "action-b")
             test.eq(addressed.sender_action_id, "action-a")
             local plain = record.decode(base("message", text_message()))
             if not plain then error("plain message") end

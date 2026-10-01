@@ -5,13 +5,26 @@ local security = require("security")
 local sql = require("sql")
 local uuid = require("uuid")
 local database = require("database")
-type Reply = {ok: boolean, error: {code: string, message: string, retryable: boolean}?, value: any, replayed: boolean}
+local bounds = require("bounds")
+local service_types = require("service_types")
+local principals = require("principals")
+type Reply = service_types.Reply
 type Client = {
     id: string,
     call: (Client, string, {[string]: unknown}) -> Reply,
-    start: (Client, string, {[string]: unknown}) -> any,
+    start: (Client, string, {[string]: unknown}) -> funcs.Future,
 }
 local M = {}
+function M.decode_reply(raw: unknown): Reply
+    local reply = principals.replayed_reply(raw)
+    local fault: service_types.Fault? = nil
+    if reply.error then
+        local value = reply.error
+        if type(value.retryable) ~= "boolean" then error("invalid thread reply fault") end
+        fault = {code = value.code, message = value.message, retryable = value.retryable}
+    end
+    return {ok = reply.ok, error = fault, value = reply.value, replayed = reply.replayed}
+end
 M.RESOURCE = "bee.threads:db"
 local SERVICE = "bee.threads.service:"
 local DELIVERY = {claim = true, dispatch = true, ack = true, release = true, expire = true, reconcile = true, subscribe = true, page = true, ack_page = true, unsubscribe = true, resume = true, close_subscription = true, forget_subscription = true, wait = true, watch = true}
@@ -41,9 +54,9 @@ function M.principal(id: string, grants: {string}, workspace_id: string?): Clien
         local result, err = funcs.new():with_actor(actor):with_scope(scope):call(target, request)
         if err then error("call " .. operation .. ": " .. tostring(err)) end
         if type(result) ~= "table" then error("call " .. operation .. " returned " .. type(result)) end
-        return result :: Reply
+        return M.decode_reply(result)
     end
-    local function start(self: Client, operation: string, request: {[string]: unknown}): any
+    local function start(self: Client, operation: string, request: {[string]: unknown}): funcs.Future
         local target = SERVICE .. operation
         if DELIVERY[operation] then target = "bee.threads.delivery:" .. operation end
         local future, err = funcs.new():with_actor(actor):with_scope(scope):async(target, request)
@@ -53,15 +66,15 @@ function M.principal(id: string, grants: {string}, workspace_id: string?): Clien
     return {id = id, call = call, start = start}
 end
 -- Waits for an async call and decodes its reply.
-function M.await(future: any): Reply
+function M.await(future: funcs.Future): Reply
     local channel = future:response()
     local payload, open = channel:receive()
     local value, err = future:result()
-    if err then error("async call: " .. tostring(err)) end
+    if err or not value then error("async call: " .. tostring(err)) end
     if not open or not payload then error("async call closed without a reply") end
     local data: unknown = value:data()
     if type(data) ~= "table" then error("async call returned " .. type(data)) end
-    return data :: Reply
+    return M.decode_reply(data)
 end
 M.ALL = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy"}
 function M.key(): string
@@ -72,9 +85,9 @@ end
 function M.session_owner(workspace_id: string?): Client
     return M.principal("sessions-owner", {"bee.threads:session_owner_test_policy"}, workspace_id)
 end
-function M.value(reply: Reply): any
+function M.value(reply: Reply): {[string]: unknown}
     if not reply.ok then error("expected success, got " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value
+    return assert(bounds.object(reply.value))
 end
 function M.code(reply: Reply): string
     if reply.ok then error("expected a failure, got success") end
@@ -112,10 +125,10 @@ function M.raw(resource: string): sql.DB
     if not db then error("sql.get: " .. tostring(err)) end
     return db
 end
-function M.query(db: sql.DB, statement: string, params: {unknown}?): {{[string]: any}}
+function M.query(db: sql.DB, statement: string, params: {unknown}?): {{[string]: unknown}}
     local rows, err = db:query(statement, params or {})
     if err or not rows then error("query: " .. tostring(err)) end
-    return rows :: {{[string]: any}}
+    return rows
 end
 function M.execute(db: sql.DB, statement: string, params: {unknown}?)
     local _, err = db:execute(statement, params or {})

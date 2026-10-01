@@ -1,5 +1,6 @@
 -- MIT. Separate action inboxes grant delivery without thread membership.
 local test = require("test")
+local bounds = require("bounds")
 local harness = require("harness")
 local sends = require("sends")
 local system = require("system")
@@ -109,8 +110,9 @@ local function define_tests()
                 sender_thread_id = sender_thread, sender_action_id = "sender-action", node_id = "remote-node", workspace_id = WORKSPACE,
                 grant_epoch = 1, idempotency_key = harness.key(), message_id = "corrupt-content", content = content,
                 payload_digest = assert(sends.payload_digest({message_id = "corrupt-content", content = content}))}))
-            local outbox = queued.outbox :: {[string]: unknown}
-            local outbox_id = outbox.outbox_id :: string
+            local outbox = assert(bounds.object(queued.outbox))
+            local outbox_id = outbox.outbox_id
+            if type(outbox_id) ~= "string" then error("outbox identifier must be text") end
             local db = harness.open()
             harness.execute(db, "UPDATE bee_thread_inbox_outbox SET content_json = '{' WHERE outbox_id = ?", {outbox_id})
             db:release()

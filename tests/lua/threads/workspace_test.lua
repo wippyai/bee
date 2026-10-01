@@ -1,8 +1,10 @@
+local principals = require("principals")
 -- MIT. A thread a workspace owns carries that workspace: the creator's
 -- host-issued identity names it, never the request, and a workspace's
 -- threads are one index range. Threads from before the attribution are
 -- attributed from their application owner.
 local test = require("test")
+local bounds = require("bounds")
 local sql = require("sql")
 local funcs = require("funcs")
 local security = require("security")
@@ -32,7 +34,7 @@ end
 local function call(client: funcs.Executor, operation: string, request: Object): Reply
     local result, err = client:call("bee.threads.service:" .. operation, request)
     if err then error(operation .. ": " .. tostring(err)) end
-    return result :: Reply
+    return harness.decode_reply(result)
 end
 
 local function create(client: funcs.Executor, title: string, extra: Object?): (string, Reply)
@@ -48,12 +50,14 @@ local function listed(client: funcs.Executor, workspace_id: string, limit: integ
     for _ = 1, 100 do
         local request: Object = {workspace_id = workspace_id, limit = limit}
         if after then request.after_thread_id = after end
-        local value = harness.value(call(client, "list_workspace", request)) :: Object
-        for _, summary in ipairs(value.threads :: {Object}) do
+        local value = assert(bounds.object(harness.value(call(client, "list_workspace", request))))
+        for _, summary in ipairs(principals.objects(value.threads, limit)) do
             test.eq(summary.workspace_id, workspace_id)
             ids[#ids + 1] = tostring(summary.thread_id)
         end
-        after = value.next_after_thread_id :: string?
+        local next_after = value.next_after_thread_id
+        if next_after ~= nil and type(next_after) ~= "string" then error("invalid thread page cursor") end
+        after = next_after
         if not after then return ids end
     end
     error("paging did not end")
@@ -64,12 +68,12 @@ local function define_tests()
         test.it("attributes a thread to the workspace its creator is bound to", function()
             local app = bound("bee.application:" .. LEFT .. ":instance-1", LEFT, {"bee.security.threads:thread_create_policy"})
             local thread_id, created = create(app, "Left work")
-            test.eq((harness.value(created) :: Object).workspace_id, LEFT)
-            local read = harness.value(call(app, "get", {thread_id = thread_id})) :: Object
-            test.eq((read.summary :: Object).workspace_id, LEFT)
+            test.eq((assert(bounds.object(harness.value(created)))).workspace_id, LEFT)
+            local read = assert(bounds.object(harness.value(call(app, "get", {thread_id = thread_id}))))
+            test.eq((assert(bounds.object(read.summary))).workspace_id, LEFT)
             local node = bound("bee.test.node_actor", nil, {"bee.security.threads:thread_create_policy"})
             local _, node_created = create(node, "Node work")
-            test.is_nil((harness.value(node_created) :: Object).workspace_id)
+            test.is_nil((assert(bounds.object(harness.value(node_created)))).workspace_id)
         end)
 
         test.it("never takes the workspace from the request", function()

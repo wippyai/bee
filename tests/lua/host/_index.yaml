@@ -7,6 +7,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     handoff: bee.host:handoff
     inventory: bee.host:inventory
@@ -86,6 +87,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "60s"}
   modules: [process, channel, time]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     connections: bee.host:clients
     contract: bee.protocol:application

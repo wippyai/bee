@@ -3,6 +3,7 @@
 -- new records without claiming anything, resume under a new lease, and a
 -- non-member refused without rows. Nothing here writes a delivery mark.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local model = require("model")
@@ -73,7 +74,7 @@ local function define_tests()
             local ack_intent = model.ack_intent(state, harness.key())
             if not ack_intent then error("timeline page has no acknowledgment intent") end
             if ack_intent.request.scanned_through ~= state.rows[3].sequence then
-                local page = type(raw_page.value) == "table" and (raw_page.value :: Object) or nil
+                local page = type(raw_page.value) == "table" and (assert(bounds.object(raw_page.value))) or nil
                 local current = state.session
                 local outstanding = current and current.outstanding or nil
                 error("timeline page cursor mismatch: owner=" .. tostring(page and page.scanned_through)
@@ -82,7 +83,7 @@ local function define_tests()
             end
             local acknowledgment = ask(state, bob, ack_intent)
             test.is_true(acknowledgment.ok)
-            local ack_value = type(acknowledgment.value) == "table" and (acknowledgment.value :: Object) or nil
+            local ack_value = type(acknowledgment.value) == "table" and (assert(bounds.object(acknowledgment.value))) or nil
             if not ack_value or ack_value.after_sequence ~= state.rows[3].sequence then
                 error("timeline owner acknowledged through " .. tostring(ack_value and ack_value.after_sequence)
                     .. " after page " .. tostring(ack_intent.request.scanned_through))

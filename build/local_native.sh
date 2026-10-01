@@ -25,16 +25,27 @@ input=${1:-wippy.build.json}
 [ -f "$directory/go.mod" ] || fail 'native module go.mod is missing'
 command -v zip >/dev/null 2>&1 || fail 'zip is required'
 
-# A pseudo-version from the commit time and the exact worktree content: identical
-# sources keep a stable version, and any native edit forces a fresh module.
-# A fresh pseudo-version per development build. The digest names the exact
-# worktree content for diagnostics; the timestamp keeps the version unique so a
-# repeated build never collides with a prior cache extraction.
-short=$(git -C "$directory" rev-parse --short=12 HEAD 2>/dev/null) || fail 'native sources are not a git checkout'
+# Retain the proxy version while the exact native worktree content is unchanged.
+# Packaging and toolchain validation must select the same module inputs.
 stamp=$(date -u +%Y%m%d%H%M%S)
 digest=$(find "$directory" -type f ! -path '*/.git/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
 [ -n "$digest" ] || fail 'native content digest is unavailable'
-version=v0.0.0-$stamp-$digest
+previous=$(python3 - "$out/bee.build.json" "$digest" <<'PYVERSION'
+import json
+from pathlib import Path
+import re
+import sys
+path = Path(sys.argv[1])
+if path.exists():
+    native = json.loads(path.read_text()).get("native", [])
+    versions = {component.get("version") for component in native}
+    if len(versions) == 1:
+        version = next(iter(versions))
+        if isinstance(version, str) and re.fullmatch(r"v0[.]0[.]0-[0-9]{14}-" + sys.argv[2], version):
+            print(version)
+PYVERSION
+)
+version=${previous:-v0.0.0-$stamp-$digest}
 
 proxy=$out/proxy/$module/@v
 stage=$(mktemp -d "${TMPDIR:-/tmp}/bee-local-native.XXXXXX")
@@ -51,7 +62,15 @@ find "$target" -exec touch -t 198001010000.00 {} +
 # cached extraction.
 (cd "$stage" && find "$module@$version" -type f -print0 | sort -z | xargs -0 zip -qXD "$proxy/$version.zip")
 cp "$directory/go.mod" "$proxy/$version.mod"
-printf '{"Version":"%s","Time":"%s"}\n' "$version" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$proxy/$version.info"
+python3 - "$version" "$proxy/$version.info" <<'PYINFO'
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import sys
+version = sys.argv[1]
+stamp = datetime.strptime(version.split("-")[1], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+Path(sys.argv[2]).write_text(json.dumps({"Version": version, "Time": stamp.strftime("%Y-%m-%dT%H:%M:%SZ")}) + "\n")
+PYINFO
 
 manifest=$out/bee.build.json
 mkdir -p "$out"

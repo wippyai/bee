@@ -4,6 +4,7 @@ local plan = require("plan")
 local graph = require("graph")
 local inspect = require("inspect")
 local requirements = require("requirements")
+local host_identity = require("binary_identity")
 
 local function root(component: string, version: string): {[string]: unknown}
     local id, problem = plan.root_id(component)
@@ -69,6 +70,17 @@ end
 
 local function define_tests()
     test.describe("Hub dependency plan", function()
+        test.it("reads the native host manifest through the declared environment module", function()
+            local identity, problem = host_identity.read_host()
+            test.is_nil(problem)
+            test.not_nil(identity)
+            if identity then
+                test.eq(identity.native_module, "github.com/wippyai/bee/native")
+                test.eq(identity.native_version, "v1.2.3")
+                test.eq(identity.native_modules[identity.native_module], "v1.2.3")
+                test.eq(identity.runtime_commit, "728b75942028080264aacbb16ef0420a0f8090b4")
+            end
+        end)
         test.it("measures a large policy closure without the message encoder limit", function()
             local entries: {inspect.Entry} = {}
             for index = 1, 200 do

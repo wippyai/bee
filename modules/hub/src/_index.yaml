@@ -79,7 +79,7 @@ entries:
 - name: binary_identity
   kind: library.lua
   source: file://binary_identity.lua
-  modules: [json]
+  modules: [json, env]
   imports: {bounds: bee.threads.records:bounds, semver: bee.hub:semver}
 - name: native_compat
   kind: library.lua

@@ -8,7 +8,10 @@ activation binds native loopback port zero and reads the assigned address
 through supervisor state. Agent
 profiles declare `thread_read` and `thread_message` (read the transcript, and
 record a note on it that schedules nothing), the ten `session_*` tools, the
-caller-owned Governance `overlay` tool and the other built-in tools below. The
+caller-owned Governance `overlay` tool, offline `docs`, read-only `components`
+and `capabilities`, and application `delivery`. These normal window policies
+also serve saved headless sessions. Hidden research batch policies expose only
+the session and thread tools. Other tools below require separate host admission. The
 `session_catalog`, `session_open`, `session_run`, `session_send`,
 `session_await`, `session_join`, `session_get`, `session_list`,
 `session_cancel` and `session_close` tools project the `bee.sessions:contract`

@@ -513,6 +513,11 @@ entries:
     - session_close
     - thread_read
     - thread_message
+    - capabilities
+    - overlay
+    - docs
+    - components
+    - delivery
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit

@@ -140,6 +140,17 @@ entries:
     bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     preferences: bee.driver:preferences
+- name: authoring_policy_test
+  kind: function.lua
+  source: file://authoring_policy_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [registry]
+  imports:
+    test: wippy.test:test
+    bounds: bee.threads.records:bounds
+    definitions: bee.harness.launch:definitions
+    policy: bee.harness.carrier:policy
 - name: window_hooks_test
   kind: function.lua
   source: file://window_hooks_test.lua

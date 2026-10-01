@@ -27,6 +27,7 @@ local CLAUDE_LOGIN_SOURCE = "bee.credentials:claude_login_fixture"
 local INVALID_LOGIN_SOURCE = "bee.credentials:invalid_login_fixture"
 local MISSING_LOGIN_SOURCE = "bee.credentials:missing_login_fixture"
 local UNPRIVILEGED_LOGIN_SOURCE = "bee.credentials:unprivileged_login_fixture"
+local UNREADABLE_LOGIN_SOURCE = "bee.credentials:unreadable_login_fixture"
 local AGY_ONBOARDING = ".gemini/antigravity-cli/cache/onboarding.json"
 local ONBOARDING_SENTINEL = "agy-onboarding-sentinel-42"
 local GROK_CONFIG = ".grok/config.toml"
@@ -146,6 +147,7 @@ local function admit_sources(workspace: string)
         {ref = CLAUDE_LOGIN_SOURCE, workspace_id = "*", audience = USER, provider = "claude", projection_kinds = {"file"}},
         {ref = INVALID_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = MISSING_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
+        {ref = UNREADABLE_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}},
         {ref = UNPRIVILEGED_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "codex", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
         {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "agy", projection_kinds = {"file"}, setup_path = AGY_ONBOARDING},
         {ref = CODEX_LOGIN_SOURCE, workspace_id = workspace, audience = USER, provider = "grok", projection_kinds = {"file"},
@@ -156,7 +158,7 @@ local function admit_sources(workspace: string)
     local file_policy = registry.get("bee.credentials.security:credential_file_policy")
     local write_policy = registry.get("bee.credentials.security:credential_file_write_policy")
     if not file_policy or not write_policy then error("credential file policy entry") end
-    file_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE}
+    file_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE, UNREADABLE_LOGIN_SOURCE}
     write_policy.data.policy.resources = {CODEX_LOGIN_SOURCE, CLAUDE_LOGIN_SOURCE, INVALID_LOGIN_SOURCE, MISSING_LOGIN_SOURCE}
     changes:update(file_policy)
     changes:update(write_policy)
@@ -935,6 +937,18 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
                 test.eq(definition.revision, 1)
                 clean(refused)
             end
+        end)
+        test.it("rejects an unreadable optional login instead of treating it as absent", function()
+            local ws = fresh("ws")
+            admit_sources(ws)
+            local attempt = fresh("attempt")
+            value(call(manager, "define", {workspace_id = ws, name = "unreadable_login", provider = "codex",
+                source = {kind = "fs_directory", ref = UNREADABLE_LOGIN_SOURCE}, optional = true}))
+            local projection = issue(user, ws, "unreadable_login", attempt)
+            local result = call(runner, "materialize", {projection_id = projection.projection_id, subject = USER,
+                audience = USER, attempt_id = attempt, generation_key = fresh("gk")})
+            test.eq(code(result), "UNAVAILABLE")
+            clean(result)
         end)
         test.it("fails closed on missing, invalid, empty or oversized login files", function()
             local ws = fresh("ws")

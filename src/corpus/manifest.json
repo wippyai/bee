@@ -307,17 +307,17 @@
       "topic": "component"
     },
     {
-      "bytes": 15102,
+      "bytes": 15352,
       "id": "component/credentials",
-      "sha256": "68f0d1e3a4887080490ea43046734102ee343e986710f2090b3e9fbf07d33478",
+      "sha256": "b4e8c21dd078a1aa73ecf1c3e2a7b76adcd3cda36de77a8c48211cddf3b1c551",
       "source": "modules/credentials/src/README.md",
       "title": "bee.credentials",
       "topic": "component"
     },
     {
-      "bytes": 1354,
+      "bytes": 1578,
       "id": "component/docs",
-      "sha256": "b594e4cbe87b85299d7395918e40cbbdaccba26ff116428ba693156ed91b89bb",
+      "sha256": "2695991b2a25a984717ba305d996033660b898b59825a591b1aec964058d5b98",
       "source": "modules/docs/src/README.md",
       "title": "bee docs",
       "topic": "component"
@@ -403,9 +403,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8838,
+      "bytes": 9079,
       "id": "component/gateway",
-      "sha256": "a11a1ff492c36adbc9aeeb20d3c712df5516d50237f5ea49dade7eedcf1a7e67",
+      "sha256": "3fedd3d156bb93180b71468c27fda8eb685e496cd58e493e43d319e9f0f56b5e",
       "source": "modules/gateway/src/README.md",
       "title": "bee.gateway",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 721525,
+    "bytes": 722240,
     "documents": 77
   }
 }

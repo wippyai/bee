@@ -240,7 +240,7 @@ function M.render(file: types.Configuration, environment: {[string]: string}, ga
     end
     if file.composition then
         if base == nil then return nil, "configuration composition base is missing" end
-        if #base > 131072 then return nil, "configuration composition base exceeds byte limit" end
+        if #base > types.MAX_COMPOSED_CONFIGURATION_BYTES then return nil, "configuration composition base exceeds byte limit" end
         local composed: string?
         local compose_error: string?
         if file.composition.kind == "copy" then
@@ -255,7 +255,7 @@ function M.render(file: types.Configuration, environment: {[string]: string}, ga
         else
             return nil, "configuration composition is unsupported"
         end
-        if #composed > 131072 then return nil, "composed configuration exceeds byte limit" end
+        if #composed > types.MAX_COMPOSED_CONFIGURATION_BYTES then return nil, "composed configuration exceeds byte limit" end
         content = composed
     elseif base ~= nil then
         return nil, "configuration supplied an unexpected base"

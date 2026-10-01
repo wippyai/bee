@@ -195,9 +195,9 @@
       "topic": "ui"
     },
     {
-      "bytes": 13118,
+      "bytes": 13368,
       "id": "docs/carrier",
-      "sha256": "b65a4252d0a09e1088d638468f54772313c32e50839c4b5199ab24948f0e0629",
+      "sha256": "002b0570fddec14f357f71772b3f5a249322b787074de1166a87811b8d798fc6",
       "source": "docs/reference/agents/carrier.md",
       "title": "Carrier contract",
       "topic": "application"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 706693,
+    "bytes": 706943,
     "documents": 77
   }
 }

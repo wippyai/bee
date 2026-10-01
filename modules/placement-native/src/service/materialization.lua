@@ -654,7 +654,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         local write_error: string? = nil
         local published_uncertain: boolean? = nil
         if retained_home then
-            written, write_error, published_uncertain = homes.publish_configuration(selected_home_path, file.path, content, created_parents)
+            written, write_error, published_uncertain = homes.publish_configuration(selected_home_path, file.path, content, created_parents, file.composition ~= nil)
         else
             written, write_error = homes.write_protected(selected_home_path, file.path, content, created_parents)
         end

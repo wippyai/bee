@@ -139,6 +139,7 @@ type Liveness = {observed: boolean, alive: boolean?, at: string, detail: string}
 -- without exposing either the host path or placement's private directory.
 type Status = {attempt: Attempt, liveness: Liveness, private_home: boolean?}
 local M = {}
+M.MAX_COMPOSED_CONFIGURATION_BYTES = 131072
 -- The host launch policy entry type; placement authorizes a request's
 -- host-selected parts against the policy the request names.
 M.LAUNCH_POLICY_TYPE = "bee.launch_policy"

@@ -177,7 +177,10 @@ authority and evidence.
 
 Generated provider configuration is additive and bounded. Drivers return
 validated argument literals and relative files; placement materializes them
-inside the private attempt/session home with exclusive creation. A retained
+inside the private attempt/session home. Admitted composition retains a measured
+configuration base and publishes the result atomically in a retained session.
+The composed read, render and publication share a 128 KiB bound; ordinary
+generated files retain their smaller bound. A retained
 session is reused only when host policy names its writable session resource,
 the prior native exit and cleanup are complete, and existing approved files
 match exactly. The launch owner derives the session identity; callers cannot
@@ -186,8 +189,8 @@ and public Agent checkpoint/restore are separate application boundaries.
 
 Provider-specific configuration remains behind the driver boundary. Claude adds
 admitted MCP and hook settings without replacing unrelated settings. Codex
-uses protected generated configuration and refuses to overwrite an existing
-protected file. Muse composes a fresh settings file in its retained private
+copies its admitted user configuration baseline, then composes additive profile
+instructions without changing the machine source. Muse composes a fresh settings file in its retained private
 home, preserving unrelated provider, MCP and hook settings while inserting only
 Bee's admitted entries. Grok structurally inserts Bee's scoped MCP subtree and
 refuses a pre-existing Bee entry. Agy receives its selected instructions under

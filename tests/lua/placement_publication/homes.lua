@@ -32,7 +32,7 @@ function M.check_private_root(): string? return nil end
 function M.read_configuration(_: string, _: string, _: string): (string?, string?)
     return nil, "fixture has no admitted configuration base"
 end
-function M.publish_configuration(home: string, path: string, content: string, created: {[string]: boolean}?): (string?, string?, boolean?)
+function M.publish_configuration(home: string, path: string, content: string, created: {[string]: boolean}?, composed: boolean?): (string?, string?, boolean?)
     M.publications = M.publications + 1
     return nil, "configuration published; durability requires inspection", true
 end

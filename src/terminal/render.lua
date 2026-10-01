@@ -39,7 +39,8 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     local selected_style = appearance.style(appearance.selection_text(theme), theme.accent)
     -- Without color the selection stays visible through reverse video, which
     -- is emphasis rather than color.
-    local selected_plain = appearance.no_color() and "\27[7m" or nil
+    local plain_output = appearance.no_color()
+    local selected_plain = plain_output and "\27[7m" or nil
     chrome.background(canvas, width, height, prefs)
     if #model.visible(scene) == 0 then
         chrome.welcome(canvas, width, height, prefs, false)
@@ -61,7 +62,9 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
                 if frozen and selected_snapshot then rows = selected_snapshot.rows
                 elseif content then rows = content.rows end
                 for y = 1, body.height do
-                    canvas:put(body.x, body.y + y - 1, rows[y] or "", body.width)
+                    local row = rows[y] or ""
+                    if plain_output then row = text.plain(row) end
+                    canvas:put(body.x, body.y + y - 1, row, body.width)
                     if frozen and selected_span and y >= selected_span.start.y and y <= selected_span.finish.y then
                         local first = y == selected_span.start.y and selected_span.start.x - 1 or 0
                         local last = y == selected_span.finish.y and selected_span.finish.x or body.width

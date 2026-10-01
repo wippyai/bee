@@ -238,7 +238,7 @@ local function define_tests()
                 active = selection.drag(selection.press(active, 1, 1), 9, 2)
                 local contents: {[string]: render.Content} = {}
                 contents.one = {rows = {"changed live content"}}
-                contents.two = {rows = {"neighbor stays live"}}
+                contents.two = {rows = {"\27[38;2;216;226;239mneighbor stays live\27[0m"}}
                 local frame = render.draw(scene, {"one", "two"}, contents, nil, nil, "", "workspace", nil, nil, false,
                     nil, nil, nil, nil, active)
                 for _, row in ipairs(frame.rows) do

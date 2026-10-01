@@ -48,6 +48,15 @@ end
 
 local function define_tests()
     test.describe("Host policy isolation and boundary enforcement", function()
+        test.it("grants apps and presenters only the nonsecret NO_COLOR display flag", function()
+            for _, name in ipairs({"bee.security:base_app_policy", "bee.security.desktop:presenter_policy", "bee.security.desktop:desktop_policy"}) do
+                test.is_true(call_can({name}, "env.get", "bee.env:no_color"))
+                test.is_false(call_can({name}, "env.get", "bee.env:machine_home"))
+                test.is_false(call_can({name}, "env.get", "private:credential"))
+                test.is_true(call_can({name}, "process.send", "target:process"))
+            end
+        end)
+
         test.it("allows the native Hive supervisor to release the eventual name it publishes", function()
             local scope = {"bee.security.hive:hive_names_policy"}
             test.is_true(call_can(scope, "process.registry.register.eventual", "bee.hive.supervisor/Antares"))

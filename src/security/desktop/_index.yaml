@@ -49,8 +49,9 @@ entries:
 - name: desktop_policy
   kind: security.policy.expr
   policy:
-    expression: action != "process.host" || resource == "bee:workers"
+    expression: '(action != "process.host" || resource == "bee:workers") && (action != "env.get" || resource == "bee.env:no_color")'
     actions:
+    - env.get
     - registry.get
     - registry.find
     - tty.mount
@@ -71,8 +72,9 @@ entries:
 - name: presenter_policy
   kind: security.policy.expr
   policy:
-    expression: '(action == "funcs.call" && resource in ["bee.approvals.binding:attention_count", "bee.sessions.binding:attention_count"]) || (action == "bee.approvals.attention" && resource == actor.meta.workspace_id) || action in ["tty.observe", "tty.input", "tty.resize", "process.send", "process.monitor", "time.ticker"]'
+    expression: '(action == "funcs.call" && resource in ["bee.approvals.binding:attention_count", "bee.sessions.binding:attention_count"]) || (action == "env.get" && resource == "bee.env:no_color") || (action == "bee.approvals.attention" && resource == actor.meta.workspace_id) || action in ["tty.observe", "tty.input", "tty.resize", "process.send", "process.monitor", "time.ticker"]'
     actions:
+    - env.get
     - funcs.call
     - bee.approvals.attention
     - time.ticker

@@ -20,10 +20,12 @@ entries:
     - bee.approvals.inbox:client_policy
     - bee.security.storage:workspace_catalog_read_policy
 - name: base_app_policy
-  kind: security.policy
+  kind: security.policy.expr
+  meta:
+    comment: Ordinary apps may read the nonsecret terminal color preference; no other environment access is granted
   policy:
-    actions:
-    - process.send
+    expression: 'action == "process.send" || (action == "env.get" && resource == "bee.env:no_color")'
+    actions: [process.send, env.get]
     resources: '*'
     effect: allow
 - name: app_boundary_policy

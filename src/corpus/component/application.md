@@ -91,3 +91,9 @@ Sessions navigation selects that terminal. Work still uses `send` and reaches
 interactive sessions through their driver hooks at the next turn boundary.
 Closing a viewer leaves the session running; `close` or `cancel` stops its
 placement with exit evidence.
+
+The host grants apps, presenters and physical display owners read access only
+to the existing nonsecret `bee.env:no_color` flag. Appearance reads it under
+the active caller scope. The presenter also strips color from incoming app
+rows when NO_COLOR is set, including rows produced on another node; selection
+stays visible through glyphs and reverse video.

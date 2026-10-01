@@ -207,7 +207,7 @@ local function verify(expected: {ExpectedModule}, actual: inventory.Result): str
         elseif selected[item.component] == nil then
             return "runtime removed retained module: " .. item.component
         elseif item.version ~= "" and selected[item.component] ~= item.version then
-            return "runtime selected another version for " .. item.component
+            return "runtime selected another version for " .. item.component .. ": expected " .. item.version .. ", selected " .. tostring(selected[item.component])
         end
         selected[item.component] = nil
     end

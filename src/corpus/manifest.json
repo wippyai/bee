@@ -419,9 +419,9 @@
       "topic": "component"
     },
     {
-      "bytes": 21072,
+      "bytes": 21374,
       "id": "component/gov",
-      "sha256": "9c5cf1e876baecd45209a79656e66e1a2444d1bb3a0d6cb82934ffeaf0e7bc13",
+      "sha256": "13e0f2df04a71e12b98972d3d880050eedbbe11064eb7b2bf65a35ecfb782346",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 721223,
+    "bytes": 721525,
     "documents": 77
   }
 }

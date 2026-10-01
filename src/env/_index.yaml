@@ -98,11 +98,22 @@ entries:
   default: ""
   readonly: true
 - name: machine_login_source
-  kind: fs.directory
-  directory: ${env:bee.env:machine_home}
-  base: project
-  mode: '0500'
-  auto_init: false
+  kind: bee.fs.selected_links
+  root: ${env:bee.env:machine_home}
+  links:
+  - {path: .codex/auth.json, write: true}
+  - {path: .codex/config.toml}
+  - {path: .claude/.credentials.json, write: true}
+  - {path: .claude/settings.json}
+  - {path: .gemini/antigravity-cli/antigravity-oauth-token, write: true}
+  - {path: .gemini/antigravity-cli/cache/onboarding.json}
+  - {path: .grok/auth.json, write: true}
+  - {path: .grok/config.toml}
+  - {path: .config/muse/auth.json, write: true}
+  - {path: .config/muse/settings.json}
+  - {path: .local/share/opencode/auth.json, write: true}
+  - {path: .config/opencode/opencode.json}
+  - {path: .config/opencode/towers.key}
 - name: gov_publication_profiles
   kind: registry.entry
   meta:

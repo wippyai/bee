@@ -47,8 +47,9 @@ optional projection too.
 The host's `data.formats` map selects reviewed component-owned registry entries
 whose data declares an environment destination or a relative login layout.
 Claude and Codex declare their API-key destinations and JSON login files;
-Agy declares an opaque file. File sources name a host-selected `fs.directory`
-using `source.kind: fs_directory`. The host source row selects the source path;
+Agy declares an opaque file. File sources name a host-selected filesystem
+using `source.kind: fs_directory`: either `fs.directory` or the native
+`bee.fs.selected_links` source. The host source row selects the source path;
 when omitted, it uses the declared login basename.
 Callers cannot choose a path, filename or mount. A file source may also carry one
 host-selected setup declaration: `setup_path`, an optional retained
@@ -83,6 +84,20 @@ read: if a source ref is admitted by metadata but absent from
 `bee.credentials.security:credential_file_policy`, availability and materialization fail closed
 (`UNAVAILABLE`). Adding another source requires an explicit host policy grant
 naming the login root.
+
+Bee's machine login source uses `bee.fs.selected_links` with `root` set to the
+machine home and a bounded list of `{path, write?}` declarations. Native boot
+resolves each declared file to its physical parent and pins that parent; an
+external login or settings symlink is accepted only at a declared path. Reads
+refuse a replacement symlink at the pinned file. Undeclared paths stay under
+the original root and cannot follow a symlink outside it. Directory listing
+and structural mutations are unavailable. Only primary login declarations
+select `write: true`; the broker's existing source allowlist, materializer and
+write-back policy checks still apply. Atomic token write-back replaces the
+pinned physical login file and preserves the host's configuration symlink.
+The declaration, including its selected links, participates in the credential
+definition digest. Changing it requires explicit owner redefinition before an
+existing projection can be used; boot never replaces a credential definition.
 
 Ordinary callers (workspace managers, projection subjects, and outsiders) cannot
 directly read login files or invoke `check` or `materialize`. The broker methods

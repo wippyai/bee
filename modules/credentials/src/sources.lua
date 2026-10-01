@@ -301,12 +301,30 @@ function M.variable(ref: string): ({[string]: unknown}?, string?)
     local data = type(entry.data) == "table" and entry.data or {}
     return {kind = entry.kind, storage = data.storage, variable = data.variable, readonly = data.readonly}, nil
 end
--- The fs.directory entry behind a login file source, as configuration only.
 function M.directory(ref: string): ({[string]: unknown}?, string?)
     local entry, err = registry.get(ref)
     if err or not entry then return nil, "source " .. ref .. " is not in the registry" end
-    if entry.kind ~= "fs.directory" then return nil, "source " .. ref .. " is not an fs.directory" end
     local data = type(entry.data) == "table" and entry.data or {}
+    if entry.kind == "bee.fs.selected_links" then
+        if bounds.fields(data, {"root", "links"}) then return nil, "source " .. ref .. " has invalid fields" end
+        local root = bounds.text(data.root, 4096)
+        local declared = bounds.array(data.links, 64)
+        if not root or not declared then return nil, "source " .. ref .. " has invalid selected links" end
+        local links: {{path: string, write: boolean}} = {}
+        local seen: {[string]: boolean} = {}
+        for _, raw in ipairs(declared) do
+            local link = bounds.object(raw)
+            local path = link and formats.path(link.path)
+            if not link or bounds.fields(link, {"path", "write"}) or not path or seen[path]
+                or (link.write ~= nil and type(link.write) ~= "boolean") then
+                return nil, "source " .. ref .. " has an invalid selected link"
+            end
+            seen[path] = true
+            links[#links + 1] = {path = path, write = link.write == true}
+        end
+        return {kind = entry.kind, root = root, links = links}, nil
+    end
+    if entry.kind ~= "fs.directory" then return nil, "source " .. ref .. " is not a supported filesystem source" end
     local directory = type(data.directory) == "string" and data.directory or nil
     if not directory or directory == "" then return nil, "source " .. ref .. " has no directory" end
     return {kind = entry.kind, directory = directory, mode = data.mode, readonly = data.readonly}, nil

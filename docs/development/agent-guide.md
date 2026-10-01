@@ -165,6 +165,14 @@ source digest, so a newer machine login is left in place. Provider configuration
 and other home files are not copied back. Codex `--profile NAME` keeps working
 with the selected `NAME.config.toml` projected into that attempt's private home.
 
+The machine login source admits external configuration symlinks only for its
+explicitly declared provider login and settings paths. Native boot pins their
+physical file locations; reads refuse replacement symlinks, and token
+write-back preserves the original configuration link. Other paths stay within
+the machine home. The credential broker still selects the provider's exact
+files and checks each attempt's projection; a source declaration grants no
+caller authority.
+
 The local Hub can inspect, plan and apply host-authorized components. Governed
 overlays can stage bounded content, freeze an immutable candidate, obtain an
 exact approval, apply it through the owning host and recover after restart.

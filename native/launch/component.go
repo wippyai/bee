@@ -9,10 +9,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/wippyai/bee/native/fslinks"
 	"github.com/wippyai/bee/native/hookpost"
 	"github.com/wippyai/runtime/api/boot"
 	envapi "github.com/wippyai/runtime/api/env"
+	"github.com/wippyai/runtime/api/event"
+	"github.com/wippyai/runtime/api/payload"
 	"github.com/wippyai/runtime/api/registry"
+	bootpkg "github.com/wippyai/runtime/boot"
 	bootsystem "github.com/wippyai/runtime/boot/components/system"
 	app "github.com/wippyai/runtime/cmd/app"
 )
@@ -255,6 +259,11 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 		storage.facts["node_identity"] = host.nodeIdentity
 	}
 	registry.RegisterStorage(registryID(), storage)
+	handlers := bootpkg.GetHandlerRegistry(ctx)
+	if handlers == nil {
+		return ctx, errors.New("registry handlers are unavailable")
+	}
+	handlers.RegisterListener(fslinks.Kind, fslinks.NewManager(event.GetBus(ctx), payload.GetTranscoder(ctx)))
 	return ctx, nil
 }
 

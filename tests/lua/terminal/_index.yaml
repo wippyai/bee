@@ -70,3 +70,14 @@ entries:
     test: wippy.test:test
     appearance: bee.application:appearance
     workspace_menu: bee.terminal:workspace_menu
+- name: help_test
+  kind: function.lua
+  source: file://help_test.lua
+  method: run
+  modules: [tty]
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    help: bee.terminal:help
+    frame: bee.application:frame
+    appearance: bee.application:appearance

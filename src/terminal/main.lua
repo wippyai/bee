@@ -18,6 +18,8 @@ local layout = require("layout")
 local render = require("render")
 local bindings = require("bindings")
 local menu = require("menu")
+local help_view = require("help_view")
+local app_frame = require("app_frame")
 local appearance = require("appearance")
 local delivery = require("delivery")
 local selection = require("selection")
@@ -73,6 +75,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     local tabs_order: {string} = {}
     local catalog: {menu.Descriptor} = {}
     local landing_pending = initial_application == nil
+    local help_open = false
+    local help_menu = app_frame.menu()
     local routing_scene: model.Scene = scene
     local routing_revision = scene.revision
     local pending_request: string? = nil
@@ -421,7 +425,10 @@ local function main(owner: string, initial_application: string?, secondary_appli
             preferences, start, initial_application ~= nil, catalog, editor, dialogs["bee.workspace:shutdown"] or dialogs[scene.focus], badges, active_selection, connection_info, connection_open, hydrated,
             transfers, display_id, workspaces, attention_count)
         tab_hits = frame.tabs
-        output:present(frame.rows, {cursor = frame.cursor})
+        if help_open then
+            local guide = help_view.draw(scene.width, scene.height, preferences, help_menu)
+            output:present(guide.rows, {cursor = {x = 1, y = 1, visible = false}})
+        else output:present(frame.rows, {cursor = frame.cursor}) end
         dirty = false
     end
     assert(process.send(owner, "bee.workspace.control", {version = 1, op = "ready"}))
@@ -697,6 +704,10 @@ local function main(owner: string, initial_application: string?, secondary_appli
                 captured_releases[kind] = nil; handled = true
             elseif event.type == "mouse" and event.action == "release" and captured_mouse then
                 captured_mouse = false; handled = true
+            elseif help_open and event.type ~= "resize" and event.type ~= "close" then
+                local _, changed = app_frame.route(help_menu, event, false)
+                if help_menu.mode == "" then help_open = false end
+                handled = true; dirty = changed or dirty
             elseif dialogs[dialog_target()] and event.type ~= "resize" and event.type ~= "close"
                 and not (not dialogs["bee.workspace:shutdown"] and event.type == "mouse" and event.y == 1 and type(event.x) == "number" and event.x > 7 and event.button == "left")
                 and not (event.type == "key" and (kind == "f12" or (event.ctrl == true and event.key == "q") or (not dialogs["bee.workspace:shutdown"] and event.alt == true and kind == "tab"))) then
@@ -928,7 +939,9 @@ local function main(owner: string, initial_application: string?, secondary_appli
                             for _, hit in ipairs(tab_hits) do
                                 if x >= hit.x and x < hit.x + hit.width then
                                     hit_tab = true
-                                    if hit.action == "sessions" or hit.action == "attention" or hit.action == "help" then
+                                    if hit.action == "help" then
+                                        help_open = true; start = nil; dirty = true
+                                    elseif hit.action == "sessions" or hit.action == "attention" then
                                         local role = hit.action == "sessions" and "sessions" or (hit.action == "attention" and "approvals" or "appearance")
                                         for _, app in ipairs(catalog) do if app.role == role then application("open", app.definition_id, ""); break end end
                                     elseif hit.action == "apps" then

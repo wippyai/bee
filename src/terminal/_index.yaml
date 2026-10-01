@@ -29,6 +29,8 @@ entries:
   method: main
   modules: [funcs, tty, process, channel, time, uuid, ctx, logger]
   imports:
+    help_view: bee.terminal:help
+    app_frame: bee.application:frame
     connection: bee.terminal:connection
     workspace_menu: bee.terminal:workspace_menu
     delivery: bee.terminal:delivery
@@ -120,4 +122,10 @@ entries:
   source: file://dialog.lua
   modules: [tty]
   imports:
+    appearance: bee.application:appearance
+- name: help
+  kind: library.lua
+  source: file://help.lua
+  imports:
+    frame: bee.application:frame
     appearance: bee.application:appearance

@@ -95,7 +95,8 @@ def upgrade(previous, binary):
         try:
             old.wait('BEE SETTINGS', timeout=45)
             old.open_start()
-            old.choose('Tools')
+            old.choose('Apps')
+            old.choose('Advanced')
             old.choose('Overlays')
             old.wait('Overlays')
             old.quit()
@@ -104,13 +105,16 @@ def upgrade(previous, binary):
             stop(previous, state)
         before, ledger = saved(state)
         before_layout = layout(state)
+        with sqlite3.connect(state / 'workspace.db') as database:
+            before_migrations = database.execute('SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id').fetchall()
         assert ledger == list(range(1, 12)), ledger
         assert set(before) == {'bee.settings:app', 'bee.gov.overlays:app'}, before.keys()
         new = NativeDesktop(binary, folder, state, 'bee.settings.app:app')
         try:
             new.wait('BEE SETTINGS', timeout=45)
             new.open_start()
-            new.choose('Tools')
+            new.choose('Apps')
+            new.choose('Advanced')
             new.choose('Overlays')
             new.wait('Overlays')
             new.quit()
@@ -121,6 +125,17 @@ def upgrade(previous, binary):
         assert ledger == list(range(1, 13)), ledger
         assert set(after) == {'bee.settings.app:app', 'bee.gov.overlays.app:app'}, after.keys()
         assert layout(state) == before_layout, 'the client lost saved view targets'
+        with sqlite3.connect(state / 'workspace.db') as database:
+            after_migrations = database.execute('SELECT id, name, checksum FROM workspace_schema_migrations ORDER BY id').fetchall()
+        assert after_migrations[:11] == before_migrations, 'an applied workspace migration changed'
+        for store, table, expected in [('threads', 'bee_thread_schema_migrations', 28), ('sync', 'bee_sync_schema_migrations', 7)]:
+            with sqlite3.connect(state / (store + '.db')) as database:
+                assert database.execute('SELECT max(id) FROM ' + table).fetchone()[0] == expected, store
+        with sqlite3.connect(state / 'threads.db') as database:
+            definitions = {row[0] for row in database.execute('SELECT definition_id FROM bee_thread_app_alias')}
+            assert 'bee.settings.app:app' in definitions and 'bee.gov.overlays.app:app' in definitions, definitions
+            assert 'bee.settings:app' not in definitions and 'bee.gov.overlays:app' not in definitions, definitions
+            assert database.execute('SELECT count(*) FROM bee_thread_definition_migrations').fetchone()[0] == 1
         for definition, prior in before.items():
             assert after[definition.replace(':app', '.app:app')] == prior, (definition, after)
         print('Main 463ac2ea standalone state restart: 2 saved apps retain window/instance/checkpoint identities; workspace ledger 11 → 12', flush=True)

@@ -62,7 +62,7 @@ def run(previous, current, added_application=None):
     with tempfile.TemporaryDirectory(prefix="bee-native-upgrade-") as temporary:
         folder = Path(temporary)
         state = folder / "state"
-        old = PreviousDesktop(previous, folder, state, "bee.settings.app:app")
+        old = PreviousDesktop(previous, folder, state, "bee.settings:app")
         try:
             old.wait("Settings")
             old.wait("Theme: Honey")
@@ -86,7 +86,8 @@ def run(previous, current, added_application=None):
             owner = owner_handle(new, current, state)
             new.wait("Theme: Ocean")
             new.open_start()
-            new.choose("Tools")
+            new.choose("Apps")
+            new.choose("Advanced")
             new.wait(added_application or "Hive Manager")
             assert "Test Status" not in new.text(), new.text()
             new.key(b"\x1b")

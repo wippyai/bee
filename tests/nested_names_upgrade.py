@@ -77,12 +77,12 @@ def main():
         try:
             renamed.wait("Settings", timeout=40)
             renamed.open_start()
-            renamed.choose("Tools")
+            renamed.choose("Apps")
+            renamed.choose("Advanced")
             renamed.choose("Overlays")
             renamed.wait("╭─ Overlays", timeout=10)
             renamed.open_start()
-            renamed.choose("Tools")
-            renamed.choose("Approvals")
+            renamed.choose("Needs you")
             renamed.wait("Approvals", timeout=10)
             renamed.quit()
         finally:

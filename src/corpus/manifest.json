@@ -155,9 +155,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 19661,
+      "bytes": 19859,
       "id": "docs/app_style",
-      "sha256": "8e7ccf3362368a1841462fbf1ef515845a38dfd5371a84386e5c96915a8f01ec",
+      "sha256": "6d74e2832059312a761e98815065dfc60f8af8dbb6b7fcfd2adc4101aa3e628c",
       "source": "docs/guides/app-style.md",
       "title": "Application visual style",
       "topic": "ui"
@@ -259,9 +259,9 @@
       "topic": "threads"
     },
     {
-      "bytes": 21705,
+      "bytes": 21781,
       "id": "docs/workspace_catalog",
-      "sha256": "4742bb04469ef1448a8dd3f0445f351dfffe39087d7d5b1c76b1c6162a8e046e",
+      "sha256": "bcfd854b28acf880bbec5ad4040c8cab610af5c24f0156e2210f808af0146f0a",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -427,9 +427,9 @@
       "topic": "component"
     },
     {
-      "bytes": 5968,
+      "bytes": 6666,
       "id": "component/harness",
-      "sha256": "209e1da70fbdbd0952bbcccb59472f7c5a33a3232a2b5a082c0e0907971eba6c",
+      "sha256": "47ddbfa878fcc2a355ee453397e71b81d34c5005f7dd5040836b9f7f5a676bba",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -507,9 +507,9 @@
       "topic": "component"
     },
     {
-      "bytes": 4361,
+      "bytes": 4855,
       "id": "component/sessions",
-      "sha256": "23f0754cf150167f3ac255a353a1b41bece4b54d478c03ccc07faf3dec684b30",
+      "sha256": "bcdfe10a8df8dda274f041a94dadc9d8db52a666cea511e501317d78c4ad2315",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -611,9 +611,9 @@
       "topic": "reference_apps"
     },
     {
-      "bytes": 41456,
+      "bytes": 41472,
       "id": "toolkit",
-      "sha256": "4bed260bcd31634ee3167b60e2bb4860ffd2d602cffbc48c3d2d51ecb332988b",
+      "sha256": "b9f0d393ca8c9390f1aad5ba6f79bfc5d11d155f06a3f78430d9ff6a0aebedf6",
       "source": "generated: modules/application/src, src application views, tests/lua/frame",
       "title": "Bee terminal toolkit",
       "topic": "terminal"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 694577,
+    "bytes": 696059,
     "documents": 77
   }
 }

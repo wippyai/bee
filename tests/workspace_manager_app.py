@@ -11,7 +11,7 @@ from tui_smoke import Desktop  # noqa: E402
 
 def exercise():
     with tempfile.TemporaryDirectory(prefix="bee-workspaces-") as directory:
-        ui = Desktop(directory, apps=("bee.workspace.manager:app",))
+        ui = Desktop(directory, apps=("bee.workspace.manager.app:app",))
         try:
             ui.wait("WORKSPACES", timeout=20)
             ui.pump(.5)

@@ -848,9 +848,33 @@ local function list(request: Object): Reply
     return succeed({items = items, next = scan and ref(scan.next) or nil})
 end
 
+-- Read-only display summary for the caller's workspace. No control actions.
+local function attention_count(request: Object): Reply
+    local actor, workspace = identity()
+    if not actor or not workspace or request.workspace_id ~= workspace
+        or bounds.fields(request, {"workspace_id"}) then return fail("DENIED", "attention summary requires the caller's workspace") end
+    local count = 0
+    local cursor: string? = nil
+    for _ = 1, 16 do
+        local page = list({filter = {workspace = workspace}, cursor = cursor})
+        if not page.ok then return page end
+        local value = object(page.value)
+        local items = value and value.items
+        if type(items) ~= "table" then return unavailable("session summary unavailable", nil) end
+        for _, raw in ipairs(items) do
+            local row = object(raw)
+            if row and row.lifecycle ~= "closed" and (row.activity == "blocked" or row.activity == "stalled") then count = count + 1 end
+        end
+        cursor = value and ref(value.next) or nil
+        if not cursor then return succeed({count = count}) end
+    end
+    return unavailable("session summary exceeds the display page limit", nil)
+end
+
 function M.call(method: string, request: unknown): Reply
     local input = object(request)
     if not input then return fail("INVALID", "request must be an object", nil) end
+    if method == "attention_count" then return attention_count(input) end
     if method == "attach" then return attach(input) end
     if method == "hook_boundary" then return hook_boundary(input) end
     if method == "detach" then return detach(input) end

@@ -413,3 +413,6 @@ Chart rules:
 Test every view at the three breakpoints plus one narrow size: exact row
 count, exact display width for every row, every hit inside the canvas, and the
 identity, the current state and the primary action visible at each class.
+
+Folder pickers render root references as readable root names. Owner requests
+retain the original reference; display labels grant no access.

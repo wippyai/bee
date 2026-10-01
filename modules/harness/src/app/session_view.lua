@@ -87,6 +87,12 @@ function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
                 lines[#lines + 1] = {text = "  " .. prefix .. row, role = role}
             end
         end
+        local reply = turn.text:lower()
+        if reply:find("workspace is read-only", 1, true) or reply:find("permission denied", 1, true)
+            or (reply:find("permission", 1, true) and reply:find("wasn't granted", 1, true)) then
+            lines[#lines + 1] = {text = "  CLI refusals are not Bee approvals.", role = "warn"}
+            lines[#lines + 1] = {text = "  Choose a writable profile or folder, then start a new session.", role = "warn"}
+        end
     end
     return lines
 end

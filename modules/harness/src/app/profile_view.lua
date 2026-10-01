@@ -333,7 +333,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if picker then return draw_folders(painter, state, picker) end
     local threads = state.threads
     if threads then return draw_threads(painter, state, threads) end
-    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced permissions" or "Name · folder · model")
+    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced permissions" or "Name · agent settings")
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))
     local window = frame.window(#listed, capacity, state.selected, 0)

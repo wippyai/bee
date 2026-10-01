@@ -53,6 +53,8 @@ local function main(owner: string, initial_application: string?, secondary_appli
     assert(tty.mouse(true))
     local width, height = tty.screen_size()
     local attention_count: integer? = nil
+    local blocked_count = 0
+    local approvals_count = 0
     local attention_pending = false
     local attention_updates = channel.new(1)
     local attention_ticker = time.ticker("2s")
@@ -63,7 +65,11 @@ local function main(owner: string, initial_application: string?, secondary_appli
             local reply, err = funcs.call("bee.approvals.binding:attention_count", {workspace_id = workspace_id})
             local value = type(reply) == "table" and reply.value or nil
             local count = type(value) == "table" and value.count or nil
-            attention_updates:send({count = not err and type(reply) == "table" and reply.ok == true and count or nil})
+            local sessions, session_error = funcs.call("bee.sessions.binding:attention_count", {workspace_id = workspace_id})
+            local session_value = type(sessions) == "table" and sessions.value or nil
+            local blocked = type(session_value) == "table" and session_value.count or nil
+            attention_updates:send({count = not err and type(reply) == "table" and reply.ok == true and count or nil,
+                blocked = not session_error and type(sessions) == "table" and sessions.ok == true and blocked or nil})
         end)
     end
     refresh_attention()
@@ -446,7 +452,12 @@ local function main(owner: string, initial_application: string?, secondary_appli
             local update: unknown = selected.value
             local row = type(update) == "table" and update or nil
             local count = row and row.count
-            attention_count = type(count) == "number" and count >= 0 and count == math.floor(count) and math.floor(count) or nil
+            local blocked = row and row.blocked
+            if type(count) == "number" and count >= 0 and count == math.floor(count)
+                and type(blocked) == "number" and blocked >= 0 and blocked == math.floor(blocked) then
+                approvals_count, blocked_count = math.floor(count), math.floor(blocked)
+                attention_count = approvals_count + blocked_count
+            else attention_count = nil end
             dirty = true
         elseif selected.channel == attention_ticker:channel() then
             refresh_attention()
@@ -942,7 +953,7 @@ local function main(owner: string, initial_application: string?, secondary_appli
                                     if hit.action == "help" then
                                         help_open = true; start = nil; dirty = true
                                     elseif hit.action == "sessions" or hit.action == "attention" then
-                                        local role = hit.action == "sessions" and "sessions" or (hit.action == "attention" and "approvals" or "appearance")
+                                        local role = (hit.action == "sessions" or (approvals_count == 0 and blocked_count > 0)) and "sessions" or "approvals"
                                         for _, app in ipairs(catalog) do if app.role == role then application("open", app.definition_id, ""); break end end
                                     elseif hit.action == "apps" then
                                         start = {selected = 1, offset = 0}; dirty = true

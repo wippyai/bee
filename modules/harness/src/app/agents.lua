@@ -9,6 +9,7 @@ local thread_record = require("thread_record")
 local sessions_protocol = require("sessions_protocol")
 local bounds = require("bounds")
 local caller = require("caller")
+local names = require("names")
 local M = {}
 type Snapshot = sessions_protocol.SessionSnapshot
 type Workspace = {label: string, folder: string}
@@ -268,7 +269,7 @@ function M.workspace(id: string, ask: Ask): Workspace?
     local label = bounds.line(row.label, 240)
     local path = bounds.subpath(row.subpath)
     if not label or not path then return nil end
-    return {label = label ~= "" and label or "Workspace", folder = path ~= "" and path or "Workspace root"}
+    return {label = label ~= "" and label or names.label(id), folder = path ~= "" and path or "Workspace root"}
 end
 
 function M.directory(client: sessions.Client, workspace: string?): ({Snapshot}?, string?)

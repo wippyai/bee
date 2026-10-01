@@ -18,7 +18,7 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    model: bee.hive.manager:model
+    model: bee.hive.manager.app:model
     directory: bee.hive.manager:directory
     types: bee.hive:types
 - name: view_test
@@ -30,8 +30,8 @@ entries:
   imports:
     frames: bee.application:frame
     test: wippy.test:test
-    model: bee.hive.manager:model
-    view: bee.hive.manager:view
+    model: bee.hive.manager.app:model
+    view: bee.hive.manager.app:view
     directory: bee.hive.manager:directory
     types: bee.hive:types
     appearance: bee.application:appearance
@@ -42,8 +42,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    remote: bee.hive.manager:remote
-    model: bee.hive.manager:model
+    remote: bee.hive.manager.app:remote
+    model: bee.hive.manager.app:model
     directory: bee.hive.manager:directory
     types: bee.hive:types
     desktop_remote: bee.hive.desktop:remote

@@ -370,10 +370,10 @@ local function define_tests()
             test.is_true(processes.application_stop == true)
             test.is_false(processes.appearance_write == true)
             test.eq(processes.close_grace_ms, 250)
-            local manager = bindings["bee.hive.manager:app"]
+            local manager = bindings["bee.hive.manager.app:app"]
             if not manager then error("hive manager package binding missing") end
             test.eq(#(manager.policies :: {string}), 3)
-            test.is_true(has(selected, "bee.workspace.manager:app"))
+            test.is_true(has(selected, "bee.workspace.manager.app:app"))
             test.is_true(has(selected, "bee.hub.modules:app"))
             test.is_true(has(selected, "bee.gov.overlays:app"))
             local files = bindings["bee.files.app:app"]

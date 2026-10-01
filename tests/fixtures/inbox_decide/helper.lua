@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. Shared constants and calls for the inbox decide acceptance probe.
 local system = require("system")
 local hash = require("hash")
@@ -40,7 +41,7 @@ end
 
 function M.object(value: unknown, label: string): Object
     if type(value) ~= "table" then error(label) end
-    return value :: Object
+    return assert(bounds.object(value))
 end
 
 function M.open_plans(): plan_store.Store

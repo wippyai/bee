@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. Consume the inbox decision: bind the approved proposal to one
 -- effect identity and prove a second effect is refused.
 local funcs = require("funcs")
@@ -27,16 +28,17 @@ local function main()
         error("decision proposal does not bind the exact plan digest")
     end
     local listed, list_error = call("bee.approvals.binding:list", {workspace_id = helper.WORKSPACE})
-    if not listed then error("list requests: " .. tostring((list_error :: Object).message)) end
+    if not listed then error("list requests: " .. tostring((assert(bounds.object(list_error))).message)) end
     local approval_id: string? = nil
     local incarnation: integer? = nil
     local decider_id: string? = nil
-    for _, raw in ipairs(helper.object(listed, "request list is malformed").requests :: {unknown}) do
+    for _, raw in ipairs(assert(bounds.array(helper.object(listed, "request list is malformed").requests))) do
         local item = helper.object(raw, "request list holds a malformed request")
         if item.state == "decided" and item.decision == "approved" and item.proposal_digest == proposal_digest then
-            approval_id = item.approval_id :: string
-            incarnation = math.floor(item.owner_incarnation :: number)
-            decider_id = item.decider_id :: string
+            assert(type(item.approval_id) == "string" and type(item.owner_incarnation) == "number" and type(item.decider_id) == "string")
+            approval_id = item.approval_id
+            incarnation = math.floor(item.owner_incarnation)
+            decider_id = item.decider_id
         end
     end
     if not approval_id or not incarnation then error("approved decision for the staged plan is missing") end
@@ -49,20 +51,22 @@ local function main()
     -- the same recovery the activation owner performs in production.
     local receipt, consume_error, consume_fault_value = call("bee.approvals.binding:consume", {approval_id = approval_id,
         proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = helper.EFFECT_KEY})
-    if not receipt and (consume_error :: Object).code == "REVALIDATE" then
+    if not receipt and (assert(bounds.object(consume_error))).code == "REVALIDATE" then
         local fault_value = helper.object(consume_fault_value, "revalidate fault carries no value")
-        local current = math.floor(fault_value.current_incarnation :: number)
+        local current_incarnation = fault_value.current_incarnation
+        assert(type(current_incarnation) == "number")
+        local current = math.floor(current_incarnation)
         local revalidated, revalidate_error = call("bee.approvals.binding:revalidate", {approval_id = approval_id,
             proposal_digest = proposal_digest, owner_incarnation = current})
         if not revalidated then
-            error("revalidate decision: " .. tostring((revalidate_error :: Object).code) .. ": " .. tostring((revalidate_error :: Object).message))
+            error("revalidate decision: " .. tostring((assert(bounds.object(revalidate_error))).code) .. ": " .. tostring((assert(bounds.object(revalidate_error))).message))
         end
         incarnation = current
         receipt, consume_error = call("bee.approvals.binding:consume", {approval_id = approval_id,
             proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = helper.EFFECT_KEY})
     end
     if not receipt then
-        error("consume decision: " .. tostring((consume_error :: Object).code) .. ": " .. tostring((consume_error :: Object).message))
+        error("consume decision: " .. tostring((assert(bounds.object(consume_error))).code) .. ": " .. tostring((assert(bounds.object(consume_error))).message))
     end
     if receipt.proposal_digest ~= proposal_digest then
         error("consumption bound another proposal digest: " .. tostring(receipt.proposal_digest))
@@ -75,10 +79,10 @@ local function main()
     local _, second_error = call("bee.approvals.binding:consume", {approval_id = approval_id,
         proposal_digest = proposal_digest, owner_incarnation = incarnation, effect_key = helper.RETRY_EFFECT_KEY})
     if second_error == nil then error("a second effect consumed the same decision") end
-    if (second_error :: Object).code ~= "CONFLICT" then
-        error("second consume refused with " .. tostring((second_error :: Object).code) .. " instead of CONFLICT")
+    if (assert(bounds.object(second_error))).code ~= "CONFLICT" then
+        error("second consume refused with " .. tostring((assert(bounds.object(second_error))).code) .. " instead of CONFLICT")
     end
-    logger:info("INBOX_DECIDE_SECOND_REFUSED", {approval_id = approval_id, code = (second_error :: Object).code})
+    logger:info("INBOX_DECIDE_SECOND_REFUSED", {approval_id = approval_id, code = (assert(bounds.object(second_error))).code})
 end
 
 return {main = main}

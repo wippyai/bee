@@ -143,9 +143,11 @@ local function refusal_message(reply: admission.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return tostring(reply.error and reply.error.message)
 end
-local function carrier_io(): machine.IO
+local function carrier_io(workspace_id: string): machine.IO
     return {
-        call = function(target: string, input: unknown): (unknown, string?) return call_as_bound(REQUESTER, target, input, workspace), nil end,
+        call = function(target: string, input: unknown): (unknown, string?)
+            return funcs.new():with_actor(principals.actor(REQUESTER, workspace_id)):with_scope(scope()):call(target, input)
+        end,
         send = function(target: string, topic: string, input: unknown) end,
         self_pid = function(): string return process.pid() end,
         now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
@@ -1190,7 +1192,7 @@ local function define_tests()
                 local request_id = fresh("complete-config-inputs")
                 local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = "ping", expected_plan_digest = selected.plan_digest}))
-                local io = carrier_io()
+                local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
                 if not planned then error(tostring(plan_error)) end
                 local prepared, prepare_error = machine.prepare_attempt(io, planned)
@@ -1272,7 +1274,7 @@ local function define_tests()
                 local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("claude-host-home-admit"),
                     definition_ref = SHIPPED_SHAPE_DEFINITION, workspace_id = workspace_id, brief = "host config fixture",
                     expected_plan_digest = selected.plan_digest}))
-                local planned, plan_error = machine.plan(carrier_io(), carrier_fixtures.request(admitted.request))
+                local planned, plan_error = machine.plan(carrier_io(workspace), carrier_fixtures.request(admitted.request))
                 if not planned then error(tostring(plan_error)) end
                 local provider_home = assert(bounds.object(planned.launch.provider_home))
                 test.eq(provider_home.variable, "CLAUDE_CONFIG_DIR")
@@ -1319,7 +1321,7 @@ local function define_tests()
                 if not applied then error("configure missing provider: " .. tostring(apply_error)) end
                 local unapproved = value(call("bee.harness.launch:admit", {request_id = fresh("unapproved-host-home"), definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
-                local refused_plan, refusal = machine.plan(carrier_io(), carrier_fixtures.request(unapproved.request))
+                local refused_plan, refusal = machine.plan(carrier_io(workspace), carrier_fixtures.request(unapproved.request))
                 test.is_nil(refused_plan)
                 test.eq(refusal, "launch policy does not authorize host HOME")
                 local refused_db = assert(placement_store.open())
@@ -1330,7 +1332,7 @@ local function define_tests()
                 apply(policy_entry)
                 local admitted = value(call("bee.harness.launch:admit", {request_id = request_id, definition_ref = DEFINITION,
                     workspace_id = workspace, brief = ""}))
-                local io = carrier_io()
+                local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
                 if not planned then error(tostring(plan_error)) end
                 local prepared, prepare_error = machine.prepare_attempt(io, planned)
@@ -1421,7 +1423,7 @@ local function define_tests()
                 local preferences = assert(bounds.object(carrier_request.preferences))
                 test.eq((assert(bounds.object(preferences.options))).config_profile, "ds-flash")
                 open_gateway()
-                local io = carrier_io()
+                local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
                 if not planned then error(tostring(plan_error)) end
                 -- Codex layers the named profile on its base user config.
@@ -1687,7 +1689,7 @@ local function define_tests()
                 changed.placement_binding = "bee.placement.native.binding:binding"
                 changed.placement_options = {}
             end, function()
-                local io = carrier_io()
+                local io = carrier_io(workspace)
                 local planned, plan_error = machine.plan(io, carrier_fixtures.request(admitted.request))
                 if not planned then error(tostring(plan_error)) end
                 local prepared, preparation_error, failed = machine.prepare_attempt(io, planned)
@@ -1985,7 +1987,9 @@ local function define_tests()
             local first = value(call("bee.harness.launch:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
                 workspace_id = workspace, brief = ""}))
             local transport: machine.IO = {
-                call = function(target: string, input: unknown): (unknown, string?) return call_as_bound(REQUESTER, target, input, workspace), nil end,
+                call = function(target: string, input: unknown): (unknown, string?)
+                    return funcs.new():with_actor(principals.actor(REQUESTER, workspace)):with_scope(scope()):call(target, input)
+                end,
                 send = function(target: string, topic: string, input: unknown) end,
                 self_pid = function(): string return process.pid() end,
                 now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,

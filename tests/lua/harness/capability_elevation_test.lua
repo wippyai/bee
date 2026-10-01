@@ -156,7 +156,6 @@ local function define_tests()
                     {binding_id = binding_id, capability = "app.database", parameters = {name = "missing"}, ttl_ms = 60000})
                 test.is_false(missing.ok)
                 test.eq(((assert(bounds.object(missing.error))).code), "NOT_FOUND")
-                if type(association_revision) ~= "number" then error("invalid fixture association_revision") end
                 call(MANAGER, workspace, "bee.resources.binding:associate", {workspace_id = workspace,
                     name = "elevdb", root_ref = ROOT, subpath = "", allowed_access = "read"})
                 local insufficient = raw_call(AGENT, workspace, "bee.gateway.binding:request_capability",

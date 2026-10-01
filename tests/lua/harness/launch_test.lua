@@ -73,6 +73,14 @@ local function call(target: string, request: unknown): admission.Reply
     if err then error(target .. ": " .. tostring(err)) end
     return principals.reply(result)
 end
+local function call_setup(request: unknown): {[string]: unknown}
+    local raw, err = funcs.new():with_actor(principals.actor(REQUESTER, principals.workspace(request)))
+        :with_scope(scope()):call("bee.harness.launch:setup", request)
+    if err then error("bee.harness.launch:setup: " .. tostring(err)) end
+    local reply = assert(bounds.object(raw))
+    assert(type(reply.ok) == "boolean" and (reply.error == nil or type(reply.error) == "string"))
+    return reply
+end
 local function call_as_bound(actor_id: string, target: string, request: unknown, workspace_id: unknown,
     extra_policies: {string}?): admission.Reply
     local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace_id))
@@ -226,7 +234,7 @@ local function prepare_host(workspace: string)
 end
 local function setup(workspace: string, definition_ref: string): {[string]: unknown}
     local plan = value(call("bee.harness.launch:resolve", {definition_ref = definition_ref}))
-    local reply = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
+    local reply = call_setup({workspace_id = workspace, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
     return reply
 end
 local function associations(workspace: string): {{[string]: unknown}}
@@ -690,7 +698,7 @@ local function define_tests()
             local ok, failure = pcall(function()
                 entry.data = changed
                 apply(entry)
-                local reply = call("bee.harness.launch:setup", {workspace_id = changed_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
+                local reply = call_setup({workspace_id = changed_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
                 test.is_false((reply).ok == true)
                 test.eq(#associations(changed_workspace), 0)
             end)
@@ -719,7 +727,7 @@ local function define_tests()
             local private_reply, private_error = funcs.new():with_actor(principals.actor(REQUESTER, private_workspace)):with_scope(security.new_scope({policy})):call("bee.harness.launch:setup_backend",
                 {workspace_id = private_workspace, definition_ref = DEFINITION, expected_plan_digest = plan.plan_digest})
             test.is_true(private_error ~= nil or (type(private_reply) == "table" and private_reply.ok == false))
-            local unknown = call("bee.harness.launch:setup", {workspace_id = fresh("setup-unknown"), definition_ref = "bee.harness.catalog:missing",
+            local unknown = call_setup({workspace_id = fresh("setup-unknown"), definition_ref = "bee.harness.catalog:missing",
                 expected_plan_digest = plan.plan_digest})
             test.is_false((unknown).ok == true)
             local empty = setup(fresh("setup-empty"), EMPTY_DEFINITION)
@@ -1640,13 +1648,13 @@ local function define_tests()
         end)
         test.it("sets up a folder under an admitted root as the working directory only under a workdir override", function()
             local plan = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
-            local refused = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+            local refused = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                 expected_plan_digest = plan.plan_digest, workdir = {root_ref = ROOT, path = "chosen"}})
             test.eq(refused.ok, false)
             test.eq(refused.error, "the launch does not allow a workdir override")
             with_overrides({"brief", "workdir"}, {"workdir"}, function()
                 local allowed = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
-                local reply = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+                local reply = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                     expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}})
                 if reply.ok ~= true then error(tostring(reply.error)) end
                 local name = tostring((assert(bounds.object(reply))).workdir)
@@ -1658,7 +1666,7 @@ local function define_tests()
                 if not found then error("folder association is missing") end
                 test.eq(found.root_ref, ROOT)
                 test.eq(found.subpath, "chosen/deeper")
-                local again = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+                local again = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                     expected_plan_digest = allowed.plan_digest, workdir = {root_ref = ROOT, path = "chosen/deeper"}})
                 test.eq((assert(bounds.object(again))).workdir, name)
                 local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("folder-workdir"), definition_ref = DEFINITION,
@@ -1666,7 +1674,7 @@ local function define_tests()
                 test.eq((assert(bounds.object(admitted.request))).working_directory, name)
                 for _, bad in ipairs({{root_ref = ROOT, path = "../escape"}, {root_ref = ROOT, path = "/abs"}, {root_ref = "bee.harness.catalog:not_a_root", path = "x"},
                     {root_ref = ROOT, path = "x", extra = true}}) do
-                    local denied = call("bee.harness.launch:setup", {workspace_id = workspace, definition_ref = DEFINITION,
+                    local denied = call_setup({workspace_id = workspace, definition_ref = DEFINITION,
                         expected_plan_digest = allowed.plan_digest, workdir = bad})
                     test.eq(denied.ok, false)
                 end

@@ -128,7 +128,9 @@ local function define_tests()
         end)
         test.it("rejects capabilities that the install-time generator cannot realize", function()
             local decoded = fixture()
-            local rows = principals.items(((assert(bounds.object(decoded.data))).capabilities))
+            local data = assert(bounds.object(decoded.data))
+            local rows = principals.items(data.capabilities)
+            data.capabilities = rows
             rows[#rows + 1] = {id = "test.elevation", revision = 1, confirm = "standard",
                 parameters = {name = "name"}, text = "Use test database {name}",
                 policies = {{operation = "database.use", resource = "$name", scope = {name = "$name"}}},

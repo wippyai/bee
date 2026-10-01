@@ -86,6 +86,11 @@ installed base, preserves unrelated roots and refuses changes to host-configured
 roots. It reports requirements, migrations, automatic starts and declared
 capabilities. A capability declaration does not grant the capability.
 
+A bare dependency parameter binds requirements of that name owned by that
+dependency. A qualified parameter binds its exact requirement in that
+dependency's closure. Unrelated roots cannot supply each other's requirements;
+different values for the same qualified requirement make the plan invalid.
+
 Planning is read-only. It may fetch and verify package artifacts into the local
 cache, but does not publish registry state or execute a migration. `ready` means
 requirement bindings are complete; service readiness needs separate lifecycle

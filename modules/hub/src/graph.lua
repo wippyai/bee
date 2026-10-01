@@ -150,11 +150,32 @@ function M.resolve(roots: {Edge}, source: Source): (Result?, string?)
     local parameters: {[string]: requirements.Parameter} = {}
     local function bind(edge: Edge): string?
         for _, parameter in ipairs(edge.parameters) do
-            local old = parameters[parameter.name]
-            if old and canonical.encode(old.value) ~= canonical.encode(parameter.value) then
-                return "conflicting parameter " .. parameter.name
+            local qualified = parameter.name:find(":", 1, true) ~= nil
+            local visited: {[string]: boolean} = {}
+            local addressed: {string} = {}
+            local function visit(component: string)
+                if visited[component] then return end
+                visited[component] = true
+                local item = assigned[component]
+                if not item then return end
+                for _, hole in ipairs(item.requirements.requirements) do
+                    if hole.id == parameter.name or (not qualified and hole.id:match(":([^:]+)$") == parameter.name) then
+                        addressed[#addressed + 1] = hole.id
+                    end
+                end
+                if qualified then
+                    for _, dependency in ipairs(item.dependencies) do visit(dependency.component) end
+                end
             end
-            parameters[parameter.name] = parameter
+            visit(edge.component)
+            if #addressed == 0 then return "parameter names no requirement " .. parameter.name .. " in " .. edge.component end
+            for _, id in ipairs(addressed) do
+                local old = parameters[id]
+                if old and canonical.encode(old.value) ~= canonical.encode(parameter.value) then
+                    return "conflicting parameter " .. id
+                end
+                parameters[id] = {name = id, value = parameter.value}
+            end
         end
         return nil
     end

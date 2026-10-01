@@ -13,8 +13,89 @@ local function artifact(name: string, version: string, dependencies: {graph.Edge
     return {component = name, version = version, digest = string.rep("a", 64), entries = entries,
         requirements = {requirements = {}, missing = {}}, next_offset = nil, eof = true}
 end
+local function required_artifact(name: string, version: string, dependencies: {graph.Edge}): inspect.Inspection
+    local item = artifact(name, version, dependencies)
+    local entries: {inspect.Entry} = {}
+    for _, entry in ipairs(item.entries) do entries[#entries + 1] = entry end
+    local namespace = name:gsub("/", ".")
+    local id = namespace .. ":target_db"
+    local targets = {{entry = namespace .. ":config", path = ".database"}}
+    entries[#entries + 1] = {id = id, kind = "ns.requirement", meta = {}, data = {targets = targets}}
+    entries[#entries + 1] = {id = namespace .. ":config", kind = "registry.entry", meta = {}, data = {}}
+    return {component = name, version = version, digest = item.digest, entries = entries,
+        requirements = {requirements = {{id = id, has_default = false, has_selected = false, targets = targets}}, missing = {id}},
+        next_offset = nil, eof = true}
+end
 local function define_tests()
     test.describe("Hub dependency graph", function()
+        test.it("scopes bare parameters to each dependency's own requirements", function()
+            local result, problem = graph.resolve({
+                {component = "acme/one", version = "1.0.0", parameters = {{name = "target_db", value = "acme.one:db"}}},
+                {component = "acme/two", version = "1.0.0", parameters = {{name = "target_db", value = "acme.two:db"}}},
+            }, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {}, false, nil end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    local namespace = name:gsub("/", ".")
+                    local id = namespace .. ":target_db"
+                    local targets = {{entry = namespace .. ":config", path = ".database"}}
+                    return {component = name, version = version, digest = string.rep("a", 64),
+                        entries = {{id = id, kind = "ns.requirement", meta = {}, data = {targets = targets}},
+                            {id = namespace .. ":config", kind = "registry.entry", meta = {}, data = {}}},
+                        requirements = {requirements = {{id = id, has_default = false, has_selected = false, targets = targets}},
+                            missing = {id}}, next_offset = nil, eof = true}, nil
+                end,
+            })
+            test.is_nil(problem)
+            test.not_nil(result)
+            if result then
+                test.eq(#result.missing, 0)
+                test.eq(result.packages[1].requirements.requirements[1].selected, "acme.one:db")
+                test.eq(result.packages[2].requirements.requirements[1].selected, "acme.two:db")
+            end
+        end)
+
+        test.it("binds qualified parameters within the dependency closure", function()
+            local result, problem = graph.resolve({
+                {component = "acme/root", version = "1.0.0", parameters = {{name = "acme.child:target_db", value = "app:db"}}},
+            }, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {}, false, nil end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    if name == "acme/root" then return artifact(name, version, {edge("acme/child", "1.0.0")}), nil end
+                    return required_artifact(name, version, {}), nil
+                end,
+            })
+            test.is_nil(problem); test.not_nil(result)
+            if result then
+                test.eq(#result.missing, 0)
+                test.eq(result.packages[1].requirements.requirements[1].selected, "app:db")
+            end
+        end)
+        test.it("rejects qualified parameters addressing an unrelated root", function()
+            local result, problem = graph.resolve({
+                {component = "acme/one", version = "1.0.0", parameters = {{name = "acme.two:target_db", value = "app:db"}}},
+                edge("acme/two", "1.0.0"),
+            }, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {}, false, nil end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    return required_artifact(name, version, {}), nil
+                end,
+            })
+            test.is_nil(result)
+            test.eq(problem, "parameter names no requirement acme.two:target_db in acme/one")
+        end)
+        test.it("rejects different values addressing the same requirement", function()
+            local result, problem = graph.resolve({
+                {component = "acme/one", version = "1.0.0", parameters = {{name = "target_db", value = "app:first"}}},
+                {component = "acme/one", version = "1.0.0", parameters = {{name = "acme.one:target_db", value = "app:second"}}},
+            }, {
+                versions = function(_: string, _: integer): ({string}?, boolean?, string?) return {}, false, nil end,
+                artifact = function(name: string, version: string): (inspect.Inspection?, string?)
+                    return required_artifact(name, version, {}), nil
+                end,
+            })
+            test.is_nil(result); test.eq(problem, "conflicting parameter acme.one:target_db")
+        end)
+
         test.it("opens exact pins without requesting any release history", function()
             local calls = 0
             local result, problem = graph.resolve({edge("acme/app", "1.0.0")}, {

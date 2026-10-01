@@ -691,25 +691,25 @@ local function define_tests()
             test.is_nil(invalid)
             test.not_nil(err)
         end)
-        test.it("ships hidden research routes for every batch driver with bounded policies", function()
+        test.it("ships hidden research routes without harness turn ceilings", function()
             local cases = {
                 {definition = "bee.driver.codex:research_batch", policy = "bee.driver.codex:launch_policy_codex_batch",
                     binding = "bee.driver.codex:binding", credential = "codex_login", executable = "bee.driver.codex:executable",
                     config = "bee.driver.codex:config_home", option = "sandbox", expected = "workspace-write"},
                 {definition = "bee.driver.claude:research_batch", policy = "bee.driver.claude:launch_policy_claude_batch",
                     binding = "bee.driver.claude:binding", credential = "claude_api_key", executable = "bee.driver.claude:executable",
-                    config = "bee.driver.claude:config_home", option = "turn_budget", expected = 128},
+                    config = "bee.driver.claude:config_home", option = "permission_mode", expected = "default"},
                 {definition = "bee.driver.agy:research_batch", policy = "bee.driver.agy:launch_policy_agy_batch",
                     binding = "bee.driver.agy:binding", credential = "agy_login", executable = "bee.driver.agy:executable",
                     option = "model", expected = "gemini-3.8-flash", additional_options = {effort = "high"}},
                 {definition = "bee.driver.muse:research_batch", policy = "bee.driver.muse:launch_policy_muse_batch",
                     binding = "bee.driver.muse:binding", credential = "muse_login", executable = "bee.driver.muse:executable",
-                    option = "approval_mode", expected = "on-request", additional_options = {turn_budget = 128}},
+                    option = "approval_mode", expected = "on-request"},
                 {definition = "bee.driver.opencode:research_batch", policy = "bee.driver.opencode:launch_policy_opencode_batch",
                     binding = "bee.driver.opencode:binding", credential = "opencode_login", executable = "bee.driver.opencode:executable", unconfined = true},
                 {definition = "bee.driver.grok:research_batch", policy = "bee.driver.grok:launch_policy_grok_batch",
                     binding = "bee.driver.grok:binding", credential = "grok_login", executable = "bee.driver.grok:executable",
-                    option = "permission_mode", expected = "default", additional_options = {turn_budget = 128}, unconfined = true},
+                    option = "permission_mode", expected = "default", unconfined = true},
             }
             for _, selected in ipairs(cases) do
                 local entry = assert(registry.get(selected.definition))
@@ -737,6 +737,10 @@ local function define_tests()
                 if not policy then error(tostring(policy_error)) end
                 if selected.option then test.eq(policy.prepare_options[selected.option], selected.expected)
                 else test.eq(next(policy.prepare_options or {}), nil) end
+                test.is_nil(policy.prepare_options.turn_budget)
+                test.is_nil(policy.prepare_options.max_turns)
+                test.is_nil(policy.prepare_options.max_steps)
+                test.is_nil(policy.prepare_options.print_timeout)
                 test.eq(table.concat(policy.allowed_overrides, ","), "thread,workdir")
                 for option, expected in pairs(selected.additional_options or {}) do
                     test.eq(policy.prepare_options[option], expected)

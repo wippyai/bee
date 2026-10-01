@@ -14,7 +14,6 @@ type HostConfig = {
     timeout_ms: integer?,
     stream: boolean?,
     admitted_delegates: {string}?,
-    max_turns: integer?,
 }
 
 -- One decoded function tool call: the wire nests name and arguments under

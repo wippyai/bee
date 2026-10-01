@@ -9,7 +9,7 @@ type Phase = "queued" | "reserved" | "accepted" | "settled"
 type Row = {work: string, session: string, input: unknown, input_digest: string, output_schema: string,
     sender: {kind: "session" | "principal", id: string}, phase: Phase, revision: integer,
     turn: string?, claim: string?, owner_epoch: integer?, checkpoint: unknown?, context: Object?,
-    result: Object?, uncertainty: Object?}
+    result: Object?, uncertainty: Object?, budget: Object?}
 type Owner = {journal: scheduler.Journal, work_state: (string) -> Object?, turn_for_work: (string) -> string?}
 
 local function object(value: unknown): Object?
@@ -46,7 +46,8 @@ function M.new(): Owner
             output_schema = request.output_schema or "bee:Text@1", sender = sender}
         rows[work] = {work = work, session = session, input = request.input, input_digest = "sha256:input-" .. tostring(sequence),
             output_schema = request.output_schema or "bee:Text@1", sender = sender, phase = "queued", revision = 1,
-            turn = nil, claim = nil, owner_epoch = nil, checkpoint = nil, context = {}, result = nil, uncertainty = nil}
+            turn = nil, claim = nil, owner_epoch = nil, checkpoint = nil, context = {}, result = nil, uncertainty = nil,
+            budget = object(request.budget)}
         order[#order + 1] = work
         return receipt, nil
     end
@@ -101,10 +102,12 @@ function M.new(): Owner
             session_ref = row.session, action_id = row.session,
             driver_binding_ref = "bee.fake.driver:binding", profile_id = "batch",
             driver_methods = {}, driver_options = {}, placement_methods = {}}
-        return {work = row.work, session = row.session, turn = request.turn, claim = request.claim,
+        local pulled: Object = {work = row.work, session = row.session, turn = request.turn, claim = request.claim,
             owner_epoch = row.owner_epoch, input = row.input, input_digest = row.input_digest,
             output_schema = row.output_schema, sender = row.sender, route = route,
-            checkpoint = row.checkpoint, context = row.context, phase = row.phase}, nil
+            checkpoint = row.checkpoint, context = row.context, phase = row.phase}
+        if row.budget then pulled.budget = row.budget end
+        return pulled, nil
     end
     journal.accept_turn = function(request: Object): (Object?, string?)
         local turn = type(request.turn) == "string" and request.turn or ""

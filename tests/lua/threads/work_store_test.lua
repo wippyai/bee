@@ -343,6 +343,28 @@ local function define_tests()
             test.eq(harness.code(sessions:call("turn_observation", {turn = reservation.turn, claim = reservation.claim,
                 operation_key = harness.key(), observation = event})), "CONFLICT")
         end)
+        test.it("marks a live quiet turn stalled with its latest progress evidence", function()
+            local sessions = harness.session_owner(WORKSPACE)
+            local opened = harness.value(sessions:call("session_create", {operation_key = harness.key(),
+                route = {progress_quiet_ms = 1}}))
+            local work = harness.value(sessions:call("work_send", {session = opened.session,
+                operation_key = harness.key(), input = "quiet turn"}))
+            local reserved = harness.value(sessions:call("turn_reserve", {session = opened.session,
+                operation_key = harness.key()}))
+            local pulled = harness.value(sessions:call("turn_pull", {turn = reserved.turn, claim = reserved.claim}))
+            harness.value(sessions:call("turn_accept", {turn = reserved.turn, claim = reserved.claim,
+                input_digest = pulled.input_digest, checkpoint = {}, operation_key = harness.key()}))
+            local db = harness.open()
+            harness.execute(db, "UPDATE bee_session_turns SET last_progress_at_ms = 1 WHERE turn_ref = ?", {reserved.turn})
+            db:release()
+            local snapshot = harness.value(sessions:call("session_describe", {session = opened.session}))
+            test.eq(snapshot.activity, "stalled")
+            test.eq(snapshot.activity_evidence.kind, "quiet")
+            test.eq(snapshot.activity_evidence.turn, reserved.turn)
+            test.eq(snapshot.activity_evidence.quiet_period_ms, 1)
+            test.is_true(snapshot.activity_evidence.quiet_for_ms >= 1)
+            test.eq(work.session, opened.session)
+        end)
 
         test.it("cancels queued work immediately and records active cancellation for the scheduler", function()
             local sessions = harness.session_owner(WORKSPACE)

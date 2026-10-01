@@ -161,7 +161,7 @@ local function terminal_fault(terminal: unknown, envelope: {[string]: unknown}, 
         local normalized = (reason):lower()
         if normalized:find("max_model_steps", 1, true) or normalized:find("max_steps", 1, true)
             or normalized:find("max_turns", 1, true) or normalized:find("max turn requests", 1, true) then
-            return events.fault("max_turns", "turn budget reached", false)
+            return events.fault("max_turns", "provider turn limit reached", false)
         end
     end
     local message = "run terminal: " .. tostring(terminal)
@@ -231,7 +231,7 @@ local function tool_result(state: State, index: integer, payload: {[string]: unk
     return true
 end
 
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local raw: unknown = envelope.payload_type
     local kind = type(raw) == "string" and raw or "unknown"

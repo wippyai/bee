@@ -16,9 +16,11 @@ type Due = {work: string, session: string, state: "queued" | "reserved" | "accep
 type Page = {items: {Due}}
 type Turn = {work: string, session: string, turn: string, claim: string, owner_epoch: integer,
     input: unknown, input_digest: string, output_schema: string, sender: Sender, route: Object,
-    checkpoint: unknown?, context: Object?, phase: "reserved" | "accepted"}
+    checkpoint: unknown?, context: Object?, budget: Object?, phase: "reserved" | "accepted"}
 type Execution = {state: "settled", outcome: "succeeded" | "failed" | "cancelled", answer: string?,
     error: {code: string, message: string}?, usage: unknown?, checkpoint: Object?, evidence: unknown?}
+    | {state: "settled", outcome: "budget_exceeded", error: {code: string, message: string},
+        checkpoint: Object?, evidence: {summary: string, artifacts: {string}}}
     | {state: "pending" | "uncertain", outcome: string?, evidence: unknown?}
 type Reservation = {work: string?, session: string, turn: string?, claim: string?, owner_epoch: integer?, state: string}
 type Journal = {
@@ -294,7 +296,7 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     local invocation: Object = {attempt_id = turn.turn,
         generation = turn.owner_epoch, recovery = due.state ~= "queued", prompt = input, sender = sender, admission = admission,
         driver_binding_ref = route.driver_binding_ref, profile_id = route.profile_id,
-        driver_methods = route.driver_methods,
+        driver_methods = route.driver_methods, budget = turn.budget,
         placement_methods = route.placement_methods, checkpoint = context}
     local observation_target: string? = "bee.threads.service:turn_observation"
     if journal.target then
@@ -334,6 +336,9 @@ local function run_due(journal: Journal, registry: Registry, pass: Pass, due: Du
     if outcome.outcome == "succeeded" then
         result = {state = "succeeded", schema = turn.output_schema, value = {text = outcome.answer or ""},
             artifacts = {}, usage = outcome.usage}
+    elseif outcome.outcome == "budget_exceeded" then
+        result = {state = "budget_exceeded", error = outcome.error, evidence = outcome.evidence,
+            artifacts = outcome.evidence.artifacts}
     else
         local error_value = outcome.error or {code = "EXECUTOR_FAILED", message = "the external turn failed"}
         result = {state = outcome.outcome, error = {code = error_value.code or "EXECUTOR_FAILED",
@@ -362,7 +367,7 @@ function M.create(journal: Journal, registry: Registry, wake: Wake?, run_id: str
             if not valid_id(request.session) or type(request.operation_key) ~= "string" or #request.operation_key == 0
                 or #request.operation_key > 128 or request.input == nil then return nil, "INVALID: session, operation_key and input are required" end
             local enqueue = {session = request.session, operation_key = request.operation_key, input = request.input,
-                output_schema = request.output_schema or "bee:Text@1"}
+                output_schema = request.output_schema or "bee:Text@1", budget = request.budget}
             local receipt, enqueue_error = journal.enqueue(enqueue)
             if enqueue_error or not receipt then return nil, enqueue_error or "Threads did not return a work receipt" end
             if wake then

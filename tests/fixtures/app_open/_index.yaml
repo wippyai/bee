@@ -43,7 +43,7 @@ entries:
       BEE_FIXTURE_GATEWAY_APP_OPEN: '1'
       BEE_FIXTURE_APP_DEFINITION: bee.app_journey_demo:app
       BEE_FIXTURE_STREAM: ''
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
     gateway_tools: [thread_read, thread_message, application_open]
     gateway_surface:
       tools: []

@@ -3,6 +3,7 @@
 local test = require("test")
 local turn = require("turn")
 local stream = require("stream")
+local bounds = require("bounds")
 
 local function base_request(): {[string]: unknown}
     return {
@@ -11,7 +12,8 @@ local function base_request(): {[string]: unknown}
         sender = {kind = "principal", id = "owner"}, driver_binding_ref = "bee.driver.fixture:binding", profile_id = "session",
         driver_methods = {prepare = "bee.driver.fixture.binding:prepare", dispatch = "bee.driver.fixture.binding:dispatch", normalize = "bee.driver.fixture.binding:normalize"},
         placement_methods = {prepare = "bee.placement.native.binding:prepare", attach = "bee.placement.native.binding:attach",
-            start = "bee.placement.native.binding:start", reconcile = "bee.placement.native.binding:reconcile", cleanup = "bee.placement.native.binding:cleanup"},
+            start = "bee.placement.native.binding:start", stop = "bee.placement.native.binding:stop",
+            reconcile = "bee.placement.native.binding:reconcile", cleanup = "bee.placement.native.binding:cleanup"},
         admission = {attempt_id = "attempt-current", definition_ref = "host:definition", workspace_id = "workspace", owner_id = "owner",
             thread_id = "thread-current", session_ref = "bs:node:workspace:session", action_id = "bs:node:workspace:session",
             brief = "continue the task", expected_plan_digest = string.rep("a", 64), profile_id = "session"},
@@ -127,6 +129,67 @@ local function define_tests()
             test.eq(result.outcome, "cancelled")
             io.reconcile = function(): (unknown, nil) return {attempt_id = "attempt-current", execution_state = "running"}, nil end
             test.eq(assert(turn.execute(io, request)).state, "uncertain")
+        end)
+        test.it("returns budget_exceeded with typed placement exit evidence for each budget kind", function()
+            for _, kind in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
+                local request = base_request()
+                request.budget = kind == "max_turns" and {max_turns = 1}
+                    or kind == "max_tokens" and {max_tokens = 1} or {wall_time_ms = 1}
+                local io = success_io()
+                io.observe = function(): (unknown, nil)
+                    return {stopped = true, budget_exceeded = kind,
+                        evidence = {summary = "placement proved the CLI exited after the budget", artifacts = {"placement attempt attempt-current", "exit observed by runner"}}}, nil
+                end
+                local result = assert(turn.execute(io, request))
+                test.eq(result.state, "settled")
+                test.eq(result.outcome, "budget_exceeded")
+                local evidence = bounds.object(result.evidence)
+                test.eq(evidence and evidence.summary, "placement proved the CLI exited after the " .. kind .. " budget")
+            end
+        end)
+        test.it("settles an exceeded budget when placement proves the process exited naturally", function()
+            local request = base_request()
+            request.budget = {max_tokens = 1}
+            local io = success_io()
+            io.observe = function(): (unknown, nil)
+                return {stopped = false, budget_exceeded = "max_tokens",
+                    evidence = {summary = "placement proved the CLI exited after max_tokens", artifacts = {"placement attempt attempt-current", "exit observed by runner"}}}, nil
+            end
+            local result = assert(turn.execute(io, request))
+            test.eq(result.state, "settled")
+            test.eq(result.outcome, "budget_exceeded")
+            local evidence = bounds.object(result.evidence)
+            test.eq(evidence and evidence.summary, "placement proved the CLI exited after the max_tokens budget")
+        end)
+        test.it("leaves a long fake turn unbounded by default", function()
+            local request = base_request()
+            local io = success_io()
+            local normalized_turns = 0
+            io.observe = function(_: unknown, _: unknown, _: string, _: boolean, _: unknown, observed_request: turn.Request): (unknown, nil)
+                test.is_nil(observed_request.budget)
+                for _ = 1, 300 do normalized_turns = normalized_turns + 1 end
+                return {terminal = {outcome = "succeeded", resume_ref = "provider-session"},
+                    observations = {}, stopped = false}, nil
+            end
+            local result = assert(turn.execute(io, request))
+            test.eq(result.state, "settled")
+            test.eq(result.outcome, "succeeded")
+            test.eq(normalized_turns, 300)
+        end)
+        test.it("does not settle a budget outcome without placement exit evidence", function()
+            local request = base_request()
+            request.budget = {max_turns = 1}
+            local io = success_io()
+            io.reconcile = function(id: string)
+                return {attempt = {attempt_id = id, execution_state = "running", cleanup_state = "pending"}}, nil
+            end
+            io.observe = function(): (unknown, nil)
+                return {stopped = false, budget_exceeded = "max_turns",
+                    evidence = {summary = "stop was not proven", artifacts = {}}}, nil
+            end
+            local result = assert(turn.execute(io, request))
+            test.eq(result.state, "uncertain")
+            test.eq(result.outcome, "uncertain")
         end)
         test.it("reconciles a recovered current attempt before any plan or invocation", function()
             local calls: {string} = {}

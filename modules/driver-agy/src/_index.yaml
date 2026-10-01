@@ -310,7 +310,6 @@ entries:
     prepare_options:
       model: gemini-3.8-flash
       effort: high
-      print_timeout: 5m
       sandbox: true
     placement_profiles:
     - bee.placement:native

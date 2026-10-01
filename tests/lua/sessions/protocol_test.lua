@@ -44,6 +44,15 @@ local function define_tests()
             result.usage = {cost_decimal = "1.2"}
             test.is_nil(protocol.decode_result(result))
         end)
+        test.it("accepts only the optional work budget fields", function()
+            local decoded = assert(protocol.decode_budget({max_turns = 8, max_tokens = 12000, wall_time_ms = 90000}))
+            test.eq(decoded.max_turns, 8)
+            test.eq(decoded.max_tokens, 12000)
+            test.eq(decoded.wall_time_ms, 90000)
+            test.is_nil(protocol.decode_budget({}))
+            test.is_nil(protocol.decode_budget({turn_budget = 8}))
+            test.is_nil(protocol.decode_budget({max_tokens = -1}))
+        end)
         test.it("accepts exactly the four await branches for a work", function()
             for _, tag in ipairs({"ready", "pending", "blocked", "uncertain"}) do
                 local decoded, failure = protocol.decode_work_await(work_await(tag))
@@ -96,6 +105,40 @@ local function define_tests()
             test.eq(result.outcome, "rejected")
             test.is_nil(protocol.decode_result({outcome = "rejected", artifacts = {}}))
             test.is_nil(protocol.decode_result({outcome = "unknown", artifacts = {}, error = {code = "X", message = "m", retry = "never"}}))
+        end)
+
+        test.it("decodes a budget-exceeded result with placement evidence", function()
+            local result = assert(protocol.decode_result({outcome = "budget_exceeded", artifacts = {},
+                error = {code = "BUDGET_EXCEEDED", message = "wall_time_ms exceeded", retry = "never"},
+                evidence = {summary = "placement proved the CLI exited after the budget", artifacts = {"attempt bturn:n:w:t1", "exit observed by runner"}}}))
+            test.eq(result.outcome, "budget_exceeded")
+            test.eq(result.evidence.summary, "placement proved the CLI exited after the budget")
+            test.is_nil(protocol.decode_result({outcome = "budget_exceeded", artifacts = {},
+                error = {code = "BUDGET_EXCEEDED", message = "limit", retry = "never"}}))
+        end)
+
+        test.it("keeps quiet-period evidence on a stalled session snapshot", function()
+            local snapshot = {session = "bs:n:w:s1", revision = 1, incarnation = 1, title = "quiet",
+                lifecycle = "active", activity = "stalled", execution = {state = "running",
+                    evidence_at = "2026-09-30T12:00:00.000Z", stale = false}, queue_count = 0, effective_limits = {},
+                continuity = {mode = "provider_resume"}, actions = {},
+                activity_evidence = {kind = "quiet", turn = "bturn:n:w:t1", last_progress_at_ms = 1000,
+                    quiet_period_ms = 5000, quiet_for_ms = 6000}}
+            local decoded = assert(protocol.decode_snapshot(snapshot))
+            test.eq(decoded.activity, "stalled")
+            test.eq(decoded.activity_evidence and decoded.activity_evidence.turn, "bturn:n:w:t1")
+            test.eq(decoded.activity_evidence and decoded.activity_evidence.quiet_for_ms, 6000)
+        end)
+
+        test.it("decodes a session snapshot after a budget-exceeded work result", function()
+            local snapshot = {session = "bs:n:w:s1", revision = 2, incarnation = 1, title = "bounded",
+                lifecycle = "active", activity = "idle", execution = {state = "quiescent",
+                    evidence_at = "2026-09-30T12:00:00.000Z", stale = false}, queue_count = 0, effective_limits = {},
+                continuity = {mode = "provider_resume"}, actions = {},
+                last_result = {work = "bw:n:w:w1", outcome = "budget_exceeded", summary = "max_tokens exceeded",
+                    at = "2026-09-30T12:00:00.000Z"}}
+            local decoded = assert(protocol.decode_snapshot(snapshot))
+            test.eq(decoded.last_result and decoded.last_result.outcome, "budget_exceeded")
         end)
 
         test.it("checks qualified refs by kind", function()

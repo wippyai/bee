@@ -21,7 +21,6 @@ type InboxDelivery = {kind: "empty"}
     | {kind: "item", content: InboxContent}
     | {kind: "failed", outcome: "failed" | "uncertain", message: string}
 
-M.MAX_TURNS = 16
 M.MAX_TOOL_CALLS_PER_TURN = 16
 M.MAX_TOOL_OUTPUT_BYTES = 8192
 M.MAX_TEXT_BYTES = 32768
@@ -186,7 +185,7 @@ end
 function M.decode_host_config(value: unknown): (types.HostConfig?, string?)
     local object = bounds.object(value == nil and {} or value)
     if not object then return nil, "host_config must be an object" end
-    local unknown_field = bounds.fields(object, {"endpoint", "credential_ref", "model", "timeout_ms", "stream", "admitted_delegates", "max_turns"})
+    local unknown_field = bounds.fields(object, {"endpoint", "credential_ref", "model", "timeout_ms", "stream", "admitted_delegates"})
     if unknown_field then return nil, "host_config: " .. unknown_field end
     local url, url_error = driver_configuration.endpoint(object.endpoint, true, "endpoint")
     if not url then return nil, "host_config: " .. tostring(url_error) end
@@ -215,14 +214,6 @@ function M.decode_host_config(value: unknown): (types.HostConfig?, string?)
         if not delegates then return nil, "host_config: admitted_delegates: " .. tostring(delegates_error) end
         admitted = delegates
     end
-    local max_turns = M.MAX_TURNS
-    if object.max_turns ~= nil then
-        local turns = bounds.integer(object.max_turns)
-        if not turns or turns < 1 or turns > M.MAX_TURNS then
-            return nil, "host_config: max_turns must be between 1 and " .. tostring(M.MAX_TURNS)
-        end
-        max_turns = turns
-    end
     return {
         endpoint = url,
         credential_ref = credential_ref,
@@ -230,7 +221,6 @@ function M.decode_host_config(value: unknown): (types.HostConfig?, string?)
         timeout_ms = timeout_ms,
         stream = object.stream == true,
         admitted_delegates = admitted,
-        max_turns = max_turns,
     }, nil
 end
 
@@ -639,10 +629,9 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
     end
 
     local final_answer: string? = nil
-    local max_turns = host_config.max_turns or M.MAX_TURNS
     local turn_sequence = 0
 
-    while turn_sequence < max_turns do
+    while true do
         turn_sequence = turn_sequence + 1
 
         if context.cancelled() then
@@ -804,7 +793,8 @@ function M.execute(context: types.ExecutionContext, request: types.RunRequest): 
         end
     end
 
-    return settle("failed", final_answer, "turn limit of " .. tostring(max_turns) .. " exceeded without a final answer")
+    return settle("failed", final_answer, "execution loop ended without a terminal response")
+
 end
 
 return M

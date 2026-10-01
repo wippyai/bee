@@ -31,7 +31,6 @@ entries:
   modules: [registry]
   imports:
     bounds: bee.threads.records:bounds
-    turn_budget: bee.driver:turn_budget
     login_evidence: bee.driver:login_evidence
 - name: locate
   kind: library.lua
@@ -60,7 +59,6 @@ entries:
     canonical: bee.threads.records:canonical
     descriptor: bee.driver:descriptor
     configuration: bee.driver:configuration
-    turn_budget: bee.driver:turn_budget
     types: bee.driver:types
     locate: bee.driver:locate
     codec_registry: bee.driver:codec_registry
@@ -101,12 +99,6 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     instructions: bee.driver:instructions
-    turn_budget: bee.driver:turn_budget
-- name: turn_budget
-  kind: library.lua
-  source: file://turn_budget.lua
-  imports:
-    bounds: bee.threads.records:bounds
 - name: driver
   kind: contract.definition
   methods:

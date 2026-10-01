@@ -25,7 +25,6 @@ local function define_tests()
             test.eq(decoded.profile_id, "session")
             test.eq(decoded.brief, "hello grok")
             test.eq(decoded.permission_mode, "default")
-            test.is_nil(decoded.turn_budget)
             test.is_nil(decoded.model)
             test.is_nil(decoded.effort)
             test.is_nil(decoded.resume_ref)
@@ -44,7 +43,7 @@ local function define_tests()
         end)
 
         test.it("runs the shipped batch worker in the default permission mode with no sandbox flag", function()
-            local decoded, err = launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default", turn_budget = 32})
+            local decoded, err = launch.decode({profile_id = "batch", brief = "read traits", permission_mode = "default"})
             if not decoded then error(tostring(err)) end
             local spec = launch.specification(decoded)
             test.eq(spec.argv[1], "-p")
@@ -103,14 +102,12 @@ local function define_tests()
                 brief = "refactor code",
                 model = "grok-4.6",
                 effort = "high",
-                turn_budget = 10,
                 resume_ref = "session-1234",
                 gateway_tools = {"fs_read", "fs_write"},
             })
             if not decoded then error(tostring(err)) end
             test.eq(decoded.model, "grok-4.6")
             test.eq(decoded.effort, "high")
-            test.eq(decoded.turn_budget, 10)
             test.eq(decoded.resume_ref, "session-1234")
             test.eq(#decoded.gateway_tools, 2)
 
@@ -118,7 +115,7 @@ local function define_tests()
             local line = table.concat(spec.argv, " ")
             test.is_true(line:find("--model grok-4.6", 1, true) ~= nil)
             test.is_true(line:find("--reasoning-effort high", 1, true) ~= nil)
-            test.is_true(line:find("--max-turns 10", 1, true) ~= nil)
+            test.is_nil(line:find("--max-turns", 1, true))
             test.is_true(line:find("-r session-1234", 1, true) ~= nil)
             test.is_true(line:find('--allow MCPTool(bee__*)', 1, true) ~= nil)
 
@@ -147,15 +144,8 @@ local function define_tests()
             local _, err_brief = launch.decode({profile_id = "session", brief = ""})
             test.eq(err_brief, "brief must be nonempty bounded text")
 
-            -- turn_budget on window
-            local _, err_win_turns = launch.decode({profile_id = "window", brief = "", turn_budget = 5})
-            test.eq(err_win_turns, "turn_budget is only supported for structured turns")
-
-            -- turn_budget bounds
-            local _, err_zero = launch.decode({profile_id = "session", brief = "hi", turn_budget = 0})
-            test.eq(err_zero, "turn_budget must be between 1 and 128")
-            local _, err_high = launch.decode({profile_id = "session", brief = "hi", turn_budget = 129})
-            test.eq(err_high, "turn_budget must be between 1 and 128")
+            local _, removed_budget_error = launch.decode({profile_id = "session", brief = "hi", turn_budget = 5})
+            test.eq(removed_budget_error, "launch request: unknown field turn_budget")
 
             -- invalid permission_mode
             local _, err_perm = launch.decode({profile_id = "session", brief = "hi", permission_mode = "yolo"})

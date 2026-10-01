@@ -240,7 +240,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: selection_policy
   kind: registry.entry
   meta:
@@ -258,7 +258,7 @@ entries:
     fixture: true
     executables: {claude: /bin/true}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: gateway_fixture_policy
   kind: registry.entry
   meta:
@@ -276,7 +276,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
     gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: gateway_surface_policy
@@ -296,7 +296,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
     gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     gateway_surface:
@@ -325,7 +325,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
     gateway_tools: [thread_read, thread_message, overlay, delivery, publish]
 - name: gateway_expiring_policy
   kind: registry.entry
@@ -344,7 +344,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
     gateway_tools: [thread_read, capabilities]
     gateway_ttl_ms: 2500
 - name: claude_gateway_policy
@@ -364,7 +364,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 3}
+    prepare_options: {permission_mode: dontAsk}
     gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: codex_gateway_policy
@@ -690,7 +690,7 @@ entries:
     fixture: true
     executables: {claude: /bin/true}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
     gateway_tools: [FileRead, FileReport]
     profile_options: {model: [claude-mapped]}
     profile_instructions: true
@@ -753,7 +753,7 @@ entries:
     fixture: true
     executables: {}
     environment: {BEE_PROFILE_PROBE_NAME: alpha, BEE_PROFILE_PROBE_ALPHA_ONLY: alpha-selected, BEE_PROFILE_PROBE_HOLD: "1"}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: profile_beta_policy
   kind: registry.entry
   meta:
@@ -771,7 +771,7 @@ entries:
     fixture: true
     executables: {}
     environment: {BEE_PROFILE_PROBE_NAME: beta, BEE_PROFILE_PROBE_BETA_ONLY: beta-selected, BEE_PROFILE_PROBE_HOLD: "1"}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: profile_alpha_definition
   kind: registry.entry
   meta:
@@ -1013,7 +1013,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: permission_production_policy
   kind: registry.entry
   meta:
@@ -1029,7 +1029,7 @@ entries:
     drain_ms: 2000
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: permission_production_policy_unpinned
   kind: registry.entry
   meta:
@@ -1045,7 +1045,7 @@ entries:
     drain_ms: 2000
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: permission_production_acceptance
   kind: registry.entry
   meta:
@@ -1268,7 +1268,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
+    prepare_options: {permission_mode: dontAsk}
 - name: claude_runner_test
   kind: function.lua
   source: file://claude_runner_test.lua
@@ -1317,7 +1317,7 @@ entries:
     fixture: true
     executables: {}
     environment: {}
-    prepare_options: {permission_mode: default, max_turns: 3}
+    prepare_options: {permission_mode: default}
 - name: claude_control_acceptance
   kind: registry.entry
   meta:

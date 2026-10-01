@@ -7,6 +7,7 @@ local process = require("process")
 local stream = require("stream")
 local placement_protocol = require("placement_protocol")
 local driver_types = require("driver_types")
+local budget_values = require("budget")
 local turn = require("turn")
 local admission = require("admission")
 local machine = require("machine")
@@ -16,6 +17,7 @@ local time = require("time")
 local exchange = require("exchange")
 local checkpoint = require("checkpoint")
 local placement_decode = require("placement_decode")
+local security = require("security")
 
 type Listener = {outputs: unknown, exits: unknown, events: unknown}
 type Object = {[string]: unknown}
@@ -100,6 +102,47 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local exit_uncertain = false
     local input_close_attempted = false
     local stderr_bytes: integer = 0
+    local live_budget = bounds.object(request.budget)
+    local wall_limit = live_budget and bounds.count(live_budget.wall_time_ms) or nil
+    local budget_started_ms = math.floor(time.now():unix_nano() / 1000000)
+    local wall_timer = wall_limit and time.after(tostring(wall_limit) .. "ms") or nil
+    local budget: budget_values.Budget? = nil
+    local counters = budget_values.new()
+    local budget_exceeded: string? = nil
+    local budget_stop_error: string? = nil
+    if request.budget ~= nil then
+        budget, budget_stop_error = budget_values.decode(request.budget)
+        if budget_stop_error then return nil, budget_stop_error end
+    end
+    local function now_ms(): integer
+        return math.floor(time.now():unix_nano() / 1000000)
+    end
+    local function stop_for_budget(): string?
+        local admission_request = bounds.object(request.admission)
+        local owner = admission_request and bounds.id(admission_request.owner_id)
+        local workspace = admission_request and bounds.id(admission_request.workspace_id)
+        local methods = bounds.object(request.placement_methods)
+        local target = methods and bounds.id(methods.stop)
+        if not owner or not workspace or not target then return "admitted owner or placement stop method is missing" end
+        local actor, actor_error = security.new_actor(owner, {workspace_id = workspace})
+        if actor_error or not actor then return "restore admitted placement owner: " .. tostring(actor_error) end
+        local raw, call_error = funcs.new():with_actor(actor):call(target, {attempt_id = attempt_id, mode = "cooperative"})
+        if call_error then return "request placement stop: " .. tostring(call_error) end
+        local reply = bounds.object(raw)
+        if not reply or reply.ok ~= true or not bounds.object(reply.value) then
+            return "placement did not acknowledge the budget stop"
+        end
+        return nil
+    end
+    local function check_budget(): string?
+        if not budget then return nil end
+        return budget_values.exceeded(budget, counters, now_ms() - budget_started_ms)
+    end
+    local function request_budget_stop(kind: string)
+        if budget_exceeded then return end
+        budget_exceeded = kind
+        budget_stop_error = stop_for_budget()
+    end
     local function completion_event(stage: string): string?
         local _, err = service_call(tostring(request.observation_target), {turn = request.attempt_id, claim = request.claim,
             operation_key = "executor-complete:" .. tostring(request.attempt_id):sub(-72) .. ":" .. stage,
@@ -125,6 +168,9 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             })
             if append_error then return "append live turn observation: " .. append_error end
             observations[#observations + 1] = event
+            budget_values.observe(counters, event)
+            local exceeded = check_budget()
+            if exceeded then request_budget_stop(exceeded); break end
         end
         if reply.terminal ~= nil then
             local decoded, decode_error = driver_types.decode_terminal(reply.terminal)
@@ -330,9 +376,16 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         local cases = {listener.outputs:case_receive(), listener.exits:case_receive(), listener.events:case_receive(),
             acks:case_receive()}
         if poller then cases[#cases + 1] = poller:channel():case_receive() end
+        if wall_timer then cases[#cases + 1] = wall_timer:case_receive() end
         local selected = channel.select(cases)
         if not selected.ok then output_error = output_error or "placement output observation was interrupted"; break end
-        if selected.channel == listener.outputs then
+        if wall_timer and selected.channel == wall_timer then
+            local exceeded = check_budget()
+            if exceeded then request_budget_stop(exceeded)
+            else
+                wall_timer = time.after(tostring(math.max(1, (wall_limit or 1) - (now_ms() - budget_started_ms))) .. "ms")
+            end
+        elseif selected.channel == listener.outputs then
             local message = selected.value
             accept_output(tostring(message:from()), message:payload():data())
         elseif selected.channel == listener.exits then
@@ -367,6 +420,10 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     if permission_context then
         local _, close_error = exchange.close(permission_context)
         output_error = output_error or close_error
+    end
+    if budget_exceeded then
+        return {terminal = terminal, observations = observations, stopped = stopped,
+            budget_exceeded = budget_exceeded, budget_stop_error = budget_stop_error}, nil
     end
     if output_error then return {terminal = terminal, observations = observations, stopped = stopped}, output_error end
     if exit_uncertain then return {terminal = terminal, observations = observations, stopped = stopped}, "placement runner did not prove process exit" end

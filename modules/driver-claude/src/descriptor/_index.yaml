@@ -40,7 +40,6 @@ entries:
       profiles: [session, batch, window]
       fields:
         permission_mode: {type: enum, values: [default, acceptEdits, plan, dontAsk], default: default, invalid: 'permission_mode is not one Bee admits'}
-        turn_budget: {type: budget, max: 128, profiles: [session, batch], unsupported: 'turn_budget is only supported for structured turns'}
         model: {type: model, invalid: 'model is not one bounded model identifier'}
         effort: {type: enum, values: [low, medium, high, xhigh, max], invalid: 'effort is not one Bee admits'}
         permission_exchange: {type: boolean, default: false, profiles: [session, batch], unsupported: 'stdio permission exchange is only supported for structured turns'}
@@ -49,10 +48,9 @@ entries:
         gateway_tools: {type: ids, default: []}
         gateway_hooks: {type: ids, default: []}
       rules:
-      - {kind: profile_fields, profile: window, fields: [turn_budget, permission_exchange, control_enabled], message: 'structured-turn options are not supported for a window'}
+      - {kind: profile_fields, profile: window, fields: [permission_exchange, control_enabled], message: 'structured-turn options are not supported for a window'}
     flags:
       permission: {field: permission_mode, emit_default: true, argv: [--permission-mode, {field: permission_mode}]}
-      turn_budget: {field: turn_budget, emit_default: false, argv: [--max-turns, {field: turn_budget}]}
     argv_templates:
       window:
         argv:
@@ -73,7 +71,6 @@ entries:
         - --verbose
         - --include-partial-messages
         - {option: permission}
-        - {option: turn_budget}
         - {if: model, then: [--model, {field: model}]}
         - {if: effort, then: [--effort, {field: effort}]}
         - {if: permission_exchange, then: [--permission-prompt-tool, stdio, --permission-prompts, host]}
@@ -93,7 +90,6 @@ entries:
         - --verbose
         - --include-partial-messages
         - {option: permission}
-        - {option: turn_budget}
         - {if: model, then: [--model, {field: model}]}
         - {if: effort, then: [--effort, {field: effort}]}
         - {if: permission_exchange, then: [--permission-prompt-tool, stdio, --permission-prompts, host]}

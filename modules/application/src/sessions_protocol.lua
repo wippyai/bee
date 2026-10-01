@@ -21,6 +21,7 @@ M.DEFAULT_TIMEOUT_MS = 30000
 
 type Retry = "never" | "same_key" | "refresh" | "reconcile"
 type Evidence = {summary: string, artifacts: {string}}
+type Budget = {max_turns: integer?, max_tokens: integer?, wall_time_ms: integer?}
 type Sender = {kind: "session" | "principal", id: string}
 type FaultExtra = {operation: string?, current_revision: integer?, evidence: Evidence?, retry_after_ms: integer?}
 type Fault = {code: string, message: string, retry: Retry, operation_key: string?, operation: string?,
@@ -30,7 +31,8 @@ type BlockerKind = "budget" | "authority" | "capacity" | "recovery" | "stalled"
 type Blocker = {kind: BlockerKind, message: string, subject: string, actions: {Action}}
 type Succeeded = {outcome: "succeeded", schema: string, value: unknown, artifacts: {string}, usage: record_types.Usage}
 type Unsuccessful = {outcome: "failed" | "cancelled" | "rejected", error: Fault, artifacts: {string}}
-type Result = Succeeded | Unsuccessful
+type BudgetExceeded = {outcome: "budget_exceeded", error: Fault, artifacts: {string}, evidence: Evidence}
+type Result = Succeeded | Unsuccessful | BudgetExceeded
 type WorkReceipt = {work: string, session: string, operation: string, committed_at: string, sequence: integer,
     kind: "request", state: "queued", output_schema: string, sender: Sender}
 type WorkPhase = "queued" | "reserved" | "accepted"
@@ -64,12 +66,14 @@ type Continuity = {mode: "exact" | "provider_resume" | "reconstructed" | "fresh"
 type Execution = {state: "absent" | "starting" | "running" | "quiescent" | "unknown", evidence_at: string, stale: boolean}
 type Lifecycle = "opening" | "active" | "suspended" | "closing" | "closed"
 type Activity = "idle" | "working" | "blocked" | "stalled"
-type LastResult = {work: string, outcome: string, summary: string, at: string}
+type ActivityEvidence = {kind: "quiet", turn: string, last_progress_at_ms: integer, quiet_period_ms: integer, quiet_for_ms: integer}
+type LastOutcome = "succeeded" | "failed" | "cancelled" | "rejected" | "budget_exceeded"
+type LastResult = {work: string, outcome: LastOutcome, summary: string, at: string}
 type HistoryItem = {work: string, sequence: integer, input: unknown, created_at: string}
 type HistoryPage = {items: {HistoryItem}, next: integer?}
 type Presentation = "headless" | "window"
 type SessionSnapshot = {presentation: Presentation?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
-    activity: Activity, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
+    activity: Activity, activity_evidence: ActivityEvidence?, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type OperationReceipt = OpenReceipt | WorkReceipt | ControlReceipt
 type OperationState = {operation: string, operation_key: string, revision: integer, receipt: OperationReceipt, observation: OperationAwait}
@@ -140,6 +144,29 @@ function M.json(value: unknown): boolean
     if value == nil then return false end
     local encoded = canonical.encode(value, M.MAX_VALUE_BYTES, M.MAX_VALUE_DEPTH)
     return encoded ~= nil
+end
+
+function M.decode_budget(value: unknown): (Budget?, string?)
+    if value == nil then return nil, nil end
+    local object = bounds.object(value)
+    if not object then return nil, "budget must be an object" end
+    local unknown = bounds.fields(object, {"max_turns", "max_tokens", "wall_time_ms"})
+    if unknown then return nil, "budget has unknown field " .. unknown end
+    local result: Budget = {}
+    for _, name in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
+        local raw = object[name]
+        if raw ~= nil then
+            local amount = bounds.count(raw)
+            if not amount then return nil, "budget." .. name .. " must be a nonnegative integer" end
+            if name == "max_turns" then result.max_turns = amount
+            elseif name == "max_tokens" then result.max_tokens = amount
+            else result.wall_time_ms = amount end
+        end
+    end
+    if result.max_turns == nil and result.max_tokens == nil and result.wall_time_ms == nil then
+        return nil, "budget must set at least one limit"
+    end
+    return result, nil
 end
 
 local function refs(value: unknown, kind: RefKind?): {string}?
@@ -279,6 +306,17 @@ function M.decode_result(value: unknown): (Result?, string?)
         local schema, artifacts, usage = M.any_ref(checked.schema), refs(checked.artifacts), record_values.usage(checked.usage)
         if not schema or not artifacts or not usage or not M.json(checked.value) then return nil, "succeeded result is malformed" end
         return {outcome = "succeeded", schema = schema, value = checked.value, artifacts = artifacts, usage = usage}, nil
+    end
+    if object.outcome == "budget_exceeded" then
+        local checked, failure = shape(object, "budget result", {"outcome", "error", "artifacts", "evidence"})
+        if not checked then return nil, failure end
+        local fault, fault_error = M.decode_fault(checked.error)
+        local artifacts = refs(checked.artifacts)
+        local evidence, evidence_error = M.decode_evidence(checked.evidence)
+        if not fault or fault.code ~= "BUDGET_EXCEEDED" or not artifacts or not evidence then
+            return nil, fault_error or evidence_error or "budget result is malformed"
+        end
+        return {outcome = "budget_exceeded", error = fault, artifacts = artifacts, evidence = evidence}, nil
     end
     local checked, failure = shape(object, "result", {"outcome", "error", "artifacts"})
     if not checked then return nil, failure end
@@ -546,7 +584,7 @@ end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation"})
+        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation"})
     if not object then return nil, failure end
     local presentation: Presentation = "headless"
     if object.presentation == "window" then presentation = "window"
@@ -563,7 +601,13 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     if object.last_result ~= nil then
         local last = shape(object.last_result, "last result", {"work", "outcome", "summary", "at"})
         local work = last and M.ref("work", last.work)
-        local outcome = last and one_of(last.outcome, {"succeeded", "failed", "cancelled", "rejected"})
+        local selected_outcome = last and one_of(last.outcome, {"succeeded", "failed", "cancelled", "rejected", "budget_exceeded"})
+        local outcome: LastOutcome? = nil
+        if selected_outcome == "succeeded" then outcome = "succeeded"
+        elseif selected_outcome == "failed" then outcome = "failed"
+        elseif selected_outcome == "cancelled" then outcome = "cancelled"
+        elseif selected_outcome == "rejected" then outcome = "rejected"
+        elseif selected_outcome == "budget_exceeded" then outcome = "budget_exceeded" end
         local summary = last and bounds.text(last.summary, 4096)
         local at = last and bounds.timestamp(last.at)
         if not work or not outcome or not summary or not at then return nil, "last result is malformed" end
@@ -573,10 +617,24 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local title = bounds.text(object.title, M.MAX_TITLE_BYTES)
     local lifecycle = one_of(object.lifecycle, {"opening", "active", "suspended", "closing", "closed"})
     local activity = one_of(object.activity, {"idle", "working", "blocked", "stalled"})
+    local activity_evidence: ActivityEvidence? = nil
+    if object.activity_evidence ~= nil then
+        local quiet = shape(object.activity_evidence, "activity evidence", {"kind", "turn", "last_progress_at_ms", "quiet_period_ms", "quiet_for_ms"})
+        local turn = quiet and M.any_ref(quiet.turn)
+        local last = quiet and bounds.count(quiet.last_progress_at_ms)
+        local quiet_period = quiet and M.position(quiet.quiet_period_ms)
+        local quiet_for = quiet and bounds.count(quiet.quiet_for_ms)
+        if not quiet or quiet.kind ~= "quiet" or not turn or not last or not quiet_period or not quiet_for or quiet_for < quiet_period then
+            return nil, "session activity evidence is malformed"
+        end
+        activity_evidence = {kind = "quiet", turn = turn, last_progress_at_ms = last,
+            quiet_period_ms = quiet_period, quiet_for_ms = quiet_for}
+    end
     local queue_count = bounds.count(object.queue_count)
     local limits, actions = decode_limits(object.effective_limits), decode_actions(object.actions)
     if not session or not revision or not incarnation or not title or not lifecycle or not activity
         or not queue_count or not limits or not actions then return nil, "session snapshot is malformed" end
+    if (activity == "stalled") ~= (activity_evidence ~= nil) then return nil, "stalled activity must carry quiet-period evidence" end
     local execution_object = shape(object.execution, "execution", {"state", "evidence_at", "stale"})
     if not execution_object then return nil, "session execution is malformed" end
     local state = one_of(execution_object.state, {"absent", "starting", "running", "quiescent", "unknown"})
@@ -607,7 +665,7 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     return {presentation = presentation, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
         definition = extras.definition, last_result = last_result,
         session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
-        activity = decoded_activity,
+        activity = decoded_activity, activity_evidence = activity_evidence,
         execution = {state = decoded_state, evidence_at = evidence_at, stale = execution_object.stale == true},
         queue_count = queue_count, effective_limits = limits,
         continuity = {mode = decoded_continuity, evidence = evidence}, actions = actions}, nil

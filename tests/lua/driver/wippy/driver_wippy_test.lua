@@ -697,28 +697,27 @@ end
             test.is_true(#records >= 2) -- at least answer from turn 1 and turn 2
         end)
 
-        test.it("stops a runaway tool-call loop at the turn limit", function()
+        test.it("completes a long tool-call sequence without a default turn ceiling", function()
             local url = get_mock_url()
-            local thread_id = new_thread("Loop Thread")
-            local action_id = "act-loop-1"
-            local attempt_id = "att-loop-1"
+            local thread_id = new_thread("Long Thread")
+            local action_id = "act-long-1"
+            local attempt_id = "att-long-1"
             prepare(thread_id, action_id, attempt_id)
 
-            local res = raw_call("bee.driver.wippy:run", {
-                operation = "run",
+            local res = driver_call("run", {
                 thread_id = thread_id,
                 action_id = action_id,
                 attempt_id = attempt_id,
                 agent_ref = "bee.driver.wippy.test:test_agent",
-                brief = "Please call_tool_loop forever",
-                host_config = {endpoint = url, stream = false, max_turns = 3},
+                brief = "Please call_tool_long",
+                host_config = {endpoint = url, stream = false},
             })
-            test.is_false(res.ok)
+            test.is_true(res.ok)
             local val = res.value :: Object
-            test.eq(val.outcome, "failed")
+            test.eq(val.outcome, "succeeded")
             test.eq(val.state, "ended")
-            local rep_err = res.error :: Object
-            test.is_true(tostring(rep_err.message):find("turn limit", 1, true) ~= nil)
+            test.eq(val.answer, "long-run-completed")
+            test.is_true(has_attempt_event(thread_id, "tool_call:att-long-1:18:"))
         end)
 
         test.it("refuses more tool calls per turn than admitted", function()

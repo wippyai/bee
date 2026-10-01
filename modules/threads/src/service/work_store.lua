@@ -14,6 +14,7 @@ local observation = require("observation")
 local record_types = require("record_types")
 local bounds = require("bounds")
 local canonical = require("canonical")
+local time = require("time")
 local M = {}
 type Result = transaction.Result
 type Row = {[string]: unknown}
@@ -21,7 +22,7 @@ type Session = {session_ref: string, thread_id: string, workspace_id: string, ow
     state: string, revision: integer, created_at: string, updated_at: string, route_json: string, context_json: string}
 type Work = {work_ref: string, session_ref: string, workspace_id: string, sequence: integer, revision: integer,
     phase: string, input_json: string, input_digest: string, output_schema: string, sender_kind: string, sender_id: string,
-    result_json: string?, uncertainty_json: string?, operation_ref: string, created_at: string}
+    result_json: string?, uncertainty_json: string?, operation_ref: string, created_at: string, budget_json: string}
 type Turn = {turn_ref: string, session_ref: string, work_ref: string, claim_token: string, owner_epoch: integer,
     input_digest: string, phase: string, checkpoint_json: string?, reserve_record_id: string,
     accept_record_id: string?, settle_record_id: string?, created_at: string}
@@ -65,8 +66,31 @@ local function integer(value: unknown): integer?
     return math.floor(value)
 end
 
+local function now_ms(): integer
+    return math.floor(time.now():unix_nano() / 1000000)
+end
+
 local function encode(value: unknown, maximum: integer?): (string?, string?)
     return canonical.encode(value, maximum or MAX_VALUE_BYTES, bounds.MAX_JSON_DEPTH)
+end
+
+local function budget_json(value: unknown): (string?, string?)
+    if value == nil then return "{}", nil end
+    local selected = object(value)
+    if not selected or not has_only(selected, {max_turns = true, max_tokens = true, wall_time_ms = true}) then
+        return nil, "budget must contain only max_turns, max_tokens or wall_time_ms"
+    end
+    local result: Row = {}
+    for _, name in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
+        local raw = selected[name]
+        if raw ~= nil then
+            local amount = integer(raw)
+            if amount == nil then return nil, "budget." .. name .. " must be a nonnegative integer" end
+            result[name] = amount
+        end
+    end
+    if next(result) == nil then return nil, "budget must set at least one limit" end
+    return encode(result)
 end
 
 local function digest(value: string): string?
@@ -141,6 +165,7 @@ local function work_row(row: Row): (Work?, string?)
     local work_ref, session_ref = text(row.work_ref, MAX_REF_BYTES), text(row.session_ref, MAX_REF_BYTES)
     local workspace, input_json = text(row.workspace_id, 32), type(row.input_json) == "string" and row.input_json or nil
     local input_digest, output_schema = text(row.input_digest, 128), text(row.output_schema, MAX_REF_BYTES)
+    local budget_json_value = type(row.budget_json) == "string" and row.budget_json or nil
     local sender_kind, sender_id = text(row.sender_kind, 16), text(row.sender_id, MAX_REF_BYTES)
     local phase = text(row.phase, 32)
     local sequence, revision = integer(row.sequence), integer(row.revision)
@@ -157,11 +182,12 @@ local function work_row(row: Row): (Work?, string?)
     end
     if not work_ref or not session_ref or not workspace or not input_json or not input_digest or not output_schema
         or (sender_kind ~= "session" and sender_kind ~= "principal") or not sender_id
-        or not phase or not sequence or not revision or not operation_ref or not created_at then return nil, "work row is corrupt" end
+        or not phase or not sequence or not revision or not operation_ref or not created_at or not budget_json_value then return nil, "work row is corrupt" end
     return {work_ref = work_ref, session_ref = session_ref, workspace_id = workspace, sequence = sequence,
         revision = revision, phase = phase, input_json = input_json, input_digest = input_digest,
         output_schema = output_schema, sender_kind = sender_kind, sender_id = sender_id, result_json = result_json,
-        uncertainty_json = uncertainty_json, operation_ref = operation_ref, created_at = created_at}, nil
+        uncertainty_json = uncertainty_json, operation_ref = operation_ref, created_at = created_at,
+        budget_json = budget_json_value}, nil
 end
 
 local function turn_row(row: Row): (Turn?, string?)
@@ -220,7 +246,7 @@ end
 local function get_work(tx: sql.Transaction, work_ref: string, workspace: string?): (Work?, string?)
     workspace = target_workspace(work_ref, workspace)
     local row, query_error = query_one(tx, "SELECT work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
-        "output_schema, sender_kind, sender_id, result_json, uncertainty_json, operation_ref, created_at FROM bee_session_work WHERE work_ref = ? AND (? IS NULL OR workspace_id = ?)",
+        "output_schema, sender_kind, sender_id, result_json, uncertainty_json, operation_ref, created_at, budget_json FROM bee_session_work WHERE work_ref = ? AND (? IS NULL OR workspace_id = ?)",
         {work_ref, workspace or sql.NULL, workspace or sql.NULL}, "work")
     if query_error then return nil, query_error end
     if not row then return nil, nil end
@@ -489,13 +515,16 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
         if head_sequence == nil then return failure("INTERNAL", "session journal sequence is corrupt") end
         local epoch, epoch_error = current_epoch(tx)
         if not epoch then return failure("UNAVAILABLE", epoch_error or "owner epoch is unavailable") end
-        local stalled_row, stalled_error = query_one(tx, "SELECT COUNT(*) AS count FROM bee_session_turns " ..
-            "WHERE session_ref = ? AND phase IN ('reserved','accepted') AND owner_epoch <> ?", {session_ref, epoch}, "stalled session turns")
-        if stalled_error then return transaction.storage_failure(stalled_error) end
-        local stalled = stalled_row and integer(stalled_row.count) or 0
-        if not stalled then return failure("INTERNAL", "stalled turn count is corrupt") end
-        local route, route_error = decode_json(session.route_json)
-        if route_error then return failure("INTERNAL", route_error) end
+        local recovery_row, recovery_error = query_one(tx, "SELECT COUNT(*) AS count FROM bee_session_turns " ..
+            "WHERE session_ref = ? AND phase IN ('reserved','accepted') AND owner_epoch <> ?", {session_ref, epoch}, "unreconciled session turns")
+        if recovery_error then return transaction.storage_failure(recovery_error) end
+        local recovery_blocked = recovery_row and integer(recovery_row.count) or 0
+        if not recovery_blocked then return failure("INTERNAL", "unreconciled turn count is corrupt") end
+        local route_value, route_error = decode_json(session.route_json)
+        local route = object(route_value)
+        if route_error or not route then return failure("INTERNAL", "session route is corrupt") end
+        local quiet_period = route.progress_quiet_ms == nil and 60000 or integer(route.progress_quiet_ms)
+        if not quiet_period or quiet_period < 1 then return failure("INTERNAL", "session quiet period is corrupt") end
         local last_rows, last_error = tx:query("SELECT work_ref, result_json, created_at FROM bee_session_work WHERE session_ref = ? AND phase = 'settled' ORDER BY sequence DESC LIMIT 1", {session_ref})
         if last_error or not last_rows then return transaction.storage_failure("read last session result") end
         local last_result: Row? = nil
@@ -509,13 +538,37 @@ function M.session_describe(db: sql.DB, actor: string, request: unknown): Result
             local summary = value and text(value.text, 65536) or fault and text(fault.message, 16384) or tostring(result.state)
             last_result = {work = last.work_ref, outcome = result.state, summary = (summary or ""):sub(1, 4096), at = last.created_at}
         end
-        local active_turn, turn_error = query_one(tx, "SELECT turn_ref, claim_token, work_ref FROM bee_session_turns WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active interactive turn")
+        local active_turn, turn_error = query_one(tx, "SELECT turn_ref, claim_token, work_ref, owner_epoch, phase, last_progress_at_ms " ..
+            "FROM bee_session_turns WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active session turn")
         if turn_error then return transaction.storage_failure(turn_error) end
+        local activity = "idle"
+        if queued > 0 or reserved + accepted > 0 then activity = "working" end
+        if uncertain > 0 or recovery_blocked > 0 then activity = "blocked" end
+        local activity_evidence: Row? = nil
+        if activity == "working" and active_turn and active_turn.phase == "accepted"
+            and integer(active_turn.owner_epoch) == epoch then
+            local last_progress_at = integer(active_turn.last_progress_at_ms)
+            if last_progress_at == nil or last_progress_at < 1 then
+                activity = "blocked"
+            else
+                local progress_at: integer = last_progress_at
+                local quiet_for = math.max(0, now_ms() - progress_at)
+                if quiet_for >= quiet_period then
+                    activity = "stalled"
+                    activity_evidence = {kind = "quiet", turn = active_turn.turn_ref,
+                        last_progress_at_ms = last_progress_at, quiet_period_ms = quiet_period, quiet_for_ms = quiet_for}
+                end
+            end
+        end
+        local execution_running = accepted > 0 and recovery_blocked == 0
         return transaction.success({session = session.session_ref, thread_ref = session.thread_id, workspace = session.workspace_id,
-            active_turn = active_turn and {turn = active_turn.turn_ref, claim = active_turn.claim_token, work = active_turn.work_ref} or nil,
+            active_turn = active_turn and {turn = active_turn.turn_ref, claim = active_turn.claim_token, work = active_turn.work_ref,
+                owner_epoch = active_turn.owner_epoch, phase = active_turn.phase, last_progress_at_ms = active_turn.last_progress_at_ms} or nil,
             last_result = last_result, title = session.title, state = session.state, route = route,
             revision = session.revision, created_at = session.created_at, updated_at = session.updated_at,
-            queued = queued, active = reserved + accepted, settled = settled, uncertain = uncertain, stalled = stalled,
+            queued = queued, active = reserved + accepted, execution_running = execution_running,
+            settled = settled, uncertain = uncertain, recovery_blocked = recovery_blocked,
+            activity = activity, activity_evidence = activity_evidence,
             head_sequence = head_sequence}, false)
     end)
 end
@@ -644,6 +697,19 @@ local function result_value(value: unknown, expected_schema: string?): (string?,
         if not has_only(result, {state = true, error = true, artifacts = true}) then return nil, nil, "unsuccessful result has unknown fields" end
         local fault = object(result.error)
         if not fault or not text(fault.code, 128) or not text(fault.message, 4096) then return nil, nil, "unsuccessful result requires a typed fault" end
+    elseif state == "budget_exceeded" then
+        if not has_only(result, {state = true, error = true, artifacts = true, evidence = true}) then
+            return nil, nil, "budget result has unknown fields"
+        end
+        local fault, evidence = object(result.error), object(result.evidence)
+        local evidence_artifacts = evidence and bounds.array(evidence.artifacts, MAX_FEED_PAGE) or nil
+        if not fault or fault.code ~= "BUDGET_EXCEEDED" or not text(fault.message, 4096)
+            or not evidence or not text(evidence.summary, 4096) or not evidence_artifacts then
+            return nil, nil, "budget result requires typed stop evidence"
+        end
+        for _, artifact in ipairs(evidence_artifacts) do
+            if not text(artifact, 4096) then return nil, nil, "budget stop evidence has an invalid artifact" end
+        end
     else
         return nil, nil, "result state must be settled"
     end
@@ -658,16 +724,17 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
     local caller = assert(caller)
     local workspace = assert(workspace)
     local input = object(request)
-    if not input or not has_only(input, {session = true, operation_key = true, input = true, output_schema = true}) then return missing_request() end
+    if not input or not has_only(input, {session = true, operation_key = true, input = true, output_schema = true, budget = true}) then return missing_request() end
     local session_ref, operation_key = ref(input.session), key(input.operation_key)
     local output_schema = input.output_schema == nil and "bee:Text@1" or text(input.output_schema, MAX_REF_BYTES)
     local input_json, input_error = encode(input.input)
-    if not session_ref or not operation_key or not output_schema or input.input == nil or not input_json then
-        return failure("INVALID_ARGUMENT", input_error or "session, key, input or output schema is invalid")
+    local selected_budget_json, budget_error = budget_json(input.budget)
+    if not session_ref or not operation_key or not output_schema or input.input == nil or not input_json or not selected_budget_json then
+        return failure("INVALID_ARGUMENT", input_error or budget_error or "session, key, input, output schema or budget is invalid")
     end
     local input_digest = digest(input_json)
     if not input_digest then return failure("INTERNAL", "measure immutable work input") end
-    local arguments = {session = session_ref, input = input_json, output_schema = output_schema}
+    local arguments = {session = session_ref, input = input_json, output_schema = output_schema, budget = selected_budget_json}
     workspace = mutation_workspace(session_ref, workspace, "send")
     if not workspace then return failure("DENIED", "sending requires a host workspace grant") end
     return transaction.write(db, function(tx: sql.Transaction): Result
@@ -690,8 +757,9 @@ function M.work_send(db: sql.DB, actor: string, request: unknown): Result
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append work event") end
         local sender_kind = caller:match("^bs:") and "session" or "principal"
         local work_error = execute(tx, "INSERT INTO bee_session_work (work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
-            "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at) VALUES (?, ?, ?, ?, 1, 'queued', ?, ?, ?, ?, ?, NULL, ?, ?)",
-            {work_ref, session_ref, workspace, sequence, input_json, input_digest, output_schema, sender_kind, caller, op_ref, now}, "enqueue work")
+            "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at, budget_json) VALUES (?, ?, ?, ?, 1, 'queued', ?, ?, ?, ?, ?, NULL, ?, ?, ?)",
+            {work_ref, session_ref, workspace, sequence, input_json, input_digest, output_schema, sender_kind, caller, op_ref, now,
+                selected_budget_json}, "enqueue work")
         if work_error then return failure("INTERNAL", work_error) end
         local receipt = {work = work_ref, session = session_ref, operation = op_ref, committed_at = now, sequence = sequence,
             kind = "request", state = "queued", output_schema = output_schema, sender = {kind = sender_kind, id = caller}}
@@ -706,6 +774,9 @@ local function work_value(work: Work): (Row?, string?)
         phase = work.phase, input = input, input_digest = work.input_digest, output_schema = work.output_schema,
         sender = {kind = work.sender_kind, id = work.sender_id}, operation = work.operation_ref,
         created_at = work.created_at}
+    local budget, budget_error = decode_json(work.budget_json)
+    if budget_error or not object(budget) then return nil, "work budget is corrupt" end
+    if next(object(budget) or {}) ~= nil then value.budget = budget end
     if work.result_json then
         local result, result_error = decode_json(work.result_json)
         if result_error then return nil, result_error end
@@ -797,7 +868,7 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
     if not limit or limit < 1 or limit > MAX_FEED_PAGE then return failure("INVALID_ARGUMENT", "work scan limit is outside its bound") end
     return transaction.read(db, function(tx: sql.Transaction): Result
         local rows, query_error = tx:query("SELECT w.work_ref, w.session_ref, w.workspace_id, w.sequence, w.revision, w.phase, w.input_json, w.input_digest, " ..
-            "w.output_schema, w.sender_kind, w.sender_id, w.result_json, w.uncertainty_json, w.operation_ref, w.created_at, " ..
+            "w.output_schema, w.sender_kind, w.sender_id, w.result_json, w.uncertainty_json, w.operation_ref, w.created_at, w.budget_json, " ..
             "t.turn_ref, t.claim_token, t.owner_epoch, t.checkpoint_json, s.route_json, s.context_json, " ..
             "c.work_ref AS cancellation_work_ref, c.reason AS cancellation_reason " ..
             "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
@@ -1048,7 +1119,7 @@ function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
             return finish_operation(tx, caller, scope_workspace, operation_key, op_ref, "turn_reserve", request_digest, session_ref, receipt, now)
         end
         local work_row_data, work_error = query_one(tx, "SELECT work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
-            "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at FROM bee_session_work " ..
+            "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at, budget_json FROM bee_session_work " ..
             "WHERE session_ref = ? AND phase = 'queued' ORDER BY sequence LIMIT 1", {session_ref}, "queued work")
         if work_error then return transaction.storage_failure(work_error) end
         if not work_row_data then
@@ -1209,15 +1280,19 @@ function M.turn_pull(db: sql.DB, actor: string, request: unknown): Result
         if route_error then return failure("INTERNAL", route_error) end
         local context_value, context_error = decode_json(session.context_json)
         if context_error or type(context_value) ~= "table" then return failure("INTERNAL", "session context is corrupt") end
+        local budget_value, budget_error = decode_json(work.budget_json)
+        if budget_error or not object(budget_value) then return failure("INTERNAL", "work budget is corrupt") end
         local checkpoint: unknown = nil
         if turn.checkpoint_json then
             checkpoint, route_error = decode_json(turn.checkpoint_json)
             if route_error then return failure("INTERNAL", route_error) end
         end
-        return transaction.success({session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
+        local pulled: Row = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
             claim = turn.claim_token, owner_epoch = turn.owner_epoch, input = input_value, input_digest = turn.input_digest,
             output_schema = work.output_schema, sender = {kind = work.sender_kind, id = work.sender_id},
-            route = route_value, checkpoint = checkpoint, context = context_value, phase = turn.phase}, false)
+            route = route_value, checkpoint = checkpoint, context = context_value, phase = turn.phase}
+        if next(object(budget_value) or {}) ~= nil then pulled.budget = budget_value end
+        return transaction.success(pulled, false)
     end)
 end
 
@@ -1256,8 +1331,9 @@ function M.turn_accept(db: sql.DB, actor: string, request: unknown): Result
         local record_id, sequence, event_error = append_event(tx, session, caller, op_ref, "turn.accepted", work.work_ref,
             work.revision + 1, {turn = turn.turn_ref, input_digest = input_digest})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn acceptance") end
-        local update_turn_error = execute(tx, "UPDATE bee_session_turns SET phase = 'accepted', checkpoint_json = ?, accept_record_id = ? " ..
-            "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'reserved'", {checkpoint_json, record_id, turn.turn_ref, turn.owner_epoch}, "accept turn")
+        local progress_at = now_ms()
+        local update_turn_error = execute(tx, "UPDATE bee_session_turns SET phase = 'accepted', checkpoint_json = ?, accept_record_id = ?, last_progress_at_ms = ? " ..
+            "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'reserved'", {checkpoint_json, record_id, progress_at, turn.turn_ref, turn.owner_epoch}, "accept turn")
         if update_turn_error then return failure("CONFLICT", update_turn_error) end
         local update_work_error = execute(tx, "UPDATE bee_session_work SET phase = 'accepted', revision = revision + 1 " ..
             "WHERE work_ref = ? AND phase = 'reserved'", {work.work_ref}, "mark work accepted")
@@ -1317,6 +1393,11 @@ function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
                 {checkpoint_json, turn.turn_ref, turn.owner_epoch}, "checkpoint turn observation")
             if checkpoint_error then return transaction.storage_failure(checkpoint_error) end
         end
+        local progress_error = execute(tx, "UPDATE bee_session_turns SET last_progress_at_ms = ? " ..
+            "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'accepted'", {now_ms(), turn.turn_ref, turn.owner_epoch}, "record live turn progress")
+        if progress_error then return failure("CONFLICT", progress_error) end
+        local session_progress_error = execute(tx, "UPDATE bee_sessions SET updated_at = ? WHERE session_ref = ?", {now, session.session_ref}, "refresh session progress time")
+        if session_progress_error then return failure("INTERNAL", session_progress_error) end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
             event_key = decoded_observation.event_key, operation = op_ref, committed_at = now, sequence = sequence}
         return finish_operation(tx, caller, scope_workspace, operation_key, op_ref,

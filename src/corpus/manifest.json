@@ -203,9 +203,9 @@
       "topic": "application"
     },
     {
-      "bytes": 10858,
+      "bytes": 11490,
       "id": "docs/gateway",
-      "sha256": "67704f8d286e034f39398475de889d7a2a5c9aecf5e96722cfb083b98a504413",
+      "sha256": "3512464e981aa747d275c37f8ea3b6a6266495324804ae109d622b2806322dc1",
       "source": "docs/reference/agents/gateway.md",
       "title": "Gateway",
       "topic": "gateway"
@@ -219,9 +219,9 @@
       "topic": "gateway"
     },
     {
-      "bytes": 22558,
+      "bytes": 23127,
       "id": "docs/application_contracts",
-      "sha256": "35f1779481bf4b73da17b147e044ca1f53003bd3952a06ffbdf058af7a5c1896",
+      "sha256": "f2d97492186f166e99ad63c538856a1cbe74d8fd50977986689985911a90968b",
       "source": "docs/reference/applications.md",
       "title": "Application contracts",
       "topic": "application"
@@ -283,9 +283,9 @@
       "topic": "component"
     },
     {
-      "bytes": 9490,
+      "bytes": 10103,
       "id": "component/application",
-      "sha256": "5fc7d4d4e399ef9cca8133b0ab207e488dcce2f9a4556dd4364c44fb4d786272",
+      "sha256": "b8ade2a2613d6b21fb47252b919438ddc58aef890b84bef2fce7fee55b147bb8",
       "source": "modules/application/src/README.md",
       "title": "bee.application",
       "topic": "component"
@@ -323,9 +323,9 @@
       "topic": "component"
     },
     {
-      "bytes": 8576,
+      "bytes": 8809,
       "id": "component/driver",
-      "sha256": "542f8ffa65cdc3a8e4ffc7297357e6b851984dce6987110055725f8e5357efe8",
+      "sha256": "6d75bd6cefc72f7cedae31bc34677317ae36240d015d9d17ebd0501a32147f7c",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
@@ -379,17 +379,17 @@
       "topic": "component"
     },
     {
-      "bytes": 2141,
+      "bytes": 2107,
       "id": "component/driver:wippy",
-      "sha256": "d0d92b80322997ffacb9effdc394c9b984db4ec93331195d39e31c39890ecbf8",
+      "sha256": "5c375997e1ed9fda75f7f0bc37750ef3355033f18a0b4c97f75ee03980b50fdf",
       "source": "modules/driver-wippy/src/README.md",
       "title": "Bee Wippy Driver",
       "topic": "component"
     },
     {
-      "bytes": 1425,
+      "bytes": 1929,
       "id": "component/executor:external",
-      "sha256": "a78f327c20888e1033b6c6210fa3366134856b7fd83e275f7720ae66f7568dcd",
+      "sha256": "df15cd0fbbe3657fe486c9b718dee590788a63b6b37a9f7000a67b1845228a95",
       "source": "modules/executor-external/src/README.md",
       "title": "Bee external executor",
       "topic": "component"
@@ -427,9 +427,9 @@
       "topic": "component"
     },
     {
-      "bytes": 6294,
+      "bytes": 6178,
       "id": "component/harness",
-      "sha256": "7acbf0ad121863a7363af0db8053e6e886b41798c6b4a1099444baa09c7c7f8d",
+      "sha256": "bec0343c6289e1b5bbb546c3c8a702209d99b9737bca0d73313eca29a5f404fe",
       "source": "modules/harness/src/README.md",
       "title": "bee.harness",
       "topic": "component"
@@ -507,9 +507,9 @@
       "topic": "component"
     },
     {
-      "bytes": 4361,
+      "bytes": 5229,
       "id": "component/sessions",
-      "sha256": "23f0754cf150167f3ac255a353a1b41bece4b54d478c03ccc07faf3dec684b30",
+      "sha256": "fd03ce3f2712239859951365c8a29f3032cc9ac6f8a2a48b028b166a88c3ff61",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, src/apps and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 697684,
+    "bytes": 700953,
     "documents": 77
   }
 }

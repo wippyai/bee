@@ -49,7 +49,6 @@ entries:
         dangerously_skip_permissions: {type: boolean, default: false}
         agent: {type: id, forbid_option: true, invalid: 'agent must not be a command-line option'}
         resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref must not be a command-line option'}
-        print_timeout: {type: duration, profiles: [session, batch], unsupported: 'print_timeout is only supported for structured print turns', invalid: 'print_timeout must be a positive duration string'}
         gateway_tools: {type: ids}
         gateway_hooks: {type: ids}
       rules: []
@@ -83,7 +82,6 @@ entries:
         - {if: model, then: [--model, {field: model}]}
         - {if: effort, then: [--effort, {field: effort}]}
         - {if: agent, then: [--agent, {field: agent}]}
-        - {if: print_timeout, then: [--print-timeout, {field: print_timeout}]}
         - {if: resume_ref, then: [--conversation, {field: resume_ref}]}
         stdin_json: {event: user, message: {content: {field: brief}, role: user}}
         stdin_eof: true
@@ -103,7 +101,6 @@ entries:
         - {if: model, then: [--model, {field: model}]}
         - {if: effort, then: [--effort, {field: effort}]}
         - {if: agent, then: [--agent, {field: agent}]}
-        - {if: print_timeout, then: [--print-timeout, {field: print_timeout}]}
         - --conversation
         - {field: resume_ref}
         stdin_json: {event: user, message: {content: {field: brief}, role: user}}

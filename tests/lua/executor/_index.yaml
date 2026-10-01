@@ -1,12 +1,33 @@
 version: '1.0'
 namespace: bee.executor.external
 entries:
+- name: budget_test
+  kind: function.lua
+  source: file://budget_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    budget: bee.executor.external.service:budget
 - name: turn_test
   kind: function.lua
   source: file://turn_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.threads.records:bounds
     test: wippy.test:test
     turn: bee.executor.external.service:turn
     stream: bee.executor.external.service:stream
+- name: permissions_test
+  kind: function.lua
+  source: file://permissions_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, hash]
+  imports:
+    test: wippy.test:test
+    permissions: bee.harness.permission:exchange
+    adapter: bee.harness.permission:adapter
+    canonical: bee.threads.records:canonical
+    bounds: bee.threads.records:bounds

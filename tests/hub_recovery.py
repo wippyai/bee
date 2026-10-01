@@ -249,12 +249,30 @@ def command_environment(folder):
         "XDG_STATE_HOME": str(folder / "state"),
         "PATH": "/usr/bin:/bin",
         "GOMAXPROCS": "2",
+        "TMPDIR": os.environ.get("TMPDIR", str(folder)),
     }
 
 
 def prepare_fixture(folder):
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
-    for module in ("hub", "persist", "sync", "threads"):
+    shutil.copy2(ROOT / "src/clock.lua", folder / "src/clock.lua")
+    root_index = folder / "src/_index.yaml"
+    root_index.write_text(root_index.read_text() +
+                          "\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")
+    shutil.copytree(ROOT / "src/protocol", folder / "src/protocol")
+    (folder / "src/protocol/_index.yaml").write_text("""version: '1.0'
+namespace: bee.protocol
+entries:
+- name: bounds
+  kind: library.lua
+  source: file://bounds.lua
+  imports: {clock: bee:clock}
+- name: canonical
+  kind: library.lua
+  source: file://canonical.lua
+  modules: [json]
+""")
+    for module in ("hub", "hive", "persist", "sync", "threads", "placement", "driver"):
         shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
     (folder / "src/hubrecoveryprobe").mkdir()
     (folder / "src/hubrecoveryprobe/main.lua").write_text(PROBE)
@@ -262,16 +280,18 @@ def prepare_fixture(folder):
     (folder / "wippy.lock").write_text(
         "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
         "- name: bee/hub\n  version: 0.1.0-dev\n"
+        "- name: bee/hive\n  version: 0.1.0-dev\n"
         "- name: bee/persist\n  version: 0.1.0-dev\n"
         "- name: bee/sync\n  version: 0.1.0-dev\n"
         "- name: bee/threads\n  version: 0.1.0-dev\n"
+        "- name: bee/placement\n  version: 0.1.0-dev\n- name: bee/driver\n  version: 0.1.0-dev\n"
     )
     (folder / ".wippy.yaml").write_text(
         "version: '1.0'\nregistry:\n  enable_history: true\n"
         "  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"
         "workspace:\n  replacements:\n"
-        "    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n"
-        "    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+        "    bee/hub: ./modules/hub\n    bee/hive: ./modules/hive\n    bee/persist: ./modules/persist\n"
+        "    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/placement: ./modules/placement\n    bee/driver: ./modules/driver\n"
     )
 
 
@@ -340,15 +360,101 @@ def kill_after_publication(runtime, folder):
         raise AssertionError(f"runtime was not SIGKILLed (return code {process.returncode})\n" + "".join(output))
 
 
+FAILURE_PROBE = r'''-- MIT. Definite resolver rejection survives the facade, receipt, replay and restart.
+local funcs = require("funcs")
+local logger = require("logger")
+local bounds = require("bounds")
+local installation = require("installation")
+local REQUEST = {action = "install", component = "wippy/test", version = "0.4.16"}
+local function call(operation: string, request: unknown?, digest: string?): {[string]: unknown}
+    local raw, problem = funcs.new():call("bee.hub.binding:call",
+        {operation = operation, request = request, expected_digest = digest})
+    if problem then error(tostring(problem)) end
+    local reply = bounds.object(raw)
+    if not reply then error("invalid Hub reply") end
+    return reply
+end
+local function main(): integer
+    local history = call("status")
+    local page = bounds.object(history.value)
+    local operations = page and bounds.array(page.operations, 25) or nil
+    local prior = operations and bounds.object(operations[1]) or nil
+    local digest: string? = prior and bounds.line(prior.digest, 64) or nil
+    if not digest then
+        local planned = call("plan", REQUEST)
+        assert(planned.ok == true, tostring(planned.message))
+        local plan = bounds.object(planned.value)
+        digest = plan and bounds.line(plan.digest, 64) or nil
+    end
+    if not digest then error("missing plan digest") end
+    local failed = call("apply", REQUEST, digest)
+    assert(failed.ok == false and failed.code == "FAILED", tostring(failed.code) .. ": " .. tostring(failed.message))
+    local message = bounds.text(failed.message, 4096)
+    assert(message and message:find("dependency resolution failed", 1, true) == 1 and message:find("[truncated]", 1, true), "resolver diagnostic was lost")
+    local status = installation.status(failed)
+    assert(status.status == "failed" and status.code == "FAILED", "definite failure stayed approved")
+    local saved = call("status", nil, digest)
+    local receipt = bounds.object(saved.value)
+    assert(saved.ok == true and receipt and receipt.state == "failed" and receipt.code == "FAILED" and receipt.message == message, "failed receipt was lost")
+    local replay = call("apply", REQUEST, digest)
+    assert(replay.ok == false and replay.code == "FAILED" and replay.replayed == true and replay.message == message, "failed receipt was not replayed")
+    local installed = call("installed")
+    local inventory = bounds.object(installed.value)
+    local modules = inventory and bounds.array(inventory.modules, 512) or nil
+    assert(modules, "invalid installed inventory")
+    for _, raw in ipairs(modules) do
+        local module = bounds.object(raw)
+        assert(not module or module.component ~= "wippy/test", "failed apply installed the module")
+    end
+    logger:info("HUB_FAILURE_RECEIPT_PASS")
+    return 0
+end
+return {main = main}
+'''
+
+
+def failure_receipt_check(folder):
+    import yaml
+    probe = folder / "src/hubrecoveryprobe"
+    (probe / "main.lua").write_text(FAILURE_PROBE)
+    document = yaml.safe_load((probe / "_index.yaml").read_text())
+    entry = next(item for item in document["entries"] if item["name"] == "main")
+    entry["imports"]["installation"] = "bee.hub:installation"
+    document["entries"] = [item for item in document["entries"] if item["name"] in {"policy", "management_policy", "reader_policy", "main"}]
+    (probe / "_index.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
+    service = folder / "modules/hub/src/binding/publication.lua"
+    original = service.read_text()
+    injected = '''local function rejected_apply(): (registry.Version?, string?)
+    return nil, "dependency resolution failed: acme/worker@1, 2; " .. string.rep("conflicting roots; ", 500)
+end
+'''
+    anchor = "    local applied, apply_error = changes:apply()"
+    assert original.count(anchor) == 1
+    service.write_text(original.replace('local registry = require("registry")', 'local registry = require("registry")\n' + injected, 1).replace(anchor, "    local applied, apply_error = rejected_apply()"))
+    subprocess.run([str(RUNTIME), "lint", "--strict-any", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"],
+                   cwd=folder, env=command_environment(folder), check=True, timeout=120)
+    # Both calls boot a new runtime over the same history; the second replays
+    # the failed receipt without invoking the rejected dependency operation.
+    for _ in range(2):
+        result = subprocess.run([str(RUNTIME), "run", "--verbose", "--host", "bee:hub_workers", "--", "hub-recovery-probe"],
+                                cwd=folder, env=command_environment(folder), capture_output=True, text=True, timeout=180)
+        output = result.stdout + result.stderr
+        assert result.returncode == 0 and "HUB_FAILURE_RECEIPT_PASS" in output, output
+        print("HUB_FAILURE_RECEIPT_PASS")
+
+
 def main():
     if not RUNTIME.is_file():
         raise SystemExit(f"candidate runtime {RUNTIME} is unavailable")
     folder = Path(tempfile.mkdtemp(prefix="bee-hub-recovery-"))
     try:
         prepare_fixture(folder)
+        failure_folder = folder / "failure-case"
+        shutil.copytree(folder, failure_folder, ignore=shutil.ignore_patterns("failure-case"))
+        failure_receipt_check(failure_folder)
         service = folder / "modules/hub/src/binding/publication.lua"
         original = service.read_text()
-        anchor = "    local applied, apply_error = changes:apply()\n    if not applied then return transaction.failure(\"FAILED\", tostring(apply_error)) end\n"
+        anchor = "    local applied, apply_error = changes:apply()\n    if not applied then return failed_apply(receipt, apply_error) end\n"
         assert original.count(anchor) == 1, "publication injection anchor is not unique"
         subprocess.run(
             [str(RUNTIME), "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"],

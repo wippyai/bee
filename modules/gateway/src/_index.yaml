@@ -12,6 +12,10 @@ entries:
   kind: ns.dependency
   component: bee/persist
   version: '*'
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -282,10 +286,18 @@ entries:
     workspace_protocol: bee.gov:workspace_protocol
     delivery_protocol: bee.gov:delivery_protocol
     docs_protocol: bee.docs:protocol
+- name: profile_scope
+  kind: library.lua
+  source: file://profile_scope.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    surface: bee.gateway:surface
+    profile_access: bee.driver:profile_access
 - name: surface
   kind: library.lua
   source: file://surface.lua
   imports:
+    profile_access: bee.driver:profile_access
     bounds: bee.threads.records:bounds
     catalog: bee.gateway:catalog
     capability_model: bee.capability:model

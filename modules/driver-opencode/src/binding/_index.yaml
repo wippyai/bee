@@ -7,14 +7,12 @@ entries:
   method: handle
   imports:
     universal: bee.driver:universal
-
 - name: dispatch
   kind: function.lua
   source: file://dispatch.lua
   method: handle
   imports:
     universal: bee.driver:universal
-
 - name: configure
   kind: function.lua
   source: file://configure.lua
@@ -23,6 +21,9 @@ entries:
     configuration: bee.driver.opencode:configuration
     configure_protocol: bee.driver:configuration
     universal: bee.driver:universal
+  security:
+    policies:
+    - bee.driver.opencode.binding:configuration_policy
 - name: locate
   kind: function.lua
   source: file://locate.lua
@@ -35,3 +36,16 @@ entries:
   method: handle
   imports:
     universal: bee.driver:universal
+- name: configuration_policy
+  kind: security.policy.expr
+  meta:
+    comment: Read only the descriptor that declares this configuration renderer
+  policy:
+    effect: allow
+    actions:
+    - registry.get
+    - registry.snapshot
+    resources:
+    - '*'
+    expression: (action == "registry.get" && resource == "bee.driver.opencode.descriptor:cli")
+      || action == "registry.snapshot"

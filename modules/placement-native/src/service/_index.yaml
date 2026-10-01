@@ -44,6 +44,7 @@ entries:
   - hash
   imports:
     formats: bee.credentials:formats
+    types: bee.placement:types
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     resources: bee.placement.native:resources

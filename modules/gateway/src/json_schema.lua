@@ -10,9 +10,9 @@ type Object = {[string]: unknown}
 
 type Schema = {empty: boolean, type: string?, const: unknown, enum: {unknown}?,
     minLength: number?, maxLength: number?, pattern: string?, format: string?,
-    minimum: number?, maximum: number?, minItems: number?, maxItems: number?,
+    minimum: number?, maximum: number?, exclusiveMinimum: number?, exclusiveMaximum: number?, minProperties: number?, maxProperties: number?, minItems: number?, maxItems: number?,
     uniqueItems: boolean?, items: Schema?, properties: {[string]: Schema}, required: {string},
-    additionalProperties: boolean?, allOf: {Schema}, oneOf: {Schema}?, anyOf: {Schema}?,
+    additionalProperties: boolean?, additionalSchema: Schema?, allOf: {Schema}, oneOf: {Schema}?, anyOf: {Schema}?,
     schema_not: Schema?, schema_if: Schema?, schema_then: Schema?, schema_else: Schema?}
 local decode_schema: (unknown) -> Schema?
 decode_schema = function(value: unknown): Schema?
@@ -78,11 +78,29 @@ decode_schema = function(value: unknown): Schema?
         if type(value) ~= "boolean" then return nil end
         uniqueItems = value
     end
+    local exclusiveMinimum: number? = nil
+    local exclusiveMaximum: number? = nil
+    local minProperties: number? = nil
+    local maxProperties: number? = nil
+    for _, key in ipairs({"exclusiveMinimum", "exclusiveMaximum", "minProperties", "maxProperties"}) do
+        local bound = raw[key]
+        if bound ~= nil then
+            if type(bound) ~= "number" or bound ~= bound or bound == math.huge or bound == -math.huge then return nil end
+            if key == "exclusiveMinimum" then exclusiveMinimum = bound
+            elseif key == "exclusiveMaximum" then exclusiveMaximum = bound
+            elseif key == "minProperties" then minProperties = bound
+            else maxProperties = bound end
+        end
+    end
     local additionalProperties: boolean? = nil
+    local additionalSchema: Schema? = nil
     if raw.additionalProperties ~= nil then
         local value = raw.additionalProperties
-        if type(value) ~= "boolean" then return nil end
-        additionalProperties = value
+        if type(value) == "boolean" then additionalProperties = value
+        else
+            additionalSchema = decode_schema(value)
+            if not additionalSchema then return nil end
+        end
     end
     local enum = raw.enum
     if enum ~= nil and type(enum) ~= "table" then return nil end
@@ -178,6 +196,8 @@ decode_schema = function(value: unknown): Schema?
         maxLength = maxLength,
         pattern = pattern,
         format = format,
+        exclusiveMinimum = exclusiveMinimum, exclusiveMaximum = exclusiveMaximum,
+        minProperties = minProperties, maxProperties = maxProperties, additionalSchema = additionalSchema,
         minimum = minimum,
         maximum = maximum,
         minItems = minItems,
@@ -297,6 +317,8 @@ check = function(schema: Schema, value: unknown, path: string): string?
         if schema.format == "date-time" and not date_time(text) then return path .. " must be an RFC 3339 date-time" end
     elseif (kind == "integer" or kind == "number") and type(value) == "number" then
         local number = value
+        if schema.exclusiveMinimum ~= nil and number <= schema.exclusiveMinimum then return path .. " is not above its exclusive minimum" end
+        if schema.exclusiveMaximum ~= nil and number >= schema.exclusiveMaximum then return path .. " is not below its exclusive maximum" end
         if schema.minimum ~= nil and number < (schema.minimum) then return path .. " is below its minimum" end
         if schema.maximum ~= nil and number > (schema.maximum) then return path .. " is above its maximum" end
     elseif kind == "array" and type(value) == "table" then
@@ -319,6 +341,9 @@ check = function(schema: Schema, value: unknown, path: string): string?
         end
     elseif kind == "object" and type(value) == "table" then
         local object = value
+        local size = count_of(object)
+        if schema.minProperties ~= nil and size < schema.minProperties then return path .. " has too few properties" end
+        if schema.maxProperties ~= nil and size > schema.maxProperties then return path .. " has too many properties" end
         local properties = (schema.properties or {})
         for _, name in ipairs((schema.required or {})) do
             if object[name] == nil then return path .. "." .. name .. " is required" end
@@ -327,6 +352,9 @@ check = function(schema: Schema, value: unknown, path: string): string?
             local child_schema = properties[name]
             if child_schema ~= nil then
                 local failure = check(child_schema, child, path .. "." .. tostring(name))
+                if failure then return failure end
+            elseif schema.additionalSchema ~= nil then
+                local failure = check(schema.additionalSchema, child, path .. "." .. tostring(name))
                 if failure then return failure end
             elseif schema.additionalProperties == false then
                 return "unknown field " .. tostring(name)

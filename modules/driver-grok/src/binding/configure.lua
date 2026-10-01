@@ -34,11 +34,7 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
 
     local arguments: {string} = {}
-    if request.instructions then
-        arguments[#arguments + 1] = "--rules"
-        arguments[#arguments + 1] = request.instructions
-    end
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
 
-return {handle = universal.configure("grok", {grok = handle})}
+return {handle = universal.configure("grok", {grok = handle}, "bee.driver.grok.descriptor:cli")}

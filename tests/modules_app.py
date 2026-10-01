@@ -29,6 +29,7 @@ AGENT_DIGEST = "d" * 64
 FACADE = '''
 local security = require("security")
 local recovered = false
+local agent_install_applied = false
 -- The agent-requested package: reads never carry management authority; the
 -- approved apply does, for exactly the approved digest and request.
 local function agent_tool(raw: {[string]: unknown}): {[string]: unknown}
@@ -49,6 +50,7 @@ local function agent_tool(raw: {[string]: unknown}): {[string]: unknown}
     assert(manage, "approved apply lacks Hub management authority")
     assert(raw.expected_digest == AGENT_DIGEST and request.action == "install" and request.version == "1.0.0"
         and request.migration_policy == "up", "agent apply changed the approved plan")
+    agent_install_applied = true
     return {ok = true, replayed = false, value = {state = "complete", message = "Agent tool installed"}}
 end
 local function handle(raw: unknown): {[string]: unknown}
@@ -57,6 +59,10 @@ local function handle(raw: unknown): {[string]: unknown}
         and raw.request.component == "bee/agent-tool" then return agent_tool(raw) end
     if raw.operation == "installed" then
         return {ok = true, replayed = false, value = {version = 1, modules = {}, roots = {}}}
+    elseif raw.operation == "updates" then
+        return {ok = true, replayed = false, value = {modules = {}, bee_update = {
+            installed_version = "", available_version = "", update_available = false,
+            needs_new_binary = false, reason = ""}, catalog_error = ""}}
     end
     if raw.operation == "catalog" then
         return {ok = true, replayed = false, value = {total = 1, items = {{
@@ -100,6 +106,12 @@ local function handle(raw: unknown): {[string]: unknown}
                 "fixture:07", "fixture:08", "fixture:09", "fixture:10", "fixture:11", "fixture:12",
                 "fixture:last"}}}
     elseif raw.operation == "status" then
+        if raw.expected_digest == AGENT_DIGEST then
+            if not agent_install_applied then
+                return {ok = false, replayed = false, code = "NOT_FOUND", message = "Agent install has no Hub receipt yet"}
+            end
+            return {ok = true, replayed = false, value = {state = "complete", message = "Agent tool installed"}}
+        end
         local rows = {}
         for index = 1, 12 do rows[index] = {id = "recovery:step" .. tostring(index), target_db = "recovery:db", module = "bee/recovery", status = "applied"} end
         local receipt = {digest = string.rep("b", 64), action = "install", component = "bee/recovery",
@@ -162,7 +174,7 @@ def exercise_agent_install(project, packed, pack):
         assert requested["action"] == "install", requested
         ui = Desktop(folder, packed=packed, project=project, deployment=pack)
         try:
-            ui.wait("No applications open", timeout=30)
+            ui.wait("SESSIONS", timeout=30)
             ui.open_start()
             ui.choose("Needs you")
             ui.wait("NEEDS YOU", timeout=30)
@@ -195,7 +207,7 @@ def exercise_agent_install(project, packed, pack):
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-ui-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules.app:app",))
         try:
             ui.wait("MODULES", timeout=20)
             ui.wait("Preview fixture", timeout=10)
@@ -321,7 +333,7 @@ def exercise(project, packed, pack):
             ui.wait("MODULES")
             ui.quit()
         except Exception:
-            Path("/tmp/bee-modules-ui-failure.raw").write_bytes(ui.raw)
+            (Path(directory) / "bee-modules-ui-failure.raw").write_bytes(ui.raw)
             raise
         finally:
             ui.close()
@@ -346,7 +358,7 @@ def install_receipt(ui, packed, pack):
     rows = ui.text().splitlines()
     first = next(index for index, row in enumerate(rows) if "Not completed:" in row)
     last = next(index for index, row in enumerate(rows) if "Receipt state:" in row)
-    reason = "".join(row[row.index("│") + 2:row.rindex("│") - 1] for row in rows[first + 1:last] if row.count("│") >= 2).rstrip()
+    reason = " ".join(row.strip(" │") for row in rows[first:last]).strip()
     if not packed:
         raise AssertionError(f"Hub installation failed in the source workspace: {reason}")
     locked = {module["name"]: module for module in yaml.safe_load((pack / "wippy.lock").read_text())["modules"]}
@@ -374,7 +386,7 @@ def exercise_real_facade(project, packed, pack):
     baseline = yaml.safe_load(((pack if packed else project) / "wippy.lock").read_text())["modules"]
     with tempfile.TemporaryDirectory(prefix="bee-modules-real-hub-") as directory:
         ui = Desktop(directory, packed=packed, project=project, deployment=pack,
-                     apps=("bee.hub.modules:app",))
+                     apps=("bee.hub.modules.app:app",))
         try:
             def click(label):
                 for y, line in enumerate(ui.screen.display, 1):
@@ -385,33 +397,40 @@ def exercise_real_facade(project, packed, pack):
                         return
                 raise AssertionError(f"Missing click target {label!r}\n{ui.text()}")
 
-            def search_test():
+            def search_dummy():
                 ui.key(b"/")
                 ui.wait("Search packages")
                 ui.key(b"\x7f" * 32)
-                ui.key(b"test")
-                ui.wait("test")
+                ui.key(b"dummy")
+                ui.wait("dummy")
                 ui.key(b"\r")
-                ui.wait("Search: test")
-                ui.wait("Test Framework", timeout=30)
+                ui.wait("Search: dummy")
+                ui.wait("Dummy Module", timeout=30)
 
+            ui.resize(180, 40)
             ui.wait("MODULES", timeout=20)
             ui.wait("Keyword: bee")
             ui.key(b"K")
             ui.wait("Filter by keyword")
             ui.key(b"\x7f\x7f\x7f\r")
             ui.wait("Keyword: all")
-            search_test()
+            search_dummy()
             # The catalog row, not the header that names the current selection.
-            click("wippy/test  ·")
-            ui.wait("Test Framework")
+            click("wippy/dummy  ·")
+            ui.wait("Dummy Module")
             ui.key(b"v")
-            ui.wait("0.4.17", timeout=30)
-            click("0.4.17")
+            ui.wait("9.9.1355", timeout=30)
+            click("9.9.1355")
             ui.key(b"i")
+            ui.key(b"e")
+            ui.wait("wippy.dummy:router")
+            ui.key(b"\r")
+            ui.wait("Configure package")
+            ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
+            ui.wait("Selected")
             ui.key(b"p")
             ui.wait("Ready for confirmation", timeout=30)
-            ui.wait("install  wippy/test  0.4.17")
+            ui.wait("install  wippy/dummy  9.9.1355")
             assert "Completed:" not in ui.text(), "planning published the local dependency root"
 
             # Review is a presentation step. Confirm opens a second screen;
@@ -428,14 +447,20 @@ def exercise_real_facade(project, packed, pack):
             # called by the Modules facade.
             click("Catalog")
             ui.wait("MODULES  CATALOG")
-            search_test()
+            search_dummy()
             # The catalog row, not the header that names the current selection.
-            click("wippy/test  ·")
-            ui.wait("Test Framework")
+            click("wippy/dummy  ·")
+            ui.wait("Dummy Module")
             ui.key(b"v")
-            ui.wait("0.4.17", timeout=30)
-            click("0.4.17")
+            ui.wait("9.9.1355", timeout=30)
+            click("9.9.1355")
             ui.key(b"i")
+            ui.key(b"e")
+            ui.wait("wippy.dummy:router")
+            ui.key(b"\r")
+            ui.wait("Configure package")
+            ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
+            ui.wait("Selected")
             ui.key(b"p")
             ui.wait("Ready for confirmation", timeout=30)
             ui.key(b"\r")
@@ -445,14 +470,15 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("Receipt state: complete")
             click("Installed")
             ui.wait("MODULES  INSTALLED", timeout=20)
-            # wippy/test sorts after Bee's own modules and its dependency;
+            # The installed package follows Bee's own modules.
             # select down to its row before reading the installed version.
             ui.key(b"\x1b[B" * (len(baseline) + 2))
-            ui.wait("wippy/test", timeout=20)
-            ui.wait("0.4.17")
+            ui.wait("wippy/dummy", timeout=20)
+            ui.wait("9.9.1355")
             # Authored publication is separate from a selected Hub installation.
             # This host has no matching authoring profile, so Governance must
             # refuse the explicit prepare request instead of inferring a source.
+            ui.resize(160, 40)
             click("Authored")
             ui.wait("MODULES  AUTHORING")
             ui.key(b"c")
@@ -466,7 +492,7 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("BLOCKED: this workspace has no publication profile", timeout=20)
             ui.quit()
         except Exception:
-            Path("/tmp/bee-modules-real-hub-failure.raw").write_bytes(ui.raw)
+            (Path(directory) / "bee-modules-real-hub-failure.raw").write_bytes(ui.raw)
             raise
         finally:
             ui.close()
@@ -476,12 +502,14 @@ def exercise_authored_publication(project, packed, pack):
     """Prove Modules sends explicit prepare then publish requests through Governance."""
     with tempfile.TemporaryDirectory(prefix="bee-modules-authored-") as directory:
         ui = Desktop(directory, packed=packed, project=project, deployment=pack,
-                     apps=("bee.hub.modules:app",))
+                     apps=("bee.hub.modules.app:app",))
         try:
+            ui.resize(180, 40)
             ui.wait("MODULES", timeout=20)
             ui.key(b"a")
             ui.wait("MODULES  AUTHORING")
             ui.wait("Freeze the actor-owned overlay")
+            ui.resize(160, 40)
             ui.key(b"c")
             ui.key(b"acme/authored\r")
             ui.key(b"v")
@@ -498,7 +526,7 @@ def exercise_authored_publication(project, packed, pack):
             ui.wait("Published acme/authored 2.4.0", timeout=20)
             ui.quit()
         except Exception:
-            Path("/tmp/bee-modules-authored-failure.raw").write_bytes(ui.raw)
+            (Path(directory) / "bee-modules-authored-failure.raw").write_bytes(ui.raw)
             raise
         finally:
             ui.close()
@@ -540,26 +568,6 @@ def main():
         exercise_agent_install(project, False, pack)
         exercise_agent_install(project, True, pack)
     with fixture_workspace(unit_tests=False) as project:
-        # The test workspace adds wippy/test as a local source dependency for
-        # unrelated fixture apps. Remove that root so this scenario proves the
-        # Modules flow fetches the public Hub artifact and installs it only on
-        # explicit local confirmation.
-        found, _ = registry_entries(project, {"test_dependency"})
-        index, _ = found["test_dependency"]
-        document = yaml.safe_load(index.read_text())
-        document["entries"] = [entry for entry in document["entries"]
-                              if entry.get("name") != "test_dependency"]
-        index.write_text(yaml.safe_dump(document, sort_keys=False))
-        # The shared fixture lock carries the test framework and its terminal
-        # helper for unrelated app checks. Leaving those modules deployed here
-        # makes the real Hub package look like it is replacing host-owned
-        # modules when its wildcard terminal dependency resolves. Keep this
-        # composition host-free for that package closure so the live resolver
-        # exercises the install path rather than a stale test deployment.
-        lock = yaml.safe_load((project / "wippy.lock").read_text())
-        lock["modules"] = [module for module in lock.get("modules", [])
-                            if module.get("name") not in {"wippy/test", "wippy/terminal"}]
-        (project / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
         exercise_real_facade(project, False, None)
     with fixture_workspace(unit_tests=False) as project:
         (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)

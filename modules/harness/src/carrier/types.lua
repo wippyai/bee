@@ -17,7 +17,9 @@ type IO = {
     key: () -> string,
     after: ((string) -> ())?,
 }
+type ProfileGrant = {workspace_id: string, name: string, subpath: string, access: "read" | "write", grant_ref: string}
 type Request = {
+    profile_grants: {ProfileGrant}?,
     preferences: placement_types.Preferences?,
     thread_id: string,
     action_id: string,
@@ -45,6 +47,8 @@ type Request = {
     options: placement_types.WorkdirOptions?,
 }
 type Exchange = {
+    transport: string?,
+    answer_mode: string?,
     adapter: permission.Adapter,
     acceptance_ref: string,
     acceptance_digest: string,

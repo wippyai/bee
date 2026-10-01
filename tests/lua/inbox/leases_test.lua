@@ -295,7 +295,9 @@ local function define_tests()
             local slice = leases.new()
             local drawn = view.draw(140, 30, appearance.defaults(), state, model.rows(state), 0, "", slice)
             local action = false
-            for _, hit in ipairs(drawn.hits) do if hit.kind == "lease" then action = true end end
+            for _, button in ipairs(assert(drawn.controls).buttons) do
+                if button.kind == "lease" and button.more then action = true end
+            end
             test.is_true(action)
             leases.apply_list(slice, "ws-1", "ws-1", {ok = true, value = {leases = {{lease_id = "l-1", target = "t", state = "active", applies_used = 0,
                 revision = 1, granted_by = "p", uses = {}, envelope = {}, max_applies = 1}}}})

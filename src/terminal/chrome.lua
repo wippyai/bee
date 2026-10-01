@@ -1,4 +1,5 @@
 local tty = require("tty")
+local frame = require("frame")
 local appearance = require("appearance")
 local M = {}
 function M.background(canvas: tty.Canvas, width: integer, height: integer, preferences: appearance.Preferences): ()
@@ -39,10 +40,11 @@ function M.welcome(canvas: tty.Canvas, width: integer, height: integer, preferen
     end
 end
 function M.boot(width: integer, height: integer): {string}
-    local canvas = tty.canvas(width, height)
     local preferences = appearance.defaults()
+    local painter = frame.new(width, height, preferences)
+    local canvas = painter.canvas
     M.background(canvas, width, height, preferences)
     M.welcome(canvas, width, height, preferences, true)
-    return canvas:rows()
+    return frame.rows(painter, painter.theme.ground)
 end
 return M

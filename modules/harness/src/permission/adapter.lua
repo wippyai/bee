@@ -21,7 +21,7 @@ type Object = {[string]: unknown}
 -- acknowledgment names the request field the harness echoes back when
 -- it acts, where that differs from the response correlation.
 type Fields = {correlation: string, tool: string, input: string, prompt: string?, acknowledgment: string?}
-type Response = {envelope: Object, correlation_field: string, decision_field: string, allow_value: string, deny_value: string, reason_field: string?, response_field: string?}
+type Response = {envelope: Object, correlation_field: string?, decision_field: string, allow_value: string, deny_value: string, reason_field: string?, response_field: string?}
 -- correlation_echo names the observation type and the field that carries
 -- the request's correlation back; continued_output claims only that the
 -- harness produced something afterwards.
@@ -161,12 +161,17 @@ function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
     end
     local response = bounds.object(object.response)
     if not response then return nil, "adapter response must be an object" end
-    local unknown_response = bounds.fields(response, {"envelope", "correlation_field", "decision_field", "allow_value", "deny_value", "reason_field", "response_field"})
+    local unknown_response = bounds.fields(response, {"envelope", "correlation_field", "decision_field", "allow_value", "deny_value", "reason_field", "response_field", "mode"})
     if unknown_response then return nil, "adapter response: " .. unknown_response end
     local envelope = bounds.object(response.envelope == nil and {} or response.envelope)
     if not envelope then return nil, "adapter response envelope must be an object" end
-    local correlation_field, cf_error = field_name(response, "correlation_field", "response")
-    if not correlation_field then return nil, cf_error end
+    if response.mode ~= nil and response.mode ~= "hook" then return nil, "adapter response mode must be hook" end
+    local correlation_field: string? = nil
+    if response.mode ~= "hook" or response.correlation_field ~= nil then
+        local cf_error: string?
+        correlation_field, cf_error = field_name(response, "correlation_field", "response")
+        if not correlation_field then return nil, cf_error end
+    end
     local decision_field, df_error = field_name(response, "decision_field", "response")
     if not decision_field then return nil, df_error end
     local allow_value = bounds.id(response.allow_value) or ""
@@ -184,7 +189,9 @@ function M.decode(adapter_id: string, value: unknown): (Adapter?, string?)
         if not named then return nil, rf_error end
         response_field = named
     end
-    local paths: {string} = {correlation_field, decision_field}
+    local paths: {string} = {}
+    if correlation_field then paths[#paths + 1] = correlation_field end
+    paths[#paths + 1] = decision_field
     if reason_field then paths[#paths + 1] = reason_field end
     if response_field then paths[#paths + 1] = response_field end
     for index = 1, #paths do
@@ -333,7 +340,9 @@ function M.write_id(identity: Identity): string
 end
 local function encode_response(adapter: Adapter, request: Request, decision: string, reason: string?, response: unknown): (string?, string?)
     local line = copy_object(adapter.response.envelope)
-    local failed = assign(line, adapter.response.correlation_field, request.correlation_id) or assign(line, adapter.response.decision_field, decision)
+    local failed: string? = nil
+    if adapter.response.correlation_field then failed = assign(line, adapter.response.correlation_field, request.correlation_id) end
+    if not failed then failed = assign(line, adapter.response.decision_field, decision) end
     if not failed and reason and adapter.response.reason_field then failed = assign(line, adapter.response.reason_field, reason) end
     if not failed and response ~= nil and adapter.response.response_field then failed = assign(line, adapter.response.response_field, response) end
     if failed then return nil, failed end

@@ -35,7 +35,7 @@ function M.hook_token_file(home_directory: string, attempt_id: string, hook_envi
 end
 function M.settings_file(gateway: Gateway, hook_token_source: string?): (Configuration?, string?)
     local selected: {[string]: unknown} = {}
-    local operations: {{kind: "default" | "insert" | "append", path: {string}}} = {
+    local operations: {configure_protocol.JsonOperation} = {
         {kind = "default", path = {"schema_version"}},
     }
     for _, event in ipairs(gateway.hooks) do

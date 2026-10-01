@@ -14,6 +14,7 @@ entries:
     placement_types: bee.placement:types
     placement_configuration: bee.placement.native:configuration
     configuration: bee.driver:configuration
+    bounds: bee.threads.records:bounds
     claude: bee.driver.claude.binding:configure
     codex: bee.driver.codex.binding:configure
     grok: bee.driver.grok.binding:configure

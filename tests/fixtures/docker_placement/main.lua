@@ -52,8 +52,7 @@ local function profile(provider: string, mode: string): (string, string, admissi
     local definition = "bee.driver." .. provider .. (mode == "window" and ":default_window" or ":research_batch")
     local id = provider .. "-docker-" .. mode
     call("bee.harness.profiles:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
-        expected_revision = 0, idempotency_key = id, profile = {title = id, definition_ref = definition,
-            placement_profile_ref = "bee.docker.proof:profile", options = {}, mcp_tools = {}, instructions = ""}})
+        expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = definition, driver_binding_ref = "bee.driver." .. provider .. ":binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = {}}}})
     local plan, refused = admission.resolve(definition, mode == "window" and "window" or "batch", WORKSPACE, id, 1)
     assert(plan, tostring(refused and refused.error and refused.error.message))
     call("bee.harness.launch:setup", {workspace_id = WORKSPACE, definition_ref = definition,
@@ -282,11 +281,12 @@ local function recover()
 end
 local function scheduled(mode: string)
     local tools = {"session_catalog", "session_open", "session_run", "session_send", "session_await", "session_join", "session_get", "session_list", "session_cancel", "session_close", "thread_read", "thread_message"}
+    local mcp: {{tool: string, scope: {[string]: unknown}}} = {}
+    for _, tool in ipairs(tools) do mcp[#mcp + 1] = {tool = tool, scope = {}} end
     for _, provider in ipairs({"claude", "codex"}) do
         local id = provider .. "-docker-scheduler"
         call("bee.harness.profiles:call", {operation = "put", workspace_id = WORKSPACE, profile_id = id,
-            expected_revision = 0, idempotency_key = id, profile = {title = id, definition_ref = "bee.driver." .. provider .. ":default_window",
-                placement_profile_ref = "bee.docker.proof:profile", options = {}, mcp_tools = tools, instructions = ""}})
+            expected_revision = 0, idempotency_key = id, profile = {schema_revision = "bee.agent-profile@2", name = id, definition_ref = "bee.driver." .. provider .. ":default_window", driver_binding_ref = "bee.driver." .. provider .. ":binding", placement = {kind = "docker", profile_ref = "bee.docker.proof:profile"}, provider = {}, bee = {mcp = mcp}}})
     end
     local function open(provider: string): Object
         return object(call("bee.sessions.binding:open", {spec = {definition = "bee.driver." .. provider .. ":default_window",

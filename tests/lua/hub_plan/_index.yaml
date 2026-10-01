@@ -5,6 +5,7 @@ entries:
   kind: function.lua
   source: file://plan_test.lua
   method: run
+  modules: [funcs, security]
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
@@ -12,3 +13,18 @@ entries:
     graph: bee.hub:graph
     inspect: bee.hub:inspection
     requirements: bee.hub:requirements
+    binary_identity: bee.hub:binary_identity
+    bounds: bee.threads.records:bounds
+- name: missing_native_scope_policy
+  kind: security.policy
+  groups: [without_native]
+  policy: {actions: [funcs.call], resources: [tests.hub.plan:missing_native_probe], effect: allow}
+- name: missing_native_deny_policy
+  kind: security.policy
+  groups: [without_native]
+  policy: {actions: [env.get], resources: ['bee.env:binary_native_*', bee.env:binary_runtime_commit], effect: deny}
+- name: missing_native_probe
+  kind: function.lua
+  source: file://missing_native_probe.lua
+  method: run
+  imports: {plan: bee.hub:plan, graph: bee.hub:graph, inspection: bee.hub:inspection}

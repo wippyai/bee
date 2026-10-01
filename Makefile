@@ -33,6 +33,17 @@ hub-preview-check:
 .PHONY: hub-unit-check
 hub-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/hub_unit.py
+.PHONY: hub-self-update-runtime-check
+hub-self-update-runtime-check:
+	python3 tests/runtime_self_update_check.py
+.PHONY: hub-self-update-standalone-check
+hub-self-update-standalone-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
+.PHONY: settings-unit-check capability-grants-unit-check
+settings-unit-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.settings view_test
+capability-grants-unit-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gov capability_grants_test
 .PHONY: hub-migration-runner-check
 hub-migration-runner-check:
 	@test -n "$(HUB_MIGRATION_PACK)" || { echo 'Set HUB_MIGRATION_PACK to the wippy/migration 0.3.17 artifact.'; exit 1; }
@@ -266,7 +277,7 @@ CHECK_JOBS ?= 4
 .PHONY: check-parallel
 check-parallel:
 	python3 build/parallel_check.py --jobs "$(CHECK_JOBS)"
-check-shard-foundation: check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
+check-shard-foundation: $(TOOLCHAIN_CURRENT) check-shards-check identity-native-check installer-check agent-corpus-check docs-agent-check lint test pack portable-pack-atomic-check about-check headless-check hub-publish-script-check hub-release-script-check
 check-shard-modules: hub-migration-service-check modules-app-check modules-update-check modules-contents-check app-admission-check kernel-bare-check package-drop-check retained-owner-check hive-supervisor-check
 check-shard-services: threads threads-module harness-module resources-module gateway-check gateway-readiness-check governance-workspace-check saved-profiles-check thread-storage-check resources-check
 check-shard-services-storage: workspace-storage-check
@@ -275,7 +286,7 @@ check-shard-services-workspace: workspace-hosts-check leased-host-fallback-check
 check-shard-windows: window-native-check managed-window-app-check window-hooks-check window-recovery-check
 check-shard-window-failure: managed-window-failure-check
 check-shard-desktop-shell: desktop-shell-start-check
-check-shard-desktop-shell-smoke: desktop-shell-smoke-check
+check-shard-desktop-shell-smoke: desktop-shell-smoke-check no-color-check
 check-shard-desktop-shell-workflow: desktop-shell-interactions-check
 check-shard-desktop-shell-close: desktop-shell-close-confirmation-check
 check-shard-desktop-shell-control: desktop-shell-control-delivery-check
@@ -644,3 +655,8 @@ DOCKER_PROOF_MODE ?= window
 docker-placement-live-check:
 	test -n "$(DOCKER_IMAGE)" -a -n "$(DOCKER_EVIDENCE)"
 	TMPDIR="$(abspath .wippy/docker-work/tmp)" python3 tests/docker_placement_live.py --image "$(DOCKER_IMAGE)" --evidence "$(DOCKER_EVIDENCE)" --provider "$(DOCKER_PROVIDER)" --mode "$(DOCKER_PROOF_MODE)" --standalone "$(abspath dist/bee)" $(if $(DOCKER_OPENCODE_MODEL),--opencode-model "$(DOCKER_OPENCODE_MODEL)")
+
+.PHONY: no-color-check
+check: no-color-check
+no-color-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/no_color.py

@@ -23,6 +23,7 @@ local resources = require("resources")
 local clock = require("clock")
 local store = require("store")
 local approval_outbox = require("outbox")
+local runtime_lease = require("runtime_lease")
 local M = {}
 M.LEDGER = {table = "bee_approval_schema_migrations", label = "approval"}
 M.REQUEST = "bee.approvals.request"
@@ -179,7 +180,7 @@ end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
 local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
-    complete_installation_effect = true, complete_publication_effect = true, reconcile = true}
+    runtime_lease = true, complete_installation_effect = true, complete_publication_effect = true, reconcile = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
 -- other authorities through the executor; the operation then runs inside
@@ -614,6 +615,11 @@ local function op_request(tx: sql.Transaction, actor: string, object: Object, no
     if not policy_name then return failure("INVALID_ARGUMENT", "policy is not an identifier") end
     local proposal, proposal_digest, proposal_json, proposal_error = proposal_of(object.proposal)
     if not proposal or not proposal_digest or not proposal_json then return failure("INVALID_ARGUMENT", proposal_error or "proposal") end
+    if proposal.ref == runtime_lease.REF then
+        local ceiling, err = runtime_lease.decode(proposal.payload)
+        if not ceiling or ceiling.subject ~= actor or ceiling.workspace_id ~= workspace_id or ceiling.expires_ms <= now
+            or ceiling.expires_ms > now + 2592000000 then return failure("INVALID_ARGUMENT", err or "runtime lease must belong to its requester and expire within 30 days") end
+    end
     local prompt, prompt_error = values.content(object.prompt)
     if not prompt then return failure("INVALID_ARGUMENT", "prompt: " .. tostring(prompt_error)) end
     local schema = bounds.object(object.response_schema == nil and {} or object.response_schema)
@@ -1230,6 +1236,78 @@ local function op_attention_count(tx: sql.Transaction, actor: string, object: Ob
     if count_error or count == nil then return storage(count_error or "count attention") end
     return success({count = count}, false)
 end
+local function op_runtime_lease(tx: sql.Transaction, actor: string, request: Object, now: integer, prepared: Object?): Result
+    if bounds.fields(request, {"operation", "lease_ref", "workspace_id", "tool", "input_digest", "effect_key"}) then return failure("INVALID_ARGUMENT", "runtime lease request has unknown fields") end
+    local operation = bounds.member(request.operation, {"grant", "check", "use", "revoke", "list"})
+    if not operation then return failure("INVALID_ARGUMENT", "runtime lease operation is invalid") end
+    if operation == "list" then
+        local workspace = bounds.id(request.workspace_id)
+        if not workspace or not security.can(M.CONSUME, workspace) then return failure("DENIED", "runtime lease list needs workspace consume authority") end
+        local rows, err = tx:query("SELECT lease_ref, subject, workspace_id, tool, input_digest, expires_ms, max_uses, revoked_at FROM bee_approval_runtime_leases WHERE subject = ? AND workspace_id = ? ORDER BY lease_ref LIMIT 64", {actor, workspace})
+        if not rows or err then return storage("list runtime leases") end
+        return success({leases = rows}, false)
+    end
+    local ref = bounds.id(request.lease_ref)
+    if not ref then return failure("INVALID_ARGUMENT", "lease_ref is required") end
+    if operation == "grant" then
+        local source, err = load(tx, ref)
+        if not source then return failure("NOT_FOUND", err or "lease source approval is missing") end
+        local ceiling, invalid = runtime_lease.decode(source.proposal.payload)
+        if source.proposal.ref ~= runtime_lease.REF or not ceiling then return failure("INVALID_ARGUMENT", invalid or "approval is not a runtime lease") end
+        if actor ~= ceiling.subject or source.requester_id ~= actor or source.workspace_id ~= ceiling.workspace_id then return failure("DENIED", "runtime lease belongs to another subject") end
+        local current, unavailable = incarnation(tx, source.owner_node)
+        if not current then return unavailable or storage("runtime lease authority") end
+        if source.owner_incarnation ~= current and source.validated_incarnation ~= current then return failure("REVALIDATE", "runtime lease approval needs revalidation after restart", {current_incarnation = current}) end
+        local consumed = op_consume(tx, actor, {approval_id = ref, proposal_digest = source.proposal_digest, effect_key = "runtime-lease:" .. ref, owner_incarnation = current}, now, nil)
+        if not consumed.ok then return consumed end
+        if ceiling.expires_ms <= now then return failure("INVALID_STATE", "runtime lease expired") end
+        local _, stored = tx:execute("INSERT INTO bee_approval_runtime_leases (lease_ref, owner_node, subject, workspace_id, tool, input_digest, expires_ms, max_uses, source_digest) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(lease_ref) DO NOTHING",
+            {ref, source.owner_node, actor, ceiling.workspace_id, ceiling.tool, ceiling.input_digest, ceiling.expires_ms, ceiling.max_uses, source.proposal_digest})
+        if stored then return storage("grant runtime lease") end
+        return success({lease_ref = ref, ceiling = ceiling}, consumed.replayed)
+    end
+    local rows, err = tx:query("SELECT * FROM bee_approval_runtime_leases WHERE lease_ref = ?", {ref})
+    local row = rows and bounds.object(rows[1])
+    if err then return storage("read runtime lease") end
+    if not row then return failure("NOT_FOUND", "runtime lease is missing") end
+    local workspace = bounds.id(row.workspace_id)
+    if not workspace or not security.can(M.CONSUME, workspace) then return failure("DENIED", "runtime lease needs workspace consume authority") end
+    if operation == "revoke" then
+        if actor ~= row.subject and not security.can(M.MANAGE, workspace) then return failure("DENIED", "runtime lease belongs to another subject") end
+        local _, failed = tx:execute("UPDATE bee_approval_runtime_leases SET revoked_at = COALESCE(revoked_at, ?) WHERE lease_ref = ?", {stamp(now), ref})
+        if failed then return storage("revoke runtime lease") end
+        return success({lease_ref = ref, revoked = true}, row.revoked_at ~= nil)
+    end
+    if actor ~= row.subject or request.workspace_id ~= workspace then return failure("DENIED", "runtime lease subject or workspace differs") end
+    local expires, maximum = bounds.count(row.expires_ms), bounds.count(row.max_uses)
+    if row.revoked_at ~= nil or not expires or expires <= now or not maximum then return failure("DENIED", "runtime lease is revoked or expired") end
+    local counts, count_error = tx:query("SELECT COUNT(*) AS count FROM bee_approval_runtime_lease_uses WHERE lease_ref = ?", {ref})
+    local count = counts and bounds.object(counts[1])
+    local used = count and bounds.count(count.count)
+    if count_error or used == nil then return storage("count runtime lease consumption") end
+    if operation == "check" then
+        if used >= maximum then return failure("DENIED", "runtime lease use limit is exhausted") end
+        if (request.tool ~= nil and request.tool ~= row.tool) or (request.input_digest ~= nil and request.input_digest ~= row.input_digest) then return failure("DENIED", "runtime lease does not cover this exact tool input") end
+        return success({lease_ref = ref, subject = actor, workspace_id = workspace}, false)
+    end
+    local effect = bounds.id(request.effect_key)
+    if not effect or request.tool ~= row.tool or request.input_digest ~= row.input_digest then return failure("DENIED", "runtime lease does not cover this exact tool input") end
+    local digest = digest_of({subject = actor, workspace_id = workspace, tool = request.tool, input_digest = request.input_digest})
+    if not digest then return failure("INVALID_ARGUMENT", "runtime lease effect cannot be measured") end
+    local previous, previous_error = tx:query("SELECT request_digest FROM bee_approval_runtime_lease_uses WHERE lease_ref = ? AND effect_key = ?", {ref, effect})
+    if not previous or previous_error then return storage("read runtime lease consumption") end
+    if #previous > 0 then
+        local stored = bounds.object(previous[1])
+        if not stored or stored.request_digest ~= digest then return failure("CONFLICT", "runtime lease effect key changed") end
+        return success({lease_ref = ref, consumed = true}, true)
+    end
+    if used >= maximum then return failure("DENIED", "runtime lease use limit is exhausted") end
+    local _, failed = tx:execute("INSERT INTO bee_approval_runtime_lease_uses (lease_ref, effect_key, request_digest) VALUES (?, ?, ?)", {ref, effect, digest})
+    if failed then return storage("consume runtime lease") end
+    return success({lease_ref = ref, consumed = true}, false)
+end
+
+operations.runtime_lease = op_runtime_lease
 operations.attention_count = op_attention_count
 operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
@@ -1238,6 +1316,7 @@ operations.publication_effects, operations.complete_publication_effect = op_publ
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
+function M.runtime_lease(value: unknown): Reply return run(value, "runtime_lease") end
 function M.request(value: unknown): Reply return run(value, "request") end
 function M.decide(value: unknown): Reply return run(value, "decide") end
 function M.decide_batch(value: unknown): Reply return run(value, "decide_batch") end

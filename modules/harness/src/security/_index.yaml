@@ -51,8 +51,9 @@ entries:
     comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application
       also resolves the public sessions contracts, whose owner authorizes each operation
   policy:
-    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding"))
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.workspace.catalog:read") || (action == "bee.workspace.manager.read" && resource == actor.meta.workspace_id)
     actions:
+    - bee.workspace.manager.read
     - bee.harness.setup
     - funcs.call
     - contract.get
@@ -97,7 +98,7 @@ entries:
 - name: profile_store_policy
   kind: security.policy
   meta:
-    comment: Saved profile facade storage access; callers separately require workspace read or write authority
+    comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or write authority
   policy:
     actions:
     - db.get
@@ -107,6 +108,7 @@ entries:
     - bee.node:db
     - bee.harness.profiles:database_ref
     - node
+    - "*"
     effect: allow
 - name: profile_workspace_policy
   kind: security.policy.expr

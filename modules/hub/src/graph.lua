@@ -45,6 +45,79 @@ local function package(artifact: inspection.Inspection): (Package?, string?)
         entries = artifact.entries, dependencies = dependencies, requirements = artifact.requirements}, nil
 end
 
+local function forward_defaults(packages: {Package}): ({Package}?, string?)
+    local holes: {[string]: requirements.Requirement} = {}
+    for _, item in ipairs(packages) do
+        for _, hole in ipairs(item.requirements.requirements) do
+            if holes[hole.id] then return nil, "packages collide at " .. hole.id end
+            holes[hole.id] = hole
+        end
+    end
+    local writers: {[string]: {string}} = {}
+    for _, hole in pairs(holes) do
+        for _, target in ipairs(hole.targets) do
+            if holes[target.entry] and (target.path == ".default" or target.path == "default") then
+                local sources = writers[target.entry] or {}
+                sources[#sources + 1] = hole.id
+                writers[target.entry] = sources
+            end
+        end
+    end
+    type Value = {value: unknown?, present: boolean}
+    local values: {[string]: Value} = {}
+    local visiting: {[string]: boolean} = {}
+    local function evaluate(id: string, depth: integer): (Value?, string?)
+        if depth >= 128 then return nil, "requirement default forwarding exceeds depth bound" end
+        if values[id] then return values[id], nil end
+        if visiting[id] then return nil, "requirement default cycle at " .. id end
+        local hole = holes[id]
+        if not hole then return nil, "unknown forwarded requirement " .. id end
+        if hole.has_selected then
+            local selected: Value = {value = hole.selected, present = true}
+            values[id] = selected
+            return selected, nil
+        end
+        visiting[id] = true
+        local chosen: Value = {present = false}
+        for _, source_id in ipairs(writers[id] or {}) do
+            local source, problem = evaluate(source_id, depth + 1)
+            if not source then return nil, problem end
+            if source.present then
+                if chosen.present and canonical.encode(chosen.value) ~= canonical.encode(source.value) then
+                    return nil, "conflicting requirement defaults for " .. id
+                end
+                chosen = source
+            end
+        end
+        if not chosen.present and hole.has_default then chosen = {value = hole.default, present = true} end
+        visiting[id] = nil
+        values[id] = chosen
+        return chosen, nil
+    end
+    for id in pairs(holes) do
+        local value, problem = evaluate(id, 0)
+        if not value then return nil, problem end
+    end
+    local bound: {Package} = {}
+    for _, item in ipairs(packages) do
+        local missing: {string} = {}
+        local selected: {requirements.Requirement} = {}
+        for _, hole in ipairs(item.requirements.requirements) do
+            local value = values[hole.id]
+            local fallback, has_default = hole.default, hole.has_default
+            if not hole.has_selected and value and value.present then
+                fallback, has_default = value.value, true
+            end
+            selected[#selected + 1] = {id = hole.id, default = fallback, has_default = has_default,
+                targets = hole.targets, selected = hole.selected, has_selected = hole.has_selected}
+            if not hole.has_selected and not has_default then missing[#missing + 1] = hole.id end
+        end
+        bound[#bound + 1] = {component = item.component, version = item.version, digest = item.digest,
+            entries = item.entries, dependencies = item.dependencies, requirements = {requirements = selected, missing = missing}}
+    end
+    return bound, nil
+end
+
 -- Rebuild constraints from each candidate assignment. Backtracking discards
 -- edges from abandoned package versions, including diamond dependencies.
 function M.resolve(roots: {Edge}, source: Source): (Result?, string?)
@@ -150,11 +223,32 @@ function M.resolve(roots: {Edge}, source: Source): (Result?, string?)
     local parameters: {[string]: requirements.Parameter} = {}
     local function bind(edge: Edge): string?
         for _, parameter in ipairs(edge.parameters) do
-            local old = parameters[parameter.name]
-            if old and canonical.encode(old.value) ~= canonical.encode(parameter.value) then
-                return "conflicting parameter " .. parameter.name
+            local qualified = parameter.name:find(":", 1, true) ~= nil
+            local visited: {[string]: boolean} = {}
+            local addressed: {string} = {}
+            local function visit(component: string)
+                if visited[component] then return end
+                visited[component] = true
+                local item = assigned[component]
+                if not item then return end
+                for _, hole in ipairs(item.requirements.requirements) do
+                    if hole.id == parameter.name or (not qualified and hole.id:match(":([^:]+)$") == parameter.name) then
+                        addressed[#addressed + 1] = hole.id
+                    end
+                end
+                if qualified then
+                    for _, dependency in ipairs(item.dependencies) do visit(dependency.component) end
+                end
             end
-            parameters[parameter.name] = parameter
+            visit(edge.component)
+            if #addressed == 0 then return "parameter names no requirement " .. parameter.name .. " in " .. edge.component end
+            for _, id in ipairs(addressed) do
+                local old = parameters[id]
+                if old and canonical.encode(old.value) ~= canonical.encode(parameter.value) then
+                    return "conflicting parameter " .. id
+                end
+                parameters[id] = {name = id, value = parameter.value}
+            end
         end
         return nil
     end
@@ -174,20 +268,27 @@ function M.resolve(roots: {Edge}, source: Source): (Result?, string?)
         end
         local selected, problem = requirements.read(item.entries, supplied)
         if not selected then return nil, problem end
-        item.requirements = selected
+        packages[#packages + 1] = {component = item.component, version = item.version, digest = item.digest,
+            entries = item.entries, dependencies = item.dependencies, requirements = selected}
+    end
+    local bound, default_error = forward_defaults(packages)
+    if not bound then return nil, default_error end
+    local projected_packages: {Package} = {}
+    for _, item in ipairs(bound) do
+        local selected = item.requirements
         local projected, projection_error = requirements.migration_targets(item.entries, selected)
         if not projected then return nil, projection_error end
-        item.entries = projected
         for _, id in ipairs(selected.missing) do missing[#missing + 1] = id end
-        for _, entry in ipairs(item.entries) do
+        for _, entry in ipairs(projected) do
             if ids[entry.id] then return nil, "packages collide at " .. entry.id end
             ids[entry.id] = item.component
         end
-        packages[#packages + 1] = item
+        projected_packages[#projected_packages + 1] = {component = item.component, version = item.version, digest = item.digest,
+            entries = projected, dependencies = item.dependencies, requirements = selected}
     end
     for name in pairs(parameters) do if not used[name] then return nil, "parameter names no requirement " .. name end end
-    table.sort(packages, function(a: Package, b: Package): boolean return a.component < b.component end)
+    table.sort(projected_packages, function(a: Package, b: Package): boolean return a.component < b.component end)
     table.sort(missing)
-    return {packages = packages, missing = missing}, nil
+    return {packages = projected_packages, missing = missing}, nil
 end
 return M

@@ -4,6 +4,7 @@ local test = require("test")
 local scheduler = require("scheduler")
 local threads = require("threads")
 local fake_executor = require("executor")
+local bounds = require("bounds")
 
 local function request(key: string): {[string]: unknown}
     return {session = "bs:node:workspace:s1", operation_key = key,
@@ -73,6 +74,32 @@ local function define_tests()
             test.eq(type(result), "table")
             test.eq((result :: {[string]: unknown}).value and ((result :: {[string]: unknown}).value :: {[string]: unknown}).text,
                 "done: Review the current patch")
+        end)
+        test.it("passes a Work budget to the executor and persists its evidenced outcome", function()
+            local owner = threads.new()
+            local registry: scheduler.Registry = {get = function(_: string): (scheduler.Executor?, string?)
+                return {run_turn = function(turn: {[string]: unknown}): (scheduler.Execution?, string?)
+                    local selected = bounds.object(turn.budget)
+                    test.eq(selected and selected.tokens, 24)
+                    local execution: scheduler.Execution = {state = "settled", outcome = "budget_exceeded",
+                        error = {code = "BUDGET_EXCEEDED", message = "tokens exceeded"},
+                        evidence = {summary = "placement proved the process stopped after tokens", artifacts = {"attempt exited"}}}
+                    return execution, nil
+                end}, nil
+            end}
+            local service = assert(scheduler.create(owner.journal, registry, nil, "budget-worker"))
+            local selected = request("budgeted-work")
+            selected.budget = {tokens = 24}
+            local receipt = assert(service.send(selected))
+            local pass = assert(service.run_pass())
+            test.eq(pass.activated, 1)
+            local state = assert(owner.work_state(receipt.work))
+            local result = bounds.object(state.result)
+            local fault = result and bounds.object(result.error)
+            local evidence = result and bounds.object(result.evidence)
+            test.eq(result and result.state, "budget_exceeded")
+            test.eq(fault and fault.code, "BUDGET_EXCEEDED")
+            test.eq(evidence and evidence.summary, "placement proved the process stopped after tokens")
         end)
 
         test.it("recovers queued work on a fresh scheduler after its wake hint is lost", function()

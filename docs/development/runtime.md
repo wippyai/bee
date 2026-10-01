@@ -44,3 +44,17 @@ The generated provenance records the selected runtime commit and any patch diges
 A runtime change is ready only when the manifest, patch checks and Bee's
 relevant acceptance gates agree. Experimental upstream work remains outside the
 published integration until its own acceptance contract exists.
+
+## Standalone live update
+
+Runtime #884 exposes the standalone deployment baseline as
+`resolution.lock = {root_module, modules, digest}`. The entire resolution graph
+requires `registry.resolution.get`; registry entry reads do not grant it.
+Hub grants this read within its execution scope, inventories the implicit root
+from `lock.root_module`, and reports installed versions from the live
+`resolution.modules`. The original lock pins stay separate in About.
+
+Modules updates the `bee/bee` closure through the existing approved Hub plan
+and apply path. Registry history and cached artifacts restore that selection
+offline. `make hub-self-update-runtime-check` tests the seeded root adapter and
+continuity; `make hub-self-update-standalone-check` exercises source-free packs.

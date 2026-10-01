@@ -838,6 +838,13 @@ CREATE TABLE bee_session_work_cancellations (
   requested_at TEXT NOT NULL
 );
 ]]
+-- Each immutable Work carries optional effective limits, and each accepted
+-- turn records the host time of its latest live observation for quiet checks.
+local SESSION_PROGRESS_SUPERVISION_SQL = [[
+ALTER TABLE bee_session_work ADD COLUMN budget_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE bee_session_turns ADD COLUMN last_progress_at_ms INTEGER NOT NULL DEFAULT 0
+  CHECK(last_progress_at_ms >= 0);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -864,6 +871,25 @@ local list: {Migration} = {
     {id = 23, name = "sessions_turn_context", sql = SESSION_CONTEXT_SQL, rebuild = false},
     {id = 24, name = "sessions_work_uncertainty", sql = SESSION_WORK_UNCERTAINTY_SQL, rebuild = false},
     {id = 25, name = "sessions_work_cancellation", sql = SESSION_WORK_CANCELLATION_SQL, rebuild = false},
+    {id = 26, name = "sessions_progress_supervision", sql = SESSION_PROGRESS_SUPERVISION_SQL, rebuild = false},
+    {id = 27, name = "profile_budget_names_and_session_accounting", rebuild = false, sql = [[
+UPDATE bee_session_work SET budget_json = json_remove(json_set(budget_json,
+ '$.provider_steps', json_extract(budget_json, '$.max_turns')), '$.max_turns') WHERE json_type(budget_json, '$.max_turns') IS NOT NULL;
+UPDATE bee_session_work SET budget_json = json_remove(json_set(budget_json,
+ '$.tokens', json_extract(budget_json, '$.max_tokens')), '$.max_tokens') WHERE json_type(budget_json, '$.max_tokens') IS NOT NULL;
+UPDATE bee_sessions SET route_json = json_remove(json_set(route_json,
+ '$.budgets.turn', json_extract(route_json, '$.budget')), '$.budget') WHERE json_type(route_json, '$.budget') IS NOT NULL;
+UPDATE bee_sessions SET route_json = json_remove(json_set(route_json,
+ '$.budgets.turn.provider_steps', json_extract(route_json, '$.budgets.turn.max_turns')), '$.budgets.turn.max_turns') WHERE json_type(route_json, '$.budgets.turn.max_turns') IS NOT NULL;
+UPDATE bee_sessions SET route_json = json_remove(json_set(route_json,
+ '$.budgets.turn.tokens', json_extract(route_json, '$.budgets.turn.max_tokens')), '$.budgets.turn.max_tokens') WHERE json_type(route_json, '$.budgets.turn.max_tokens') IS NOT NULL;
+UPDATE bee_sessions SET route_json = json_remove(json_set(route_json,
+ '$.supervision.quiet_period_ms', json_extract(route_json, '$.progress_quiet_ms'), '$.supervision.on_stall', 'report'), '$.progress_quiet_ms') WHERE json_type(route_json, '$.progress_quiet_ms') IS NOT NULL;
+ALTER TABLE bee_sessions ADD COLUMN budget_started_at_ms INTEGER NOT NULL DEFAULT 0 CHECK(budget_started_at_ms >= 0);
+ALTER TABLE bee_sessions ADD COLUMN provider_steps INTEGER NOT NULL DEFAULT 0 CHECK(provider_steps >= 0);
+ALTER TABLE bee_sessions ADD COLUMN tool_calls INTEGER NOT NULL DEFAULT 0 CHECK(tool_calls >= 0);
+ALTER TABLE bee_sessions ADD COLUMN tokens INTEGER NOT NULL DEFAULT 0 CHECK(tokens >= 0);
+]]},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

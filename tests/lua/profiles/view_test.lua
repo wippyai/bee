@@ -24,22 +24,19 @@ local function ask(target: string, request: Object): caller.Reply
     return {ok = false, error = {code = "NOT_FOUND", message = target}, value = nil, replayed = false}
 end
 local function state(): view.State
-    local draft, err = editor.new({title = "Agent", definition_ref = "host:agent", options = {},
-        mcp_tools = {"thread_read"}, instructions = ""}, {options = {}, mcp_tools = {"thread_read"}, instructions = true})
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex:binding", provider = {system_prompt_append = ""}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}, {options = {}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
 end
 local function text_state(): view.State
-    local draft, err = editor.new({title = "Agent", definition_ref = "host:agent", options = {label = "ds-flash"},
-        mcp_tools = {"thread_read"}, instructions = "Keep changes small."},
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex:binding", provider = {options = {label = "ds-flash"}, system_prompt_append = "Keep changes small."}, bee = {mcp = {{tool = "thread_read", scope = {}}}}},
         {options = {label = {kind = "text", max_bytes = 64}}, mcp_tools = {"thread_read"}, instructions = true})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "agent", revision = 1, draft = draft,
         save_key = "save-agent", remove_key = "remove-agent"}, ask)
 end
 local function launch_state(workdir: boolean, thread: boolean): view.State
-    local draft, err = editor.new({title = "Agent", definition_ref = "host:agent", options = {},
-        mcp_tools = {}, instructions = ""}, {options = {}, mcp_tools = {}, instructions = false, workdir = workdir, thread = thread})
+    local draft, err = editor.new({schema_revision = "bee.agent-profile@2", name = "Agent", definition_ref = "host:agent", driver_binding_ref = "bee.driver.codex:binding", provider = {system_prompt_append = ""}, bee = {mcp = {}}}, {options = {}, mcp_tools = {}, instructions = false, workdir = workdir, thread = thread})
     if not draft then error(tostring(err)) end
     return view.new({workspace_id = "workspace", profile_id = "profile", revision = 1, draft = draft, save_key = "save", remove_key = "remove"}, ask)
 end
@@ -48,9 +45,65 @@ local function key(name: string, rune: string?)
 end
 local function define_tests()
     test.describe("Agent profile form input", function()
+        test.it("loads session limits without inventing turn limits", function()
+            local s = state()
+            s.form.draft.budgets = {session = {tokens = 100}}
+            local loaded = view.new(s.form, ask)
+            test.eq(loaded.settings["session.tokens"], "100")
+            test.eq(loaded.settings["turn.tokens"], "")
+            test.eq(view.action(loaded, "save"), "save")
+            test.is_nil(loaded.form.draft.budgets and loaded.form.draft.budgets.turn)
+        end)
+        test.it("edits named budgets and supervision with units and preserves unrelated Docker requests", function()
+            local s = state()
+            s.form.draft._allowed.placements = {"bee.placement.docker:coding"}
+            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding", overrides = {user = "1000:1000"}}
+            s.settings["turn.wall_time_ms"] = "2000"
+            s.settings["session.tokens"] = "10000"
+            s.settings.quiet_period_ms = "5000"
+            s.settings["docker.memory_bytes"] = "33554432"
+            view.action(s, "advanced")
+            local rendered = table.concat(view.draw(120, 45, appearance.defaults(), s).rows, "\n")
+            test.is_true(rendered:find("Time limit (ms)", 1, true) ~= nil)
+            test.is_true(rendered:find("Docker memory (bytes)", 1, true) ~= nil)
+            test.is_false(rendered:find("JSON", 1, true) ~= nil)
+            test.eq(view.action(s, "save"), "save")
+            local limits = s.form.draft.budgets
+            test.eq(limits and limits.turn and limits.turn.wall_time_ms, 2000)
+            test.eq(limits and limits.session and limits.session.tokens, 10000)
+            test.is_nil(limits and limits.turn and limits.turn.tokens)
+            test.eq(s.form.draft.supervision and s.form.draft.supervision.quiet_period_ms, 5000)
+            local placement = s.form.draft.placement
+            test.eq(placement and placement.kind == "docker" and placement.overrides and placement.overrides.user, "1000:1000")
+            s.settings["turn.wall_time_ms"] = "2.5"
+            test.is_nil(view.action(s, "save"))
+            test.is_true(s.status:find("whole number", 1, true) ~= nil)
+            test.eq(limits and limits.turn and limits.turn.wall_time_ms, 2000)
+            s.settings["turn.wall_time_ms"] = ""
+            s.settings["session.tokens"] = ""
+            test.eq(view.action(s, "save"), "save")
+            test.is_nil(s.form.draft.budgets)
+        end)
+        test.it("describes the basic fields that this agent supports", function()
+            local shown = view.draw(80, 24, appearance.defaults(), state())
+            test.is_nil((shown.rows[1]:find("model", 1, true)))
+        end)
+
+        test.it("shows Docker revoke under Advanced at both frame sizes", function()
+            local current = state()
+            current.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding"}
+            current.advanced = true
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local shown = view.draw(size[1], size[2], appearance.defaults(), current)
+                test.is_true(shown.rows[size[2] - 1]:find("Revoke Docker access", 1, true) ~= nil)
+            end
+            view.action(current, "revoke_docker")
+            test.is_true(current.confirming_revoke == true)
+        end)
+
         test.it("requires confirmation before the person revokes Docker access", function()
             local s = state()
-            s.form.draft.placement_profile_ref = "bee.placement.docker:coding"
+            s.form.draft.placement = {kind = "docker", profile_ref = "bee.placement.docker:coding"}
             local revoked = false
             s.ask = function(target: string, request: Object): caller.Reply
                 test.eq(target, "bee.placement.docker.binding:prepare_environment")
@@ -58,6 +111,7 @@ local function define_tests()
                 test.eq(request.workspace_id, "workspace")
                 revoked = true; return ok({address = "revoked"})
             end
+            view.action(s, "advanced")
             view.action(s, "revoke_docker")
             test.is_true(s.confirming_revoke == true)
             test.is_false(revoked)
@@ -102,7 +156,7 @@ local function define_tests()
             view.input(s, key("enter"), drawn)
             test.not_nil(s.browsing)
             drawn = view.draw(60, 16, appearance.defaults(), s)
-            test.is_true(table.concat(drawn.rows, "\n"):find("bee.env:workspace_root", 1, true) ~= nil)
+            test.is_true(table.concat(drawn.rows, "\n"):find("Workspace root", 1, true) ~= nil)
             view.input(s, key("enter"), drawn)
             view.input(s, key("enter"), drawn)
             test.eq(s.browsing and s.browsing.path, "legacy")
@@ -110,7 +164,10 @@ local function define_tests()
             test.is_nil(s.browsing)
             test.eq(s.form.draft.workdir and s.form.draft.workdir.path, "legacy")
             test.eq(s.form.draft.workdir and s.form.draft.workdir.root_ref, "bee.env:workspace_root")
-            -- Then the thread: the new one first, then this Agent's threads.
+            -- Presentation, native home and permission answers precede the thread.
+            view.input(s, key("tab"), drawn)
+            view.input(s, key("tab"), drawn)
+            view.input(s, key("tab"), drawn)
             view.input(s, key("tab"), drawn)
             view.input(s, key("enter"), drawn)
             local threads = s.threads
@@ -126,6 +183,9 @@ local function define_tests()
             test.eq(result and result.workdir and result.workdir.path, "legacy")
             test.eq(result and result.thread and result.thread.thread_id, "thread-1")
             -- The definition folder and a new thread clear the choices.
+            view.input(s, key("up"), drawn)
+            view.input(s, key("up"), drawn)
+            view.input(s, key("up"), drawn)
             view.input(s, key("up"), drawn)
             view.input(s, key("enter"), drawn)
             view.input(s, key("rune", "d"), drawn)
@@ -146,9 +206,12 @@ local function define_tests()
             view.input(s, {type = "key", action = "press", key = "space", key_type = "space", ctrl = false, alt = false, shift = false}, frame)
             test.eq(s.title, "Bee  ")
             view.input(s, {type = "key", action = "press", key = "", key_type = "tab", ctrl = false, alt = false, shift = false}, frame)
+            view.input(s, key("tab"), frame)
+            view.input(s, key("tab"), frame)
+            view.input(s, key("tab"), frame)
             view.input(s, {type = "paste", text = "Use small changes.\nVerify them."}, frame)
             test.eq(view.action(s, "save"), "save")
-            test.eq(s.form.draft.instructions, "Use small changes.\nVerify them.")
+            test.eq(s.form.draft.provider.system_prompt_append, "Use small changes.\nVerify them.")
             test.is_nil(s.form.pending)
         end)
         test.it("requires confirmation for removal and keeps submitted values frozen", function()
@@ -170,8 +233,8 @@ local function define_tests()
             local s = text_state()
             view.action(s, "advanced")
             local frame = view.draw(60, 16, appearance.defaults(), s)
-            -- Name, instructions, then the text option.
-            for _ = 1, 2 do
+            -- Name, presentation, native home, permission answers, instructions, option.
+            for _ = 1, 5 do
                 view.input(s, {type = "key", action = "press", key = "", key_type = "tab",
                     ctrl = false, alt = false, shift = false}, frame)
             end
@@ -181,8 +244,8 @@ local function define_tests()
             test.eq(s.option_text.label, "ds-flash")
             test.eq(s.guidance, "Keep changes small.")
             test.eq(view.action(s, "save"), "save")
-            test.eq(s.form.draft.options.label, "ds-flash")
-            test.eq(s.form.draft.instructions, "Keep changes small.")
+            test.eq(s.form.draft.provider.options.label, "ds-flash")
+            test.eq(s.form.draft.provider.system_prompt_append, "Keep changes small.")
         end)
         test.it("keeps rows and mouse targets within compact terminal sizes", function()
             for _, size in ipairs({{1, 1}, {12, 4}, {30, 8}, {60, 16}}) do
@@ -194,14 +257,14 @@ local function define_tests()
                 end
             end
         end)
-        test.it("hides technical grants until Advanced permissions and preserves help at both sizes", function()
+        test.it("hides technical grants until Advanced and preserves help at both sizes", function()
             for _, size in ipairs({{120, 36}, {80, 24}}) do
                 local s = state()
                 s.status = "Name is required"
                 local shown = view.draw(size[1], size[2], appearance.defaults(), s)
                 local plain = table.concat(shown.rows, "\n"):gsub("\27%[[0-9;]*m", "")
                 test.is_nil((plain:find("thread_read", 1, true)))
-                test.is_true(plain:find("Advanced permissions", 1, true) ~= nil)
+                test.is_true(plain:find("Advanced", 1, true) ~= nil)
                 test.is_true(shown.rows[size[2]]:find("Ctrl+S save", 1, true) ~= nil)
                 test.is_true(shown.rows[size[2]]:find("? help", 1, true) ~= nil)
                 view.action(s, "advanced")

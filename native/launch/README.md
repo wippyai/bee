@@ -170,9 +170,9 @@ until the runtime's gossip-over-internode hook lands, mirrored networking
 (`networkingMode=mirrored` in `%UserProfile%\.wslconfig`, then `wsl --shutdown`)
 is the complete answer for a NATed peer.
 
-`bee version` is not answered by the host: the embedded pack version and the
-pinned runtime commit are not visible to `app.Host`, so the word reaches the
-owner as an application command.
+The host does not expose the embedded Bee pack version. It exposes the native
+Go module version and pinned runtime commit as read-only environment facts; Bee
+About uses those baked executable facts separately from the live pack versions.
 
 The runtime owns state opening, locking, deployment history, migrations, process
 ownership and application lifecycle. The native host provides the selected

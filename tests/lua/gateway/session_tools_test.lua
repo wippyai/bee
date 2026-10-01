@@ -20,9 +20,13 @@ local READS = {"session_catalog", "session_await", "session_get", "session_list"
 local function valid(name: string): Object
     local spec = {definition = "def:research"}
     if name == "session_catalog" then return {kind = "definition", include_unavailable = true} end
-    if name == "session_open" then return {spec = spec, operation_key = "k1"} end
-    if name == "session_run" then return {spec = spec, input = "do it", operation_key = "k1"} end
-    if name == "session_send" then return {session = SESSION, input = {schema = "bee:Text@1", value = {text = "go"}}, operation_key = "k1"} end
+    if name == "session_open" then
+        spec.budgets = {turn = {provider_steps = 8, tokens = 12000}}
+        spec.supervision = {quiet_period_ms = 45000, on_stall = "report"}
+        return {spec = spec, operation_key = "k1"}
+    end
+    if name == "session_run" then return {spec = spec, input = "do it", budgets = {turn = {wall_time_ms = 120000}}, operation_key = "k1"} end
+    if name == "session_send" then return {session = SESSION, input = {schema = "bee:Text@1", value = {text = "go"}}, budgets = {turn = {tokens = 5000}}, operation_key = "k1"} end
     if name == "session_await" then return {subject = WORK, timeout_ms = 1000} end
     if name == "session_join" then return {works = {WORK, WORK2}, policy = "quorum", quorum = 2, operation_key = "k1"} end
     if name == "session_get" then return {work = WORK} end
@@ -268,8 +272,11 @@ local function define_tests()
             test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "work", value = work}}))
             local stalled = snapshot()
             stalled.activity = "stalled"
+            stalled.activity_evidence = {kind = "quiet", turn = "bturn:n:w:t1", last_progress_at_ms = 1000,
+                quiet_period_ms = 5000, quiet_for_ms = 6000}
             test.not_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = stalled}}))
             stalled.activity = "queued"
+            stalled.activity_evidence = nil
             test.is_nil(session_tools.result("session_get", {ok = true, value = {kind = "session", value = stalled}}))
             test.not_nil(session_tools.decode("session_list", {arguments = {filter = {activity = "blocked"}}}))
             test.is_nil(session_tools.decode("session_list", {arguments = {filter = {activity = "queued"}}}))

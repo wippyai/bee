@@ -46,16 +46,6 @@ function M.mcp_file(gateway: configure_protocol.GatewayInput): (configure_protoc
     }, nil
 end
 
--- Agy discovers persistent rules from an added customization root, separately
--- from the conversation's user messages. Do not create or change project files.
-function M.instructions_file(text: string): (configure_protocol.Configuration?, string?)
-    local content, content_error = configure_protocol.instructions(text)
-    if not content then return nil, content_error or "instructions are missing" end
-    local digest, digest_error = hash.sha256(content)
-    if not digest then return nil, tostring(digest_error or "instructions digest failed") end
-    return {revision = "bee.agy-instructions@2", path = M.CUSTOMIZATION_DIRECTORY .. "/AGENTS.md", content = content,
-        digest = digest, provider_ref = configure_protocol.INSTRUCTIONS_PROVIDER_REF}, nil
-end
 -- Agy uses matcher groups for tool events and flat entries for Stop.
 function M.hooks_file(gateway: configure_protocol.GatewayInput): (configure_protocol.Configuration?, string?)
     local executable = gateway.hook_command

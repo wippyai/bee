@@ -55,7 +55,7 @@ func prepareFixture(root, repo string) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "tests/fixtures/hub_manage"))); err != nil {
 		return fmt.Errorf("copy Hub fixture: %w", err)
 	}
-	for _, module := range []string{"hub", "persist", "sync", "threads", "hive"} {
+	for _, module := range []string{"hub", "persist", "sync", "threads", "hive", "driver", "placement"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", module), os.DirFS(filepath.Join(repo, "modules", module))); err != nil {
 			return fmt.Errorf("stage Hub component dependency %s: %w", module, err)
 		}
@@ -108,11 +108,11 @@ func prepareFixture(root, repo string) error {
 		return closeErr
 	}
 
-	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n"
+	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n- name: bee/driver\n  version: 0.1.0-dev\n- name: bee/placement\n  version: 0.1.0-dev\n"
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write fixture lock: %w", err)
 	}
-	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/hive: ./modules/hive\n"
+	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/hive: ./modules/hive\n    bee/driver: ./modules/driver\n    bee/placement: ./modules/placement\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write fixture configuration: %w", err)
 	}

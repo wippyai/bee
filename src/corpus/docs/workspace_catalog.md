@@ -296,7 +296,7 @@ from Hive Manager.
 
 ## Workspaces viewer
 
-`bee.workspace.manager:app` (Tools → Workspaces) is the bundled viewer on the shared
+`bee.workspace.manager.app:app` (Tools → Workspaces) is the bundled viewer on the shared
 application frame. It holds one catalog page (50 rows) and the cursors back to
 earlier pages, never the whole catalog; ↑↓ past either end of a page and
 PgUp/PgDn load the neighbouring page. The Active and Archived tabs list each
@@ -323,9 +323,10 @@ edited, and, under a root admitted for writing, an optional new folder made
 inside the chosen one (`create_directory`). Enter creates; a folder that is a
 workspace already needs a new folder, and the catalog's refusal stays on the
 form. The new workspace is selected on the Active tab's first page when that
-page holds it. S (Serve) holds a host
-lease on the selected workspace while the viewer stays open, so the node host
-manager starts its host; S again, or closing the viewer, releases it.
+page holds it. Enter (Serve) holds a host lease on the selected workspace while
+the viewer stays open. The workspace header switches the desktop workspace.
+I inspects without serving; D opens technical Details. Closing the viewer
+releases its serving lease.
 
 Its admission binding grants `bee.security.storage:workspace_catalog_read_policy`,
 `bee.security.storage:workspace_catalog_manage_policy`, `bee.security.threads:thread_workspace_list_policy`,

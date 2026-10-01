@@ -7,11 +7,11 @@ local bounds = require("bounds")
 local canonical = require("canonical")
 local resources = require("resources")
 local formats = require("formats")
+local types = require("types")
 local M = {}
 M.ATTEMPTS = "attempts"
 M.SESSIONS = "sessions"
 M.MAX_REPLAY_BYTES = 16384
-M.MAX_CONFIGURATION_BASE_BYTES = 131072
 M.REPLAY_CHUNK_BYTES = 4096
 -- Login bytes are opaque provider state. They have a separate, larger bound
 -- from declarative configuration and are never compared on retained reuse:
@@ -193,9 +193,10 @@ end
 -- and provider conversation files retain their separate ownership. The runtime
 -- verifies/pins existing parents; missing parents can only be created through
 -- directories this materialization itself created.
-function M.publish_configuration(home_path: string, relative: string, content: string, created: {[string]: boolean}?): (string?, string?, boolean?)
+function M.publish_configuration(home_path: string, relative: string, content: string, created: {[string]: boolean}?, composed: boolean?): (string?, string?, boolean?)
     if relative == "" or relative:find("^/") or relative:find("%.%.") then return nil, "configuration path escapes the home", false end
-    if #content > M.MAX_REPLAY_BYTES then return nil, "configuration exceeds publication bound", false end
+    local bound = composed == true and types.MAX_COMPOSED_CONFIGURATION_BYTES or M.MAX_REPLAY_BYTES
+    if #content > bound then return nil, "configuration exceeds publication bound", false end
     local vol, vol_error = volume()
     if not vol then return nil, vol_error, false end
     local privacy_error = private_root(vol)
@@ -294,7 +295,7 @@ function M.read_configuration(home_path: string, relative: string, expected_dige
     if privacy_error then return nil, privacy_error end
     local target = home_path .. "/home/" .. relative
     if not vol:exists(target) then return nil, "configuration base is missing" end
-    local content, read_error = read_bounded(vol, target, M.MAX_CONFIGURATION_BASE_BYTES, "configuration base")
+    local content, read_error = read_bounded(vol, target, types.MAX_COMPOSED_CONFIGURATION_BYTES, "configuration base")
     if content == nil then return nil, read_error end
     local digest, digest_error = hash.sha256(content)
     if not digest then return nil, "digest configuration base: " .. tostring(digest_error) end

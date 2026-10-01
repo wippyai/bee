@@ -16,6 +16,18 @@ entries:
   kind: security.policy
   groups: [execution_scope]
   policy: {actions: [registry.get, hub.modules.list, hub.modules.search, hub.modules.get, hub.modules.readme, hub.versions.open, hub.versions.list], resources: '*', effect: allow}
+- name: resolution_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy: {actions: [registry.resolution.get], resources: [''], effect: allow}
+- name: binary_identity_policy
+  kind: security.policy
+  groups: [execution_scope]
+  policy:
+    actions: [env.get]
+    resources: [bee.env:binary_native_module, bee.env:binary_native_version, bee.env:binary_native_modules,
+      bee.env:binary_runtime_commit]
+    effect: allow
 - name: publisher_policy
   kind: security.policy
   groups: [execution_scope]
@@ -23,7 +35,7 @@ entries:
 - name: dependency_policy
   kind: security.policy
   groups: [execution_scope]
-  policy: {actions: [registry.create.ns.dependency, registry.update.ns.dependency, registry.delete.ns.dependency], resources: 'bee.hub.deps:*', effect: allow}
+  policy: {actions: [registry.create.ns.dependency, registry.update.ns.dependency, registry.delete.ns.dependency], resources: ['bee.hub.deps:*', 'bee:deployment'], effect: allow}
 - name: receipt_policy
   kind: security.policy
   groups: [execution_scope]

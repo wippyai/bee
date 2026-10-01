@@ -14,10 +14,14 @@ local function handle(raw: unknown): {[string]: unknown}
     if type(raw) ~= "table" then return {ok = false, replayed = false} end
     if raw.operation == "catalog" then
         return {ok = true, replayed = false, value = {total = 1, items = {{
-            component = "bee/example", title = "Update fixture", description = "Saved configuration fixture",
+            component = "acme/example", title = "Update fixture", description = "Saved configuration fixture",
             latest_version = "2.0.0"}}}}
+    elseif raw.operation == "updates" then
+        return {ok = true, replayed = false, value = {modules = {}, bee_update = {
+            installed_version = "", available_version = "", update_available = false,
+            needs_new_binary = false, reason = ""}, catalog_error = ""}}
     elseif raw.operation == "details" then
-        return {ok = true, replayed = false, value = {component = "bee/example", title = "Update fixture",
+        return {ok = true, replayed = false, value = {component = "acme/example", title = "Update fixture",
             description = "Saved configuration fixture", readme = "# Update fixture", page = 1, total_versions = 1,
             versions = {{version = "2.0.0", yanked = false}}}}
     elseif raw.operation == "installed" then
@@ -32,10 +36,10 @@ local function handle(raw: unknown): {[string]: unknown}
             time.sleep("0.5s")
         end
         local stale = installed_reads == 1
-        return {ok = true, replayed = false, value = {modules = {{component = "bee/example", version = "1.0.0",
+        return {ok = true, replayed = false, value = {modules = {{component = "acme/example", version = "1.0.0",
             source = "hub", direct = true, used_by = {}}}, roots = {{
-            id = "bee.hub.deps:798600fd836e0fb1d798461f608b9a0e85844cb05f8409797c8600d825b2d463",
-            component = "bee/example", version = "1.0.0", parameters = {
+            id = "bee.hub.deps:cc95b0f7498a74222c0f5db968f6ff26b78e569d19ce551d4c052d26139818b1",
+            component = "acme/example", version = "1.0.0", parameters = {
                 {name = "example:enabled", value = stale and false or true},
                 {name = "example:name", value = stale and "stale" or "saved"},
                 {name = "example:config", value = {mode = stale and "stale" or "saved", retries = stale and 99 or 3}},
@@ -62,7 +66,7 @@ local function handle(raw: unknown): {[string]: unknown}
             return {id = id, has_default = true, default = default, has_selected = selected,
                 selected = selected and values[id] or nil, targets = {}}
         end
-        return {ok = true, replayed = false, value = {component = "bee/example", version = raw.request.version,
+        return {ok = true, replayed = false, value = {component = "acme/example", version = raw.request.version,
             digest = string.rep("c", 64), requirements = {missing = {}, requirements = {
                 requirement("example:enabled", false), requirement("example:name", "default"),
                 requirement("example:config", {mode = "default"}),
@@ -84,12 +88,50 @@ return {handle = handle}
 '''
 
 
+SELF_UPDATE_FACADE = r'''
+local function handle(raw: unknown): {[string]: unknown}
+    if type(raw) ~= "table" then return {ok = false, replayed = false} end
+    if raw.operation == "catalog" then
+        return {ok = true, replayed = false, value = {total = 0, items = {}}}
+    elseif raw.operation == "installed" then
+        return {ok = true, replayed = false, value = {version = 1, modules = {
+            {component = "bee/bee", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+            {component = "bee/application", version = "1.0.0", source = "hub", direct = false, used_by = {"bee/bee"}},
+        }, roots = {{id = "bee:deployment", component = "bee/bee", version = "1.0.0", parameters = {
+            {name = "bee:target", value = {channel = "stable"}},
+        }}}}}
+    elseif raw.operation == "updates" then
+        return {ok = true, replayed = false, value = {modules = {
+            {component = "bee/bee", installed_version = "1.0.0", available_version = "2.0.0", update_available = true},
+            {component = "bee/application", installed_version = "1.0.0", available_version = "2.0.0", update_available = true},
+        }, bee_update = {installed_version = "1.0.0", available_version = "2.0.0", update_available = true,
+            needs_new_binary = false, reason = ""}, catalog_error = ""}}
+    elseif raw.operation == "plan" then
+        local request = raw.request
+        assert(request.action == "update" and request.component == "bee/bee" and request.version == "2.0.0",
+            "Bee update did not plan the host deployment root")
+        assert(#request.parameters == 1 and request.parameters[1].name == "bee:target"
+            and request.parameters[1].value.channel == "stable", "Bee update did not preserve host root parameters")
+        return {ok = true, replayed = false, value = {request = request, digest = string.rep("a", 64), ready = true,
+            base_revision = 12, modules = {
+                {component = "bee/bee", version = "2.0.0", previous_version = "1.0.0", change = "update"},
+                {component = "bee/application", version = "2.0.0", previous_version = "1.0.0", change = "update"},
+            }, missing = {}, migrations = {}, starts = {}, capabilities = {}}}
+    end
+    return {ok = false, replayed = false, code = "FIXTURE", message = "unsupported self-update operation"}
+end
+return {handle = handle}
+'''
+
+
 def exercise(project, packed, pack):
     with tempfile.TemporaryDirectory(prefix="bee-modules-update-") as directory:
         (Path(directory) / ".wippy").mkdir()
-        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules:app",))
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules.app:app",))
         try:
+            ui.resize(150, 40)
             ui.wait("MODULES", timeout=20)
+            ui.resize(160, 40)
             ui.wait("Update fixture")
             ui.key(b"\x1b[B")
             ui.key(b"\r")
@@ -122,7 +164,39 @@ def exercise(project, packed, pack):
             ui.wait("Ready for confirmation")
             ui.quit()
         except Exception:
-            Path("/tmp/bee-modules-update-failure.raw").write_bytes(ui.raw)
+            (Path(directory) / "bee-modules-update-failure.raw").write_bytes(ui.raw)
+            raise
+        finally:
+            ui.close()
+
+
+def exercise_self_update(project, packed, pack):
+    with tempfile.TemporaryDirectory(prefix="bee-modules-self-update-") as directory:
+        (Path(directory) / ".wippy").mkdir()
+        ui = Desktop(directory, packed=packed, project=project, deployment=pack, apps=("bee.hub.modules.app:app",))
+        try:
+            ui.wait("MODULES", timeout=20)
+            for y, line in enumerate(ui.screen.display, 1):
+                if "Installed" in line:
+                    x = line.index("Installed") + 1
+                    ui.mouse(0, x, y)
+                    ui.mouse(0, x, y, True)
+                    break
+            else:
+                raise AssertionError(f"Installed tab is missing\n{ui.text()}")
+            ui.wait("MODULES  INSTALLED")
+            ui.wait("bee/bee")
+            ui.wait("Hub 2.0.0")
+            ui.wait("Update Bee")
+            ui.key(b"u")
+            ui.wait("Ready for confirmation")
+            assert "update  bee/bee  2.0.0" in ui.text(), ui.text()
+            ui.key(b"\r")
+            ui.wait("MODULES  CONFIRM")
+            assert "update  bee/bee  2.0.0" in ui.text() and "update  bee/application  2.0.0" in ui.text(), ui.text()
+            ui.quit()
+        except Exception:
+            (Path(directory) / "bee-modules-self-update-failure.raw").write_bytes(ui.raw)
             raise
         finally:
             ui.close()
@@ -137,6 +211,11 @@ def main():
         pack_fixture(project, pack)
         exercise(project, False, pack)
         exercise(project, True, pack)
+        (project / "modules/hub/src/binding/facade.lua").write_text(SELF_UPDATE_FACADE)
+        pack = project / "modules-self-update-deployment"
+        pack_fixture(project, pack)
+        exercise_self_update(project, False, pack)
+        exercise_self_update(project, True, pack)
     print("Modules source/pack update: delayed and failed inventory reads, retry fencing, saved typed values, edit/clear preservation and update planning pass")
 
 

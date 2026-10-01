@@ -7,6 +7,7 @@ local configuration = require("configuration")
 local types = require("types")
 local locate = require("locate")
 local codec_registry = require("codec_registry")
+local option_render = require("option_render")
 local M = {}
 
 type Object = {[string]: unknown}
@@ -22,7 +23,8 @@ type LaunchAPI = {
 }
 
 local function request_value(request: Request, field: string): descriptor_reader.OptionValue?
-    return request[field]
+    local name = field:match("^provider%.options%.(.+)$") or field:match("^provider%.(.+)$") or field
+    return request[name]
 end
 
 local function rule_error(rule: Object, fallback: string): string
@@ -42,7 +44,7 @@ local function apply_rules(options: Object, request: Request): string?
                 local supplied = value ~= nil
                 if type(value) == "boolean" then supplied = value end
                 if type(value) == "string" then supplied = value ~= "" end
-                if type(value) == "table" then supplied = #(value) > 0 end
+                if type(value) == "table" then supplied = next(value) ~= nil end
                 if field and supplied then return rule_error(rule, field .. " is not supported for " .. tostring(request.profile_id)) end
             end
         elseif rule.kind == "values" then
@@ -100,7 +102,7 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     local request: Request = {profile_id = profile_id, brief = brief}
     for name, raw_spec in pairs(declared_fields) do
         local field = tostring(name)
-        local spec = bounds.object(raw_spec) or {}
+        local spec = descriptor_reader.runtime_spec(bounds.object(raw_spec) or {})
         if object[field] ~= nil then
             local decoded, decode_error = descriptor_reader.decode_option(field, spec, object[field])
             if decode_error then return nil, decode_error end
@@ -114,7 +116,7 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
         local supplied = value ~= nil
         if type(value) == "boolean" then supplied = value end
         if type(value) == "string" then supplied = value ~= "" end
-        if type(value) == "table" then supplied = #(value) > 0 end
+        if type(value) == "table" then supplied = next(value) ~= nil end
         if supplied and type(spec.profiles) == "table" and not bounds.member(profile_id, spec.profiles) then
             return nil, bounds.text(spec.unsupported, 256) or (field .. " is not supported for this profile")
         end
@@ -245,7 +247,22 @@ function M.render_argv(raw: unknown, request: Request, selected: Descriptor, dep
         else
             local item = bounds.object(node)
             if not item then return nil, "CLI argv template is malformed" end
-            if item.field ~= nil then
+            if item.render ~= nil then
+                local name = bounds.id(item.render)
+                local fields = bounds.object((bounds.object(selected.options) or {}).fields) or {}
+                local declaration = name and bounds.object(fields[name])
+                if not declaration then return nil, "OptionSpec render is missing" end
+                for _, raw_render in ipairs(as_list(declaration.render)) do
+                    local render = bounds.object(raw_render)
+                    local contexts = render and bounds.ids(render.contexts, true)
+                    if render and render.kind == "argv" and contexts and bounds.member(item.context, contexts) then
+                        local expanded, err = M.render_argv(render.tokens, request, selected, nesting + 1)
+                        if not expanded then return nil, err end
+                        local append_error = append_many(expanded)
+                        if append_error then return nil, append_error end
+                    end
+                end
+            elseif item.field ~= nil then
                 local field = bounds.id(item.field)
                 local value = field and request_value(request, field) or nil
                 if type(value) ~= "string" and type(value) ~= "number" then return nil, "CLI argv template field is absent or not scalar" end
@@ -344,13 +361,39 @@ local function provider_home(selected: Descriptor, private: boolean, request: Re
     return {provider = provider, private = private, variable = nil, directory = nil, extra_variables = extras, files = files}
 end
 
+local function referenced_options(raw: unknown, used: {[string]: boolean}, depth: integer)
+    if type(raw) ~= "table" or depth > descriptor_reader.MAX_TEMPLATE_DEPTH then return end
+    for key, value in pairs(raw) do
+        if key == "render" and type(value) == "string" then used[value] = true
+        elseif type(value) == "table" then referenced_options(value, used, depth + 1) end
+    end
+end
+
 local function build_launch(selected: Descriptor, request: Request): (types.Launch?, string?)
     local templates = bounds.object(selected.argv_templates) or {}
     local template_name = request.profile_id == "window" and "window" or (request_value(request, "resume_ref") ~= nil and "resume" or "first_turn")
     local template = bounds.object(templates[template_name])
     if not template then return nil, "CLI descriptor has no " .. template_name .. " launch template" end
-    local argv, argv_error = M.render_argv(template.argv, request, selected)
-    if not argv then return nil, argv_error end
+    local rendered_argv, argv_error = M.render_argv(template.argv, request, selected)
+    if not rendered_argv then return nil, argv_error end
+    local argv: {string} = {}
+    for _, argument in ipairs(rendered_argv) do argv[#argv + 1] = argument end
+    local fields = bounds.object(selected.options.fields) or {}
+    local used: {[string]: boolean} = {}
+    referenced_options(template.argv, used, 0)
+    local ordered: {string} = {}
+    for name, raw in pairs(fields) do
+        local field = bounds.object(raw)
+        if field and field.path ~= nil and request[name] ~= nil and not used[name] and name ~= "system_prompt_append" then ordered[#ordered + 1] = name end
+    end
+    table.sort(ordered)
+    for _, name in ipairs(ordered) do
+        local expanded, err = M.render_argv({{render = name, context = template_name}}, request, selected)
+        if not expanded then return nil, err end
+        for _, argument in ipairs(expanded) do argv[#argv + 1] = argument end
+    end
+    local environment, environment_error = option_render.environment(bounds.object(selected.options.fields) or {}, request, template_name)
+    if not environment then return nil, environment_error end
     local launch: types.Launch = {executable = selected.executable, argv = argv, environment = {}, readiness = assert(bounds.id(template.readiness))}
     local input_written = false
     if template.stdin ~= nil then
@@ -459,7 +502,7 @@ end
 -- The contract's configure boundary decodes once and dispatches through the
 -- descriptor's renderer id. Renderers contain only the CLI-specific format
 -- operation; decoding, bounds, and refusal shape stay in bee.driver.
-function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}): (unknown) -> Object
+function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}, descriptor_ref: string): (unknown) -> Object
     if not bounds.id(default_renderer) or renderers[default_renderer] == nil then error("default configure renderer is unsupported") end
     return function(raw: unknown): Object
         local object = bounds.object(raw)
@@ -477,7 +520,57 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
         end
         local request, decode_error = configuration.decode_request(config_request)
         if not request then return {ok = false, error = decode_error or "invalid configuration request"} end
-        return renderer(request)
+        local descriptor, descriptor_error = descriptor_reader.load(descriptor_ref)
+        if not descriptor then return {ok = false, error = descriptor_error or "Configuration descriptor is unavailable"} end
+        local fields = bounds.object(descriptor.options.fields) or {}
+        local generic: Object = {}
+        for name, value in pairs(request.option_values or {}) do generic[name] = value end
+        if request.instructions then generic.system_prompt_append = request.instructions end
+        local prompt_arguments: {string} = {}
+        local declaration = bounds.object(fields.system_prompt_append)
+        for _, raw_render in ipairs(declaration and as_list(declaration.render) or {}) do
+            local render = bounds.object(raw_render)
+            if render and render.kind == "config" and render.format == "text" then request.instructions_path = bounds.subpath(render.file) end
+        end
+        if request.instructions then
+            if not request.instructions_path or not request.home_directory then return {ok = false, error = "Prompt append requires its declared private-home file"} end
+            generic.system_prompt_files = {request.home_directory .. "/" .. request.instructions_path}
+            local prompt: Request = {profile_id = "batch", brief = "", system_prompt_append = request.instructions,
+                system_prompt_file = request.home_directory .. "/" .. request.instructions_path}
+            for _, raw_render in ipairs(declaration and as_list(declaration.render) or {}) do
+                local render = bounds.object(raw_render)
+                if render and render.kind == "argv" and bounds.member(request.context or "first_turn", render.contexts) then
+                    local tokens, err = M.render_argv(render.tokens, prompt, descriptor)
+                    if not tokens then return {ok = false, error = err} end
+                    for _, token in ipairs(tokens) do prompt_arguments[#prompt_arguments + 1] = token end
+                end
+            end
+        end
+        local reply = renderer(request)
+        if reply.ok ~= true then return reply end
+        local delivery, delivery_error = configuration.decode_delivery(reply.delivery)
+        if not delivery then return {ok = false, error = delivery_error} end
+        for name, raw in pairs(fields) do
+            local field = bounds.object(raw)
+            if field and field.path ~= nil and generic[name] == nil and field.default ~= nil then generic[name] = field.default end
+        end
+        for name, value in pairs(generic) do
+            if name ~= "system_prompt_files" then
+                local field = bounds.object(fields[name])
+                if not field then return {ok = false, error = "Configuration option is undeclared: " .. name} end
+                local selected_value, err = descriptor_reader.decode_option(name, field, value)
+                if selected_value == nil then return {ok = false, error = err} end
+                generic[name] = selected_value
+            end
+        end
+        local generated, render_error = option_render.files(fields, generic, request.context or "first_turn", delivery.files)
+        if not generated then return {ok = false, error = render_error} end
+        delivery.files = generated
+        local environment, environment_error = option_render.environment(fields, generic, request.context or "first_turn")
+        if not environment then return {ok = false, error = environment_error} end
+        if next(environment) ~= nil then delivery.environment = environment end
+        for _, argument in ipairs(prompt_arguments) do delivery.arguments[#delivery.arguments + 1] = argument end
+        return {ok = true, delivery = delivery}
     end
 end
 
@@ -515,7 +608,7 @@ function M.protocol(ref: string): DeferredProtocol
         new = function(resumed: boolean): unknown return selected().new(resumed) end,
         decode_state = function(raw: unknown): (unknown?, string?) return selected().decode_state(raw) end,
         normalize = function(state: unknown, index: integer, envelope: Object, budget: integer?): (ProtocolStep?, string?)
-            return selected().normalize(state, index, envelope, budget)
+            return selected().normalize(state, index, envelope)
         end,
         finish = function(state: unknown, index: integer): (ProtocolStep?, string?) return selected().finish(state, index) end,
     }

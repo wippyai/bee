@@ -725,6 +725,8 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             local projection = issue(user, ws, "codex_profile_login", attempt)
             test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation_key = "codex-profile-denied", provider_files = {{source_path = ".codex/secrets.json", path = ".codex/secrets.json", optional = false}}})), "FORBIDDEN")
+            test.eq(code(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
+                attempt_id = attempt, generation_key = "codex-baseline-duplicate", provider_files = {{source_path = ".codex/config.toml", path = ".codex/.bee-user-config.toml", optional = true}}})), "CONFLICT")
             local materialized = value(call(runner, "materialize", {projection_id = projection.projection_id, subject = USER, audience = USER,
                 attempt_id = attempt, generation_key = "codex-profile-present", provider_files = {{source_path = profile_path, path = profile_path, optional = false}}}))
             local found = false

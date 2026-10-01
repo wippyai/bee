@@ -133,16 +133,14 @@ end
 -- grants NO_COLOR visibility per process through the env module; without
 -- that grant the desktop keeps its themed colors.
 local forced: boolean? = nil
-local granted: boolean? = nil
 function M.set_no_color(value: boolean?) forced = value end
 function M.no_color(): boolean
     if forced ~= nil then return forced end
-    if granted == nil then
-        local value, read_error = env.get("bee.env:no_color")
-        granted = read_error == nil and type(value) == "string" and value ~= ""
-    end
-    return granted == true
+    -- Read under the active caller scope; an earlier denied lookup is not a preference.
+    local value, read_error = env.get("bee.env:no_color")
+    return read_error == nil and type(value) == "string" and value ~= ""
 end
+
 function M.style(foreground: string, background: string): string
     if M.no_color() then return "" end
     return "\27[38;2;" .. rgb(foreground) .. "m\27[48;2;" .. rgb(background) .. "m"

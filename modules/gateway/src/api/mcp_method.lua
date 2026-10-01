@@ -14,6 +14,7 @@ local catalog = require("catalog")
 local context = require("context")
 local session_tools = require("session_tools")
 local bounds = require("bounds")
+local profile_scope = require("profile_scope")
 local transport_admission = require("admission")
 local subject_call = require("subject_call")
 type Object = {[string]: unknown}
@@ -116,10 +117,10 @@ end
 -- The executor that runs a tool as the bound subject under the tool's
 -- host-named scope. The endpoint's own right to invoke these operations
 -- is a separate grant; membership is the thread owner's decision.
-local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values: Object?, runtime: RuntimeGrant?): (funcs.Executor?, Object?)
+local function subject_executor(binding: gateway.Binding, tool: mcp.Tool, values: Object?, runtime: RuntimeGrant?, grants: {context.ResourceGrant}?): (funcs.Executor?, Object?)
     local policies, policy_error = policies_for(tool.policies)
     if not policies then return nil, refused("UNAVAILABLE", policy_error or "tool policy is unavailable") end
-    local executor, setup_error = subject_call.executor(binding, policies, values or {}, runtime)
+    local executor, setup_error = subject_call.executor(binding, policies, values or {}, runtime, grants)
     if not executor then
         local fault = setup_error and setup_error.error
         return nil, refused(fault and fault.code or "DENIED", fault and fault.message or "bound subject executor is unavailable")
@@ -155,7 +156,7 @@ local function capabilities(binding: gateway.Binding): Object
     return reply_result({ok = true, value = {workspace_id = binding.workspace_id, thread_id = binding.thread_id,
         action_id = binding.action_id, revision = bound.revision, digest = bound.digest,
         tools = tools, traits = traits, allowed_traits = config.allowed_traits, active_traits = bound.selection.active,
-        requestable_access = config.access,
+        requestable_access = config.access, resource_grants = config.resource_grants,
         thread_access = {thread_id = binding.thread_id,
             note = "thread_read reads the bound thread and thread_message records a note on it; sessions are addressed through the session_* tools"},
         authoring = {guide_tool = "overlay", guide_operation = "guide",
@@ -188,12 +189,12 @@ end
 -- contracts. The owner binding opens as the bound subject; the request is the
 -- validated payload and identity travels only in the authenticated context. A
 -- reply that violates the published schema is an owner fault, not a result.
-local function session_projection(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object): Object
+local function session_projection(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, grants: {context.ResourceGrant}?): Object
     local policies, policy_error = policies_for(tool.policies)
     if not policies then return refused("UNAVAILABLE", policy_error or "tool policy is unavailable") end
     local contract_id = session_tools.target(tool.name)
     if not contract_id then return refused("INTERNAL", "session tool has no owner contract") end
-    local instance, failure = subject_call.contract(binding, policies, values, contract_id)
+    local instance, failure = subject_call.contract(binding, policies, values, contract_id, grants)
     if not instance then
         local fault = failure and failure.error
         return refused(fault and fault.code or "DENIED", fault and fault.message or "owner binding is unavailable", nil, true)
@@ -207,9 +208,9 @@ local function session_projection(binding: gateway.Binding, tool: mcp.Tool, requ
     if encode_error or not encoded then return refused("UNAVAILABLE", "owner reply could not be encoded", nil, true, remedy) end
     return mcp.tool_result(encoded, checked.ok ~= true, checked)
 end
-local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?): Object
-    if session_tools.is_session_tool(tool.name) then return session_projection(binding, tool, request, values) end
-    local executor, failure = subject_executor(binding, tool, values, runtime)
+local function run(binding: gateway.Binding, tool: mcp.Tool, request: Object, values: Object, runtime: RuntimeGrant?, grants: {context.ResourceGrant}?): Object
+    if session_tools.is_session_tool(tool.name) then return session_projection(binding, tool, request, values, grants) end
+    local executor, failure = subject_executor(binding, tool, values, runtime, grants)
     if not executor then return failure end
     if tool.name == "capabilities" then return capabilities(binding) end
     if tool.name == "thread_read" then
@@ -354,6 +355,10 @@ local function handle(): nil
         if argument_error then arguments = nil end
     end
     if not arguments then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, argument_error or "invalid arguments")); return nil end
+    local grant_error = profile_scope.revalidate(bound.configuration.resource_grants, binding.attempt_id, function(target: string, value: unknown): (unknown, unknown) local raw, err = funcs.call(target, value); return raw, err end)
+    if grant_error then answer(response, http.STATUS.OK, mcp.result(call.id, refused("DENIED", grant_error))); return nil end
+    local scope_error = profile_scope.check(bound.configuration.profile, tool.name, tool.operation, binding.workspace_id, arguments)
+    if scope_error then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, scope_error)); return nil end
     local runtime: RuntimeGrant? = nil
     if tool.name == "application_open" then
         local granted, grant_failure = gateway.application_runtime(binding, bound)
@@ -363,7 +368,7 @@ local function handle(): nil
         end
         runtime = granted
     end
-    answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime)))
+    answer(response, http.STATUS.OK, mcp.result(call.id, run(binding, tool, arguments, values, runtime, bound.configuration.resource_grants)))
     return nil
 end
 return {handle = handle}

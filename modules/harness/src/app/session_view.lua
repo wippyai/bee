@@ -10,9 +10,9 @@ local M = {}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
 local HINTS = frame.hints({{key = "Enter", verb = "send"}, {key = "Ctrl+K", verb = "stop work"},
     {key = "Ctrl+X", verb = "close session"}, {key = "Esc", verb = "sessions"}})
-local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "error"}
-local STATE_ROLE = {queued = "muted", working = "muted", ready = "text", failed = "error", blocked = "warn", uncertain = "warn"}
-local STATE_LABEL = {queued = "queued", working = "working", ready = "", failed = "", blocked = "blocked", uncertain = "uncertain"}
+local ACTIVITY_ROLE = {idle = "muted", working = "accent", blocked = "warn", stalled = "warn"}
+local STATE_ROLE = {queued = "muted", working = "muted", ready = "text", failed = "error", blocked = "warn", uncertain = "warn", budget_exceeded = "error"}
+local STATE_LABEL = {queued = "queued", working = "working", ready = "", failed = "", blocked = "blocked", uncertain = "uncertain", budget_exceeded = "budget exceeded"}
 
 local function wrap(value: string, room: integer): {string}
     local out: {string} = {}
@@ -23,11 +23,20 @@ local function wrap(value: string, room: integer): {string}
         if size <= width then
             out[#out + 1] = clean
         else
-            local offset = 0
-            while offset < size do
-                out[#out + 1] = tty.text.cut(clean, offset, offset + width)
-                offset = offset + width
+            local remaining = clean
+            while tty.text.width(remaining) > width do
+                local piece = tty.text.cut(remaining, 0, width)
+                local boundary = tonumber((piece:match("^.*()%s")))
+                if remaining:sub(#piece + 1, #piece + 1):match("%s") then boundary = #piece + 1 end
+                if boundary and boundary > 1 then
+                    out[#out + 1] = piece:sub(1, boundary - 1)
+                    remaining = remaining:sub(boundary + 1):gsub("^%s+", "")
+                else
+                    out[#out + 1] = piece
+                    remaining = remaining:sub(#piece + 1)
+                end
             end
+            out[#out + 1] = remaining
         end
     end
     return out
@@ -63,15 +72,26 @@ function M.lines(conv: agents.Conversation, room: integer): {frame.LogLine}
         for index, row in ipairs(wrap(turn.input, room - 2)) do
             lines[#lines + 1] = {text = (index == 1 and "> " or "  ") .. row, role = "accent"}
         end
+        local tools = turn.tools or {}
+        local keys: {string} = {}
+        for key in pairs(tools) do keys[#keys + 1] = key end
+        table.sort(keys)
+        for _, key in ipairs(keys) do lines[#lines + 1] = {text = "  " .. text.bound(tools[key], room - 2), role = "muted"} end
         local role = STATE_ROLE[turn.state]
         local label = STATE_LABEL[turn.state]
         if turn.text == "" then
             lines[#lines + 1] = {text = "  " .. (label ~= "" and label or turn.state), role = role}
         else
-            for index, row in ipairs(wrap(turn.text, room - 2)) do
+            for index, row in ipairs(wrap(turn.text, room - 2 - (label ~= "" and #label + 2 or 0))) do
                 local prefix = index == 1 and label ~= "" and (label .. ": ") or ""
                 lines[#lines + 1] = {text = "  " .. prefix .. row, role = role}
             end
+        end
+        local reply = turn.text:lower()
+        if reply:find("workspace is read-only", 1, true) or reply:find("permission denied", 1, true)
+            or (reply:find("permission", 1, true) and reply:find("wasn't granted", 1, true)) then
+            lines[#lines + 1] = {text = "  CLI refusals are not Bee approvals.", role = "warn"}
+            lines[#lines + 1] = {text = "  Choose a writable profile or folder, then start a new session.", role = "warn"}
         end
     end
     return lines
@@ -89,7 +109,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for slot = 1, window.capacity do
             local index = window.offset + slot
             local item = sidebar[index]
-            if item then frame.row(rail, slot + 2, text.bound(item.title, 128), index == selected, "sidebar_session", index, "") end
+            if item then frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(item.title, 128), index == selected, "sidebar_session", index, "") end
         end
         frame.fill(rail, height)
         frame.put(rail, 2, height, "Esc sessions", rail_width - 2, rail.theme.muted)
@@ -115,7 +135,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local input_row = height - 3
     local last = input_row - 1
     local lines = M.lines(conv, math.floor(math.max(1, width - 2)))
-    if height >= 7 then frame.line(painter, 3, "Work queue · " .. (conv.session.snapshot.provider or "Agent") .. " · " .. conv.session:ref(), theme.muted) end
+    if height >= 7 then frame.line(painter, 3, "Conversation · " .. (conv.session.snapshot.provider or "Agent"), theme.muted) end
+    if conv.details then
+        lines = {{text = "Session: " .. conv.session:ref()}, {text = "Definition: " .. (conv.session.snapshot.definition or "Unavailable")},
+            {text = "Workspace: " .. (conv.session.snapshot.workspace or "Unavailable")}}
+        for _, turn in ipairs(conv.turns) do
+            lines[#lines + 1] = {text = "Work: " .. turn.work:ref()}
+            for _, row in ipairs(wrap(turn.diagnostics or "", width - 4)) do
+                if row ~= "" then lines[#lines + 1] = {text = row, role = "muted"} end
+            end
+        end
+    end
     if #lines == 0 and height >= 9 then
         frame.empty(painter, 4, "Ready for work", "Type below, then Enter sends work to this session")
     end
@@ -123,17 +153,21 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.log(painter, 4, last - 1, {lines = lines, selected = 0, offset = math.floor(math.max(0, #lines - (last - 4))), focused = false})
     end
     if height >= 5 then
-        frame.line(painter, input_row, "> " .. text.bound(draft, 512) .. "▏", theme.text)
+        frame.line(painter, input_row, conv.lifecycle == "closed" and "Closed · history remains available" or "> " .. text.bound(draft, 512) .. "▏", theme.text)
         frame.actions(painter, height - 1, {
-            {kind = "send", key = "Enter", label = "Send", enabled = draft ~= "" and conv.lifecycle == "active", primary = true},
+            {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start new session from this" or "Send", enabled = conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active", primary = true},
             {kind = "back", key = "Esc", label = "Sessions", enabled = true},
+            {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true, more = true},
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = agents.pending(conv)},
             {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = conv.lifecycle == "active"},
         })
     end
     local message = status ~= "" and status or conv.notice
+    if message == "" and conv.activity == "stalled" and conv.activity_evidence then
+        message = "No progress for " .. tostring(conv.activity_evidence.quiet_for_ms) .. " ms · " .. conv.activity_evidence.turn
+    end
     if height >= 6 then frame.line(painter, height - 2, text.bound(message, 512), theme.text) end
-    if height >= 2 then frame.footer(painter, "", HINTS) end
+    if height >= 2 then frame.footer(painter, "", conv.lifecycle == "closed" and frame.hints({{key = "Enter", verb = "start new"}, {key = "Esc", verb = "sessions"}}) or HINTS) end
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter)}
 end
 return M

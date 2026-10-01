@@ -28,8 +28,9 @@ Actions: `bee.resources.manage` (associate, list, revoke any, revoke_all;
 host policy `bee.resources.security:resource_manage_policy`), `bee.resources.grant` (take a
 grant as oneself, only in the workspace the caller's host-issued identity is
 bound to through `actor.meta.workspace_id`; `bee.resources.security:resource_grant_policy`), `bee.resources.resolve`
-(placement services only; `bee.resources.security:resource_resolve_policy` is attached to the
-placement service entries). `describe` (a workspace's associations as
+(placement services and scoped Gateway dispatch; `bee.resources.security:resource_resolve_policy` is attached to
+those host entries). `grant` accepts an optional normalized `subpath` within the association's admitted path;
+it can narrow that path and is included in the idempotency digest. `describe` (a workspace's associations as
 `{title, items [{label, detail}], total}`, at most 50) and `search`
 (associations whose name starts with `text`) answer callers holding
 `bee.workspace.manager.read` on the workspace; they have the shape of a workspace

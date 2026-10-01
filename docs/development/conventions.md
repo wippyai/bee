@@ -40,7 +40,7 @@ host wiring lives in the app root or beside its component.
 | `modules/threads-timeline/src` | Thread timeline viewer as an installable package |
 | `modules/workspace-manager/src` | Workspace manager as an installable package |
 | `modules/host-processes/src` | Host process inspection app as an installable package |
-| `modules/hub-modules/src` | Hub Modules app as an installable package |
+| `modules/hub-modules/src` | Hub Modules package policies and dependencies; UI in `src/app` as `bee.hub.modules.app` |
 | `modules/gov-overlays/src` | Governance Overlays app as an installable package |
 | `modules/hive/src` | Cross-node protocol envelopes, client, exposure catalog, shared principal identity and the `hive.invoke` check |
 | `modules/threads/src` | Durable records, authority, subscriptions, delivery and carrier store |

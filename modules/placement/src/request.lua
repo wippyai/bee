@@ -364,7 +364,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
     local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest", "placement_profile_ref", "placement_profile_digest",
-        "binding_digest", "profile_digest", "launch", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts", "options"})
+        "binding_digest", "profile_digest", "launch", "configuration_context", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts", "options"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
     if not key then return nil, "idempotency_key is not an identifier" end
@@ -439,6 +439,8 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     for _, name in ipairs(launch.environment) do
         if environment[name] == nil and refs[name] == nil then return nil, "launch.environment requires " .. name .. " and nothing supplies it" end
     end
+    local configuration_context = object.configuration_context == nil and nil or bounds.member(object.configuration_context, {"window", "first_turn", "resume"})
+    if object.configuration_context ~= nil and not configuration_context then return nil, "invalid configuration context" end
     local configuration_digest: string? = nil
     local selected: types.Preferences? = nil
     if object.preferences ~= nil then
@@ -513,7 +515,7 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if options_error then return nil, options_error end
     local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
         preferences = selected,
-        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_profile_ref = placement_profile_ref, placement_profile_digest = placement_profile_digest, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
+        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_profile_ref = placement_profile_ref, placement_profile_digest = placement_profile_digest, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_context = configuration_context, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
         required_cleanup = required_cleanup, required_exit_observation = required_observation, timeouts = timeouts, options = options}
     return decoded, nil

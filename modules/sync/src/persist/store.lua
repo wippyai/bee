@@ -20,6 +20,7 @@ type Store = {db: sql.DB, owner: string, event_capacity: integer, receipt_capaci
     read_after_in: (Store, sql.Transaction, unknown, unknown, unknown) -> Result,
     snapshot: (Store, unknown, unknown, unknown?, unknown?) -> Result,
     snapshot_in: (Store, sql.Transaction, unknown, unknown, unknown?, unknown?) -> Result,
+    migrate: (Store, string, string, (unknown) -> (unknown?, string?)) -> Result,
     close: (Store) -> (boolean, string?)}
 type Input = {feed: string, event_id: string, idempotency_key: string, event_type: string, payload: unknown,
     projection_key: string, projection_value: unknown, tombstone: boolean, expected_revision: integer?, request_json: string}
@@ -316,6 +317,44 @@ function M.snapshot(store: Store, feed: unknown, limit: unknown, after: unknown?
     if store.closed then return failure("CLOSED", "sync store is closed") end
     return shared.read(store.db, "sync", function(tx: sql.Transaction): Result return M.snapshot_in(store, tx, feed, limit, after, expected_cursor) end)
 end
+function M.migrate(store: Store, prefix: string, migration_id: string, transform: (unknown) -> (unknown?, string?)): Result
+    if store.closed then return failure("CLOSED", "sync store is closed") end
+    if not bounds.id(prefix) or not bounds.id(migration_id) then return failure("INVALID_ARGUMENT", "migration identity is invalid") end
+    return shared.write(store.db, "sync migration", function(tx: sql.Transaction): Result
+        local prior, prior_error = query_one(tx,
+            "SELECT completed_at FROM bee_sync_projection_migrations WHERE owner_id = ? AND prefix = ? AND migration_id = ?",
+            {store.owner, prefix, migration_id}, "projection migration")
+        if prior_error then return prior_error end
+        if prior then return shared.success(nil, true) end
+        local rows, read_error = tx:query(
+            "SELECT feed, projection_key, value_json FROM bee_sync_projections WHERE owner_id = ? AND substr(feed, 1, length(?)) = ? AND tombstone = 0 ORDER BY feed, projection_key",
+            {store.owner, prefix, prefix})
+        if read_error or not rows then return storage(read_error, "read projections for migration") end
+        for _, row in ipairs(rows) do
+            local feed, key, source = bounds.id(row.feed), bounds.id(row.projection_key), row.value_json
+            if not feed or not key or type(source) ~= "string" or #source > 65536 then return failure("INTERNAL", "migration source is corrupt") end
+            local decoded, decode_error = json.decode(source)
+            if decode_error then return failure("INTERNAL", "migration source is invalid JSON") end
+            local value, transform_error = transform(decoded)
+            if value == nil then return failure("INTERNAL", transform_error or "projection migration refused") end
+            local encoded, encode_error = canonical.encode(value, 65536)
+            if not encoded or #encoded > 65536 then return failure("INTERNAL", encode_error or "migrated value exceeds storage bounds") end
+            local _, update_error = tx:execute(
+                "UPDATE bee_sync_projections SET value_json = ? WHERE owner_id = ? AND feed = ? AND projection_key = ? AND tombstone = 0",
+                {encoded, store.owner, feed, key})
+            if update_error then return storage(update_error, "migrate projection") end
+        end
+        local _, fence_error = tx:execute(
+            "UPDATE bee_sync_feeds SET head_sequence = head_sequence + 1, earliest_sequence = head_sequence + 2 WHERE owner_id = ? AND substr(feed, 1, length(?)) = ?",
+            {store.owner, prefix, prefix})
+        if fence_error then return storage(fence_error, "fence migrated feeds") end
+        local _, mark_error = tx:execute(
+            "INSERT INTO bee_sync_projection_migrations (owner_id, prefix, migration_id, completed_at) VALUES (?, ?, ?, ?)",
+            {store.owner, prefix, migration_id, stamp()})
+        if mark_error then return storage(mark_error, "record projection migration") end
+        return shared.success({migrated = #rows}, false)
+    end)
+end
 function M.close(store: Store): (boolean, string?)
     if store.closed then return true, nil end
     store.closed = true
@@ -341,7 +380,7 @@ function M.open(raw: unknown): (Store?, string?)
     return {db = db, owner = owner, event_capacity = event_capacity, receipt_capacity = receipt_capacity, closed = false,
         append = M.append, append_in = M.append_in, projection = M.projection, projection_in = M.projection_in,
         read_after = M.read_after, read_after_in = M.read_after_in, snapshot = M.snapshot, snapshot_in = M.snapshot_in,
-        close = M.close}, nil
+        migrate = M.migrate, close = M.close}, nil
 end
 function M.open_linked(owner: unknown, options: {[string]: unknown}?): (Store?, string?)
     local resource, resource_error = resources.database()

@@ -200,8 +200,8 @@ function M.readiness(ref: string, runtime: string): ({[string]: unknown}?, strin
         return {present = false, buildable = false, runtime_present = available, os = "linux", arch = discovered.arch,
             reason = "cached runtime image differs from the installed artifact recipe"}, nil
     end
-    return {present = verified ~= nil, buildable = available, runtime_present = available,
-        os = "linux", arch = discovered.arch, reason = available and "installed CLI artifacts are ready; image builds on first launch" or "this CLI has no installed artifact"}, nil
+    return {image_ref = verified, image_digest = verified or discovered.digest, present = verified ~= nil, buildable = available, runtime_present = available,
+        os = "linux", arch = discovered.arch, reason = verified and "cached runtime image is ready" or (available and "runtime image is not cached; launch once to build it, then refresh runtime options" or "this CLI has no installed artifact")}, nil
 end
 function M.build(profile: profiles.Resolved, recipient: string?, cancel: Channel<boolean>?): (string?, string?, string?)
     local recipe_ref = profile.profile.image_recipe_ref

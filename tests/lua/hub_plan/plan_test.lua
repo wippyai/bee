@@ -4,6 +4,10 @@ local plan = require("plan")
 local graph = require("graph")
 local inspect = require("inspect")
 local requirements = require("requirements")
+local host_identity = require("binary_identity")
+local funcs = require("funcs")
+local security = require("security")
+local bounds = require("bounds")
 
 local function root(component: string, version: string): {[string]: unknown}
     local id, problem = plan.root_id(component)
@@ -16,6 +20,21 @@ local function state(entries: {unknown}, modules: {unknown}?): {[string]: unknow
     local result: {[string]: unknown} = {entries = entries}
     if modules then result.resolution = {modules = modules} end
     return result
+end
+
+local function binary_identity(package_name: string, version: string): inspect.Entry
+    return {id = "bee.env:binary_identity", kind = "registry.entry", registry = {owner = "bee/bee"},
+        meta = {type = "bee.binary_identity"}, data = {version = "0.1.0", build = "revision",
+            source = "https://example.test/bee", source_revision = "revision", runtime = "https://example.test/runtime",
+            runtime_commit = "runtime-commit", native = "github.com/wippyai/bee/native", native_version = version,
+            website = "https://example.test", native_components = {{package = package_name, version = version}}}}
+end
+
+local function baked_identity(version: string, runtime_commit: string?): {native_module: string, native_version: string,
+    native_modules: {[string]: string}, runtime_commit: string}
+    local module = "github.com/wippyai/bee/native"
+    return {native_module = module, native_version = version, native_modules = {[module] = version},
+        runtime_commit = runtime_commit or "runtime-commit"}
 end
 
 local function package(name: string, version: string, digest: string, entries: {inspect.Entry}?,
@@ -54,6 +73,62 @@ end
 
 local function define_tests()
     test.describe("Hub dependency plan", function()
+        for _, changed in ipairs({false, true}) do
+            test.it(changed and "requires bindings when a kept version's artifact changes" or "preserves untouched dependency requirement holes", function()
+                local captured = state({root("acme/app", "1.0.0"),
+                    {id = "acme.app:dependency", kind = "ns.dependency", registry = {owner = "acme/app"},
+                        data = {component = "acme/lib", version = "1.0.0", parameters = {}}},
+                }, {{name = "acme/app", version = "1.0.0", digest = string.rep("a", 64)},
+                    {name = "acme/lib", version = "1.0.0", digest = string.rep("c", 64)}})
+                local targets = {{entry = "acme.lib:main", path = ".database"}}
+                local prepared, problem = plan.prepare(captured, 1,
+                    request({action = "update", component = "acme/app", version = "2.0.0"}), source({
+                        ["acme/app@2.0.0"] = package("acme/app", "2.0.0", "b", {
+                            {id = "acme.app:dependency", kind = "ns.dependency", meta = {},
+                                data = {component = "acme/lib", version = "1.0.0", parameters = {}}}}),
+                        ["acme/lib@1.0.0"] = package("acme/lib", "1.0.0", changed and "d" or "c", {
+                            {id = "acme.lib:database", kind = "ns.requirement", meta = {}, data = {targets = targets}}}),
+                    }))
+                test.is_nil(problem); test.not_nil(prepared)
+                if prepared then
+                    test.eq(prepared.plan.ready, not changed)
+                    test.eq(#prepared.plan.missing, changed and 1 or 0)
+                end
+            end)
+        end
+        test.it("reads the native host manifest through the declared environment module", function()
+            local identity, problem = host_identity.read_host()
+            test.is_nil(problem)
+            test.not_nil(identity)
+            if identity then
+                test.eq(identity.native_module, "github.com/wippyai/bee/native")
+                test.eq(identity.native_version, "v1.2.3")
+                test.eq(identity.native_modules[identity.native_module], "v1.2.3")
+                test.eq(identity.runtime_commit, "728b75942028080264aacbb16ef0420a0f8090b4")
+            end
+        end)
+        test.it("measures a large policy closure without the message encoder limit", function()
+            local entries: {inspect.Entry} = {}
+            for index = 1, 200 do
+                entries[index] = {id = "acme.large:policy_" .. tostring(index), kind = "security.policy",
+                    meta = {}, data = {policy = {actions = {"registry.get"}, resources = {"acme.large:*"}, effect = "allow"}}}
+            end
+            local selected = request({action = "install", component = "acme/large", version = "1.0.0"})
+            local prepared, problem = plan.prepare(state({}), 1, selected,
+                source({["acme/large@1.0.0"] = package("acme/large", "1.0.0", "a", entries)}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if not prepared then return end
+            test.eq(#prepared.plan.policy_changes, 200)
+            test.eq(#prepared.plan.digest, 64)
+            entries[200].data = {policy = {actions = {"registry.apply"}, resources = {"acme.large:*"}, effect = "allow"}}
+            local changed, changed_error = plan.prepare(state({}), 1, selected,
+                source({["acme/large@1.0.0"] = package("acme/large", "1.0.0", "a", entries)}))
+            test.is_nil(changed_error)
+            test.not_nil(changed)
+            if changed then test.eq(changed.plan.digest == prepared.plan.digest, false) end
+        end)
+
         test.it("preserves bundled modules outside the dependency-root closure", function()
             local resident = {id = "bee.core:main", kind = "library.lua", registry = {owner = "bee/core", root = false}}
             -- A fresh embedded deployment has ownership but no persisted
@@ -172,6 +247,135 @@ local function define_tests()
                 request({action = "update", component = "acme/app", version = "1.1.0"}), source({}))
             test.is_nil(prepared)
             test.eq(problem, "component is managed by the host deployment")
+        end)
+
+        test.it("reserves Bee's pack components for deployment-root updates", function()
+            local prepared, problem = plan.prepare(state({}), 1,
+                request({action = "install", component = "bee/application", version = "0.2.0"}), source({}))
+            test.is_nil(prepared)
+            test.eq(problem, "Bee packs update through the bee/bee deployment root")
+        end)
+
+        test.it("updates the existing Bee deployment root and resolves its pack closure", function()
+            local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
+                data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
+            local application = {id = "bee:dependency_application", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                data = {component = "bee/application", version = "0.1.0"}}
+            local installed = state({deployment, application, root("acme/app", "1.0.0")}, {
+                {name = "bee/bee", version = "0.1.0", source = "hub"},
+                {name = "bee/application", version = "0.1.0", source = "hub"},
+                {name = "acme/app", version = "1.0.0", source = "hub"},
+            })
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({
+                    ["bee/bee@0.2.0"] = package("bee/bee", "0.2.0", "a", {
+                        {id = "bee:dependency_application", kind = "ns.dependency", meta = {},
+                            data = {component = "bee/application", version = "0.2.0"}},
+                        binary_identity("github.com/wippyai/bee/native", "v0.0.0-20260926183503-c0d6585b5fd1"),
+                    }),
+                    ["bee/application@0.2.0"] = package("bee/application", "0.2.0", "b"),
+                    ["acme/app@1.0.0"] = package("acme/app", "1.0.0", "c"),
+                }), baked_identity("v0.0.0-20260926183503-c0d6585b5fd1"))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                test.eq(prepared.plan.root_id, "bee:deployment")
+                local bee, application, third_party = module_for(prepared.plan.modules, "bee/bee"),
+                    module_for(prepared.plan.modules, "bee/application"), module_for(prepared.plan.modules, "acme/app")
+                test.not_nil(bee); test.not_nil(application); test.not_nil(third_party)
+                if bee then test.eq(bee.change, "update") end
+                if application then test.eq(application.change, "update") end
+                if third_party then test.eq(third_party.change, "keep") end
+            end
+        end)
+
+        test.it("checks target packs against host binary facts rather than live root metadata", function()
+            local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
+                data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
+            local current = "v0.0.0-20260926183503-c0d6585b5fd1"
+            local identity = binary_identity("github.com/wippyai/bee/native/launch", "v0.0.0-20260925183503-c0d6585b5fd1")
+            identity.registry = {owner = "bee/bee"}
+            local target_identity = binary_identity("github.com/wippyai/bee/native/launch", current)
+            target_identity.registry = nil
+            local prepared, problem = plan.prepare(state({deployment, identity}, {
+                {name = "bee/bee", version = "0.1.0", source = "hub"},
+            }), 12, request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = package("bee/bee", "0.2.0", "a", {target_identity})}), baked_identity(current))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+        end)
+
+        test.it("refuses a Bee pack closure that requires a newer native binary", function()
+            local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
+                data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
+            local current = "v0.0.0-20260926183503-c0d6585b5fd1"
+            local required = "v0.0.0-20260928183503-c0d6585b5fd1"
+            local root_package = package("bee/bee", "0.2.0", "d", {
+                {id = "bee:definition", kind = "ns.definition", meta = {native_requirements = {
+                    {package = "github.com/wippyai/bee/native/launch", version = required}}}, data = {}},
+                binary_identity("github.com/wippyai/bee/native/launch", current),
+            })
+            local installed = state({deployment, binary_identity("github.com/wippyai/bee/native/launch", current)}, {
+                {name = "bee/bee", version = "0.1.0", source = "local"},
+            })
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = root_package}), baked_identity(current))
+            test.is_nil(prepared)
+            test.eq(problem, "needs a newer Bee binary: bee/bee requires native component github.com/wippyai/bee/native/launch v0.0.0-20260928183503-c0d6585b5fd1; this binary has v0.0.0-20260926183503-c0d6585b5fd1")
+        end)
+
+        test.it("accepts a Bee pack closure within the baked native manifest", function()
+            local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
+                data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
+            local current = "v0.0.0-20260926183503-c0d6585b5fd1"
+            local root_package = package("bee/bee", "0.2.0", "e", {
+                {id = "bee:definition", kind = "ns.definition", meta = {native_requirements = {
+                    {package = "github.com/wippyai/bee/native/launch", version = current}}}, data = {}},
+                binary_identity("github.com/wippyai/bee/native/launch", current),
+            })
+            local installed = state({deployment, binary_identity("github.com/wippyai/bee/native/launch", current)}, {
+                {name = "bee/bee", version = "0.1.0", source = "local"},
+            })
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = root_package}), baked_identity(current))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+        end)
+
+        test.it("refuses a Bee root pack built for a newer native manifest", function()
+            local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
+                data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
+            local current = "v0.0.0-20260926183503-c0d6585b5fd1"
+            local target = "v0.0.0-20260928183503-c0d6585b5fd1"
+            local root_package = package("bee/bee", "0.2.0", "d", {
+                binary_identity("github.com/wippyai/bee/native/launch", target),
+            })
+            local installed = state({deployment, binary_identity("github.com/wippyai/bee/native/launch", current)}, {
+                {name = "bee/bee", version = "0.1.0", source = "hub"},
+            })
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = root_package}), baked_identity(current))
+            test.is_nil(prepared)
+            test.eq(problem, "needs a newer Bee binary: bee/bee pack set requires native component github.com/wippyai/bee/native/launch v0.0.0-20260928183503-c0d6585b5fd1; this binary has v0.0.0-20260926183503-c0d6585b5fd1")
+        end)
+
+        test.it("fails closed when host binary facts are unavailable", function()
+            local scope, scope_error = security.named_scope("tests.hub.plan:without_native")
+            if not scope then error(tostring(scope_error)) end
+            local executor, executor_error = funcs.new():with_scope(scope)
+            if not executor then error(tostring(executor_error)) end
+            local reply, call_error = executor:call("tests.hub.plan:missing_native_probe", {})
+            test.is_nil(call_error)
+            local result = bounds.object(reply)
+            test.not_nil(result)
+            if result then
+                test.eq(result.refused, true)
+                test.eq(result.message, "needs a newer Bee binary: running binary native manifest is unavailable")
+            end
         end)
 
         test.it("binds digest to the captured base revision and selected artifact", function()

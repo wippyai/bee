@@ -11,7 +11,7 @@ function M.catalog(_: unknown): {[string]: unknown}
     local items: {{[string]: unknown}} = {}
     if presentation and presentation.start_menu == true then
         items[1] = {ref = "bee.managed.window.fixture:selector_definition", kind = "definition", title = tostring(data.title),
-            status = "ready", checked_at = "2026-01-01T00:00:00.000Z", reasons = {}, features = {}, actions = {}}
+            status = "ready", checked_at = "2026-01-01T00:00:00.000Z", reasons = {}, features = {"presentation:start_menu"}, actions = {}}
     end
     return {ok = true, value = {items = items, complete = true, unavailable_count = 0, diagnostics = {}}}
 end

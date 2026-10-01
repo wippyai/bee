@@ -405,8 +405,9 @@ entries:
 - name: work_store
   kind: library.lua
   source: file://work_store.lua
-  modules: [sql, json, hash, uuid, system]
+  modules: [sql, json, hash, uuid, system, time]
   imports:
+    budget_values: bee.threads.records:budgets
     access: bee.threads.service:access
     transaction: bee.threads.persist:transaction
     thread_owner: bee.threads.persist:owner

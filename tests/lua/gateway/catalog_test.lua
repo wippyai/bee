@@ -63,6 +63,17 @@ local function define_tests()
             test.not_nil(catalog.decode(declared({type = "object", required = {"q"},
                 properties = {q = {type = "string", enum = {"a", "b"}, minLength = 1}}}, {readOnlyHint = true})))
         end)
+        test.it("admits bounded nested budget and environment schemas", function()
+            local schema = {type = "object", properties = {
+                budgets = {type = "object", minProperties = 1, maxProperties = 2, properties = {
+                    turn = {type = "object", properties = {cost_usd = {type = "number", exclusiveMinimum = 0.01}}}}},
+                env = {type = "object", additionalProperties = {type = "string", maxLength = 80}}}}
+            local declaration = {tools = {{name = "probe", operation = "research:probe", description = "Probe",
+                policies = {"research:probe_policy"}, schema = schema, annotations = {}}}, traits = {}}
+            test.not_nil(catalog.decode(declaration))
+            schema.properties.budgets.minProperties = -1
+            test.is_nil(catalog.decode(declaration))
+        end)
         test.it("rejects sparse lists and oversized configuration", function()
             test.is_nil(catalog.decode({tools = {[2] = sample().tools[1]}, traits = {}}))
             local large = sample()

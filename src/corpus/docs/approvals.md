@@ -42,6 +42,9 @@ state. A proposal may describe an operation or an attempt. If it projects to a
 thread, the requester must already be an authorized owner or participant and
 the thread binding is stored when the request is made.
 
+Needs you wraps the opened request's bounded prompt so a provider command and
+effect remain visible after its session and workspace identities.
+
 The proposal and digest are immutable for one decision. Changing an action or
 its parameters creates a new request. Requester/key pairs are idempotent;
 different content under the same key is a conflict. States are `pending`,
@@ -262,3 +265,7 @@ ephemeral wait, not the workflow or approval. Any implementation must prove
 owner restart, duplicate wakeups, source changes during registration, revoked
 security, changed function generations, queue limits and uncertain external
 effects before this proposal becomes a callable contract.
+
+The Approvals owner exposes runtime approval leases through `bee.approvals.binding:runtime_lease` (also `local.runtime_lease`). Its operations are `grant`, `check`, `use`, `revoke`, `list`; requests carry `operation`, `lease_ref?`, `workspace_id?`, `tool?`, `input_digest?`, `effect_key?`. An ordinary permission approval with operation proposal ref `bee.approvals:runtime-lease` carries `{subject, workspace_id, tool, input_digest, expires_ms, max_uses}`. The digest is lowercase SHA-256; expiry is within 30 days and uses are 1..10000. Grant consumes that exact approved proposal, revalidating its owner incarnation after a restart. Approval migration 5 stores leases and per-effect receipts in the Approvals ledger.
+
+Check/use require consume authority and the exact subject/workspace. Use additionally checks tool/input digest, expiry, revocation and the use bound; the same effect key replays only the same exact operation. Persisted runtime authority survives an owner restart. Subject or workspace manager may revoke; list exposes only the caller's records in one workspace. Saved profile references cannot transfer authority. The shared permission exchange uses matching references before requesting another decision and rechecks the same receipt before dispatch/recovery; Deny still wins.

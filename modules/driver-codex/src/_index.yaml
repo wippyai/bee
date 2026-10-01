@@ -7,8 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Codex driver
-    comment: Optional harness binding; host activation and launch policies authorize
-      its use
+    comment: Optional harness binding; host activation and launch policies authorize its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -53,8 +52,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.codex_provider
-    comment: Built-in account login with Codex's default model; host policy selects
-      this configuration
+    comment: Built-in account login with Codex's default model; host policy selects this configuration
   data:
     schema_revision: bee.codex-provider@1
     name: openai
@@ -223,6 +221,7 @@ entries:
           - UserPromptSubmit
           - PreToolUse
           - PostToolUse
+          - PermissionRequest
           - Stop
           - SessionEnd
           adapter_ref: bee.driver.codex:protocol
@@ -247,13 +246,15 @@ entries:
           required_placement_features: []
           git_writable_roots_adapter: codex_workspace_write
         permission_exchange:
-          mode: none
+          mode: adapter
+          adapter_ref: bee.driver:permission_request_hook
+          adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867
 - name: default_window
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Codex window declaration; the host separately selects
-      its policy, activation, executable and permissions
+    comment: Component-owned Codex window declaration; the host separately selects its policy, activation, executable and
+      permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: codex-window
@@ -286,8 +287,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Codex batch route for a host-selected coordinator
-      and caller-owned shared thread
+    comment: Component-owned bounded Codex batch route for a host-selected coordinator and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: codex-research-batch
@@ -316,8 +316,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned structured Codex route that projects its selected named
-      profile, login and required configuration into a private home
+    comment: Component-owned structured Codex route that projects its selected named profile, login and required configuration
+      into a private home
   data:
     schema_revision: bee.launch-definition@1
     launch_id: codex-named-batch
@@ -368,8 +368,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Codex batch policy for bounded research actions on a caller-owned
-      thread; private home with no host inheritance, workspace-write CLI sandbox
+    comment: Host-selected Codex batch policy for bounded research actions on a caller-owned thread; private home with no
+      host inheritance, workspace-write CLI sandbox
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -407,26 +407,25 @@ entries:
     - PostToolUse
     - Stop
     profile_instructions: true
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
-      config_profile:
-        kind: text
-        max_bytes: 64
     prepare_options:
       sandbox: workspace-write
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+      provider.options.config_profile:
+        kind: text
+        max_bytes: 64
 - name: launch_policy_codex_named_batch
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected structured Codex route that projects one admitted named
-      Codex profile into its private home; read-only, one bounded turn on a caller-owned
-      thread
+    comment: Host-selected structured Codex route that projects one admitted named Codex profile into its private home; read-only,
+      one bounded turn on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -464,25 +463,25 @@ entries:
     - PostToolUse
     - Stop
     profile_instructions: true
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
-      config_profile:
-        kind: text
-        max_bytes: 64
     prepare_options:
       sandbox: workspace-write
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+      provider.options.config_profile:
+        kind: text
+        max_bytes: 64
 - name: launch_policy_codex_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Codex window;
-      missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Codex window; missing host executable leaves the declaration
+      unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -519,17 +518,18 @@ entries:
     - UserPromptSubmit
     - PreToolUse
     - PostToolUse
+    - PermissionRequest
     - Stop
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
-      config_profile:
-        kind: text
-        max_bytes: 64
     profile_instructions: true
     prepare_options: {}
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
+      provider.options.config_profile:
+        kind: text
+        max_bytes: 64

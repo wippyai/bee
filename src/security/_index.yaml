@@ -5,7 +5,7 @@ entries:
   kind: registry.entry
   bindings:
   - definition_id: bee.settings:app
-    policies: [bee.security:ordinary_app_subsystem_boundary, bee.security:settings_edit_mode_policy]
+    policies: [bee.security:ordinary_app_subsystem_boundary, bee.security:settings_edit_mode_policy, bee.security:settings_hub_status_policy]
     appearance_write: true
   - definition_id: bee.console:app
     policies:
@@ -20,10 +20,12 @@ entries:
     - bee.approvals.inbox:client_policy
     - bee.security.storage:workspace_catalog_read_policy
 - name: base_app_policy
-  kind: security.policy
+  kind: security.policy.expr
+  meta:
+    comment: Ordinary apps may read the nonsecret terminal color preference; no other environment access is granted
   policy:
-    actions:
-    - process.send
+    expression: 'action == "process.send" || (action == "env.get" && resource == "bee.env:no_color")'
+    actions: [process.send, env.get]
     resources: '*'
     effect: allow
 - name: app_boundary_policy
@@ -96,6 +98,15 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.gov.binding:super_edit_call]
+    effect: allow
+- name: settings_hub_status_policy
+  kind: security.policy
+  meta:
+    comment: Settings may read the host-selected binary identity and live Bee pack versions through the read-only Hub status operation
+  policy:
+    actions: [funcs.call, bee.hub.read, env.get]
+    resources: [bee.hub.binding:call, updates, bee.env:binary_native_module, bee.env:binary_native_version,
+      bee.env:binary_runtime_commit]
     effect: allow
 - name: application_open_facade_policy
   kind: security.policy.expr

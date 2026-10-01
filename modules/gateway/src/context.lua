@@ -14,8 +14,30 @@ type CopyState = {keys: integer, active: {[table]: boolean}}
 type OriginView = {view_id: string, instance_id: string}
 type Runtime = {thread_id: string, subject: string, initiating_owner: string, binding_id: string,
     access_approval_id: string, access_proposal_digest: string, surface_revision: integer, surface_digest: string}
-type Attribution = {binding_id: string, thread_id: string, subject: string, action_id: string, attempt_id: string,
+type ResourceGrant = {workspace_id: string, name: string, subpath: string, access: "read" | "write", grant_ref: string, subject: string}
+type Attribution = {resource_grants: {ResourceGrant}?, binding_id: string, thread_id: string, subject: string, action_id: string, attempt_id: string,
     policy_ref: string?, workspace_id: string?, origin_view: OriginView?, application_runtime: Runtime?}
+
+function M.resource_grants(value: unknown): ({ResourceGrant}?, string?)
+    if value == nil then return nil, nil end
+    local rows, err = bounds.array(value, 64)
+    if not rows then return nil, err end
+    local grants: {ResourceGrant} = {}
+    for _, raw in ipairs(rows) do
+        local row = bounds.object(raw)
+        local workspace = row and bounds.id(row.workspace_id)
+        local name, ref = row and bounds.id(row.name), row and bounds.id(row.grant_ref)
+        local subject, path = row and bounds.id(row.subject), row and bounds.subpath(row.subpath)
+        if not row or bounds.fields(row, {"workspace_id", "name", "subpath", "access", "grant_ref", "subject"})
+            or not workspace or not name or not ref or not subject or not path then return nil, "invalid profile resource grant" end
+        local access: "read" | "write"
+        if row.access == "read" then access = "read" elseif row.access == "write" then access = "write" else return nil, "invalid profile resource access" end
+        grants[#grants + 1] = {workspace_id = workspace, name = name, grant_ref = ref, subject = subject, subpath = path, access = access}
+    end
+    local encoded = json.encode(grants)
+    if not encoded or #encoded > 65536 then return nil, "profile resource grants exceed their byte bound" end
+    return grants, nil
+end
 
 local function digest(value: unknown): string?
     local text = bounds.text(value, 64)
@@ -199,7 +221,9 @@ function M.bind(values: unknown, identity: Attribution): (Context?, string?)
             access_approval_id = approval_id, access_proposal_digest = proposal_digest,
             surface_revision = revision, surface_digest = surface_digest}
     end
-    copied[M.BINDING_KEY] = {binding_id = binding_id, thread_id = thread_id, subject = subject,
+    local grants, grant_error = M.resource_grants(identity.resource_grants)
+    if grant_error then return nil, grant_error end
+    copied[M.BINDING_KEY] = {resource_grants = grants, binding_id = binding_id, thread_id = thread_id, subject = subject,
         action_id = action_id, attempt_id = attempt_id, policy_ref = policy_ref, workspace_id = workspace_id,
         origin_view = origin_view, application_runtime = runtime}
     return copied, nil

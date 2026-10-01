@@ -238,7 +238,7 @@ local function define_tests()
                 active = selection.drag(selection.press(active, 1, 1), 9, 2)
                 local contents: {[string]: render.Content} = {}
                 contents.one = {rows = {"changed live content"}}
-                contents.two = {rows = {"neighbor stays live"}}
+                contents.two = {rows = {"\27[38;2;216;226;239mneighbor stays live\27[0m"}}
                 local frame = render.draw(scene, {"one", "two"}, contents, nil, nil, "", "workspace", nil, nil, false,
                     nil, nil, nil, nil, active)
                 for _, row in ipairs(frame.rows) do
@@ -409,8 +409,14 @@ local function define_tests()
             test.is_true(frame.rows[1]:find("F1 Start", 1, true) ~= nil)
             test.is_true(frame.rows[1]:find("No applications open", 1, true) ~= nil)
         end)
+        test.it("keeps the Sessions tab name visible at 80 columns", function()
+            local scene = model.add(model.new(80, 24), "sessions", "sessions", "Sessions")
+            scene = model.toggle_fullscreen(scene, "sessions")
+            local shown = render.draw(scene, {"sessions"}, {}, nil, nil, "", "Workspace Nimble Meadow", appearance.defaults())
+            test.is_true(plain_text(shown.rows[1]):find("▣ Sessions", 1, true) ~= nil)
+        end)
         test.it("renders status badges in taskbar labels and window chrome without changing titles", function()
-            local scene = model.add(model.new(80, 24), "one", "one", "Application One", "界")
+            local scene = model.add(model.new(120, 36), "one", "one", "Application One", "界")
             local badges: {[string]: surface.Badge} = {one = {glyph = "◐", text = "Waiting on you", tone = "warning"}}
             local preferences = appearance.defaults()
             local plain = render.draw(scene, {"one"}, {}, nil, nil, "", "workspace", preferences)

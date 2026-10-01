@@ -13,12 +13,16 @@ local M = {}
 -- Keep this at the workspace recovery boundary; opaque resume_state is never
 -- rewritten or interpreted as a Bee-owned identifier.
 local prior_definitions: {[string]: string} = {
-    ["bee.hive_manager:app"] = "bee.hive.manager:app",
+    ["bee.threads.timeline:app"] = "bee.threads.timeline.app:app",
+    ["bee.workspace.manager:app"] = "bee.workspace.manager.app:app",
+    ["bee.hive.manager:app"] = "bee.hive.manager.app:app",
+    ["bee.hive_manager:app"] = "bee.hive.manager.app:app",
     ["bee.inbox:app"] = "bee.approvals.inbox.app:app",
-    ["bee.modules:app"] = "bee.hub.modules:app",
+    ["bee.modules:app"] = "bee.hub.modules.app:app",
+    ["bee.hub.modules:app"] = "bee.hub.modules.app:app",
     ["bee.overlays:app"] = "bee.gov.overlays:app",
-    ["bee.workspaces:app"] = "bee.workspace.manager:app",
-    ["bee.timeline:app"] = "bee.threads.timeline:app",
+    ["bee.workspaces:app"] = "bee.workspace.manager.app:app",
+    ["bee.timeline:app"] = "bee.threads.timeline.app:app",
     ["bee.processes:app"] = "bee.host.processes:app",
 }
 function M.record(value: unknown): Record?

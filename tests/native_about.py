@@ -17,27 +17,44 @@ with tempfile.TemporaryDirectory(prefix="bee-native-about-") as temporary:
     ui = NativeDesktop(binary, project, state, application="bee.settings:app")
     try:
         ui.wait("BEE SETTINGS", timeout=20)
-        ui.key(b"\t\t\t")
+        ui.key(b"\t\t\t\t")
         ui.wait("BEE SETTINGS · ABOUT")
+        ui.wait(manifest["runtime"]["commit"], timeout=30)
+        ui.wait("Pack  bee/agents", timeout=30)
         initial = ui.text()
         assert "development (unknown)" not in initial, initial
+        assert "Live Bee packs" in initial, initial
         expected = os.environ.get("BEE_ABOUT_SOURCE", "")
         if expected:
             assert expected[:12] in initial, initial
-        ui.key(b"\x1b[6~" * 30)
-        ui.wait("https://bee.wippy.ai")
+        if "https://bee.wippy.ai" not in initial:
+            ui.key(b"\x1b[6~")
+            ui.wait("https://bee.wippy.ai")
         combined = initial + ui.text()
+        assert "Binary runtime commit" in combined, combined
+        assert "Binary native version" in combined, combined
+        assert "Binary native module" in combined, combined
+        assert manifest["native"][0]["module"] in combined, combined
         assert manifest["runtime"]["commit"] in combined, combined
         for native in manifest["native"]:
             assert native["version"] in combined, combined
+        ui.key(b"\x1b[6~" * 30)
+        ui.wait("bee/hub", timeout=20)
+        assert "installed" in ui.text(), ui.text()
         ui.key(b"\x1b[24~")
+        ui.wait("BEE SETTINGS · ABOUT")
+        ui.key(b"\x1b[5~" * 30)
         ui.wait("https://bee.wippy.ai")
         ui.resize(48, 16)
-        ui.key(b"\x1b[6~" * 30)
+        ui.key(b"\x1b[5~" * 30)
         ui.wait("Website")
+        ui.wait("https://bee.wippy.ai")
+        ui.key(b"\x1b[6~")
+        ui.wait("Live Bee packs")
+        ui.wait("installed")
         ui.quit()
     finally:
         ui.close()
         for pid in live_owners(binary, state):
             stop_owner(hold_owner(pid, binary, state))
-print("Native About: embedded build/runtime/native identity, F12 and narrow scrolling pass")
+print("Native About: executable native/runtime identity, live pack status, F12 and narrow scrolling pass")

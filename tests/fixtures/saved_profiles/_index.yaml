@@ -1,6 +1,12 @@
 version: '1.0'
 namespace: bee.saved.profiles.probe
 entries:
+- name: agent
+  kind: registry.entry
+  data: {binding_ref: 'bee.saved.profiles.probe:binding', default_mode: headless}
+- name: binding
+  kind: registry.entry
+  meta: {descriptor_ref: 'bee.driver.codex.descriptor:cli'}
 - name: workers
   kind: process.host
   host: {workers: 2, max_processes: 8}

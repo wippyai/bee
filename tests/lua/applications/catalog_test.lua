@@ -355,7 +355,7 @@ local function define_tests()
             for _, binding in ipairs(selected.bindings) do
                 bindings[binding.definition_id] = binding :: Object
             end
-            local timeline = bindings["bee.threads.timeline:app"]
+            local timeline = bindings["bee.threads.timeline.app:app"]
             if not timeline then error("timeline package binding missing") end
             -- Measured admissions carry sorted distinct policies.
             local policies = timeline.policies
@@ -370,11 +370,11 @@ local function define_tests()
             test.is_true(processes.application_stop == true)
             test.is_false(processes.appearance_write == true)
             test.eq(processes.close_grace_ms, 250)
-            local manager = bindings["bee.hive.manager:app"]
+            local manager = bindings["bee.hive.manager.app:app"]
             if not manager then error("hive manager package binding missing") end
             test.eq(#(manager.policies :: {string}), 3)
-            test.is_true(has(selected, "bee.workspace.manager:app"))
-            test.is_true(has(selected, "bee.hub.modules:app"))
+            test.is_true(has(selected, "bee.workspace.manager.app:app"))
+            test.is_true(has(selected, "bee.hub.modules.app:app"))
             test.is_true(has(selected, "bee.gov.overlays:app"))
             local files = bindings["bee.files.app:app"]
             if not files then error("Files package binding missing") end
@@ -384,7 +384,7 @@ local function define_tests()
             test.eq(files.thread_access, "observe_post")
             test.is_true(has(selected, "bee.settings:app"))
             test.is_true(selected.evidence ~= "")
-            test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline:app"))
+            test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline.app:app"))
         end)
 
         test.it("refreshes a missing open selection once before refusing it", function()

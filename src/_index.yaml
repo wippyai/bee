@@ -191,6 +191,14 @@ entries:
       policies:
       - {operation: hub.manage, resource: components, scope: {}}
       resources: []
+    - id: hub.self_update
+      revision: 1
+      parameters: {}
+      text: Update Bee's live deployment root
+      confirm: explicit
+      policies:
+      - {operation: hub.self_update, resource: bee/bee, scope: {}}
+      resources: []
     - id: gov.delivery.manage
       revision: 1
       parameters: {}

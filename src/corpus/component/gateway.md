@@ -84,7 +84,11 @@ larger authoring files require another admitted facade rather than an oversized
 gateway request. The underlying overlay store keeps its own larger
 limits for non-MCP callers.
 All four default profiles include the `thread_message` write. Claude/Codex also
-declare lifecycle hooks.
+declare lifecycle hooks. Both HTTP hook endpoints carry the exact
+`bee.gateway.security:session_boundary_policy` call grant alongside its policy
+resolver. Delivery runs as the authenticated binding's SessionRef; Sessions
+checks that identity, workspace and current native attempt before journaling a
+turn or answering a permission request.
 
 The default remains `127.0.0.1:0`. A host may explicitly select a loopback or
 RFC1918 IPv4 interface for a local container, with its corresponding readiness
@@ -125,3 +129,5 @@ becomes one MCP tool under its `llm_alias` adapter alias with its input
 schema, and each trait keeps its prompt with those aliases. The alias carries
 no authority; the host supplies one policy list per function id, and
 selection still refuses any tool outside the admitted ceiling.
+
+Saved profile MCP scopes are checked after argument decoding for every direct or `call_tool` call. `methods` bounds the owner target, `operations` bounds the decoded operation, and definition scopes also inspect nested Session specs. Profile file grants remain attempt-bound Resources records, carried privately in the frozen surface and resolved again before dispatch. Capabilities reports the admitted references; the protected `bee.gateway.binding.resource_grants` call context carries them to host-selected owner tools. Session/work references also undergo destination-operation checks, including peer sends and joins. Their expiry, revocation or replacement refuses the call; profile metadata never creates a tool policy or owner permission.

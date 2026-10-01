@@ -86,6 +86,18 @@ installed base, preserves unrelated roots and refuses changes to host-configured
 roots. It reports requirements, migrations, automatic starts and declared
 capabilities. A capability declaration does not grant the capability.
 
+A bare dependency parameter binds requirements of that name owned by that
+dependency. A qualified parameter binds its exact requirement in that
+dependency's closure. Unrelated roots cannot supply each other's requirements;
+different values for the same qualified requirement make the plan invalid.
+Planning follows requirement targets that set another requirement's `.default`,
+including dependency chains. Explicit parameters take precedence over these
+defaults. Conflicting default writers, cycles and chains beyond 128 requirements
+are refused; native linking owns other target paths.
+Readiness checks missing bindings in the requested component and new or changed
+artifacts. A dependency retained at the same version and digest keeps its existing
+bindings, matching runtime enforcement for untouched modules.
+
 Planning is read-only. It may fetch and verify package artifacts into the local
 cache, but does not publish registry state or execute a migration. `ready` means
 requirement bindings are complete; service readiness needs separate lifecycle
@@ -98,6 +110,10 @@ review. Receipts distinguish `published`, `complete`, `failed` and
 `recovery_required`; after an uncertain call, inspect its receipt rather than
 retrying blindly. `status` with a digest reads that receipt. Without one,
 `status` pages the authenticated caller's own receipt history.
+A resolver rejection returns `FAILED` and records a `failed` receipt containing
+its code and original diagnostic. Diagnostics over 4,096 bytes carry an explicit
+`[truncated]` marker. Replaying that confirmed request returns the recorded
+failure, including after restart.
 
 Apply records lifecycle intent but does not claim that an automatic service has
 become healthy. Package functions run only under host-selected exact database

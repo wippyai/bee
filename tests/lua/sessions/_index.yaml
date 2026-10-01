@@ -10,6 +10,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.threads:harness
+    bounds: bee.threads.records:bounds
 - name: executor_registry_test
   kind: function.lua
   source: file://executor_registry_test.lua
@@ -56,6 +57,7 @@ entries:
     scheduler: bee.sessions.service:scheduler
     threads: bee.tests.fixtures.sessions:threads_owner
     executor: bee.tests.fixtures.sessions:fake_executor
+    bounds: bee.threads.records:bounds
 - name: fake_owner
   kind: contract.binding
   meta: {type: test_support}
@@ -234,3 +236,13 @@ entries:
     subject_call: bee.gateway.security:subject_call
   security:
     policies: [bee.gateway.security:execute_policy, bee.gateway.security:session_boundary_resolver_policy, bee.gateway.security:session_boundary_policy]
+
+- name: attention_test
+  kind: function.lua
+  source: file://attention_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness

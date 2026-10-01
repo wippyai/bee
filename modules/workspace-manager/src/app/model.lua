@@ -19,7 +19,7 @@ type Detail = {workspace_id: string, live: boolean, applications: {Item}, thread
 type Intent = {target: string, request: {[string]: unknown}}
 type State = {tab: string, query: string, editing: boolean, items: {Summary}, cursor: string?, next_after: string?,
     back: {string}, page: integer, selected: string, detail: Detail?, showing: boolean, confirming: boolean,
-    status: string, error: string?, served: string?}
+    status: string, error: string?, served: string?, technical: boolean?}
 type Object = {[string]: unknown}
 
 local M = {}
@@ -67,8 +67,7 @@ function M.summary(value: unknown): Summary?
 end
 
 function M.folder(summary: Summary): string
-    if summary.subpath == "" then return summary.root_ref end
-    return summary.root_ref .. "/" .. summary.subpath
+    return summary.subpath ~= "" and summary.subpath or "Workspace root"
 end
 -- The name a person sees: the saved label, or the desktop petname when the
 -- workspace has none, so an unlabeled workspace reads the same as the header.

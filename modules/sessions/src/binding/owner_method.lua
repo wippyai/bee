@@ -1,6 +1,7 @@
 -- MIT. Contract methods enter through the Sessions owner.
 local owner = require("owner")
 local M = {}
+function M.attention_count(request: unknown): unknown return owner.call("attention_count", request) end
 function M.open(request: unknown): unknown return owner.call("open", request) end
 function M.run(request: unknown): unknown return owner.call("run", request) end
 function M.send(request: unknown): unknown return owner.call("send", request) end

@@ -15,7 +15,7 @@ local MARKER = "›"
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
 -- A button with a key is drawn as "Key Label"; primary marks the one filled
 -- action, active a selected toggle. Disabled buttons stay visible and have no hit.
-type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?}
+type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?, more: boolean?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
 type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?}
@@ -73,7 +73,7 @@ end
 -- A painter over a canvas cleared to the theme's surface, with no hits yet.
 function M.new(width: integer, height: integer, preferences: appearance.Preferences): Painter
     local theme = appearance.theme(preferences.theme)
-    local canvas = tty.canvas(width, height)
+    local canvas = tty.canvas(maximum(1, width), maximum(1, height))
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
     local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = ""}
     local bars: {[integer]: Bar} = {}
@@ -81,10 +81,17 @@ function M.new(width: integer, height: integer, preferences: appearance.Preferen
 end
 
 -- The painted rows, ready for output:present.
-function M.rows(painter: Painter): {string}
+function M.rows(painter: Painter, background: string?): {string}
     for y, bar in pairs(painter.bars) do M.actions(painter, y, bar.buttons, bar.x) end
     painter.bars = {}
-    return painter.canvas:rows()
+    local painted = painter.canvas:rows()
+    local rows: {string} = {}
+    for y = 1, painter.height do
+        local row = painted[y] or ""
+        local gap = maximum(0, painter.width - tty.text.width(row))
+        rows[y] = row .. appearance.style(painter.theme.text, background or painter.theme.surface) .. string.rep(" ", gap) .. RESET
+    end
+    return rows
 end
 
 -- Draws value at (x, y) within room cells and returns the drawn width.
@@ -222,12 +229,14 @@ end
 function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?): integer
     local column = x or 2
     local total = 0
+    local forced = false
     for _, button in ipairs(buttons) do
         total = total + button_width(button)
+        if button.more then forced = true end
         painter.controls.buttons[#painter.controls.buttons + 1] = button
     end
     local room = painter.width - column
-    if total - 1 <= room then
+    if not forced and total - 1 <= room then
         for _, button in ipairs(buttons) do column = draw_button(painter, column, y, button) end
         return column
     end
@@ -236,7 +245,7 @@ function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?)
     local chosen: {[integer]: boolean} = {}
     for _, primary in ipairs({true, false}) do
         for index, button in ipairs(buttons) do
-            if (button.primary == true) == primary and button_width(button) <= available then
+            if not button.more and (button.primary == true) == primary and button_width(button) <= available then
                 chosen[index] = true
                 available = available - button_width(button)
             end

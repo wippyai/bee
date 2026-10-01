@@ -1,0 +1,69 @@
+version: '1.0'
+namespace: bee.hive.manager.app
+entries:
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules:
+  - tty
+  - process
+  - channel
+  - time
+  - uuid
+  - registry
+  - system
+  imports:
+    frame: bee.application:frame
+    client: bee.application:client
+    appearance: bee.application:appearance
+    model: bee.hive.manager.app:model
+    names: bee.application:names
+    view: bee.hive.manager.app:view
+    directory: bee.hive.manager:directory
+    hive: bee.hive:client
+    types: bee.hive:types
+    remote: bee.hive.manager.app:remote
+    desktop_protocol: bee.hive.desktop:protocol
+    clock: bee:clock
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Hive Manager
+      icon: H
+      lifetime: view
+      revision: '1'
+      instance_policy: singleton
+      group: Tools
+      role: hive
+      resume_schema: hive_manager.v1
+      restart_policy: manual
+- name: model
+  kind: library.lua
+  source: file://model.lua
+  modules:
+  - json
+  imports:
+    text: bee.application:text
+    directory: bee.hive.manager:directory
+    contract: bee.protocol:application
+    types: bee.hive:types
+    hive_bounds: bee.protocol:bounds
+    names: bee.application:names
+- name: view
+  kind: library.lua
+  source: file://view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    model: bee.hive.manager.app:model
+    names: bee.application:names
+- name: remote
+  kind: library.lua
+  source: file://remote.lua
+  imports:
+    bounds: bee.protocol:bounds
+    appearance: bee.application:appearance
+    frame: bee.application:frame
+    names: bee.application:names

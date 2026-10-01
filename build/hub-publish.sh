@@ -64,9 +64,16 @@ while read -r module directory; do
     grep -q "^$module " "$stage/locked.tsv" || fail "$module is not in the release deployment lock"
 done < "$stage/modules.tsv"
 while read -r module module_version hash; do
-    grep -q "^$module " "$stage/modules.tsv" || fail "the release deployment locks $module, which is not a Bee module"
-    [ "$module_version" = "$version" ] || fail "the release deployment locks $module at $module_version, not $version"
+    if grep -q "^$module " "$stage/modules.tsv"; then
+        [ "$module_version" = "$version" ] || fail "the release deployment locks $module at $module_version, not $version"
+    else
+        case "$module" in bee/*) fail "the release deployment locks unknown Bee module $module" ;; esac
+        [ -n "$module_version" ] || fail "the release deployment has no version for $module"
+    fi
     printf '%s\n' "$hash" | grep -Eq '^sha256:[0-9a-f]{64}$' || fail "the release deployment has no sha256 hash for $module"
+    pack=$deployment/.wippy/vendor/$module-$module_version.wapp
+    [ -f "$pack" ] || fail "sealed pack is missing: $pack"
+    [ "sha256:$(sha256sum "$pack" | awk '{print $1}')" = "$hash" ] || fail "$pack does not match the lock hash $hash"
 done < "$stage/locked.tsv"
 
 # Dependencies publish before their dependents: tsort orders each module after

@@ -29,6 +29,7 @@ type Policy = {
     ref: string,
     digest: string,
     permission_exchange: PermissionExchange?,
+    permission_answers: string,
     provider_ref: string?,
     instructions: string?,
     instruction_builder: configuration.InstructionBuilder?,
@@ -142,7 +143,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     if meta.type ~= M.TYPE then return nil, ref .. " is not a launch policy" end
     local data = bounds.object(entry.data)
     if not data then return nil, ref .. " has no data" end
-    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_options", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
+    local unknown_field = bounds.fields(data, {"schema_revision", "required_cleanup", "required_exit_observation", "start_ms", "stop_grace_ms", "drain_ms", "runner_drain_ms", "retain_ms", "executables", "executable_env", "environment", "environment_refs", "allow_host_home", "fixture", "permission_exchange", "provider_ref", "instructions", "instruction_builder", "prepare_options", "profile_restrictions", "profile_instructions", "gateway_tools", "gateway_surface", "agent_model_map", "agent_delegates", "gateway_ttl_ms", "gateway_hooks", "hook_command_ref", "placement_binding", "placement_options", "placement_profiles", "allowed_overrides"})
     if unknown_field then return nil, ref .. ": " .. unknown_field end
     if data.schema_revision ~= M.SCHEMA then return nil, ref .. ": schema_revision must be " .. M.SCHEMA end
     local cleanup = bounds.member(data.required_cleanup, placement_types.CAPABILITIES)
@@ -177,8 +178,8 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
     local allow_host_home = data.allow_host_home == true
     local fixture = data.fixture == true
     if observation == "eof_gated" and not fixture then return nil, ref .. ": eof_gated execution is permitted only in a fixture policy" end
-    local _, profile_options_error = preferences.decode_profile_options(data.profile_options)
-    if profile_options_error then return nil, ref .. ": " .. profile_options_error end
+    local _, profile_restrictions_error = preferences.decode_profile_restrictions(data.profile_restrictions)
+    if profile_restrictions_error then return nil, ref .. ": " .. profile_restrictions_error end
     local exchange: PermissionExchange? = nil
     if data.permission_exchange ~= nil then
         local declared = bounds.object(data.permission_exchange)
@@ -195,10 +196,15 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not poll_ms or poll_ms < 50 or not ttl_ms or ttl_ms < 1000 then return nil, ref .. ": permission_exchange poll_ms and ttl_ms are out of range" end
         exchange = {adapter_ref = adapter_ref, acceptance_ref = acceptance_ref, fixture_digest = fixture_digest, approver_policy = approver, poll_ms = poll_ms, ttl_ms = ttl_ms}
     end
+    local answer_mode = exchange and "ask" or "provider"
+    if selected and selected.bee and selected.bee.permission_answers then answer_mode = selected.bee.permission_answers end
+    if answer_mode ~= "provider" and not exchange then return nil, "bee.permission_answers=" .. answer_mode .. " requires a host-accepted permission transport" end
+    if answer_mode == "provider" then exchange = nil end
     local digest_input: {[string]: unknown} = {}
     for key, value in pairs(data) do digest_input[key] = value end
     digest_input.executables = executables
     digest_input.environment = environment
+    digest_input.permission_answers = answer_mode
     local encoded, encode_error = canonical.encode(digest_input)
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
@@ -325,7 +331,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = required_cleanup, required_exit_observation = required_observation,
+    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, permission_answers = answer_mode, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = required_cleanup, required_exit_observation = required_observation,
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_profiles = placement_profiles, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end

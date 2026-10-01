@@ -102,11 +102,13 @@ The flow is catalog, open, send, await, close:
 
 1. session_catalog lists the definitions and profiles whose executor is ready.
    `include_unavailable` adds the rest with reasons. It starts nothing.
-2. session_open takes `spec` (`definition`, optional `profile`, `title`,
-   `workdir`) and returns a `SessionRef` that survives turns and owner
-   restarts. No process runs while the session is idle.
-3. session_send takes `session`, `input` and an optional `output` schema
-   reference. It commits one immutable unit of work and returns a `WorkReceipt`.
+2. session_open takes `spec` (`definition`, optional `profile`, `workdir`,
+   `workspace`, `budgets`, `supervision`) and returns a `SessionRef` that survives turns
+   and owner restarts. `budgets` selects `turn` and/or `session` limits;
+   `supervision.quiet_period_ms` defaults to 60000. No process runs while the session is idle.
+3. session_send takes `session`, `input`, an optional `output` schema reference
+   and an optional per-Work `budgets.turn` of the same shape. A Work budget tightens
+   matching session limits. It commits one immutable unit of work and returns a `WorkReceipt`.
    A receipt says the work is queued; it is not a result. A busy session queues
    the work; nothing is injected into a running process. This is the only way
    to give a session work.
@@ -114,17 +116,25 @@ The flow is catalog, open, send, await, close:
    tagged observation: `ready` with the result, `pending`, `blocked` or
    `uncertain`. A timeout never cancels the work. The same reference always
    names the same work.
-5. session_close seals intake and drains by default, or requests cancellation
-   with `mode: cancel`. Await the returned operation for closure.
+5. session_close seals intake and drains accepted work. Await the returned
+   operation for closure; use session_cancel to stop one Work.
 
-session_run submits one job on a fresh session that closes after settlement and
-returns a `WorkReceipt`; await it. session_join observes an ordered set of
+Managed `spec.placement` overrides use the canonical native/Docker union and require both the definition and host policy to admit `placement`. Docker template references and native machine-home authority are checked again. Window placement overrides require a saved profile.
+
+session_run opens a fresh session, submits one Work and returns its
+`WorkReceipt`; `spec.budgets` sets turn/session defaults and its top-level `budgets.turn`
+sets the first Work limit. Await the receipt. session_join observes an ordered set of
 `WorkRef` values under `all_success`, `all_settled`, `first_success` or
 `quorum`. session_get inspects one session, work or operation, or recovers an
 operation by its saved `operation_key`. session_list pages durable sessions
 with a stable snapshot and feed cursor. session_cancel requests cancellation of
 one work and keeps its session open; the receipt says `requested` and the
 operation observation reports `stopped`, `already_terminal` or `uncertain`.
+
+An accepted turn appears as `stalled` after `supervision.quiet_period_ms` without a live
+thread event. `session_get` and `session_list` include its quiet-period evidence;
+`on_stall="report"` keeps work running, while `cancel_work` requests a placement stop. Known approval waits pause stall cancellation. When an opted-in Work budget is exceeded,
+await returns `budget_exceeded` with `BUDGET_EXCEEDED` and placement exit evidence.
 
 Reuse the same `operation_key` after a lost reply; changing the input under a
 key is a conflict.

@@ -1,17 +1,48 @@
 -- MIT. Strict decoder and registry reader for declarative external CLI drivers.
 local bounds = require("bounds")
 local registry = require("registry")
-local turn_budget = require("turn_budget")
 local login_evidence = require("login_evidence")
+local schema_values = require("schema_values")
 local M = {}
+type PermissionAnswer = {transport: string, adapter_ref: string?, reason: string?}
+type BudgetCapabilities = {provider_steps: "agent_turn" | "model_step", tokens: boolean, cost_usd: boolean, tool_calls: boolean, wall_time_ms: boolean}
+type Capabilities = {permission_answers: {[string]: PermissionAnswer}, budgets: BudgetCapabilities?}
+local function capabilities(value: unknown): (Capabilities?, string?)
+    if value == nil then return {permission_answers = {}}, nil end
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"permission_answers", "budgets"}) then return nil, "CLI descriptor.capabilities is malformed" end
+    local answers = bounds.object(object.permission_answers)
+    if not answers or bounds.fields(answers, {"window", "first_turn", "resume"}) then return nil, "CLI descriptor permission_answers contexts are malformed" end
+    local result: {[string]: PermissionAnswer} = {}
+    for _, context in ipairs({"window", "first_turn", "resume"}) do
+        local item = bounds.object(answers[context])
+        if not item or bounds.fields(item, {"transport", "adapter_ref", "reason"}) then return nil, "permission_answers." .. context .. " is malformed" end
+        local transport = bounds.member(item.transport, {"stdio", "hook_http", "hook_mcp", "provider"})
+        local adapter_ref = item.adapter_ref == nil and nil or bounds.id(item.adapter_ref)
+        local reason = item.reason == nil and nil or bounds.text(item.reason, 1024)
+        if not transport or (transport == "provider" and (not reason or adapter_ref ~= nil))
+            or (transport ~= "provider" and (not adapter_ref or item.reason ~= nil)) then return nil, "permission_answers." .. context .. " needs an adapter or an unsupported reason" end
+        result[context] = {transport = transport, adapter_ref = adapter_ref, reason = reason}
+    end
+    local budget: BudgetCapabilities? = nil
+    if object.budgets ~= nil then
+        local value = bounds.object(object.budgets)
+        if not value or bounds.fields(value, {"provider_steps", "tokens", "cost_usd", "tool_calls", "wall_time_ms"}) then return nil, "Budget capability declaration is malformed" end
+        if (value.provider_steps ~= "agent_turn" and value.provider_steps ~= "model_step") or type(value.tokens) ~= "boolean"
+            or type(value.cost_usd) ~= "boolean" or type(value.tool_calls) ~= "boolean" or type(value.wall_time_ms) ~= "boolean" then return nil, "Budget capabilities need an explicit unit and accounting coverage" end
+        budget = {provider_steps = value.provider_steps == "model_step" and "model_step" or "agent_turn", tokens = value.tokens,
+            cost_usd = value.cost_usd, tool_calls = value.tool_calls, wall_time_ms = value.wall_time_ms}
+    end
+    return {permission_answers = result, budgets = budget}, nil
+end
 M.TYPE = "bee.driver.cli_descriptor"
-M.SCHEMA = "bee.driver.cli-descriptor@2"
+M.SCHEMA = "bee.driver.cli-descriptor@3"
 M.MAX_TEMPLATE_ITEMS = 128
 M.MAX_TEMPLATE_DEPTH = 8
 M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}
 
 type Object = {[string]: unknown}
-type OptionValue = string | integer | boolean | {string}
+type OptionValue = string | number | boolean | {[string]: unknown} | {unknown}
 type Descriptor = {
     schema_revision: string,
     provider: string,
@@ -26,6 +57,7 @@ type Descriptor = {
     flags: Object,
     provider_home: Object,
     configure: string,
+    capabilities: Capabilities?,
 }
 
 local function object(value: unknown, label: string): (Object?, string?)
@@ -62,8 +94,29 @@ local function field_error(spec: Object, field: string, fallback: string): strin
     return message or (field .. " " .. fallback)
 end
 
-function M.decode_option(field: string, spec: Object, value: unknown): (OptionValue?, string?)
-    if spec.type == "enum" then
+function M.runtime_spec(spec: Object): Object
+    local schema = bounds.object(spec.value_schema)
+    if not schema then return spec end
+    local result: Object = {}
+    for _, name in ipairs({"default", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) do result[name] = spec[name] end
+    if schema.enum ~= nil then result.type = "enum"; result.values = schema.enum
+    elseif schema.type == "boolean" then result.type = "boolean"
+    elseif schema.type == "array" and spec.transform ~= nil then result.type = "ids"; result.values = (bounds.object(schema.items) or {}).enum
+    elseif schema.type == "array" then result.type = "json"; result.schema = schema
+    elseif schema.type == "object" or schema.type == "number" or schema.type == "integer" then result.type = "json"; result.schema = schema
+    else result.type = schema.format or "text"; result.max = schema.maxLength end
+    return result
+end
+
+function M.decode_option(field: string, declaration: Object, value: unknown): (OptionValue?, string?)
+    local spec = M.runtime_spec(declaration)
+    if spec.type == "json" then
+        return schema_values.decode(spec.schema, value, field)
+    elseif spec.type == "text" then
+        local text = bounds.text(value, bounds.count(spec.max) or 4096)
+        if not text or text:find("%z") then return nil, field .. " must be bounded text" end
+        return text, nil
+    elseif spec.type == "enum" then
         local values = type(spec.values) == "table" and spec.values or {}
         local selected = bounds.member(value, values)
         if not selected then return nil, field_error(spec, field, "is not one Bee admits") end
@@ -80,15 +133,9 @@ function M.decode_option(field: string, spec: Object, value: unknown): (OptionVa
         return selected, nil
     elseif spec.type == "model" then
         local selected = bounds.text(value, 128)
-        if not selected or selected == "" or not selected:match("^[A-Za-z0-9][A-Za-z0-9._:-]*$") then
+        if not selected or selected == "" or not selected:match("^[A-Za-z0-9][A-Za-z0-9._:/%-]*$") then
             return nil, field_error(spec, field, "is not one bounded model identifier")
         end
-        return selected, nil
-    elseif spec.type == "budget" then
-        local selected, budget_error = turn_budget.decode(value, field)
-        if not selected then return nil, budget_error or field_error(spec, field, "is invalid") end
-        local maximum = spec.max ~= nil and bounds.count(spec.max) or nil
-        if maximum ~= nil and selected > maximum then return nil, field_error(spec, field, "exceeds its admitted limit") end
         return selected, nil
     elseif spec.type == "duration" then
         local selected = bounds.text(value, 32)
@@ -123,11 +170,15 @@ local function validate_template(value: unknown, label: string, depth: integer):
     if type(value) == "string" then return nil end
     if type(value) ~= "table" then return label .. " contains an invalid template node" end
     local item = value
-    local fields = bounds.fields(item, {"field", "format", "if", "if_any", "if_none", "equals", "not_equals", "starts_with", "then", "else", "option", "join"})
+    local fields = bounds.fields(item, {"field", "format", "if", "if_any", "if_none", "equals", "not_equals", "starts_with", "then", "else", "option", "join", "render", "context"})
     if fields then return label .. ": " .. fields end
     local selected = 0
-    for _, name in ipairs({"field", "format", "if", "if_any", "if_none", "option", "join"}) do if item[name] ~= nil then selected = selected + 1 end end
+    for _, name in ipairs({"field", "format", "if", "if_any", "if_none", "option", "join", "render"}) do if item[name] ~= nil then selected = selected + 1 end end
     if selected ~= 1 then return label .. " must select one template operation" end
+    if item.render ~= nil then
+        if not bounds.id(item.render) or not bounds.member(item.context, {"window", "first_turn", "resume"}) or bounds.fields(item, {"render", "context"}) then return label .. " render reference is invalid" end
+        return nil
+    end
     if item.field ~= nil then
         if not bounds.id(item.field) or bounds.fields(item, {"field"}) then return label .. " field reference is malformed" end
         return nil
@@ -137,7 +188,7 @@ local function validate_template(value: unknown, label: string, depth: integer):
         return nil
     end
     if item.option ~= nil then
-        if not bounds.member(item.option, {"permission", "turn_budget"}) or bounds.fields(item, {"option"}) then return label .. " option reference is malformed" end
+        if item.option ~= "permission" or bounds.fields(item, {"option"}) then return label .. " option reference is malformed" end
         return nil
     end
     if item.join ~= nil then
@@ -218,7 +269,8 @@ end
 local function check_reference(value: unknown, fields: Object, label: string): string?
     local name = bounds.id(value)
     if not name then return label .. " is not an identifier" end
-    if fields[name] ~= true then return label .. " names undeclared field " .. name end
+    local short = name:match("^provider%.options%.(.+)$") or name:match("^provider%.(.+)$") or name
+    if fields[short] ~= true then return label .. " names undeclared field " .. name end
     return nil
 end
 
@@ -244,6 +296,10 @@ local function validate_template_references(value: unknown, label: string, field
             if child_error then return child_error end
         end
         return nil
+    end
+    if item.render ~= nil then
+        local reference_error = check_reference(item.render, fields, label .. ".render")
+        if reference_error then return reference_error end
     end
     if item.field ~= nil then
         local reference_error = check_reference(item.field, fields, label .. ".field")
@@ -357,7 +413,7 @@ end
 function M.decode(value: unknown): (Descriptor?, string?)
     local item, object_error = object(value, "CLI descriptor")
     if not item then return nil, object_error end
-    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure"})
+    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities"})
     if extra then return nil, "CLI descriptor: " .. extra end
     if item.schema_revision ~= M.SCHEMA then return nil, "CLI descriptor schema_revision is unsupported" end
     local provider, executable, codec, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.member(item.codec, M.CODECS), bounds.id(item.configure)
@@ -418,10 +474,63 @@ function M.decode(value: unknown): (Descriptor?, string?)
     for name, raw_spec in pairs(fields) do
         if not bounds.id(name) then return nil, "CLI descriptor.options has an invalid field name" end
         if name == "profile_id" or name == "brief" then return nil, "CLI descriptor.options has a reserved field name" end
-        local spec, spec_error = object(raw_spec, "CLI descriptor.options." .. tostring(name))
-        if not spec then return nil, spec_error end
-        if bounds.fields(spec, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "CLI descriptor.options." .. tostring(name) .. " has unknown fields" end
-        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "budget", "duration", "ids", "codex_profile"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
+        local declaration, spec_error = object(raw_spec, "CLI descriptor.options." .. tostring(name))
+        if not declaration then return nil, spec_error end
+        if declaration.path ~= nil then
+            if bounds.fields(declaration, {"path", "value_schema", "default", "label", "description", "section", "order", "contexts", "support", "render", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "OptionSpec has unknown fields" end
+            local path = bounds.line(declaration.path, 128)
+            if not path or (path ~= "provider." .. name and path ~= "provider.options." .. name) then return nil, "OptionSpec path must name its canonical provider field" end
+            local schema = bounds.object(declaration.value_schema)
+            if not schema or bounds.fields(schema, {"type", "enum", "format", "items", "maxItems", "maxLength", "properties", "additionalProperties", "required", "minimum", "maximum"}) or not bounds.member(schema.type, {"string", "boolean", "array", "object", "number", "integer"}) then return nil, "OptionSpec value_schema is invalid" end
+            if not bounds.line(declaration.label, 80) or not bounds.line(declaration.description, 512) or not bounds.member(declaration.section, {"basic", "advanced"}) or not bounds.count(declaration.order) then return nil, "OptionSpec form declaration is invalid" end
+            local contexts = bounds.ids(declaration.contexts, true)
+            if not contexts or #contexts == 0 then return nil, "OptionSpec contexts are invalid" end
+            for _, context in ipairs(contexts) do if not bounds.member(context, {"window", "first_turn", "resume"}) then return nil, "OptionSpec context is invalid" end end
+            local support = bounds.object(declaration.support)
+            if not support or bounds.fields(support, {"version_range", "help_probe", "config_schema_ref"}) then return nil, "OptionSpec support is invalid" end
+            if support.version_range ~= nil then
+                local version = bounds.line(support.version_range, 32)
+                if not version or not version:match("^>=[0-9]+%.[0-9]+%.[0-9]+$") then return nil, "OptionSpec version_range is invalid" end
+            end
+            if support.config_schema_ref ~= nil and not bounds.id(support.config_schema_ref) then return nil, "OptionSpec config schema reference is invalid" end
+            if support.help_probe ~= nil then
+                local help = bounds.object(support.help_probe)
+                local args = help and sequence(help.argv, "OptionSpec help argv", 8)
+                local flag = help and bounds.line(help.flag, 128)
+                if not help or bounds.fields(help, {"argv", "flag"}) or not args or #args == 0 or not flag or flag:sub(1, 1) ~= "-" then return nil, "OptionSpec help probe is invalid" end
+                for _, arg in ipairs(args) do if not bounds.line(arg, 128) then return nil, "OptionSpec help argument is invalid" end end
+            end
+            local renders, renders_error = sequence(declaration.render, "OptionSpec render", 8)
+            if not renders then return nil, renders_error end
+            for _, raw_render in ipairs(renders) do
+                local render = bounds.object(raw_render)
+                if not render or not bounds.member(render.kind, {"argv", "config", "env"}) then return nil, "OptionSpec render is invalid" end
+                local render_contexts = bounds.ids(render.contexts, true)
+                if not render_contexts or #render_contexts == 0 then return nil, "OptionSpec render contexts are invalid" end
+                for _, context in ipairs(render_contexts) do if not bounds.member(context, contexts) then return nil, "OptionSpec render context is undeclared" end end
+                if render.kind == "argv" then
+                    if bounds.fields(render, {"kind", "contexts", "tokens"}) then return nil, "OptionSpec argv render has unknown fields" end
+                    local tokens, token_error = sequence(render.tokens, "OptionSpec tokens", M.MAX_TEMPLATE_ITEMS)
+                    if not tokens then return nil, token_error end
+                    for _, token in ipairs(tokens) do local err = validate_template(token, "OptionSpec token", 0); if err then return nil, err end end
+                elseif render.kind == "config" then
+                    if bounds.fields(render, {"kind", "contexts", "file", "format", "path", "merge", "value"}) then return nil, "OptionSpec config render has unknown fields" end
+                    local key_path = sequence(render.path, "OptionSpec configuration path", 12)
+                    local value = bounds.object(render.value)
+                    if not key_path or not value or bounds.fields(value, {"field", "literal"}) or (value.literal == nil and value.field ~= declaration.path and value.field ~= "provider.system_prompt_files") or (value.literal ~= nil and (type(value.literal) ~= "string" or value.field ~= nil)) then return nil, "OptionSpec config value must name its canonical field" end
+                    for _, key in ipairs(key_path) do if not bounds.id(key) then return nil, "OptionSpec config path is invalid" end end
+                    local file = bounds.line(render.file, 512)
+                    if not file or not safe_relative(file) or not bounds.member(render.format, {"json", "toml", "text"}) or not bounds.member(render.merge, {"set", "append"}) then return nil, "OptionSpec config render is invalid" end
+                else
+                    if bounds.fields(render, {"kind", "contexts", "name", "value"}) then return nil, "OptionSpec environment render has unknown fields" end
+                    local name = bounds.line(render.name, 128)
+                    local value = bounds.object(render.value)
+                    if not name or not name:match("^[A-Z][A-Z0-9_]*$") or name == "HOME" or name == "PATH" or name:match("^BEE_") or name:match("_HOME$") or not value or bounds.fields(value, {"field", "literal"}) or (value.literal ~= nil and (type(value.literal) ~= "string" or value.field ~= nil)) or (value.literal == nil and value.field ~= declaration.path and value.field ~= "provider.env." .. name) then return nil, "OptionSpec environment render is invalid" end
+                end
+            end
+        elseif bounds.fields(declaration, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "Runtime option has unknown fields" end
+        local spec = M.runtime_spec(declaration)
+        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "duration", "ids", "codex_profile", "text", "json"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
         if spec.type == "enum" and spec.values == nil then return nil, "CLI descriptor.options." .. tostring(name) .. ".values is required for an enum" end
         if spec.values ~= nil then
             local values, values_error = sequence(spec.values, "CLI descriptor.options." .. tostring(name) .. ".values", 32)
@@ -478,7 +587,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
 
     local flags, flags_error = object(item.flags, "CLI descriptor.flags")
     if not flags then return nil, flags_error end
-    if bounds.fields(flags, {"permission", "turn_budget"}) then return nil, "CLI descriptor.flags has unknown fields" end
+    if bounds.fields(flags, {"permission"}) then return nil, "CLI descriptor.flags has unknown fields" end
     for name, raw_flag in pairs(flags) do
         local flag, flag_error = object(raw_flag, "CLI descriptor.flags." .. tostring(name))
         if not flag then return nil, flag_error end
@@ -527,8 +636,47 @@ function M.decode(value: unknown): (Descriptor?, string?)
             or type(profile_file.window_only) ~= "boolean" then return nil, "CLI descriptor provider-home profile file is invalid" end
     end
 
-    local declared_fields: Object = {profile_id = true, brief = true}
+    local declared_fields: Object = {profile_id = true, brief = true, system_prompt_file = true}
     for name in pairs(fields) do declared_fields[name] = true end
+    local visiting: {[string]: boolean} = {}
+    local visited: {[string]: boolean} = {}
+    local function visit_render(name: string): string?
+        if visiting[name] then return "OptionSpec render dependency cycle includes " .. name end
+        if visited[name] then return nil end
+        visiting[name] = true
+        local declaration = bounds.object(fields[name]) or {}
+        local renders = type(declaration.render) == "table" and declaration.render or {}
+        local function visit_tokens(value: unknown): string?
+            if type(value) ~= "table" then return nil end
+            local item = bounds.object(value)
+            if item and item.render ~= nil then
+                local target = bounds.id(item.render)
+                if not target or fields[target] == nil then return "OptionSpec render reference is undeclared" end
+                return visit_render(target)
+            end
+            for _, child in pairs(value) do
+                local err = visit_tokens(child)
+                if err then return err end
+            end
+            return nil
+        end
+        for _, raw_render in ipairs(renders) do
+            local render = bounds.object(raw_render)
+            if render and render.kind == "argv" then
+                local reference_error = validate_template_references(render.tokens, "OptionSpec argv", declared_fields, flags, 0)
+                if reference_error then return reference_error end
+                local cycle_error = visit_tokens(render.tokens)
+                if cycle_error then return cycle_error end
+            end
+        end
+        visiting[name] = nil; visited[name] = true
+        return nil
+    end
+    for name in pairs(fields) do
+        local render_error = visit_render(name)
+        if render_error then return nil, render_error end
+    end
+
     for _, name in ipairs({"window", "first_turn", "resume"}) do
         local template = bounds.object(templates[name]) or {}
         local template_error = validate_template_references(template.argv, "CLI descriptor.argv_templates." .. name .. ".argv", declared_fields, flags, 0)
@@ -568,9 +716,20 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if template_error then return nil, template_error end
     end
 
+    local declared, capability_error = capabilities(item.capabilities)
+    if not declared then return nil, capability_error end
     return {schema_revision = M.SCHEMA, provider = provider, executable = executable, version_probe = probe,
         login_evidence = login, platform = platform, codec = codec, json_paths = paths, argv_templates = templates,
-        options = options, flags = flags, provider_home = home, configure = configure}, nil
+        options = options, flags = flags, provider_home = home, configure = configure, capabilities = declared}, nil
+end
+
+function M.permission_answer(item: Descriptor, context: string): PermissionAnswer
+    local declared = item.capabilities
+    if declared then
+        local selected: PermissionAnswer? = declared.permission_answers[context]
+        if selected then return selected end
+    end
+    return {transport = "provider", reason = "No permission answer transport is declared for " .. context}
 end
 
 function M.find_provider(pinned: registry.Snapshot, provider: string): (Descriptor?, string?)

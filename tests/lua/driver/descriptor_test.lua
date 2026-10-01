@@ -2,6 +2,7 @@
 local test = require("test")
 local descriptor = require("descriptor")
 local login_evidence = require("login_evidence")
+local bounds = require("bounds")
 type Object = {[string]: unknown}
 
 local function copy_object(value: Object): Object
@@ -12,6 +13,21 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("declares permission answer transports for the launch context without provider dispatch", function()
+            local expected: {[string]: {string}} = {
+                claude = {"stdio", "hook_http"}, codex = {"provider", "hook_mcp"},
+                agy = {"provider", "provider"}, grok = {"provider", "provider"},
+                muse = {"provider", "provider"}, opencode = {"provider", "provider"}}
+            for provider, transports in pairs(expected) do
+                local loaded = assert(descriptor.load("bee.driver." .. provider .. ".descriptor:cli"))
+                local headless = descriptor.permission_answer(loaded, "first_turn")
+                local window = descriptor.permission_answer(loaded, "window")
+                test.eq(headless.transport, transports[1])
+                test.eq(window.transport, transports[2])
+                test.eq(descriptor.permission_answer(loaded, "resume").transport, transports[1])
+                if headless.transport == "provider" then test.not_nil(headless.reason) else test.not_nil(headless.adapter_ref) end
+            end
+        end)
         test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()
             local loaded = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
             local changed = copy_object(loaded)
@@ -185,11 +201,24 @@ local function define_tests()
 
             local cyclic_flag = copy_object(claude)
             local flags = copy_object(claude.flags :: Object)
-            local turn_budget = copy_object(flags.turn_budget :: Object)
-            turn_budget.argv = {{option = "turn_budget"}}
-            flags.turn_budget = turn_budget
+            local permission: Object = {field = "permission_mode", argv = {{option = "permission"}}}
+            flags.permission = permission
             cyclic_flag.flags = flags
             decoded, decode_error = descriptor.decode(cyclic_flag)
+            test.is_nil(decoded)
+            test.not_nil(decode_error)
+
+            local legacy_budget = copy_object(claude)
+            local options_source = bounds.object(claude.options)
+            if not options_source then error("Claude options are malformed") end
+            local options = copy_object(options_source)
+            local fields_source = bounds.object(options.fields)
+            if not fields_source then error("Claude option fields are malformed") end
+            local fields = copy_object(fields_source)
+            fields.turn_budget = {type = "budget", max = 128}
+            options.fields = fields
+            legacy_budget.options = options
+            decoded, decode_error = descriptor.decode(legacy_budget)
             test.is_nil(decoded)
             test.not_nil(decode_error)
         end)

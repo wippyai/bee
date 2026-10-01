@@ -7,8 +7,25 @@ local frame = require("frame")
 local model = require("model")
 local leases = require("leases")
 local names = require("names")
+local tty = require("tty")
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
+local function prompt_lines(prompt: string, width: integer): {string}
+    local rest = "Asked: " .. prompt
+    local room = math.floor(math.max(1, width - 2))
+    local lines: {string} = {}
+    repeat
+        local part = tty.text.cut(rest, 0, room)
+        local cut = #part
+        if cut < #rest then
+            local space = part:find("%s[^%s]*$")
+            if space and space > 1 then cut = space - 1 end
+        end
+        lines[#lines + 1] = rest:sub(1, cut)
+        rest = rest:sub(cut + 1):gsub("^%s+", "")
+    until rest == ""
+    return lines
+end
 local function state_label(row: model.Row): string
     if row.state == "decided" then return row.decision or "decided" end
     return row.state
@@ -113,9 +130,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local selected = model.selected_row(state)
     local detail_rows = 0
     local permission_lines: {string} = {}
+    local asked_lines: {string} = {}
     if detail and selected and detail.approval_id == selected.approval_id and height >= 12 then
         permission_lines = model.permission_lines(detail)
-        local needed = 5 + #permission_lines
+        asked_lines = prompt_lines(selected.prompt, width)
+        local needed = 4 + #asked_lines + #permission_lines
         if state.technical then needed = needed + 2 + #model.payload_lines(detail) end
         detail_rows = math.floor(math.max(6, math.min(height - 5, needed)))
     end
@@ -143,15 +162,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local y = list_last + 1
         frame.rule(painter, y)
         local lines: {string} = {
-            "Effect: " .. selected.effect .. "  target " .. selected.target,
-            "Asked: " .. selected.prompt,
+            "Effect: " .. selected.effect,
         }
+        for _, asked_line in ipairs(asked_lines) do lines[#lines + 1] = asked_line end
         for _, permission_line in ipairs(permission_lines) do
             lines[#lines + 1] = permission_line
         end
-        lines[#lines + 1] = "Requester: " .. selected.requester_id .. "  owner " .. selected.owner_node .. "  policy " .. selected.policy
+        if detail.requesting_session then lines[#lines + 1] = "Source: Session · S returns to the conversation" end
         lines[#lines + 1] = "State: " .. state_label(selected) .. (selected.decider_id and (" by " .. selected.decider_id) or "") .. "  expires " .. selected.expires_at
         if state.technical then
+            lines[#lines + 1] = "Requester: " .. selected.requester_id .. " · Owner: " .. selected.owner_node .. " · Policy: " .. selected.policy
+            lines[#lines + 1] = "Target: " .. selected.target
             lines[#lines + 1] = "Request " .. selected.approval_id .. "  revision " .. tostring(selected.revision) .. "  incarnation observed " .. tostring(selected.owner_incarnation)
             lines[#lines + 1] = "Digest " .. model.text(detail.proposal_digest, 80) .. "  kind " .. selected.request_kind
             for _, payload_line in ipairs(model.payload_lines(detail)) do lines[#lines + 1] = payload_line end
@@ -169,21 +190,27 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local idle = state.pending == nil
     if height >= 4 then
         local can_open = selected ~= nil and detail == nil
-        frame.actions(painter, height - 1, {
-            {kind = "open", key = "Enter", label = "Open", enabled = can_open, primary = true},
-            {kind = "approve", key = "A", label = "Approve", enabled = pending_detail and idle, primary = true},
-            {kind = "deny", key = "D", label = "Deny", enabled = pending_detail and idle},
-            {kind = "withdraw", key = "W", label = "Withdraw", enabled = pending_detail and idle},
-            {kind = "source", key = "S", label = detail and detail.state == "pending" and "Source" or "Return to source", enabled = detail ~= nil and detail.requesting_session ~= nil},
-            {kind = "refresh", key = "R", label = "Refresh", enabled = idle},
-            {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = detail ~= nil},
-            {kind = "mark", key = "M", label = "Mark", enabled = selected ~= nil and selected.state == "pending"},
-            {kind = "batch_approve", key = "B", label = "Approve " .. tostring(marked), enabled = marked > 0 and idle},
-            {kind = "batch_deny", key = "N", label = "Deny " .. tostring(marked), enabled = marked > 0 and idle},
-            {kind = "lease", key = "L", label = "Lease", enabled = can_lease and idle},
-            {kind = "grant", key = "G", label = "Grant", enabled = can_grant and idle},
-            {kind = "leases", key = "V", label = "Leases", enabled = true},
-        })
+        local buttons: {frame.Button} = {}
+        if can_open then buttons[#buttons + 1] = {kind = "open", key = "Enter", label = "Open", enabled = true, primary = true} end
+        if pending_detail then
+            buttons[#buttons + 1] = {kind = "approve", key = "A", label = "Approve", enabled = idle, primary = true}
+            buttons[#buttons + 1] = {kind = "deny", key = "D", label = "Deny", enabled = idle}
+            buttons[#buttons + 1] = {kind = "withdraw", key = "W", label = "Withdraw", enabled = idle, more = true}
+        end
+        buttons[#buttons + 1] = {kind = "refresh", key = "R", label = "Refresh", enabled = idle, primary = #rows == 0, more = #rows > 0}
+        if detail then
+            buttons[#buttons + 1] = {kind = "source", key = "S", label = "Return to source", enabled = detail.requesting_session ~= nil, more = true}
+            buttons[#buttons + 1] = {kind = "technical", key = "T", label = state.technical and "Hide details" or "Details", enabled = true, more = true}
+        end
+        if selected and selected.state == "pending" then buttons[#buttons + 1] = {kind = "mark", key = "M", label = "Mark", enabled = true, more = true} end
+        if marked > 0 then
+            buttons[#buttons + 1] = {kind = "batch_approve", key = "B", label = "Approve " .. tostring(marked), enabled = idle, more = true}
+            buttons[#buttons + 1] = {kind = "batch_deny", key = "N", label = "Deny " .. tostring(marked), enabled = idle, more = true}
+        end
+        if can_lease then buttons[#buttons + 1] = {kind = "lease", key = "L", label = "Lease", enabled = idle, more = true} end
+        if can_grant then buttons[#buttons + 1] = {kind = "grant", key = "G", label = "Grant", enabled = idle, more = true} end
+        buttons[#buttons + 1] = {kind = "leases", key = "V", label = "Leases", enabled = true, more = true}
+        frame.actions(painter, height - 1, buttons)
     end
     local message = status
     if message == "" then message = state.notice end
@@ -198,7 +225,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         end
     end
     if height >= 6 then frame.line(painter, height - 2, message, theme.text) end
-    frame.footer(painter, "", width >= 130 and WIDE_HINTS or HINTS)
+    frame.footer(painter, "", #rows == 0 and frame.hints({{key = "R", verb = "refresh"}}) or HINTS)
     return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = window.capacity, offset = window.offset}
 end
 return M

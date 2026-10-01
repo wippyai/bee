@@ -7,8 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Grok driver
-    comment: Declarative Grok CLI driver; placement owns process, credentials, and
-      private-home materialization
+    comment: Declarative Grok CLI driver; placement owns process, credentials, and private-home materialization
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -187,8 +186,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Grok window declaration; the host separately selects
-      its policy, activation, executable and permissions
+    comment: Component-owned Grok window declaration; the host separately selects its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: grok-window
@@ -221,9 +219,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Grok batch route for a host-selected coordinator
-      and caller-owned shared thread; the CLI offers no provable workdir confinement,
-      so the host records it as unconfined
+    comment: Component-owned bounded Grok batch route for a host-selected coordinator and caller-owned shared thread; the
+      CLI offers no provable workdir confinement, so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: grok-research-batch
@@ -274,8 +271,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Grok turn budget for agentic research actions on a caller-owned
-      thread
+    comment: Host-selected Grok turn budget for agentic research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -305,29 +301,23 @@ entries:
     - session_close
     - thread_read
     - thread_message
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
-      turn_budget:
-      - 16
-      - 32
-      - 64
-      - 128
     profile_instructions: true
     prepare_options:
       permission_mode: default
-      turn_budget: 128
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
 - name: launch_policy_grok_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Grok window;
-      missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Grok window; missing host executable leaves the declaration
+      unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -363,13 +353,13 @@ entries:
     - PostToolUse
     - Stop
     hook_command_ref: bee.gateway:hook_executable
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
     profile_instructions: true
     prepare_options: {}
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high

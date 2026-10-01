@@ -669,3 +669,9 @@ app-layout-standalone-check:
 app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
+
+.PHONY: login-links-check
+# Explicit proof against the local runtime PR build; the production pin stays unchanged.
+login-links-check:
+	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
+	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)

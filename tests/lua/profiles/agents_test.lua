@@ -118,6 +118,17 @@ local function define_tests()
             test.eq(#listing.items, 1)
             test.eq(listing.items[1].title, "Claude")
         end)
+        test.it("shows the runtime refusal in the login-needed state", function()
+            local refusal = "owner_safe: /store/bee.login: group/other-writable mode 0620"
+            local item = candidate("c:codex", "Codex", "unconfigured", {refusal})
+            item.features = {"presentation:start_menu", "driver:codex"}
+            local client = fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?)
+                return {items = {item}, complete = true, unavailable_count = 1, diagnostics = {}}, nil
+            end})
+            local listing = must_list(client, true)
+            test.is_false(listing.items[1].ready)
+            test.eq(listing.items[1].reason, "Login needed · " .. refusal)
+        end)
         test.it("reports a catalog fault", function()
             local client = fixtures.fixture_client({catalog = function(): (unknown, sessions.Fault?) return nil, protocol.fault("DENIED", "no", "never", nil) end})
             local listing, err = agents.list(client, false)

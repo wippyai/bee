@@ -112,6 +112,12 @@ function M.evaluate(spec: Spec, raw: unknown): (Result?, string?)
         if spec.login_evidence then reason = "declared login evidence is present; credential contents and service validity were not checked" end
     end
 
+    if present ~= true and (status == "unknown" or status == "unconfigured") then
+        for _, check in ipairs(checks) do
+            if check.reason then reason = check.reason; break end
+        end
+    end
+
     local login: Login
     if spec.login_evidence then login = {evidence = "any_of", exists = present}
     else login = {evidence = "not_required", exists = true} end

@@ -15,11 +15,11 @@ local function define_tests()
         test.it("opens the selected profile by its catalog revision without exposing its values", function()
             local opened: Object = {}
             local candidate: Object = {ref = PROFILE_ID, kind = "profile", revision = 4, title = "Personal Claude",
-                status = "ready", checked_at = "2026-09-29T12:00:00.000Z", reasons = {}, features = {"driver:claude"},
+                status = "ready", checked_at = "2026-09-29T12:00:00.000Z", reasons = {}, features = {"driver:claude", "presentation:start_menu"},
                 actions = {{operation = "session_open", label = "Open session"}}}
             local raw_client: any = {
                 catalog = function(_: any, options: Object): (unknown, nil)
-                    test.eq(options.include_unavailable, false)
+                    test.eq(options.include_unavailable, true)
                     return {items = {candidate}, complete = true, unavailable_count = 1, diagnostics = {}}, nil
                 end,
                 open = function(_: any, options: Object): (any, nil)

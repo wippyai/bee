@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. Seed the inbox lease smoke: two pending requests of one requester for
 -- the batch, one pending activation request to lease, and one active lease
 -- with a recorded use so the leases view shows usage and can revoke it.
@@ -17,12 +18,12 @@ type Object = {[string]: unknown}
 local function call(target: string, request: unknown): Object
     local raw, err = funcs.new():call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = raw :: Object
+    local reply = assert(bounds.object(raw))
     if reply.ok ~= true then
-        local fault = reply.error :: Object
+        local fault = assert(bounds.object(reply.error))
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 
 local function request(key: string, ref: string, payload: Object, prompt: string)

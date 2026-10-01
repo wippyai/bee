@@ -13,7 +13,7 @@ TOOLCHAIN_CURRENT := toolchain-current
 endif
 .PHONY: toolchain-current
 toolchain-current:
-	python3 build/verify_cached_toolchain.py current || $(MAKE) native-tools
+	python3 build/verify_cached_toolchain.py current $(if $(BEE_NATIVE_LOCAL),--local,) || $(MAKE) native-tools
 lint: $(TOOLCHAIN_CURRENT)
 test: $(TOOLCHAIN_CURRENT)
 fixture-lint: $(TOOLCHAIN_CURRENT)

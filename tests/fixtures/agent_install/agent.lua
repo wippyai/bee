@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. The agent side of the installation acceptance: one admitted attempt
 -- with its gateway binding, calling the gateway methods its MCP tools reach
 -- as its bound subject.
@@ -24,12 +25,12 @@ function M.call(target: string, request: Object): Object
     local actor = security.new_actor(M.SUBJECT, {workspace_id = M.WORKSPACE})
     local raw, err = funcs.new():with_actor(actor):with_scope(security.new_scope(policies)):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = raw :: Object
+    local reply = assert(bounds.object(raw))
     if reply.ok ~= true then
-        local fault = (reply.error or {}) :: Object
+        local fault = assert(bounds.object((reply.error or {})))
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 
 -- A command process starts beside the host services; admission records the

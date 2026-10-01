@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. An actual child submits hooks and remains interactive on its PTY.
 local M = {}
 
@@ -84,7 +85,7 @@ end
 
 function M.dispatch(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then return {ok = false, error = "continuation request must be an object"} end
-    local request = value :: {[string]: unknown}
+    local request = assert(bounds.object(value))
     if request.brief ~= "" then return {ok = false, error = "continuation brief must be empty"} end
     if request.resume_ref ~= "s1" then return {ok = false, error = "continuation provider session must be s1"} end
     return launch("continuation")

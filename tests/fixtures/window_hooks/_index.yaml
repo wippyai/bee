@@ -123,14 +123,20 @@ entries:
   kind: function.lua
   source: file://driver.lua
   method: prepare
+  imports: {bounds: bee.protocol:bounds}
+
 - name: dispatch
   kind: function.lua
   source: file://driver.lua
   method: dispatch
+  imports: {bounds: bee.protocol:bounds}
+
 - name: normalize
   kind: function.lua
   source: file://driver.lua
   method: normalize
+  imports: {bounds: bee.protocol:bounds}
+
 - name: configure
   kind: function.lua
   source: file://configure.lua
@@ -152,6 +158,7 @@ entries:
   method: main
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
@@ -169,6 +176,7 @@ entries:
   method: crash
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
@@ -186,6 +194,7 @@ entries:
   method: pending_hook
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
@@ -203,6 +212,7 @@ entries:
   method: cancel_recovery
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
@@ -220,6 +230,7 @@ entries:
   method: command_hooks
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
@@ -237,6 +248,7 @@ entries:
   method: run
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store

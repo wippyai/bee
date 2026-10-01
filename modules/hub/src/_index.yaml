@@ -122,3 +122,7 @@ entries:
   source: file://publishing.lua
   modules: [hash]
   imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, semver: bee.hub:semver}
+- name: result
+  kind: library.lua
+  source: file://result.lua
+  imports: {bounds: bee.threads.records:bounds, transaction: bee.persist:transaction}

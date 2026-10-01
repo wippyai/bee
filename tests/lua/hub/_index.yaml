@@ -120,3 +120,12 @@ entries:
     inventory: bee.hub:inventory
     installed: bee.hub:inventory_reader
     preview: bee.hub.binding:preview
+- name: result_test
+  kind: function.lua
+  source: file://result_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    hub_result: bee.hub:result
+    installation: bee.hub:installation

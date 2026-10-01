@@ -9,6 +9,7 @@ local catalog = require("catalog")
 local inspect = require("inspect")
 local inspection = require("inspection")
 local transaction = require("transaction")
+local hub_result = require("hub_result")
 local inventory = require("inventory")
 local inventory_reader = require("inventory_reader")
 local canonical = require("canonical")
@@ -21,7 +22,7 @@ type Result = transaction.Result
 type ExpectedModule = {component: string, version: string, change: string}
 type Removal = {root_digest: string, before_modules: {ExpectedModule}, published: boolean}
 type Receipt = {actor_id: string, digest: string, request_digest: string?, component: string, state: string,
-    baseline_revision: integer, message: string, action: string, expected_modules: {ExpectedModule}?,
+    baseline_revision: integer, message: string, action: string, code: string?, expected_modules: {ExpectedModule}?,
     migration_work: migration_work.Work?, request: {[string]: unknown}?, removal: Removal?, root_id: string?}
 
 local function receipt_id(digest: string): string return "bee.hub.operations:" .. digest end
@@ -105,6 +106,8 @@ local function decode_receipt(raw: unknown): Receipt?
     local baseline = bounds.count(value.baseline_revision)
     local message, action = bounds.text(value.message, 4096), bounds.member(value.action, {"install", "update", "uninstall"})
     if not actor or not measured or not component or not state or not baseline or not message or not action then return nil end
+    local code = value.code ~= nil and bounds.line(value.code, 160) or nil
+    if value.code ~= nil and not code then return nil end
     local root_id = value.root_id ~= nil and bounds.id(value.root_id) or nil
     if value.root_id ~= nil and not root_id then return nil end
     local request_digest = digest(value.request_digest)
@@ -133,7 +136,7 @@ local function decode_receipt(raw: unknown): Receipt?
         removal = {root_digest = root_digest, before_modules = before, published = supplied.published}
     end
     return {actor_id = actor, digest = measured, request_digest = request_digest, component = component, state = state,
-        baseline_revision = baseline, message = message, action = action, expected_modules = expected, migration_work = work,
+        baseline_revision = baseline, message = message, action = action, code = code, expected_modules = expected, migration_work = work,
         request = request, removal = removal, root_id = root_id}
 end
 
@@ -186,6 +189,7 @@ function M.status(raw: unknown, options: unknown?): Result
 end
 
 local function save(receipt: Receipt): Result
+    receipt.message = hub_result.message(receipt.message) or "invalid Hub receipt message"
     local snapshot, problem = registry.snapshot()
     if not snapshot then return transaction.failure("UNCERTAIN", tostring(problem)) end
     local changes, change_error = snapshot:changes()
@@ -223,6 +227,17 @@ local function root_digest(raw: unknown): string?
     if not entry or entry.kind ~= "ns.dependency" then return nil end
     local encoded = canonical.encode({id = entry.id, kind = entry.kind, data = entry.data})
     return encoded and hash.sha256(encoded) or nil
+end
+
+local function failed_apply(receipt: Receipt, problem: unknown): Result
+    receipt.state, receipt.code = "failed", "FAILED"
+    receipt.message = hub_result.message(tostring(problem)) or "Hub apply failed"
+    local recorded = save(receipt)
+    local message = receipt.message
+    if not recorded.ok then
+        message = hub_result.message(message .. "; failed to record receipt: " .. tostring(recorded.message)) or message
+    end
+    return transaction.failure("FAILED", message, receipt)
 end
 
 local function incomplete_removal(receipt: Receipt, message: string): Result
@@ -429,6 +444,11 @@ function M.apply(raw: unknown, expected: unknown): Result
         if receipt.state == "published" or (receipt.state == "recovery_required" and receipt.migration_work ~= nil) then
             return reconcile(receipt, decoded)
         end
+        if receipt.state == "failed" and receipt.code then
+            local failed = transaction.failure(receipt.code, receipt.message, receipt)
+            failed.replayed = true
+            return failed
+        end
         previous.replayed = true
         return previous
     end
@@ -541,7 +561,7 @@ function M.apply(raw: unknown, expected: unknown): Result
     local recorded, record_error = changes:create({id = receipt_id(measured), kind = "registry.entry", data = receipt})
     if not recorded then return transaction.failure("FAILED", tostring(record_error)) end
     local applied, apply_error = changes:apply()
-    if not applied then return transaction.failure("FAILED", tostring(apply_error)) end
+    if not applied then return failed_apply(receipt, apply_error) end
     local actual, inventory_error = inventory_reader.read()
     local mismatch: string? = inventory_error
     if actual then mismatch = verify(expected, actual)

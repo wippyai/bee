@@ -8,6 +8,7 @@ local plan = require("plan")
 local preview = require("preview")
 local publishing = require("publishing")
 local transaction = require("transaction")
+local hub_result = require("hub_result")
 type Result = transaction.Result
 local BACKEND = "bee.hub.binding:backend"
 local SCOPE = "bee.hub.security:execution_scope"
@@ -105,20 +106,6 @@ local function handle(raw: unknown): Result
     if not executor then return transaction.failure("DENIED", tostring(executor_error)) end
     local result, call_error = executor:call(BACKEND, {operation = operation, request = value.request or {}, expected_digest = value.expected_digest})
     if call_error then return transaction.failure("UNCERTAIN", tostring(call_error)) end
-    local reply = bounds.object(result)
-    if not reply or type(reply.ok) ~= "boolean" or type(reply.replayed) ~= "boolean" then
-        return transaction.failure("UNCERTAIN", "invalid Hub backend reply")
-    end
-    local code: string? = nil
-    local message: string? = nil
-    if reply.code ~= nil then
-        code = bounds.line(reply.code, 160)
-        if not code then return transaction.failure("UNCERTAIN", "invalid Hub result code") end
-    end
-    if reply.message ~= nil then
-        message = bounds.text(reply.message, 4096)
-        if not message then return transaction.failure("UNCERTAIN", "invalid Hub result message") end
-    end
-    return {ok = reply.ok, replayed = reply.replayed, code = code, message = message, value = reply.value}
+    return hub_result.decode(result)
 end
 return {handle = handle}

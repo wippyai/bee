@@ -110,6 +110,10 @@ review. Receipts distinguish `published`, `complete`, `failed` and
 `recovery_required`; after an uncertain call, inspect its receipt rather than
 retrying blindly. `status` with a digest reads that receipt. Without one,
 `status` pages the authenticated caller's own receipt history.
+A resolver rejection returns `FAILED` and records a `failed` receipt containing
+its code and original diagnostic. Diagnostics over 4,096 bytes carry an explicit
+`[truncated]` marker. Replaying that confirmed request returns the recorded
+failure, including after restart.
 
 Apply records lifecycle intent but does not claim that an automatic service has
 become healthy. Package functions run only under host-selected exact database

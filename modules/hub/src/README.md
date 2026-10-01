@@ -22,6 +22,11 @@ The app presents an exact plan and requires the person to confirm each update. A
 uses the same durable receipt and migration path as other Hub root changes. The facade
 validates and authorizes the operation before entering its fixed private scope.
 Requests cannot select credentials, a registry URL, an actor or a host path.
+Resolver rejection returns `FAILED` with the original diagnostic bounded to
+4,096 bytes and an explicit `[truncated]` marker when needed. It records a
+`failed` receipt with the same code and message; replay returns that failure.
+A malformed diagnostic does not turn a definite failure into `UNCERTAIN`.
+Uncertain worker delivery still requires a receipt lookup.
 
 Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`,
 `installed`, `installed_source` and `updates`. `updates` returns installed Bee

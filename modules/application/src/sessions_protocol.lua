@@ -2,6 +2,8 @@
 -- Every decoder accepts exactly the closed shapes of the owner schemas and
 -- returns the typed value or a description of the first violation.
 local bounds = require("bounds")
+local budget_values = require("budget_values")
+local profile_values = require("profile_values")
 local canonical = require("canonical")
 local record_values = require("record_values")
 local record_types = require("record_types")
@@ -21,7 +23,10 @@ M.DEFAULT_TIMEOUT_MS = 30000
 
 type Retry = "never" | "same_key" | "refresh" | "reconcile"
 type Evidence = {summary: string, artifacts: {string}}
-type Budget = {max_turns: integer?, max_tokens: integer?, wall_time_ms: integer?}
+type Placement = profile_values.Placement
+type Budget = budget_values.Budget
+type Budgets = budget_values.Budgets
+type Supervision = budget_values.Supervision
 type Sender = {kind: "session" | "principal", id: string}
 type FaultExtra = {operation: string?, current_revision: integer?, evidence: Evidence?, retry_after_ms: integer?}
 type Fault = {code: string, message: string, retry: Retry, operation_key: string?, operation: string?,
@@ -61,7 +66,7 @@ type JoinAwait = {subject_kind: "join", subject: string, cursor: string, tag: "r
     | {subject_kind: "join", subject: string, cursor: string, tag: "blocked", children: {WorkAwait}, blocker: Blocker}
     | {subject_kind: "join", subject: string, cursor: string, tag: "uncertain", children: {WorkAwait}, evidence: Evidence}
 
-type Limits = {active_ms: integer?, model_steps: integer?, tool_calls: integer?, recovery_attempts: integer?, queue_ms: integer?}
+type Limits = budget_values.Budgets
 type Continuity = {mode: "exact" | "provider_resume" | "reconstructed" | "fresh", evidence: Evidence?}
 type Execution = {state: "absent" | "starting" | "running" | "quiescent" | "unknown", evidence_at: string, stale: boolean}
 type Lifecycle = "opening" | "active" | "suspended" | "closing" | "closed"
@@ -72,7 +77,8 @@ type LastResult = {work: string, outcome: LastOutcome, summary: string, at: stri
 type HistoryItem = {work: string, sequence: integer, input: unknown, created_at: string}
 type HistoryPage = {items: {HistoryItem}, next: integer?}
 type Presentation = "headless" | "window"
-type SessionSnapshot = {presentation: Presentation?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
+type SessionSnapshot = {effective_profile: profile_values.Profile?, profile_digest: string?,
+    budget_consumption: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}?, presentation: Presentation?, thread_ref: string?, workspace: string?, driver: string?, provider: string?, definition: string?, last_result: LastResult?, session: string, revision: integer, incarnation: integer, title: string, lifecycle: Lifecycle,
     activity: Activity, activity_evidence: ActivityEvidence?, execution: Execution, queue_count: integer, effective_limits: Limits, continuity: Continuity, actions: {Action}}
 type OpenReceipt = {session: string, operation: string, snapshot: SessionSnapshot}
 type OperationReceipt = OpenReceipt | WorkReceipt | ControlReceipt
@@ -146,27 +152,11 @@ function M.json(value: unknown): boolean
     return encoded ~= nil
 end
 
+M.decode_placement = profile_values.placement
+M.decode_budgets = budget_values.budgets
+M.decode_supervision = budget_values.supervision
 function M.decode_budget(value: unknown): (Budget?, string?)
-    if value == nil then return nil, nil end
-    local object = bounds.object(value)
-    if not object then return nil, "budget must be an object" end
-    local unknown = bounds.fields(object, {"max_turns", "max_tokens", "wall_time_ms"})
-    if unknown then return nil, "budget has unknown field " .. unknown end
-    local result: Budget = {}
-    for _, name in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
-        local raw = object[name]
-        if raw ~= nil then
-            local amount = bounds.count(raw)
-            if not amount then return nil, "budget." .. name .. " must be a nonnegative integer" end
-            if name == "max_turns" then result.max_turns = amount
-            elseif name == "max_tokens" then result.max_tokens = amount
-            else result.wall_time_ms = amount end
-        end
-    end
-    if result.max_turns == nil and result.max_tokens == nil and result.wall_time_ms == nil then
-        return nil, "budget must set at least one limit"
-    end
-    return result, nil
+    return budget_values.decode(value)
 end
 
 local function refs(value: unknown, kind: RefKind?): {string}?
@@ -563,28 +553,16 @@ function M.decode_join_await(value: unknown): (JoinAwait?, string?)
     return {subject_kind = "join", subject = subject, cursor = cursor, tag = "uncertain", children = children, evidence = evidence}, nil
 end
 
-local LIMIT_FIELDS = {"active_ms", "model_steps", "tool_calls", "recovery_attempts", "queue_ms"}
-
 local function decode_limits(value: unknown): Limits?
-    local object = shape(value, "limits", LIMIT_FIELDS)
+    local object = bounds.object(value)
     if not object then return nil end
-    local limits: Limits = {}
-    for _, name in ipairs(LIMIT_FIELDS) do
-        local raw = object[name]
-        if raw ~= nil then
-            local number = name == "recovery_attempts" and bounds.count(raw) or M.position(raw)
-            if not number then return nil end
-            if name == "active_ms" then limits.active_ms = number elseif name == "model_steps" then limits.model_steps = number
-            elseif name == "tool_calls" then limits.tool_calls = number elseif name == "recovery_attempts" then limits.recovery_attempts = number
-            elseif name == "queue_ms" then limits.queue_ms = number end
-        end
-    end
-    return limits
+    if next(object) == nil then return {} end
+    return budget_values.budgets(object)
 end
 
 function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     local object, failure = shape(value, "session snapshot", {"session", "revision", "incarnation", "title", "lifecycle",
-        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation"})
+        "activity", "activity_evidence", "execution", "queue_count", "effective_limits", "continuity", "actions", "thread_ref", "workspace", "driver", "provider", "definition", "last_result", "presentation", "effective_profile", "profile_digest", "budget_consumption"})
     if not object then return nil, failure end
     local presentation: Presentation = "headless"
     if object.presentation == "window" then presentation = "window"
@@ -662,7 +640,26 @@ function M.decode_snapshot(value: unknown): (SessionSnapshot?, string?)
     if continuity_mode == "provider_resume" then decoded_continuity = "provider_resume"
     elseif continuity_mode == "reconstructed" then decoded_continuity = "reconstructed"
     elseif continuity_mode == "fresh" then decoded_continuity = "fresh" end
-    return {presentation = presentation, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
+    local profile: profile_values.Profile? = nil
+    if object.effective_profile ~= nil then
+        local err: string?
+        profile, err = profile_values.profile(object.effective_profile)
+        if not profile then return nil, err end
+    end
+    local profile_digest: string? = nil
+    if object.profile_digest ~= nil then
+        profile_digest = bounds.line(object.profile_digest, 64)
+        if not profile_digest or #profile_digest ~= 64 or profile_digest:find("[^0-9a-f]") then return nil, "profile digest is malformed" end
+    end
+    local consumed: {provider_steps: integer, tool_calls: integer, tokens: integer, wall_time_ms: integer}? = nil
+    if object.budget_consumption ~= nil then
+        local raw = bounds.object(object.budget_consumption)
+        if not raw or bounds.fields(raw, {"provider_steps", "tool_calls", "tokens", "wall_time_ms"}) then return nil, "session consumption is malformed" end
+        local steps, tools, tokens, wall = bounds.count(raw.provider_steps), bounds.count(raw.tool_calls), bounds.count(raw.tokens), bounds.count(raw.wall_time_ms)
+        if not steps or not tools or not tokens or not wall then return nil, "session consumption is malformed" end
+        consumed = {provider_steps = steps, tool_calls = tools, tokens = tokens, wall_time_ms = wall}
+    end
+    return {effective_profile = profile, profile_digest = profile_digest, budget_consumption = consumed, presentation = presentation, thread_ref = extras.thread_ref, workspace = extras.workspace, driver = extras.driver, provider = extras.provider,
         definition = extras.definition, last_result = last_result,
         session = session, revision = revision, incarnation = incarnation, title = title, lifecycle = decoded_lifecycle,
         activity = decoded_activity, activity_evidence = activity_evidence,

@@ -77,3 +77,9 @@ entries:
   source: file://canonical.lua
   imports:
     shared: bee.protocol:canonical
+
+- name: budgets
+  kind: library.lua
+  source: file://budgets.lua
+  imports:
+    bounds: bee.threads.records:bounds

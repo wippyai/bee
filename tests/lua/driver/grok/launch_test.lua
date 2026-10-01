@@ -115,7 +115,7 @@ local function define_tests()
             local line = table.concat(spec.argv, " ")
             test.is_true(line:find("--model grok-4.6", 1, true) ~= nil)
             test.is_true(line:find("--reasoning-effort high", 1, true) ~= nil)
-            test.is_nil(line:find("--max-turns", 1, true))
+            test.is_nil((line:find("--max-turns", 1, true)))
             test.is_true(line:find("-r session-1234", 1, true) ~= nil)
             test.is_true(line:find('--allow MCPTool(bee__*)', 1, true) ~= nil)
 

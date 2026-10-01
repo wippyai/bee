@@ -35,6 +35,8 @@ entries:
     continuation: bee.harness.carrier:continuation
     interrupted: bee.harness.app:interrupted
     profiles: bee.harness.profiles:protocol
+    profile_validation: bee.harness.profiles:validation
+    descriptors: bee.driver:descriptor
     placement_profiles: bee.placement:profiles
 - name: agent_resolver
   kind: library.lua
@@ -155,6 +157,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     admission: bee.harness.launch:admission
+    profiles: bee.harness.profiles:protocol
   security:
     policies:
     - bee.harness.launch:setup_facade_policy

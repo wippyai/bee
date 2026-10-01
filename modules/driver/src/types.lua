@@ -65,7 +65,7 @@ type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unk
 type LocatePlatform = {os: string?, arch: string?, compatible: boolean?}
 type LocateExecutable = {name: string, present: boolean?, version: string?}
 type LocateLogin = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
-type LocateResult = {provider: string, status: LocateStatus, executable: LocateExecutable,
+type LocateResult = {capabilities: {[string]: {supported: boolean, reason: string?}}?, provider: string, status: LocateStatus, executable: LocateExecutable,
     login: LocateLogin, platform: LocatePlatform, checked_at: string?, reason: string?}
 type ProviderHomeFile =
     {source_path: string, path: string, kind: "login", optional: boolean, write_back: boolean}

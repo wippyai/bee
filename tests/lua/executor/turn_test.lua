@@ -131,10 +131,10 @@ local function define_tests()
             test.eq(assert(turn.execute(io, request)).state, "uncertain")
         end)
         test.it("returns budget_exceeded with typed placement exit evidence for each budget kind", function()
-            for _, kind in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
+            for _, kind in ipairs({"provider_steps", "tokens", "wall_time_ms"}) do
                 local request = base_request()
-                request.budget = kind == "max_turns" and {max_turns = 1}
-                    or kind == "max_tokens" and {max_tokens = 1} or {wall_time_ms = 1}
+                request.budget = kind == "provider_steps" and {provider_steps = 1}
+                    or kind == "tokens" and {tokens = 1} or {wall_time_ms = 1}
                 local io = success_io()
                 io.observe = function(): (unknown, nil)
                     return {stopped = true, budget_exceeded = kind,
@@ -149,17 +149,17 @@ local function define_tests()
         end)
         test.it("settles an exceeded budget when placement proves the process exited naturally", function()
             local request = base_request()
-            request.budget = {max_tokens = 1}
+            request.budget = {tokens = 1}
             local io = success_io()
             io.observe = function(): (unknown, nil)
-                return {stopped = false, budget_exceeded = "max_tokens",
-                    evidence = {summary = "placement proved the CLI exited after max_tokens", artifacts = {"placement attempt attempt-current", "exit observed by runner"}}}, nil
+                return {stopped = false, budget_exceeded = "tokens",
+                    evidence = {summary = "placement proved the CLI exited after tokens", artifacts = {"placement attempt attempt-current", "exit observed by runner"}}}, nil
             end
             local result = assert(turn.execute(io, request))
             test.eq(result.state, "settled")
             test.eq(result.outcome, "budget_exceeded")
             local evidence = bounds.object(result.evidence)
-            test.eq(evidence and evidence.summary, "placement proved the CLI exited after the max_tokens budget")
+            test.eq(evidence and evidence.summary, "placement proved the CLI exited after the tokens budget")
         end)
         test.it("leaves a long fake turn unbounded by default", function()
             local request = base_request()
@@ -178,13 +178,13 @@ local function define_tests()
         end)
         test.it("does not settle a budget outcome without placement exit evidence", function()
             local request = base_request()
-            request.budget = {max_turns = 1}
+            request.budget = {provider_steps = 1}
             local io = success_io()
             io.reconcile = function(id: string)
                 return {attempt = {attempt_id = id, execution_state = "running", cleanup_state = "pending"}}, nil
             end
             io.observe = function(): (unknown, nil)
-                return {stopped = false, budget_exceeded = "max_turns",
+                return {stopped = false, budget_exceeded = "provider_steps",
                     evidence = {summary = "stop was not proven", artifacts = {}}}, nil
             end
             local result = assert(turn.execute(io, request))

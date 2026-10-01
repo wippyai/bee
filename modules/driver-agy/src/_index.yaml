@@ -7,8 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Antigravity CLI driver
-    comment: Declarative Agy launch, stream-json normalization, and host-selected
-      configuration delivery
+    comment: Declarative Agy launch, stream-json normalization, and host-selected configuration delivery
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -192,8 +191,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Antigravity window declaration; the host separately selects
-      its policy, activation, executable and permissions
+    comment: Component-owned Antigravity window declaration; the host separately selects its policy, activation, executable
+      and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: agy-window
@@ -225,8 +224,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Agy batch route for a host-selected coordinator and caller-owned
-      shared thread
+    comment: Component-owned Agy batch route for a host-selected coordinator and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: agy-research-batch
@@ -276,8 +274,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected bounded Gemini batch policy with a retained user login
-      and caller-owned thread MCP
+    comment: Host-selected bounded Gemini batch policy with a retained user login and caller-owned thread MCP
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -318,8 +315,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Antigravity
-      window; missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Antigravity window; missing host executable leaves the
+      declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -354,13 +351,13 @@ entries:
     - PostToolUse
     - Stop
     hook_command_ref: bee.gateway:hook_executable
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
     profile_instructions: true
     prepare_options: {}
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high

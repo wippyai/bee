@@ -15,6 +15,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.threads.records:bounds
     test: wippy.test:test
     turn: bee.executor.external.service:turn
     stream: bee.executor.external.service:stream

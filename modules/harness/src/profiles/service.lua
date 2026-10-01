@@ -11,12 +11,15 @@ local bounds = require("bounds")
 local sync = require("sync")
 local transaction = require("transaction")
 local protocol = require("protocol")
+local migration = require("migration")
+local validation = require("validation")
+local driver_profile = require("driver_profile")
 
 local M = {}
 type Result = transaction.Result
 type Request = protocol.Request
 type Profile = protocol.Profile
-type Stored = {profile_id: string, revision: integer, profile: Profile?, tombstone: boolean}
+type Stored = {profile_id: string, revision: integer, profile: Profile?, tombstone: boolean, migration_diagnostic: {[string]: unknown}?}
 
 local DATABASE_REF = "bee.harness.profiles:database_ref"
 local FEED_PREFIX = "harness.profiles:"
@@ -84,32 +87,6 @@ local function open(node: string): (sync.Store?, string?)
     return sync.open({resource = resource, owner = node, event_capacity = 128, receipt_capacity = 1024})
 end
 
--- Historical read compatibility only. Older projections stored one named
--- setting beside the shared options map. Translate that value in memory and
--- leave the projection, event and revision untouched; all new writes pass
--- through protocol.profile and therefore use the canonical shape.
-local function historical_profile(value: unknown): (Profile?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "stored profile is not an object" end
-    local legacy = object.config_profile
-    if legacy == nil then return protocol.profile(value) end
-    local options = bounds.object(object.options == nil and {} or object.options)
-    if not options then return nil, "stored profile options are not an object" end
-    local selected = options.config_profile
-    if selected ~= nil and (type(selected) ~= type(legacy) or selected ~= legacy) then
-        return nil, "stored profile has conflicting legacy and canonical option values"
-    end
-    local canonical: {[string]: unknown} = {}
-    for key, item in pairs(object) do
-        if key ~= "config_profile" then canonical[key] = item end
-    end
-    local copied_options: {[string]: unknown} = {}
-    for key, item in pairs(options) do copied_options[key] = item end
-    copied_options.config_profile = legacy
-    canonical.options = copied_options
-    return protocol.profile(canonical)
-end
-
 local function projection(value: unknown): (Stored?, Result?)
     local object = bounds.object(value)
     if not object then return nil, failure("INTERNAL", "profile projection is malformed") end
@@ -121,13 +98,17 @@ local function projection(value: unknown): (Stored?, Result?)
         if object.value ~= nil then return nil, failure("INTERNAL", "profile tombstone contains a value") end
         return {profile_id = profile_id, revision = revision, profile = nil, tombstone = true}, nil
     end
-    local profile, profile_error = historical_profile(object.value)
+    local stored = bounds.object(object.value)
+    if stored and stored.schema_revision == migration.DIAGNOSTIC then
+        return {profile_id = profile_id, revision = revision, profile = nil, tombstone = false, migration_diagnostic = stored}, nil
+    end
+    local profile, profile_error = protocol.profile(object.value)
     if not profile then return nil, failure("INTERNAL", profile_error or "stored profile is malformed") end
     return {profile_id = profile_id, revision = revision, profile = profile, tombstone = false}, nil
 end
 
-local function reply(input: Request, profile_id: string, revision: integer, profile: Profile?, tombstone: boolean): {[string]: unknown}
-    local value: {[string]: unknown} = {workspace_id = input.workspace_id, profile_id = profile_id, revision = revision, tombstone = tombstone}
+local function reply(input: Request, profile_id: string, revision: integer, profile: Profile?, tombstone: boolean, diagnostic: {[string]: unknown}?): {[string]: unknown}
+    local value: {[string]: unknown} = {workspace_id = input.workspace_id, profile_id = profile_id, revision = revision, tombstone = tombstone, migration_diagnostic = diagnostic}
     if not tombstone then value.profile = profile end
     return value
 end
@@ -151,45 +132,73 @@ local function get(store: sync.Store, tx: sql.Transaction, input: Request, feed_
     if result.value == nil then return failure("NOT_FOUND", "profile does not exist") end
     local item, item_error = projection(result.value)
     if not item then return item_error or failure("INTERNAL", "decode profile") end
-    return transaction.success(reply(input, item.profile_id, item.revision, item.profile, item.tombstone), false)
+    return transaction.success(reply(input, item.profile_id, item.revision, item.profile, item.tombstone, item.migration_diagnostic), false)
 end
 
 local function list(store: sync.Store, tx: sql.Transaction, input: Request, feed_name: string): Result
-    -- sync treats nil as the first page; an explicit empty key is not a
-    -- projection key and must not cross that generic boundary.
-    local after_key: string? = input.after_key ~= "" and input.after_key or nil
-    local result = store:snapshot_in(tx, feed_name, input.limit, after_key, input.expected_cursor)
-    if not result.ok then
-        if result.code == "RESET_REQUIRED" then
-            local raw = bounds.object(result.value)
-            local cursor = raw and bounds.count(raw.cursor) or nil
-            return failure("RESET_REQUIRED", result.message or "profile cursor is stale", {
-                workspace_id = input.workspace_id, cursor = cursor, reset_required = true,
-            })
+    local collected: {Stored} = {}
+    local cursor: integer? = nil
+    local after: string? = nil
+    repeat
+        local result = store:snapshot_in(tx, feed_name, 64, after, cursor or input.expected_cursor)
+        if not result.ok then
+            if result.code == "RESET_REQUIRED" then
+                local raw = bounds.object(result.value)
+                return failure("RESET_REQUIRED", "profile cursor changed", {workspace_id = input.workspace_id,
+                    cursor = raw and bounds.count(raw.cursor), reset_required = true})
+            end
+            return clean(result)
         end
-        return clean(result)
+        local page = bounds.object(result.value)
+        local rows = page and bounds.array(page.items, 64)
+        if not page or not rows then return failure("INTERNAL", "profile snapshot is malformed") end
+        cursor = bounds.count(page.cursor)
+        if not cursor then return failure("INTERNAL", "profile cursor is malformed") end
+        for _, row in ipairs(rows) do
+            local item, err = projection(row)
+            if not item then return err or failure("INTERNAL", "profile row is invalid") end
+            local profile = item.profile
+            local diagnostic = item.migration_diagnostic
+            local draft = diagnostic and bounds.object(diagnostic.draft)
+            local definition_ref = profile and profile.definition_ref or (draft and bounds.id(draft.definition_ref))
+            local name = profile and profile.name or (draft and bounds.line(draft.name, 80)) or item.profile_id
+            if (not input.definition_ref or input.definition_ref == definition_ref)
+                and (not input.query or name:lower():find(input.query:lower(), 1, true)) then collected[#collected + 1] = item end
+        end
+        if page.complete == true then after = nil
+        else
+            local next_key = bounds.id(page.next_key)
+            if not next_key or (after and next_key <= after) then return failure("INTERNAL", "profile continuation does not advance") end
+            after = next_key
+        end
+    until not after
+    table.sort(collected, function(left: Stored, right: Stored): boolean
+        local a, b = left.profile, right.profile
+        local x, y = a and a.name:lower() or left.profile_id, b and b.name:lower() or right.profile_id
+        if input.sort == "driver" then
+            local first, second = a and a.driver_binding_ref or "", b and b.driver_binding_ref or ""
+            if first ~= second then return first < second end
+        end
+        if x ~= y then return x < y end
+        return left.profile_id < right.profile_id
+    end)
+    local start = 1
+    if input.after_key ~= "" then
+        local found = false
+        for index, item in ipairs(collected) do
+            if item.profile_id == input.after_key then start = index + 1; found = true; break end
+        end
+        if not found then return failure("INVALID_ARGUMENT", "profile continuation is outside this selection") end
     end
-    local raw = bounds.object(result.value)
-    if not raw then return failure("INTERNAL", "profile snapshot is malformed") end
-    local cursor = bounds.count(raw.cursor)
-    local complete = raw.complete
-    local items = raw.items
-    if not cursor or type(complete) ~= "boolean" or type(items) ~= "table" then
-        return failure("INTERNAL", "profile snapshot envelope is malformed")
+    local items: {{[string]: unknown}} = {}
+    local last = math.floor(math.min(#collected, start + input.limit - 1))
+    for index = start, last do
+        local item = collected[index]
+        items[#items + 1] = reply(input, item.profile_id, item.revision, item.profile, item.tombstone, item.migration_diagnostic)
     end
-    local decoded: {{[string]: unknown}} = {}
-    for _, value in ipairs(items) do
-        local item, item_error = projection(value)
-        if not item then return item_error or failure("INTERNAL", "decode profile snapshot") end
-        decoded[#decoded + 1] = reply(input, item.profile_id, item.revision, item.profile, item.tombstone)
-    end
-    local next_key: string? = nil
-    if not complete then
-        next_key = bounds.id(raw.next_key)
-        if not next_key then return failure("INTERNAL", "profile snapshot continuation is malformed") end
-    end
-    return transaction.success({workspace_id = input.workspace_id, items = decoded, cursor = cursor,
-        next_key = next_key, complete = complete}, false)
+    local complete = last >= #collected
+    return transaction.success({workspace_id = input.workspace_id, items = items, cursor = cursor,
+        next_key = not complete and collected[last].profile_id or nil, complete = complete}, false)
 end
 
 local function put(store: sync.Store, tx: sql.Transaction, input: Request, node: string, actor: string, feed_name: string): Result
@@ -236,15 +245,49 @@ function M.call(raw: unknown): Result
     local selected_feed: string = feed_name
     local store, open_error = open(owner)
     if not store then return failure("UNAVAILABLE", open_error or "profile store unavailable") end
+    local pinned, pin_error = registry.snapshot()
+    if not pinned then store:close(); return failure("UNAVAILABLE", tostring(pin_error or "profile migration registry unavailable")) end
+    local migrated = store:migrate(FEED_PREFIX, migration.ID, function(source: unknown): (unknown?, string?)
+        return migration.convert(source, function(ref: string): string?
+            local entry = pinned:get(ref)
+            local data = entry and bounds.object(entry.data)
+            return data and bounds.id(data.binding_ref) or nil
+        end, function(profile: Profile): string? return validation.check(pinned, profile) end,
+        function(ref: string, presentation: string?): migration.NativeHome?
+            local entry = pinned:get(ref)
+            local definition = entry and bounds.object(entry.data)
+            local binding_ref = definition and bounds.id(definition.binding_ref)
+            local binding = binding_ref and pinned:get(binding_ref)
+            local meta = binding and bounds.object(binding.meta)
+            local profiles_ref = meta and bounds.id(meta.profiles_ref)
+            local declaration = profiles_ref and pinned:get(profiles_ref)
+            local data = declaration and bounds.object(declaration.data)
+            local driver = data and driver_profile.decode(data.driver)
+            local profile_id = definition and bounds.id(presentation == "window" and definition.profile_id or definition.session_profile_id or definition.profile_id)
+            local selected = driver and profile_id and driver_profile.find(driver, profile_id)
+            if not selected then return nil end
+            return selected.isolation_env.private_home and "private" or "machine"
+        end), nil
+    end)
+    if not migrated.ok then store:close(); return clean(migrated) end
+    if input.profile then
+        local invalid_profile = validation.check(pinned, input.profile)
+        if invalid_profile then store:close(); return failure("INVALID_ARGUMENT", invalid_profile) end
+    end
+    local request: Request = {operation = input.operation, workspace_id = input.workspace_id,
+        profile_id = input.profile_id, profile = input.profile, expected_revision = input.expected_revision,
+        idempotency_key = input.idempotency_key, after_key = input.after_key,
+        expected_cursor = input.expected_cursor, limit = input.limit, definition_ref = input.definition_ref,
+        query = input.query, sort = input.sort}
     local result: Result
     if input.operation == "get" then
-        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return get(store, tx, input, selected_feed) end)
+        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return get(store, tx, request, selected_feed) end)
     elseif input.operation == "list" then
-        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return list(store, tx, input, selected_feed) end)
+        result = transaction.read(store.db, "profiles", function(tx: sql.Transaction): Result return list(store, tx, request, selected_feed) end)
     elseif input.operation == "put" then
-        result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result return put(store, tx, input, owner, caller, selected_feed) end)
+        result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result return put(store, tx, request, owner, caller, selected_feed) end)
     else
-        result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result return remove(store, tx, input, owner, caller, selected_feed) end)
+        result = transaction.write(store.db, "profiles", function(tx: sql.Transaction): Result return remove(store, tx, request, owner, caller, selected_feed) end)
     end
     store:close()
     return result

@@ -151,7 +151,8 @@ local function define_tests()
             if call_error then error(tostring(call_error)) end
             local claude, claude_error = configuration.decode_reply(raw, nil, gateway)
             if not claude then error(tostring(claude_error)) end
-            test.eq(claude.arguments[1], "--mcp-config")
+            test.eq(claude.arguments[1], "--strict-mcp-config")
+            test.eq(claude.arguments[2], "--mcp-config")
             for _, argument in ipairs(claude.arguments) do test.is_true(argument ~= "--settings") end
         end)
         test.it("renders driver-owned hook delivery with Codex trust hashes as the pinned executable computes them", function()

@@ -258,6 +258,51 @@ function M.locate(pinned: registry.Snapshot, binding_ref: string, profile_id: st
         cache.drivers[cache_key] = fallback
         return fallback
     end
+    local option_fields = bounds.object((bounds.object(selected.options) or {}).fields) or {}
+    local capabilities: {[string]: locate.Capability} = {}
+    local help_cache: {[string]: string} = {}
+    for _, raw in pairs(option_fields) do
+        local field = bounds.object(raw)
+        local path = field and bounds.line(field.path, 128)
+        if field and path then
+            local support = bounds.object(field.support)
+            local help = support and bounds.object(support.help_probe)
+            local supported = result.status == "ready"
+            local reason: string? = supported and nil or "Installed version and login are not established"
+            if supported and help and not docker then
+                local args = bounds.array(help.argv, 8)
+                local flag = bounds.line(help.flag, 128)
+                local argv: {string} = {executable_path}
+                if args then
+                    for _, argument in ipairs(args) do
+                        if type(argument) == "string" then argv[#argv + 1] = argument end
+                    end
+                end
+                local key = table.concat(argv, "\n")
+                local output = help_cache[key]
+                if not output then
+                    output = capture(argv, 3000, false) or ""
+                    help_cache[key] = output
+                end
+                supported = args ~= nil and flag ~= nil and output:find(flag, 1, true) ~= nil
+                if not supported then reason = "Installed CLI help does not advertise " .. (flag or path) end
+            elseif supported and help then
+                supported = false; reason = "Docker runtime help has not been probed"
+            elseif supported and not (support and support.config_schema_ref) then
+                supported = false; reason = "Option has no declared capability evidence"
+            end
+            local range = support and bounds.line(support.version_range, 32)
+            if supported and range then
+                local a, b, c = range:match("^>=(%d+)%.(%d+)%.(%d+)$")
+                local x, y, z = (version or ""):match("(%d+)%.(%d+)%.(%d+)")
+                local wanted = a and tonumber(a) and (assert(tonumber(a)) * 1000000 + assert(tonumber(b)) * 1000 + assert(tonumber(c)))
+                local installed = x and tonumber(x) and (assert(tonumber(x)) * 1000000 + assert(tonumber(y)) * 1000 + assert(tonumber(z)))
+                if not installed or not wanted or installed < wanted then supported = false; reason = "Installed CLI version does not satisfy " .. range end
+            end
+            capabilities[path] = {supported = supported, reason = reason}
+        end
+    end
+    result.capabilities = capabilities
     cache.drivers[cache_key] = result
     return result
 end

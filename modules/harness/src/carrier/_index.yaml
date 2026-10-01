@@ -128,6 +128,7 @@ entries:
     hints: bee.harness.carrier:hints
     permission_exchange: bee.harness.permission:exchange
     descriptor: bee.driver:descriptor
+    readiness: bee.harness.launch:readiness
     hook_records: bee.harness.carrier:hook_records
     placement_profiles: bee.placement:profiles
 - name: lease

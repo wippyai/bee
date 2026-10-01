@@ -7,8 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee OpenCode driver
-    comment: Optional harness binding; host activation and launch policies authorize
-      its use
+    comment: Optional harness binding; host activation and launch policies authorize its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -158,8 +157,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned OpenCode window declaration; the host separately selects
-      its policy, activation, executable and permissions
+    comment: Component-owned OpenCode window declaration; the host separately selects its policy, activation, executable and
+      permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-window
@@ -192,9 +191,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator
-      and caller-owned shared thread; the CLI offers no sandbox or permission flag
-      Bee can select, so the host records it as unconfined
+    comment: Component-owned bounded OpenCode batch route for a host-selected coordinator and caller-owned shared thread;
+      the CLI offers no sandbox or permission flag Bee can select, so the host records it as unconfined
   data:
     schema_revision: bee.launch-definition@1
     launch_id: opencode-research-batch
@@ -245,8 +243,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected non-interactive OpenCode batch policy for bounded research
-      actions on a caller-owned thread
+    comment: Host-selected non-interactive OpenCode batch policy for bounded research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -277,17 +274,18 @@ entries:
     - thread_read
     - thread_message
     gateway_hooks: []
-    profile_options: {}
     prepare_options: {}
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions: {}
+    profile_instructions: true
 - name: launch_policy_opencode_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned OpenCode window;
-      missing host executable leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned OpenCode window; missing host executable leaves the
+      declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -318,8 +316,9 @@ entries:
     - thread_read
     - thread_message
     gateway_hooks: []
-    profile_options: {}
     prepare_options: {}
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions: {}
+    profile_instructions: true

@@ -43,6 +43,21 @@ local function run()
             value = docker(); value.mounts = {{resource = "project", target = "/home/bee", access = "write"}}
             test.is_nil(profiles.decode(value))
         end)
+        test.it("narrows canonical overrides without changing the host template", function()
+            local base = assert(profiles.decode(docker()))
+            local resolved = {ref = "bee.placement.docker:coding", digest = string.rep("a", 64), profile = base}
+            local tuned = assert(profiles.tune(resolved, {limits = {memory_bytes = 1073741824, cpu_millicpus = 500, pids = 16},
+                mounts = {{resource = "project", subpath = "", target = "/workspace", access = "read"}}}))
+            test.eq(tuned.profile.limits.memory, 1073741824)
+            test.eq(tuned.profile.limits.cpu, 50000)
+            test.eq(tuned.profile.mounts[1].access, "read")
+            test.eq(base.limits.cpu, 200000)
+            test.eq(base.mounts[1].access, "write")
+            test.is_nil(profiles.tune(resolved, {limits = {cpu_millicpus = 2001}}))
+            test.is_nil(profiles.tune(resolved, {image = {kind = "digest", ref = "sha256:" .. string.rep("b", 64)}}))
+            test.is_nil(profiles.tune(resolved, {mounts = {{resource = "project", target = "/workspace", access = "write"},
+                {resource = "project", target = "/workspace", access = "read"}}}))
+        end)
         test.it("does not accept caller paths, secrets or executor references", function()
             for _, key in ipairs({"executor", "environment", "credential_directory", "host_path"}) do
                 local value = docker(); value[key] = "caller-controlled"

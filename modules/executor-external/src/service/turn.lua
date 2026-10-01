@@ -20,6 +20,10 @@ type Request = {
     previous_attempt_id: string?,
     checkpoint: {[string]: unknown}?,
     budget: Budget?,
+    session_budget: Budget?,
+    session_consumption: budget_values.Counters?,
+    session_wall_ms: integer?,
+    supervision: budget_values.Supervision?,
 }
 
 type IO = {
@@ -52,7 +56,7 @@ local function decode(value: unknown): (Request?, string?)
     local request = object(value)
     if not request then return nil, "turn request must be an object" end
     local allowed = {"attempt_id", "claim", "observation_target", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods",
-        "placement_methods", "admission", "previous_attempt_id", "checkpoint", "recovery", "budget"}
+        "placement_methods", "admission", "previous_attempt_id", "checkpoint", "recovery", "budget", "session_budget", "session_consumption", "supervision"}
     local fields: {[string]: boolean} = {}
     for _, field in ipairs(allowed) do fields[field] = true end
     for field in pairs(request) do
@@ -121,6 +125,19 @@ local function decode(value: unknown): (Request?, string?)
     if request.checkpoint ~= nil and not checkpoint then return nil, "checkpoint must be an object" end
     local selected_budget, budget_error = budget_values.decode(request.budget)
     if budget_error then return nil, budget_error end
+    local session_budget, session_budget_error = budget_values.decode(request.session_budget)
+    if session_budget_error then return nil, session_budget_error end
+    local consumption = object(request.session_consumption)
+    local session_counters: budget_values.Counters? = nil
+    local session_wall_ms: integer? = nil
+    if consumption then
+        local steps, tools, tokens, wall = bounds.count(consumption.provider_steps), bounds.count(consumption.tool_calls), bounds.count(consumption.tokens), bounds.count(consumption.wall_time_ms)
+        if not steps or not tools or not tokens or not wall then return nil, "session consumption is malformed" end
+        session_counters = {turns = steps, tool_calls = tools, tokens = tokens}
+        session_wall_ms = wall
+    elseif session_budget then return nil, "session budget requires durable consumption" end
+    local supervision, supervision_error = budget_values.supervision(request.supervision)
+    if supervision_error then return nil, supervision_error end
     local resume_ref = checkpoint and checkpoint.resume_ref or nil
     if resume_ref ~= nil and not id(resume_ref) then return nil, "checkpoint.resume_ref is invalid" end
     local sender_label = "[Bee sender " .. tostring(sender.kind) .. " " .. tostring(sender.id) .. "]\n"
@@ -131,7 +148,8 @@ local function decode(value: unknown): (Request?, string?)
         sender = decoded_sender,
         driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = resolved_driver,
         placement_methods = resolved_placement, admission = admission,
-        previous_attempt_id = previous_attempt_id, checkpoint = checkpoint, budget = selected_budget,
+        previous_attempt_id = previous_attempt_id, checkpoint = checkpoint, budget = selected_budget, session_budget = session_budget, session_consumption = session_counters,
+        session_wall_ms = session_wall_ms, supervision = supervision,
     }, nil
 end
 
@@ -292,7 +310,7 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
     local observation = object(observed)
     local exceeded = observation and observation.budget_exceeded
     if exceeded ~= nil then
-        if exceeded ~= "max_turns" and exceeded ~= "max_tokens" and exceeded ~= "wall_time_ms" then
+        if exceeded ~= "provider_steps" and exceeded ~= "tokens" and exceeded ~= "tool_calls" and exceeded ~= "wall_time_ms" then
             return uncertain(request, "executor reported an unsupported budget kind", final_attempt)
         end
         local artifacts = {"placement attempt " .. request.attempt_id,
@@ -305,6 +323,11 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
                 resume_ref = request.checkpoint and request.checkpoint.resume_ref},
             observations = observation.observations or {},
             evidence = {summary = "placement proved the CLI exited after the " .. exceeded .. " budget", artifacts = artifacts}}, nil
+    end
+    if observation and observation.stalled == true then
+        return {state = "settled", outcome = "cancelled", error = {code = "STALLED", message = "quiet period exceeded; placement proved the process stopped"},
+            attempt_id = request.attempt_id, checkpoint = {attempt_id = request.attempt_id, resume_ref = request.checkpoint and request.checkpoint.resume_ref},
+            observations = observation.observations or {}, evidence = final_attempt}, nil
     end
     if observation and observation.stopped == true then
         return {state = "settled", outcome = "cancelled", error = {code = "CANCELLED", message = "placement stopped the process"},

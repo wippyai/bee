@@ -45,13 +45,13 @@ local function define_tests()
             test.is_nil(protocol.decode_result(result))
         end)
         test.it("accepts only the optional work budget fields", function()
-            local decoded = assert(protocol.decode_budget({max_turns = 8, max_tokens = 12000, wall_time_ms = 90000}))
-            test.eq(decoded.max_turns, 8)
-            test.eq(decoded.max_tokens, 12000)
+            local decoded = assert(protocol.decode_budget({provider_steps = 8, tokens = 12000, wall_time_ms = 90000}))
+            test.eq(decoded.provider_steps, 8)
+            test.eq(decoded.tokens, 12000)
             test.eq(decoded.wall_time_ms, 90000)
             test.is_nil(protocol.decode_budget({}))
             test.is_nil(protocol.decode_budget({turn_budget = 8}))
-            test.is_nil(protocol.decode_budget({max_tokens = -1}))
+            test.is_nil(protocol.decode_budget({tokens = -1}))
         end)
         test.it("accepts exactly the four await branches for a work", function()
             for _, tag in ipairs({"ready", "pending", "blocked", "uncertain"}) do
@@ -135,7 +135,7 @@ local function define_tests()
                 lifecycle = "active", activity = "idle", execution = {state = "quiescent",
                     evidence_at = "2026-09-30T12:00:00.000Z", stale = false}, queue_count = 0, effective_limits = {},
                 continuity = {mode = "provider_resume"}, actions = {},
-                last_result = {work = "bw:n:w:w1", outcome = "budget_exceeded", summary = "max_tokens exceeded",
+                last_result = {work = "bw:n:w:w1", outcome = "budget_exceeded", summary = "tokens exceeded",
                     at = "2026-09-30T12:00:00.000Z"}}
             local decoded = assert(protocol.decode_snapshot(snapshot))
             test.eq(decoded.last_result and decoded.last_result.outcome, "budget_exceeded")

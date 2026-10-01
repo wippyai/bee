@@ -113,6 +113,35 @@ CREATE TABLE bee_sync_distribution_cursors (
   cursor INTEGER NOT NULL CHECK(cursor >= 0),
   PRIMARY KEY(source_owner, feed, destination_node)
 );
+ ]]},
+        {id = 5, name = "owner_projection_data_migrations", rebuild = false, sql = [[
+CREATE TABLE bee_sync_projection_migrations (
+  owner_id TEXT NOT NULL,
+  prefix TEXT NOT NULL,
+  migration_id TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  PRIMARY KEY(owner_id, prefix, migration_id)
+);
+]]},
+        {id = 6, name = "projection_migration_diagnostics", rebuild = true, sql = [[
+CREATE TABLE bee_sync_projections_next (
+  owner_id TEXT NOT NULL,
+  feed TEXT NOT NULL,
+  projection_key TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  value_json TEXT,
+  tombstone INTEGER NOT NULL CHECK(tombstone IN (0,1)),
+  last_sequence INTEGER NOT NULL CHECK(last_sequence > 0),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(owner_id, feed, projection_key),
+  FOREIGN KEY(owner_id, feed) REFERENCES bee_sync_feeds(owner_id, feed),
+  CHECK((tombstone = 1 AND value_json IS NULL) OR (tombstone = 0 AND value_json IS NOT NULL)),
+  CHECK(value_json IS NULL OR length(CAST(value_json AS BLOB)) <= 65536)
+);
+INSERT INTO bee_sync_projections_next SELECT * FROM bee_sync_projections;
+DROP TABLE bee_sync_projections;
+ALTER TABLE bee_sync_projections_next RENAME TO bee_sync_projections;
+CREATE INDEX bee_sync_projection_snapshot ON bee_sync_projections(owner_id, feed, projection_key);
 ]]}}
 end
 return M

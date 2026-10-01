@@ -7,25 +7,58 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Claude Code command, stream-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@2
+    schema_revision: bee.driver.cli-descriptor@3
     provider: claude
     executable: claude
-    version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
+    version_probe:
+      argv:
+      - --version
+      pattern: ([0-9]+[.][0-9]+[.][0-9]+)
     login_evidence:
       command: claude auth login
       any_of:
-      - {kind: file_exists, paths: [.claude/.credentials.json], variable: CLAUDE_CONFIG_DIR, directory: .claude}
-      - {kind: env_present, names: [ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN]}
-      - {kind: auth_status, argv: [auth, status], success_exit_code: 0, timeout_ms: 3000}
-    platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
+      - kind: file_exists
+        paths:
+        - .claude/.credentials.json
+        variable: CLAUDE_CONFIG_DIR
+        directory: .claude
+      - kind: env_present
+        names:
+        - ANTHROPIC_API_KEY
+        - CLAUDE_CODE_OAUTH_TOKEN
+      - kind: auth_status
+        argv:
+        - auth
+        - status
+        success_exit_code: 0
+        timeout_ms: 3000
+    platform:
+      os:
+      - linux
+      - darwin
+      arch:
+      - x86_64
+      - amd64
+      - arm64
+      - aarch64
     codec: claude-stream-json
     json_paths:
-      resume_id: [session_id]
-      result_text: [result]
-      errors: [terminal_reason]
-      usage: [usage]
+      resume_id:
+      - session_id
+      result_text:
+      - result
+      errors:
+      - terminal_reason
+      usage:
+      - usage
     configure: claude
     capabilities:
+      budgets:
+        provider_steps: agent_turn
+        tokens: true
+        cost_usd: false
+        tool_calls: true
+        wall_time_ms: true
       permission_answers:
         window:
           transport: hook_http
@@ -37,68 +70,338 @@ entries:
           transport: stdio
           adapter_ref: bee.driver.claude:permission_adapter
     options:
-      profiles: [session, batch, window]
+      profiles:
+      - session
+      - batch
+      - window
       fields:
-        permission_mode: {type: enum, values: [default, acceptEdits, plan, dontAsk], default: default, invalid: 'permission_mode is not one Bee admits'}
-        model: {type: model, invalid: 'model is not one bounded model identifier'}
-        effort: {type: enum, values: [low, medium, high, xhigh, max], invalid: 'effort is not one Bee admits'}
-        permission_exchange: {type: boolean, default: false, profiles: [session, batch], unsupported: 'stdio permission exchange is only supported for structured turns'}
-        control_enabled: {type: boolean, default: false, profiles: [session, batch], unsupported: 'stream-json control is only supported for structured turns'}
-        resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref is not an identifier'}
-        gateway_tools: {type: ids, default: []}
-        gateway_hooks: {type: ids, default: []}
+        permission_mode:
+          default: default
+          invalid: permission_mode is not one Bee admits
+          path: provider.permission_mode
+          value_schema:
+            type: string
+            enum:
+            - default
+            - acceptEdits
+            - plan
+            - dontAsk
+          label: Permission mode
+          description: CLI permission mode
+          section: advanced
+          order: 0
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --permission-mode
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens: &id001
+            - --permission-mode
+            - field: permission_mode
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens: *id001
+          - kind: argv
+            contexts:
+            - resume
+            tokens: *id001
+        model:
+          invalid: model is not one bounded model identifier
+          path: provider.model
+          value_schema:
+            type: string
+            format: model
+          label: Model
+          description: CLI model
+          section: basic
+          order: 1
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --model
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+        effort:
+          invalid: effort is not one Bee admits
+          path: provider.effort
+          value_schema:
+            type: string
+            enum:
+            - low
+            - medium
+            - high
+            - xhigh
+            - max
+          label: Effort
+          description: CLI effort
+          section: basic
+          order: 2
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --effort
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: effort
+              then:
+              - --effort
+              - field: effort
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: effort
+              then:
+              - --effort
+              - field: effort
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: effort
+              then:
+              - --effort
+              - field: effort
+        permission_exchange:
+          type: boolean
+          default: false
+          profiles:
+          - session
+          - batch
+          unsupported: stdio permission exchange is only supported for structured
+            turns
+        control_enabled:
+          type: boolean
+          default: false
+          profiles:
+          - session
+          - batch
+          unsupported: stream-json control is only supported for structured turns
+        resume_ref:
+          type: id
+          forbid_option: true
+          invalid: resume_ref is not an identifier
+        gateway_tools:
+          type: ids
+          default: []
+        gateway_hooks:
+          type: ids
+          default: []
+        system_prompt_append:
+          path: provider.system_prompt_append
+          value_schema:
+            type: string
+            maxLength: 4096
+          label: System prompt append
+          description: Additional instructions in the session private home
+          section: advanced
+          order: 100
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.claude.descriptor:cli
+          render:
+          - kind: config
+            contexts:
+            - window
+            - first_turn
+            - resume
+            file: .bee/system-prompt-append.txt
+            format: text
+            path: []
+            merge: append
+            value:
+              field: provider.system_prompt_append
+          - kind: argv
+            contexts:
+            - window
+            - first_turn
+            - resume
+            tokens:
+            - --append-system-prompt-file
+            - field: system_prompt_file
       rules:
-      - {kind: profile_fields, profile: window, fields: [permission_exchange, control_enabled], message: 'structured-turn options are not supported for a window'}
-    flags:
-      permission: {field: permission_mode, emit_default: true, argv: [--permission-mode, {field: permission_mode}]}
+      - kind: profile_fields
+        profile: window
+        fields:
+        - permission_exchange
+        - control_enabled
+        message: structured-turn options are not supported for a window
+    flags: {}
     argv_templates:
       window:
         argv:
-        - {option: permission}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--effort, {field: effort}]}
-        - {if: resume_ref, then: [-r, {field: resume_ref}]}
-        - {if: brief, then: [--, {field: brief}]}
+        - render: permission_mode
+          context: window
+        - render: model
+          context: window
+        - render: effort
+          context: window
+        - if: resume_ref
+          then:
+          - -r
+          - field: resume_ref
+        - if: brief
+          then:
+          - --
+          - field: brief
         readiness: terminal:attached
         provider_home_private: false
         login: true
       first_turn:
         argv:
         - -p
-        - {if_any: [permission_exchange, control_enabled], then: [--input-format, stream-json]}
+        - if_any:
+          - permission_exchange
+          - control_enabled
+          then:
+          - --input-format
+          - stream-json
         - --output-format
         - stream-json
         - --verbose
         - --include-partial-messages
-        - {option: permission}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--effort, {field: effort}]}
-        - {if: permission_exchange, then: [--permission-prompt-tool, stdio, --permission-prompts, host]}
-        - {if: gateway_tools, then: [--allowedTools, {join: {field: gateway_tools, separator: ',', prefix: 'mcp__bee__', always: [session], exclude: [session]}}]}
-        - {if_none: [permission_exchange, control_enabled], then: [--, {field: brief}]}
-        stdin_json: {type: user, message: {role: user, content: {field: brief}}}
-        stdin_when_any: [permission_exchange, control_enabled]
+        - render: permission_mode
+          context: first_turn
+        - render: model
+          context: first_turn
+        - render: effort
+          context: first_turn
+        - if: permission_exchange
+          then:
+          - --permission-prompt-tool
+          - stdio
+          - --permission-prompts
+          - host
+        - if: gateway_tools
+          then:
+          - --allowedTools
+          - join:
+              field: gateway_tools
+              separator: ','
+              prefix: mcp__bee__
+              always:
+              - session
+              exclude:
+              - session
+        - if_none:
+          - permission_exchange
+          - control_enabled
+          then:
+          - --
+          - field: brief
+        stdin_json:
+          type: user
+          message:
+            role: user
+            content:
+              field: brief
+        stdin_when_any:
+        - permission_exchange
+        - control_enabled
         session_end: stdin_close
         readiness: protocol:system.init
         provider_home_private: true
       resume:
         argv:
         - -p
-        - {if_any: [permission_exchange, control_enabled], then: [--input-format, stream-json]}
+        - if_any:
+          - permission_exchange
+          - control_enabled
+          then:
+          - --input-format
+          - stream-json
         - --output-format
         - stream-json
         - --verbose
         - --include-partial-messages
-        - {option: permission}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--effort, {field: effort}]}
-        - {if: permission_exchange, then: [--permission-prompt-tool, stdio, --permission-prompts, host]}
+        - render: permission_mode
+          context: resume
+        - render: model
+          context: resume
+        - render: effort
+          context: resume
+        - if: permission_exchange
+          then:
+          - --permission-prompt-tool
+          - stdio
+          - --permission-prompts
+          - host
         - --resume
-        - {field: resume_ref}
-        - {if: gateway_tools, then: [--allowedTools, {join: {field: gateway_tools, separator: ',', prefix: 'mcp__bee__', always: [session], exclude: [session]}}]}
-        - {if_none: [permission_exchange, control_enabled], then: [--, {field: brief}]}
-        stdin_json: {type: user, message: {role: user, content: {field: brief}}}
-        stdin_when_any: [permission_exchange, control_enabled]
+        - field: resume_ref
+        - if: gateway_tools
+          then:
+          - --allowedTools
+          - join:
+              field: gateway_tools
+              separator: ','
+              prefix: mcp__bee__
+              always:
+              - session
+              exclude:
+              - session
+        - if_none:
+          - permission_exchange
+          - control_enabled
+          then:
+          - --
+          - field: brief
+        stdin_json:
+          type: user
+          message:
+            role: user
+            content:
+              field: brief
+        stdin_when_any:
+        - permission_exchange
+        - control_enabled
         session_end: stdin_close
         readiness: protocol:system.init
         provider_home_private: true
@@ -106,6 +409,18 @@ entries:
       variable: CLAUDE_CONFIG_DIR
       directory: .claude
       files:
-      - {source_path: .claude/.credentials.json, path: .claude/.credentials.json, kind: login, optional: true, write_back: true}
-      - {source_path: .claude/settings.json, path: .claude/settings.json, kind: config, optional: true, write_back: false, container_content: '{}'}
-      - {path: .claude.json, kind: state, optional: true, write_back: false}
+      - source_path: .claude/.credentials.json
+        path: .claude/.credentials.json
+        kind: login
+        optional: true
+        write_back: true
+      - source_path: .claude/settings.json
+        path: .claude/settings.json
+        kind: config
+        optional: true
+        write_back: false
+        container_content: '{}'
+      - path: .claude.json
+        kind: state
+        optional: true
+        write_back: false

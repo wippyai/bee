@@ -19,7 +19,7 @@ local function define_tests()
                     error("descriptor-selected renderer was bypassed")
                 end,
             }
-            local handle = universal.configure("claude", renderers)
+            local handle = universal.configure("claude", renderers, "bee.driver.claude.descriptor:cli")
             local invalid = handle({configure_renderer = "claude", fixture = "false"})
             test.eq(invalid.ok, false)
             test.is_false(called)
@@ -36,7 +36,7 @@ local function define_tests()
                     called = true
                     return {ok = true, delivery = {arguments = {}, files = {}}}
                 end,
-            })
+            }, "bee.driver.claude.descriptor:cli")
             test.eq(handle("invalid").ok, false)
             test.eq(handle({configure_renderer = "not a renderer"}).ok, false)
             test.is_false(called)

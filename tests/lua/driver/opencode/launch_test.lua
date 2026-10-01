@@ -65,8 +65,10 @@ local function define_tests()
             test.eq(resume_error, "resume_ref must not be a command-line option")
             local _, tools_error = launch.decode({profile_id = "batch", brief = "hi", gateway_tools = {"bad-tool!"}})
             test.eq(tools_error, "gateway_tools names a tool that is not a plain identifier")
-            local _, unknown_error = launch.decode({profile_id = "batch", brief = "hi", model = "x/y"})
-            test.eq(unknown_error, "unknown field model")
+            local configured, configured_error = launch.decode({profile_id = "batch", brief = "hi", model = "x/y"})
+            test.not_nil(configured)
+            test.is_nil(configured_error)
+            test.is_nil(launch.decode({profile_id = "batch", brief = "hi", model = "--unsafe"}))
             -- OpenCode offers no sandbox or permission flag Bee can select:
             -- every such launch field is refused, which is why the host
             -- records the batch route as unconfined.

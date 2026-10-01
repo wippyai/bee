@@ -7,93 +7,377 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Grok CLI command, streaming-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@2
+    schema_revision: bee.driver.cli-descriptor@3
     provider: grok
     executable: grok
-    version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
+    version_probe:
+      argv:
+      - --version
+      pattern: ([0-9]+[.][0-9]+[.][0-9]+)
     login_evidence:
       command: grok login
       any_of:
-      - {kind: file_exists, paths: [.grok/auth.json], variable: GROK_HOME, directory: .grok}
-      - {kind: env_present, names: [XAI_API_KEY, GROK_CODE_XAI_API_KEY]}
-    platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
+      - kind: file_exists
+        paths:
+        - .grok/auth.json
+        variable: GROK_HOME
+        directory: .grok
+      - kind: env_present
+        names:
+        - XAI_API_KEY
+        - GROK_CODE_XAI_API_KEY
+    platform:
+      os:
+      - linux
+      - darwin
+      arch:
+      - x86_64
+      - amd64
+      - arm64
+      - aarch64
     codec: grok-streaming-json
     json_paths:
-      resume_id: [sessionId]
-      result_text: [data]
-      errors: [message]
-      usage: [usage]
+      resume_id:
+      - sessionId
+      result_text:
+      - data
+      errors:
+      - message
+      usage:
+      - usage
     configure: grok
     capabilities:
+      budgets:
+        provider_steps: agent_turn
+        tokens: true
+        cost_usd: false
+        tool_calls: true
+        wall_time_ms: true
       permission_answers:
         window:
           transport: provider
-          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval
-            channel is selected. The window retains provider prompts; command hooks are observations only.
+          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt
+            stdin closed. No duplex ACP approval channel is selected. The window retains
+            provider prompts; command hooks are observations only.
         first_turn:
           transport: provider
-          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval
-            channel is selected. The window retains provider prompts; command hooks are observations only.
+          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt
+            stdin closed. No duplex ACP approval channel is selected. The window retains
+            provider prompts; command hooks are observations only.
         resume:
           transport: provider
-          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval
-            channel is selected. The window retains provider prompts; command hooks are observations only.
+          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt
+            stdin closed. No duplex ACP approval channel is selected. The window retains
+            provider prompts; command hooks are observations only.
     options:
-      profiles: [window, session, batch]
+      profiles:
+      - window
+      - session
+      - batch
       unknown_prefix: 'launch request: '
       fields:
-        permission_mode: {type: enum, values: [default, acceptEdits, auto, dontAsk, bypassPermissions, plan], default: default, invalid: 'permission_mode is not one Bee admits'}
-        model: {type: model, invalid: 'model is not one bounded model identifier'}
-        effort: {type: enum, values: [none, minimal, low, medium, high, xhigh, max], invalid: 'effort is not one Bee admits'}
-        resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref must not be a command-line option'}
-        gateway_tools: {type: ids, pattern: '^[a-z_]+$', default: [], transform: sorted, invalid: 'gateway_tools names a tool that is not a plain identifier'}
-        gateway_hooks: {type: ids, default: []}
+        permission_mode:
+          default: default
+          invalid: permission_mode is not one Bee admits
+          path: provider.permission_mode
+          value_schema:
+            type: string
+            enum:
+            - default
+            - acceptEdits
+            - auto
+            - dontAsk
+            - bypassPermissions
+            - plan
+          label: Permission mode
+          description: CLI permission mode
+          section: advanced
+          order: 0
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --permission-mode
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: permission_mode
+              not_equals: default
+              then:
+              - --permission-mode
+              - field: permission_mode
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - --permission-mode
+            - field: permission_mode
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - --permission-mode
+            - field: permission_mode
+        model:
+          invalid: model is not one bounded model identifier
+          path: provider.model
+          value_schema:
+            type: string
+            format: model
+          label: Model
+          description: CLI model
+          section: basic
+          order: 1
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --model
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+        effort:
+          invalid: effort is not one Bee admits
+          path: provider.effort
+          value_schema:
+            type: string
+            enum:
+            - none
+            - minimal
+            - low
+            - medium
+            - high
+            - xhigh
+            - max
+          label: Effort
+          description: CLI effort
+          section: basic
+          order: 2
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --reasoning-effort
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: effort
+              then:
+              - --reasoning-effort
+              - field: effort
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: effort
+              then:
+              - --reasoning-effort
+              - field: effort
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: effort
+              then:
+              - --reasoning-effort
+              - field: effort
+        resume_ref:
+          type: id
+          forbid_option: true
+          invalid: resume_ref must not be a command-line option
+        gateway_tools:
+          type: ids
+          pattern: ^[a-z_]+$
+          default: []
+          transform: sorted
+          invalid: gateway_tools names a tool that is not a plain identifier
+        gateway_hooks:
+          type: ids
+          default: []
+        system_prompt_append:
+          path: provider.system_prompt_append
+          value_schema:
+            type: string
+            maxLength: 4096
+          label: System prompt append
+          description: Additional instructions in the session private home
+          section: advanced
+          order: 100
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.grok.descriptor:cli
+          render:
+          - kind: config
+            contexts:
+            - window
+            - first_turn
+            - resume
+            file: .bee/system-prompt-append.txt
+            format: text
+            path: []
+            merge: append
+            value:
+              field: provider.system_prompt_append
+          - kind: argv
+            contexts:
+            - window
+            - first_turn
+            - resume
+            tokens:
+            - --rules
+            - field: system_prompt_append
       rules:
-      - {kind: values, field: gateway_hooks, values: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop], message: 'unsupported gateway hook'}
-      - {kind: profile_fields, profile: batch, fields: [gateway_hooks], message: 'gateway hooks require the window profile'}
-      - {kind: profile_fields, profile: session, fields: [gateway_hooks], message: 'gateway hooks require the window profile'}
-    flags:
-      permission: {field: permission_mode, emit_default: true, argv: [--permission-mode, {field: permission_mode}]}
+      - kind: values
+        field: gateway_hooks
+        values:
+        - SessionStart
+        - UserPromptSubmit
+        - PreToolUse
+        - PostToolUse
+        - Stop
+        message: unsupported gateway hook
+      - kind: profile_fields
+        profile: batch
+        fields:
+        - gateway_hooks
+        message: gateway hooks require the window profile
+      - kind: profile_fields
+        profile: session
+        fields:
+        - gateway_hooks
+        message: gateway hooks require the window profile
+    flags: {}
     argv_templates:
       window:
         argv:
-        - {if: permission_mode, not_equals: default, then: [{option: permission}]}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--reasoning-effort, {field: effort}]}
-        - {if: resume_ref, then: [-r, {field: resume_ref}]}
-        - {if: gateway_tools, then: [--allow, 'MCPTool(bee__*)']}
-        - {if: brief, then: [--, {field: brief}]}
+        - render: permission_mode
+          context: window
+        - render: model
+          context: window
+        - render: effort
+          context: window
+        - if: resume_ref
+          then:
+          - -r
+          - field: resume_ref
+        - if: gateway_tools
+          then:
+          - --allow
+          - MCPTool(bee__*)
+        - if: brief
+          then:
+          - --
+          - field: brief
         readiness: terminal:attached
         provider_home_private: true
         login: true
       first_turn:
         argv:
-        - {if: brief, starts_with: '-', then: [{format: '--single={brief}'}], else: [-p, {field: brief}]}
+        - if: brief
+          starts_with: '-'
+          then:
+          - format: --single={brief}
+          else:
+          - -p
+          - field: brief
         - --output-format
         - streaming-json
-        - {option: permission}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--reasoning-effort, {field: effort}]}
-        - {if: resume_ref, then: [-r, {field: resume_ref}]}
-        - {if: gateway_tools, then: [--allow, 'MCPTool(bee__*)']}
+        - render: permission_mode
+          context: first_turn
+        - render: model
+          context: first_turn
+        - render: effort
+          context: first_turn
+        - if: resume_ref
+          then:
+          - -r
+          - field: resume_ref
+        - if: gateway_tools
+          then:
+          - --allow
+          - MCPTool(bee__*)
         readiness: none
         provider_home_private: true
       resume:
         argv:
-        - {if: brief, starts_with: '-', then: [{format: '--single={brief}'}], else: [-p, {field: brief}]}
+        - if: brief
+          starts_with: '-'
+          then:
+          - format: --single={brief}
+          else:
+          - -p
+          - field: brief
         - --output-format
         - streaming-json
-        - {option: permission}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--reasoning-effort, {field: effort}]}
+        - render: permission_mode
+          context: resume
+        - render: model
+          context: resume
+        - render: effort
+          context: resume
         - -r
-        - {field: resume_ref}
-        - {if: gateway_tools, then: [--allow, 'MCPTool(bee__*)']}
+        - field: resume_ref
+        - if: gateway_tools
+          then:
+          - --allow
+          - MCPTool(bee__*)
         readiness: none
         provider_home_private: true
     provider_home:
       variable: GROK_HOME
       directory: .grok
       files:
-      - {source_path: .grok/auth.json, path: .grok/auth.json, kind: login, optional: true, write_back: true}
-      - {source_path: .grok/config.toml, path: .grok/.bee-global-config.toml, kind: config, optional: true, write_back: false, container_omit: [hooks, mcp_servers]}
+      - source_path: .grok/auth.json
+        path: .grok/auth.json
+        kind: login
+        optional: true
+        write_back: true
+      - source_path: .grok/config.toml
+        path: .grok/.bee-global-config.toml
+        kind: config
+        optional: true
+        write_back: false
+        container_omit:
+        - hooks
+        - mcp_servers

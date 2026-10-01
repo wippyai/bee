@@ -34,9 +34,9 @@ local function submit(): nil
     local raw = request:body() or ""
     if #raw > hooks.MAX_PAYLOAD_BYTES then refuse(response, 413, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes"); return nil end
     local body: unknown, body_error = json.decode(raw)
-    if body_error or type(body) ~= "table" then return refuse(response, http.STATUS.BAD_REQUEST, "hook payload is not a JSON object") end
+    if body_error or type(body) ~= "table" then refuse(response, http.STATUS.BAD_REQUEST, "hook payload is not a JSON object"); return nil end
     local payload = bounds.object(body)
-    if not payload then return refuse(response, http.STATUS.BAD_REQUEST, "hook payload must be an object") end
+    if not payload then refuse(response, http.STATUS.BAD_REQUEST, "hook payload must be an object"); return nil end
     local reply = gateway.submit_hook(binding, payload, "http")
     if not reply.ok then
         local fault = reply.error or {code = "STORAGE", message = "hook"}
@@ -48,9 +48,9 @@ local function submit(): nil
     response:set_header("X-Bee-Event", tostring(outcome.event_id))
     -- A replay of a terminally rejected occurrence is told so with a status
     -- and plain text, never a body a harness could act on.
-    if outcome.status == "rejected" then return refuse(response, http.STATUS.GONE, "rejected: " .. tostring(outcome.rejected_reason or "no reason")) end
+    if outcome.status == "rejected" then refuse(response, http.STATUS.GONE, "rejected: " .. tostring(outcome.rejected_reason or "no reason")); return nil end
     local context, boundary_error = boundary.deliver(binding, outcome, payload, "hook_http")
-    if not context then return refuse(response, http.STATUS.INTERNAL_ERROR, boundary_error or "session boundary failed") end
+    if not context then refuse(response, http.STATUS.INTERNAL_ERROR, boundary_error or "session boundary failed"); return nil end
     if context.hookSpecificOutput ~= nil then response:set_content_type(http.CONTENT.JSON); response:write_json(context) end
     if outcome.status == "committed" then response:set_status(http.STATUS.OK) else response:set_status(http.STATUS.ACCEPTED) end
     return nil

@@ -100,7 +100,7 @@ local function decode_request(selected: Descriptor, raw: unknown): (Request?, st
     local request: Request = {profile_id = profile_id, brief = brief}
     for name, raw_spec in pairs(declared_fields) do
         local field = tostring(name)
-        local spec = bounds.object(raw_spec) or {}
+        local spec = descriptor_reader.runtime_spec(bounds.object(raw_spec) or {})
         if object[field] ~= nil then
             local decoded, decode_error = descriptor_reader.decode_option(field, spec, object[field])
             if decode_error then return nil, decode_error end
@@ -245,7 +245,22 @@ function M.render_argv(raw: unknown, request: Request, selected: Descriptor, dep
         else
             local item = bounds.object(node)
             if not item then return nil, "CLI argv template is malformed" end
-            if item.field ~= nil then
+            if item.render ~= nil then
+                local name = bounds.id(item.render)
+                local fields = bounds.object((bounds.object(selected.options) or {}).fields) or {}
+                local declaration = name and bounds.object(fields[name])
+                if not declaration then return nil, "OptionSpec render is missing" end
+                for _, raw_render in ipairs(as_list(declaration.render)) do
+                    local render = bounds.object(raw_render)
+                    local contexts = render and bounds.ids(render.contexts, true)
+                    if render and render.kind == "argv" and contexts and bounds.member(item.context, contexts) then
+                        local expanded, err = M.render_argv(render.tokens, request, selected, nesting + 1)
+                        if not expanded then return nil, err end
+                        local append_error = append_many(expanded)
+                        if append_error then return nil, append_error end
+                    end
+                end
+            elseif item.field ~= nil then
                 local field = bounds.id(item.field)
                 local value = field and request_value(request, field) or nil
                 if type(value) ~= "string" and type(value) ~= "number" then return nil, "CLI argv template field is absent or not scalar" end
@@ -459,7 +474,7 @@ end
 -- The contract's configure boundary decodes once and dispatches through the
 -- descriptor's renderer id. Renderers contain only the CLI-specific format
 -- operation; decoding, bounds, and refusal shape stay in bee.driver.
-function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}): (unknown) -> Object
+function M.configure(default_renderer: string, renderers: {[string]: ConfigureRenderer}, descriptor_ref: string): (unknown) -> Object
     if not bounds.id(default_renderer) or renderers[default_renderer] == nil then error("default configure renderer is unsupported") end
     return function(raw: unknown): Object
         local object = bounds.object(raw)
@@ -477,7 +492,41 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
         end
         local request, decode_error = configuration.decode_request(config_request)
         if not request then return {ok = false, error = decode_error or "invalid configuration request"} end
-        return renderer(request)
+        local descriptor, descriptor_error = descriptor_reader.load(descriptor_ref)
+        if not descriptor then return {ok = false, error = descriptor_error or "Configuration descriptor is unavailable"} end
+        local prompt_file: configuration.Configuration? = nil
+        local prompt_arguments: {string} = {}
+        if request.instructions then
+            local fields = bounds.object((bounds.object(descriptor.options) or {}).fields) or {}
+            local declaration = bounds.object(fields.system_prompt_append)
+            local renders = declaration and as_list(declaration.render) or {}
+            for _, raw_render in ipairs(renders) do
+                local render = bounds.object(raw_render)
+                if render and render.kind == "config" and render.format == "text" then request.instructions_path = bounds.subpath(render.file) end
+            end
+            if not request.instructions_path then return {ok = false, error = "System prompt append has no declared private-home file"} end
+            local file, file_error = configuration.instructions_file(request.instructions_path, request.instructions)
+            if not file then return {ok = false, error = file_error} end
+            prompt_file = file
+            if not request.home_directory then return {ok = false, error = "System prompt append requires the owner-derived private home"} end
+            local prompt: Request = {profile_id = "batch", brief = "", system_prompt_append = request.instructions,
+                system_prompt_file = request.home_directory .. "/" .. file.path, system_prompt_append_toml = canonical.encode(request.instructions)}
+            for _, raw_render in ipairs(renders) do
+                local render = bounds.object(raw_render)
+                if render and render.kind == "argv" then
+                    local tokens, render_error = M.render_argv(render.tokens, prompt, descriptor)
+                    if not tokens then return {ok = false, error = render_error} end
+                    for _, token in ipairs(tokens) do prompt_arguments[#prompt_arguments + 1] = token end
+                end
+            end
+        end
+        local reply = renderer(request)
+        if reply.ok ~= true then return reply end
+        local delivery, delivery_error = configuration.decode_delivery(reply.delivery)
+        if not delivery then return {ok = false, error = delivery_error} end
+        if prompt_file then delivery.files[#delivery.files + 1] = prompt_file end
+        for _, argument in ipairs(prompt_arguments) do delivery.arguments[#delivery.arguments + 1] = argument end
+        return {ok = true, delivery = delivery}
     end
 end
 
@@ -515,7 +564,7 @@ function M.protocol(ref: string): DeferredProtocol
         new = function(resumed: boolean): unknown return selected().new(resumed) end,
         decode_state = function(raw: unknown): (unknown?, string?) return selected().decode_state(raw) end,
         normalize = function(state: unknown, index: integer, envelope: Object, budget: integer?): (ProtocolStep?, string?)
-            return selected().normalize(state, index, envelope, budget)
+            return selected().normalize(state, index, envelope)
         end,
         finish = function(state: unknown, index: integer): (ProtocolStep?, string?) return selected().finish(state, index) end,
     }

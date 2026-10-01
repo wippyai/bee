@@ -86,7 +86,7 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash, funcs, security, registry]
+  modules: [hash, funcs, security, registry, json]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical

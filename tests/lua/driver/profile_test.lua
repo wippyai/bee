@@ -136,7 +136,7 @@ local function define_tests()
                 test.eq(window.isolation_env.private_home, false)
                 test.is_false(window.exit_codes_trustworthy)
                 test.eq(window.input_ready.strategy, "none")
-                test.eq(window.permission_exchange.mode, "none")
+                test.eq(window.permission_exchange.mode, (id == "bee.driver.claude:binding" or id == "bee.driver.codex:binding") and "adapter" or "none")
                 if id == "bee.driver.claude:binding" then
                     test.eq(window.sandbox.git_writable_roots_adapter, "claude_add_dir")
                 elseif id == "bee.driver.codex:binding" then

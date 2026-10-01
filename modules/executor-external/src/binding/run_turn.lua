@@ -81,7 +81,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local observation_target = tostring(request.observation_target)
     local claim = tostring(request.claim)
     local acks = assert(process.listen(placement_protocol.TOPIC_ACK, {message = true}))
-    local permission_context: exchange.Context? = nil
+    local permission_contexts: {exchange.Context} = {}
     local permission_point: checkpoint.Checkpoint? = nil
     local poller = nil
     if plan and plan.exchange then
@@ -104,6 +104,16 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local stderr_bytes: integer = 0
     local live_budget = bounds.object(request.budget)
     local wall_limit = live_budget and bounds.count(live_budget.wall_time_ms) or nil
+    local session_budget = request.session_budget
+    if session_budget and session_budget.wall_time_ms then
+        local remaining = math.max(1, session_budget.wall_time_ms - (request.session_wall_ms or 0))
+        wall_limit = wall_limit and math.min(wall_limit, remaining) or remaining
+    end
+    local session_counters = request.session_consumption or budget_values.new()
+    local quiet_period = request.supervision and request.supervision.quiet_period_ms or 60000
+    local stall_timer = request.supervision and request.supervision.on_stall == "cancel_work" and time.ticker(tostring(math.min(1000, quiet_period)) .. "ms") or nil
+    local last_progress_ms = math.floor(time.now():unix_nano() / 1000000)
+    local stalled = false
     local budget_started_ms = math.floor(time.now():unix_nano() / 1000000)
     local wall_timer = wall_limit and time.after(tostring(wall_limit) .. "ms") or nil
     local budget: budget_values.Budget? = nil
@@ -135,8 +145,8 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         return nil
     end
     local function check_budget(): string?
-        if not budget then return nil end
-        return budget_values.exceeded(budget, counters, now_ms() - budget_started_ms)
+        local elapsed = now_ms() - budget_started_ms
+        return budget_values.exceeded(budget, counters, elapsed) or budget_values.exceeded(session_budget, session_counters, (request.session_wall_ms or 0) + elapsed)
     end
     local function request_budget_stop(kind: string)
         if budget_exceeded then return end
@@ -168,7 +178,9 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             })
             if append_error then return "append live turn observation: " .. append_error end
             observations[#observations + 1] = event
+            last_progress_ms = now_ms()
             budget_values.observe(counters, event)
+            budget_values.observe(session_counters, event)
             local exceeded = check_budget()
             if exceeded then request_budget_stop(exceeded); break end
         end
@@ -201,7 +213,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         local planned = plan
         local permission_state: exchange.State = {request = planned.request, plan_digest = planned.plan_digest,
             exchange = planned.exchange, permissions = point.permissions, epoch = generation, proposal_kind = "operation"}
-        permission_context = {state = permission_state, now_ms = clock.milliseconds, approvals = "bee.approvals.binding", max_consume_attempts = exchange.MAX_CONSUME_ATTEMPTS,
+        permission_contexts[1] = {state = permission_state, now_ms = clock.milliseconds, approvals = "bee.approvals.binding", max_consume_attempts = exchange.MAX_CONSUME_ATTEMPTS,
             commit = commit_permissions,
             call = function(target: string, fields: unknown): (unknown, string?)
                 local value, err = funcs.call(target, fields)
@@ -254,7 +266,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             end}
     end
     local function accept_observations(fresh: {Object})
-        local ctx = permission_context
+        local ctx = permission_contexts[1]
         if not ctx then return end
         local records: {Object} = {}
         for _, body in ipairs(fresh) do records[#records + 1] = {body = body} end
@@ -334,6 +346,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                 accept_observations(fresh)
             end
         end
+        if not output.eof and output_stream == "stderr" and type(output.data) == "string" and #output.data > 0 then last_progress_ms = now_ms() end
         if not output.eof and output_stream == "stderr" and type(output.data) == "string" and stderr_bytes < 4096 then
             local text = output.data:sub(1, 4096 - stderr_bytes)
             stderr_bytes = stderr_bytes + #text
@@ -377,6 +390,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             acks:case_receive()}
         if poller then cases[#cases + 1] = poller:channel():case_receive() end
         if wall_timer then cases[#cases + 1] = wall_timer:case_receive() end
+        if stall_timer then cases[#cases + 1] = stall_timer:channel():case_receive() end
         local selected = channel.select(cases)
         if not selected.ok then output_error = output_error or "placement output observation was interrupted"; break end
         if wall_timer and selected.channel == wall_timer then
@@ -384,6 +398,19 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
             if exceeded then request_budget_stop(exceeded)
             else
                 wall_timer = time.after(tostring(math.max(1, (wall_limit or 1) - (now_ms() - budget_started_ms))) .. "ms")
+            end
+        elseif stall_timer and selected.channel == stall_timer:channel() then
+            local waiting = false
+            if permission_point then
+                for _, item in ipairs(permission_point.permissions) do
+                    if item.phase ~= "closed" and item.phase ~= "acknowledged" then waiting = true end
+                end
+            end
+            if waiting then last_progress_ms = now_ms()
+            elseif not stalled and now_ms() - last_progress_ms >= quiet_period then
+                stalled = true
+                budget_stop_error = stop_for_budget()
+                if budget_stop_error then output_error = output_error or budget_stop_error end
             end
         elseif selected.channel == listener.outputs then
             local message = selected.value
@@ -398,6 +425,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                 output_error = output_error or completion_event("process_exited")
             end
         elseif poller and selected.channel == poller:channel() then
+            local permission_context = permission_contexts[1]
             if permission_context then
                 local _, err = exchange.advance(permission_context, true)
                 output_error = output_error or err
@@ -417,6 +445,8 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     if monitored then process.unmonitor(runner) end
     process.unlisten(acks)
     if poller then poller:stop() end
+    if stall_timer then stall_timer:stop() end
+    local permission_context = permission_contexts[1]
     if permission_context then
         local _, close_error = exchange.close(permission_context)
         output_error = output_error or close_error
@@ -427,7 +457,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     end
     if output_error then return {terminal = terminal, observations = observations, stopped = stopped}, output_error end
     if exit_uncertain then return {terminal = terminal, observations = observations, stopped = stopped}, "placement runner did not prove process exit" end
-    return {terminal = terminal, observations = observations, stopped = stopped}, nil
+    return {terminal = terminal, observations = observations, stopped = stopped, stalled = stalled}, nil
 end
 
 local function handle(value: unknown): ({[string]: unknown}?, string?)

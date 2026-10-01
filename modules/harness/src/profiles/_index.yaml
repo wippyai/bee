@@ -14,8 +14,25 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
+  modules: [json]
   imports:
     bounds: bee.threads.records:bounds
+    budgets: bee.threads.records:budgets
+    canonical: bee.threads.records:canonical
+- name: validation
+  kind: library.lua
+  source: file://validation.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    descriptors: bee.driver:descriptor
+    protocol: bee.harness.profiles:protocol
+- name: migration
+  kind: library.lua
+  source: file://migration.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    protocol: bee.harness.profiles:protocol
 - name: service
   kind: library.lua
   source: file://service.lua
@@ -26,6 +43,9 @@ entries:
     sync: bee.sync.persist:store
     transaction: bee.persist:transaction
     protocol: bee.harness.profiles:protocol
+    migration: bee.harness.profiles:migration
+    validation: bee.harness.profiles:validation
+    driver_profile: bee.driver:profile
 - name: contract
   kind: contract.definition
   methods:

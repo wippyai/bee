@@ -97,7 +97,7 @@ entries:
 - name: profile_store_policy
   kind: security.policy
   meta:
-    comment: Saved profile facade storage access; callers separately require workspace read or write authority
+    comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or write authority
   policy:
     actions:
     - db.get
@@ -107,6 +107,7 @@ entries:
     - bee.node:db
     - bee.harness.profiles:database_ref
     - node
+    - "*"
     effect: allow
 - name: profile_workspace_policy
   kind: security.policy.expr

@@ -8,7 +8,7 @@ local function policy(): {[string]: unknown}
         instructions = "Host guidance",
         gateway_tools = {"thread_wait", "thread_read"},
         gateway_hooks = {"SessionStart", "Stop"},
-        profile_options = {model = {"small", "large"}, effort = {"low", "high"}, enabled = {false, true}},
+        profile_restrictions = {["provider.model"] = {"small", "large"}, ["provider.effort"] = {"low", "high"}, ["provider.options.enabled"] = {false, true}},
         profile_instructions = true,
         retained = {owner = "host"},
     }
@@ -53,14 +53,14 @@ local function define_tests()
 
         test.it("accepts enum shorthand and bounded text option descriptors", function()
             local host = policy()
-            host.profile_options.label = {kind = "text", max_bytes = 12}
+            host.profile_restrictions["provider.options.label"] = {kind = "text", max_bytes = 12}
             local applied = apply({options = {label = "plain text"}}, host)
             test.eq(applied.prepare_options.label, "plain text")
             test.is_nil(preferences.apply(host, {options = {label = ""}}))
             test.is_nil(preferences.apply(host, {options = {label = string.rep("x", 13)}}))
             test.is_nil(preferences.apply(host, {options = {label = "bad\27value"}}))
             test.is_nil(preferences.apply(host, {options = {label = true}}))
-            host.profile_options.mode = {kind = "enum", values = {"one", "two"}}
+            host.profile_restrictions["provider.options.mode"] = {kind = "enum", values = {"one", "two"}}
             local enum = apply({options = {mode = "two"}}, host)
             test.eq(enum.prepare_options.mode, "two")
         end)
@@ -78,7 +78,7 @@ local function define_tests()
                 {model = {kind = "other", max_bytes = 8}},
             }) do
                 local host = policy()
-                host.profile_options = malformed
+                host.profile_restrictions = malformed
                 test.is_nil(preferences.apply(host, {}))
             end
         end)

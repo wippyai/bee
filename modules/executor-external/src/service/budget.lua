@@ -1,35 +1,21 @@
 -- MIT. Decode optional per-Work limits and count the normalized live turn events.
 local bounds = require("bounds")
+local budget_values = require("budget_values")
 local M = {}
 
-type Budget = {max_turns: integer?, max_tokens: integer?, wall_time_ms: integer?}
-type Counters = {turns: integer, tokens: integer}
+type Budget = budget_values.Budget
+type Supervision = budget_values.Supervision
+M.supervision = budget_values.supervision
+type Counters = {turns: integer, tokens: integer, tool_calls: integer}
 
 function M.decode(value: unknown): (Budget?, string?)
-    if value == nil then return nil, nil end
-    local object = bounds.object(value)
-    if not object then return nil, "budget must be an object" end
-    local unknown = bounds.fields(object, {"max_turns", "max_tokens", "wall_time_ms"})
-    if unknown then return nil, "budget has unknown field " .. unknown end
-    local result: Budget = {}
-    for _, name in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
-        local raw = object[name]
-        if raw ~= nil then
-            local selected = bounds.count(raw)
-            if not selected then return nil, "budget." .. name .. " must be a nonnegative integer" end
-            if name == "max_turns" then result.max_turns = selected
-            elseif name == "max_tokens" then result.max_tokens = selected
-            else result.wall_time_ms = selected end
-        end
-    end
-    if result.max_turns == nil and result.max_tokens == nil and result.wall_time_ms == nil then
-        return nil, "budget must set at least one limit"
-    end
-    return result, nil
+    local budget, err = budget_values.decode(value)
+    if budget and budget.cost_usd then return nil, "cost_usd requires trustworthy provider cost accounting" end
+    return budget, err
 end
 
 function M.new(): Counters
-    return {turns = 0, tokens = 0}
+    return {turns = 0, tokens = 0, tool_calls = 0}
 end
 
 local function add(left: integer, right: integer): integer
@@ -39,6 +25,7 @@ end
 function M.observe(counters: Counters, value: unknown)
     local event = bounds.object(value)
     local data = event and bounds.object(event.data)
+    if data and data.type == "tool.call" then counters.tool_calls = add(counters.tool_calls, 1); return end
     if not data or data.type ~= "turn.signal" then return end
     if data.phase == "started" then
         counters.turns = add(counters.turns, 1)
@@ -55,8 +42,9 @@ end
 function M.exceeded(budget: Budget?, counters: Counters, elapsed_ms: integer): string?
     if not budget then return nil end
     if budget.wall_time_ms ~= nil and elapsed_ms >= budget.wall_time_ms then return "wall_time_ms" end
-    if budget.max_turns ~= nil and counters.turns > budget.max_turns then return "max_turns" end
-    if budget.max_tokens ~= nil and counters.tokens > budget.max_tokens then return "max_tokens" end
+    if budget.provider_steps ~= nil and counters.turns > budget.provider_steps then return "provider_steps" end
+    if budget.tool_calls ~= nil and counters.tool_calls > budget.tool_calls then return "tool_calls" end
+    if budget.tokens ~= nil and counters.tokens > budget.tokens then return "tokens" end
     return nil
 end
 

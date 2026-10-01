@@ -1,5 +1,6 @@
 -- MIT. Typed driver configuration delivery under an empty callee scope.
 local hash = require("hash")
+local json = require("json")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local funcs = require("funcs")
@@ -30,7 +31,7 @@ type Configuration = {secret_fields: {SecretField}?, composition: Composition?, 
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
 type Delivery = {arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
-type Request = {instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
+type Request = {instructions_path: string?, instructions: string?, instruction_builder: InstructionBuilder?, provider_ref: string?, provider: Object?, gateway: GatewayInput?, home_directory: string?, private_home: boolean?, attempt_id: string?, fixture: boolean}
 
 -- Profile guidance is separate from a turn brief and grants no authority.
 M.instructions = instructions.decode
@@ -173,6 +174,16 @@ local function sequence(value: unknown, label: string, maximum: integer): ({unkn
         if list[index] == nil then return nil, label .. " must not have holes" end
     end
     return list, nil
+end
+function M.instructions_file(path: string, text: string): (Configuration?, string?)
+    local selected, err = bounds.subpath(path)
+    if not selected or selected == "" then return nil, err or "Instructions require a private-home path" end
+    local validated, text_error = instructions.decode(text, "system_prompt_append", false)
+    if not validated then return nil, text_error end
+    local digest, digest_error = hash.sha256(validated)
+    if not digest then return nil, tostring(digest_error or "Instructions digest failed") end
+    return {revision = "bee.system-prompt-append@1", path = selected, content = validated,
+        digest = digest, provider_ref = M.INSTRUCTIONS_PROVIDER_REF}, nil
 end
 function M.decode_file(value: unknown): (Configuration?, string?)
     local item = bounds.object(value)
@@ -351,6 +362,15 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
         local provider_file = selected_provider ~= nil and file.provider_ref == selected_provider
         local gateway_file = gateway ~= nil and file.provider_ref == M.GATEWAY_PROVIDER_REF
         local instructions_file = instructions ~= nil and file.provider_ref == M.INSTRUCTIONS_PROVIDER_REF and file.content == instructions
+        if not instructions_file and instructions ~= nil and file.provider_ref == M.INSTRUCTIONS_PROVIDER_REF and file.composition and file.composition.kind == "json_patch" and not file.secret_fields then
+            local decoded = json.decode(file.content)
+            local document = bounds.object(decoded)
+            local paths = document and bounds.array(document.instructions, 1)
+            local path = paths and bounds.line(paths[1], 4096)
+            if document and not bounds.fields(document, {"$schema", "instructions"}) and path and path:sub(-30) == "/.bee/system-prompt-append.txt" then
+                instructions_file = #file.composition.operations == 2 and file.composition.operations[1].kind == "default" and file.composition.operations[2].kind == "append" and file.composition.operations[2].path[1] == "instructions"
+            end
+        end
         local login_file = private_home == true and file.provider_ref == M.LOGIN_PROVIDER_REF and file.composition ~= nil and file.composition.kind == "copy" and not file.secret_fields
         if not provider_file and not gateway_file and not instructions_file and not login_file then return nil, "driver configure file " .. file.path .. " names an unselected source" end
         if file.secret_fields then
@@ -428,7 +448,7 @@ function M.call(target: string, request_value: unknown, configure_renderer: stri
         provider = request.provider,
         gateway = request.gateway,
         home_directory = request.home_directory,
-        private_home = private_home,
+        private_home = request.private_home,
         attempt_id = request.attempt_id,
         fixture = request.fixture,
     }

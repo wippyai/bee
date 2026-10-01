@@ -9,7 +9,8 @@ type Request = {profile_id: string, configured: boolean, executable: {[string]: 
     platform: {[string]: unknown}?, checked_at: string?}
 type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
 type Login = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
-type Result = {provider: string, status: LocateStatus,
+type Capability = {supported: boolean, reason: string?}
+type Result = {capabilities: {[string]: Capability}?, provider: string, status: LocateStatus,
     executable: {name: string, present: boolean?, version: string?},
     login: Login,
     platform: {os: string?, arch: string?, compatible: boolean?}, checked_at: string?, reason: string?}
@@ -129,7 +130,7 @@ end
 function M.decode(raw: unknown): (Result?, string?)
     local object = bounds.object(raw)
     if not object then return nil, "locate result must be an object" end
-    local extra = bounds.fields(object, {"provider", "status", "executable", "login", "platform", "checked_at", "reason"})
+    local extra = bounds.fields(object, {"provider", "status", "executable", "login", "platform", "checked_at", "reason", "capabilities"})
     if extra then return nil, "locate result: " .. extra end
     local provider = bounds.id(object.provider)
     local status = M.status(object.status)
@@ -182,7 +183,22 @@ function M.decode(raw: unknown): (Result?, string?)
     local present, exists, compatible = raw_executable.present, raw_login.exists, raw_platform.compatible
     if (present ~= nil and type(present) ~= "boolean") or (exists ~= nil and type(exists) ~= "boolean")
         or (compatible ~= nil and type(compatible) ~= "boolean") then return nil, "locate result boolean is invalid" end
-    local decoded: Result = {provider = provider, status = status,
+    local capabilities: {[string]: Capability}? = nil
+    if object.capabilities ~= nil then
+        local raw_capabilities = bounds.object(object.capabilities)
+        if not raw_capabilities then return nil, "locate capabilities is malformed" end
+        capabilities = {}
+        local count = 0
+        for path, raw in pairs(raw_capabilities) do
+            count = count + 1
+            local item = bounds.object(raw)
+            if count > 64 or not bounds.line(path, 128) or not item or bounds.fields(item, {"supported", "reason"}) or type(item.supported) ~= "boolean" then return nil, "locate capability is malformed" end
+            local reason = item.reason == nil and nil or bounds.line(item.reason, 512)
+            if item.reason ~= nil and not reason then return nil, "locate capability reason is malformed" end
+            capabilities[path] = {supported = item.supported, reason = reason}
+        end
+    end
+    local decoded: Result = {capabilities = capabilities, provider = provider, status = status,
         executable = {name = executable_name, present = present, version = executable_version},
         login = {evidence = evidence_kind, path = login_path, exists = exists},
         platform = {os = platform_os, arch = platform_arch, compatible = compatible},

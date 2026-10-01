@@ -17,7 +17,7 @@ type Object = {[string]: unknown}
 type Scalar = string | number | boolean
 type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer}
 type Bee = {permission_answers: string?}
-type Value = {bee: Bee?, options: {[string]: Scalar}, mcp_tools: {string}, instructions: string}
+type Value = {docker_overrides: Object?, home: "private" | "machine"?, bee: Bee?, options: {[string]: Scalar}, mcp_tools: {string}, instructions: string}
 
 local RESERVED_OPTIONS: {[string]: boolean} = {
     profile_id = true,
@@ -79,23 +79,23 @@ local function decode_options(value: unknown, label: string): ({[string]: Scalar
 end
 
 local function decode_allowed(value: unknown, name: string): ({Scalar}?, string?)
-    if type(value) ~= "table" then return nil, "profile_options." .. name .. " must be a list" end
+    if type(value) ~= "table" then return nil, "profile_restrictions." .. name .. " must be a list" end
     local list = value
     local count = 0
     local highest = 0
     for key in pairs(list) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then
-            return nil, "profile_options." .. name .. " must be dense"
+            return nil, "profile_restrictions." .. name .. " must be dense"
         end
         count = count + 1
         if key > highest then highest = key end
     end
-    if count == 0 then return nil, "profile_options." .. name .. " must be nonempty" end
-    if count > M.MAX_OPTION_VALUES then return nil, "profile_options." .. name .. " exceeds 32 values" end
-    if count ~= highest then return nil, "profile_options." .. name .. " must be dense" end
+    if count == 0 then return nil, "profile_restrictions." .. name .. " must be nonempty" end
+    if count > M.MAX_OPTION_VALUES then return nil, "profile_restrictions." .. name .. " exceeds 32 values" end
+    if count ~= highest then return nil, "profile_restrictions." .. name .. " must be dense" end
     local result: {Scalar} = {}
     for index = 1, count do
-        local item, item_error = scalar(list[index], "profile_options." .. name .. "[" .. tostring(index) .. "]")
+        local item, item_error = scalar(list[index], "profile_restrictions." .. name .. "[" .. tostring(index) .. "]")
         if item == nil then return nil, item_error end
         result[index] = item
     end
@@ -104,7 +104,7 @@ end
 
 local function decode_option(value: unknown, name: string): (Option?, string?)
     if type(value) ~= "table" then
-        return nil, "profile_options." .. name .. " must be an enum list or descriptor"
+        return nil, "profile_restrictions." .. name .. " must be an enum list or descriptor"
     end
     local object = value
     if object.kind == nil then
@@ -113,35 +113,43 @@ local function decode_option(value: unknown, name: string): (Option?, string?)
         return {kind = "enum", values = values}, nil
     end
     local kind = bounds.member(object.kind, {"enum", "text"})
-    if not kind then return nil, "profile_options." .. name .. ".kind must be enum or text" end
+    if not kind then return nil, "profile_restrictions." .. name .. ".kind must be enum or text" end
     if kind == "enum" then
         local extra = bounds.fields(object, {"kind", "values"})
-        if extra then return nil, "profile_options." .. name .. ": " .. extra end
+        if extra then return nil, "profile_restrictions." .. name .. ": " .. extra end
         local values, values_error = decode_allowed(object.values, name)
         if not values then return nil, values_error end
         return {kind = "enum", values = values}, nil
     end
     local extra = bounds.fields(object, {"kind", "max_bytes"})
-    if extra then return nil, "profile_options." .. name .. ": " .. extra end
+    if extra then return nil, "profile_restrictions." .. name .. ": " .. extra end
     local max_bytes = bounds.integer(object.max_bytes)
     if not max_bytes or max_bytes < 1 or max_bytes > M.MAX_OPTION_VALUE_BYTES then
-        return nil, "profile_options." .. name .. ".max_bytes must be between 1 and " .. tostring(M.MAX_OPTION_VALUE_BYTES)
+        return nil, "profile_restrictions." .. name .. ".max_bytes must be between 1 and " .. tostring(M.MAX_OPTION_VALUE_BYTES)
     end
     return {kind = "text", max_bytes = max_bytes}, nil
 end
 
-local function decode_profile_options(value: unknown): ({[string]: Option}?, string?)
+function M.path(name: string): string
+    if bounds.member(name, {"model", "effort", "permission_mode", "tool_allow", "tool_deny", "system_prompt_append", "env"}) then return "provider." .. name end
+    return "provider.options." .. name
+end
+function M.restriction_paths(raw: unknown): Object
+    local values = bounds.object(raw) or {}
+    local result: Object = {}
+    for name, value in pairs(values) do result[M.path(name)] = value end
+    return result
+end
+local function decode_profile_restrictions(value: unknown): ({[string]: Option}?, string?)
     local object = bounds.object(value == nil and {} or value)
-    if not object then return nil, "profile_options must be an object" end
+    if not object then return nil, "profile_restrictions must be an object" end
     local result: {[string]: Option} = {}
     local count = 0
     for name, allowed in pairs(object) do
         count = count + 1
-        if count > M.MAX_OPTIONS then return nil, "profile_options exceeds " .. tostring(M.MAX_OPTIONS) .. " options" end
-        if not option_name(name) then
-            if RESERVED_OPTIONS[name] then return nil, "profile_options contains reserved option " .. name end
-            return nil, "profile_options contains an invalid option name"
-        end
+        if count > M.MAX_OPTIONS then return nil, "profile_restrictions exceeds " .. tostring(M.MAX_OPTIONS) .. " options" end
+        local field = name:match("^provider%.options%.([a-z][a-z0-9_]*)$") or name:match("^provider%.([a-z][a-z0-9_]*)$")
+        if not field or not option_name(field) or M.path(field) ~= name then return nil, "profile_restrictions must reference canonical descriptor paths" end
         local option, option_error = decode_option(allowed, name)
         if not option then return nil, option_error end
         result[name] = option
@@ -149,7 +157,7 @@ local function decode_profile_options(value: unknown): ({[string]: Option}?, str
     return result, nil
 end
 
-M.decode_profile_options = decode_profile_options
+M.decode_profile_restrictions = decode_profile_restrictions
 
 function M.decode_prepare_options(value: unknown): (Object?, string?)
     local object = bounds.object(value == nil and {} or value)
@@ -173,7 +181,7 @@ end
 function M.decode(value: unknown): (Value?, string?)
     local object = bounds.object(value)
     if not object then return nil, "saved preferences must be an object" end
-    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "bee"})
+    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "bee", "home", "docker_overrides"})
     if unexpected then return nil, unexpected end
     local options, options_error = decode_options(object.options == nil and {} or object.options, "options")
     if not options then return nil, options_error end
@@ -192,7 +200,13 @@ function M.decode(value: unknown): (Value?, string?)
         end
         bee = {permission_answers = mode}
     end
-    return {bee = bee, options = options, mcp_tools = mcp_tools, instructions = text}, nil
+    local home: "private" | "machine"? = nil
+    if object.home == "private" then home = "private"
+    elseif object.home == "machine" then home = "machine"
+    elseif object.home ~= nil then return nil, "home must be private or machine" end
+    local docker_overrides = bounds.object(object.docker_overrides)
+    if object.docker_overrides ~= nil and not docker_overrides then return nil, "docker_overrides must be an object" end
+    return {docker_overrides = docker_overrides, home = home, bee = bee, options = options, mcp_tools = mcp_tools, instructions = text}, nil
 end
 
 local function allowed_value(values: {Scalar}, selected: Scalar): boolean
@@ -213,8 +227,8 @@ function M.apply(policy_data: Object, raw: unknown): (Object?, string?)
     if not policy then return nil, "policy data must be an object" end
     local saved, saved_error = M.decode(raw)
     if not saved then return nil, saved_error end
-    local profile_options, profile_options_error = decode_profile_options(policy.profile_options)
-    if not profile_options then return nil, profile_options_error end
+    local profile_restrictions, profile_restrictions_error = decode_profile_restrictions(policy.profile_restrictions)
+    if not profile_restrictions then return nil, profile_restrictions_error end
     local profile_instructions = policy.profile_instructions
     if profile_instructions == nil then profile_instructions = false end
     if type(profile_instructions) ~= "boolean" then return nil, "profile_instructions must be a boolean" end
@@ -222,7 +236,7 @@ function M.apply(policy_data: Object, raw: unknown): (Object?, string?)
     local prepare_options, prepare_options_error = M.decode_prepare_options(policy.prepare_options)
     if not prepare_options then return nil, prepare_options_error end
     for name, selected in pairs(saved.options) do
-        local allowed = profile_options[name]
+        local allowed = profile_restrictions[M.path(name)]
         if not allowed then return nil, "option " .. name .. " is not allowed by the host policy" end
         if not allowed_option(allowed, selected) then return nil, "option " .. name .. " has a value that is not allowed by the host policy" end
         prepare_options[name] = selected

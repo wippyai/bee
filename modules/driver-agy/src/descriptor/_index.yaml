@@ -7,64 +7,400 @@ entries:
     type: bee.driver.cli_descriptor
     comment: Agy CLI command, stream-json codec, login evidence and version probe
   data:
-    schema_revision: bee.driver.cli-descriptor@2
+    schema_revision: bee.driver.cli-descriptor@3
     provider: agy
     executable: agy
-    version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
+    version_probe:
+      argv:
+      - --version
+      pattern: ([0-9]+[.][0-9]+[.][0-9]+)
     login_evidence:
       command: agy
       any_of:
-      - {kind: file_exists, paths: [.gemini/antigravity-cli/antigravity-oauth-token]}
-      - {kind: env_present, names: [GEMINI_API_KEY]}
-    platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
+      - kind: file_exists
+        paths:
+        - .gemini/antigravity-cli/antigravity-oauth-token
+      - kind: env_present
+        names:
+        - GEMINI_API_KEY
+    platform:
+      os:
+      - linux
+      - darwin
+      arch:
+      - x86_64
+      - amd64
+      - arm64
+      - aarch64
     codec: agy-stream-json
     json_paths:
-      resume_id: [conversation_id]
-      result_text: [response]
-      errors: [error]
-      usage: [usage]
+      resume_id:
+      - conversation_id
+      result_text:
+      - response
+      errors:
+      - error
+      usage:
+      - usage
     configure: agy
     capabilities:
+      budgets:
+        provider_steps: agent_turn
+        tokens: true
+        cost_usd: false
+        tool_calls: true
+        wall_time_ms: true
       permission_answers:
         window:
           transport: provider
-          reason: 'Bee runs print stream-json: user messages are supported, but no permission-response channel is declared
-            by this CLI. The window retains provider approval prompts; Bee command hooks are observations only.'
+          reason: 'Bee runs print stream-json: user messages are supported, but no
+            permission-response channel is declared by this CLI. The window retains
+            provider approval prompts; Bee command hooks are observations only.'
         first_turn:
           transport: provider
-          reason: 'Bee runs print stream-json: user messages are supported, but no permission-response channel is declared
-            by this CLI. The window retains provider approval prompts; Bee command hooks are observations only.'
+          reason: 'Bee runs print stream-json: user messages are supported, but no
+            permission-response channel is declared by this CLI. The window retains
+            provider approval prompts; Bee command hooks are observations only.'
         resume:
           transport: provider
-          reason: 'Bee runs print stream-json: user messages are supported, but no permission-response channel is declared
-            by this CLI. The window retains provider approval prompts; Bee command hooks are observations only.'
+          reason: 'Bee runs print stream-json: user messages are supported, but no
+            permission-response channel is declared by this CLI. The window retains
+            provider approval prompts; Bee command hooks are observations only.'
     options:
-      profiles: [window, session, batch]
+      profiles:
+      - window
+      - session
+      - batch
       unknown_prefix: ''
       fields:
-        mode: {type: enum, values: [default, accept-edits, plan], default: default, invalid: 'mode is not one Bee admits'}
-        model: {type: model, invalid: 'model is not one bounded model identifier'}
-        effort: {type: enum, values: [low, medium, high], invalid: 'effort is not one Bee admits'}
-        sandbox: {type: boolean, default: false}
-        dangerously_skip_permissions: {type: boolean, default: false}
-        agent: {type: id, forbid_option: true, invalid: 'agent must not be a command-line option'}
-        resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref must not be a command-line option'}
-        gateway_tools: {type: ids}
-        gateway_hooks: {type: ids}
+        mode:
+          default: default
+          invalid: mode is not one Bee admits
+          path: provider.options.mode
+          value_schema:
+            type: string
+            enum:
+            - default
+            - accept-edits
+            - plan
+          label: Mode
+          description: CLI mode
+          section: advanced
+          order: 0
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --mode
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: mode
+              not_equals: default
+              then:
+              - --mode
+              - field: mode
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: mode
+              not_equals: default
+              then:
+              - --mode
+              - field: mode
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: mode
+              not_equals: default
+              then:
+              - --mode
+              - field: mode
+        model:
+          invalid: model is not one bounded model identifier
+          path: provider.model
+          value_schema:
+            type: string
+            format: model
+          label: Model
+          description: CLI model
+          section: basic
+          order: 1
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --model
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: model
+              then:
+              - --model
+              - field: model
+        effort:
+          invalid: effort is not one Bee admits
+          path: provider.effort
+          value_schema:
+            type: string
+            enum:
+            - low
+            - medium
+            - high
+            - max
+          label: Effort
+          description: CLI effort
+          section: basic
+          order: 2
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --effort
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: effort
+              then:
+              - --effort
+              - field: effort
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: effort
+              then:
+              - --effort
+              - field: effort
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: effort
+              then:
+              - --effort
+              - field: effort
+        sandbox:
+          default: false
+          path: provider.options.sandbox
+          value_schema:
+            type: boolean
+          label: Sandbox
+          description: CLI sandbox
+          section: advanced
+          order: 3
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --sandbox
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: sandbox
+              then:
+              - --sandbox
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: sandbox
+              then:
+              - --sandbox
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: sandbox
+              then:
+              - --sandbox
+        dangerously_skip_permissions:
+          default: false
+          path: provider.options.dangerously_skip_permissions
+          value_schema:
+            type: boolean
+          label: Dangerously skip permissions
+          description: CLI dangerously skip permissions
+          section: advanced
+          order: 4
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --dangerously-skip-permissions
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: dangerously_skip_permissions
+              then:
+              - --dangerously-skip-permissions
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: dangerously_skip_permissions
+              then:
+              - --dangerously-skip-permissions
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: dangerously_skip_permissions
+              then:
+              - --dangerously-skip-permissions
+        agent:
+          forbid_option: true
+          invalid: agent must not be a command-line option
+          path: provider.options.agent
+          value_schema:
+            type: string
+            format: id
+          label: Agent
+          description: CLI agent
+          section: advanced
+          order: 5
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            help_probe:
+              argv:
+              - --help
+              flag: --agent
+          render:
+          - kind: argv
+            contexts:
+            - window
+            tokens:
+            - if: agent
+              then:
+              - --agent
+              - field: agent
+          - kind: argv
+            contexts:
+            - first_turn
+            tokens:
+            - if: agent
+              then:
+              - --agent
+              - field: agent
+          - kind: argv
+            contexts:
+            - resume
+            tokens:
+            - if: agent
+              then:
+              - --agent
+              - field: agent
+        resume_ref:
+          type: id
+          forbid_option: true
+          invalid: resume_ref must not be a command-line option
+        gateway_tools:
+          type: ids
+        gateway_hooks:
+          type: ids
+        system_prompt_append:
+          path: provider.system_prompt_append
+          value_schema:
+            type: string
+            maxLength: 4096
+          label: System prompt append
+          description: Additional instructions in the session private home
+          section: advanced
+          order: 100
+          contexts:
+          - window
+          - first_turn
+          - resume
+          support:
+            config_schema_ref: bee.driver.agy.descriptor:cli
+          render:
+          - kind: config
+            contexts:
+            - window
+            - first_turn
+            - resume
+            file: .agents/AGENTS.md
+            format: text
+            path: []
+            merge: append
+            value:
+              field: provider.system_prompt_append
       rules: []
-    flags:
-      permission: {field: mode, emit_default: false, argv: [--mode, {field: mode}]}
+    flags: {}
     argv_templates:
       window:
         argv:
-        - {if: mode, not_equals: default, then: [{option: permission}]}
-        - {if: dangerously_skip_permissions, then: [--dangerously-skip-permissions]}
-        - {if: sandbox, then: [--sandbox]}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--effort, {field: effort}]}
-        - {if: agent, then: [--agent, {field: agent}]}
-        - {if: resume_ref, then: [--conversation, {field: resume_ref}]}
-        - {if: brief, then: [--prompt-interactive, {field: brief}]}
+        - render: mode
+          context: window
+        - render: dangerously_skip_permissions
+          context: window
+        - render: sandbox
+          context: window
+        - render: model
+          context: window
+        - render: effort
+          context: window
+        - render: agent
+          context: window
+        - if: resume_ref
+          then:
+          - --conversation
+          - field: resume_ref
+        - if: brief
+          then:
+          - --prompt-interactive
+          - field: brief
         readiness: terminal:attached
         provider_home_private: false
         login: true
@@ -76,14 +412,28 @@ entries:
         - --output-format
         - stream-json
         - --disable-slash-commands
-        - {if: mode, not_equals: default, then: [{option: permission}]}
-        - {if: dangerously_skip_permissions, then: [--dangerously-skip-permissions]}
-        - {if: sandbox, then: [--sandbox]}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--effort, {field: effort}]}
-        - {if: agent, then: [--agent, {field: agent}]}
-        - {if: resume_ref, then: [--conversation, {field: resume_ref}]}
-        stdin_json: {event: user, message: {content: {field: brief}, role: user}}
+        - render: mode
+          context: first_turn
+        - render: dangerously_skip_permissions
+          context: first_turn
+        - render: sandbox
+          context: first_turn
+        - render: model
+          context: first_turn
+        - render: effort
+          context: first_turn
+        - render: agent
+          context: first_turn
+        - if: resume_ref
+          then:
+          - --conversation
+          - field: resume_ref
+        stdin_json:
+          event: user
+          message:
+            content:
+              field: brief
+            role: user
         stdin_eof: true
         readiness: protocol:init
         provider_home_private: true
@@ -95,19 +445,38 @@ entries:
         - --output-format
         - stream-json
         - --disable-slash-commands
-        - {if: mode, not_equals: default, then: [{option: permission}]}
-        - {if: dangerously_skip_permissions, then: [--dangerously-skip-permissions]}
-        - {if: sandbox, then: [--sandbox]}
-        - {if: model, then: [--model, {field: model}]}
-        - {if: effort, then: [--effort, {field: effort}]}
-        - {if: agent, then: [--agent, {field: agent}]}
+        - render: mode
+          context: resume
+        - render: dangerously_skip_permissions
+          context: resume
+        - render: sandbox
+          context: resume
+        - render: model
+          context: resume
+        - render: effort
+          context: resume
+        - render: agent
+          context: resume
         - --conversation
-        - {field: resume_ref}
-        stdin_json: {event: user, message: {content: {field: brief}, role: user}}
+        - field: resume_ref
+        stdin_json:
+          event: user
+          message:
+            content:
+              field: brief
+            role: user
         stdin_eof: true
         readiness: protocol:init
         provider_home_private: true
     provider_home:
       files:
-      - {source_path: .gemini/antigravity-cli/antigravity-oauth-token, path: .gemini/antigravity-cli/antigravity-oauth-token, kind: login, optional: true, write_back: true}
-      - {source_path: .gemini/antigravity-cli/cache/onboarding.json, path: .gemini/antigravity-cli/cache/onboarding.json, kind: config, optional: true, write_back: false}
+      - source_path: .gemini/antigravity-cli/antigravity-oauth-token
+        path: .gemini/antigravity-cli/antigravity-oauth-token
+        kind: login
+        optional: true
+        write_back: true
+      - source_path: .gemini/antigravity-cli/cache/onboarding.json
+        path: .gemini/antigravity-cli/cache/onboarding.json
+        kind: config
+        optional: true
+        write_back: false

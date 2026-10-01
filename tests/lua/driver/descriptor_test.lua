@@ -201,10 +201,7 @@ local function define_tests()
 
             local cyclic_flag = copy_object(claude)
             local flags = copy_object(claude.flags :: Object)
-            local permission_source = bounds.object(flags.permission)
-            if not permission_source then error("Claude permission flag is malformed") end
-            local permission = copy_object(permission_source)
-            permission.argv = {{option = "permission"}}
+            local permission: Object = {field = "permission_mode", argv = {{option = "permission"}}}
             flags.permission = permission
             cyclic_flag.flags = flags
             decoded, decode_error = descriptor.decode(cyclic_flag)

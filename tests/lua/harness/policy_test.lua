@@ -166,7 +166,7 @@ local function define_tests()
             test.not_nil(host_error)
 
             data.prepare_options = {}
-            data.profile_options = {turn_budget = {1, 3, 5}}
+            data.profile_restrictions = {["provider.options.turn_budget"] = {1, 3, 5}}
             local profile, profile_error = policy.decode("test:policy", raw, nil,
                 {options = {turn_budget = 1}, mcp_tools = {}, instructions = ""})
             test.is_nil(profile)
@@ -175,13 +175,13 @@ local function define_tests()
         test.it("applies declared text options without widening host policy", function()
             local raw = entry({codex = "/bin/codex"})
             local data = assert(bounds.object(raw.data))
-            data.profile_options = {config_profile = {kind = "text", max_bytes = 64}}
+            data.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 64}}
             local closed, closed_error = policy.decode("test:policy", raw)
             if not closed then error(tostring(closed_error)) end
             local opened, opened_error = policy.decode("test:policy", raw, nil, {options = {config_profile = "ds-flash"}, mcp_tools = {}, instructions = ""})
             if not opened then error(tostring(opened_error)) end
             test.eq(opened.prepare_options.config_profile, "ds-flash")
-            data.profile_options = {config_profile = {kind = "text", max_bytes = 513}}
+            data.profile_restrictions = {["provider.options.config_profile"] = {kind = "text", max_bytes = 513}}
             test.is_nil(policy.decode("test:policy", raw))
         end)
 

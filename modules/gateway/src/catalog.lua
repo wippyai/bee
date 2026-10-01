@@ -18,7 +18,7 @@ end
 -- oneOf/allOf/if/then/else/not applicators over the same subset. Anything else
 -- is refused at admission so a malformed component tool cannot be advertised.
 local SCHEMA_KEYS: {[string]: boolean} = {type = true, properties = true, required = true, items = true,
-    enum = true, const = true, default = true, format = true, minimum = true, maximum = true, minLength = true,
+    enum = true, const = true, default = true, format = true, minimum = true, maximum = true, exclusiveMinimum = true, exclusiveMaximum = true, minProperties = true, maxProperties = true, minLength = true,
     maxLength = true, minItems = true, maxItems = true, uniqueItems = true, pattern = true, description = true,
     additionalProperties = true, examples = true, oneOf = true, allOf = true, ["if"] = true, ["then"] = true,
     ["else"] = true, ["not"] = true}
@@ -26,7 +26,7 @@ local SCHEMA_TYPES: {[string]: boolean} = {object = true, array = true, string =
     number = true, boolean = true}
 local SCHEMA_SCHEMAS = {"if", "then", "else", "not"}
 local SCHEMA_LISTS = {"oneOf", "allOf"}
-local SCHEMA_DEPTH = 4
+local SCHEMA_DEPTH = 8
 local function valid_schema(value: unknown, depth: integer, applicator: boolean): boolean
     if depth > SCHEMA_DEPTH then return false end
     local schema = bounds.object(value)
@@ -75,15 +75,20 @@ local function valid_schema(value: unknown, depth: integer, applicator: boolean)
         end
         if count ~= #schema.enum then return false end
     end
-    for _, key in ipairs({"minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"}) do
+    for _, key in ipairs({"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"}) do
         local bound = schema[key]
-        if bound ~= nil and (type(bound) ~= "number" or bound ~= math.floor(bound)) then return false end
+        if bound ~= nil and (type(bound) ~= "number" or bound ~= bound or bound == math.huge or bound == -math.huge) then return false end
+    end
+    for _, key in ipairs({"minLength", "maxLength", "minItems", "maxItems", "minProperties", "maxProperties"}) do
+        local bound = schema[key]
+        if bound ~= nil and (type(bound) ~= "number" or bound ~= math.floor(bound) or bound < 0 or bound == math.huge) then return false end
     end
     if schema.pattern ~= nil and type(schema.pattern) ~= "string" then return false end
     if schema.format ~= nil and type(schema.format) ~= "string" then return false end
     if schema.uniqueItems ~= nil and type(schema.uniqueItems) ~= "boolean" then return false end
     if schema.description ~= nil and type(schema.description) ~= "string" then return false end
-    if schema.additionalProperties ~= nil and type(schema.additionalProperties) ~= "boolean" then return false end
+    if schema.additionalProperties ~= nil and type(schema.additionalProperties) ~= "boolean"
+        and not valid_schema(schema.additionalProperties, depth + 1, false) then return false end
     return true
 end
 -- MCP annotations are four booleans from a closed set. A configured tool

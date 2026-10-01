@@ -7,8 +7,7 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Claude driver
-    comment: Optional harness binding; host activation and launch policies authorize
-      its use
+    comment: Optional harness binding; host activation and launch policies authorize its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -20,8 +19,7 @@ entries:
 - name: host_environment
   kind: ns.requirement
   meta:
-    comment: Read-only host environment that supplies the selected Claude executable
-      and API key
+    comment: Read-only host environment that supplies the selected Claude executable and API key
   default: bee.harness.host:environment
   targets:
   - entry: bee.driver.claude:executable
@@ -85,9 +83,8 @@ entries:
   kind: registry.entry
   meta:
     type: harness.permission_adapter
-    comment: The Claude Code stream-json control protocol for interactive permissions,
-      captured from the executable; profiles pin its digest, hosts enable it per launch
-      policy
+    comment: The Claude Code stream-json control protocol for interactive permissions, captured from the executable; profiles
+      pin its digest, hosts enable it per launch policy
   data:
     adapter:
       schema_revision: bee.permission-adapter@2
@@ -293,8 +290,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Claude Code window declaration; the host separately selects
-      its policy, activation, executable and permissions
+    comment: Component-owned Claude Code window declaration; the host separately selects its policy, activation, executable
+      and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: claude-window
@@ -328,8 +325,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Claude batch route for a host-selected coordinator
-      and caller-owned shared thread
+    comment: Component-owned bounded Claude batch route for a host-selected coordinator and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: claude-research-batch
@@ -383,8 +379,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Claude turn budget for agentic research actions on a caller-owned
-      thread
+    comment: Host-selected Claude turn budget for agentic research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -421,28 +416,26 @@ entries:
     - PreToolUse
     - PostToolUse
     - Stop
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
     profile_instructions: true
     prepare_options:
       permission_mode: default
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high
 - name: launch_policy_claude_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Claude Code
-      window; missing host executable leaves the declaration unavailable. It is the
-      shipped orchestrator policy - a Claude window may launch the allow-listed worker
-      definitions below, reach a child it started on a new thread through the thread
-      tools, and follow a run with the managed-run tools. A person selects it as a
-      saved profile in the Agent window (press N for a new profile, name it, and choose
-      Claude Code).
+    comment: Host-selected executable binding for the component-owned Claude Code window; missing host executable leaves the
+      declaration unavailable. It is the shipped orchestrator policy - a Claude window may launch the allow-listed worker
+      definitions below, reach a child it started on a new thread through the thread tools, and follow a run with the managed-run
+      tools. A person selects it as a saved profile in the Agent window (press N for a new profile, name it, and choose Claude
+      Code).
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides:
@@ -481,13 +474,13 @@ entries:
     - PostToolUse
     - PermissionRequest
     - Stop
-    profile_options:
-      effort:
-      - low
-      - medium
-      - high
     profile_instructions: true
     prepare_options: {}
     placement_profiles:
     - bee.placement:native
     - bee.placement.docker:coding
+    profile_restrictions:
+      provider.effort:
+      - low
+      - medium
+      - high

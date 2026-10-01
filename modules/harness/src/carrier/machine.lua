@@ -42,6 +42,7 @@ local carrier_types = require("carrier_types")
 local hints = require("hints")
 local permission_exchange = require("permission_exchange")
 local descriptor = require("descriptor")
+local readiness = require("readiness")
 local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
@@ -244,6 +245,9 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
         if not bounds.member(request.placement_profile_ref, launch_policy.placement_profiles) then return nil, "launch policy does not admit this placement profile" end
         local selected, profile_error = placement_profiles.resolve(pinned, request.placement_profile_ref)
         if not selected then return nil, profile_error end
+        local tuned, tune_error = placement_profiles.tune(selected, request.preferences and request.preferences.docker_overrides)
+        if not tuned then return nil, tune_error end
+        selected = tuned
         if selected.digest ~= request.placement_profile_digest then return nil, "placement profile changed since admission" end
         placement_binding_ref = selected.profile.placement_binding
     end
@@ -293,6 +297,19 @@ local function measure(request: Request, session_turn: boolean?, resumed: boolea
         if command_error then return nil, command_error end
         gateway_input = {hook_command = hook_command, endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
             token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
+    end
+    if request.preferences and not launch_policy.fixture then
+        local probed = readiness.probe(request.binding_ref, request.profile_id, readiness.new_cache(), request.placement_profile_ref)
+        local capabilities = probed.result and probed.result.capabilities or {}
+        for name in pairs(request.preferences.options) do
+            local path = (name == "model" or name == "effort" or name == "permission_mode") and ("provider." .. name) or ("provider.options." .. name)
+            local evidence = capabilities[path]
+            if not evidence or not evidence.supported then return nil, path .. ": " .. (evidence and evidence.reason or "Installed CLI support is not established") end
+        end
+        if request.preferences.instructions ~= "" then
+            local evidence = capabilities["provider.system_prompt_append"]
+            if not evidence or not evidence.supported then return nil, "provider.system_prompt_append: " .. (evidence and evidence.reason or "Installed CLI support is not established") end
+        end
     end
     local configure_target = binding.methods.configure
     if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
@@ -362,6 +379,7 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
     end
     local private_home = previous_private_home
     if private_home == nil then private_home = profile.private_home end
+    if request.preferences and request.preferences.home and previous_private_home == nil then private_home = request.preferences.home == "private" end
     if placement_binding.placement_kind == "docker" then private_home = true end
     if not private_home and not launch_policy.allow_host_home then
         return nil, "launch policy does not authorize host HOME"

@@ -171,6 +171,9 @@ function M.prepare(value: unknown): Reply
     if not pinned then return fail("UNAVAILABLE", tostring(pin_error)) end
     local profile, profile_error = profiles.resolve(pinned, request.placement_profile_ref)
     if not profile then return fail("DENIED", profile_error or "placement profile unavailable") end
+    local tuned, tune_error = profiles.tune(profile, request.preferences and request.preferences.docker_overrides)
+    if not tuned then return fail("DENIED", tune_error or "Docker override refused") end
+    profile = tuned
     local admission_error = spec_codec.admit(profile, request)
     if admission_error then return fail("DENIED", admission_error) end
     if profile.profile.network ~= "none" then

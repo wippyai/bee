@@ -125,7 +125,8 @@ function M.acknowledge(ctx: Context, records: {{[string]: unknown}})
     local exchange = session.exchange
     if not exchange then return end
     local count = #records
-    for _, state in ipairs(session.permissions) do
+    for _, item in ipairs(session.permissions) do
+        local state: checkpoint.Permission = item
         if state.phase == "written" then
             for index = 1, count do
                 local body = records[index].body

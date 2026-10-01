@@ -44,15 +44,15 @@ entries:
   kind: library.lua
   source: file://restore_view.lua
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
 - name: runtime
   kind: library.lua
   source: file://runtime.lua
   modules: [tty, exec, process, channel, time, funcs, uuid, json]
   imports:
-    client: bee.application:client
-    text: bee.application:text
+    client: bee.app:client
+    text: bee.app:text
     bounds: bee.threads.records:bounds
     window_request: bee.harness.app:request
     input_event: bee.harness.app:input
@@ -63,9 +63,9 @@ entries:
     hooks: bee.harness.app:hooks
     delivery: bee.harness.app:delivery
     records: bee.harness.carrier:hook_records
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     restore_view: bee.harness.app:restore_view
-    frame: bee.application:frame
+    frame: bee.app:frame
 - name: app
   kind: process.lua
   source: file://app.lua
@@ -75,7 +75,7 @@ entries:
     runtime: bee.harness.app:runtime
     windows: bee.harness.app:windows
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Sessions
@@ -100,46 +100,46 @@ entries:
   source: file://agents.lua
   modules: [json, funcs]
   imports:
-    names: bee.application:names
-    sessions: bee.application:sessions
-    sessions_protocol: bee.application:sessions_protocol
+    names: bee.app:names
+    sessions: bee.app:sessions
+    sessions_protocol: bee.app:sessions_protocol
     thread_record: bee.threads.records:record
     bounds: bee.threads.records:bounds
-    caller: bee.application:caller
+    caller: bee.app:caller
 - name: picker_view
   kind: library.lua
   source: file://picker_view.lua
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    text: bee.application:text
+    frame: bee.app:frame
+    appearance: bee.app:appearance
+    text: bee.app:text
     agents: bee.harness.app:agents
 - name: session_view
   kind: library.lua
   source: file://session_view.lua
   modules: [tty]
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    text: bee.application:text
+    frame: bee.app:frame
+    appearance: bee.app:appearance
+    text: bee.app:text
     agents: bee.harness.app:agents
-    protocol: bee.application:sessions_protocol
+    protocol: bee.app:sessions_protocol
 - name: picker
   kind: library.lua
   source: file://picker.lua
   modules: [tty, process, channel, time, uuid, funcs]
   imports:
-    frame: bee.application:frame
+    frame: bee.app:frame
     bounds: bee.threads.records:bounds
-    client: bee.application:client
-    caller: bee.application:caller
-    appearance: bee.application:appearance
+    client: bee.app:client
+    caller: bee.app:caller
+    appearance: bee.app:appearance
     input_event: bee.harness.app:input
-    sessions: bee.application:sessions
+    sessions: bee.app:sessions
     agents: bee.harness.app:agents
     session_view: bee.harness.app:session_view
     directory_view: bee.harness.app:directory_view
-    sessions_protocol: bee.application:sessions_protocol
+    sessions_protocol: bee.app:sessions_protocol
     admission: bee.harness.launch:admission
     view: bee.harness.app:picker_view
     forms: bee.harness.app:profile_form
@@ -179,11 +179,11 @@ entries:
     canonical: bee.threads.records:canonical
     settings: bee.harness.app:profile_settings
     bounds: bee.threads.records:bounds
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    text: bee.application:text
-    caller: bee.application:caller
-    folder_picker: bee.application:folder_picker
+    frame: bee.app:frame
+    appearance: bee.app:appearance
+    text: bee.app:text
+    caller: bee.app:caller
+    folder_picker: bee.app:folder_picker
     editor: bee.harness.app:profile_editor
     forms: bee.harness.app:profile_form
 
@@ -191,10 +191,10 @@ entries:
   kind: library.lua
   source: file://directory_view.lua
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    text: bee.application:text
-    protocol: bee.application:sessions_protocol
+    frame: bee.app:frame
+    appearance: bee.app:appearance
+    text: bee.app:text
+    protocol: bee.app:sessions_protocol
     agents: bee.harness.app:agents
 
 - name: terminal_view
@@ -204,7 +204,7 @@ entries:
   imports:
     presentation: bee.harness.service:presentation
     bounds: bee.threads.records:bounds
-    client: bee.application:client
+    client: bee.app:client
     input_event: bee.harness.app:input
 
 - name: profile_settings

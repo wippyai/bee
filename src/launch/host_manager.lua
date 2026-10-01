@@ -28,7 +28,7 @@ local DEFAULT_CAP = 64
 local DEFAULT_IDLE_MS = 900000
 -- Topics a host delivers to its owner. The manager drains those it does not
 -- act on, so no message waits in its queue for a listener that never comes.
-local DRAINED = {"bee.application.catalog", "bee.host.checkpoint", "bee.host.restore_result", "bee.interaction.state"}
+local DRAINED = {"bee.app.catalog", "bee.host.checkpoint", "bee.host.restore_result", "bee.interaction.state"}
 
 local function config(value: unknown): Config?
     if value == nil then return {cap = DEFAULT_CAP, idle = DEFAULT_IDLE_MS / 1000, database = nil} end

@@ -118,7 +118,7 @@ local function define_tests()
     test.describe("Application stable membership", function()
         test.it("follows its runs across restarts and loses them on uninstall", function()
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_ready = assert(process.listen("bee.app.ready", {message = true}))
             local events = assert(process.events())
@@ -288,7 +288,7 @@ local function define_tests()
 
         test.it("fences a removed application family when an earlier refresh was refused", function()
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local events = assert(process.events())
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
@@ -387,7 +387,7 @@ local function define_tests()
         -- the catalog left by that repair.
         test.it("retries the admission poll after a refused refresh", function()
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local events = assert(process.events())
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
@@ -477,7 +477,7 @@ local function define_tests()
 
         test.it("converges after an observed refusal without accepting stale catalog messages", function()
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local events = assert(process.events())
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,

@@ -14,11 +14,11 @@ entries:
   - registry
   - system
   imports:
-    frame: bee.application:frame
-    client: bee.application:client
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    client: bee.app:client
+    appearance: bee.app:appearance
     model: bee.hive.manager.app:model
-    names: bee.application:names
+    names: bee.app:names
     view: bee.hive.manager.app:view
     directory: bee.hive.manager:directory
     hive: bee.hive:client
@@ -27,7 +27,7 @@ entries:
     desktop_protocol: bee.hive.desktop:protocol
     clock: bee:clock
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Hive Manager
@@ -45,25 +45,25 @@ entries:
   modules:
   - json
   imports:
-    text: bee.application:text
+    text: bee.app:text
     directory: bee.hive.manager:directory
     contract: bee.protocol:application
     types: bee.hive:types
     hive_bounds: bee.protocol:bounds
-    names: bee.application:names
+    names: bee.app:names
 - name: view
   kind: library.lua
   source: file://view.lua
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
     model: bee.hive.manager.app:model
-    names: bee.application:names
+    names: bee.app:names
 - name: remote
   kind: library.lua
   source: file://remote.lua
   imports:
     bounds: bee.protocol:bounds
-    appearance: bee.application:appearance
-    frame: bee.application:frame
-    names: bee.application:names
+    appearance: bee.app:appearance
+    frame: bee.app:frame
+    names: bee.app:names

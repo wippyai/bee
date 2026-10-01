@@ -51,7 +51,7 @@ entries:
   imports:
     test: wippy.test:test
     hosts: bee.launch:hosts
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
 - name: holdings_test
   kind: function.lua
   source: file://holdings_test.lua

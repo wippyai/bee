@@ -52,7 +52,7 @@ entries:
       active_traits: []
       fixed_context: {}
       dynamic_keys: []
-      access: {policy: app-open-runtime, traits: ['bee.application:runtime']}
+      access: {policy: app-open-runtime, traits: ['bee.app:runtime']}
 - name: managed_agent
   kind: registry.entry
   meta:
@@ -104,7 +104,7 @@ entries:
   method: main
   modules: [json, time, channel, process, tty, fs, security]
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       lifetime: view
@@ -113,7 +113,7 @@ entries:
       instance_policy: multiple
       restart_policy: never
   imports:
-    client: bee.application:client
+    client: bee.app:client
     bounds: bee.threads.records:bounds
   security:
     policies: [bee.app.open.probe:view_policy, bee.app.open.probe:evidence_policy,

@@ -12,17 +12,17 @@ entries:
   - uuid
   - funcs
   imports:
-    frame: bee.application:frame
-    client: bee.application:client
-    appearance: bee.application:appearance
-    caller: bee.application:caller
-    leases: bee.application:host_leases
+    frame: bee.app:frame
+    client: bee.app:client
+    appearance: bee.app:appearance
+    caller: bee.app:caller
+    leases: bee.app:host_leases
     model: bee.workspace.manager.app:model
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.application:folder_picker
+    folder_picker: bee.app:folder_picker
     view: bee.workspace.manager.app:view
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Workspaces
@@ -36,25 +36,25 @@ entries:
   kind: library.lua
   source: file://model.lua
   imports:
-    text: bee.application:text
-    caller: bee.application:caller
+    text: bee.app:text
+    caller: bee.app:caller
     bounds: bee.protocol:bounds
     contract: bee.protocol:application
-    names: bee.application:names
+    names: bee.app:names
 - name: creation
   kind: library.lua
   source: file://creation.lua
   imports:
-    folder_picker: bee.application:folder_picker
-    text: bee.application:text
-    caller: bee.application:caller
+    folder_picker: bee.app:folder_picker
+    text: bee.app:text
+    caller: bee.app:caller
     model: bee.workspace.manager.app:model
 - name: view
   kind: library.lua
   source: file://view.lua
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
     model: bee.workspace.manager.app:model
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.application:folder_picker
+    folder_picker: bee.app:folder_picker

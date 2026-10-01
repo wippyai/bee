@@ -52,7 +52,7 @@ end
 local function descriptor(id: string, entries: {[string]: Entry}): contract.Descriptor?
     local entry = entries[id]
     if not entry or entry.kind ~= "process.lua" or type(entry.meta) ~= "table"
-        or entry.meta.type ~= "bee.application" then return nil end
+        or entry.meta.type ~= "bee.app" then return nil end
     return contract.descriptor(id, entry.meta.application)
 end
 

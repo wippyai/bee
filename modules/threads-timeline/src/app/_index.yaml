@@ -13,14 +13,14 @@ entries:
   - uuid
   - funcs
   imports:
-    frame: bee.application:frame
-    client: bee.application:client
-    appearance: bee.application:appearance
-    caller: bee.application:caller
+    frame: bee.app:frame
+    client: bee.app:client
+    appearance: bee.app:appearance
+    caller: bee.app:caller
     model: bee.threads.timeline.app:model
     view: bee.threads.timeline.app:view
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Timeline
@@ -36,7 +36,7 @@ entries:
   kind: library.lua
   source: file://format.lua
   imports:
-    text: bee.application:text
+    text: bee.app:text
     record_types: bee.threads.records:types
 - name: model
   kind: library.lua
@@ -44,8 +44,8 @@ entries:
   modules:
   - json
   imports:
-    text: bee.application:text
-    caller: bee.application:caller
+    text: bee.app:text
+    caller: bee.app:caller
     session: bee.threads.delivery:session
     record: bee.threads.records:record
     record_types: bee.threads.records:types
@@ -56,6 +56,6 @@ entries:
   kind: library.lua
   source: file://view.lua
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
     model: bee.threads.timeline.app:model

@@ -12,8 +12,8 @@ entries:
     test: wippy.test:test
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    client: bee.application:client
-    arguments: bee.application:arguments
+    client: bee.app:client
+    arguments: bee.app:arguments
 - name: decode_test
   kind: function.lua
   source: file://decode_test.lua
@@ -45,7 +45,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    interaction: bee.application:interaction
+    interaction: bee.app:interaction
     test: wippy.test:test
 - name: display_transfer_test
   kind: function.lua

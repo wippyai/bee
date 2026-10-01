@@ -77,7 +77,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             if value.connection_id == connection_id then
                 assert(value.workspace_id == workspace_id)
                 local terminal = false
-                for _, item in ipairs(value.items) do if item.definition_id == "bee.console:app" then terminal = true end end
+                for _, item in ipairs(value.items) do if item.definition_id == "bee.console.app:app" then terminal = true end end
                 assert(terminal, "Host omitted its Terminal descriptor")
                 return
             end
@@ -133,7 +133,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
         renderer_generation = data.generation
     end
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = workspace_id,
-        connection_id = connection_id, definition_id = definition_id or "bee.console:app"}))
+        connection_id = connection_id, definition_id = definition_id or "bee.console.app:app"}))
     local opened = reply("open", "open")
     assert(opened.error_code == "" and opened.mount == "" and opened.resume_state == "")
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "bind", op = "bind", workspace_id = workspace_id,
@@ -332,7 +332,7 @@ function M.client(owner: string, host: string, workspace_id: string, label: stri
             assert(fresh ~= connection_id)
             for _, token in ipairs({connection_id, fresh}) do
                 assert(process.send(host, "bee.app.request", {version = 1, request_id = "forbidden", op = "open", workspace_id = workspace_id,
-                    connection_id = token, definition_id = "bee.console:app"}))
+                    connection_id = token, definition_id = "bee.console.app:app"}))
                 assert(reply("forbidden", "open").error_code == "permission_denied")
             end
             connection_id = fresh

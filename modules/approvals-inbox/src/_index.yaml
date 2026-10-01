@@ -31,7 +31,7 @@ entries:
   kind: library.lua
   source: file://client.lua
   imports:
-    caller: bee.application:caller
+    caller: bee.app:caller
 - name: source_config
   kind: library.lua
   source: file://sources.lua

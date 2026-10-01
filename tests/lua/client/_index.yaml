@@ -34,7 +34,7 @@ entries:
     test: wippy.test:test
     state: bee.client:state
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: handoff_test
   kind: function.lua
   source: file://handoff_test.lua
@@ -63,7 +63,7 @@ entries:
     store: bee.client:store
     state: bee.client:state
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: workspace_pages_test
   kind: function.lua
   source: file://workspace_pages_test.lua

@@ -111,7 +111,7 @@ entries:
     catalog: bee.storage:catalog
     decode: bee.protocol:decode
     recovery: bee.workspace:recovery
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
   meta:
     command:
       name: workspace-hosts-lazy-supervisor
@@ -134,7 +134,7 @@ entries:
   imports:
     store: bee.storage:store
     catalog: bee.storage:catalog
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
   meta:
     command:
       name: workspace-hosts-attach-supervisor
@@ -152,7 +152,7 @@ entries:
   imports:
     store: bee.storage:store
     catalog: bee.storage:catalog
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
   meta:
     command:
       name: workspace-hosts-attach-fallback

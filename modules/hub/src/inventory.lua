@@ -5,7 +5,7 @@ local M = {}
 type Module = {component: string, version: string, locked_version: string, digest: string, source: string, direct: boolean,
     roots: {string}, used_by: {string}, entries: integer}
 type Root = {id: string, owner: string, component: string, version: string, parameters: {requirements.Parameter}}
-type Result = {version: integer, modules: {Module}, roots: {Root}}
+type Result = {version: integer, modules: {Module}, roots: {Root}, deployment: string?}
 
 local function component(raw: unknown): string?
     local name = bounds.line(raw, 160)
@@ -140,19 +140,7 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             end
         end
     end
-    if deployment then
-        local declared = false
-        for _, root in ipairs(roots) do
-            if root.component == deployment and root.owner == "" then declared = true end
-        end
-        if not declared then
-            local bucket = module(deployment)
-            roots[#roots + 1] = {id = "bee:deployment", owner = "", component = deployment,
-                version = bucket.version, parameters = {}}
-            add_once(bucket.roots, "bee:deployment")
-            bucket.direct = true
-        end
-    end
+    if deployment then module(deployment).direct = true end
     local modules: {Module} = {}
     for _, item in pairs(by_name) do
         if #modules >= 512 then return nil, "inventory exceeds module bound" end
@@ -162,7 +150,7 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     end
     table.sort(modules, function(a: Module, b: Module): boolean return a.component < b.component end)
     table.sort(roots, function(a: Root, b: Root): boolean return a.id < b.id end)
-    return {version = version, modules = modules, roots = roots}, nil
+    return {version = version, modules = modules, roots = roots, deployment = deployment}, nil
 end
 
 -- Hub owns only roots it published. Host-declared component roots remain

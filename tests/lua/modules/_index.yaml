@@ -20,7 +20,7 @@ entries:
     test: wippy.test:test
     model: bee.hub.modules.app:model
     view: bee.hub.modules.app:view
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     contents: bee.hub.modules.app:contents
 - name: app_test
   kind: function.lua

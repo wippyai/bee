@@ -41,5 +41,5 @@ entries:
     type: test
     suite: bee
   imports:
-    names: bee.application:names
+    names: bee.app:names
     test: wippy.test:test

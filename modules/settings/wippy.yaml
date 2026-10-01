@@ -1,0 +1,9 @@
+organization: bee
+module: settings
+type: library
+version: 0.1.0-dev
+description: Bee settings application
+license: MIT
+directories:
+  modules: .wippy
+  src: ./src

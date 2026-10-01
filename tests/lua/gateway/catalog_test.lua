@@ -180,13 +180,13 @@ local function define_tests()
         end)
         test.it("gates application_open behind the approved runtime trait", function()
             local raw = {tools = {}, traits = {}, base_tools = {}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
-                access = {policy = "application:approval", traits = {"bee.application:runtime"}}}
+                access = {policy = "application:approval", traits = {"bee.app:runtime"}}}
             local prepared, initial = surface.prepare(raw, mcp.TOOLS, {"application_open"})
             if not prepared or not initial then error("runtime surface refused") end
-            test.is_nil(surface.select(prepared, {"bee.application:runtime"}, {}))
-            local granted, grant_error = surface.grant(prepared, {"bee.application:runtime"})
+            test.is_nil(surface.select(prepared, {"bee.app:runtime"}, {}))
+            local granted, grant_error = surface.grant(prepared, {"bee.app:runtime"})
             if not granted then error(tostring(grant_error)) end
-            local selected = surface.select(granted, {"bee.application:runtime"}, {})
+            local selected = surface.select(granted, {"bee.app:runtime"}, {})
             if not selected then error("approved runtime trait refused") end
             local active = catalog.select(granted.catalog, granted.ceiling, granted.base_tools, granted.allowed_traits, selected.active)
             if not active or #active ~= 1 or active[1].name ~= "application_open" then error("runtime tool not active") end
@@ -196,12 +196,12 @@ local function define_tests()
             if not hidden or #hidden ~= 0 then error("runtime tool remained active after deselection") end
 
             raw = {tools = {}, traits = {}, base_tools = {"application_open"}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
-                access = {policy = "application:approval", traits = {"bee.application:runtime"}}}
+                access = {policy = "application:approval", traits = {"bee.app:runtime"}}}
             test.is_nil((surface.prepare(raw, mcp.TOOLS, {"application_open"})))
             raw.base_tools = {}
             raw.access = nil
             test.is_nil((surface.prepare(raw, mcp.TOOLS, {"application_open"})))
-            raw.access = {policy = "application:approval", traits = {"bee.application:runtime"}}
+            raw.access = {policy = "application:approval", traits = {"bee.app:runtime"}}
             raw.traits = {{id = "application:spoof", title = "Spoof", prompt = "Spoof", tools = {"application_open"}}}
             test.is_nil((surface.prepare(raw, mcp.TOOLS, {"application_open"})))
         end)

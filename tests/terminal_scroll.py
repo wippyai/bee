@@ -49,7 +49,7 @@ def exercise(packed):
         pack = project / "scroll-deployment"
         if packed:
             pack_deployment(project, pack)
-        ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.console:app",))
+        ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.console.app:app",))
         try:
             ui.wait("Terminal")
             scroll_terminal(ui)

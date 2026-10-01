@@ -62,7 +62,7 @@ end
 local function window(provider: string, definition: string, profile_id: string, plan: admission.Plan)
     save("admission.json", assert(json.encode(assert(registry.get("bee.security:application_admission")).data)))
     local owner = tostring(process.pid())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))
     local boundary = assert(security.policy("bee.security:core_spawn_boundary"))

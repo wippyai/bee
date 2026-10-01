@@ -50,7 +50,7 @@ application answers. Manual instances resume when opened. Restored launches carr
 `resume_schema` and `resume_state`, stable logical IDs and fresh capabilities.
 
 `client.checkpoint(launch, json_string)` returns a queued request ID. Only a
-successful `bee.application.checkpoint_result` means database commit. The broker
+successful `bee.app.checkpoint_result` means database commit. The broker
 checks sender, identities and token; the workspace validates and writes the
 envelope. One pending request per app is retained; supersession and timeouts have
 explicit outcomes. A timeout is not proof the transaction never committed.
@@ -69,13 +69,30 @@ ledgers fail explicitly; Bee does not delete or downgrade the database. Stale
 store handles cannot overwrite a newer generation. These guarantees are tested
 in `tests/storage.py`; source/pack restoration is tested in `tests/recovery.py`.
 
-Migration 9 translates the classic catalog root and Bee-owned saved application
-definition IDs. The workspace recovery decoder also accepts older definition IDs
-in JSON written with different spacing. The client layout stores view and
-instance IDs, not application definition IDs, so its three applied migrations
-stay unchanged. `make nested-names-upgrade-check` boots state from the pre-rename
-main revision and verifies restored Settings and Approvals windows retain their
-identities and client layout.
+Migrations 9–11 translate the classic catalog root and earlier application IDs.
+Migration 12 moves Settings, Terminal, Process Manager and Overlays to their
+module application children and completes earlier definition translations in
+JSON with arbitrary spacing. It updates only saved application `definition_id`
+fields and workspace thread binding definitions; opaque resume state stays intact.
+The recovery decoder reads current IDs without aliases. Client layouts contain
+view and instance IDs, so their migration ledger stays unchanged.
+`make app-layout-upgrade-check` restarts state written by main `463ac2ea` and
+checks application identities, layout and the new ledger.
+
+Threads schema migration 28 and data ledger `bee_thread_definition_migrations:1`
+move the four relocated definitions and their derived stable memberships,
+Sessions ownership, operational filters and receipts in one transaction.
+Historical journal records keep their original evidence.
+
+Sync migration 7 updates SDK references in saved profiles, feed events and
+idempotency receipts. Gateway migration 15 updates stored surfaces, active
+traits and grant receipt trait lists. Both owners translate exact SDK reference
+strings without changing approval proposal digests or actor identities.
+Process topics use `bee.app.*` and change with all senders and receivers in one
+deployment followed by a full node owner restart. Topics are not persisted.
+Application principals retain `bee.application:<workspace_id>:<instance_id>`
+because Threads records and command receipts persist that identity. Workspace
+thread bindings also store it, and recovery compares it with stored memberships.
 
 Workspace database schema, registry revision, app revision and app resume schema
 are different version domains. Apps own interpretation of their opaque state;

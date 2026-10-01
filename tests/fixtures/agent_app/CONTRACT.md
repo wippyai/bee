@@ -12,8 +12,8 @@ An application is one `process.lua` entry:
     {"id": "<namespace>:<name>", "kind": "process.lua",
      "data": {"source": "...", "method": "main",
               "modules": ["tty", "process", "channel", "json"],
-              "imports": {"client": "bee.application:client"}},
-     "meta": {"type": "bee.application",
+              "imports": {"client": "bee.app:client"}},
+     "meta": {"type": "bee.app",
               "application": {"api_version": 1, "lifetime": "view", "revision": "1",
                               "title": "...", "instance_policy": "multiple",
                               "resume_schema": "...", "restart_policy": "automatic"}}}
@@ -50,11 +50,11 @@ paint.
 
 `client.checkpoint(launch, state)` queues one checkpoint of at most 65536 bytes.
 It needs a nonempty `resume_schema` in the definition metadata. A queued
-checkpoint is not a commit. The broker answers with a `bee.application.checkpoint_result`
+checkpoint is not a commit. The broker answers with a `bee.app.checkpoint_result`
 process message sent from `launch.broker_pid`; its payload data carries
 `error_code`, empty on success. Subscribe before the first checkpoint:
 
-    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local receipts = assert(process.listen("bee.app.checkpoint_result", {message = true}))
 
 and read the acknowledgment from the channel:
 

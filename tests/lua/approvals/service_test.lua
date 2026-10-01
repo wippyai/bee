@@ -58,7 +58,7 @@ local INBOX_ACTOR = "bee.application:0123456789abcdef0123456789abcdef:inbox-inst
 local inbox_app = caller(INBOX_ACTOR, {"bee.security.approvals:approval_decide_policy"},
     {definition_id = "bee.approvals.inbox.app:app", workspace_id = "0123456789abcdef0123456789abcdef"})
 local other_app = caller("bee.application:0123456789abcdef0123456789abcdef:other-instance",
-    {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.settings:app"})
+    {"bee.security.approvals:approval_decide_policy"}, {definition_id = "bee.settings.app:app"})
 local owner = caller(OUTBOX, {"bee.security.approvals:approval_owner_policy", "bee.security.threads:thread_approval_policy", "bee.security.threads:thread_approval_client_policy", "bee.security.threads:thread_storage_policy", "bee.security.threads:thread_resource_policy"})
 local function call(client: funcs.Executor, method: string, value: unknown): service.Reply
     local reply, err = client:call("bee.approvals.binding:" .. method, value)

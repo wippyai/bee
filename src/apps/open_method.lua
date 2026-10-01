@@ -12,7 +12,7 @@ local arguments = require("arguments")
 local M = {}
 local BINDING_KEY = "bee.gateway.binding"
 local HOST_PREFIX = "bee.workspace.host/"
-local CALLER_PREFIX = "bee.application.open/"
+local CALLER_PREFIX = "bee.app.open/"
 local MAX_WAIT_MS = 30000
 
 local function fail(code: string, message: string): {[string]: unknown}
@@ -73,7 +73,7 @@ function M.handle(raw: unknown): {[string]: unknown}
     local request, request_error = request_id(action_id, idempotency_key)
     if not request then return fail("INVALID", request_error or "request identity failed") end
     local nonce = uuid.v7()
-    local caller_token = (presentation_session ~= nil and "bee.application.presentation/" or CALLER_PREFIX) .. nonce
+    local caller_token = (presentation_session ~= nil and "bee.app.presentation/" or CALLER_PREFIX) .. nonce
     local registered, register_error = process.registry.register(caller_token)
     if not registered then return fail("UNAVAILABLE", "open caller registration failed: " .. tostring(register_error)) end
     local host, lookup_error = process.registry.lookup(HOST_PREFIX .. workspace_id)

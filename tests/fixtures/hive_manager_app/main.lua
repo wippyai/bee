@@ -20,7 +20,7 @@ local function key(view: tty.Viewport, value: string)
 end
 local function main(mode: string?)
     local owner = tostring(process.pid())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local dialogs = assert(process.listen("bee.interaction.state", {message = true}))
     local slow_entered = assert(process.listen("bee.hive.manager.probe.slow_entered", {message = true}))

@@ -12,7 +12,7 @@ entries:
     transaction: bee.persist:transaction
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: local
   kind: contract.binding
   contracts:

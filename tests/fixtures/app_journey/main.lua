@@ -48,8 +48,8 @@ local function main(value: unknown)
     if not launch then error("Invalid launch") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
-    local receipts = assert(process.listen("bee.application.checkpoint_result", {message = true}))
-    local thread_results = assert(process.listen("bee.application.thread.result", {message = true}))
+    local receipts = assert(process.listen("bee.app.checkpoint_result", {message = true}))
+    local thread_results = assert(process.listen("bee.app.thread.result", {message = true}))
     local rechecks = assert(process.listen("bee.app.journey.probe.recheck", {message = true}))
     local revocations = assert(process.listen("bee.app.open.probe.access.revoke.result", {message = true}))
     local stale_status = "n/a"
@@ -455,8 +455,8 @@ local function main()
 
     seed_shared_database()
     local entries = {{id = DEFINITION_ID, kind = "process.lua", data = {source = APP_SOURCE, method = "main",
-        modules = {"tty", "process", "channel", "json", "time"}, imports = {client = "bee.application:client"}},
-        meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", revision = "1",
+        modules = {"tty", "process", "channel", "json", "time"}, imports = {client = "bee.app:client"}},
+        meta = {type = "bee.app", application = {api_version = 1, lifetime = "view", revision = "1",
             title = APP_TITLE, instance_policy = "multiple", resume_schema = "app-journey.v1",
             restart_policy = "automatic"}}},
         {id = MIGRATION_ID, kind = "function.lua", data = {source = MIGRATION_SOURCE, method = "run", modules = {"sql"}},

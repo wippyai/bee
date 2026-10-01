@@ -114,7 +114,7 @@ function M.run()
     local thread = "managed_opencode_live_thread"
     call("bee.threads.service:create", {thread_id = thread, idempotency_key = thread .. "-create", title = "Open OpenCode window"})
     local owner = tostring(process.pid())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local broker_policy = security.policy("bee.security.desktop:broker_policy")
     if not broker_policy then error("broker policy") end

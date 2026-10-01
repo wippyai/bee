@@ -1,3 +1,4 @@
+local history_values = require("history_values")
 -- Pure presentation of measured samples. No polling, process control or grants.
 local appearance = require("appearance")
 local frame = require("frame")
@@ -33,7 +34,7 @@ local function number(value: number?): string
 end
 local HINTS = frame.hints({{key = "↑↓", verb = "select"}, {key = "Tab", verb = "switch"}, {key = "S", verb = "sort"},
     {key = "P", verb = "pause"}, {key = "Del", verb = "stop"}, {key = "Esc", verb = "close"}})
-function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, history: probe.History,
+function M.draw(width: integer, height: integer, snapshot: probe.Snapshot, history: history_values.History,
     preferences: appearance.Preferences, selected: string, offset: integer, paused: boolean,
     status: string, confirming: boolean, services: boolean, rows: {Row}, by_steps: boolean): Frame
     local painter = frame.new(width, height, preferences)

@@ -7,13 +7,13 @@ entries:
   method: main
   modules: [tty, process, channel, time, uuid, json, funcs, registry]
   imports:
-    frame: bee.application:frame
-    client: bee.application:client
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    client: bee.app:client
+    appearance: bee.app:appearance
     model: bee.approvals.inbox.app:model
     view: bee.approvals.inbox.app:view
     inbox: bee.approvals.inbox:client
-    caller: bee.application:caller
+    caller: bee.app:caller
     feeds: bee.approvals.inbox.app:feeds
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
@@ -21,7 +21,7 @@ entries:
     hive: bee.hive:client
     hive_types: bee.hive:types
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Needs you
@@ -38,9 +38,9 @@ entries:
   source: file://model.lua
   modules: [json]
   imports:
-    text: bee.application:text
+    text: bee.app:text
     bounds: bee.threads.records:bounds
-    caller: bee.application:caller
+    caller: bee.app:caller
 - name: leases
   kind: library.lua
   source: file://leases.lua
@@ -53,9 +53,9 @@ entries:
   source: file://lease_form.lua
   modules: [tty]
   imports:
-    appearance: bee.application:appearance
-    frame: bee.application:frame
-    forms: bee.application:forms
+    appearance: bee.app:appearance
+    frame: bee.app:frame
+    forms: bee.app:forms
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
 - name: feeds
@@ -64,7 +64,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     sync: bee.sync:protocol
-    caller: bee.application:caller
+    caller: bee.app:caller
     source_config: bee.approvals.inbox:source_config
     model: bee.approvals.inbox.app:model
 - name: view
@@ -72,8 +72,8 @@ entries:
   source: file://view.lua
   modules: [tty]
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
-    names: bee.application:names
+    names: bee.app:names

@@ -67,7 +67,7 @@ entries:
   - json
   - registry
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
   security:
     policies:
     - bee.security.desktop:desktop_policy

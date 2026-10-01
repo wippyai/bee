@@ -56,7 +56,7 @@ local function define_tests()
                 idempotency_key = THREAD .. "-create", title = "Open membership"})
 
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
@@ -93,7 +93,7 @@ local function define_tests()
         test.it("opens a window that names a thread created later", function()
             local missing = "open-missing-launch-thread"
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
@@ -129,7 +129,7 @@ local function define_tests()
         end)
         test.it("stops thread instances on an owner fence", function()
             local owner = tostring(process.pid())
-            local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
             local replies = assert(process.listen("bee.app.reply", {message = true}))
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
@@ -154,7 +154,7 @@ local function define_tests()
             end
             assert(opened.error_code == "", "managed window did not become ready: " .. tostring(opened.error))
             local instance_id = assert(opened.instance_id) :: string
-            assert(process.send(broker, "bee.application.fence", {version = 1, request_id = "fence-thread", thread_id = THREAD}))
+            assert(process.send(broker, "bee.app.fence", {version = 1, request_id = "fence-thread", thread_id = THREAD}))
             local acked: {[string]: unknown}? = nil
             deadline = time.after("30s")
             while not acked do

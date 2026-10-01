@@ -86,22 +86,22 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     if not alias_backfill then error("Invalid retained application identity projection") end
     assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
-    local shutdown_requests = assert(process.listen("bee.application.shutdown", {message = true}))
-    local close_replies = assert(process.listen("bee.application.close.reply", {message = true}))
-    local queries = assert(process.listen("bee.application.query", {message = true}))
+    local shutdown_requests = assert(process.listen("bee.app.shutdown", {message = true}))
+    local close_replies = assert(process.listen("bee.app.close.reply", {message = true}))
+    local queries = assert(process.listen("bee.app.query", {message = true}))
     local answers = assert(process.listen("bee.interaction.response", {message = true}))
-    local titles = assert(process.listen("bee.application.title", {message = true}))
-    local app_ready = assert(process.listen("bee.application.ready", {message = true}))
+    local titles = assert(process.listen("bee.app.title", {message = true}))
+    local app_ready = assert(process.listen("bee.app.ready", {message = true}))
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
     local appearance_states = assert(process.listen("bee.appearance.state", {message = true}))
-    local controls = assert(process.listen("bee.application.control", {message = true}))
-    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
-    local persisted = assert(process.listen("bee.application.persisted", {message = true}))
-    local binding_results = assert(process.listen("bee.application.binding.result", {message = true}))
-    local binding_recovery = assert(process.listen("bee.application.binding.recovery", {message = true}))
-    local replace_acks = assert(process.listen("bee.application.replace_ack", {message = true}))
-    local thread_requests = assert(process.listen("bee.application.thread.request", {message = true}))
-    local fences = assert(process.listen("bee.application.fence", {message = true}))
+    local controls = assert(process.listen("bee.app.control", {message = true}))
+    local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
+    local persisted = assert(process.listen("bee.app.persisted", {message = true}))
+    local binding_results = assert(process.listen("bee.app.binding.result", {message = true}))
+    local binding_recovery = assert(process.listen("bee.app.binding.recovery", {message = true}))
+    local replace_acks = assert(process.listen("bee.app.replace_ack", {message = true}))
+    local thread_requests = assert(process.listen("bee.app.thread.request", {message = true}))
+    local fences = assert(process.listen("bee.app.fence", {message = true}))
     local checkpoint_waiters: {[string]: Checkpoint} = {}
     local events = assert(process.events())
     assert(process.monitor(owner))
@@ -418,7 +418,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 end
             end
             admission.current, admission.error, applied = selected, "", selected
-            assert(process.send(owner, "bee.application.catalog", {version = 1, items = selected.items}))
+            assert(process.send(owner, "bee.app.catalog", {version = 1, items = selected.items}))
             -- A compatible automatic application follows its applied
             -- definition behind the same viewport. Once an exit has been
             -- observed, its exact requested revision is a fence: a later
@@ -443,7 +443,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             -- available for another launch. Existing instances retain their scope.
             catalog.invalidate(admission_follower)
             admission.current, admission.error = nil, tostring(loaded):sub(1, 2000)
-            if previous then assert(process.send(owner, "bee.application.catalog", {version = 1, items = {}})) end
+            if previous then assert(process.send(owner, "bee.app.catalog", {version = 1, items = {}})) end
             return false
         end
     end
@@ -472,7 +472,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     end
     local function reopen(item: Instance, req: contract.Request)
         if #req.arguments > 0 then
-            local sent, err = process.send(item.execution_pid, "bee.application.navigate", {version = 1,
+            local sent, err = process.send(item.execution_pid, "bee.app.navigate", {version = 1,
                 instance_id = item.instance_id, view_id = item.view_id,
                 execution_generation = item.producer_generation, launch_token = item.launch_token,
                 arguments = req.arguments})
@@ -591,7 +591,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
     binding_context = {workspace_id = workspace_id, now = now, new_id = uuid.v7,
         send_host = function(request_id: string, instance_id: string, request: binding_protocol.Request): boolean
             if binding_engine.requests[request_id] ~= instance_id then error("Application binding request was not recorded") end
-            return process.send(owner, "bee.application.binding.request", request) == true
+            return process.send(owner, "bee.app.binding.request", request) == true
         end,
         thread_call = thread_call, emit = emit, launch = launch_binding,
         stop_after_revoke = function(instance_id: string, event: lifecycle.Event, settle: boolean)
@@ -607,7 +607,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             error = code and {code = code, message = message or "Application thread request failed"} or nil}
         local reply = thread_protocol.wire_reply(raw, request.operation)
         if not reply then error("Constructed an invalid application thread reply") end
-        process.send(pid, "bee.application.thread.result", reply)
+        process.send(pid, "bee.app.thread.result", reply)
     end
     local function handle_thread_request(sender: string, raw: unknown)
         local request = thread_protocol.request(raw)
@@ -746,7 +746,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         return nil
     end
     local function control_result(waiter: Waiter, code: string, message: string)
-        process.send(waiter.recipient, "bee.application.result", {version = 1, request_id = waiter.request_id,
+        process.send(waiter.recipient, "bee.app.result", {version = 1, request_id = waiter.request_id,
             error_code = code, error = message})
     end
     local function refresh_shutdown()
@@ -872,7 +872,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         local pending_dialog = interactions.remove(dialogs, item.view_id)
         if pending_dialog then
             if not pending_dialog.closing then
-                process.send(item.execution_pid, "bee.application.query.result", {version = 1,
+                process.send(item.execution_pid, "bee.app.query.result", {version = 1,
                     request_id = pending_dialog.client_request_id, id = item.view_id, instance_id = item.instance_id,
                     action = "cancel", value = "", error = ""})
             end
@@ -903,7 +903,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             end
         elseif effect == "query_close" then
             discard_dialog(item)
-            process.send(item.execution_pid, "bee.application.close", {version = 1, request_id = item.close_request_id,
+            process.send(item.execution_pid, "bee.app.close", {version = 1, request_id = item.close_request_id,
                 id = item.view_id, instance_id = item.instance_id})
         elseif effect == "close_timeout" then
             if shutdown_plan and shutdown_plan.pending[item.view_id] then
@@ -912,7 +912,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             else close_prompt(item, "Application did not respond", "Force stopping may lose unsaved work.", "Force stop") end
         elseif effect == "close_cancelled" then
             discard_dialog(item)
-            process.send(item.execution_pid, "bee.application.close.result", {version = 1, request_id = item.close_request_id,
+            process.send(item.execution_pid, "bee.app.close.result", {version = 1, request_id = item.close_request_id,
                 id = item.view_id, instance_id = item.instance_id, action = "cancel"})
             item.close_request_id = nil
             for _, waiter in ipairs(item.waiters) do
@@ -1103,11 +1103,11 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         if replace_requested and not replace_acked then
             if current - replace_started >= 10 then
-                process.send(owner, "bee.application.replace_failed", {version = 1, schema = 1,
+                process.send(owner, "bee.app.replace_failed", {version = 1, schema = 1,
                     workspace_id = workspace_id, broker = tostring(process.pid()), reason = "drain_timeout"})
                 replace_requested = false
             elseif current >= replace_retry_at then
-                process.send(owner, "bee.application.replacing", {version = 1, schema = 1,
+                process.send(owner, "bee.app.replacing", {version = 1, schema = 1,
                     workspace_id = workspace_id, broker = tostring(process.pid())})
                 replace_retry_at = current + 0.1
             end
@@ -1128,7 +1128,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
         end
         for id, waiter in pairs(checkpoint_waiters) do
             if current >= waiter.deadline then
-                process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
+                process.send(waiter.pid, "bee.app.checkpoint_result", {version = 1, request_id = waiter.request_id,
                     error_code = "timeout", error = "Checkpoint persistence timed out"})
                 checkpoint_waiters[id] = nil
                 local item = find_pid(waiter.pid)
@@ -1148,7 +1148,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if terminal ~= "active" and terminal ~= "fenced" and terminal ~= "cleanup_pending" then return end
         end
         recovery_received = true
-        assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
+        assert(process.send(owner, "bee.app.binding.recovered", {version = 1, workspace_id = workspace_id}))
     end
     arm_deadline()
     while running do
@@ -1221,7 +1221,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 end
                 if settled then
                     recovery_received = true
-                    assert(process.send(owner, "bee.application.binding.recovered", {version = 1, workspace_id = workspace_id}))
+                    assert(process.send(owner, "bee.app.binding.recovered", {version = 1, workspace_id = workspace_id}))
                 end
             end
         elseif selected.channel == fences then
@@ -1276,7 +1276,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 replace_requested = true
                 replace_started = now()
                 replace_retry_at = replace_started + 0.1
-                process.send(owner, "bee.application.replacing", {version = 1, schema = 1,
+                process.send(owner, "bee.app.replacing", {version = 1, schema = 1,
                     workspace_id = workspace_id, broker = tostring(process.pid())})
             end
             if event.kind == process.event.EXIT then
@@ -1341,7 +1341,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                     if (item.state.phase == "starting" or item.state.phase == "ready") and not shutdown_plan
                         and interactions.add(dialogs, spec, client_request_id, item.execution_pid, false) then publish_dialogs()
                     else
-                        process.send(item.execution_pid, "bee.application.query.result", {version = 1,
+                        process.send(item.execution_pid, "bee.app.query.result", {version = 1,
                             request_id = client_request_id, id = item.view_id, instance_id = item.instance_id,
                             action = "cancel", value = "", error = "busy"})
                     end
@@ -1364,7 +1364,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                             commit_explicit_close(item, event)
                         end
                     else
-                        process.send(pending_dialog.execution_pid, "bee.application.query.result", {version = 1,
+                        process.send(pending_dialog.execution_pid, "bee.app.query.result", {version = 1,
                             request_id = pending_dialog.client_request_id, id = response.id, instance_id = response.instance_id,
                             action = response.action, value = response.value, error = ""})
                     end
@@ -1397,12 +1397,12 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                 if request_id and request_id ~= "" then
                     if item.descriptor.restart_policy == "never" or data.resume_schema ~= item.descriptor.resume_schema
                         or type(data.resume_state) ~= "string" or #data.resume_state > 65536 then
-                        process.send(item.execution_pid, "bee.application.checkpoint_result", {version = 1, request_id = request_id,
+                        process.send(item.execution_pid, "bee.app.checkpoint_result", {version = 1, request_id = request_id,
                             error_code = "invalid_checkpoint", error = "Checkpoint does not match the application contract"})
                     else
                         for id, waiter in pairs(checkpoint_waiters) do
                             if waiter.pid == item.execution_pid then
-                                process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
+                                process.send(waiter.pid, "bee.app.checkpoint_result", {version = 1, request_id = waiter.request_id,
                                     error_code = "superseded", error = "A newer checkpoint replaced this request"})
                                 checkpoint_waiters[id] = nil
                             end
@@ -1412,7 +1412,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                             resume_state = data.resume_state}
                         local record = identified(item, "open", routed_id)
                         record.resume_state = data.resume_state
-                        process.send(owner, "bee.application.checkpoint", record)
+                        process.send(owner, "bee.app.checkpoint", record)
                     end
                 end
             end
@@ -1427,7 +1427,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
                         local item = find_pid(waiter.pid)
                         if item then item.resume_state = waiter.resume_state end
                     end
-                    process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1, request_id = waiter.request_id,
+                    process.send(waiter.pid, "bee.app.checkpoint_result", {version = 1, request_id = waiter.request_id,
                         error_code = type(data.error_code) == "string" and data.error_code or "invalid_result",
                         error = type(data.error) == "string" and data.error or "Invalid persistence result"})
                     checkpoint_waiters[data.request_id] = nil
@@ -1796,7 +1796,7 @@ local function main(owner: string, initial_preferences: unknown, raw_alias_backf
             if not writes then break end
             if now() >= replace_deadline then
                 for id, waiter in pairs(checkpoint_waiters) do
-                    process.send(waiter.pid, "bee.application.checkpoint_result", {version = 1,
+                    process.send(waiter.pid, "bee.app.checkpoint_result", {version = 1,
                         request_id = waiter.request_id, error_code = "uncertain",
                         error = "Broker replacement ended before checkpoint persistence was acknowledged"})
                     checkpoint_waiters[id] = nil

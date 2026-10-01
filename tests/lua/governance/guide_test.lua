@@ -15,7 +15,7 @@ local function define_tests()
             local document = guide.document()
             test.not_nil((string.find(document, "entries.json", 1, true)))
             test.not_nil((string.find(document, "process.lua", 1, true)))
-            test.not_nil((string.find(document, "bee.application", 1, true)))
+            test.not_nil((string.find(document, "bee.app", 1, true)))
             test.not_nil((string.find(document, "freeze", 1, true)))
             test.not_nil((string.find(document, "Overlays", 1, true)))
             test.not_nil((string.find(document, "Approvals", 1, true)))
@@ -56,7 +56,7 @@ local function define_tests()
         test.it("routes every application request to its archetype, the style rules and the kit", function()
             local document = guide.document()
             for _, needle in ipairs({"docs/guides/app-style.md", "80x24", "120x36", "160x48", "frame.size", "frame.layout",
-                "bee.application:viz", "viz = \"bee.application:viz\"", "tested example", "one-shot"}) do
+                "bee.app:viz", "viz = \"bee.app:viz\"", "tested example", "one-shot"}) do
                 test.eq(needle .. (string.find(document, needle, 1, true) and "" or " missing"), needle)
             end
             test.eq(#guide.ARCHETYPES, 6)
@@ -114,7 +114,9 @@ local function define_tests()
             test.eq(#measured.entries, 1)
             test.eq(measured.entries[1].id, guide.DEFINITION_ID)
             test.eq(measured.entries[1].kind, "process.lua")
-            test.eq((measured.entries[1].meta :: {[string]: unknown}).type, "bee.application")
+            local metadata = measured.entries[1].meta
+            if type(metadata) ~= "table" then error("example metadata is not an object") end
+            test.eq(metadata.type, "bee.app")
             local data = measured.entries[1].data :: {[string]: unknown}
             local source = data.source :: string
             local modules = data.modules :: {string}
@@ -124,9 +126,9 @@ local function define_tests()
             test.eq(modules[2], "process")
             test.eq(modules[3], "channel")
             test.eq(modules[4], "json")
-            test.eq(imports.client, "bee.application:client")
-            test.eq(imports.appearance, "bee.application:appearance")
-            test.eq(imports.frame, "bee.application:frame")
+            test.eq(imports.client, "bee.app:client")
+            test.eq(imports.appearance, "bee.app:appearance")
+            test.eq(imports.frame, "bee.app:frame")
             test.is_true(#source < 10000)
             for _, fragment in ipairs({
                 "local appearance = require(\"appearance\")", "appearance.defaults()",

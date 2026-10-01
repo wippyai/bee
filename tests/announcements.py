@@ -15,7 +15,7 @@ def exercise(packed):
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        source = project / "src/settings/app.lua"
+        source = project / "modules/settings/src/app/app.lua"
         code = source.read_text()
         anchor = "            local data = event.value"
         assert anchor in code
@@ -35,7 +35,7 @@ def exercise(packed):
                         {id = launch.view_id, token = launch.launch_token, title = "\27[31m"},
                         {id = launch.view_id, token = launch.launch_token, title = string.rep("x", 81)},
                     }) do
-                        assert(process.send(launch.broker_pid, "bee.application.title", {version = 1,
+                        assert(process.send(launch.broker_pid, "bee.app.title", {version = 1,
                             instance_id = launch.instance_id, id = request.id, launch_token = request.token, title = request.title}))
                     end
                     status = "Invalid attempts sent"
@@ -50,7 +50,7 @@ def exercise(packed):
         pack = project / "titles-deployment"
         if packed:
             pack_deployment(project, pack)
-        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.settings:app",))
+        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS")
             ui.key(b"!")

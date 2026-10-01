@@ -1,4 +1,4 @@
-# bee.application
+# bee.app
 
 The public application SDK. It provides bounded launch arguments, application
 client and interaction values, caller and status helpers, semantic appearance
@@ -45,7 +45,7 @@ clickable. Neither overlay grants permissions or bypasses app confirmations.
 
 ## Sessions client
 
-`sessions` (`bee.application:sessions`) calls the `bee.sessions:contract` and
+`sessions` (`bee.app:sessions`) calls the `bee.sessions:contract` and
 `bee.sessions:catalog` owner contracts through their default bindings, as the
 calling process's own actor. It grants nothing; the host admits the caller and
 the owner authorizes every operation. Each function returns `value, Fault?`;
@@ -83,7 +83,7 @@ durable identity from the current application broker or client, so applications
 must persist their own key before dispatch and reuse it after an uncertain
 reply. Reusing a key with different arguments is a conflict.
 
-Session snapshots expose `thread_ref`, `workspace`, driver/provider, definition and the latest settled result summary. `session:history{cursor?, limit?}` pages immutable Work inputs and refs in sequence order; rehydrate each Work to observe its current result. `client.navigate(launch, definition_id, arguments?)` queues an admitted app open through the current authenticated broker execution. A receiving app listens on `bee.application.navigate` and passes the message sender and payload to `client.navigation(launch, sender, payload)`; the helper returns bounded arguments only for the current broker execution.
+Session snapshots expose `thread_ref`, `workspace`, driver/provider, definition and the latest settled result summary. `session:history{cursor?, limit?}` pages immutable Work inputs and refs in sequence order; rehydrate each Work to observe its current result. `client.navigate(launch, definition_id, arguments?)` queues an admitted app open through the current authenticated broker execution. A receiving app listens on `bee.app.navigate` and passes the message sender and payload to `client.navigation(launch, sender, payload)`; the helper returns bounded arguments only for the current broker execution.
 
 `sessions.open` and `sessions.call` accept optional `presentation = "headless" |
 "window"`. Headless is the default. Window opens an interactive session with a
@@ -99,3 +99,12 @@ to the existing nonsecret `bee.env:no_color` flag. Appearance reads it under
 the active caller scope. The presenter also strips color from incoming app
 rows when NO_COLOR is set, including rows produced on another node; selection
 stays visible through glyphs and reverse video.
+
+The SDK root is `bee.app`; a feature UI child such as `bee.files.app` is a
+separate namespace with its own app entry. Process topics use `bee.app.*`.
+Deploy topic changes together with the SDK, broker and every sender and receiver,
+then restart the node owner and its processes from committed state. Selective
+live code handoff cannot mix the old and new topic protocols.
+Application principals retain `bee.application:<workspace_id>:<instance_id>`:
+Threads persists them in immutable records and command receipts, and workspace
+binding recovery matches them against stored memberships.

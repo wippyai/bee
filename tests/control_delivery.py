@@ -15,7 +15,7 @@ CASES = {
     "restore": ("host", 'topic == "bee.app.request" and type(value) == "table" and value.op == "open"'),
     "shutdown": ("launch", 'topic == "bee.app.request" and type(value) == "table" and value.op == "shutdown"'),
     "scene": ("client", 'topic == "bee.desktop.command" and type(value) == "table" and value.op == "add"'),
-    "receipt": ("host", 'topic == "bee.application.persisted"'),
+    "receipt": ("host", 'topic == "bee.app.persisted"'),
 }
 
 
@@ -34,7 +34,7 @@ def run(packed, cases=CASES):
         with tempfile.TemporaryDirectory(prefix="bee-delivery-") as directory:
             folder = Path(directory)
             # Establish an acknowledged real Settings checkpoint before faulting.
-            ui = Desktop(folder, apps=("bee.settings:app",))
+            ui = Desktop(folder, apps=("bee.settings.app:app",))
             try:
                 ui.wait("BEE SETTINGS")
                 ui.quit()
@@ -122,8 +122,8 @@ def routine(packed, cases=("open", "close", "prepare")):
             if case == "prepare":
                 actor = project / "src/host/main.lua"
                 source = actor.read_text().replace("local function main(", "local reject_command = true\nlocal function main(")
-                anchor = '                        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
-                operation = 'process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})'
+                anchor = '                        local sent, err = process.send(broker, "bee.app.shutdown", {version = 1, op = "prepare"})'
+                operation = 'process.send(broker, "bee.app.shutdown", {version = 1, op = "prepare"})'
                 condition = "reject_command"
             else:
                 actor = project / "src/host/clients.lua"
@@ -133,7 +133,7 @@ def routine(packed, cases=("open", "close", "prepare")):
                 # The initial CLI open must succeed; reject the later user action.
                 condition = 'reject_command and request.op == "' + case + '"'
                 if case == "open":
-                    condition += ' and request.definition_id == "bee.host.processes:app"'
+                    condition += ' and request.definition_id == "bee.host.processes.app:app"'
             assert source.count(anchor) == 1
             source = source.replace(anchor, f'''        local sent, err = true, ""
         if {condition} then
@@ -152,7 +152,7 @@ def routine(packed, cases=("open", "close", "prepare")):
             if packed:
                 pack_deployment(project, pack)
             ui = Desktop(folder, packed, project=project, deployment=pack,
-                         apps=("bee.console:app" if case == "prepare" else "bee.settings:app",))
+                         apps=("bee.console.app:app" if case == "prepare" else "bee.settings.app:app",))
             try:
                 ui.wait("Terminal" if case == "prepare" else "BEE SETTINGS")
                 if case == "open":
@@ -206,7 +206,7 @@ def targeting(packed):
                 target = 'nil' if operation == "open" else f'({owner_id} == string.rep("f", 32) and string.rep("0", 32) or string.rep("f", 32))'
                 condition = f'type(value) == "table" and value.op == "{operation}"'
                 if operation == "open":
-                    condition += ' and value.definition_id == "bee.host.processes:app"'
+                    condition += ' and value.definition_id == "bee.host.processes.app:app"'
                 injection = f'''        if reject_target and {condition} then
             reject_target = false
             value.workspace_id = {target}
@@ -217,7 +217,7 @@ def targeting(packed):
                 pack = project / "target-deployment"
                 if packed:
                     pack_deployment(project, pack)
-                ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.settings:app",))
+                ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.settings.app:app",))
                 try:
                     ui.wait("BEE SETTINGS")
                     if operation == "open":

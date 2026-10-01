@@ -24,7 +24,7 @@ entries:
   imports:
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
-    caller: bee.application:caller
+    caller: bee.app:caller
     inbox: bee.approvals.inbox:client
 - name: feeds_test
   kind: function.lua
@@ -43,12 +43,12 @@ entries:
   meta: {type: test, suite: bee}
   modules: [tty]
   imports:
-    frames: bee.application:frame
+    frames: bee.app:frame
     test: wippy.test:test
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
     view: bee.approvals.inbox.app:view
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: surface_test
   kind: function.lua
   source: file://surface_test.lua
@@ -64,7 +64,7 @@ entries:
     model: bee.approvals.inbox.app:model
     inbox: bee.approvals.inbox:client
     view: bee.approvals.inbox.app:view
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: admission_probe
   kind: process.lua
   source: file://admission_probe.lua
@@ -100,7 +100,7 @@ entries:
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
     inbox: bee.approvals.inbox:client
-    caller: bee.application:caller
+    caller: bee.app:caller
     thread_harness: bee.threads:harness
 - name: changed_proposal_test
   kind: function.lua
@@ -114,7 +114,7 @@ entries:
     test: wippy.test:test
     model: bee.approvals.inbox.app:model
     inbox: bee.approvals.inbox:client
-    caller: bee.application:caller
+    caller: bee.app:caller
 - name: leases_test
   kind: function.lua
   source: file://leases_test.lua
@@ -122,9 +122,9 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
-    forms: bee.application:forms
+    forms: bee.app:forms
     view: bee.approvals.inbox.app:view

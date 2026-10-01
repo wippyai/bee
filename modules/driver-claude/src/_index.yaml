@@ -367,7 +367,7 @@ entries:
 - name: command
   kind: registry.entry
   meta:
-    type: bee.application_command
+    type: bee.app_command
     comment: CLI command to launch Claude in the agent window
   data:
     name: claude

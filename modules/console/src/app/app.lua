@@ -8,7 +8,7 @@ local command = require("command")
 local function main(value: unknown)
     local launch = client.launch(value)
     if not launch then error("Invalid application launch") end
-    local closes = assert(process.listen("bee.application.close", {message = true}))
+    local closes = assert(process.listen("bee.app.close", {message = true}))
     local input = assert(tty.events())
     local events = assert(process.events())
     assert(tty.start())

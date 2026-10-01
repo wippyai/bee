@@ -107,7 +107,7 @@ entries:
   - fs
   imports:
     bounds: bee.threads.records:bounds
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     machine: bee.harness.carrier:machine
     protocol: bee.placement.native:protocol

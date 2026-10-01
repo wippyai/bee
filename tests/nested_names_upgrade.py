@@ -17,10 +17,10 @@ from workspace import ROOT, RUNTIME  # noqa: E402
 BASE = "ddc2694acf065d5b4253cc13f231dd1a65e92dab"
 RENAMED = {
     "bee.inbox:app": "bee.approvals.inbox.app:app",
-    "bee.overlays:app": "bee.gov.overlays:app",
+    "bee.overlays:app": "bee.gov.overlays.app:app",
 }
 OLD = {"bee.settings:app", *RENAMED}
-NEW = {"bee.settings:app", *RENAMED.values()}
+NEW = {"bee.settings.app:app", *RENAMED.values()}
 
 
 def saved(database):
@@ -77,12 +77,12 @@ def main():
         try:
             renamed.wait("Settings", timeout=40)
             renamed.open_start()
-            renamed.choose("Tools")
+            renamed.choose("Apps")
+            renamed.choose("Advanced")
             renamed.choose("Overlays")
             renamed.wait("╭─ Overlays", timeout=10)
             renamed.open_start()
-            renamed.choose("Tools")
-            renamed.choose("Approvals")
+            renamed.choose("Needs you")
             renamed.wait("Approvals", timeout=10)
             renamed.quit()
         finally:
@@ -91,11 +91,11 @@ def main():
         after_layout = layout(state / "workspace.db.client")
         assert after_root == (before_root[0], "bee.env:workspace_root"), after_root
         assert set(after_apps) == NEW, after_apps
-        assert after_apps["bee.settings:app"] == before_apps["bee.settings:app"]
+        assert after_apps["bee.settings.app:app"] == before_apps["bee.settings:app"]
         for old_id, new_id in RENAMED.items():
             assert after_apps[new_id] == before_apps[old_id]
         assert after_layout == before_layout, (before_layout, after_layout)
-        assert new_ledger == list(range(1, 10)), new_ledger
+        assert new_ledger == list(range(1, 13)), new_ledger
         print("Main state upgraded: Settings, Approvals, and Overlays windows retained their identities and layout")
 
 

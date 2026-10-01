@@ -40,7 +40,7 @@ local function created(label: string, root_ref: string, subpath: string): string
 end
 
 local function binding_request(instance_id: string, key: string): {[string]: unknown}
-    return {instance_id = instance_id, thread_id = "thread-" .. instance_id, definition_id = "bee.settings:app",
+    return {instance_id = instance_id, thread_id = "thread-" .. instance_id, definition_id = "bee.settings.app:app",
         actor_id = "actor-" .. instance_id, role = "participant", idempotency_key = key,
         definition_revision = "rev-1", initiating_owner_id = "owner", gateway_binding_id = "binding",
         gateway_approval_id = "approval", gateway_proposal_digest = string.rep("a", 64), access = "observe_post",
@@ -184,7 +184,7 @@ local function define_tests()
             if not db then error("open node database: " .. tostring(open_error)) end
             db:release()
             test.eq(#query(resource, "SELECT workspace_id FROM workspaces"), 0)
-            test.eq(#query(resource, "SELECT id FROM workspace_schema_migrations"), 11)
+            test.eq(#query(resource, "SELECT id FROM workspace_schema_migrations"), 12)
             local classic = open(resource, binding.classic())
             local id = assert(classic:identity())
             assert(classic:close())
@@ -221,7 +221,7 @@ local function define_tests()
             local migrated, open_error = store.database(resource)
             if not migrated then error("open node database: " .. tostring(open_error)) end
             migrated:release()
-            test.eq(#query(resource, "SELECT id FROM workspace_schema_migrations"), 11)
+            test.eq(#query(resource, "SELECT id FROM workspace_schema_migrations"), 12)
             local kept = query(resource, "SELECT workspace_id FROM workspaces")
             test.eq(#kept, 1)
             test.eq(kept[1].workspace_id, seeded[1].workspace_id)
@@ -245,7 +245,7 @@ local function define_tests()
             assert(db:execute("INSERT INTO workspace_state VALUES (1, 1, 7, ?, 'before')", {'{"version":1,"probe":"legacy"}'}))
             assert(db:execute("INSERT INTO workspace_display_assignments VALUES ('view', 'instance', 'display-a', 4)"))
             assert(db:execute("INSERT INTO workspace_display_transfer_receipts VALUES ('move', 'view', 'instance', 'display-a', 'display-b', 4, 'prepared', NULL, 'before')"))
-            assert(db:execute("INSERT INTO workspace_application_thread_bindings VALUES ('instance', 'thread', 'bee.settings:app', 'actor', 'participant', 2, 'active', 'key', 'rev', 'owner', 'binding', 'approval', ?, 'observe_post', 1, 5, 0, NULL)",
+            assert(db:execute("INSERT INTO workspace_application_thread_bindings VALUES ('instance', 'thread', 'bee.settings.app:app', 'actor', 'participant', 2, 'active', 'key', 'rev', 'owner', 'binding', 'approval', ?, 'observe_post', 1, 5, 0, NULL)",
                 {string.rep("b", 64)}))
             db:release()
 
@@ -264,7 +264,7 @@ local function define_tests()
             assert(classic:write('{"version":1,"probe":"upgraded"}'))
             assert(classic:close())
             local ledger = query(resource, "SELECT id FROM workspace_schema_migrations ORDER BY id")
-            test.eq(#ledger, 11)
+            test.eq(#ledger, 12)
             test.eq(#query(resource, "SELECT name FROM sqlite_master WHERE name = 'workspace_identity'"), 0)
             local reopened = open(resource, {workspace_id = identity})
             test.eq(reopened:read(), '{"version":1,"probe":"upgraded"}')

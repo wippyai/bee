@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.settings
+namespace: bee.settings.app
 entries:
 - name: app
   kind: process.lua
@@ -14,15 +14,15 @@ entries:
   - json
   - funcs
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    view: bee.settings:view
+    frame: bee.app:frame
+    appearance: bee.app:appearance
+    view: bee.settings.app:view
     build_info: bee.settings:build_info
-    client: bee.application:client
+    client: bee.app:client
     super_edit: bee.gov.binding:super_edit_call
-    live_updates: bee.settings:live_updates
+    live_updates: bee.settings.app:live_updates
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Settings
@@ -40,13 +40,10 @@ entries:
   modules:
   - tty
   imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
     build_info: bee.settings:build_info
-    live_updates: bee.settings:live_updates
-- name: build_info
-  kind: library.lua
-  source: file://build_info.lua
+    live_updates: bee.settings.app:live_updates
 - name: live_updates
   kind: library.lua
   source: file://live_updates.lua

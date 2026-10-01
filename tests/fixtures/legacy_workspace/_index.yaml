@@ -15,12 +15,12 @@ entries:
   imports:
     command: bee.apps:command
     contract: bee.protocol:application
-    arguments: bee.application:arguments
-    interaction: bee.application:interaction
+    arguments: bee.app:arguments
+    interaction: bee.app:interaction
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.protocol:input
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     physical: bee.terminal:display
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery
@@ -38,12 +38,12 @@ entries:
   imports:
     command: bee.apps:command
     contract: bee.protocol:application
-    arguments: bee.application:arguments
-    interaction: bee.application:interaction
+    arguments: bee.app:arguments
+    interaction: bee.app:interaction
     model: bee.desktop:model
     decode: bee.protocol:decode
     decode_input: bee.protocol:input
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     physical: bee.terminal:display
     persistence: bee.workspace:persistence
     recovery: bee.workspace:recovery

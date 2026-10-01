@@ -1,3 +1,4 @@
+local history_values = require("history_values")
 -- On-demand runtime observer. Only the broker can end a workspace application.
 local tty = require("tty")
 local client = require("client")
@@ -20,17 +21,17 @@ local function main(value: unknown)
     local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
-    local replies = assert(process.listen("bee.application.result", {message = true}))
+    local replies = assert(process.listen("bee.app.result", {message = true}))
     assert(tty.start())
     local output = assert(tty.surface())
     local ticker = assert(time.ticker("1s"))
     local ticks = ticker:channel()
     local width, height = tty.screen_size()
     local preferences = appearance.defaults()
-    local history = probe.new_history()
+    local history = history_values.new_history()
     local snapshot = probe.sample()
     local last_time = time.now():unix_nano()
-    probe.append(history, snapshot, nil, 0)
+    history_values.append(history, snapshot, nil, 0)
     local selected = ""
     local offset, capacity = 0, 0
     local hits: {frame.Hit} = {}
@@ -69,7 +70,7 @@ local function main(value: unknown)
     local function sample()
         local now = time.now():unix_nano()
         local next_snapshot = probe.sample()
-        probe.append(history, next_snapshot, snapshot, clock.elapsed_seconds(now, last_time))
+        history_values.append(history, next_snapshot, snapshot, clock.elapsed_seconds(now, last_time))
         snapshot, last_time = next_snapshot, now
         order(); reveal(); dirty = true
     end
@@ -79,7 +80,7 @@ local function main(value: unknown)
         -- a paused minute was a one-second sample.
         if not paused then
             snapshot = probe.sample(); last_time = time.now():unix_nano()
-            probe.append(history, snapshot, nil, 0); order(); reveal()
+            history_values.append(history, snapshot, nil, 0); order(); reveal()
         end
         dirty = true
     end
@@ -135,7 +136,7 @@ local function main(value: unknown)
                         if key == "enter" and broker then
                             local request_id = uuid.v7()
                             pending = stop_request.begin(request_id)
-                            local sent, send_error = process.send(broker, "bee.application.control", {version = 1, request_id = request_id, op = "stop", execution_pid = selected})
+                            local sent, send_error = process.send(broker, "bee.app.control", {version = 1, request_id = request_id, op = "stop", execution_pid = selected})
                             confirming = false
                             if sent and not send_error then status = "Stopping application…"
                             else pending = nil; status = "Stop request failed: " .. tostring(send_error) end

@@ -129,7 +129,7 @@ local function replacement_probe(): string
         error("replacement credentials did not advance and rotate")
     end
     local stale_request = launch.instance_id .. "-stale-credential"
-    assert(process.send(launch.broker_pid, "bee.application.thread.request", {
+    assert(process.send(launch.broker_pid, "bee.app.thread.request", {
         version = 1, request_id = stale_request, instance_id = launch.instance_id,
         launch_token = previous_token, execution_generation = previous_generation,
         operation = "read", arguments = {cursor = 0, limit = 1}}))

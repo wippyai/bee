@@ -28,13 +28,13 @@ entries:
   meta: {type: test, suite: bee}
   modules: [tty]
   imports:
-    frames: bee.application:frame
+    frames: bee.app:frame
     test: wippy.test:test
     model: bee.hive.manager.app:model
     view: bee.hive.manager.app:view
     directory: bee.hive.manager:directory
     types: bee.hive:types
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: remote_test
   kind: function.lua
   source: file://remote_test.lua
@@ -48,4 +48,4 @@ entries:
     types: bee.hive:types
     desktop_remote: bee.hive.desktop:remote
     display: bee.hive.desktop:display
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance

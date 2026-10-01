@@ -34,8 +34,8 @@ local function run_probe(mode: string?)
     -- Deliberately no physical tty.start, surface or input listener.
     local owner = tostring(process.pid())
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
-    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
+    local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
     local database = assert(store.open(nil, {root_ref = "bee.env:workspace_root", subpath = ""}))
     local workspace_id = assert(database:identity())
     local broker_policy, policy_error = security.policy("bee.security.desktop:broker_policy")
@@ -62,7 +62,7 @@ local function run_probe(mode: string?)
         assert(database:write(assert(json.encode({version = 1, desktop = {
             scene = model.new(80, 24), tabs = {}, preferences = appearance.defaults()}, applications = {record}}))))
         saved = true
-        assert(process.send(endpoint, "bee.application.persisted", {version = 1, request_id = data.request_id, error_code = "", error = ""}))
+        assert(process.send(endpoint, "bee.app.persisted", {version = 1, request_id = data.request_id, error_code = "", error = ""}))
     end
     local function wait_reply(request_id: string, op: string): decode.Reply
         while true do

@@ -256,6 +256,65 @@ local function define_tests()
             test.eq(problem, "Bee packs update through the bee/bee deployment root")
         end)
 
+        test.it("creates the first standalone selection instead of updating an absent entry", function()
+            local installed = state({}, {{name = "bee/bee", version = "0.1.0", source = "hub"}})
+            installed.resolution = {modules = {{name = "bee/bee", version = "0.1.0", source = "hub"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.1.0"}}}}
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = package("bee/bee", "0.2.0", "a", {
+                    binary_identity("github.com/wippyai/bee/native", "1.0.0"),
+                })}), baked_identity("1.0.0"))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                test.eq(prepared.plan.root_id, assert(plan.root_id("bee/bee")))
+                test.eq(prepared.plan.root_operation, "create")
+                test.eq(#prepared.installed.roots, 0)
+            end
+        end)
+
+        test.it("refuses a first standalone selection whose destination is occupied", function()
+            local installed = state({{id = assert(plan.root_id("bee/bee")), kind = "registry.entry",
+                registry = {owner = "", root = false}, data = {}}})
+            installed.resolution = {modules = {{name = "bee/bee", version = "0.1.0", source = "hub"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.1.0"}}}}
+            local prepared, problem = plan.prepare(installed, 12,
+                request({action = "update", component = "bee/bee", version = "0.2.0"}),
+                source({["bee/bee@0.2.0"] = package("bee/bee", "0.2.0", "a", {
+                    binary_identity("github.com/wippyai/bee/native", "1.0.0"),
+                })}), baked_identity("1.0.0"))
+            test.is_nil(prepared)
+            test.eq(problem, "dependency destination is already occupied")
+        end)
+
+        test.it("updates the resident standalone selection while preserving parameters", function()
+            local selection = root("bee/bee", "0.2.0")
+            selection.data = {component = "bee/bee", version = "0.2.0", parameters = {{name = "setting", value = "kept"}}}
+            local installed = state({selection})
+            installed.resolution = {modules = {{name = "bee/bee", version = "0.2.0", source = "hub"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "0.1.0"}}}}
+            local prepared, problem = plan.prepare(installed, 13,
+                request({action = "update", component = "bee/bee", version = "0.3.0",
+                    parameters = {{name = "setting", value = "kept"}}}),
+                source({["bee/bee@0.3.0"] = package("bee/bee", "0.3.0", "a", {
+                    binary_identity("github.com/wippyai/bee/native", "1.0.0"),
+                    {id = "bee:setting", kind = "ns.requirement", meta = {},
+                        data = {targets = {{entry = "bee.env:binary_identity", path = ".data.setting"}}}},
+                }, {requirements = {{id = "bee:setting", has_default = false, has_selected = false,
+                    targets = {{entry = "bee.env:binary_identity", path = ".data.setting"}}}}, missing = {"bee:setting"}})}), baked_identity("1.0.0"))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+            if prepared then
+                test.eq(prepared.plan.root_id, selection.id)
+                test.eq(prepared.plan.root_operation, "update")
+                test.eq(#prepared.installed.roots, 1)
+                test.eq(prepared.plan.request.parameters[1].value, "kept")
+            end
+            test.is_nil((plan.prepare(installed, 13,
+                request({action = "update", component = "bee/bee", version = "0.3.0"}), source({}), baked_identity("1.0.0"))))
+        end)
+
         test.it("updates the existing Bee deployment root and resolves its pack closure", function()
             local deployment = {id = "bee:deployment", kind = "ns.dependency", registry = {owner = "", root = true},
                 data = {component = "bee/bee", version = "0.1.0", parameters = {}}}
@@ -281,6 +340,7 @@ local function define_tests()
             test.not_nil(prepared)
             if prepared then
                 test.eq(prepared.plan.root_id, "bee:deployment")
+                test.eq(prepared.plan.root_operation, "update")
                 local bee, application, third_party = module_for(prepared.plan.modules, "bee/bee"),
                     module_for(prepared.plan.modules, "bee/application"), module_for(prepared.plan.modules, "acme/app")
                 test.not_nil(bee); test.not_nil(application); test.not_nil(third_party)

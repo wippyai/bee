@@ -19,7 +19,7 @@ entries:
   kind: library.lua
   source: file://commands.lua
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     contract: bee.protocol:application
 - name: input
   kind: library.lua
@@ -31,12 +31,12 @@ entries:
   imports:
     contract: bee.protocol:application
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: application
   kind: library.lua
   source: file://application.lua
   imports:
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
     bounds: bee.protocol:bounds
 - name: display_transfer
   kind: library.lua

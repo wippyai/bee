@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     home = Path(temporary) / "home"
     home.mkdir()
     state = Path(temporary) / "bee state"
-    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app", home=home)
+    ui = NativeDesktop(BINARY, folder, state, "bee.settings.app:app", home=home)
     try:
         ui.wait("Settings")
         ui.key(b"\x1b[24~")
@@ -45,13 +45,13 @@ with tempfile.TemporaryDirectory(prefix="bee-native-binary-") as temporary:
     # This suite verifies explicit in-process application launches. The public
     # owner/client route (which retains its owner after exit) is exercised by
     # native_client.py with explicit fixture-owned process cleanup.
-    ui = NativeDesktop(BINARY, folder, state, "bee.settings:app", home=home)
+    ui = NativeDesktop(BINARY, folder, state, "bee.settings.app:app", home=home)
     try:
         ui.wait("Settings")
         ui.quit()
     finally:
         ui.close()
-    ui = NativeDesktop(BINARY, folder, state, "bee.console:app", home=home)
+    ui = NativeDesktop(BINARY, folder, state, "bee.console.app:app", home=home)
     try:
         ui.wait("Terminal")
         # The wide taskbar caps status text at 18 cells. Use its compact layout

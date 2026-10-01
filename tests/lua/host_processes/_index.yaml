@@ -5,8 +5,10 @@ entries:
   kind: function.lua
   source: file://probe_test.lua
   method: run
-  meta: {type: test, suite: bee}
+  meta:
+    type: test
+    suite: bee
   imports:
     test: wippy.test:test
     probe: bee.host.processes:probe
-    stop_request: bee.host.processes:stop_request
+    stop_request: bee.host.processes.app:stop_request

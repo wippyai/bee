@@ -170,7 +170,7 @@ owner, grant IDs, and activation receipts when Bee resumes them.
 The shipped workspace application profile also admits `ns.requirement` entries
 for capability requests. A request declares `meta.value_kind: security.policy`,
 `meta.capability`, bounded `meta.parameters`, and a printable `meta.reason`. Its
-single target must be its own `bee.application` process entry at
+single target must be its own `bee.app` process entry at
 `.security.policies +=`, except a `hive.expose` request, whose target is one of
 the artifact's own Hive operations at the requested mode. The destination
 resolver checks the request against the host-owned `bee:capability_catalog`,

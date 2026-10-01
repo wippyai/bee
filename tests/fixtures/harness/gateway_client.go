@@ -373,7 +373,7 @@ func reportApplicationOpen(client *httpClient, url, authorization string, report
 	session := call("session", object{"operation": "read"}, 61)
 	report["session_read"] = session != nil && session["ok"] == true
 	requested := call("session", object{"operation": "request_access", "idempotency_key": "app-open-runtime",
-		"traits": []string{"bee.application:runtime"}, "reason": "Open the reviewed application and report its bound thread progress"}, 62)
+		"traits": []string{"bee.app:runtime"}, "reason": "Open the reviewed application and report its bound thread progress"}, 62)
 	report["app_open_request"] = requested
 	if requested == nil || requested["ok"] != true {
 		report["app_open_error"] = "access request failed"
@@ -402,7 +402,7 @@ func reportApplicationOpen(client *httpClient, url, authorization string, report
 		return
 	}
 	selected := call("session", object{"operation": "select", "expected_revision": int(revision),
-		"active_traits": []string{"bee.application:runtime"}, "context": object{}}, 400)
+		"active_traits": []string{"bee.app:runtime"}, "context": object{}}, 400)
 	report["selected"] = selected != nil && selected["ok"] == true
 	first := call("application_open", object{"definition_id": target, "arguments": []string{}, "idempotency_key": "open-first"}, 401)
 	second := call("application_open", object{"definition_id": target, "arguments": []string{}, "idempotency_key": "open-second"}, 402)

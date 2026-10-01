@@ -237,7 +237,7 @@ entries:
     test: wippy.test:test
     recovery: bee.harness.app:recovery
     restore_view: bee.harness.app:restore_view
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: carrier_transport_test
   kind: function.lua
   source: file://carrier_transport_test.lua
@@ -2129,7 +2129,7 @@ entries:
   imports:
     test: wippy.test:test
     lease: bee.harness.carrier:lease
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
 - name: fixture_open_cli_binding
   kind: contract.binding
   meta:
@@ -2287,7 +2287,7 @@ entries:
   - channel
   imports:
     terminal_view: bee.harness.app:terminal_view
-    client: bee.application:client
+    client: bee.app:client
 - name: presentation_producer
   kind: process.lua
   source: file://presentation_view_probe.lua
@@ -2300,7 +2300,7 @@ entries:
   - channel
   imports:
     terminal_view: bee.harness.app:terminal_view
-    client: bee.application:client
+    client: bee.app:client
 - name: presentation_view_get
   kind: function.lua
   source: file://presentation_view_probe.lua
@@ -2313,7 +2313,7 @@ entries:
   - channel
   imports:
     terminal_view: bee.harness.app:terminal_view
-    client: bee.application:client
+    client: bee.app:client
 - name: permission_exchange_test
   kind: function.lua
   source: file://permission_exchange_test.lua

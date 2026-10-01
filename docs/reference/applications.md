@@ -16,7 +16,7 @@ memory; it is not durable exactly-once execution.
 
 ## Admission
 
-An application definition uses `meta.type = bee.application` and
+An application definition uses `meta.type = bee.app` and
 `meta.application` with `api_version: 1`, `lifetime: view`, a nonempty
 `revision` and `title`, and `instance_policy: singleton|multiple`. It may
 declare an icon, slash-separated menu group, role and bounded
@@ -108,7 +108,7 @@ arguments never authorize calls.
 
 For `observe_post`, the broker binds the application to the initiating thread
 and requires both the exact admitted revision's selection and a live
-`bee.application:runtime` grant. The authenticated facade exposes `read`,
+`bee.app:runtime` grant. The authenticated facade exposes `read`,
 `post`, `subscribe`, `page`, `ack_page`, `resume` and `unsubscribe`. Each
 request carries the logical instance, launch token and execution generation;
 the caller cannot choose a thread, actor, workspace, membership or grant. The
@@ -136,7 +136,7 @@ does not mutate thread obligations or delivery history.
 
 ## Running managed agents
 
-An application opens and drives managed agents with `bee.application:sessions`,
+An application opens and drives managed agents with `bee.app:sessions`,
 which calls the `bee.sessions` owner contracts as the application's own actor.
 The SDK grants nothing: the host admits the caller and the owner authorizes
 every operation. The flow is catalog, open, send, await, close. `send` is the
@@ -144,7 +144,7 @@ only way to give a session work, and its receipt proves intake only; the result
 comes from `await`.
 
 ```lua
-local sessions = require("sessions")   -- imports: sessions: bee.application:sessions
+local sessions = require("sessions")   -- imports: sessions: bee.app:sessions
 
 local ready = sessions.catalog{}                        -- definitions whose executor is ready
 local s, fault = sessions.open{definition = "bee.driver.codex:research_batch", operation_key = "research/open"}
@@ -170,7 +170,7 @@ awaits it once. Every function returns `value, Fault`; a Fault carries `code`,
 observation and the work keeps running. Every mutation carries an operation
 key, so a replayed handler receives the original receipts; a lost reply is
 `UNKNOWN_OUTCOME` and is retried with the same key. The
-`bee.application` package README documents the handle functions, joins,
+`bee.app` package README documents the handle functions, joins,
 cancellation and key derivation.
 
 Launch definitions are registry entries with `meta.type = bee.launch_definition`;
@@ -209,7 +209,7 @@ dispatch or multi-workspace clients.
 
 An authorized open may carry a bounded `thread_id` association. It is a
 printable descriptive thread record ID of at most 160 bytes; it grants no
-membership or operation permission. `bee.application.open` rejects a caller
+membership or operation permission. `bee.app.open` rejects a caller
 chosen association, and applications cannot infer one from arguments. The
 broker carries the selected association through launch, replies, inventory and
 checkpoints. A singleton opened with a different live association returns
@@ -221,7 +221,7 @@ Arguments participate in open deduplication, are not accepted on
 close/bind/shutdown, and are not automatically persisted. A ready singleton
 reopen with nonempty arguments queues `{version = 1, instance_id, view_id,
 execution_generation, launch_token, arguments}` from the authenticated broker
-to the retained producer on the fixed `bee.application.navigate` topic before
+to the retained producer on the fixed `bee.app.navigate` topic before
 returning focus. The receiver calls `client.navigation(launch, sender, payload)`;
 it accepts only the current broker, instance, view, generation and launch token,
 then decodes bounded arguments. Queued delivery does not acknowledge successful
@@ -282,7 +282,7 @@ protected appearance grant. The session commits the preference and projection
 revision; broker-originated changes are validated before adoption. The theme
 and presentation role choose viewport defaults; a role does not add permission.
 
-`bee.application:client.title(launch, title)` queues a title of at most 80
+`bee.app:client.title(launch, title)` queues a title of at most 80
 bytes without controls; an empty title restores the admitted title. Queued
 does not mean committed. The broker authenticates PID, instance/view IDs and
 launch token, coalesces updates and routes them through the session. A user's
@@ -293,8 +293,8 @@ user may set a separate window label and named accent; applications cannot
 submit those private desktop commands. Native PTY OSC title forwarding is not
 implemented.
 
-Process control uses `bee.application.control` (`stop|force_stop`,
-`execution_pid`) and `bee.application.result`. The broker checks the caller's
+Process control uses `bee.app.control` (`stop|force_stop`,
+`execution_pid`) and `bee.app.result`. The broker checks the caller's
 grant and target ownership; a successful stop is reported only after EXIT.
 `termination_pending` is not success. Desktop command messages are private to
 the owning workspace and acknowledge committed scene, tabs, preferences and
@@ -312,7 +312,7 @@ keeps the saved record rather than feeding it to a different definition.
 
 `client.checkpoint(launch, json_string)` queues at most 64 KiB of opaque,
 application-owned JSON and returns a request ID. A successful
-`bee.application.checkpoint_result` means the workspace transaction committed;
+`bee.app.checkpoint_result` means the workspace transaction committed;
 one pending request is retained per app, superseded requests report
 `superseded`, and a five-second wait may end with an unknown result. Only an
 acknowledged receipt changes the saved resume state.
@@ -341,7 +341,7 @@ questions are not persisted, are canceled on app exit, and F12 retains the
 question while resetting transient input and focus. They are plain text, not
 password fields. A positive answer is not a capability grant.
 The options are `{kind = "confirm"|"text", title = string, message?, accept?,
-initial?}`. Listen on `bee.application.query.result` before calling `query`;
+initial?}`. Listen on `bee.app.query.result` before calling `query`;
 it returns `request_id, error`. Decode the broker message with
 `client.query_result(launch, tostring(message:from()), message:payload():data())`
 and match its `request_id`. The decoded reply is `{request_id, action =
@@ -352,7 +352,7 @@ Terminal key events use `key_type` values such as `runes`, `space`, `enter`,
 the payload also carries `key`, `ctrl`, `alt` and `shift`. Mouse wheel events
 have `type = "mouse"`, `action = "wheel"` and `button = "wheel_up"` or
 `"wheel_down"` (some senders use `"up"` or `"down"`).
-`bee.application:text.bound(value, limit)` replaces control
+`bee.app:text.bound(value, limit)` replaces control
 characters, including newlines, with spaces and truncates on a UTF-8
 character boundary.
 

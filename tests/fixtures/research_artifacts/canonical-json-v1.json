@@ -16,12 +16,12 @@
           "role": "research",
           "title": "Performance Research"
         },
-        "type": "bee.application"
+        "type": "bee.app"
       },
       "data": {
         "imports": {
           "appearance": "bee.desktop:appearance",
-          "client": "bee.application:client"
+          "client": "bee.app:client"
         },
         "method": "main",
         "modules": [

@@ -141,7 +141,7 @@ local function main(mode: string?)
     local function start(label: string, width: integer, launch: boolean): (string, tty.Viewport, desktops.Desktop)
         local selection: desktops.Selection = {host = host, workspace_id = workspace_id,
             database = "bee.client.db:" .. (shared_store and label == "right" and "left" or label), width = width, height = 32,
-            application = launch and "bee.console:app" or nil,
+            application = launch and "bee.console.app:app" or nil,
             options = {version = 1, desktop_id = shared_store and label == "right" and selected_id or nil, quit_mode = label == "right" and "supervisor" or "detach",
                 fullscreen = label == "left",
                 arguments = label == "left" and {"env", "BEE_LAUNCH_LITERAL=space ; $HOME", "bash", "--noprofile", "--norc", "-i"}
@@ -839,7 +839,7 @@ local function main(mode: string?)
     assert(denied_state and denied_state.preferences.theme == other_before.preferences.theme,
         "Client without appearance permission changed its theme")
     local function prepare_shutdown(): interaction.Spec
-        assert(process.send(host, "bee.application.shutdown", {version = 1, op = "prepare"}))
+        assert(process.send(host, "bee.app.shutdown", {version = 1, op = "prepare"}))
         while true do
             local message = assert(host_questions:receive())
             assert(tostring(message:from()) == host)

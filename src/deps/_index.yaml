@@ -217,3 +217,11 @@ entries:
     - bee.placement.docker.security:image_client_policy
     - bee.placement.docker.security:environment_owner_policy
     - bee.placement.docker.security:environment_listener_policy
+- name: settings
+  kind: ns.dependency
+  component: bee/settings
+  version: 0.1.0-dev
+- name: console
+  kind: ns.dependency
+  component: bee/console
+  version: 0.1.0-dev

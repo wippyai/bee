@@ -706,7 +706,7 @@ def exercise():
         shutil.copytree(ROOT / "tests/fixtures/window_hooks", project / "src/window_hooks")
         open_manifest = yaml.safe_load((project / "src/open_probe/_index.yaml").read_text())
         open_seed = next(entry for entry in open_manifest["entries"] if entry["name"] == "seed")
-        assert open_seed["imports"]["client"] == "bee.application:client"
+        assert open_seed["imports"]["client"] == "bee.app:client"
         for name in [".wippy.yaml", "wippy.lock", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
         bind_admission(project)

@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory(prefix="bee-native-about-") as temporary:
     project = Path(temporary) / "project"
     project.mkdir()
     state = Path(temporary) / "state"
-    ui = NativeDesktop(binary, project, state, application="bee.settings:app")
+    ui = NativeDesktop(binary, project, state, application="bee.settings.app:app")
     try:
         ui.wait("BEE SETTINGS", timeout=20)
         ui.key(b"\t\t\t\t")

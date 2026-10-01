@@ -46,3 +46,5 @@ workspace:
     bee/agents: ./modules/agents
     bee/files: ./modules/files
     bee/sessions: ./modules/sessions
+    bee/settings: ./modules/settings
+    bee/console: ./modules/console

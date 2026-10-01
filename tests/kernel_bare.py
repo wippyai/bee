@@ -20,7 +20,7 @@ ALLOWED_NAMESPACES = {
 }
 ALLOWED_NAMESPACE_TREES = (
     "bee.security", "bee.workspace", "bee.approvals", "bee.threads", "bee.hive",
-    "bee.gov", "bee.hub", "bee.gateway", "bee.sync", "bee.node", "bee.application",
+    "bee.gov", "bee.hub", "bee.gateway", "bee.sync", "bee.node", "bee.app",
     "bee.docs",
 )
 EXCLUDED_NAMESPACE_TREES = (
@@ -143,7 +143,7 @@ def run():
 
         state = folder / "state"
         state.mkdir()
-        ui = Desktop(str(state), project=project, apps=("bee.settings:app",))
+        ui = Desktop(str(state), project=project, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS", timeout=90)
             ui.open_start()

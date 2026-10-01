@@ -14,7 +14,7 @@ entries:
   method: main
   modules: [process, time, security, tty, io]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
   security:
     policies: [bee.hive.manager.probe:policy]
   meta:

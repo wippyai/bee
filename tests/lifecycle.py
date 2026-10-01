@@ -22,7 +22,7 @@ local function main(value: unknown)
     assert(tty.start())
     if launch.definition_id == "probe:early" then return end
     if launch.definition_id == "probe:never" then
-        process.send(launch.broker_pid, "bee.application.ready", {version = 1, instance_id = launch.instance_id,
+        process.send(launch.broker_pid, "bee.app.ready", {version = 1, instance_id = launch.instance_id,
             view_id = launch.view_id, launch_token = "forged"})
         time.sleep("10s")
         return
@@ -69,8 +69,8 @@ def run():
         entries = []
         for name in ["early", "never", "delayed", "stubborn"]:
             entries.append({"name": name, "kind": "process.lua", "source": "file://app.lua", "method": "main",
-                            "modules": ["tty", "process", "channel", "time"], "imports": {"client": "bee.application:client"},
-                            "meta": {"type": "bee.application", "application": {"api_version": 1, "lifetime": "view",
+                            "modules": ["tty", "process", "channel", "time"], "imports": {"client": "bee.app:client"},
+                            "meta": {"type": "bee.app", "application": {"api_version": 1, "lifetime": "view",
                             "title": name, "revision": "1", "instance_policy": "multiple", "group": "Probe"}}})
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": entries}, sort_keys=False))
         index = project / "src/security/_index.yaml"

@@ -66,7 +66,7 @@ local function run()
     local thread = "managed_window_selector"
     call("bee.threads.service:create", {thread_id = thread, idempotency_key = "managed-window-failure-create", title = "Managed window failure fixture"})
     local owner = tostring(process.pid())
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
     local appearance_requests = assert(process.listen("bee.appearance.request", {message = true}))
     local broker_policy = assert(security.policy("bee.security.desktop:broker_policy"))

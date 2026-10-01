@@ -66,7 +66,7 @@ end
 function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channel<process.Event>,
     closes: Channel<process.Message>): (admission.Admitted?, string?)
     local states = assert(process.listen("bee.appearance.state", {message = true}))
-    local navigation = assert(process.listen("bee.application.navigate", {message = true}))
+    local navigation = assert(process.listen("bee.app.navigate", {message = true}))
     local output = assert(tty.surface())
     local running = true
     local load_serial = 0

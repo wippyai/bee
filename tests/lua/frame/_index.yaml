@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.application.frame.test
+namespace: bee.app.frame.test
 entries:
 - name: frame_test
   kind: function.lua
@@ -9,8 +9,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
 - name: layout_test
   kind: function.lua
   source: file://layout_test.lua
@@ -19,8 +19,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    frame: bee.application:frame
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    appearance: bee.app:appearance
 - name: viz_test
   kind: function.lua
   source: file://viz_test.lua
@@ -29,9 +29,9 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    frame: bee.application:frame
-    viz: bee.application:viz
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    viz: bee.app:viz
+    appearance: bee.app:appearance
 - name: forms_test
   kind: function.lua
   source: file://forms_test.lua
@@ -40,9 +40,9 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    frame: bee.application:frame
-    forms: bee.application:forms
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    forms: bee.app:forms
+    appearance: bee.app:appearance
 - name: diagram_test
   kind: function.lua
   source: file://diagram_test.lua
@@ -51,7 +51,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    frame: bee.application:frame
-    viz: bee.application:viz
-    diagram: bee.application:diagram
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    viz: bee.app:viz
+    diagram: bee.app:diagram
+    appearance: bee.app:appearance

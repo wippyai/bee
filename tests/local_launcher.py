@@ -65,7 +65,7 @@ def run():
         application_entry["meta"] = {"command": {"name": "local-application-probe", "short": "Explicit argument acceptance",
             "security": entry["meta"]["command"]["security"]}}
         index.write_text(yaml.safe_dump(document, sort_keys=False))
-        index = project / "src/console/_index.yaml"
+        index = project / "modules/console/src/app/_index.yaml"
         document = yaml.safe_load(index.read_text())
         next(e for e in document["entries"] if e["name"] == "app")["meta"]["application"]["commands"].append({
             "name": "local-proof", "fullscreen": True,
@@ -80,7 +80,7 @@ def run():
             pair_folder = root / ("pair-pack" if packed else "pair-source")
             pair_folder.mkdir()
             ui = Desktop(pair_folder, packed, project=project, deployment=pack,
-                         command_name="local-command-probe", apps=("bee.client.db:local", "bee.console:app", "bee.settings:app"))
+                         command_name="local-command-probe", apps=("bee.client.db:local", "bee.console.app:app", "bee.settings.app:app"))
             try:
                 ui.wait("Terminal", timeout=12)
                 assert "Settings" not in ui.text(), "Secondary shortcut target opened at boot"
@@ -124,7 +124,7 @@ def run():
             argument_folder.mkdir()
             ui = Desktop(argument_folder, packed, project=project, deployment=pack,
                          command_name="local-application-probe",
-                         apps=("bee.client.db:local", "bee.console:app", "/bin/bash", str(script), "space ; $HOME"))
+                         apps=("bee.client.db:local", "bee.console.app:app", "/bin/bash", str(script), "space ; $HOME"))
             try:
                 ui.wait("EXPLICIT=<space ; $HOME>", timeout=12)
                 ui.quit(confirm=True)
@@ -149,7 +149,7 @@ def run():
             folder = root / ("pack" if packed else "source")
             folder.mkdir()
             ui = Desktop(folder, packed, project=project, deployment=pack,
-                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
+                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console.app:app"))
             try:
                 ui.wait("Terminal", timeout=12)
                 ui.key(b"bee_local=alive; printf 'LOCAL_%s_OK\\n' \"$bee_local\"\r")
@@ -174,7 +174,7 @@ def run():
                 ui.close()
 
             ui = Desktop(folder, packed, project=project, deployment=pack,
-                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
+                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console.app:app"))
             try:
                 ui.wait("Terminal", timeout=12)
                 exhaust_presenter_recovery(ui)
@@ -198,7 +198,7 @@ def run():
             restored_folder = root / ("restore-pack" if packed else "restore-source")
             restored_folder.mkdir()
             for initial in (True, False):
-                apps = ("bee.client.db:local", "bee.settings:app") if initial else ("bee.client.db:local",)
+                apps = ("bee.client.db:local", "bee.settings.app:app") if initial else ("bee.client.db:local",)
                 ui = Desktop(restored_folder, packed, project=project, deployment=pack,
                              command_name="local-client-probe", apps=apps)
                 try:
@@ -242,7 +242,7 @@ def run():
                             end
 ''')
         client_file.write_text(replay_code)
-        settings_index = project / "src/settings/_index.yaml"
+        settings_index = project / "modules/settings/src/app/_index.yaml"
         original_settings = settings_index.read_text()
         settings = yaml.safe_load(original_settings)
         next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["restart_policy"] = "manual"
@@ -253,7 +253,7 @@ def run():
             folder = root / ("manual-pack" if packed else "manual-source")
             folder.mkdir()
             ui = Desktop(folder, packed, project=project, deployment=pack,
-                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.settings:app"))
+                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.settings.app:app"))
             try:
                 ui.wait("Replay verified", timeout=12)
                 ui.wait("Honey", timeout=12)
@@ -294,7 +294,7 @@ def run():
             folder = root / ("stalled-pack" if packed else "stalled-source")
             folder.mkdir()
             ui = Desktop(folder, packed, project=project, deployment=pack,
-                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
+                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console.app:app"))
             try:
                 ui.wait("Emergency exit", timeout=8)
                 elapsed = ui.quit()
@@ -323,7 +323,7 @@ def run():
             folder = root / ("lost-reply-pack" if packed else "lost-reply-source")
             folder.mkdir()
             ui = Desktop(folder, packed, project=project, deployment=pack,
-                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console:app"))
+                         command_name="local-client-probe", apps=("bee.client.db:local", "bee.console.app:app"))
             try:
                 ui.wait("Terminal", timeout=12)
                 ui.key(b"bee_retained=alive\r")
@@ -416,7 +416,7 @@ def public_migration():
         for packed in (False, True):
             folder = root / ("pack" if packed else "source")
             folder.mkdir()
-            ui = Desktop(folder, project=project, command_name="legacy-desktop-probe", apps=("bee.settings:app",))
+            ui = Desktop(folder, project=project, command_name="legacy-desktop-probe", apps=("bee.settings.app:app",))
             try:
                 ui.wait("BEE SETTINGS")
                 move(ui)

@@ -67,7 +67,7 @@ to offer a `create` or a launch folder. Browsing a root is its own action,
 `bee.workspace.manager.browse`: `bee.security.storage:workspace_catalog_manage_policy` grants it with
 management, and `bee.security.storage:workspace_folder_browse_policy` grants it with the
 catalog read `roots` needs and nothing else, which the Agent window holds for
-its folder choice. `bee.application:folder_picker` is the shared picker model
+its folder choice. `bee.app:folder_picker` is the shared picker model
 and table both the Workspaces create flow and the Agent profile form use.
 
 **Inspect and search within.** `inspect` (`{workspace_id}`, read authority on
@@ -118,7 +118,7 @@ served (`managed = false`) instead of starting a second one.
 
 A lease is a process-registry name `bee.workspace.lease/<id>` its holder
 registers under the host-named policy `bee.security.desktop:workspace_host_lease_policy`.
-`bee.application:host_leases.acquire(workspace_id, timeout)` registers the name,
+`bee.app:host_leases.acquire(workspace_id, timeout)` registers the name,
 sends `bee.workspace.hosts.acquire` to the registered manager
 `bee.workspace.hosts` and waits for `bee.workspace.hosts.result`
 (`{host, managed}` or `error_code` `busy`, `unavailable`,

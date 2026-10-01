@@ -74,13 +74,13 @@ def canonical(value):
 
 
 def fixture_artifact(evidence):
-    entry = {"id": DEFINITION_ID, "kind": "process.lua", "meta": {"type": "bee.application",
+    entry = {"id": DEFINITION_ID, "kind": "process.lua", "meta": {"type": "bee.app",
              "application": {"api_version": 1, "title": TITLE, "lifetime": "view", "revision": "2",
                              "instance_policy": "multiple", "resume_schema": "agent-app.v1",
                              "restart_policy": "automatic"}},
              "data": {"source": FIXTURE_SOURCE.read_text(), "method": "main",
                       "modules": ["tty", "process", "channel", "json"],
-                      "imports": {"client": "bee.application:client"}}}
+                      "imports": {"client": "bee.app:client"}}}
     measured = canonical({"schema_revision": "bee.governance-artifact@1", "entries": [entry]})
     digest = hashlib.sha256(measured.encode()).hexdigest()
     path = evidence / "fixture-authored.json"

@@ -239,7 +239,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
                 local target_namespace = target_id:match("^([^:]+):")
                 local target_meta = object(destination.meta)
                 if target.path ~= ".security.policies +=" or target_namespace ~= request_namespace
-                    or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.application" then
+                    or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.app" then
                     return nil, "capability requirement must append policies to its own application"
                 end
             end

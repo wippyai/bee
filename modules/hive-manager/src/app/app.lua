@@ -56,7 +56,7 @@ local function main(value: unknown)
     local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
-    local answers = assert(process.listen("bee.application.query.result", {message = true}))
+    local answers = assert(process.listen("bee.app.query.result", {message = true}))
     local handle, open_error = hive.open()
     if not handle then error("Hive client: " .. tostring(open_error)) end
     assert(tty.start())

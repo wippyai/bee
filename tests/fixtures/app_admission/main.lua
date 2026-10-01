@@ -14,7 +14,7 @@ local function run()
     local owner = tostring(process.pid())
     local workspace = "0123456789abcdef0123456789abcdef"
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
     local principals = assert(process.listen("bee.admission.probe.principal", {message = true}))
     local scope = security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")), assert(security.policy("bee.security:core_spawn_boundary"))})
     local broker = tostring(assert(process.with_context({["bee.workspace_owner"] = owner, ["bee.workspace_id"] = workspace})

@@ -2,7 +2,7 @@
 
 Read this page before drawing any Bee application. It states the rules every
 terminal application follows, and each rule names the
-`bee.application:frame` function that implements it. The
+`bee.app:frame` function that implements it. The
 [brand book](ui.md) explains the intent behind the rules; this page is the
 contract. When a rule and a wish conflict, follow the rule.
 
@@ -99,7 +99,7 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
 
 ## 6. Color roles
 
-Use `bee.application:appearance` roles; never write a hex value in an
+Use `bee.app:appearance` roles; never write a hex value in an
 application. `appearance.role(theme, name)` resolves a role by name.
 
 | Role | Allowed on |
@@ -143,7 +143,7 @@ Rules:
 - Truncate in this order: the header summary, then metadata columns, then the
   flexible column. A table too narrow for its flexible column folds each row
   into `first cell · other cells` (`frame.table`).
-- External text passes through `bee.application:text.bound` with a byte
+- External text passes through `bee.app:text.bound` with a byte
   ceiling before it reaches the frame.
 - Numbers are right-aligned (`Column.align = "right"`) and never truncated;
   shorten their unit instead (`12.4 MiB`, `1.2k`).
@@ -274,7 +274,7 @@ never grow without bound.
 ```
  BUILD LOG                                         Following · 1,204 lines
 
- 18:02:11  compile  bee.application:frame
+ 18:02:11  compile  bee.app:frame
  18:02:12  lint     507 entries, 0 errors
 ›18:02:14  test     frame_test 11 passed
   Follow    Clear
@@ -361,7 +361,7 @@ application owns, and are drawn at every size class by
 
 ## 12. Visualizations
 
-The visualization kit is `bee.application:viz`. Choose by the question:
+The visualization kit is `bee.app:viz`. Choose by the question:
 
 | Question | Function |
 |---|---|

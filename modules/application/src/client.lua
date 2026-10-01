@@ -47,13 +47,13 @@ function M.reference(launch: Launch): ViewReference
 end
 type ReadyOptions = {negotiate_close: boolean?}
 function M.ready(launch: Launch, options: ReadyOptions?)
-    assert(process.send(launch.broker_pid, "bee.application.ready", {version = 1, instance_id = launch.instance_id,
+    assert(process.send(launch.broker_pid, "bee.app.ready", {version = 1, instance_id = launch.instance_id,
         view_id = launch.view_id, launch_token = launch.launch_token, negotiate_close = options and options.negotiate_close == true or false}))
 end
 -- True means queued; it is not a persistence or presentation acknowledgement.
 function M.title(launch: Launch, title: string): (boolean, string?)
     if #title > 80 or title:find("%c") then return false, "Invalid application title" end
-    local sent, err = process.send(launch.broker_pid, "bee.application.title", {version = 1,
+    local sent, err = process.send(launch.broker_pid, "bee.app.title", {version = 1,
         instance_id = launch.instance_id, id = launch.view_id, launch_token = launch.launch_token, title = title})
     if not sent then return false, tostring(err) end
     return true, nil
@@ -77,21 +77,21 @@ function M.close_reply(launch: Launch, request_id: string, decision: CloseDecisi
     if decision.action == "confirm" and not interaction.spec({version = 1, request_id = request_id,
         id = launch.view_id, instance_id = launch.instance_id, kind = "confirm", title = title, message = message,
         accept = accept, initial = ""}) then return false, "Invalid confirmation" end
-    local sent, err = process.send(launch.broker_pid, "bee.application.close.reply", {version = 1,
+    local sent, err = process.send(launch.broker_pid, "bee.app.close.reply", {version = 1,
         request_id = request_id, id = launch.view_id, instance_id = launch.instance_id, launch_token = launch.launch_token,
         action = decision.action, title = title, message = message, accept = accept})
     if not sent then return false, tostring(err) end
     return true, nil
 end
 type Query = {kind: interaction.Kind, title: string, message: string?, accept: string?, initial: string?}
--- Listen for bee.application.query.result before sending; success means queued.
+-- Listen for bee.app.query.result before sending; success means queued.
 function M.query(launch: Launch, options: Query): (string?, string?)
     local request_id = uuid.v7()
     local spec = interaction.spec({version = 1, request_id = request_id, id = launch.view_id,
         instance_id = launch.instance_id, kind = options.kind, title = options.title,
         message = options.message or "", accept = options.accept or "Continue", initial = options.initial or ""})
     if not spec then return nil, "Invalid interaction" end
-    local sent, err = process.send(launch.broker_pid, "bee.application.query", {version = 1,
+    local sent, err = process.send(launch.broker_pid, "bee.app.query", {version = 1,
         launch_token = launch.launch_token, request_id = request_id, id = spec.id, instance_id = spec.instance_id,
         kind = spec.kind, title = spec.title, message = spec.message, accept = spec.accept, initial = spec.initial})
     if not sent then return nil, tostring(err) end
@@ -109,7 +109,7 @@ end
 function M.checkpoint(launch: Launch, state: string): (string?, string?)
     if launch.resume_schema == "" or #state > 65536 then return nil, "Checkpoint unsupported or too large" end
     local request_id = uuid.v7()
-    local sent, err = process.send(launch.broker_pid, "bee.application.checkpoint", {version = 1, request_id = request_id,
+    local sent, err = process.send(launch.broker_pid, "bee.app.checkpoint", {version = 1, request_id = request_id,
         instance_id = launch.instance_id, id = launch.view_id, launch_token = launch.launch_token,
         resume_schema = launch.resume_schema, resume_state = state})
     if not sent then return nil, tostring(err) end
@@ -126,7 +126,7 @@ function M.thread_request(launch: Launch, operation: thread_protocol.Operation, 
         execution_generation = launch.execution_generation, operation = operation,
         arguments = values})
     if not request then return nil, "Invalid application thread request" end
-    local sent, err = process.send(launch.broker_pid, "bee.application.thread.request", request)
+    local sent, err = process.send(launch.broker_pid, "bee.app.thread.request", request)
     if not sent then return nil, tostring(err) end
     return request_id, nil
 end

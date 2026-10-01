@@ -1,5 +1,11 @@
 # Process code handoff
 
+Application process topics use `bee.app.*`. A topic rename requires one
+deployment containing the SDK, broker and all senders and receivers, followed by
+a full node owner restart from committed state. Selective process handoff does
+not support mixing topic namespaces; saved applications recover with the current
+protocol after restart.
+
 Bee supports a same-PID code handoff for the desktop session. The
 runtime delivers `OUTDATED` only after the session opts in. The session drains
 accepted desktop commands and binding updates before calling `process.upgrade`

@@ -1,3 +1,4 @@
+local history_values = require("history_values")
 -- MIT. Compact process views keep their mode and health visible, and native
 -- sampler text cannot inject terminal controls.
 local test = require("test")
@@ -19,12 +20,12 @@ local function define_tests()
     test.describe("Process Manager frame", function()
         test.it("fits every responsive geometry in both modes and strips hostile text", function()
             local sample = snapshot()
-            local history = probe.new_history()
-            probe.append(history, sample, nil, 0)
+            local history = history_values.new_history()
+            history_values.append(history, sample, nil, 0)
             for _, services in ipairs({false, true}) do
                 local rows = view.items(sample, services)
                 for _, width in ipairs({1, 20, 40, 80, 120}) do
-                    for _, height in ipairs({1, 6, 12, 24}) do
+                    for _, height in ipairs({1, 6, 12, 24, 36}) do
                         local frame = view.draw(width, height, sample, history, appearance.defaults(), rows[1].pid,
                             0, false, "", false, services, rows, false)
                         test.eq(#frame.rows, height)
@@ -41,8 +42,8 @@ local function define_tests()
         end)
         test.it("shows the active compact mode and bounds native text", function()
             local sample = snapshot()
-            local history = probe.new_history()
-            probe.append(history, sample, nil, 0)
+            local history = history_values.new_history()
+            history_values.append(history, sample, nil, 0)
             local process_rows = view.items(sample, false)
             local processes = table.concat(view.draw(24, 10, sample, history, appearance.defaults(), process_rows[1].pid,
                 0, false, "", false, false, process_rows, false).rows, "\n")
@@ -63,14 +64,14 @@ local function define_tests()
         test.it("names the app, its live state and keys, and tells same-source processes apart by PID suffix", function()
             local sample: probe.Snapshot = {
                 processes = {
-                    {pid = "{node@bee:workers|0x00017}", source = "bee.settings:app", host = "main", state = "idle", steps = 12},
-                    {pid = "{node@bee:workers|0x00018}", source = "bee.settings:app", host = "main", state = "idle", steps = 14},
+                    {pid = "{node@bee:workers|0x00017}", source = "bee.settings.app:app", host = "main", state = "idle", steps = 12},
+                    {pid = "{node@bee:workers|0x00018}", source = "bee.settings.app:app", host = "main", state = "idle", steps = 14},
                     {pid = "{node@bee:workers|0x00002}", source = "bee.host:main", host = "main", state = "idle", steps = 96}},
                 services = {}, heap = 1048576, heap_objects = 1, reserved = 2097152, gc_cycles = 1, goroutines = 2,
                 queue = 0, executed = 9, host_executed = {main = 9}, error = "",
             }
-            local history = probe.new_history()
-            probe.append(history, sample, nil, 0)
+            local history = history_values.new_history()
+            history_values.append(history, sample, nil, 0)
             local rows = view.items(sample, false)
             local drawn = view.draw(80, 24, sample, history, appearance.defaults(), rows[2].pid, 0, false, "", false, false, rows, false)
             local plain: {string} = {}
@@ -78,8 +79,8 @@ local function define_tests()
             local text = table.concat(plain, "\n")
             test.is_true(plain[1]:find("PROCESS MANAGER", 1, true) ~= nil)
             test.is_true(plain[1]:find("Live · 1s · 3 processes", 1, true) ~= nil)
-            test.is_true(text:find("bee.settings:app · 0x00017 ", 1, true) ~= nil)
-            test.is_true(text:find("bee.settings:app · 0x00018 ", 1, true) ~= nil)
+            test.is_true(text:find("bee.settings.app:app · 0x00017 ", 1, true) ~= nil)
+            test.is_true(text:find("bee.settings.app:app · 0x00018 ", 1, true) ~= nil)
             test.is_nil(text:find("0x00017}", 1, true) and text:find("· 0x00017}", 1, true))
             test.is_true(plain[24]:find("↑↓ select · Tab switch · S sort · P pause · Del stop · Esc close", 1, true) ~= nil)
             test.is_true(plain[23]:find("Pause", 1, true) ~= nil and plain[23]:find("Stop app", 1, true) ~= nil)

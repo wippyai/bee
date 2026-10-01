@@ -74,4 +74,4 @@ entries:
     test: wippy.test:test
     persistence: bee.workspace:persistence
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance

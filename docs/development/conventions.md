@@ -34,8 +34,9 @@ host wiring lives in the app root or beside its component.
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `src/storage` | Workspace database, catalog rows and migration ledger |
-| `modules/application/src` | Public application helpers, appearance and rendering values |
-| `src/console`, `src/settings` | Standalone Terminal and Settings applications |
+| `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
+| `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
+| `src/console` | Host-selected native Terminal executor, OS environment and grants |
 | `modules/approvals-inbox/src` | Approvals inbox app as an installable package |
 | `modules/threads-timeline/src` | Thread timeline viewer as an installable package |
 | `modules/workspace-manager/src` | Workspace manager as an installable package |
@@ -88,6 +89,12 @@ process, persistence, migration, binding, trait and registry slices. The
 module's root, namespace ownership and dependency requirements must be declared
 before extraction. Independent Hub packages, public enrollment and remote
 package transfer remain separate proposals.
+
+Application entries, renderers, screen models and view helpers live in
+`modules/<module>/src/app` as `<module namespace>.app`. The SDK root
+`bee.app` belongs only to `modules/application`; app children such as
+`bee.files.app` import its helpers and own their separate application entries.
+The desktop shell remains in `src/desktop` and `src/terminal`.
 
 Within a module, keep shared domain types and contracts at the root. Contract
 implementations belong in `binding`, SQL repositories in `persist`, and

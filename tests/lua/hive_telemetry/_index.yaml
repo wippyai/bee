@@ -20,7 +20,7 @@ entries:
   modules: [funcs, process, time]
   imports:
     test: wippy.test:test
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
 - name: cluster_test
   kind: function.lua
   source: file://cluster_test.lua

@@ -208,8 +208,8 @@ local function main(value: unknown, constructors: {[string]: Open}, retained: bo
     if not launch then error("Invalid application launch") end
     local input = assert(tty.events())
     local lifecycle = assert(process.events())
-    local closes = assert(process.listen("bee.application.close", {message = true}))
-    local checkpoint_results = assert(process.listen("bee.application.checkpoint_result", {message = true}))
+    local closes = assert(process.listen("bee.app.close", {message = true}))
+    local checkpoint_results = assert(process.listen("bee.app.checkpoint_result", {message = true}))
     assert(tty.start())
     if launch.resume_schema ~= recovery.SCHEMA then
         tty.stop(); process.unlisten(closes); process.unlisten(checkpoint_results)

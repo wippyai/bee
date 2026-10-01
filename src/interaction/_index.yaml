@@ -6,11 +6,11 @@ entries:
   source: file://protocol.lua
   imports:
     contract: bee.protocol:application
-    interaction: bee.application:interaction
+    interaction: bee.app:interaction
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
   imports:
     contract: bee.protocol:application
-    interaction: bee.application:interaction
+    interaction: bee.app:interaction
     protocol: bee.interaction:protocol

@@ -583,13 +583,13 @@ def process_manager(packed):
             # Navigate the actual list instead of assuming the entire inventory fits.
             ui.key(b"\x1b[H")
             for _ in range(64):
-                if "bee.settings:app" in ui.text():
+                if "bee.settings.app:app" in ui.text():
                     break
                 ui.key(b"\x1b[B")
                 ui.pump(.05)
-            ui.wait("bee.settings:app")
+            ui.wait("bee.settings.app:app")
             assert ui.screen.display[0].count("Process Manager") == 1, ui.text()
-            row = next(y for y, text in enumerate(ui.screen.display, 1) if "bee.settings:app" in text)
+            row = next(y for y, text in enumerate(ui.screen.display, 1) if "bee.settings.app:app" in text)
             ui.mouse(0, 5, row); ui.mouse(0, 5, row, True)
             ui.key(b"\x1b[3~"); ui.wait("Stop selected app?")
             ui.key(b"\r"); ui.wait("Application ended")

@@ -62,7 +62,7 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         local trait_tools = trait and bounds.ids(trait.tools, true)
         if trait_tools then
             for _, name in ipairs(trait_tools) do
-                if name == "application_open" then return nil, nil, "application_open belongs only to bee.application:runtime" end
+                if name == "application_open" then return nil, nil, "application_open belongs only to bee.app:runtime" end
             end
         end
     end
@@ -87,10 +87,10 @@ function M.prepare(raw: unknown, builtins: {catalog.Tool}, ceiling: {string}): (
         for _, id in ipairs(access.traits) do requestable[id] = true end
     end
     if has_open then
-        if not access then return nil, nil, "application_open requires bee.application:runtime access" end
+        if not access then return nil, nil, "application_open requires bee.app:runtime access" end
         local declared = false
         for _, id in ipairs(access.traits) do if id == mcp.APPLICATION_RUNTIME_TRAIT.id then declared = true end end
-        if not declared then return nil, nil, "application_open requires bee.application:runtime access" end
+        if not declared then return nil, nil, "application_open requires bee.app:runtime access" end
     end
     local gated_tools: {[string]: boolean} = {}
     local known_traits: {[string]: catalog.Trait} = {}

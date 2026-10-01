@@ -9,7 +9,7 @@ entries:
   imports:
     test: wippy.test:test
     model: bee.workspace.manager.app:model
-    caller: bee.application:caller
+    caller: bee.app:caller
 - name: view_test
   kind: function.lua
   source: file://view_test.lua
@@ -21,10 +21,10 @@ entries:
     model: bee.workspace.manager.app:model
     view: bee.workspace.manager.app:view
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.application:folder_picker
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    caller: bee.application:caller
+    folder_picker: bee.app:folder_picker
+    frame: bee.app:frame
+    appearance: bee.app:appearance
+    caller: bee.app:caller
 - name: creation_test
   kind: function.lua
   source: file://creation_test.lua
@@ -33,5 +33,5 @@ entries:
   imports:
     test: wippy.test:test
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.application:folder_picker
-    caller: bee.application:caller
+    folder_picker: bee.app:folder_picker
+    caller: bee.app:caller

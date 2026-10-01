@@ -121,13 +121,13 @@ local function define_tests()
             model.apply_page(state, page(1, 2, nil))
             local selected = state.selected
             model.apply_inspect(state, selected, ok({workspace = row(1), live = true,
-                applications = {{definition_id = "bee.settings:app", instance_id = "i-1", restart_policy = "automatic"}},
+                applications = {{definition_id = "bee.settings.app:app", instance_id = "i-1", restart_policy = "automatic"}},
                 extensions = {{binding = "bee.resources:resources_workspace_extension", title = "Resources", total = 3, items = {{label = "docs", detail = "bee.env:workspace_root · read"}}},
                     {binding = "bee:broken", title = "Broken", total = 0, items = {}, error = "refused\27[31m"}}}))
             local detail = state.detail
             if not detail then error("detail") end
             test.eq(detail.live, true)
-            test.eq(detail.applications[1].label, "bee.settings:app")
+            test.eq(detail.applications[1].label, "bee.settings.app:app")
             test.eq(#detail.sections, 2)
             test.eq(detail.sections[1].title, "Resources")
             test.eq(detail.sections[1].total, 3)

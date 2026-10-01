@@ -122,7 +122,7 @@ function M.resolve(name: string, tail: {string}): (Launch?, string?)
         end
     end
 
-    local entries, find_error = registry.find({["meta.type"] = "bee.application_command"})
+    local entries, find_error = registry.find({["meta.type"] = "bee.app_command"})
     if find_error then return nil, tostring(find_error) end
     if entries then
         if #entries > 64 then return nil, "Too many application commands" end

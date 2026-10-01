@@ -143,7 +143,7 @@ local function define_tests()
             local state: State = {entries = {}, generation = 1, conflicts = 0}
             local policy_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
+                meta = {type = "bee.app"}, data = {source = "return true"}},
                 {id = "app.notes:threads", kind = "ns.requirement",
                     meta = {capability = "threads.read", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
@@ -174,7 +174,7 @@ local function define_tests()
             local volume_id = "bee.gov.grants:volume." .. string.rep("b", 64)
             local database_id = "bee.gov.grants:database." .. string.rep("c", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
+                meta = {type = "bee.app"}, data = {source = "return true"}},
                 {id = "app.notes:files", kind = "ns.requirement",
                     meta = {capability = "workspace.files.read", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
@@ -209,7 +209,7 @@ local function define_tests()
             local call_id = "bee.gov.grants:policy." .. string.rep("a", 64)
             local web_id = "bee.gov.grants:policy." .. string.rep("b", 64)
             local portable = {{id = "app.notes:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
+                meta = {type = "bee.app"}, data = {source = "return true"}},
                 {id = "app.notes:call", kind = "ns.requirement",
                     meta = {capability = "contract.call", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}},

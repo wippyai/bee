@@ -26,7 +26,7 @@ def rename(ui, title, value):
 
 def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-personalize-") as directory:
-        ui = Desktop(directory, packed, apps=("bee.settings:app",))
+        ui = Desktop(directory, packed, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS")
             rename(ui, "Settings", "Workspace Colors")
@@ -71,7 +71,7 @@ def unauthorized_application():
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        source = project / "src/settings/app.lua"
+        source = project / "modules/settings/src/app/app.lua"
         code = source.read_text()
         anchor = "            local data = event.value"
         assert anchor in code
@@ -81,7 +81,7 @@ def unauthorized_application():
             status = "Attempt sent"
 """)
         source.write_text(code)
-        ui = Desktop(directory, project=project, apps=("bee.settings:app",))
+        ui = Desktop(directory, project=project, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS")
             ui.key(b"\t")
@@ -96,7 +96,7 @@ def unauthorized_application():
 
 def terminals(packed):
     with tempfile.TemporaryDirectory(prefix="bee-terminal-labels-") as directory:
-        ui = Desktop(directory, packed, apps=("bee.console:app",))
+        ui = Desktop(directory, packed, apps=("bee.console.app:app",))
         try:
             ui.wait("Terminal")
             rename(ui, "Terminal", "Build")
@@ -137,7 +137,7 @@ def acknowledged_layout():
         for packed in (False, True):
             folder = root / ("pack" if packed else "source")
             folder.mkdir()
-            ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.settings:app",))
+            ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.settings.app:app",))
             try:
                 ui.wait("BEE SETTINGS")
                 rename(ui, "Settings", "Committed label")

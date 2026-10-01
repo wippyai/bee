@@ -103,7 +103,7 @@ def wait_for_uncertain_prepare(ui, folder, timeout=45):
     deadline = time.monotonic() + timeout
     while True:
         applications = workspace_checkpoint(folder / "workspace.db")["applications"]
-        overlays = [item for item in applications if item["definition_id"] == "bee.gov.overlays:app"]
+        overlays = [item for item in applications if item["definition_id"] == "bee.gov.overlays.app:app"]
         assert len(overlays) == 1, overlays
         saved_state = json.loads(overlays[0]["resume_state"])
         pending = saved_state.get("pending_prepare")
@@ -203,7 +203,7 @@ def exercise_responsive():
         delay_destination(project, "available")
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True, timeout=300)
 
-        ui = Desktop(folder, project=project, apps=("bee.gov.overlays:app",))
+        ui = Desktop(folder, project=project, apps=("bee.gov.overlays.app:app",))
         ui.observed_frames = []
         try:
             deadline = time.monotonic() + COLD_BOOT
@@ -251,7 +251,7 @@ def exercise():
         evidence = seed(project, folder)
         assert evidence["workspace_id"] == workspace_id, evidence
 
-        ui = Desktop(folder, project=project, apps=("bee.gov.overlays:app",))
+        ui = Desktop(folder, project=project, apps=("bee.gov.overlays.app:app",))
         try:
             ui.wait("OVERLAYS", timeout=COLD_BOOT)
             ui.window_control("□")
@@ -324,7 +324,7 @@ def exercise():
             replayed = prepared_receipts(folder, pending["receipt_key"] + ":prepare")
             assert replayed == [first_receipt], (first_receipt, replayed)
             restored = next(item for item in workspace_checkpoint(folder / "workspace.db")["applications"]
-                            if item["definition_id"] == "bee.gov.overlays:app")
+                            if item["definition_id"] == "bee.gov.overlays.app:app")
             assert "pending_prepare" not in json.loads(restored["resume_state"]), restored
 
             # The decision itself is made by a person in the Approvals window.

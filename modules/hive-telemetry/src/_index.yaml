@@ -129,7 +129,7 @@ entries:
   modules: [process, system]
   imports:
     bounds: bee.protocol:bounds
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
   meta:
     comment: Open Hive operation paging this node's live workspace holdings with each host phase and lease count
     hive: open

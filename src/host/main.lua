@@ -35,12 +35,12 @@ local function main(owner: string, workspace: unknown, database_resource: string
     assert(process.set_options({upgradable = true}))
     local requests = assert(process.listen("bee.app.request", {message = true}))
     local replies = assert(process.listen("bee.app.reply", {message = true}))
-    local catalogs = assert(process.listen("bee.application.catalog", {message = true}))
-    local checkpoints = assert(process.listen("bee.application.checkpoint", {message = true}))
+    local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
+    local checkpoints = assert(process.listen("bee.app.checkpoint", {message = true}))
     local questions = assert(process.listen("bee.interaction.state", {message = true}))
     local answers = assert(process.listen("bee.interaction.response", {message = true}))
     local preferences = assert(process.listen("bee.appearance.request", {message = true}))
-    local shutdown_requests = assert(process.listen("bee.application.shutdown", {message = true}))
+    local shutdown_requests = assert(process.listen("bee.app.shutdown", {message = true}))
     local client_requests = assert(process.listen("bee.host.client", {message = true}))
     local selections = assert(process.listen("bee.host.selection", {message = true}))
     local client_answers = assert(process.listen("bee.host.answer", {message = true}))
@@ -49,11 +49,11 @@ local function main(owner: string, workspace: unknown, database_resource: string
     local transfer_requests = assert(process.listen("bee.host.transfer", {message = true}))
     local open_requests = assert(process.listen("bee.host.application", {message = true}))
     local broker_ready = assert(process.listen("bee.app.ready", {message = true}))
-    local broker_replacements = assert(process.listen("bee.application.replacing", {message = true}))
-    local broker_replace_failures = assert(process.listen("bee.application.replace_failed", {message = true}))
+    local broker_replacements = assert(process.listen("bee.app.replacing", {message = true}))
+    local broker_replace_failures = assert(process.listen("bee.app.replace_failed", {message = true}))
     local upgrade_acks = assert(process.listen("bee.host.upgrade_ack", {message = true}))
-    local binding_requests = assert(process.listen("bee.application.binding.request", {message = true}))
-    local binding_recovered = assert(process.listen("bee.application.binding.recovered", {message = true}))
+    local binding_requests = assert(process.listen("bee.app.binding.request", {message = true}))
+    local binding_recovered = assert(process.listen("bee.app.binding.recovered", {message = true}))
     local events = assert(process.events())
     if checkpoint == nil then assert(process.monitor(owner)) end
     local database, database_error = persistence.open(database_resource, workspace)
@@ -309,7 +309,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
         -- database diagnostic. The coordinator receives a stable typed fault
         -- and can continue its own recovery path.
         local reply = assert(binding_protocol.failure(request, "storage_failed", "Workspace binding operation failed"))
-        assert(process.send(broker, "bee.application.binding.result", reply))
+        assert(process.send(broker, "bee.app.binding.result", reply))
     end
     local function binding_request(request: binding_protocol.Request)
         local value, operation_error
@@ -332,7 +332,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
         end
         local reply = binding_protocol.success(request, value)
         if not reply then error("Workspace binding store returned an invalid binding") end
-        assert(process.send(broker, "bee.application.binding.result", reply))
+        assert(process.send(broker, "bee.app.binding.result", reply))
     end
     local function broker_drained(): boolean
         if restores.opening(restore_schedule) or next(pending_opens) ~= nil or next(pending_transfers) ~= nil
@@ -458,7 +458,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                         and data.workspace_id == workspace_id and data.broker == broker
                     if accepted then broker_replacing, ready = true, false end
                     if tostring(message:from()) == broker then
-                        process.send(broker, "bee.application.replace_ack", {version = 1, schema = 1,
+                        process.send(broker, "bee.app.replace_ack", {version = 1, schema = 1,
                             workspace_id = workspace_id, broker = broker, accepted = accepted})
                     end
                 elseif selected.channel == broker_replace_failures and tostring(message:from()) == broker then
@@ -472,7 +472,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                         local next_inventory = inventory.set_catalog(live_inventory, data.items)
                         if not next_inventory then error("Invalid broker catalog") end
                         live_inventory = next_inventory
-                        deliver("bee.application.catalog", data)
+                        deliver("bee.app.catalog", data)
                         if ready then connections.publish(client_connections, live_inventory, "catalog") end
                         restore_next()
                     end
@@ -482,7 +482,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                     if not bindings then error("List application thread bindings: " .. tostring(binding_error)) end
                     local recovered = binding_protocol.recovery({version = 1, workspace_id = workspace_id, items = bindings}, workspace_id)
                     if not recovered then error("Workspace application thread binding recovery is invalid") end
-                    assert(process.send(broker, "bee.application.binding.recovery", recovered))
+                    assert(process.send(broker, "bee.app.binding.recovery", recovered))
                     broker_recovery_requested = true
                 elseif selected.channel == binding_recovered and message:from() == broker and broker_recovery_requested and not broker_started then
                     if binding_protocol.recovered(data, workspace_id) then
@@ -637,7 +637,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                     if type(data) == "table" and data.version == 1 and data.workspace_id == workspace_id
                         and contract.text(data.request_id, 80) and record then
                         local committed, err = replace_record(record)
-                        send("bee.application.persisted", {version = 1, request_id = data.request_id,
+                        send("bee.app.persisted", {version = 1, request_id = data.request_id,
                             error_code = committed and "" or "persistence_failed", error = err or ""})
                         if committed then deliver("bee.host.checkpoint", {version = 1, workspace_id = workspace_id, record = record}) end
                     end
@@ -770,7 +770,7 @@ local function main(owner: string, workspace: unknown, database_resource: string
                     if response then send("bee.interaction.response", data) end
                 elseif selected.channel == shutdown_requests and message:from() == owner then
                     if ready and not stopping and type(data) == "table" and data.version == 1 and data.op == "prepare" then
-                        local sent, err = process.send(broker, "bee.application.shutdown", {version = 1, op = "prepare"})
+                        local sent, err = process.send(broker, "bee.app.shutdown", {version = 1, op = "prepare"})
                         if not sent then
                             local reply = contract.reply("", "quit", "delivery_failed", tostring(err))
                             reply.workspace_id = workspace_id

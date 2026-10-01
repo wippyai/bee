@@ -146,7 +146,7 @@ local function define_tests()
                     text = "Read workspace files under {subpath}",
                     policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                     resources = {}}}}}
-            local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
+            local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
                 data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
             local request: Entry = {id = "private.app:files", kind = "ns.requirement",
                 meta = {value_kind = "security.policy", capability = "workspace.files.read",
@@ -244,7 +244,7 @@ local function define_tests()
                 registry = {owner = "bee/host"}}
             captured.entries[#captured.entries + 1] = {id = "bee.host:private_callable", kind = "function.lua",
                 data = {source = "return true"}, registry = {owner = "bee/host"}}
-            local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.application"},
+            local app: Entry = {id = "private.app:main", kind = "process.lua", meta = {type = "bee.app"},
                 data = {source = "return true", security = {policies = {"bee.host:read_policy"}}}}
             local request: Entry = {id = "private.app:launch", kind = "ns.requirement",
                 meta = {value_kind = "security.policy", capability = "agents.launch",
@@ -285,7 +285,7 @@ local function define_tests()
                     policies = {"bee:ordinary-policy"}, thread_access = "observe_post"}}}
             local deps, spec = fixture(policy)
             changes(spec, {{id = "private.app:main", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}}})
+                meta = {type = "bee.app"}, data = {source = "return true"}}})
             local captured = (deps.capture :: () -> (Captured?, string?))()
             captured.entries[#captured.entries + 1] = {id = "bee:ordinary-policy", kind = "security.policy",
                 data = {},
@@ -329,7 +329,7 @@ local function define_tests()
                     text = "Read owned threads", policies = {{operation = "threads.read",
                         resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
             changes(spec, {{id = "private.app:main", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
+                meta = {type = "bee.app"}, data = {source = "return true"}},
                 {id = "private.app:threads", kind = "ns.requirement",
                     meta = {value_kind = "security.policy", capability = "threads.read",
                         parameters = {scope = "owned"}, reason = "Show threads"},
@@ -373,7 +373,7 @@ local function define_tests()
                     text = "Read owned threads", policies = {{operation = "threads.read",
                         resource = "threads", scope = {scope = "$scope"}}}, resources = {}}}}}
             changes(spec, {{id = "private.app:main", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
+                meta = {type = "bee.app"}, data = {source = "return true"}},
                 {id = "private.app:threads", kind = "ns.requirement",
                     meta = {value_kind = "security.policy", capability = "threads.read",
                         parameters = {scope = "owned"}, reason = "Show threads"},
@@ -412,7 +412,7 @@ local function define_tests()
                     policies = {{operation = "files.read", resource = "workspace", scope = {subpath = "$subpath"}}},
                     resources = {}}}}}
             changes(spec, {{id = "private.app:main", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
+                meta = {type = "bee.app"}, data = {source = "return true"}},
                 {id = "private.app:files", kind = "ns.requirement",
                     meta = {value_kind = "security.policy", capability = "workspace.files.read",
                         parameters = {subpath = "docs"}, reason = "Render documentation"},
@@ -454,7 +454,7 @@ local function define_tests()
                     policies = {{operation = "database.use", resource = "$name",
                         scope = {name = "$name"}}}, resources = {}}}}}
             changes(spec, {{id = "private.app:main", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {source = "return true"}},
+                meta = {type = "bee.app"}, data = {source = "return true"}},
                 {id = "private.app:db", kind = "ns.requirement",
                     meta = {value_kind = "security.policy", capability = "app.database",
                         parameters = {name = "journal"}, reason = "Persist rows"},

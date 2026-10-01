@@ -54,7 +54,7 @@ entries:
   source: file://protocol.lua
   imports:
     bounds: bee.threads.records:bounds
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: contract
   kind: contract.definition
   methods:

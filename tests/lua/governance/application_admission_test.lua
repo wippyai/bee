@@ -21,7 +21,7 @@ local function projection(): {[string]: unknown}
         bindings = {{definition_id = "vendor.app:first", policies = {"bee:ordinary-policy"},
             thread_access = "observe_post"}},
         artifact_entries = {{id = "vendor.app:first", kind = "process.lua",
-            meta = {type = "bee.application"}, data = {source = "return true"}}},
+            meta = {type = "bee.app"}, data = {source = "return true"}}},
         registry_entries = {{id = "bee:ordinary-policy", kind = "security.policy",
             policy = {actions = {"funcs.call"}, resources = {"bee.app:read"}, effect = "allow"},
             registry = {owner = "bee/host"}}}, overlay_ids = {}}
@@ -182,7 +182,7 @@ local function define_tests()
             local meta = artifact_entries[1].meta :: {[string]: unknown}
             meta.type = "ordinary"
             test.is_nil(admission.project(value))
-            meta.type = "bee.application"
+            meta.type = "bee.app"
             local registry_entries = value.registry_entries :: {{[string]: unknown}}
             registry_entries[1].kind = "function.lua"
             test.is_nil(admission.project(value))

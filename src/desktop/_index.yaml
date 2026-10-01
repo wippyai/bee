@@ -9,7 +9,7 @@ entries:
   source: file://state.lua
   imports:
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     commands: bee.protocol:commands
 - name: layout
   kind: library.lua

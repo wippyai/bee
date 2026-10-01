@@ -6,57 +6,16 @@ entries:
   module: host-processes
   meta:
     title: Bee host processes
-    comment: Host process inspection app; host composition and policy selection remain in Bee
+    comment: Host process inspection app; host composition and policy selection remain
+      in Bee
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: app
-  kind: process.lua
-  source: file://app.lua
-  method: main
-  modules:
-  - tty
-  - process
-  - channel
-  - time
-  - uuid
-  imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    probe: bee.host.processes:probe
-    view: bee.host.processes:view
-    client: bee.application:client
-    clock: bee:clock
-    stop_request: bee.host.processes:stop_request
-  meta:
-    type: bee.application
-    application:
-      api_version: 1
-      title: Process Manager
-      icon: P
-      lifetime: view
-      revision: '1'
-      instance_policy: singleton
-      group: Tools
-      role: inspection
 - name: probe
   kind: library.lua
   source: file://probe.lua
   modules:
   - system
   imports:
-    viz: bee.application:viz
     bounds: bee.protocol:bounds
-- name: stop_request
-  kind: library.lua
-  source: file://stop_request.lua
-- name: view
-  kind: library.lua
-  source: file://view.lua
-  imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    probe: bee.host.processes:probe
-    text: bee.application:text
-    viz: bee.application:viz

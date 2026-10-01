@@ -189,7 +189,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 advance("saving"); control("save")
             elseif not quit_pending then
                 quit_pending = true
-                send(host, "bee.application.shutdown", {version = 1, op = "prepare"})
+                send(host, "bee.app.shutdown", {version = 1, op = "prepare"})
             end
         end
         local function find_desktop(id: string): desktops.Desktop?

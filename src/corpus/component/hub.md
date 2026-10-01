@@ -60,8 +60,11 @@ Standalone inventory identifies the deployment root from
 `snapshot:state().resolution.lock.root_module`, under the Hub execution scope's
 exact `registry.resolution.get` grant. The live `resolution.modules` supplies
 installed versions; `resolution.lock.modules` supplies the unchanged shipped
-pins shown separately in About. Before the first update, the implicit root uses
-`bee:deployment`; subsequent approved updates retain that explicit root.
+pins shown separately in About. Inventory roots contain only resident registry
+entries; the lock-selected deployment is reported separately. The first standalone
+update creates a history-owned `ns.dependency` at the normal `bee.hub.deps` ID.
+Later updates change that resident selection; an existing host root retains its ID
+and parameters. The plan digest covers the root ID and create/update operation.
 
 For self-update, the request updates the installed host `bee/bee` root and
 resolves its `bee/*` closure, preserving the root's typed parameters and every

@@ -51,7 +51,7 @@ local function application_actor(launch: client.Launch): string
 end
 
 local function direct_sender_probe(workspace_id: string): boolean
-    local token = "bee.application.open/00000000-0000-7000-8000-000000000000"
+    local token = "bee.app.open/00000000-0000-7000-8000-000000000000"
     local registered = process.registry.register(token)
     if registered then error("ordinary application registered a protected open caller name") end
     local host = process.registry.lookup("bee.workspace.host/" .. workspace_id)

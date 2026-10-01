@@ -1,7 +1,6 @@
 -- MIT. Strict decoder and registry reader for declarative external CLI drivers.
 local bounds = require("bounds")
 local registry = require("registry")
-local turn_budget = require("turn_budget")
 local login_evidence = require("login_evidence")
 local M = {}
 M.TYPE = "bee.driver.cli_descriptor"
@@ -11,7 +10,7 @@ M.MAX_TEMPLATE_DEPTH = 8
 M.CODECS = {"claude-stream-json", "codex-jsonl", "opencode-json-events", "agy-stream-json", "grok-streaming-json", "muse-record-jsonl"}
 
 type Object = {[string]: unknown}
-type OptionValue = string | integer | boolean | {string}
+type OptionValue = string | boolean | {string}
 type Descriptor = {
     schema_revision: string,
     provider: string,
@@ -84,12 +83,6 @@ function M.decode_option(field: string, spec: Object, value: unknown): (OptionVa
             return nil, field_error(spec, field, "is not one bounded model identifier")
         end
         return selected :: string, nil
-    elseif spec.type == "budget" then
-        local selected, budget_error = turn_budget.decode(value, field)
-        if not selected then return nil, budget_error or field_error(spec, field, "is invalid") end
-        local maximum = spec.max ~= nil and bounds.count(spec.max) or nil
-        if maximum ~= nil and selected > maximum then return nil, field_error(spec, field, "exceeds its admitted limit") end
-        return selected, nil
     elseif spec.type == "duration" then
         local selected = bounds.text(value, 32)
         if not selected or not selected:match("^[1-9][0-9]*[smh]$") then return nil, field_error(spec, field, "must be a positive duration string") end
@@ -137,7 +130,7 @@ local function validate_template(value: unknown, label: string, depth: integer):
         return nil
     end
     if item.option ~= nil then
-        if not bounds.member(item.option, {"permission", "turn_budget"}) or bounds.fields(item, {"option"}) then return label .. " option reference is malformed" end
+        if item.option ~= "permission" or bounds.fields(item, {"option"}) then return label .. " option reference is malformed" end
         return nil
     end
     if item.join ~= nil then
@@ -421,7 +414,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
         local spec, spec_error = object(raw_spec, "CLI descriptor.options." .. tostring(name))
         if not spec then return nil, spec_error end
         if bounds.fields(spec, {"type", "values", "default", "max", "profiles", "transform", "pattern", "invalid", "unsupported", "forbid_option"}) then return nil, "CLI descriptor.options." .. tostring(name) .. " has unknown fields" end
-        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "budget", "duration", "ids", "codex_profile"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
+        if not bounds.member(spec.type, {"enum", "boolean", "id", "model", "duration", "ids", "codex_profile"}) then return nil, "CLI descriptor.options." .. tostring(name) .. ".type is invalid" end
         if spec.type == "enum" and spec.values == nil then return nil, "CLI descriptor.options." .. tostring(name) .. ".values is required for an enum" end
         if spec.values ~= nil then
             local values, values_error = sequence(spec.values, "CLI descriptor.options." .. tostring(name) .. ".values", 32)
@@ -478,7 +471,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
 
     local flags, flags_error = object(item.flags, "CLI descriptor.flags")
     if not flags then return nil, flags_error end
-    if bounds.fields(flags, {"permission", "turn_budget"}) then return nil, "CLI descriptor.flags has unknown fields" end
+    if bounds.fields(flags, {"permission"}) then return nil, "CLI descriptor.flags has unknown fields" end
     for name, raw_flag in pairs(flags) do
         local flag, flag_error = object(raw_flag, "CLI descriptor.flags." .. tostring(name))
         if not flag then return nil, flag_error end

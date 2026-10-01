@@ -60,12 +60,11 @@ and drain accepted Work. Escape returns to the list. Closing the window leaves
 its sessions addressable. At 120 columns the conversation shows a session rail;
 compact screens use Escape to return to the list. Ctrl+D shows the session ref.
 
-The conversation currently retains only Work submitted by this window and its
-observed results. The public session snapshot exposes neither thread identity
-nor Work history, so reopening after window loss cannot reconstruct the Work
-queue or read live turn events. Durable history, provider metadata, last result
-and interactive Terminal switching need those public associations; they are
-proposals until the owner exposes them. Manual `M` attach remains in the catalog.
+The conversation restores durable Work history, provider metadata and live
+turn events from the session thread. A quiet accepted turn appears as `stalled`
+with its turn ref and quiet-period evidence; this view does not cancel or fail
+the Work. A budget-limited Work displays its settled `budget exceeded` result.
+Manual `M` attach remains in the catalog.
 The unavailable Setup action explains the owner-reported reason and the
 install/sign-in/refresh steps; it executes no provider commands.
 

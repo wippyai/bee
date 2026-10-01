@@ -88,7 +88,7 @@ local function define_tests()
     end)
 
     test.describe("Antigravity CLI launch specifications and host-policy options", function()
-        test.it("produces structured stream-json print launches with expressible host-policy options", function()
+        test.it("produces structured stream-json print launches without a work timeout", function()
             local request, err = launch.decode({
                 profile_id = "session",
                 brief = "list workspace files",
@@ -98,7 +98,6 @@ local function define_tests()
                 sandbox = true,
                 dangerously_skip_permissions = true,
                 agent = "default",
-                print_timeout = "10m",
             })
             if not request then error(tostring(err)) end
 
@@ -116,7 +115,7 @@ local function define_tests()
             test.is_true(line:find("%-%-model gemini%-3%.8%-flash%-high") ~= nil)
             test.is_true(line:find("%-%-effort high") ~= nil)
             test.is_true(line:find("%-%-agent default") ~= nil)
-            test.is_true(line:find("%-%-print%-timeout 10m") ~= nil)
+            test.is_nil(line:find("%-%-print%-timeout"))
         end)
 
         test.it("prepares the hidden Gemini batch profile and delivers its admitted HTTP MCP configuration", function()
@@ -125,7 +124,6 @@ local function define_tests()
                 brief = "Use the admitted Bee overlay tool once.",
                 model = "gemini-3.8-flash",
                 effort = "high",
-                print_timeout = "5m",
                 gateway_tools = {"thread_read", "overlay"},
             })
             if prepare_error then error(tostring(prepare_error)) end
@@ -138,7 +136,7 @@ local function define_tests()
             test.is_true(arguments:find("^%-%-print= %-%-input%-format stream%-json") ~= nil)
             test.is_true(arguments:find("%-%-model gemini%-3%.8%-flash") ~= nil)
             test.is_true(arguments:find("%-%-effort high") ~= nil)
-            test.is_true(arguments:find("%-%-print%-timeout 5m") ~= nil)
+            test.is_nil(arguments:find("%-%-print%-timeout"))
 
             local gateway = {
                 endpoint = "127.0.0.1:18790",
@@ -171,13 +169,12 @@ local function define_tests()
                 model = "gemini-3.8-flash",
                 effort = "high",
                 sandbox = true,
-                print_timeout = "5m",
             })
             if not request then error(tostring(err)) end
             local line = quote.line(launch.specification(request).argv)
             test.is_true(line:find("%-%-sandbox") ~= nil)
             test.is_true(line:find("dangerously%-skip%-permissions") == nil)
-            test.is_true(line:find("%-%-print%-timeout 5m") ~= nil)
+            test.is_nil(line:find("%-%-print%-timeout"))
         end)
 
         test.it("does not hardcode a model when omitted in production", function()
@@ -267,8 +264,8 @@ local function define_tests()
             local empty_session = launch.decode({profile_id = "session", brief = ""})
             test.is_nil(empty_session)
 
-            local _, timeout_err = launch.decode({profile_id = "window", brief = "", print_timeout = "5m"})
-            test.eq(timeout_err, "print_timeout is only supported for structured print turns")
+            local _, timeout_err = launch.decode({profile_id = "session", brief = "x", print_timeout = "5m"})
+            test.eq(timeout_err, "unknown field print_timeout")
 
             local _, model_err = launch.decode({profile_id = "session", brief = "x", model = "invalid space"})
             test.eq(model_err, "model is not one bounded model identifier")

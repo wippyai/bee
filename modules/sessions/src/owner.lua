@@ -13,6 +13,7 @@ local M = {}
 
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, value?: unknown, error?: Object}
+type Budget = {max_turns: integer?, max_tokens: integer?, wall_time_ms: integer?}
 
 local function object(value: unknown): Object?
     return bounds.object(value)
@@ -55,6 +56,43 @@ local function ref(value: unknown): string?
     return value
 end
 
+local function budget(value: unknown): (Budget?, string?)
+    if value == nil then return nil, nil end
+    local selected = object(value)
+    if not selected or bounds.fields(selected, {"max_turns", "max_tokens", "wall_time_ms"}) then
+        return nil, "budget must be an object with max_turns, max_tokens or wall_time_ms"
+    end
+    local result: Budget = {}
+    for _, name in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
+        local raw = selected[name]
+        if raw ~= nil then
+            local amount = bounds.count(raw)
+            if not amount then return nil, "budget." .. name .. " must be a nonnegative integer" end
+            if name == "max_turns" then result.max_turns = amount
+            elseif name == "max_tokens" then result.max_tokens = amount
+            else result.wall_time_ms = amount end
+        end
+    end
+    if result.max_turns == nil and result.max_tokens == nil and result.wall_time_ms == nil then
+        return nil, "budget must set at least one limit"
+    end
+    return result, nil
+end
+
+local function merge_budget(session: Budget?, work: Budget?): Budget?
+    if not session then return work end
+    if not work then return session end
+    local result: Budget = {}
+    for _, name in ipairs({"max_turns", "max_tokens", "wall_time_ms"}) do
+        local session_limit, work_limit = session[name], work[name]
+        local selected = session_limit and work_limit and math.min(session_limit, work_limit) or session_limit or work_limit
+        if name == "max_turns" then result.max_turns = selected
+        elseif name == "max_tokens" then result.max_tokens = selected
+        else result.wall_time_ms = selected end
+    end
+    return result
+end
+
 local function snapshot(value: unknown): (Object?, string?)
     local row = object(value)
     if not row or type(row.session) ~= "string" or type(row.title) ~= "string"
@@ -62,25 +100,37 @@ local function snapshot(value: unknown): (Object?, string?)
         return nil, "Threads returned a malformed session snapshot"
     end
     local queued = type(row.queued) == "number" and row.queued or 0
-    local active = type(row.active) == "number" and row.active or 0
-    local uncertain = type(row.uncertain) == "number" and row.uncertain or 0
-    local stalled = type(row.stalled) == "number" and row.stalled or 0
     local lifecycle = row.state
     if lifecycle ~= "active" and lifecycle ~= "suspended" and lifecycle ~= "closing" and lifecycle ~= "closed" then
         return nil, "Threads returned an unsupported session lifecycle"
     end
-    local activity = "idle"
-    if stalled > 0 then activity = "stalled"
-    elseif uncertain > 0 then activity = "blocked"
-    elseif active > 0 or queued > 0 then activity = "working" end
+    local activity = row.activity
+    if activity ~= "idle" and activity ~= "working" and activity ~= "blocked" and activity ~= "stalled" then
+        return nil, "Threads returned an unsupported session activity"
+    end
+    local activity_evidence: Object? = nil
+    if row.activity_evidence ~= nil then
+        local evidence = object(row.activity_evidence)
+        local turn = evidence and ref(evidence.turn)
+        local last = evidence and bounds.count(evidence.last_progress_at_ms)
+        local quiet_period = evidence and bounds.count(evidence.quiet_period_ms)
+        local quiet_for = evidence and bounds.count(evidence.quiet_for_ms)
+        if not evidence or bounds.fields(evidence, {"kind", "turn", "last_progress_at_ms", "quiet_period_ms", "quiet_for_ms"})
+            or evidence.kind ~= "quiet" or not turn or not last or not quiet_period or quiet_period < 1
+            or not quiet_for or quiet_for < quiet_period then
+            return nil, "Threads returned malformed quiet-period evidence"
+        end
+        activity_evidence = {kind = "quiet", turn = turn, last_progress_at_ms = last,
+            quiet_period_ms = quiet_period, quiet_for_ms = quiet_for}
+    end
     local at = type(row.updated_at) == "string" and row.updated_at or row.created_at
     if type(at) ~= "string" then return nil, "Threads omitted the session timestamp" end
     local route = object(row.route) or {}
     return {session = row.session, thread_ref = row.thread_ref, workspace = row.workspace,
         driver = route.driver_binding_ref, provider = route.provider, definition = route.definition, last_result = row.last_result,
         revision = row.revision, incarnation = 1, title = row.title,
-        lifecycle = lifecycle, activity = activity,
-        execution = {state = active > 0 and "running" or "quiescent", evidence_at = at, stale = false},
+        lifecycle = lifecycle, activity = activity, activity_evidence = activity_evidence,
+        execution = {state = row.execution_running == true and "running" or "quiescent", evidence_at = at, stale = false},
         queue_count = queued, effective_limits = {}, continuity = {mode = "provider_resume"}, actions = {}}, nil
 end
 
@@ -93,9 +143,13 @@ end
 local function open(request: Object): Reply
     local operation_key = key(request.operation_key)
     local spec = object(request.spec)
-    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace"}) then
+    if not operation_key or not spec or bounds.fields(spec, {"definition", "profile", "workdir", "workspace", "budget", "progress_quiet_ms"}) then
         return fail("INVALID", "open requires a definition, optional profile/workdir, and operation_key", operation_key)
     end
+    local session_budget, budget_error = budget(spec.budget)
+    if budget_error then return fail("INVALID", budget_error, operation_key) end
+    local quiet_period = spec.progress_quiet_ms == nil and 60000 or bounds.count(spec.progress_quiet_ms)
+    if not quiet_period or quiet_period < 1 then return fail("INVALID", "progress_quiet_ms must be a positive integer", operation_key) end
     local definition = ref(spec.definition)
     if not definition then return fail("INVALID", "definition is not a ref", operation_key) end
     local profile = object(spec.profile)
@@ -123,8 +177,9 @@ local function open(request: Object): Reply
             if not actor then return unavailable(tostring(actor_error), operation_key) end
             local executor, executor_error = funcs.new():with_actor(actor)
             if not executor then return unavailable(tostring(executor_error), operation_key) end
-            local raw, call_error = executor:call("bee.sessions.binding:open", {spec = {definition = definition,
-                profile = profile, workdir = workdir}, operation_key = operation_key})
+            local forwarded: Object = {definition = definition, profile = profile, workdir = workdir,
+                budget = session_budget, progress_quiet_ms = quiet_period}
+            local raw, call_error = executor:call("bee.sessions.binding:open", {spec = forwarded, operation_key = operation_key})
             if call_error then return unavailable(tostring(call_error), operation_key) end
             local reply = object(raw)
             if not reply or type(reply.ok) ~= "boolean" then return unavailable("cross-workspace owner returned a malformed reply", operation_key) end
@@ -161,7 +216,8 @@ local function open(request: Object): Reply
     local route: Object = {definition = definition, plan_digest = plan_value.plan_digest,
         saved_profile_id = profile_id, saved_profile_revision = profile_revision, workdir = workdir,
         driver_binding_ref = driver_binding_ref, provider = driver_binding_ref:match("^bee%.driver%.([^:]+):"), profile_id = profile_ref, driver_methods = methods,
-        placement_methods = placement_methods}
+        placement_methods = placement_methods, progress_quiet_ms = quiet_period}
+    if session_budget then route.budget = session_budget end
     local created, create_error = journal.invoke("session_create", {operation_key = operation_key,
         title = plan_value.title or definition, route = route})
     if create_error or not created then return unavailable(create_error or "Threads returned no open receipt", operation_key) end
@@ -329,9 +385,11 @@ local function send(request: Object): Reply
     local operation_key = key(request.operation_key)
     local session = ref(request.session)
     if not operation_key or not session or request.input == nil
-        or bounds.fields(request, {"session", "input", "output", "expected_incarnation", "operation_key"}) then
+        or bounds.fields(request, {"session", "input", "output", "expected_incarnation", "operation_key", "budget"}) then
         return fail("INVALID", "send requires session, input, and operation_key", operation_key)
     end
+    local work_budget, budget_error = budget(request.budget)
+    if budget_error then return fail("INVALID", budget_error, operation_key) end
     if request.expected_incarnation ~= nil and request.expected_incarnation ~= 1 then
         return fail("STALE", "session incarnation changed", operation_key)
     end
@@ -340,13 +398,17 @@ local function send(request: Object): Reply
     if current.lifecycle ~= "active" then return fail("CONFLICT", "session is not accepting work", operation_key) end
     local output_schema = request.output == nil and "bee:Text@1" or ref(request.output)
     if not output_schema then return fail("INVALID", "output must be a schema ref", operation_key) end
-    local stored = journal.invoke("session_describe", {session = session})
+    local stored, stored_error = journal.invoke("session_describe", {session = session})
     local route = object(stored) and object((object(stored) :: Object).route)
+    if stored_error or not route then return unavailable(stored_error or "Threads omitted the retained session route", operation_key) end
+    local session_budget, route_budget_error = budget(route.budget)
+    if route_budget_error then return unavailable("Threads returned a malformed session budget", operation_key) end
+    local effective_budget = merge_budget(session_budget, work_budget)
     if route and route.delivery == "hook" and output_schema ~= "bee:Text@1" then
         return fail("INVALID", "interactive delivery supports Text acknowledgments", operation_key)
     end
     local receipt, send_error = journal.invoke("work_send", {session = session, operation_key = operation_key,
-        input = request.input, output_schema = output_schema})
+        input = request.input, output_schema = output_schema, budget = effective_budget})
     if send_error or not receipt then return unavailable(send_error or "Threads returned no work receipt", operation_key) end
     return succeed(receipt)
 end
@@ -369,6 +431,15 @@ local function work_value(value: unknown): (Object?, string?)
             state.phase = "settled"
             state.result = {outcome = outcome, schema = result.schema or row.output_schema,
                 value = result.value, artifacts = result.artifacts or {}, usage = result.usage or {}}
+        elseif outcome == "budget_exceeded" then
+            local failure = object(result.error) or {}
+            local evidence = object(result.evidence)
+            if failure.code ~= "BUDGET_EXCEEDED" or not evidence then return nil, "Threads returned a malformed budget outcome" end
+            state.phase = "settled"
+            state.cancelling = false
+            state.result = {outcome = outcome, error = {code = "BUDGET_EXCEEDED",
+                message = failure.message or "the configured work budget was exceeded", retry = "never"},
+                artifacts = result.artifacts or {}, evidence = evidence}
         elseif outcome == "failed" or outcome == "cancelled" or outcome == "rejected" then
             local failure = object(result.error) or {}
             state.phase = "settled"
@@ -777,7 +848,7 @@ function M.call(method: string, request: unknown): Reply
         local receipt = object(opened.value)
         if not receipt then return unavailable("open returned no session receipt", operation_key) end
         return send({session = receipt.session, input = input.input, output = input.output,
-            expected_incarnation = 1, operation_key = operation_key})
+            expected_incarnation = 1, operation_key = operation_key, budget = input.budget})
     end
     if method == "history" then
         local session = ref(input.session)

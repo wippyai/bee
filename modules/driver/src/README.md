@@ -94,6 +94,10 @@ process EOF; Grok and Muse also use distinct event envelopes. The codec
 registry selects these implementations by descriptor ID. `driver-wippy` is a
 separate non-CLI driver and does not use this external-driver registry.
 
+External CLI descriptors do not impose a default turn, token or run-time cap.
+Optional limits belong to the Sessions Work budget; codecs report normalized
+turn signals and provider usage so the external executor can supervise them.
+
 A window launch may declare `login`: a provider identifier, a display-only
 sign-in command and bounded alternative file paths relative to its selected
 provider home. Placement uses their existence to return a typed advisory

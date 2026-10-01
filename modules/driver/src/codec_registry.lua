@@ -16,7 +16,7 @@ type Protocol = {
     MAX_ANSWER_BYTES: integer,
     new: (boolean) -> unknown,
     decode_state: (unknown) -> (unknown?, string?),
-    normalize: (unknown, integer, {[string]: unknown}, integer?) -> (Step?, string?),
+    normalize: (unknown, integer, {[string]: unknown}) -> (Step?, string?),
     finish: (unknown, integer) -> (Step?, string?),
 }
 type Codec = {
@@ -24,7 +24,7 @@ type Codec = {
     MAX_ANSWER_BYTES: integer,
     new: (boolean) -> unknown,
     decode_state: (unknown) -> (unknown?, string?),
-    normalize: (unknown, integer, {[string]: unknown}, integer?, Object?) -> (Step?, string?),
+    normalize: (unknown, integer, {[string]: unknown}, Object?) -> (Step?, string?),
     finish: (unknown, integer) -> (Step?, string?),
 }
 
@@ -45,8 +45,8 @@ function M.resolve(codec_id: string, json_paths: Object): Protocol?
         MAX_ANSWER_BYTES = implementation.MAX_ANSWER_BYTES,
         new = function(resumed: boolean): unknown return implementation.new(resumed) end,
         decode_state = function(value: unknown): (unknown?, string?) return implementation.decode_state(value) end,
-        normalize = function(state: unknown, index: integer, envelope: Object, budget: integer?): (Step?, string?)
-            return implementation.normalize(state, index, envelope, budget, json_paths)
+        normalize = function(state: unknown, index: integer, envelope: Object): (Step?, string?)
+            return implementation.normalize(state, index, envelope, json_paths)
         end,
         finish = function(state: unknown, index: integer): (Step?, string?) return implementation.finish(state, index) end,
     }

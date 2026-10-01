@@ -838,6 +838,13 @@ CREATE TABLE bee_session_work_cancellations (
   requested_at TEXT NOT NULL
 );
 ]]
+-- Each immutable Work carries optional effective limits, and each accepted
+-- turn records the host time of its latest live observation for quiet checks.
+local SESSION_PROGRESS_SUPERVISION_SQL = [[
+ALTER TABLE bee_session_work ADD COLUMN budget_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE bee_session_turns ADD COLUMN last_progress_at_ms INTEGER NOT NULL DEFAULT 0
+  CHECK(last_progress_at_ms >= 0);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -864,6 +871,7 @@ local list: {Migration} = {
     {id = 23, name = "sessions_turn_context", sql = SESSION_CONTEXT_SQL, rebuild = false},
     {id = 24, name = "sessions_work_uncertainty", sql = SESSION_WORK_UNCERTAINTY_SQL, rebuild = false},
     {id = 25, name = "sessions_work_cancellation", sql = SESSION_WORK_CANCELLATION_SQL, rebuild = false},
+    {id = 26, name = "sessions_progress_supervision", sql = SESSION_PROGRESS_SUPERVISION_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

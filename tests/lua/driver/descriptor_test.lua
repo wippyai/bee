@@ -2,6 +2,7 @@
 local test = require("test")
 local descriptor = require("descriptor")
 local login_evidence = require("login_evidence")
+local bounds = require("bounds")
 type Object = {[string]: unknown}
 
 local function copy_object(value: Object): Object
@@ -185,11 +186,27 @@ local function define_tests()
 
             local cyclic_flag = copy_object(claude)
             local flags = copy_object(claude.flags :: Object)
-            local turn_budget = copy_object(flags.turn_budget :: Object)
-            turn_budget.argv = {{option = "turn_budget"}}
-            flags.turn_budget = turn_budget
+            local permission_source = bounds.object(flags.permission)
+            if not permission_source then error("Claude permission flag is malformed") end
+            local permission = copy_object(permission_source)
+            permission.argv = {{option = "permission"}}
+            flags.permission = permission
             cyclic_flag.flags = flags
             decoded, decode_error = descriptor.decode(cyclic_flag)
+            test.is_nil(decoded)
+            test.not_nil(decode_error)
+
+            local legacy_budget = copy_object(claude)
+            local options_source = bounds.object(claude.options)
+            if not options_source then error("Claude options are malformed") end
+            local options = copy_object(options_source)
+            local fields_source = bounds.object(options.fields)
+            if not fields_source then error("Claude option fields are malformed") end
+            local fields = copy_object(fields_source)
+            fields.turn_budget = {type = "budget", max = 128}
+            options.fields = fields
+            legacy_budget.options = options
+            decoded, decode_error = descriptor.decode(legacy_budget)
             test.is_nil(decoded)
             test.not_nil(decode_error)
         end)

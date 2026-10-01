@@ -512,8 +512,8 @@ function M.normalize(ref: string): (unknown) -> unknown
     return normalizer.bind(
         function(resumed: boolean): unknown return protocol.new(resumed) end,
         function(value: unknown): (unknown?, string?) return protocol.decode_state(value) end,
-        function(state: unknown, index: integer, envelope: {[string]: unknown}, budget: integer?): (ProtocolStep?, string?)
-            return protocol.normalize(state, index, envelope, budget)
+        function(state: unknown, index: integer, envelope: {[string]: unknown}): (ProtocolStep?, string?)
+            return protocol.normalize(state, index, envelope)
         end,
         function(state: unknown, index: integer): (ProtocolStep?, string?) return protocol.finish(state, index) end)
 end

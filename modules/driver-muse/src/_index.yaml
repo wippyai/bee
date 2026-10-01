@@ -230,7 +230,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Muse turn budget for agentic research actions on a caller-owned thread
+    comment: Host-selected Muse launch policy for agentic research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides: [thread, workdir]
@@ -247,8 +247,8 @@ entries:
     gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     hook_command_ref: bee.gateway:hook_executable
-    profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
-    prepare_options: {approval_mode: on-request, turn_budget: 128}
+    profile_options: {effort: [low, medium, high]}
+    prepare_options: {approval_mode: on-request}
 - name: launch_policy_muse_window
   kind: registry.entry
   meta:

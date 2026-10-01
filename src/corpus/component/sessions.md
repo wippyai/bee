@@ -17,6 +17,10 @@ is an observation and the provider owns authentication.
 
 Session reads and list pagination include home-workspace sessions plus workspaces explicitly admitted by `bee.threads.workspace`. Cross-workspace mutations require separate exact host grants: `bee.sessions.workspace.open`, `bee.sessions.workspace.send`, `bee.sessions.workspace.cancel`, and `bee.sessions.workspace.close`. Visibility alone grants no mutation authority. List filters accept workspace, definition, lifecycle and activity.
 
+`open` accepts an optional `budget = {max_turns?, max_tokens?, wall_time_ms?}` and `progress_quiet_ms`; the quiet period defaults to 60000 ms. `send` accepts the same optional budget shape for one Work. A Work uses the tighter value for each budget field supplied at both levels. Budgets are absent by default. The external executor counts normalized turn signals, codec usage and elapsed wall time; an exceeded budget settles as `budget_exceeded` only after placement proves process exit, with typed fault and evidence.
+
+An accepted turn becomes `stalled` when its thread has no new live observation for the session's quiet period. `activity_evidence` identifies the turn, last progress time, quiet period and elapsed quiet time. `get` and `list` derive this view from the stored progress timestamp; stalled is observational and causes no automatic stop or failure.
+
 Snapshots expose the canonical `thread_ref`, driver/provider, definition, workspace
 and last result summary. `history{session,cursor?}` pages immutable Work inputs;
 clients observe results with `get` or `await`. SDK open/call and MCP open/run accept

@@ -238,7 +238,7 @@ local function extract_cid(envelope: {[string]: unknown}, body: {[string]: unkno
     return envelope_cid or body_cid, nil
 end
 
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local raw_kind: unknown = envelope.event
     local kind = tostring(raw_kind or "")

@@ -1,5 +1,8 @@
 -- MIT. One external CLI process belongs to one immutable pulled turn.
 local M = {}
+local budget_values = require("budget")
+
+type Budget = budget_values.Budget
 
 type Request = {
     attempt_id: string,
@@ -16,6 +19,7 @@ type Request = {
     admission: {[string]: unknown},
     previous_attempt_id: string?,
     checkpoint: {[string]: unknown}?,
+    budget: Budget?,
 }
 
 type IO = {
@@ -35,7 +39,8 @@ type IO = {
 
 local PLACEMENT_METHODS = {
     prepare = "bee.placement.native.binding:prepare", attach = "bee.placement.native.binding:attach",
-    start = "bee.placement.native.binding:start", reconcile = "bee.placement.native.binding:reconcile",
+    start = "bee.placement.native.binding:start", stop = "bee.placement.native.binding:stop",
+    reconcile = "bee.placement.native.binding:reconcile",
     cleanup = "bee.placement.native.binding:cleanup",
 }
 
@@ -53,7 +58,7 @@ local function decode(value: unknown): (Request?, string?)
     local request = object(value)
     if not request then return nil, "turn request must be an object" end
     local allowed = {"attempt_id", "claim", "observation_target", "generation", "prompt", "sender", "driver_binding_ref", "profile_id", "driver_methods",
-        "placement_methods", "admission", "previous_attempt_id", "checkpoint", "recovery"}
+        "placement_methods", "admission", "previous_attempt_id", "checkpoint", "recovery", "budget"}
     local fields: {[string]: boolean} = {}
     for _, field in ipairs(allowed) do fields[field] = true end
     for field in pairs(request) do
@@ -91,7 +96,7 @@ local function decode(value: unknown): (Request?, string?)
     end
     local placement_methods = object(request.placement_methods)
     if not placement_methods then return nil, "placement_methods must be an object" end
-    for _, method in ipairs({"prepare", "attach", "start", "reconcile", "cleanup"}) do
+    for _, method in ipairs({"prepare", "attach", "start", "stop", "reconcile", "cleanup"}) do
         if placement_methods[method] ~= PLACEMENT_METHODS[method] then
             return nil, "placement_methods." .. method .. " is not the host-selected native binding"
         end
@@ -106,6 +111,8 @@ local function decode(value: unknown): (Request?, string?)
     end
     local checkpoint = object(request.checkpoint)
     if request.checkpoint ~= nil and not checkpoint then return nil, "checkpoint must be an object" end
+    local selected_budget, budget_error = budget_values.decode(request.budget)
+    if budget_error then return nil, budget_error end
     local resume_ref = checkpoint and checkpoint.resume_ref or nil
     if resume_ref ~= nil and not id(resume_ref) then return nil, "checkpoint.resume_ref is invalid" end
     local sender_label = "[Bee sender " .. tostring(sender.kind) .. " " .. tostring(sender.id) .. "]\n"
@@ -116,7 +123,7 @@ local function decode(value: unknown): (Request?, string?)
         sender = sender :: {kind: "session" | "principal", id: string},
         driver_binding_ref = driver_binding_ref, profile_id = profile_id, driver_methods = driver_methods :: {[string]: string},
         placement_methods = placement_methods :: {[string]: string}, admission = admission,
-        previous_attempt_id = previous_attempt_id, checkpoint = checkpoint,
+        previous_attempt_id = previous_attempt_id, checkpoint = checkpoint, budget = selected_budget,
     }, nil
 end
 
@@ -272,6 +279,22 @@ function M.execute(io: IO, value: unknown): ({[string]: unknown}?, string?)
         return uncertain(request, "placement exit cannot be proven: " .. tostring(final_decode_error or "attempt is not proven exited"), final_attempt)
     end
     local observation = object(observed)
+    local exceeded = observation and observation.budget_exceeded
+    if exceeded ~= nil then
+        if exceeded ~= "max_turns" and exceeded ~= "max_tokens" and exceeded ~= "wall_time_ms" then
+            return uncertain(request, "executor reported an unsupported budget kind", final_attempt)
+        end
+        local artifacts = {"placement attempt " .. request.attempt_id,
+            "execution state " .. tostring(final_attempt.execution_state),
+            "exit observed by " .. tostring(final_attempt.exit_source),
+            "budget " .. exceeded .. " exceeded"}
+        return {state = "settled", outcome = "budget_exceeded",
+            error = {code = "BUDGET_EXCEEDED", message = exceeded .. " exceeded"},
+            attempt_id = request.attempt_id, checkpoint = {attempt_id = request.attempt_id,
+                resume_ref = request.checkpoint and request.checkpoint.resume_ref},
+            observations = observation.observations or {},
+            evidence = {summary = "placement proved the CLI exited after the " .. exceeded .. " budget", artifacts = artifacts}}, nil
+    end
     if observation and observation.stopped == true then
         return {state = "settled", outcome = "cancelled", error = {code = "CANCELLED", message = "placement stopped the process"},
             attempt_id = request.attempt_id, checkpoint = {attempt_id = request.attempt_id,

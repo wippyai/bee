@@ -18,7 +18,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         local home = agents.home(item.session)
         local workspace = home and names[home]
         local location = workspace and (workspace.label .. " · " .. workspace.folder) or "Workspace unavailable"
-        cells[#cells + 1] = {text.bound(item.title, 512), item.provider or "—", item.activity, text.bound(location, 512), item.lifecycle}
+        local activity = item.activity
+        if item.activity_evidence then
+            activity = activity .. " · quiet " .. tostring(item.activity_evidence.quiet_for_ms) .. " ms"
+        end
+        cells[#cells + 1] = {text.bound(item.title, 512), item.provider or "—", activity, text.bound(location, 512), item.lifecycle}
     end
     local last = layout.work.y + layout.work.height - 2
     local window = frame.table(painter, layout.work.y, last, {columns = {

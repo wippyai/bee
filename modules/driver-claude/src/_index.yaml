@@ -331,7 +331,7 @@ entries:
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Claude turn budget for agentic research actions on a caller-owned thread
+    comment: Host-selected Claude launch policy for agentic research actions on a caller-owned thread
   data:
     schema_revision: bee.launch-policy@2
     allowed_overrides: [thread, workdir]
@@ -348,9 +348,9 @@ entries:
     allow_host_home: false
     gateway_tools: [session_catalog, session_open, session_run, session_send, session_await, session_join, session_get, session_list, session_cancel, session_close, thread_read, thread_message]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
+    profile_options: {effort: [low, medium, high]}
     profile_instructions: true
-    prepare_options: {permission_mode: default, turn_budget: 128}
+    prepare_options: {permission_mode: default}
 - name: launch_policy_claude_window
   kind: registry.entry
   meta:

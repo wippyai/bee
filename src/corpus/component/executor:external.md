@@ -18,3 +18,11 @@ Each attempt records progress before prepare, gateway admission and CLI start.
 Normalized assistant text, tool events and usage are appended live through the
 fenced Threads observation operation. Caller identity comes from the canonical
 Session route, under host-selected admission policies.
+
+There is no default work ceiling. A Session or one Work may opt into
+`{max_turns?, max_tokens?, wall_time_ms?}`. The executor counts normalized
+turn signals and usage from the selected driver's codec, and checks elapsed
+wall time while observing the process. When a field is exceeded, it requests a
+placement stop and settles `budget_exceeded` only after placement proves exit;
+the result carries `BUDGET_EXCEEDED` and placement evidence. Start and stop
+grace timeouts remain placement safety controls.

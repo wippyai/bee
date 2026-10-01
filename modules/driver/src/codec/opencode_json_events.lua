@@ -199,7 +199,7 @@ function M.decode_state(value: unknown): (State?, string?)
         answer = answer, answer_truncated = object.answer_truncated :: boolean, usage = usage, error = fault,
         terminal = terminal}, nil
 end
-function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, _turn_budget: integer?, paths: {[string]: unknown}?): Step
+function M.normalize(state: State, index: integer, envelope: {[string]: unknown}, paths: {[string]: unknown}?): Step
     local out: {Observation} = {}
     local kind = type(envelope.type) == "string" and envelope.type :: string or "unknown"
     if state.terminal then

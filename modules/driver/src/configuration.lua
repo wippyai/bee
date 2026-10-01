@@ -1,6 +1,7 @@
 -- MIT. Typed driver configuration delivery under an empty callee scope.
 local hash = require("hash")
 local json = require("json")
+local toml = require("toml")
 local bounds = require("bounds")
 local canonical = require("canonical")
 local funcs = require("funcs")
@@ -26,7 +27,7 @@ M.INSTRUCTIONS_PROVIDER_REF = "bee:profile_instructions"
 type Object = {[string]: unknown}
 type SecretField = {path: {string}, environment: string, prefix: string}
 type JsonOperation = {kind: "default" | "insert" | "append", path: {string}}
-type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
+type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}, append_text: boolean?} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type InstructionBuilder = {func_id: string, args: {[string]: unknown}}
 type GatewayInput = {endpoint: string, action_id: string, tools: {string}, hooks: {string}, token_environment: string, hook_token_environment: string?, hook_command: string?}
@@ -217,7 +218,7 @@ function M.decode_file(value: unknown): (Configuration?, string?)
             if bounds.fields(composition, {"kind", "base_path"}) or content ~= "" then return nil, "copy composition requires empty content and a base path" end
             result.composition = {kind = "copy", base_path = base_path}
         elseif composition.kind == "toml_insert" then
-            if bounds.fields(composition, {"kind", "base_path", "path"}) then return nil, "invalid configuration composition" end
+            if bounds.fields(composition, {"kind", "base_path", "path", "append_text"}) or (composition.append_text ~= nil and type(composition.append_text) ~= "boolean") then return nil, "invalid configuration composition" end
             local raw_path, path_error = sequence(composition.path, "configuration composition path", 8)
             if not raw_path or #raw_path == 0 then return nil, path_error or "configuration composition path is empty" end
             local selected_path: {string} = {}
@@ -226,7 +227,7 @@ function M.decode_file(value: unknown): (Configuration?, string?)
                 if not selected or selected == "" then return nil, "configuration composition path key " .. tostring(index) .. " is invalid" end
                 selected_path[index] = selected
             end
-            result.composition = {kind = "toml_insert", base_path = base_path, path = selected_path}
+            result.composition = {kind = "toml_insert", base_path = base_path, path = selected_path, append_text = composition.append_text == true}
         elseif composition.kind == "json_patch" then
             if bounds.fields(composition, {"kind", "base_path", "operations"}) then return nil, "invalid configuration composition" end
             local raw_operations, operations_error = sequence(composition.operations, "configuration composition operations", 16)
@@ -369,6 +370,19 @@ function M.decode_reply(value: unknown, selected_provider: string?, gateway: Gat
             local path = paths and bounds.line(paths[1], 4096)
             if document and not bounds.fields(document, {"$schema", "instructions"}) and path and path:sub(-30) == "/.bee/system-prompt-append.txt" then
                 instructions_file = #file.composition.operations == 2 and file.composition.operations[1].kind == "default" and file.composition.operations[2].kind == "append" and file.composition.operations[2].path[1] == "instructions"
+            end
+        end
+        if not instructions_file and instructions and file.provider_ref == M.INSTRUCTIONS_PROVIDER_REF and file.composition and file.composition.kind == "toml_insert" and file.composition.append_text == true and not file.secret_fields then
+            local parsed = toml.decode(file.content)
+            local current = bounds.object(parsed)
+            local exact = current ~= nil
+            for index, key in ipairs(file.composition.path) do
+                if current then
+                    if bounds.fields(current, {key}) then exact = false end
+                    local selected = current[key]
+                    if index == #file.composition.path then instructions_file = exact and selected == instructions
+                    else current = bounds.object(selected); if not current then exact = false end end
+                end
             end
         end
         local login_file = private_home == true and file.provider_ref == M.LOGIN_PROVIDER_REF and file.composition ~= nil and file.composition.kind == "copy" and not file.secret_fields

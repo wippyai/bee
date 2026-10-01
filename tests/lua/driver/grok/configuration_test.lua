@@ -144,7 +144,7 @@ local function define_tests()
             test.eq(hooks_reply.error, "grok hooks require the host-selected hook command")
         end)
         test.it("leaves MCP permission to the launch specification and appends instructions", function()
-            local reply = configure.handle({fixture = false, instructions = "Keep the Bee thread current.", gateway = {
+            local reply = configure.handle({fixture = false, home_directory = "/private/grok", instructions = "Keep the Bee thread current.", gateway = {
                 endpoint = "127.0.0.1:9090", action_id = "action-instructions", tools = {"thread_read"}, hooks = {},
                 token_environment = "BEE_TOKEN",
             }})

@@ -5,8 +5,7 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref ~= nil or request.provider ~= nil then
         return {ok = false, error = "muse accepts no provider configuration"}
     end
-    if request.instructions then return {ok = false, error = "muse accepts no profile instructions"} end
-    local files = {}
+    local files: {configure_protocol.Configuration} = {}
     if request.gateway and (#request.gateway.tools > 0 or #request.gateway.hooks > 0) then
         local hook_token_source: string? = nil
         if #request.gateway.hooks > 0 then
@@ -26,4 +25,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
     return {ok = true, delivery = {arguments = {}, files = files}}
 end
-return {handle = universal.configure("muse", {muse = handle})}
+return {handle = universal.configure("muse", {muse = handle}, "bee.driver.muse.descriptor:cli")}

@@ -3,14 +3,14 @@ local configure_protocol = require("configure_protocol")
 local canonical = require("canonical")
 local universal = require("universal")
 local function gateway_delivery(gateway)
-    if not gateway then return {arguments = {}, files = {}}, nil end
+    if not gateway then return {arguments = {"--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}'}, files = {}}, nil end
     local url = "http://" .. gateway.endpoint .. "/mcp/" .. gateway.action_id
     local mcp, mcp_error = canonical.encode({mcpServers = {bee = {type = "http", url = url,
         headers = {Authorization = "Bearer ${" .. gateway.token_environment .. "}"}}}})
     if not mcp then return nil, mcp_error end
     -- Settings carry only the hook handlers; a gateway without hooks passes
     -- none, since Claude reads a settings literal it cannot parse as a path.
-    if #gateway.hooks == 0 then return {arguments = {"--mcp-config", mcp}, files = {}}, nil end
+    if #gateway.hooks == 0 then return {arguments = {"--strict-mcp-config", "--mcp-config", mcp}, files = {}}, nil end
     local hook_url = "http://" .. gateway.endpoint .. "/hook/" .. gateway.action_id
     local hook_token = gateway.hook_token_environment
     if not hook_token then return nil, "Claude hooks require a token environment" end
@@ -24,7 +24,7 @@ local function gateway_delivery(gateway)
     local settings, settings_error = canonical.encode({hooks = events, allowedHttpHookUrls = {hook_url},
         httpHookAllowedEnvVars = {gateway.hook_token_environment}})
     if not settings then return nil, settings_error end
-    return {arguments = {"--mcp-config", mcp, "--settings", settings}, files = {}}, nil
+    return {arguments = {"--strict-mcp-config", "--mcp-config", mcp, "--settings", settings}, files = {}}, nil
 end
 local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref ~= nil or request.provider ~= nil then
@@ -32,10 +32,6 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     end
     local delivery, delivery_error = gateway_delivery(request.gateway)
     if not delivery then return {ok = false, error = tostring(delivery_error)} end
-    if request.instructions then
-        delivery.arguments[#delivery.arguments + 1] = "--append-system-prompt"
-        delivery.arguments[#delivery.arguments + 1] = request.instructions
-    end
     return {ok = true, delivery = delivery}
 end
-return {handle = universal.configure("claude", {claude = handle})}
+return {handle = universal.configure("claude", {claude = handle}, "bee.driver.claude.descriptor:cli")}

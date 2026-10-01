@@ -115,7 +115,7 @@ local function define_tests()
             test.is_true(line:find("%-%-model gemini%-3%.8%-flash%-high") ~= nil)
             test.is_true(line:find("%-%-effort high") ~= nil)
             test.is_true(line:find("%-%-agent default") ~= nil)
-            test.is_nil(line:find("%-%-print%-timeout"))
+            test.is_nil((line:find("%-%-print%-timeout")))
         end)
 
         test.it("prepares the hidden Gemini batch profile and delivers its admitted HTTP MCP configuration", function()
@@ -136,7 +136,7 @@ local function define_tests()
             test.is_true(arguments:find("^%-%-print= %-%-input%-format stream%-json") ~= nil)
             test.is_true(arguments:find("%-%-model gemini%-3%.8%-flash") ~= nil)
             test.is_true(arguments:find("%-%-effort high") ~= nil)
-            test.is_nil(arguments:find("%-%-print%-timeout"))
+            test.is_nil((arguments:find("%-%-print%-timeout")))
 
             local gateway = {
                 endpoint = "127.0.0.1:18790",
@@ -174,7 +174,7 @@ local function define_tests()
             local line = quote.line(launch.specification(request).argv)
             test.is_true(line:find("%-%-sandbox") ~= nil)
             test.is_true(line:find("dangerously%-skip%-permissions") == nil)
-            test.is_nil(line:find("%-%-print%-timeout"))
+            test.is_nil((line:find("%-%-print%-timeout")))
         end)
 
         test.it("does not hardcode a model when omitted in production", function()

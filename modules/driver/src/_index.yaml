@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee driver contract
-    comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement owns execution
+    comment: The driver contract, declarative envelopes, activated binding resolution and scoped configuration calls; placement
+      owns execution
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -28,7 +29,8 @@ entries:
 - name: descriptor
   kind: library.lua
   source: file://descriptor.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     login_evidence: bee.driver:login_evidence
@@ -53,7 +55,8 @@ entries:
 - name: universal
   kind: library.lua
   source: file://universal.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -77,7 +80,8 @@ entries:
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     profile: bee.driver:profile
@@ -86,7 +90,13 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash, funcs, security, registry, json]
+  modules:
+  - hash
+  - funcs
+  - security
+  - registry
+  - json
+  - toml
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -119,8 +129,7 @@ entries:
   kind: registry.entry
   meta:
     type: harness.permission_adapter
-    comment: Claude and Codex PermissionRequest hook response protocol; host acceptance
-      separately authorizes answers
+    comment: Claude and Codex PermissionRequest hook response protocol; host acceptance separately authorizes answers
   data:
     adapter:
       schema_revision: bee.permission-adapter@2

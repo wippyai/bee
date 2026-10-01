@@ -36,11 +36,16 @@ local function exact_subtree(document: Object, path: {string}): (unknown, string
     return nil, "selected TOML path is empty"
 end
 
-local function insert_missing(document: Object, path: {string}, selected: unknown): string?
+local function insert_missing(document: Object, path: {string}, selected: unknown, append_text: boolean?): string?
     local current = document
     for index, segment in ipairs(path) do
         local value = current[segment]
         if index == #path then
+            if append_text then
+                if type(selected) ~= "string" or (value ~= nil and type(value) ~= "string") then return "selected TOML append path must contain text" end
+                current[segment] = type(value) == "string" and value ~= "" and (value .. "\n\n" .. selected) or selected
+                return nil
+            end
             if value ~= nil then return "selected TOML path already exists" end
             current[segment] = selected
             return nil
@@ -58,14 +63,14 @@ local function insert_missing(document: Object, path: {string}, selected: unknow
     return "selected TOML path is empty"
 end
 
-local function compose_toml(base: string, path: {string}, source: string): (string?, string?)
+local function compose_toml(base: string, path: {string}, source: string, append_text: boolean?): (string?, string?)
     local document, document_error = decode_toml(base, true)
     if not document then return nil, "decode base TOML: " .. tostring(document_error) end
     local overlay, overlay_error = decode_toml(source, false)
     if not overlay then return nil, "decode source TOML: " .. tostring(overlay_error) end
     local selected, selection_error = exact_subtree(overlay, path)
     if selection_error then return nil, selection_error end
-    local insert_error = insert_missing(document, path, selected)
+    local insert_error = insert_missing(document, path, selected, append_text)
     if insert_error then return nil, insert_error end
     local encoded, encode_error = toml.encode(document)
     if not encoded then return nil, "encode composed TOML: " .. tostring(encode_error) end
@@ -242,7 +247,7 @@ function M.render(file: types.Configuration, environment: {[string]: string}, ga
             if content ~= "" then return nil, "copy composition requires empty content" end
             composed = base
         elseif file.composition.kind == "toml_insert" then
-            composed, compose_error = compose_toml(base, file.composition.path, content)
+            composed, compose_error = compose_toml(base, file.composition.path, content, file.composition.append_text)
             if not composed then return nil, "compose TOML configuration: " .. tostring(compose_error) end
         elseif file.composition.kind == "json_patch" then
             composed, compose_error = compose_json_patch(base, content, file.composition.operations)

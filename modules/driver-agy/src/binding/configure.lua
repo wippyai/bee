@@ -19,13 +19,8 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
             files[#files + 1] = mcp_file
         end
     end
-    if request.instructions then
-        local file, file_error = configuration.instructions_file(request.instructions)
-        if not file then return {ok = false, error = tostring(file_error)} end
-        files[#files + 1] = file
-    end
     local arguments = {}
-    if #files > 0 then
+    if #files > 0 or request.instructions then
         if not request.home_directory then
             return {ok = false, error = "agy additive configuration needs the owner-derived home_directory"}
         end
@@ -38,4 +33,4 @@ local function handle(request: configure_protocol.Request): {[string]: unknown}
     return {ok = true, delivery = {arguments = arguments, files = files}}
 end
 
-return {handle = universal.configure("agy", {agy = handle})}
+return {handle = universal.configure("agy", {agy = handle}, "bee.driver.agy.descriptor:cli")}

@@ -18,11 +18,11 @@ M.SCHEMA = "https://opencode.ai/config.json"
 M.MAX_CONFIGURATION_BYTES = 8192
 type Gateway = configure_protocol.GatewayInput
 type Configuration = configure_protocol.Configuration
-function M.settings_file(gateway: Gateway): (Configuration?, string?)
+function M.settings_file(gateway: Gateway, instructions: string?): (Configuration?, string?)
     for _, event in ipairs(gateway.hooks) do
         return nil, "opencode does not support gateway hook event " .. event
     end
-    if #gateway.tools == 0 then return nil, "opencode configuration needs at least one gateway tool" end
+    if #gateway.tools == 0 and not instructions then return nil, "opencode configuration needs a gateway or instructions" end
     local document: {[string]: unknown} = {
         ["$schema"] = M.SCHEMA,
         mcp = {
@@ -34,6 +34,8 @@ function M.settings_file(gateway: Gateway): (Configuration?, string?)
             },
         },
     }
+    if #gateway.tools == 0 then document.mcp = nil end
+    if instructions then document.instructions = {instructions} end
     local content, content_error = canonical.encode(document)
     if not content then return nil, content_error end
     content = content .. "\n"
@@ -44,10 +46,13 @@ function M.settings_file(gateway: Gateway): (Configuration?, string?)
         {kind = "default", path = {"$schema"}},
         {kind = "insert", path = {"mcp", "bee"}},
     }
+    if #gateway.tools == 0 then table.remove(operations, 2) end
+    if instructions then operations[#operations + 1] = {kind = "append", path = {"instructions"}} end
     local file: Configuration = {revision = M.REVISION, path = M.PATH, content = content, digest = digest,
-        provider_ref = configure_protocol.GATEWAY_PROVIDER_REF,
+        provider_ref = #gateway.tools > 0 and configure_protocol.GATEWAY_PROVIDER_REF or configure_protocol.INSTRUCTIONS_PROVIDER_REF,
         composition = {kind = "json_patch", base_path = M.BASE_PATH, operations = operations},
         secret_fields = {{path = {"mcp", "bee", "headers", "Authorization"}, environment = gateway.token_environment, prefix = "Bearer "}}}
+    if #gateway.tools == 0 then file.secret_fields = nil end
     return file, nil
 end
 function M.login_configuration(): (configure_protocol.Configuration?, string?)

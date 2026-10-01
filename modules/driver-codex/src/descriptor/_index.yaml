@@ -67,14 +67,12 @@ entries:
           adapter_ref: bee.driver:permission_request_hook
         first_turn:
           transport: provider
-          reason: Bee runs codex exec --json with prompt stdin closed; exec has no
-            client approval-response channel. The window uses PermissionRequest hooks.
-            App-server JSON-RPC approvals require a different driver mode.
+          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window
+            uses PermissionRequest hooks. App-server JSON-RPC approvals require a different driver mode.
         resume:
           transport: provider
-          reason: Bee runs codex exec --json with prompt stdin closed; exec has no
-            client approval-response channel. The window uses PermissionRequest hooks.
-            App-server JSON-RPC approvals require a different driver mode.
+          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel. The window
+            uses PermissionRequest hooks. App-server JSON-RPC approvals require a different driver mode.
     options:
       profiles:
       - window
@@ -117,17 +115,25 @@ entries:
           path: provider.options.approval_policy
           value_schema:
             type: string
-            enum: [on-request, never]
+            enum:
+            - on-request
+            - never
           label: Approval policy
           description: Codex approval requests
           section: advanced
           order: 2
-          contexts: [window, first_turn, resume]
+          contexts:
+          - window
+          - first_turn
+          - resume
           support:
             config_schema_ref: bee.driver.codex.descriptor:cli
           render:
           - kind: argv
-            contexts: [window, first_turn, resume]
+            contexts:
+            - window
+            - first_turn
+            - resume
             tokens:
             - if: approval_policy
               then:
@@ -264,14 +270,18 @@ entries:
             merge: append
             value:
               field: provider.system_prompt_append
-          - kind: argv
+          - kind: config
             contexts:
             - window
             - first_turn
             - resume
-            tokens:
-            - -c
-            - format: developer_instructions={system_prompt_append_toml}
+            file: .codex/config.toml
+            format: toml
+            path:
+            - developer_instructions
+            merge: append
+            value:
+              field: provider.system_prompt_append
         model:
           path: provider.model
           value_schema:
@@ -383,6 +393,12 @@ entries:
         write_back: true
       - source_path: .codex/config.toml
         path: .codex/config.toml
+        kind: config
+        optional: true
+        write_back: false
+        container_content: ''
+      - source_path: .codex/config.toml
+        path: .codex/.bee-user-config.toml
         kind: config
         optional: true
         write_back: false

@@ -2,7 +2,9 @@
 local test = require("test")
 local hash = require("hash")
 local json = require("json")
+local toml = require("toml")
 local configuration = require("configuration")
+local bounds = require("bounds")
 local placement_configuration = require("placement_configuration")
 local placement_types = require("placement_types")
 local claude = require("claude")
@@ -188,12 +190,13 @@ local function define_tests()
             for _, invalid in ipairs({"", string.rep("x", 4097), "bad\0text", "bad\27text"}) do
                 test.is_nil(configuration.decode_request({fixture = false, instructions = invalid}))
             end
-            local claude_reply = claude.handle({fixture = false, instructions = text})
-            local claude_delivery, claude_error = configuration.decode_reply(claude_reply, nil)
+            local claude_reply = claude.handle({fixture = false, instructions = text, home_directory = "/private/claude"})
+            local claude_delivery, claude_error = configuration.decode_reply(claude_reply, nil, nil, text)
             if not claude_delivery then error(tostring(claude_error)) end
-            test.eq(claude_delivery.arguments[#claude_delivery.arguments - 1], "--append-system-prompt")
-            test.eq(claude_delivery.arguments[#claude_delivery.arguments], text)
-            local grok_delivery, grok_error = configuration.decode_reply(grok.handle({fixture = false, instructions = text}), nil)
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments - 1], "--append-system-prompt-file")
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments], "/private/claude/.bee/system-prompt-append.txt")
+            test.eq(claude_delivery.files[1].content, text)
+            local grok_delivery, grok_error = configuration.decode_reply(grok.handle({fixture = false, instructions = text, home_directory = "/private/grok"}), nil, nil, text)
             if not grok_delivery then error(tostring(grok_error)) end
             test.eq(grok_delivery.arguments[1], "--rules")
             test.eq(grok_delivery.arguments[2], text)
@@ -207,15 +210,28 @@ local function define_tests()
             test.is_nil(configuration.decode_reply(agy_reply, nil))
             test.is_nil(configuration.decode_reply(agy_reply, nil, nil, "different instructions"))
         end)
-        test.it("renders Codex instructions and refuses ambiguous provider guidance", function()
+        test.it("projects additive Codex instructions into private config and retains host guidance", function()
             local data = {schema_revision = "bee.codex-provider@1", name = "openai", authentication = "chatgpt"}
             local provider = {kind = "registry.entry", meta = {type = "bee.codex_provider"}, data = data}
-            local request = {fixture = false, provider_ref = PROVIDER, provider = provider, instructions = "Review carefully.\nKeep boundaries."}
-            local result, err = configuration.decode_reply(codex.handle(request), PROVIDER)
+            local request = {fixture = false, home_directory = "/private/codex", provider_ref = PROVIDER, provider = provider, instructions = "Review carefully.\nKeep boundaries."}
+            local result, err = configuration.decode_reply(codex.handle(request), PROVIDER, nil, request.instructions)
             if not result then error(tostring(err)) end
-            test.is_true(result.files[1].content:find('developer_instructions = "Review carefully.\\nKeep boundaries."', 1, true) ~= nil)
+            test.eq(result.files[#result.files].content, request.instructions)
+            test.eq(#result.arguments, 0)
+            local projected = assert(bounds.object(toml.decode(result.files[1].content)))
+            test.eq(projected.developer_instructions, request.instructions)
             local conflicting = {kind = "registry.entry", meta = {type = "bee.codex_provider"}, data = {schema_revision = "bee.codex-provider@1", name = "openai", authentication = "chatgpt", developer_instructions = "Other guidance"}}
-            test.eq(codex.handle({fixture = false, provider_ref = PROVIDER, provider = conflicting, instructions = "Profile guidance"}).ok, false)
+            local combined = assert(configuration.decode_reply(codex.handle({fixture = false, home_directory = "/private/codex", provider_ref = PROVIDER, provider = conflicting, instructions = "Profile guidance"}), PROVIDER, nil, "Profile guidance"))
+            test.eq(assert(bounds.object(toml.decode(combined.files[1].content))).developer_instructions, "Other guidance\n\nProfile guidance")
+            local private = assert(configuration.decode_reply(codex.handle({fixture = false, home_directory = "/private/codex", instructions = request.instructions}), nil, nil, request.instructions))
+            test.eq(private.files[1].path, ".codex/config.toml")
+            local materialized = assert(placement_configuration.render(private.files[1], {}, nil, 'model = "kept"\ndeveloper_instructions = "Host guidance"\n[profiles.custom]\nmodel = "custom"\n'))
+            local parsed = assert(bounds.object(toml.decode(materialized)))
+            test.eq(parsed.developer_instructions, "Host guidance\n\n" .. request.instructions)
+            test.eq(parsed.model, "kept")
+            test.is_true(materialized:find("custom", 1, true) ~= nil)
+            test.is_nil(configuration.decode_reply(codex.handle({fixture = false, home_directory = "/private/codex", instructions = request.instructions}), nil, nil, "Wrong prompt"))
+            test.is_nil(placement_configuration.render(private.files[1], {}, nil, "developer_instructions = 4\n"))
         end)
         test.it("accepts measured files and a bounded empty argv literal", function()
             local result, err = configuration.decode_reply({ok = true, delivery = delivery({file(nil)}, {"--setting-sources", ""})}, PROVIDER)
@@ -308,10 +324,12 @@ local function define_tests()
                 test.is_nil(configuration.decode_request({fixture = false, instruction_builder = invalid}))
             end
         end)
-        test.it("leaves ordinary Claude settings enabled when no Bee configuration is needed", function()
+        test.it("loads only Bee MCP even when no tools are selected", function()
             local ordinary, err = configuration.call("bee.driver.claude.binding:configure", {fixture = false})
             if not ordinary then error(tostring(err)) end
-            test.eq(#ordinary.arguments, 0)
+            test.eq(ordinary.arguments[1], "--strict-mcp-config")
+            test.eq(ordinary.arguments[2], "--mcp-config")
+            test.eq(ordinary.arguments[3], '{"mcpServers":{}}')
             test.eq(#ordinary.files, 0)
         end)
         test.it("accepts an empty memory result without adding or replacing guidance", function()
@@ -321,11 +339,12 @@ local function define_tests()
             test.eq(#empty.files, 0)
             test.eq(#empty.arguments, 0)
             local retained, retained_error = configuration.call("bee.driver.claude.binding:configure", {
-                fixture = false, instructions = "Persistent guidance.", instruction_builder = builder,
+                fixture = false, home_directory = "/private/claude", instructions = "Persistent guidance.", instruction_builder = builder,
             })
             if not retained then error(tostring(retained_error)) end
-            test.eq(retained.arguments[#retained.arguments - 1], "--append-system-prompt")
-            test.eq(retained.arguments[#retained.arguments], "Persistent guidance.")
+            test.eq(retained.arguments[#retained.arguments - 1], "--append-system-prompt-file")
+            test.eq(retained.arguments[#retained.arguments], "/private/claude/.bee/system-prompt-append.txt")
+            test.eq(retained.files[1].content, "Persistent guidance.")
         end)
         test.it("evaluates builder in configuration.call, appends with blank line, and enforces bounds", function()
             local static_text = "Static profile guidance."
@@ -341,8 +360,9 @@ local function define_tests()
             local claude_delivery, claude_err = configuration.call("bee.driver.claude.binding:configure", request)
             if not claude_delivery then error(tostring(claude_err)) end
             local expected_combined = "Static profile guidance.\n\nDynamic memory rules from custom_test"
-            test.eq(claude_delivery.arguments[#claude_delivery.arguments - 1], "--append-system-prompt")
-            test.eq(claude_delivery.arguments[#claude_delivery.arguments], expected_combined)
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments - 1], "--append-system-prompt-file")
+            test.eq(claude_delivery.arguments[#claude_delivery.arguments], "/private/agy-session/.bee/system-prompt-append.txt")
+            test.eq(claude_delivery.files[1].content, expected_combined)
 
             -- Static + Dynamic append for Agy
             local agy_delivery, agy_err = configuration.call("bee.driver.agy.binding:configure", request)

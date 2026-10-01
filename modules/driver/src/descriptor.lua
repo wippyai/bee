@@ -630,7 +630,7 @@ function M.decode(value: unknown): (Descriptor?, string?)
             or type(profile_file.window_only) ~= "boolean" then return nil, "CLI descriptor provider-home profile file is invalid" end
     end
 
-    local declared_fields: Object = {profile_id = true, brief = true, system_prompt_file = true, system_prompt_append_toml = true}
+    local declared_fields: Object = {profile_id = true, brief = true, system_prompt_file = true}
     for name in pairs(fields) do declared_fields[name] = true end
     local visiting: {[string]: boolean} = {}
     local visited: {[string]: boolean} = {}

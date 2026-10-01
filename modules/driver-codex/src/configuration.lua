@@ -133,6 +133,14 @@ function M.projection(provider: Provider, gateway_section: string?, instructions
     if hash_error or not digest then return nil, "configuration digest failed" end
     return {revision = M.REVISION, path = M.PATH, content = content, digest = digest, provider_ref = provider.ref, provider_digest = provider.digest}, nil
 end
+function M.prompt_projection(text: string): (shared_configuration.Configuration?, string?)
+    local content = "developer_instructions = " .. toml.string(text) .. "\n"
+    local digest, err = hash.sha256(content)
+    if not digest then return nil, tostring(err or "Prompt configuration digest failed") end
+    return {revision = "bee.codex-prompt@1", path = M.PATH, content = content, digest = digest,
+        provider_ref = shared_configuration.INSTRUCTIONS_PROVIDER_REF,
+        composition = {kind = "toml_insert", base_path = ".codex/.bee-user-config.toml", path = {"developer_instructions"}, append_text = true}}, nil
+end
 -- The gateway descriptor is already selected and validated by the host. This
 -- driver owns the Codex syntax that consumes it; it never performs endpoint
 -- lookup or receives token bytes.
@@ -207,13 +215,12 @@ function M.hook_files(gateway: Gateway, home_directory: string): ({Projection}?,
 end
 -- Session flags add Bee integration to Codex's ordinary user configuration.
 -- No user config, hook file, login file or named profile is replaced.
-function M.session_arguments(gateway: Gateway?, instructions: string?): ({string}?, string?)
+function M.session_arguments(gateway: Gateway?): ({string}?, string?)
     local arguments: {string} = {}
     local function option(value: string)
         arguments[#arguments + 1] = "-c"
         arguments[#arguments + 1] = value
     end
-    if instructions then option("developer_instructions=" .. toml.string(instructions)) end
     if not gateway then return arguments, nil end
     local function server(name: string, path: string, token: string, hidden: boolean)
         local value = "mcp_servers." .. name .. "={url=" .. toml.string("http://" .. gateway.endpoint .. path)

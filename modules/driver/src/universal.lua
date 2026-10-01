@@ -510,7 +510,7 @@ function M.configure(default_renderer: string, renderers: {[string]: ConfigureRe
             prompt_file = file
             if not request.home_directory then return {ok = false, error = "System prompt append requires the owner-derived private home"} end
             local prompt: Request = {profile_id = "batch", brief = "", system_prompt_append = request.instructions,
-                system_prompt_file = request.home_directory .. "/" .. file.path, system_prompt_append_toml = canonical.encode(request.instructions)}
+                system_prompt_file = request.home_directory .. "/" .. file.path}
             for _, raw_render in ipairs(renders) do
                 local render = bounds.object(raw_render)
                 if render and render.kind == "argv" then

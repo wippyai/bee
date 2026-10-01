@@ -43,6 +43,68 @@ type Output = {attempt_id: string, generation: integer, stream: "stdout" | "stde
 type InputAck = {attempt_id: string, generation: integer, write_id: string, accepted: boolean, reason: string?}
 -- stopped: the child ended after a stop its placement was asked for.
 type Exit = {attempt_id: string, generation: integer, code: integer?, signal: integer?, uncertain: boolean, stopped: boolean?}
+function M.decode_exit(raw: unknown): Exit?
+    local value = bounds.object(raw)
+    if not value then return nil end
+    local attempt_id, generation = bounds.id(value.attempt_id), bounds.count(value.generation)
+    if not attempt_id or not generation then return nil end
+    local code: integer? = nil
+    if value.code ~= nil then
+        code = bounds.integer(value.code)
+        if not code then return nil end
+    end
+    local signal: integer? = nil
+    if value.signal ~= nil then
+        signal = bounds.integer(value.signal)
+        if not signal then return nil end
+    end
+    local uncertain = value.uncertain
+    if type(uncertain) ~= "boolean" then return nil end
+    local stopped = value.stopped
+    if stopped ~= nil and type(stopped) ~= "boolean" then return nil end
+    return {attempt_id = attempt_id, generation = generation, code = code, signal = signal, uncertain = uncertain, stopped = stopped}
+end
+function M.decode_output(raw: unknown): Output?
+    local value = bounds.object(raw)
+    if not value then return nil end
+    local attempt_id, generation = bounds.id(value.attempt_id), bounds.count(value.generation)
+    if not attempt_id or not generation then return nil end
+    local stream = value.stream
+    if stream ~= "stdout" and stream ~= "stderr" then return nil end
+    local sequence = bounds.count(value.sequence)
+    if not sequence then return nil end
+    local data = value.data
+    if data ~= nil and type(data) ~= "string" then return nil end
+    local eof = value.eof
+    if type(eof) ~= "boolean" then return nil end
+    local truncated = value.truncated
+    if truncated ~= nil and type(truncated) ~= "boolean" then return nil end
+    return {attempt_id = attempt_id, generation = generation, stream = stream, sequence = sequence, data = data, eof = eof, truncated = truncated}
+end
+function M.decode_input_ack(raw: unknown): InputAck?
+    local value = bounds.object(raw)
+    if not value then return nil end
+    local attempt_id, generation = bounds.id(value.attempt_id), bounds.count(value.generation)
+    if not attempt_id or not generation then return nil end
+    local write_id = bounds.id(value.write_id)
+    if not write_id then return nil end
+    local accepted = value.accepted
+    if type(accepted) ~= "boolean" then return nil end
+    local reason = value.reason
+    if reason ~= nil and type(reason) ~= "string" then return nil end
+    return {attempt_id = attempt_id, generation = generation, write_id = write_id, accepted = accepted, reason = reason}
+end
+function M.decode_write_status(raw: unknown): WriteStatus?
+    local value = bounds.object(raw)
+    if not value then return nil end
+    local attempt_id, generation = bounds.id(value.attempt_id), bounds.count(value.generation)
+    if not attempt_id or not generation then return nil end
+    local write_id = bounds.id(value.write_id)
+    if not write_id then return nil end
+    local status = value.status
+    if status ~= "accepted" and status ~= "unknown" then return nil end
+    return {attempt_id = attempt_id, generation = generation, write_id = write_id, status = status}
+end
 -- A status reply counts only from the placement-recorded runner, for the
 -- attempt and attachment generation the service holds, answering the
 -- probe it sent; anything else is unauthenticated traffic.

@@ -35,10 +35,9 @@ type Operation = {digest: string, component: string, action: string, state: stri
 type Recovery = {digest: string, request: Object, operation: Operation}
 type Publication = {component: string, version: string, snapshot_digest: string, descriptor_digest: string}
 type State = {
-    phase: Phase, keyword: string, query: string, page: integer, catalog: {Item}, total: integer,
-    installed: {Module}, installed_roots: {Root}, installed_read: "unknown" | "pending" | "ready" | "error",
-    pack_updates: {PackUpdate}, bee_update: BeeUpdate?, update_status: "unknown" | "pending" | "ready" | "error",
-    selected: string?, detail: Detail?, selected_version: string?,
+    phase: Phase, keyword: string, query: string, page: integer, catalog: {Item}, all_catalog: {Item}?, total: integer,
+    developer_packages: boolean, pack_updates: {PackUpdate}, bee_update: BeeUpdate?, update_status: string,
+    installed: {Module}, installed_roots: {Root}, installed_read: "unknown" | "pending" | "ready" | "error", selected: string?, detail: Detail?, selected_version: string?,
     requirements_open: boolean, requirements: {Requirement}, requirements_digest: string?, selected_requirement: integer,
     action: string, policy: string, parameters: {Parameter}, parameter_touched: {[string]: boolean}, plan: Plan?, result: Result?, notice: string,
     publication_component: string, publication_version: string, publication_snapshot_digest: string, publication_prepared: Publication?,
@@ -70,7 +69,7 @@ end
 local function clone(value: unknown): unknown
     if type(value) ~= "table" then return value end
     local result: {[unknown]: unknown} = {}
-    for key, item in pairs(value :: {[unknown]: unknown}) do result[clone(key)] = clone(item) end
+    for key, item in pairs(value) do result[clone(key)] = clone(item) end
     return result
 end
 
@@ -133,7 +132,7 @@ local function operation_request(raw: unknown, action: string, owner: string): O
     local selected_version = version(value.version)
     if not selected_version or type(value.parameters) ~= "table" then return nil end
     local parameters: {Object} = {}
-    for index, raw_parameter in ipairs(value.parameters :: {unknown}) do
+    for index, raw_parameter in ipairs(value.parameters) do
         if index > M.MAX_PARAMETERS then return nil end
         local parameter = object(raw_parameter)
         if not parameter then return nil end
@@ -235,9 +234,9 @@ local function reset_plan(state: State)
 end
 
 function M.new(): State
-    return {phase = "catalog", keyword = "bee", query = "", page = 1, catalog = {}, total = 0,
-        installed = {}, installed_roots = {}, installed_read = "unknown", pack_updates = {}, bee_update = nil, update_status = "unknown",
-        selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
+    return {phase = "catalog", keyword = "bee", query = "", page = 1, catalog = {}, all_catalog = {}, total = 0,
+        developer_packages = false, pack_updates = {}, bee_update = nil, update_status = "idle",
+        installed = {}, installed_roots = {}, installed_read = "unknown", selected = nil, detail = nil, selected_version = nil, action = "install", policy = "none",
         requirements_open = false, requirements = {}, requirements_digest = nil, selected_requirement = 1,
         parameters = {}, parameter_touched = {}, plan = nil, result = nil, notice = "",
         publication_component = "", publication_version = "", publication_snapshot_digest = "", publication_prepared = nil,
@@ -255,6 +254,11 @@ function M.show(state: State, phase: Phase)
         state.selected_operation, state.recovery = nil, nil
     end
     state.phase = phase
+end
+
+function M.begin_plan(state: State)
+    reset_plan(state)
+    M.show(state, "plan")
 end
 
 function M.catalog_intent(state: State): Intent
@@ -305,7 +309,7 @@ local function publication_identity(state: State, workspace_id: unknown): (strin
     end
     if not component(state.publication_component) then return nil, "enter a component in namespace/name form" end
     if not version(state.publication_version) then return nil, "enter an explicit version" end
-    return workspace :: string, nil
+    return workspace, nil
 end
 
 function M.publication_prepare_intent(state: State, workspace_id: unknown): (Intent?, string?)
@@ -467,7 +471,7 @@ function M.recover(state: State): string?
     if not operation.request then return "this operation has no stored request for recovery" end
     local preserved = clone(operation.request)
     if type(preserved) ~= "table" then return "this operation has no stored request for recovery" end
-    state.recovery = {digest = operation.digest, request = preserved :: Object, operation = operation}
+    state.recovery = {digest = operation.digest, request = preserved, operation = operation}
     state.phase, state.notice = "confirm", ""
     return nil
 end
@@ -507,7 +511,7 @@ function M.confirm_intent(state: State): (Intent?, string?)
     if state.recovery then
         local request = clone(state.recovery.request)
         if type(request) ~= "table" then return nil, "recovery request is unavailable" end
-        return {operation = "apply", request = request :: Object, expected_digest = state.recovery.digest}, nil
+        return {operation = "apply", request = request, expected_digest = state.recovery.digest}, nil
     end
     local plan = state.plan
     if not plan then return nil, "prepare a plan first" end
@@ -532,10 +536,21 @@ function M.set_keyword(state: State, value: unknown)
     local selected = M.text(value, 160)
     if selected ~= state.keyword then state.keyword, state.page = selected, 1; reset_plan(state) end
 end
+-- The keyword filter opens on the catalog phase, where the footer advertises
+-- it; on other phases the same key keeps its selection meaning.
+function M.keyword_phase(phase: string): boolean
+    return phase == "catalog"
+end
+
+local update_catalog_visibility: ((State) -> ())? = nil
 
 function M.set_query(state: State, value: unknown)
     local selected = M.text(value, 160)
-    if selected ~= state.query then state.query, state.page = selected, 1; reset_plan(state) end
+    if selected ~= state.query then
+        state.query, state.page = selected, 1
+        if update_catalog_visibility then update_catalog_visibility(state) end
+        reset_plan(state)
+    end
 end
 
 function M.set_page(state: State, page: integer)
@@ -705,6 +720,144 @@ function M.select_requirement(state: State, index: integer)
     state.selected_requirement = math.floor(math.max(1, math.min(#state.requirements, index)))
 end
 
+local BUILTIN_APPLICATIONS: {[string]: boolean} = {
+    ["bee/terminal"] = true,
+    ["bee/harness"] = true,
+    ["bee/console"] = true,
+    ["bee/workspace-manager"] = true,
+    ["bee/approvals-inbox"] = true,
+    ["bee/hive-manager"] = true,
+    ["bee/threads-timeline"] = true,
+    ["bee/host-processes"] = true,
+    ["bee/gov-overlays"] = true,
+    ["bee/hub-modules"] = true,
+    ["bee/settings"] = true,
+    ["bee/bee"] = true,
+}
+
+local BEE_LIBRARIES: {[string]: boolean} = {
+    ["bee/sync"] = true,
+    ["bee/threads"] = true,
+    ["bee/persist"] = true,
+    ["bee/gateway"] = true,
+    ["bee/protocol"] = true,
+    ["bee/capability"] = true,
+    ["bee/placement"] = true,
+    ["bee/placement-native"] = true,
+    ["bee/credentials"] = true,
+    ["bee/resources"] = true,
+    ["bee/node"] = true,
+    ["bee/docs"] = true,
+    ["bee/hive"] = true,
+    ["bee/hive-telemetry"] = true,
+    ["bee/gov"] = true,
+    ["bee/application"] = true,
+    ["bee/agents"] = true,
+    ["bee/git-worktree"] = true,
+}
+
+function M.is_application(item: Item): boolean
+    local comp = item.component:lower()
+    local title = item.title:lower()
+    local desc = item.description:lower()
+
+    if BUILTIN_APPLICATIONS[comp] or comp:find("^bee/driver%-") then
+        return true
+    end
+    if comp:find("^wippy/") or comp:find("^kickside/") or BEE_LIBRARIES[comp] then
+        return false
+    end
+    if comp:find("/lib") or comp:find("%-lib$") or comp:find("^acme/lib") then
+        return false
+    end
+    if desc:find("framework") or title:find("framework")
+        or desc:find("library") or title:find("library")
+        or desc:find("utilities") or title:find("utilities")
+        or desc:find("migration") or title:find("migration")
+        or desc:find("binding") or title:find("binding") then
+        return false
+    end
+    return true
+end
+
+local function component_status_installed(installed: {Module}, comp_name: string): string?
+    for _, mod in ipairs(installed) do
+        if mod.component == comp_name then
+            if mod.source == "builtin" or mod.source == "core" or mod.source == "system" or BUILTIN_APPLICATIONS[comp_name] then
+                return "built-in"
+            end
+            return "installed"
+        end
+    end
+    if BUILTIN_APPLICATIONS[comp_name] then
+        return "built-in"
+    end
+    return nil
+end
+
+function M.component_status(state: State, comp_name: string): string?
+    return component_status_installed(state.installed, comp_name)
+end
+
+local function ensure_selected_visible(state: State)
+    local items = state.catalog
+    if #items == 0 then return end
+    if not state.selected then
+        state.selected = items[1].component
+        return
+    end
+    for _, item in ipairs(items) do
+        if item.component == state.selected then
+            return
+        end
+    end
+    state.selected = items[1].component
+end
+
+function M.visible_catalog(state: State): {Item}
+    local source = state.all_catalog or state.catalog
+    if state.developer_packages or state.query ~= "" then
+        return source
+    end
+    local apps: {Item} = {}
+    for _, item in ipairs(source) do
+        if M.is_application(item) then
+            apps[#apps + 1] = item
+        end
+    end
+    return apps
+end
+
+update_catalog_visibility = function(state: State)
+    state.catalog = M.visible_catalog(state)
+    ensure_selected_visible(state)
+end
+
+function M.toggle_developer_packages(state: State)
+    state.developer_packages = not state.developer_packages
+    if update_catalog_visibility then update_catalog_visibility(state) end
+    reset_plan(state)
+end
+
+function M.set_developer_packages(state: State, enabled: boolean)
+    state.developer_packages = enabled == true
+    if update_catalog_visibility then update_catalog_visibility(state) end
+    reset_plan(state)
+end
+
+local function catalog_rank(installed: {Module}, item: Item): integer
+    local is_app = M.is_application(item)
+    local status = component_status_installed(installed, item.component)
+    if is_app then
+        if status == "built-in" then return 1 end
+        if status == "installed" then return 2 end
+        return 3
+    else
+        if status == "built-in" or status == "installed" then return 4 end
+        return 5
+    end
+end
+
 function M.apply_catalog(state: State, reply: Reply)
     if not reply.ok or type(reply.value) ~= "table" then state.notice = M.text((reply.code or "UNAVAILABLE") .. ": " .. (reply.message or "catalog unavailable")); return end
     local value = object(reply.value)
@@ -721,7 +874,15 @@ function M.apply_catalog(state: State, reply: Reply)
         if name then rows[#rows + 1] = {component = name, title = M.text(item.title, 160),
             description = M.text(item.description, 512), latest_version = M.text(item.latest_version, 128)} end
     end
-    state.catalog, state.total, state.phase, state.notice = rows, total, "catalog", ""
+    local installed = state.installed
+    table.sort(rows, function(a: Item, b: Item): boolean
+        local ra, rb = catalog_rank(installed, a), catalog_rank(installed, b)
+        if ra ~= rb then return ra < rb end
+        return a.component < b.component
+    end)
+    state.all_catalog = rows
+    state.total, state.phase, state.notice = total, "catalog", ""
+    if update_catalog_visibility then update_catalog_visibility(state) end
 end
 
 function M.apply_installed(state: State, reply: Reply)

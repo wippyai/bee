@@ -25,11 +25,17 @@ local function decode_pack_entry(raw_entry: unknown): (Identity?, string?)
     local extra = bounds.fields(data, {"version", "build", "source", "source_revision", "runtime", "runtime_commit",
         "native", "native_version", "website", "native_components"})
     if extra then return nil, "host binary identity has unsupported fields" end
-    local values: {[string]: string} = {}
-    for _, field in ipairs({"version", "build", "source", "source_revision", "runtime", "runtime_commit", "native", "native_version", "website"}) do
-        local value = bounds.text(data[field], 512)
-        if not value then return nil, "host binary identity is missing " .. field end
-        values[field] = value
+    local version = bounds.text(data.version, 512)
+    local build = bounds.text(data.build, 512)
+    local source = bounds.text(data.source, 512)
+    local source_revision = bounds.text(data.source_revision, 512)
+    local runtime = bounds.text(data.runtime, 512)
+    local runtime_commit = bounds.text(data.runtime_commit, 512)
+    local native = bounds.text(data.native, 512)
+    local native_version = bounds.text(data.native_version, 512)
+    local website = bounds.text(data.website, 512)
+    if not version or not build or not source or not source_revision or not runtime or not runtime_commit or not native or not native_version or not website then
+        return nil, "host binary identity is incomplete"
     end
     local rows, rows_error = bounds.dense_list(data.native_components, 128, "host native components")
     if not rows then return nil, rows_error end
@@ -48,9 +54,9 @@ local function decode_pack_entry(raw_entry: unknown): (Identity?, string?)
         components[#components + 1] = {package = name, version = version}
         seen[name] = true
     end
-    return {version = values.version :: string, build = values.build :: string, source = values.source :: string,
-        source_revision = values.source_revision :: string, runtime = values.runtime :: string, runtime_commit = values.runtime_commit :: string,
-        native = values.native :: string, native_version = values.native_version :: string, website = values.website :: string,
+    return {version = version, build = build, source = source,
+        source_revision = source_revision, runtime = runtime, runtime_commit = runtime_commit,
+        native = native, native_version = native_version, website = website,
         native_components = components}, nil
 end
 
@@ -87,8 +93,8 @@ function M.read_host(): (Baked?, string?)
     if native_modules[native_module] ~= native_version then
         return nil, "host binary native version differs from its module manifest"
     end
-    return {native_module = native_module :: string, native_version = native_version :: string,
-        native_modules = native_modules, runtime_commit = runtime_commit :: string}, nil
+    return {native_module = native_module, native_version = native_version,
+        native_modules = native_modules, runtime_commit = runtime_commit}, nil
 end
 
 function M.read_packages(raw_packages: unknown): (Identity?, string?)

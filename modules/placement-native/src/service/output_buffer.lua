@@ -11,7 +11,7 @@ function M.new(): Buffers
 end
 function M.append(buffers: Buffers, stream: Stream, data: string): {Chunk}
     local chunks: {Chunk} = {}
-    local pending = buffers[stream]
+    local pending = stream == "stdout" and buffers.stdout or buffers.stderr
     local offset = 1
     while offset <= #data do
         local room = M.MAX_BYTES - #pending
@@ -27,7 +27,7 @@ function M.append(buffers: Buffers, stream: Stream, data: string): {Chunk}
     return chunks
 end
 function M.flush(buffers: Buffers, stream: Stream): Chunk?
-    local pending = buffers[stream]
+    local pending = stream == "stdout" and buffers.stdout or buffers.stderr
     if pending == "" then return nil end
     buffers[stream] = ""
     return {stream = stream, data = pending}

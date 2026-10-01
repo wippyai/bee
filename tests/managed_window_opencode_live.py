@@ -127,7 +127,7 @@ function M.run()
     local request = assert(json.encode({request_id = "opencode-live-request", definition_ref = "bee.managed.opencode.fixture:definition",
         brief = "", thread_id = thread}))
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "opencode-live-open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", thread_id = thread, arguments = {request}}))
+        definition_id = "bee.harness.app:app", thread_id = thread, arguments = {request}}))
     local opened = receive_reply(replies, "opencode-live-open", "open", "60s")
     assert(opened.error_code == "", "managed OpenCode window did not become ready: " .. tostring(opened.error))
     local id = tostring(opened.id)

@@ -22,6 +22,14 @@ entries:
     view: bee.hub.modules:view
     appearance: bee.application:appearance
     contents: bee.hub.modules:contents
+- name: app_test
+  kind: function.lua
+  source: file://app_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "60s"}
+  modules: [process, channel, time, tty, uuid]
+  imports:
+    test: wippy.test:test
 - name: contents_test
   kind: function.lua
   source: file://contents_test.lua

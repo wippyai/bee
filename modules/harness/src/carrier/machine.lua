@@ -25,6 +25,7 @@ local stream_json = require("stream_json")
 local driver_types = require("driver_types")
 local placement_types = require("placement_types")
 local placement_resolver = require("placement_resolver")
+local placement_profiles = require("placement_profiles")
 local placement_protocol = require("placement_protocol")
 local placement_decode = require("placement_decode")
 local record_types = require("record_types")
@@ -33,16 +34,17 @@ local record_values = require("record_values")
 local observation_decode = require("observation_decode")
 local launch_request = require("launch_request")
 local configuration_protocol = require("configuration")
+local driver_resolver = require("driver_resolver")
 local gateway_protocol = require("gateway_protocol")
 local service_reply = require("service_reply")
 local hook_records = require("hook_records")
 local carrier_types = require("carrier_types")
-local inbox = require("inbox")
+local hints = require("hints")
 local permission_exchange = require("permission_exchange")
 local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
-M.THREADS = inbox.THREADS
+M.THREADS = hints.THREADS
 M.CARRIER_OPS = "bee.threads.carrier"
 M.GATEWAY = "bee.gateway.binding"
 M.MAX_RECORDS_PER_COMMIT = 64
@@ -50,7 +52,7 @@ M.MAX_RECORDS_PER_COMMIT = 64
 -- checkpoint carries only a partial frame up to checkpoint.MAX_CARRY_BYTES.
 M.MAX_FRAME_BYTES = placement_protocol.MAX_OUTSTANDING_CHUNKS * placement_protocol.MAX_CHUNK_BYTES
 M.APPROVALS = "bee.approvals.binding"
-M.DELIVERY = inbox.DELIVERY
+M.DELIVERY = hints.DELIVERY
 M.WAITER_NAME = "bee.threads.waiter"
 M.HINT_REGISTRATION_MS = 60000
 type Object = {[string]: unknown}
@@ -58,15 +60,13 @@ type Reply = service_reply.Reply
 type IO = carrier_types.IO
 type Request = carrier_types.Request
 type Exchange = carrier_types.Exchange
-type Push = carrier_types.Push
+type Acceptance = carrier_types.Acceptance
 type Plan = carrier_types.Plan
 type OutputState = carrier_types.OutputState
 type Session = carrier_types.Session
-type Offer = carrier_types.Offer
-type InboxPromptItem = inbox.InboxPromptItem
-local inbox_context_value: inbox.Context? = nil
+local inbox_context_value: hints.Context? = nil
 local permission_context_value: permission_exchange.Context? = nil
-local function inbox_context(): inbox.Context
+local function inbox_context(): hints.Context
     if inbox_context_value == nil then error("carrier inbox context is not initialized") end
     return inbox_context_value
 end
@@ -75,28 +75,17 @@ local function permission_context(): permission_exchange.Context
     return permission_context_value
 end
 
-M.inbox_prompt = inbox.inbox_prompt
-M.push_line = inbox.push_line
 function M.open_hints(io: IO, session: Session): (integer?, string?)
-    return inbox.open_hints(inbox_context(), io, session)
+    return hints.open_hints(inbox_context(), io, session)
 end
 function M.take_hints(io: IO, session: Session): (boolean, integer?, string?)
-    return inbox.take_hints(inbox_context(), io, session)
+    return hints.take_hints(inbox_context(), io, session)
 end
 function M.acknowledge_hints(io: IO, session: Session): (boolean, string?)
-    return inbox.acknowledge_hints(inbox_context(), io, session)
+    return hints.acknowledge_hints(inbox_context(), io, session)
 end
 function M.close_hints(io: IO, session: Session)
-    inbox.close_hints(inbox_context(), io, session)
-end
-function M.offer_inbox(io: IO, session: Session): (Offer?, string?)
-    return inbox.offer_inbox(inbox_context(), io, session)
-end
-function M.carry_brief(io: IO, request: Request, driver_id: string, mode: string): string
-    return inbox.carry_brief(inbox_context(), io, request, driver_id, mode)
-end
-function M.begin_push_turn(io: IO, session: Session, item: Offer): (string?, string?)
-    return inbox.begin_push_turn(inbox_context(), io, session, item)
+    hints.close_hints(inbox_context(), io, session)
 end
 
 local function step(io: IO, name: string): ()
@@ -215,13 +204,13 @@ local function digest_of(value: unknown): (string?, string?)
 end
 -- measure: the binding, profile, policy and, when enabled, the adapter and
 -- acceptance record, all read from one pinned registry generation.
-type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, push: Push?, configuration_digest: string, gateway: placement_types.Gateway?}
+type Measured = {generation: integer, binding: classify.Binding, profile: classify.Profile, policy: policy.Policy, placement_binding: placement_types.PlacementBinding, exchange: Exchange?, configuration_digest: string, gateway: placement_types.Gateway?}
 -- verify_acceptance: the acceptance record a host declaration names,
 -- decoded and matched against this snapshot's binding, profile, adapter
--- and proof fixture. The permission exchange and production inbox push
--- stand on the same record type; the label names which check failed.
+-- and proof fixture. The permission exchange stands on this record type;
+-- the label names which check failed.
 type DeclaredAcceptance = {adapter_ref: string, acceptance_ref: string, fixture_digest: string}
-local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAcceptance, binding: classify.Binding, profile: classify.Profile, fixture: boolean, label: string): (Push?, string?)
+local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAcceptance, binding: classify.Binding, profile: classify.Profile, fixture: boolean, label: string): (Acceptance?, string?)
     if not fixture and (not profile.permission.eligible or profile.permission.adapter_ref ~= declared.adapter_ref) then
         return nil, "profile " .. profile.id .. " does not pin permission adapter " .. declared.adapter_ref
     end
@@ -248,7 +237,7 @@ local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAc
     if mismatch then return nil, label .. " acceptance: " .. mismatch end
     return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
 end
-local function measure(request: Request): (Measured?, string?)
+local function measure(request: Request, session_turn: boolean?): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
     local snapshot, snapshot_error = catalog.read(pinned, nil)
@@ -272,7 +261,15 @@ local function measure(request: Request): (Measured?, string?)
     -- The policy is host-owned and decoded from this pinned snapshot. It is
     -- the source of placement selection; request fields only prove that the
     -- carrier received the same measured choice from admission.
-    local selected_placement, placement_error = placement_resolver.resolve(pinned, launch_policy.placement_binding)
+    local placement_binding_ref = launch_policy.placement_binding
+    if request.placement_profile_ref then
+        if not bounds.member(request.placement_profile_ref, launch_policy.placement_profiles) then return nil, "launch policy does not admit this placement profile" end
+        local selected, profile_error = placement_profiles.resolve(pinned, request.placement_profile_ref)
+        if not selected then return nil, profile_error end
+        if selected.digest ~= request.placement_profile_digest then return nil, "placement profile changed since admission" end
+        placement_binding_ref = selected.profile.placement_binding
+    end
+    local selected_placement, placement_error = placement_resolver.resolve(pinned, placement_binding_ref)
     if not selected_placement then return nil, placement_error end
     if (request.placement_binding_ref and request.placement_binding_ref ~= selected_placement.binding_id)
         or (request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest) then
@@ -288,42 +285,41 @@ local function measure(request: Request): (Measured?, string?)
             executable_revision = verified.executable_revision, executable_kind = verified.executable_kind, executable_digest = verified.executable_digest,
             approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
     end
-    local push: Push? = nil
-    local declared_push = launch_policy.push_acceptance
-    if declared_push then
-        local verified_push, push_error = verify_acceptance(pinned, declared_push, binding, profile, launch_policy.fixture, "push")
-        if not verified_push then return nil, push_error end
-        push = verified_push
-    elseif launch_policy.inbox_push and not launch_policy.fixture then
-        return nil, "inbox push needs a pinned executable acceptance before production admission"
-    end
     -- The carrier carries only host-selected configuration inputs. Placement
     -- renders and freezes the driver's final delivery with its own HOME path.
     local gateway: placement_types.Gateway? = nil
     local gateway_input: configuration_protocol.GatewayInput? = nil
-    if #launch_policy.gateway_tools > 0 or #launch_policy.gateway_hooks > 0 then
+    local selected, selected_error = driver_resolver.profile(pinned, request.binding_ref, request.profile_id)
+    if selected_error then return nil, selected_error end
+    local selected_hooks = driver_resolver.select_hooks(selected, launch_policy.gateway_hooks)
+    if #launch_policy.gateway_tools > 0 or #selected_hooks > 0 then
         local address, endpoint_error = gateway_configuration.endpoint()
         if not address then return nil, "gateway: " .. tostring(endpoint_error) end
         local hook_destination: string? = nil
-        if #launch_policy.gateway_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
+        if #selected_hooks > 0 then hook_destination = gateway_configuration.HOOK_DESTINATION end
         gateway = {endpoint = address, tools = launch_policy.gateway_tools, destination = gateway_configuration.DESTINATION,
-            hooks = launch_policy.gateway_hooks, hook_destination = hook_destination}
-        local hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref)
+            hooks = selected_hooks, hook_destination = hook_destination}
+        local hook_command: string? = nil
+        local command_error: string? = nil
+        if #selected_hooks > 0 then hook_command, command_error = gateway_configuration.hook_command(launch_policy.hook_command_ref) end
         if command_error then return nil, command_error end
         gateway_input = {hook_command = hook_command, endpoint = address, action_id = request.action_id, tools = gateway.tools, hooks = gateway.hooks,
             token_environment = gateway.destination, hook_token_environment = gateway.hook_destination}
     end
     local configure_target = binding.methods.configure
     if not configure_target then return nil, "binding " .. request.binding_ref .. " binds no configure" end
+    local configure_renderer, configure_renderer_error = driver_resolver.configure_renderer(pinned, request.binding_ref, configure_target)
+    if configure_renderer_error then return nil, configure_renderer_error end
     local provider_entry: Object? = nil
     if launch_policy.provider_ref then
         provider_entry = catalog.entry(pinned, launch_policy.provider_ref)
         if not provider_entry then return nil, "provider " .. launch_policy.provider_ref .. " is not in the registry" end
     end
     local configuration_digest, configuration_error = configuration_protocol.digest({provider_ref = launch_policy.provider_ref,
-        provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder, gateway = gateway_input, fixture = launch_policy.fixture}, configure_target)
+        provider = provider_entry, instructions = launch_policy.instructions, instruction_builder = launch_policy.instruction_builder,
+        gateway = gateway_input, fixture = launch_policy.fixture}, configure_target, configure_renderer)
     if not configuration_digest then return nil, configuration_error end
-    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange, push = push,
+    return {generation = snapshot.generation, binding = binding, profile = profile, policy = launch_policy, placement_binding = selected_placement, exchange = exchange,
         configuration_digest = configuration_digest, gateway = gateway}
 end
 -- A launch may declare a host file it needs before it starts. Bee never
@@ -340,10 +336,10 @@ function M.required_file_refusal(launch: driver_types.Launch, private_home: bool
 end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.
-function M.plan(io: IO, request: Request): (Plan?, string?)
-    local measured, measure_error = measure(request)
+local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?): (Plan?, string?)
+    local measured, measure_error = measure(request, session_turn)
     if not measured then return nil, measure_error end
-    local binding, profile, launch_policy, placement_binding, exchange, push, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.push, measured.configuration_digest, measured.gateway
+    local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then
         return nil, "selected provider configuration requires a private-home profile"
     end
@@ -354,7 +350,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     if request.reauthorize == true and (not request.previous_attempt_id or profile.mode ~= "window") then
         return nil, "reauthorization requires a saved window"
     end
-    if request.previous_attempt_id then
+    if session_turn and session_resume_ref then
+        if not request.session_ref then return nil, "session continuation needs its retained session" end
+        resume_ref = session_resume_ref
+        previous_private_home = profile.private_home
+        local dispatch = binding.methods.dispatch
+        if not dispatch then return nil, "driver has no continuation method" end
+        prepare_target = dispatch
+    elseif request.previous_attempt_id and not session_turn then
         if not request.session_ref then return nil, "continuation needs a retained session" end
         if profile.mode == "window" and request.brief ~= "" then return nil, "window continuation cannot replay a brief" end
         local resolver = profile.mode == "window" and continuation.resolve_window or continuation.resolve
@@ -371,14 +374,10 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     end
     local private_home = previous_private_home
     if private_home == nil then private_home = profile.private_home end
+    if placement_binding.placement_kind == "docker" then private_home = true end
     if not private_home and not launch_policy.allow_host_home then
         return nil, "launch policy does not authorize host HOME"
     end
-    -- A fresh attempt on a driver without a between-turns controller starts
-    -- carrying its oldest outstanding inbox item in the brief. The plan owns
-    -- the request table from here; nothing downstream rereads the caller's
-    -- brief, and the carry is idempotent across repeated plans.
-    request.brief = M.carry_brief(io, request, binding.driver_id, profile.mode)
     local prepare_request: {[string]: unknown} = {}
     for name, value in pairs(launch_policy.prepare_options) do prepare_request[name] = value end
     prepare_request.profile_id = request.profile_id
@@ -387,15 +386,6 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     -- The host enabled an interactive permission exchange: the driver
     -- prepares the launch shape that keeps stdin open for the responses.
     if exchange then prepare_request.permission_exchange = true end
-    if launch_policy.inbox_push then
-        if binding.driver_id ~= "claude" or profile.mode == "window" or profile.protocol ~= "stream-json" then
-            return nil, "inbox push requires a Claude structured stream-json profile"
-        end
-        if not launch_policy.fixture and not push then
-            return nil, "inbox push needs a pinned executable acceptance before production admission"
-        end
-        prepare_request.control_enabled = true
-    end
     -- The driver shapes its launch to reach the admitted gateway tools and
     -- to load the hook adapter the runner writes.
     if gateway then
@@ -432,8 +422,14 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if not home then return nil, "retained session needs a writable session resource" end
         launch.home_ref = home
     end
-    local bound = launch_policy.executables[launch.executable]
+    local runtime_name = launch.executable
+    local bound = launch_policy.executables[runtime_name]
     if bound then launch.executable = bound end
+    if placement_binding.placement_kind == "docker" then
+        local name = runtime_name:match("^([A-Za-z0-9_.%-]+)$")
+        if not name or not name:match("^[A-Za-z0-9_.%-]+$") then return nil, "Docker executable has no runtime name" end
+        launch.executable = "/usr/local/bin/" .. name
+    end
     -- The host-selected executable is measured by placement, read-only,
     -- and the measurement is part of the plan: the runner verifies it
     -- again before exec. An enabled exchange stands on an acceptance record
@@ -443,10 +439,6 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
     local exchange_refusal: string? = nil
     local function refuse_exchange(reason: string)
         if not exchange_refusal then exchange_refusal = reason end
-    end
-    local push_refusal: string? = nil
-    local function refuse_push(reason: string)
-        if not push_refusal then push_refusal = reason end
     end
     -- capabilities_refusal: the placement's executable-measurement proof
     -- under the label that needs it, or the hard error when the
@@ -471,11 +463,6 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if capabilities_error then return nil, capabilities_error end
         if refusal then refuse_exchange(refusal) end
     end
-    if push and not launch_policy.fixture then
-        local refusal, capabilities_error = capabilities_refusal("production push")
-        if capabilities_error then return nil, capabilities_error end
-        if refusal then refuse_push(refusal) end
-    end
     if launch.executable:sub(1, 1) == "/" then
         local measure_target = placement_binding.methods.measure_executable
         if measure_target then
@@ -486,18 +473,15 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
                 local measured, measured_error = executable_measurement(reply.value, launch.executable)
                 if not measured then return nil, "measure executable returned an invalid measurement: " .. tostring(measured_error) end
                 measurement = measured
-            elseif (exchange or push) and not launch_policy.fixture then
+            elseif exchange and not launch_policy.fixture then
                 local fault = reply.error or {code = "UNAVAILABLE", message = "measurement failed"}
-                if exchange then refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message) end
-                if push then refuse_push("production push: executable measurement: " .. fault.code .. ": " .. fault.message) end
+                refuse_exchange("production exchange: executable measurement: " .. fault.code .. ": " .. fault.message)
             end
-        elseif (exchange or push) and not launch_policy.fixture then
-            if exchange then refuse_exchange("production exchange: selected placement cannot measure the executable") end
-            if push then refuse_push("production push: selected placement cannot measure the executable") end
+        elseif exchange and not launch_policy.fixture then
+            refuse_exchange("production exchange: selected placement cannot measure the executable")
         end
-    elseif (exchange or push) and not launch_policy.fixture then
-        if exchange then refuse_exchange("production exchange: the launch policy binds no absolute executable to measure") end
-        if push then refuse_push("production push: the launch policy binds no absolute executable to measure") end
+    elseif exchange and not launch_policy.fixture then
+        refuse_exchange("production exchange: the launch policy binds no absolute executable to measure")
     end
     if exchange and measurement then
         -- A production exchange covers a measured native image only: a
@@ -509,14 +493,6 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         if exchange.executable_kind ~= measurement.kind then refuse_exchange("permission exchange acceptance: executable kind changed since acceptance") end
         if exchange.executable_digest ~= measurement.digest then refuse_exchange("permission exchange acceptance: executable measurement changed since acceptance") end
     end
-    if push and measurement then
-        -- A production push covers the executable the acceptance measured:
-        -- push authorizes no tool effect, so the recorded kind stands, and
-        -- any revision, kind or digest swap still refuses.
-        if push.executable_revision ~= measurement.revision then refuse_push("push acceptance: executable measurement revision changed since acceptance") end
-        if push.executable_kind ~= measurement.kind then refuse_push("push acceptance: executable kind changed since acceptance") end
-        if push.executable_digest ~= measurement.digest then refuse_push("push acceptance: executable measurement changed since acceptance") end
-    end
     local environment: {[string]: string} = {}
     for name, value in pairs(request.environment) do environment[name] = value end
     for name, value in pairs(launch_policy.environment) do
@@ -525,21 +501,27 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         -- host-selected override from the current profile.
         if previous_private_home ~= true or launch_policy.host_environment[name] == nil then environment[name] = value end
     end
+    if placement_binding.placement_kind == "docker" then
+        environment.HOME = nil
+        local home = launch.provider_home
+        if home then
+            if home.variable then environment[home.variable] = nil end
+            for _, item in ipairs(home.extra_variables or {}) do environment[item.variable] = nil end
+        end
+    end
     if request.working_directory then launch.working_directory_ref = request.working_directory end
     local measured_exchange: {[string]: unknown}? = nil
     if exchange then measured_exchange = {adapter = exchange.adapter.digest, acceptance = exchange.acceptance_ref, acceptance_digest = exchange.acceptance_digest} end
-    local measured_push: {[string]: unknown}? = nil
-    if push then measured_push = {adapter = push.adapter.digest, acceptance = push.acceptance_ref, acceptance_digest = push.acceptance_digest} end
     local plan_digest, digest_error = digest_of({executable = measurement, policy = launch_policy.digest, binding = binding.binding_digest.entry, profile = binding.profile_digest.entry,
         placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, placement_methods = placement_binding.methods,
         launch = launch, session_ref = request.session_ref, previous_attempt_id = request.previous_attempt_id, reauthorize = request.reauthorize,
-        environment = environment, permission = measured_exchange, push = measured_push, configuration = configuration_digest, gateway = gateway})
+        environment = environment, permission = measured_exchange, configuration = configuration_digest, gateway = gateway})
     if not plan_digest then return nil, digest_error end
     local placement_request: placement_types.LaunchRequest = {
         preferences = request.preferences,
         idempotency_key = "placement:" .. request.attempt_id, owner_id = request.owner_id, owner_incarnation = request.owner_incarnation,
         action_id = request.action_id, attempt_id = request.attempt_id, binding_ref = binding.binding_id, policy_ref = launch_policy.ref, profile_id = profile.id,
-        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
+        binding_digest = binding.binding_digest.entry, profile_digest = binding.profile_digest.entry, placement_profile_ref = request.placement_profile_ref, placement_profile_digest = request.placement_profile_digest, placement_binding_ref = placement_binding.binding_id, placement_binding_digest = placement_binding.binding_digest, launch = launch, configuration_digest = configuration_digest, executable = measurement, gateway = gateway, resources = request.resources,
         environment = environment, environment_refs = {}, projections = request.projections or {}, session_ref = request.session_ref, required_cleanup = launch_policy.required_cleanup,
         required_exit_observation = launch_policy.required_exit_observation, timeouts = {start_ms = launch_policy.start_ms, stop_grace_ms = launch_policy.stop_grace_ms, drain_ms = launch_policy.runner_drain_ms, retain_ms = launch_policy.retain_ms},
         options = request.options,
@@ -548,7 +530,16 @@ function M.plan(io: IO, request: Request): (Plan?, string?)
         placement_request.environment_refs.HOME = "bee.env:machine_home"
     end
     return {request = request, binding = binding, profile = profile, launch = launch, policy = launch_policy, placement_binding = placement_binding, plan_digest = plan_digest,
-        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, push = push, push_refusal = push_refusal, gateway = gateway}, nil
+        placement_request = placement_request, exit_codes_trustworthy = false, prepare_target = prepare_target, resume_ref = resume_ref, normalize_target = normalize_target, exchange = exchange, exchange_refusal = exchange_refusal, gateway = gateway}, nil
+end
+function M.plan(io: IO, request: Request): (Plan?, string?)
+    return build_plan(io, request, false, nil)
+end
+function M.session_plan(io: IO, request: Request, resume_ref: string?): (Plan?, string?)
+    if resume_ref ~= nil and (resume_ref == "" or #resume_ref > 256 or resume_ref:find("[%c%s]")) then
+        return nil, "session resume identity is invalid"
+    end
+    return build_plan(io, request, true, resume_ref)
 end
 -- Thread operations of the open sequence key on the attempt and the step,
 -- so a start retried after an ambiguous failure replays the same records
@@ -648,7 +639,7 @@ local function gateway_admit(io: IO, plan: Plan, epoch: integer): (string?, stri
         surface_value = policy.with_workspace(surface_value, request.workspace_id)
         if not surface_value then return nil, "gateway admit: cannot compose the launch workspace" end
     end
-    local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
+    local admitted, admit_error = must(io, M.GATEWAY .. ":admit", {subject = request.session_ref and request.session_ref:match("^bs:") and request.session_ref or request.owner_id, action_id = request.action_id, attempt_id = request.attempt_id, thread_id = request.thread_id,
         owner_incarnation = request.owner_incarnation, carrier_epoch = epoch, tools = gateway.tools, hooks = gateway.hooks, ttl_ms = plan.policy.gateway_ttl_ms, surface = surface_value,
         policy_ref = plan.policy.ref, workspace_id = request.workspace_id, origin_view = request.origin_view})
     if admit_error then return nil, "gateway admit: " .. admit_error end
@@ -673,6 +664,15 @@ end
 local function gateway_revoke(io: IO, binding_id: string?)
     if not binding_id then return end
     io.call(M.GATEWAY .. ":revoke", {binding_id = binding_id})
+end
+function M.admit_gateway(io: IO, plan: Plan, epoch: integer): (string?, string?)
+    return gateway_admit(io, plan, epoch)
+end
+function M.gateway_ready(io: IO, binding_id: string): string?
+    return gateway_ready(io, binding_id)
+end
+function M.revoke_gateway(io: IO, binding_id: string?)
+    gateway_revoke(io, binding_id)
 end
 -- drain_hooks: claim what the gateway queued for this binding under this
 -- carrier's epoch, commit it through the carrier's own commit path, then
@@ -740,7 +740,7 @@ end
 -- Anything unverified fails closed with the admit refusal. The owner still
 -- enforces the chain, the open thread and the single live attempt.
 M.ATTACH_SCAN_PAGES = 8
-M.ATTACH_PAGE_RECORDS = inbox.DELIVERY_PAGE_RECORDS
+M.ATTACH_PAGE_RECORDS = hints.DELIVERY_PAGE_RECORDS
 function M.attach_action(io: IO, request: Request): (string?, boolean, string?)
     local owned = false
     local previous: string? = nil
@@ -773,7 +773,6 @@ function M.attach_action(io: IO, request: Request): (string?, boolean, string?)
 end
 function M.prepare_attempt(io: IO, plan: Plan): (PreparedAttempt?, string?, FailedPreparation?)
     if plan.exchange_refusal then return nil, plan.exchange_refusal, nil end
-    if plan.push_refusal then return nil, plan.push_refusal, nil end
     local request = plan.request
     local attempt_prepared = false
     local action_admitted = false
@@ -1513,10 +1512,6 @@ end
 function M.on_write_ack(io: IO, session: Session, sender: string, message: placement_protocol.InputAck): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
     if not pending_write(session, message.write_id) then return true, nil end
-    if message.accepted then
-        local accepted, accept_error = inbox.accept_write(inbox_context(), io, session, message.write_id)
-        if not accepted then return false, accept_error end
-    end
     local phase = message.accepted and "accepted" or "uncertain"
     return settle_write(io, session, message.write_id, phase, message.reason)
 end
@@ -1543,8 +1538,6 @@ function M.on_write_status(io: IO, session: Session, sender: string, message: pl
     local found = pending_write(session, message.write_id)
     if not found then return true, nil end
     if message.status == "accepted" then
-        local accepted, accept_error = inbox.accept_write(inbox_context(), io, session, message.write_id)
-        if not accepted then return false, accept_error end
         return settle_write(io, session, message.write_id, "accepted", nil)
     end
     if found.dispatched then return true, nil end
@@ -1559,9 +1552,6 @@ function M.advance_permissions(io: IO, session: Session, poll: boolean): (boolea
 end
 function M.close_exchanges(io: IO, session: Session, drain_elapsed: boolean): (boolean, string?)
     return permission_exchange.close_exchanges(permission_context(), io, session, drain_elapsed)
-end
-function M.finish_push_turn(io: IO, session: Session): (boolean, string?)
-    return permission_exchange.finish_push_turn(permission_context(), io, session)
 end
 
 function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Settlement?, string?)

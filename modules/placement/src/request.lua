@@ -8,6 +8,7 @@ local canonical = require("canonical")
 local types = require("types")
 local driver_types = require("driver_types")
 local preferences = require("preferences")
+local login_evidence = require("login_evidence")
 local M = {}
 M.MAX_RESOURCES = 16
 M.MAX_PROJECTIONS = 8
@@ -54,10 +55,10 @@ local function decode_grant(value: unknown, index: integer): (types.ResourceGran
     local subpath, subpath_error = M.subpath(object.subpath == nil and "" or object.subpath)
     if not subpath then return nil, "resources[" .. tostring(index) .. "]: " .. tostring(subpath_error) end
     local access = bounds.member(object.access, types.ACCESS)
-    if not access then return nil, "resources[" .. tostring(index) .. "].access must be read or write" end
+    if access ~= "read" and access ~= "write" then return nil, "resources[" .. tostring(index) .. "].access must be read or write" end
     local purpose = bounds.member(object.purpose, types.PURPOSES)
-    if not purpose then return nil, "resources[" .. tostring(index) .. "].purpose is not one placement knows" end
-    return {name = name, grant_ref = grant_ref, root_ref = root_ref, subpath = subpath, access = access :: types.Access, purpose = purpose :: types.Purpose}, nil
+    if purpose ~= "project" and purpose ~= "output" and purpose ~= "cache" and purpose ~= "session" then return nil, "resources[" .. tostring(index) .. "].purpose is not one placement knows" end
+    return {name = name, grant_ref = grant_ref, root_ref = root_ref, subpath = subpath, access = access, purpose = purpose}, nil
 end
 local function decode_files(value: unknown, field: string, nonempty: boolean): ({driver_types.RequiredFile}?, string?)
     local raw, array_error = bounds.array(value, M.MAX_REQUIRED_FILES)
@@ -152,7 +153,7 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
     for index, raw in ipairs(raw_files) do
         local file = bounds.object(raw)
         if not file then return nil, "launch.provider_home.files[" .. tostring(index) .. "] must be an object" end
-        local file_unknown = bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back"})
+        local file_unknown = bounds.fields(file, {"source_path", "path", "kind", "optional", "write_back", "container_content", "container_omit"})
         if file_unknown then return nil, "launch.provider_home.files[" .. tostring(index) .. "]: " .. file_unknown end
         local path = bounds.text(file.path, M.MAX_REQUIRED_PATH_BYTES)
         if not path or not safe_relative(path) then return nil, "launch.provider_home.files[" .. tostring(index) .. "].path must be a safe relative path" end
@@ -170,6 +171,16 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
             if type(file.optional) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].optional must be a boolean" end
             optional = file.optional
         end
+        local container_omit: {string}? = nil
+        if file.container_omit ~= nil then
+            container_omit = bounds.ids(file.container_omit, true)
+            if kind ~= "config" or not container_omit or #container_omit > 16 then return nil, "container_omit requires bounded config keys" end
+        end
+        local container_content: string? = nil
+        if file.container_content ~= nil then
+            container_content = bounds.text(file.container_content, 8192)
+            if kind ~= "config" or not container_content then return nil, "container_content requires bounded config text" end
+        end
         local write_back = false
         if file.write_back ~= nil then
             if type(file.write_back) ~= "boolean" then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
@@ -181,7 +192,7 @@ local function decode_provider_home(value: unknown): (driver_types.ProviderHome?
         elseif kind == "config" then
             if not source_path then return nil, "ambient provider files need a source path" end
             if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
-            files[index] = {source_path = source_path, path = path, kind = "config", optional = optional, write_back = false}
+            files[index] = {source_path = source_path, path = path, kind = "config", optional = optional, write_back = false, container_content = container_content, container_omit = container_omit}
         else
             if source_path ~= nil then return nil, "generated provider state cannot name a source file" end
             if write_back then return nil, "launch.provider_home.files[" .. tostring(index) .. "].write_back is only valid for login files" end
@@ -246,15 +257,21 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     if object.login ~= nil then
         local declared = bounds.object(object.login)
         if not declared then return nil, "launch.login must be an object" end
-        local login_field = bounds.fields(declared, {"provider", "command", "files"})
+        local login_field = bounds.fields(declared, {"provider", "command", "files", "any_of"})
         if login_field then return nil, "launch.login: " .. login_field end
         local provider = bounds.id(declared.provider)
         if not provider then return nil, "launch.login.provider must be an identifier" end
         local command = bounds.line(declared.command, 128)
         if not command or command == "" then return nil, "launch.login.command must be a bounded single line" end
-        local files, files_error = decode_files(declared.files, "launch.login.files", true)
+        local files, files_error = decode_files(declared.files, "launch.login.files", declared.any_of == nil)
         if not files then return nil, files_error end
-        login = {provider = provider, command = command, files = files}
+        local alternatives: {login_evidence.Evidence}? = nil
+        if declared.any_of ~= nil then
+            local evidence, evidence_error = login_evidence.decode({command = command, any_of = declared.any_of})
+            if not evidence then return nil, evidence_error end
+            alternatives = evidence.any_of
+        end
+        login = {provider = provider, command = command, files = files, any_of = alternatives}
     end
     local provider_home: driver_types.ProviderHome? = nil
     if object.provider_home ~= nil then
@@ -268,7 +285,7 @@ function M.launch(value: unknown): (driver_types.Launch?, string?)
     if object.stdin_eof ~= nil then
         if type(object.stdin_eof) ~= "boolean" then return nil, "launch.stdin_eof must be a boolean" end
         if object.stdin_eof == true and not stdin then return nil, "launch.stdin_eof needs launch.stdin" end
-        stdin_eof = object.stdin_eof :: boolean
+        stdin_eof = object.stdin_eof
     end
     local session_end: string? = nil
     if object.session_end ~= nil then
@@ -346,7 +363,7 @@ end
 function M.decode(value: unknown): (types.LaunchRequest?, string?)
     local object = bounds.object(value)
     if not object then return nil, "launch request must be an object" end
-    local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest",
+    local unknown_field = bounds.fields(object, {"idempotency_key", "owner_id", "owner_incarnation", "action_id", "attempt_id", "binding_ref", "policy_ref", "profile_id", "placement_binding_ref", "placement_binding_digest", "placement_profile_ref", "placement_profile_digest",
         "binding_digest", "profile_digest", "launch", "configuration_digest", "preferences", "executable", "gateway", "resources", "environment", "environment_refs", "projections", "session_ref", "required_cleanup", "required_exit_observation", "timeouts", "options"})
     if unknown_field then return nil, unknown_field end
     local key = bounds.id(object.idempotency_key)
@@ -361,6 +378,13 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
     if not attempt_id then return nil, "attempt_id is not an identifier" end
     local binding_ref = bounds.id(object.binding_ref)
     if not binding_ref then return nil, "binding_ref is not an identifier" end
+    local placement_profile_ref: string? = nil
+    local placement_profile_digest: string? = nil
+    if object.placement_profile_ref ~= nil then
+        placement_profile_ref = bounds.id(object.placement_profile_ref)
+        placement_profile_digest = digest_hex(object.placement_profile_digest)
+        if not placement_profile_ref or not placement_profile_digest then return nil, "placement profile requires ref and digest" end
+    elseif object.placement_profile_digest ~= nil then return nil, "placement_profile_digest needs placement_profile_ref" end
     local placement_binding_ref: string? = nil
     local placement_binding_digest: string? = nil
     if object.placement_binding_ref ~= nil then
@@ -474,19 +498,24 @@ function M.decode(value: unknown): (types.LaunchRequest?, string?)
         session_ref = bounds.id(object.session_ref)
         if not session_ref then return nil, "session_ref is not an identifier" end
     end
-    local required = bounds.member(object.required_cleanup, types.CAPABILITIES)
-    if not required then return nil, "required_cleanup must name a cleanup capability" end
+    local required = object.required_cleanup
+    local required_cleanup: types.Capability? = nil
+    if required == "direct_process" then required_cleanup = "direct_process"
+    elseif required == "process_group" then required_cleanup = "process_group"
+    elseif required == "contained_tree" then required_cleanup = "contained_tree" end
+    if not required_cleanup then return nil, "required_cleanup must name a cleanup capability" end
     local observation = bounds.member(object.required_exit_observation == nil and "independent" or object.required_exit_observation, types.EXIT_OBSERVATIONS)
-    if not observation then return nil, "required_exit_observation must be independent or eof_gated" end
+    if observation ~= "independent" and observation ~= "eof_gated" then return nil, "required_exit_observation must be independent or eof_gated" end
+    local required_observation: types.ExitObservation = observation
     local timeouts, timeouts_error = decode_timeouts(object.timeouts)
     if not timeouts then return nil, timeouts_error end
     local options, options_error = M.decode_options(object.options)
     if options_error then return nil, options_error end
     local decoded: types.LaunchRequest = {idempotency_key = key, owner_id = owner_id, owner_incarnation = incarnation, action_id = action_id, attempt_id = attempt_id,
         preferences = selected,
-        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
+        binding_ref = binding_ref, policy_ref = policy_ref, profile_id = profile_id, placement_profile_ref = placement_profile_ref, placement_profile_digest = placement_profile_digest, placement_binding_ref = placement_binding_ref, placement_binding_digest = placement_binding_digest, binding_digest = binding_digest, profile_digest = profile_digest, launch = launch, configuration_digest = configuration_digest, executable = executable, gateway = gateway,
         resources = resources, environment = environment, environment_refs = refs, projections = projections, session_ref = session_ref,
-        required_cleanup = required :: types.Capability, required_exit_observation = observation :: types.ExitObservation, timeouts = timeouts, options = options}
+        required_cleanup = required_cleanup, required_exit_observation = required_observation, timeouts = timeouts, options = options}
     return decoded, nil
 end
 -- The canonical digest of a decoded request: two requests with one

@@ -40,7 +40,7 @@ def main():
         subprocess.run(["go", "mod", "edit", "-dropreplace=github.com/charmbracelet/x/ansi"],
                        cwd=copied, env=env, check=True)
         subprocess.run(["go", "test", "-mod=mod", "./cmd/app",
-                        "-run", "^TestSeededStandaloneRootVisibleInLuaSnapshot$", "-count=1"],
+                        "-run", "^TestBeeSeededStandaloneRootVisibleInLuaSnapshot$", "-count=1"],
                        cwd=copied, env=env, check=True)
     print("Pinned runtime proves standalone root visibility, cached history restore, nested roots, and newer-baseline reconciliation.")
 

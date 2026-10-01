@@ -9,11 +9,16 @@ local function method(id: string): Entry
     return {id = id, kind = "function.lua", meta = {}, data = {source = "file://" .. id .. ".lua"}}
 end
 local function methods(): {[string]: Entry?}
-    return {["fake:prepare"] = method("fake:prepare"), ["fake:dispatch"] = method("fake:dispatch"), ["fake:normalize"] = method("fake:normalize"), ["fake:configure"] = method("fake:configure")}
+    return {["fake:prepare"] = method("fake:prepare"), ["fake:dispatch"] = method("fake:dispatch"),
+        ["fake:locate"] = method("fake:locate"), ["fake:normalize"] = method("fake:normalize"), ["fake:configure"] = method("fake:configure")}
 end
 local function binding(): Entry
     return {id = "fake:binding", kind = "contract.binding", meta = {type = "harness.driver", driver_id = "fake", profiles_ref = "fake:profiles"},
-        data = {contracts = {{contract = "bee.driver:driver", methods = {prepare = "fake:prepare", dispatch = "fake:dispatch", normalize = "fake:normalize", configure = "fake:configure"}}}}}
+        data = {contracts = {
+            {contract = "bee.driver:driver", methods = {prepare = "fake:prepare", dispatch = "fake:dispatch",
+                normalize = "fake:normalize", configure = "fake:configure"}},
+            {contract = "bee.driver:locate_facet", methods = {locate = "fake:locate"}},
+        }}}
 end
 local function declaration(protocol: string?): Entry
     return {id = "fake:profiles", kind = "registry.entry", meta = {type = "harness.profile", driver_ref = "fake:binding"},
@@ -181,6 +186,28 @@ local function define_tests()
             wrong_kind.kind = "registry.entry"
             test.is_true(has(classified(nil, wrong_kind).diagnostics, "binding must be a contract.binding"))
         end)
+        test.it("keeps existing non-external drivers compatible without the locate facet", function()
+            local legacy = binding()
+            local contracts = data_of(legacy).contracts :: {{[string]: unknown}}
+            contracts[2] = nil
+            local available = methods()
+            available["fake:locate"] = nil
+            local result = classify.binding({binding = legacy, declaration = declaration(), methods = available, activated = false})
+            test.eq(result.state, "compatible")
+            test.is_nil(result.methods.locate)
+        end)
+        test.it("requires locate only through its optional contract facet", function()
+            local result = classified()
+            test.eq(result.state, "compatible")
+            test.eq(result.methods.locate, "fake:locate")
+            local misplaced = binding()
+            local contracts = data_of(misplaced).contracts :: {{[string]: unknown}}
+            local driver_methods = contracts[1].methods :: {[string]: unknown}
+            driver_methods.locate = "fake:locate"
+            local invalid = classified(nil, misplaced)
+            test.eq(invalid.state, "incompatible")
+            test.is_true(has(invalid.diagnostics, "method locate belongs to bee.driver:locate_facet, not bee.driver:driver"))
+        end)
         test.it("marks compatible bindings that share a driver_id as ambiguous", function()
             local first = classified()
             local second = classified()
@@ -194,7 +221,7 @@ local function define_tests()
             test.eq(list[2].state, "incompatible")
             test.is_true(has(list[1].diagnostics, "driver_id fake is declared by 2 compatible bindings"))
             test.eq(list[3].state, "compatible")
-            test.eq(#broken.diagnostics, 4)
+            test.eq(#broken.diagnostics, 5)
         end)
     end)
 end

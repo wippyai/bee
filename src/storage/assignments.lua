@@ -97,7 +97,8 @@ end
 local function intent(row: {[string]: unknown}): Intent?
     local prepared = prepare_input(row)
     local phase: IntentPhase? = nil
-    if row.phase == "prepared" or row.phase == "committed" or row.phase == "failed" then phase = row.phase end
+    local raw_phase = row.phase
+    if raw_phase == "prepared" or raw_phase == "committed" or raw_phase == "failed" then phase = raw_phase end
     local error: string? = nil
     if row.error ~= nil then
         if type(row.error) ~= "string" or #row.error > MAX_ERROR then return nil end

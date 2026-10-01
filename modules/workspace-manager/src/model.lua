@@ -7,6 +7,7 @@ local text = require("text")
 local caller = require("caller")
 local bounds = require("bounds")
 local contract = require("contract")
+local names = require("names")
 
 type WorkspaceState = "active" | "archived"
 type Summary = {workspace_id: string, label: string, root_ref: string, subpath: string, state: WorkspaceState, created_at: string,
@@ -68,6 +69,12 @@ end
 function M.folder(summary: Summary): string
     if summary.subpath == "" then return summary.root_ref end
     return summary.root_ref .. "/" .. summary.subpath
+end
+-- The name a person sees: the saved label, or the desktop petname when the
+-- workspace has none, so an unlabeled workspace reads the same as the header.
+function M.display_label(summary: Summary): string
+    if summary.label ~= "" then return summary.label end
+    return names.label(summary.workspace_id)
 end
 
 function M.selected(state: State): Summary?
@@ -242,7 +249,7 @@ function M.apply_inspect(state: State, workspace_id: string, reply: caller.Reply
                 detail.sections[#detail.sections + 1] = {title = bounded(extension.title, 80),
                     items = items(extension.items, function(item: Object): string return tostring(item.label) end,
                         function(item: Object): string return item.detail == nil and "" or tostring(item.detail) end, 50),
-                    total = type(extension.total) == "number" and math.floor(extension.total :: number) or 0,
+                    total = type(extension.total) == "number" and math.floor(extension.total) or 0,
                     error = fault ~= nil and bounded(fault, 200) or nil}
             end
         end
@@ -281,7 +288,7 @@ function M.apply_change(state: State, reply: caller.Reply)
         state.status = failure(reply)
         return
     end
-    state.status = (changed.state == "archived" and "Archived " or "Restored ") .. (changed.label ~= "" and changed.label or changed.workspace_id)
+    state.status = (changed.state == "archived" and "Archived " or "Restored ") .. M.display_label(changed)
     local kept: {Summary} = {}
     for _, item in ipairs(state.items) do
         if item.workspace_id ~= changed.workspace_id then kept[#kept + 1] = item end
@@ -298,7 +305,15 @@ function M.created(state: State, created: Summary)
     state.tab, state.query, state.editing = "active", "", false
     restart(state)
     state.selected = created.workspace_id
-    state.status = "Created " .. (created.label ~= "" and created.label or created.workspace_id)
+    state.status = "Created " .. M.display_label(created)
+end
+-- After a reload, keep the workspace the person just made when the reloaded
+-- page holds it, so opening it now lands where they expect.
+function M.pin(state: State, workspace_id: string): boolean
+    for _, item in ipairs(state.items) do
+        if item.workspace_id == workspace_id then state.selected = workspace_id; return true end
+    end
+    return false
 end
 
 function M.edit(state: State, on: boolean) state.editing = on end
@@ -310,9 +325,9 @@ function M.forget_detail(state: State) state.detail = nil end
 function M.serve(state: State, workspace_id: string?) state.served = workspace_id end
 function M.label(state: State, workspace_id: string): string
     for _, item in ipairs(state.items) do
-        if item.workspace_id == workspace_id then return item.label ~= "" and item.label or workspace_id end
+        if item.workspace_id == workspace_id then return M.display_label(item) end
     end
-    return workspace_id
+    return names.label(workspace_id)
 end
 
 return M

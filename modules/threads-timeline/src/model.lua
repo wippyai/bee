@@ -17,6 +17,7 @@ M.MAX_ROWS = 512
 M.PAGE_LIMIT = 64
 M.WAIT_MS = 30000
 M.LIST = "bee.threads.service:list"
+M.LIST_WORKSPACE = "bee.threads.service:list_workspace"
 M.GET = "bee.threads.service:get"
 M.SUBSCRIBE = "bee.threads.delivery:subscribe"
 M.PAGE = "bee.threads.delivery:page"
@@ -35,7 +36,7 @@ type Recap = {through_sequence: integer, revision: integer, lines: {string}, las
 type Picker = {threads: {Summary}, selected: string?, next_after: string?, unavailable: string?}
 type Phase = "picking" | "attaching" | "attached" | "resume_required" | "reset_required" | "unavailable"
 type State = {
-    picker: Picker, thread_id: string?, consumer_id: string, attach_key: string?, title: string, thread_state: string, head_sequence: integer,
+    picker: Picker, thread_id: string?, consumer_id: string, workspace_id: string?, attach_key: string?, title: string, thread_state: string, head_sequence: integer,
     phase: Phase, session: session.Session?, subscription_id: string?, rows: {Row}, dropped_through: integer, gap_after: integer?,
     recap: Recap?, unavailable: string, notice: string, selected: integer?, follow: boolean, technical: boolean,
 }
@@ -43,8 +44,8 @@ type PageResult = {kind: "accepted", has_more: boolean} | {kind: "refused"}
 function M.text(value: unknown, limit: integer?): string
     return text.bound(value, limit or format.LINE_LIMIT)
 end
-function M.new(consumer_id: string): State
-    return {picker = {threads = {}, selected = nil, next_after = nil, unavailable = nil}, thread_id = nil, consumer_id = consumer_id, attach_key = nil, title = "", thread_state = "",
+function M.new(consumer_id: string, workspace_id: string?): State
+    return {picker = {threads = {}, selected = nil, next_after = nil, unavailable = nil}, thread_id = nil, consumer_id = consumer_id, workspace_id = workspace_id, attach_key = nil, title = "", thread_state = "",
         head_sequence = 0, phase = "picking", session = nil, subscription_id = nil, rows = {}, dropped_through = 0, gap_after = nil,
         recap = nil, unavailable = "", notice = "", selected = nil, follow = true, technical = false}
 end
@@ -91,10 +92,16 @@ local function decode_list(value: unknown): ListResult
     end
     return {ok = true, threads = threads, next_after = next_after}
 end
--- Picking: threads the caller may read, one bounded page at a time.
+-- Picking: the workspace's threads when this viewer is bound to one, so
+-- threads owned by other applications stay visible; otherwise the threads
+-- the caller may read. One bounded page at a time either way.
 function M.list_intent(state: State): Intent
     local request: Object = {limit = M.PAGE_LIMIT}
     if state.picker.next_after then request.after_thread_id = state.picker.next_after end
+    if state.workspace_id then
+        request.workspace_id = state.workspace_id
+        return {target = M.LIST_WORKSPACE, request = request}
+    end
     return {target = M.LIST, request = request}
 end
 function M.apply_list(state: State, reply: Reply): boolean
@@ -203,7 +210,7 @@ function M.apply_recap(state: State, reply: Reply)
         local turn = object(checkpoint.last_turn)
         if not turn or bounds.fields(turn, {"turn_id", "outcome"}) or not bounds.id(turn.turn_id)
             or not bounds.member(turn.outcome, {"succeeded", "failed", "cancelled", "uncertain"}) then state.recap = nil; return end
-        last_turn = turn.outcome :: string
+        last_turn = turn.outcome
     end
     for _, key in ipairs({"claimed", "delivered", "released", "uncertain"}) do
         local count = bounds.count(deliveries[key])
@@ -457,18 +464,18 @@ function M.checkpoint(state: State): string
         selected = state.selected, follow = state.follow, technical = state.technical}) or "{}"
 end
 local function optional_string(value: unknown): boolean
-    return value == nil or (type(value) == "string" and #(value :: string) <= 200 and not (value :: string):find("%c"))
+    return value == nil or (type(value) == "string" and #(value) <= 200 and not (value):find("%c"))
 end
 function M.restore(state: State, encoded: string): boolean
     local decoded: unknown = json.decode(encoded)
     if type(decoded) ~= "table" then return false end
-    local saved = decoded :: Object
+    local saved = decoded
     if not optional_string(saved.thread_id) or not optional_string(saved.subscription_id) or not optional_string(saved.attach_key) then return false end
     if saved.selected ~= nil and type(saved.selected) ~= "number" then return false end
     if saved.follow ~= nil and type(saved.follow) ~= "boolean" then return false end
     if saved.technical ~= nil and type(saved.technical) ~= "boolean" then return false end
     if type(saved.thread_id) == "string" and saved.thread_id ~= "" then
-        M.open(state, saved.thread_id :: string, type(saved.subscription_id) == "string" and (saved.subscription_id :: string) or nil)
+        M.open(state, saved.thread_id, type(saved.subscription_id) == "string" and (saved.subscription_id) or nil)
     end
     state.attach_key = type(saved.attach_key) == "string" and saved.attach_key or nil
     state.selected = saved.selected ~= nil and bounds.sequence(saved.selected) or nil

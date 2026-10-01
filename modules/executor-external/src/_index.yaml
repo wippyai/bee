@@ -1,0 +1,46 @@
+version: '1.0'
+namespace: bee.executor.external
+entries:
+- name: definition
+  kind: ns.definition
+  module: executor-external
+  readme: file://README.md
+  meta:
+    title: Bee external executor
+    comment: One selected external CLI invocation per pulled turn through the driver and placement contracts
+- name: dependency_driver
+  kind: ns.dependency
+  component: bee/driver
+  version: '*'
+  meta:
+    comment: Shared driver launch and terminal normalization contracts
+- name: dependency_sessions
+  kind: ns.dependency
+  component: bee/sessions
+  version: '*'
+  meta:
+    comment: Sessions selects this provider-agnostic external turn executor
+- name: dependency_harness
+  kind: ns.dependency
+  component: bee/harness
+  version: '*'
+  meta:
+    comment: Host launch admission and the shared placement planner prepare each turn
+- name: dependency_placement
+  kind: ns.dependency
+  component: bee/placement
+  version: '*'
+  meta:
+    comment: Placement request and attempt contracts used by the turn adapter
+- name: dependency_placement_native
+  kind: ns.dependency
+  component: bee/placement-native
+  version: '*'
+  meta:
+    comment: Host-selected native process placement implementation
+- name: dependency_threads
+  kind: ns.dependency
+  component: bee/threads
+  version: '*'
+  meta:
+    comment: Shared bounded identifier and object decoders

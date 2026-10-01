@@ -16,6 +16,8 @@ type Window = {
     normal_bounds: Rect,
     mode: Mode,
     restore_mode: RestoreMode,
+    snap_side: string?,
+    snap_ratio: number?,
 }
 type Scene = {
     width: integer,
@@ -50,6 +52,8 @@ local function copy_window(value: Window): Window
         normal_bounds = copy_rect(value.normal_bounds),
         mode = value.mode,
         restore_mode = value.restore_mode,
+        snap_side = value.snap_side,
+        snap_ratio = value.snap_ratio,
     }
 end
 
@@ -228,10 +232,22 @@ function M.add(scene: Scene, id: string, instance_id: string, title: string, ico
         normal_bounds = copy_rect(rect),
         mode = "floating",
         restore_mode = "floating",
+        snap_side = nil,
+        snap_ratio = nil,
     }
     local windows = copy_windows(scene.windows)
     windows[#windows + 1] = added
     return commit(scene, scene.width, scene.height, id, windows)
+end
+
+function M.add_fullpane(scene: Scene, id: string, instance_id: string, title: string, icon: string?, workspace_id: string?): Scene
+    local added = M.add(scene, id, instance_id, title, icon, workspace_id)
+    if added == scene then return scene end
+    local windows = copy_windows(added.windows)
+    local current = windows[#windows]
+    current.mode, current.restore_mode = "fullscreen", "fullscreen"
+    current.bounds = workspace(scene.width, scene.height)
+    return {width = added.width, height = added.height, revision = added.revision, focus = added.focus, windows = windows}
 end
 
 function M.display_title(window: Window): string
@@ -308,6 +324,17 @@ function M.focus(scene: Scene, id: string): Scene
     return commit(scene, scene.width, scene.height, id, windows)
 end
 
+-- A snapped window keeps its side and its share of the viewport: the saved
+-- bounds only remember the last computed geometry, never the intent.
+local function snapped_bounds(window: Window, area: Rect): Rect
+    local ratio = window.snap_ratio or 0.5
+    local width = math.floor(area.width * ratio + 0.5)
+    if width < 1 then width = 1 end
+    if width > area.width then width = area.width end
+    local x = area.x
+    if window.snap_side == "right" then x = area.x + area.width - width end
+    return {x = x, y = area.y, width = width, height = area.height}
+end
 function M.resize_screen(scene: Scene, width: integer, height: integer): Scene
     local scene_width = at_least_one(width)
     local scene_height = at_least_one(height)
@@ -317,6 +344,9 @@ function M.resize_screen(scene: Scene, width: integer, height: integer): Scene
     local windows = copy_windows(scene.windows)
     for index = 1, #windows do
         local window = windows[index]
+        if window.snap_side ~= nil and window.snap_ratio ~= nil then
+            window.normal_bounds = snapped_bounds(window, area)
+        end
         if window.mode == "fullscreen" then
             window.bounds = copy_rect(area)
         elseif window.mode == "collapsed" then
@@ -347,12 +377,15 @@ function M.place(scene: Scene, id: string, rect: Rect): Scene
         windows[index].bounds = placed
         windows[index].normal_bounds.x = placed.x
         windows[index].normal_bounds.y = placed.y
+        windows[index].snap_side = nil
+        windows[index].snap_ratio = nil
         return commit(scene, scene.width, scene.height, scene.focus, windows)
     end
     if current.mode ~= "floating" then return scene end
 
     local placed = clamp(rect, workspace(scene.width, scene.height))
-    if same_rect(current.bounds, placed) and same_rect(current.normal_bounds, placed) then
+    if same_rect(current.bounds, placed) and same_rect(current.normal_bounds, placed)
+        and current.snap_side == nil and current.snap_ratio == nil then
         return scene
     end
 
@@ -360,6 +393,8 @@ function M.place(scene: Scene, id: string, rect: Rect): Scene
     windows[index].bounds = copy_rect(placed)
     windows[index].normal_bounds = copy_rect(placed)
     windows[index].restore_mode = "floating"
+    windows[index].snap_side = nil
+    windows[index].snap_ratio = nil
     return commit(scene, scene.width, scene.height, scene.focus, windows)
 end
 
@@ -386,7 +421,9 @@ function M.snap(scene: Scene, id: string, side: string): Scene
 
     local placed = clamp(target, area)
     local current = scene.windows[index]
-    if same_rect(current.bounds, placed) and same_rect(current.normal_bounds, placed) then
+    local ratio = placed.width / area.width
+    if same_rect(current.bounds, placed) and same_rect(current.normal_bounds, placed)
+        and current.snap_side == side and current.snap_ratio == ratio then
         return scene
     end
 
@@ -394,6 +431,8 @@ function M.snap(scene: Scene, id: string, side: string): Scene
     windows[index].bounds = copy_rect(placed)
     windows[index].normal_bounds = copy_rect(placed)
     windows[index].restore_mode = "floating"
+    windows[index].snap_side = side
+    windows[index].snap_ratio = ratio
     return commit(scene, scene.width, scene.height, scene.focus, windows)
 end
 

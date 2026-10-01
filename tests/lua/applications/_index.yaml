@@ -105,14 +105,6 @@ entries:
     test: wippy.test:test
     picker: bee.application:folder_picker
     caller: bee.application:caller
-- name: agents_receipt_test
-  kind: function.lua
-  source: file://agents_receipt_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  imports:
-    test: wippy.test:test
-    agents: bee.application:agents
 - name: thread_binding_test
   kind: function.lua
   source: file://thread_binding_test.lua
@@ -162,6 +154,15 @@ entries:
   source: file://broker_exit_test.lua
   method: run
   modules: [process, channel, time, security]
+  meta: {type: test, suite: bee, timeout: "60s"}
+  imports:
+    test: wippy.test:test
+    appearance: bee.application:appearance
+- name: broker_reopen_test
+  kind: function.lua
+  source: file://broker_reopen_test.lua
+  method: run
+  modules: [process, channel, time, security, tty]
   meta: {type: test, suite: bee, timeout: "60s"}
   imports:
     test: wippy.test:test

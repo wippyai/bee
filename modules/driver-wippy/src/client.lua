@@ -30,16 +30,16 @@ function M.resolve_key(credential_ref: string?, workspace_id: string?): (string?
     local entry = registry.get(credential_ref)
     if entry then
         if entry.kind == "env.variable" and type(entry.data) == "table" then
-            local data = entry.data :: {[string]: unknown}
+            local data = entry.data
             if type(data.variable) == "string" and data.variable ~= "" then
-                local name = data.variable :: string
+                local name = data.variable
                 local val, err = env.get(name)
                 if not err and val and #val > 0 then return val, nil end
                 return nil, "credential source " .. name .. " yields no value"
             end
             return nil, "credential entry " .. credential_ref .. " names no variable"
         elseif type(entry.data) == "table" then
-            local d = entry.data :: {[string]: unknown}
+            local d = entry.data
             local token = d.api_key or d.key or d.token or d.value
             if type(token) == "string" and #token > 0 then return token, nil end
             return nil, "credential entry " .. credential_ref .. " carries no key"

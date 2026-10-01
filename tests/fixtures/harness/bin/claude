@@ -1,6 +1,10 @@
 #!/bin/bash
 # Claude protocol fixture: replays a captured stream-json-2 file in place of
 # the Claude executable. This is protocol evidence, not the real harness.
+if [[ "${1:-}" == "--version" ]]; then
+  printf '%s\n' 'Claude Code 2.1.265'
+  exit 0
+fi
 # The permission mode answers a control_request from stdin with a timeout,
 # which is why this fixture runs under bash.
 stream="${BEE_FIXTURE_STREAM:?BEE_FIXTURE_STREAM names the captured stream}"
@@ -122,10 +126,14 @@ if [ -n "${BEE_FIXTURE_PERMISSION:-}" ]; then
 elif [ -n "${BEE_FIXTURE_FLOOD:-}" ]; then
   count="$BEE_FIXTURE_FLOOD"
   pace="${BEE_FIXTURE_FLOOD_PACE:-0.01}"
+  flood_text="${BEE_FIXTURE_FLOOD_TEXT:-80}"
+  flood_pad=""
+  j=0
+  while [ "$j" -lt "$flood_text" ]; do flood_pad="${flood_pad}x"; j=$((j + 1)); done
   i=0
   while [ "$i" -lt "$count" ]; do
-    printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}}\n'
-    sleep "$pace"
+    printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"%s"}}}\n' "$flood_pad"
+    if [ "$pace" != "0" ]; then sleep "$pace"; fi
     i=$((i + 1))
   done
   printf '{"type":"result","subtype":"success","is_error":false,"result":"flood-complete","session_id":"fixture","num_turns":1}\n'

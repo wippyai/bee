@@ -29,7 +29,7 @@ local function names(raw: unknown): {string}
     if type(raw) == "string" then return {raw} end
     local result: {string} = {}
     if type(raw) ~= "table" then return result end
-    for _, item in ipairs(raw :: {unknown}) do
+    for _, item in ipairs(raw) do
         if type(item) == "string" then result[#result + 1] = item end
     end
     return result

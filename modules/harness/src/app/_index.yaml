@@ -1,0 +1,196 @@
+version: '1.0'
+namespace: bee.harness.app
+entries:
+- name: request
+  kind: library.lua
+  source: file://request.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: input
+  kind: library.lua
+  source: file://input.lua
+  modules: [tty]
+- name: recovery
+  kind: library.lua
+  source: file://recovery.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+- name: hooks
+  kind: library.lua
+  source: file://hooks.lua
+  imports:
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.threads.records:bounds
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  modules: [funcs, channel]
+  imports:
+    hooks: bee.harness.app:hooks
+- name: interrupted
+  kind: library.lua
+  source: file://interrupted.lua
+  modules: [funcs, channel, time, uuid]
+  imports:
+    continuation: bee.harness.carrier:continuation
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.threads.records:bounds
+    hooks: bee.harness.app:hooks
+    delivery: bee.harness.app:delivery
+    records: bee.harness.carrier:hook_records
+- name: restore_view
+  kind: library.lua
+  source: file://restore_view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+- name: runtime
+  kind: library.lua
+  source: file://runtime.lua
+  modules: [tty, exec, process, channel, time, funcs, uuid, json]
+  imports:
+    client: bee.application:client
+    text: bee.application:text
+    bounds: bee.threads.records:bounds
+    window_request: bee.harness.app:request
+    input_event: bee.harness.app:input
+    admission: bee.harness.launch:admission
+    machine: bee.harness.carrier:machine
+    picker: bee.harness.app:picker
+    recovery: bee.harness.app:recovery
+    hooks: bee.harness.app:hooks
+    delivery: bee.harness.app:delivery
+    records: bee.harness.carrier:hook_records
+    appearance: bee.application:appearance
+    restore_view: bee.harness.app:restore_view
+    frame: bee.application:frame
+- name: app
+  kind: process.lua
+  source: file://app.lua
+  method: main
+  modules: []
+  imports:
+    runtime: bee.harness.app:runtime
+    windows: bee.harness.app:windows
+  meta:
+    type: bee.application
+    application:
+      api_version: 1
+      title: Sessions
+      icon: A
+      lifetime: view
+      revision: '1'
+      instance_policy: multiple
+      group: ''
+      role: sessions
+      resume_schema: bee.agent.window@1
+      restart_policy: automatic
+      commands:
+      - {name: agent, fullscreen: false}
+- name: windows
+  kind: library.lua
+  source: file://windows.lua
+  imports:
+    window: bee.placement.native.service:window
+    docker_window: bee.placement.docker.service:window
+- name: agents
+  kind: library.lua
+  source: file://agents.lua
+  modules: [json, funcs]
+  imports:
+    sessions: bee.application:sessions
+    sessions_protocol: bee.application:sessions_protocol
+    thread_record: bee.threads.records:record
+    bounds: bee.threads.records:bounds
+    caller: bee.application:caller
+- name: picker_view
+  kind: library.lua
+  source: file://picker_view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    text: bee.application:text
+    agents: bee.harness.app:agents
+- name: session_view
+  kind: library.lua
+  source: file://session_view.lua
+  modules: [tty]
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    text: bee.application:text
+    agents: bee.harness.app:agents
+    protocol: bee.application:sessions_protocol
+- name: picker
+  kind: library.lua
+  source: file://picker.lua
+  modules: [tty, process, channel, time, uuid, funcs]
+  imports:
+    frame: bee.application:frame
+    bounds: bee.threads.records:bounds
+    client: bee.application:client
+    caller: bee.application:caller
+    appearance: bee.application:appearance
+    input_event: bee.harness.app:input
+    sessions: bee.application:sessions
+    agents: bee.harness.app:agents
+    session_view: bee.harness.app:session_view
+    directory_view: bee.harness.app:directory_view
+    sessions_protocol: bee.application:sessions_protocol
+    admission: bee.harness.launch:admission
+    view: bee.harness.app:picker_view
+    forms: bee.harness.app:profile_form
+    profile_view: bee.harness.app:profile_view
+    terminal_view: bee.harness.app:terminal_view
+
+- name: profile_editor
+  kind: library.lua
+  source: file://profile_editor.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    preferences: bee.driver:preferences
+    protocol: bee.harness.profiles:protocol
+- name: profile_form
+  kind: library.lua
+  source: file://profile_form.lua
+  modules: [funcs, uuid]
+  imports:
+    bounds: bee.threads.records:bounds
+    catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    protocol: bee.harness.profiles:protocol
+    editor: bee.harness.app:profile_editor
+- name: profile_view
+  kind: library.lua
+  source: file://profile_view.lua
+  modules: [tty]
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    text: bee.application:text
+    caller: bee.application:caller
+    folder_picker: bee.application:folder_picker
+    editor: bee.harness.app:profile_editor
+    forms: bee.harness.app:profile_form
+
+- name: directory_view
+  kind: library.lua
+  source: file://directory_view.lua
+  imports:
+    frame: bee.application:frame
+    appearance: bee.application:appearance
+    text: bee.application:text
+    protocol: bee.application:sessions_protocol
+    agents: bee.harness.app:agents
+
+- name: terminal_view
+  kind: library.lua
+  source: file://terminal_view.lua
+  modules: [tty, process, channel]
+  imports:
+    presentation: bee.harness.service:presentation
+    bounds: bee.threads.records:bounds
+    client: bee.application:client
+    input_event: bee.harness.app:input

@@ -21,6 +21,21 @@ entries:
     interaction: bee.application:interaction
     thread_bounds: bee.threads.records:bounds
     thread_protocol: bee.application:thread_protocol
+- name: sessions_protocol
+  kind: library.lua
+  source: file://sessions_protocol.lua
+  imports:
+    bounds: bee.protocol:bounds
+    canonical: bee.protocol:canonical
+    record_values: bee.threads.records:values
+    record_types: bee.threads.records:types
+- name: sessions
+  kind: library.lua
+  source: file://sessions.lua
+  modules: [contract]
+  imports:
+    bounds: bee.protocol:bounds
+    protocol: bee.application:sessions_protocol
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
@@ -45,15 +60,6 @@ entries:
   source: file://agent_protocol.lua
   imports:
     bounds: bee.threads.records:bounds
-- name: agents
-  kind: library.lua
-  source: file://agents.lua
-  modules: [funcs, time]
-  imports:
-    caller: bee.application:caller
-    agent_protocol: bee.application:agent_protocol
-    bounds: bee.threads.records:bounds
-    record_types: bee.threads.records:types
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua
@@ -80,6 +86,7 @@ entries:
 - name: appearance
   kind: library.lua
   source: file://appearance.lua
+  modules: [env]
 - name: frame
   kind: library.lua
   source: file://frame.lua

@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Antigravity CLI driver
-    comment: Declarative Agy launch, stream-json normalization, and host-selected configuration delivery
+    comment: Declarative Agy launch, stream-json normalization, and host-selected
+      configuration delivery
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -49,28 +50,28 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
-    values: bee.threads.records:values
+    universal: bee.driver:universal
 - name: launch
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    types: bee.driver:types
+    universal: bee.driver:universal
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     configure_protocol: bee.driver:configuration
     quote: bee.driver.kit:quote
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -80,9 +81,13 @@ entries:
       dispatch: bee.driver.agy.binding:dispatch
       normalize: bee.driver.agy.binding:normalize
       configure: bee.driver.agy.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.agy.binding:locate
   meta:
     type: harness.driver
     driver_id: agy
+    descriptor_ref: bee.driver.agy.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.agy:profiles
 - name: profiles
@@ -108,16 +113,16 @@ entries:
         resume: &id002
           strategy: per-process
           portable: false
-        isolation_env: &id003
+        isolation_env:
           variables:
           - HOME
           private_home: true
         exit_codes_trustworthy: false
-        input_ready: &id004
+        input_ready: &id003
           strategy: protocol
           adapter_ref: bee.driver.agy:protocol
           timeout_ms: 15000
-        interrupt: &id005
+        interrupt: &id004
           methods:
           - signal_group
         mcp:
@@ -141,13 +146,15 @@ entries:
         answer_path: *id001
         resume: *id002
         isolation_env:
-          variables: [HOME]
+          variables:
+          - HOME
           private_home: true
         exit_codes_trustworthy: false
-        input_ready: *id004
-        interrupt: *id005
+        input_ready: *id003
+        interrupt: *id004
         mcp:
-          client_transports: [streamable_http]
+          client_transports:
+          - streamable_http
           initialize_timeout_ms: 30000
           call_timeout_ceiling_ms: 120000
         sandbox:
@@ -160,41 +167,66 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
-        hooks: {transports: [command], events: [PreToolUse, PostToolUse, Stop]}
-        answer_path: {strategy: none}
-        resume: {strategy: none, portable: false}
+        hooks:
+          transports:
+          - command
+          events:
+          - PreToolUse
+          - PostToolUse
+          - Stop
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
         isolation_env:
-          variables: [HOME]
+          variables:
+          - HOME
           private_home: false
         exit_codes_trustworthy: false
-        input_ready: {strategy: none}
-        permission_exchange: {mode: none}
+        input_ready:
+          strategy: none
+        permission_exchange:
+          mode: none
 - name: default_window
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Antigravity window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Antigravity window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: agy-window
     title: Antigravity CLI
-    command_names: [agy]
+    command_names:
+    - agy
     binding_ref: bee.driver.agy:binding
     profile_id: window
+    session_profile_id: session
+    session_credentials:
+    - agy_login
     policy_ref: ''
     default_mode: window
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: new}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
     session_resource: session
     credentials: []
-    presentation: {start_menu: true, fullscreen: true, reuse: never}
-
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Agy batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned Agy batch route for a host-selected coordinator and caller-owned
+      shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: agy-research-batch
@@ -204,13 +236,21 @@ entries:
     profile_id: batch
     policy_ref: ''
     default_mode: batch
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
     session_resource: session
-    credentials: [agy_login]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-
+    credentials:
+    - agy_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
 - name: credential_format
   kind: registry.entry
   meta:
@@ -228,19 +268,21 @@ entries:
     comment: CLI command to launch Antigravity CLI in the agent window
   data:
     name: agy
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     arguments:
     - bee.driver.agy:default_window
     fullscreen: true
-
 - name: launch_policy_agy_batch
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected bounded Gemini batch policy with a retained user login and caller-owned thread MCP
+    comment: Host-selected bounded Gemini batch policy with a retained user login
+      and caller-owned thread MCP
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -248,20 +290,42 @@ entries:
     drain_ms: 5000
     fixture: false
     executables: {}
-    executable_env: {agy: bee.driver.agy:executable}
+    executable_env:
+      agy: bee.driver.agy:executable
     environment: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
-    prepare_options: {model: gemini-3.8-flash, effort: high, print_timeout: 5m, sandbox: true}
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    prepare_options:
+      model: gemini-3.8-flash
+      effort: high
+      print_timeout: 5m
+      sandbox: true
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding
 - name: launch_policy_agy_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Antigravity window; missing host executable
-      leaves the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Antigravity
+      window; missing host executable leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -274,23 +338,18 @@ entries:
     environment: {}
     allow_host_home: true
     gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_sessions
-    - thread_notify
-    - session_directory
+    - session_catalog
+    - session_open
+    - session_run
     - session_send
-    - session_inbox
-    - session_ack
-    - session_reply
-    - overlay
-    - delivery
-    - docs
-    - components
-    - install_request
-    - uninstall_request
-    - install_status
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
     gateway_hooks:
     - PreToolUse
     - PostToolUse
@@ -303,3 +362,6 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding

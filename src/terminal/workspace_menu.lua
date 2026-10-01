@@ -43,7 +43,7 @@ function M.apply(menu: Menu, value: unknown): boolean
     end
     local items: {Item} = {}
     if type(value.items) == "table" then
-        for index, raw in ipairs(value.items :: {unknown}) do
+        for index, raw in ipairs(value.items) do
             if index > M.MAX_ITEMS or type(raw) ~= "table" then break end
             local id, label = contract.workspace_id(raw.workspace_id), contract.text(raw.label, 240)
             if id and label then items[#items + 1] = {workspace_id = id, label = label} end
@@ -66,6 +66,14 @@ end
 function M.label(item: Item): string
     if item.label ~= "" then return item.label end
     return names.label(item.workspace_id)
+end
+-- The saved label for one workspace on the loaded page, if the page holds it
+-- with a label; the header shows it instead of the generated identity name.
+function M.current_label(menu: Menu, workspace_id: string): string?
+    for _, item in ipairs(menu.items) do
+        if item.workspace_id == workspace_id and item.label ~= "" then return item.label end
+    end
+    return nil
 end
 local function move(menu: Menu, step: integer)
     if #menu.items == 0 then return end
@@ -148,7 +156,7 @@ function M.draw(canvas: tty.Canvas, width: integer, height: integer, preferences
         local item = menu.items[index]
         if item then
             local marker = item.workspace_id == menu.current and "● " or "  "
-            local text = marker .. M.label(item) .. "  " .. item.workspace_id:sub(1, 8)
+            local text = marker .. M.label(item)
             put(2 + row, text, index == menu.selected and chosen or normal)
         end
     end

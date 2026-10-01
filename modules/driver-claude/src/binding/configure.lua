@@ -1,6 +1,7 @@
 -- MIT. Claude receives fresh MCP and hook settings as exact argv literals.
 local configure_protocol = require("configure_protocol")
 local canonical = require("canonical")
+local universal = require("universal")
 local function gateway_delivery(gateway)
     if not gateway then return {arguments = {}, files = {}}, nil end
     local url = "http://" .. gateway.endpoint .. "/mcp/" .. gateway.action_id
@@ -11,7 +12,7 @@ local function gateway_delivery(gateway)
     -- none, since Claude reads a settings literal it cannot parse as a path.
     if #gateway.hooks == 0 then return {arguments = {"--mcp-config", mcp}, files = {}}, nil end
     local hook_url = "http://" .. gateway.endpoint .. "/hook/" .. gateway.action_id
-    local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. (gateway.hook_token_environment :: string) .. "}"}, allowedEnvVars = {gateway.hook_token_environment}, timeout = 2}
+    local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. (gateway.hook_token_environment) .. "}"}, allowedEnvVars = {gateway.hook_token_environment}, timeout = 2}
     local events = {}
     for _, event in ipairs(gateway.hooks) do events[event] = {{matcher = "", hooks = {handler}}} end
     local settings, settings_error = canonical.encode({hooks = events, allowedHttpHookUrls = {hook_url},
@@ -19,9 +20,7 @@ local function gateway_delivery(gateway)
     if not settings then return nil, settings_error end
     return {arguments = {"--mcp-config", mcp, "--settings", settings}, files = {}}, nil
 end
-local function handle(value: unknown): {[string]: unknown}
-    local request, request_error = configure_protocol.decode_request(value)
-    if not request then return {ok = false, error = request_error or "invalid configuration request"} end
+local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref ~= nil or request.provider ~= nil then
         return {ok = false, error = "claude accepts no provider configuration"}
     end
@@ -33,4 +32,4 @@ local function handle(value: unknown): {[string]: unknown}
     end
     return {ok = true, delivery = delivery}
 end
-return {handle = handle}
+return {handle = universal.configure("claude", {claude = handle})}

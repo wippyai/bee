@@ -20,6 +20,14 @@ recovery verify that recorded ID and digest before dispatching. The native
 implementation rejects requests naming another binding before durable intent;
 native windows require the exact native binding ID.
 
+`bee.placement_profile` entries use `bee.placement-profile@1`. The native
+default selects the native binding. Docker profiles select a digest-pinned
+image, non-root uid:gid, host-selected network, bounded memory/CPU/PID limits,
+resource mount destinations and an interactive executor route. Registry metadata
+describes the placement; the launch policy's `placement_profiles` allowlist and
+resource grants authorize its use. Saved agent profiles carry only the selected
+reference. Launch requests pin both its reference and digest.
+
 Placement implementations also discover and invoke host-authorized
 `bee.placement:workdir_preparer` contract bindings (`plan`, `setup`, and `cleanup`).
 A preparer contributes extra writable roots inside already write-granted roots,

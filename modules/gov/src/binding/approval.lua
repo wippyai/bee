@@ -165,7 +165,7 @@ local function review_lines(raw: unknown): ({string}?, string?)
     if type(raw) ~= "table" then return nil, "capability review lines are invalid" end
     local result: {string} = {}
     if #raw > 24 then return nil, "capability review exceeds its bound" end
-    for index, line in ipairs(raw :: {unknown}) do
+    for index, line in ipairs(raw) do
         local shown = bounds.text(line, 512)
         if not shown or shown == "" or shown:find("%c") then
             return nil, "capability review line is invalid"

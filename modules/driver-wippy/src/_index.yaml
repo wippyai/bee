@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Wippy native driver
-    comment: In-process agent harness driver running framework closures against OpenAI-compatible chat endpoints
+    comment: In-process agent harness driver running framework closures against OpenAI-compatible
+      chat endpoints
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -34,7 +35,11 @@ entries:
 - name: client
   kind: library.lua
   source: file://client.lua
-  modules: [http_client, json, env, registry]
+  modules:
+  - http_client
+  - json
+  - env
+  - registry
   imports:
     types: bee.driver.wippy:types
     bounds: bee.threads.records:bounds
@@ -42,7 +47,11 @@ entries:
 - name: runner
   kind: library.lua
   source: file://runner.lua
-  modules: [json, registry, funcs, security]
+  modules:
+  - json
+  - registry
+  - funcs
+  - security
   imports:
     client: bee.driver.wippy:client
     types: bee.driver.wippy:types
@@ -133,7 +142,8 @@ entries:
   kind: registry.entry
   meta:
     type: bee.driver_wippy_config
-    comment: Default host configuration for Wippy native driver OpenAI-compatible chat endpoint
+    comment: Default host configuration for Wippy native driver OpenAI-compatible
+      chat endpoint
   data:
     endpoint: http://127.0.0.1:8080/v1
     model: default

@@ -9,7 +9,8 @@ entries:
 - name: checkpoint
   kind: library.lua
   source: file://checkpoint.lua
-  modules: [json]
+  modules:
+  - json
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -34,9 +35,9 @@ entries:
     stream_json: bee.driver.transport:stream_json
     settle: bee.harness.carrier:settle
     record_types: bee.threads.records:types
-- name: inbox
+- name: hints
   kind: library.lua
-  source: file://inbox.lua
+  source: file://hints.lua
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -49,7 +50,8 @@ entries:
 - name: permission_exchange
   kind: library.lua
   source: file://permission_exchange.lua
-  modules: [json]
+  modules:
+  - json
   imports:
     bounds: bee.threads.records:bounds
     permission: bee.harness.permission:adapter
@@ -65,19 +67,25 @@ entries:
 - name: policy
   kind: library.lua
   source: file://policy.lua
-  modules: [hash, registry, env, json]
+  modules:
+  - hash
+  - registry
+  - env
+  - json
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
     placement_types: bee.placement:types
     configuration: bee.driver:configuration
+    driver_resolver: bee.driver:resolver
     mcp: bee.gateway:mcp
     surface: bee.gateway:surface
     preferences: bee.driver:preferences
 - name: continuation
   kind: library.lua
   source: file://continuation.lua
-  modules: [json]
+  modules:
+  - json
   imports:
     bounds: bee.threads.records:bounds
     checkpoint: bee.harness.carrier:checkpoint
@@ -93,7 +101,12 @@ entries:
 - name: machine
   kind: library.lua
   source: file://machine.lua
-  modules: [json, hash, registry, funcs, security]
+  modules:
+  - json
+  - hash
+  - registry
+  - funcs
+  - security
   imports:
     permission: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
@@ -109,6 +122,7 @@ entries:
     settle: bee.harness.carrier:settle
     stream_json: bee.driver.transport:stream_json
     configuration: bee.driver:configuration
+    driver_resolver: bee.driver:resolver
     driver_types: bee.driver:types
     placement_types: bee.placement:types
     prestart: bee.harness.carrier:prestart
@@ -123,9 +137,10 @@ entries:
     gateway_protocol: bee.gateway:protocol
     service_reply: bee.protocol:reply
     carrier_types: bee.harness.carrier:types
-    inbox: bee.harness.carrier:inbox
+    hints: bee.harness.carrier:hints
     permission_exchange: bee.harness.carrier:permission_exchange
     hook_records: bee.harness.carrier:hook_records
+    placement_profiles: bee.placement:profiles
 - name: lease
   kind: library.lua
   source: file://lease.lua
@@ -135,13 +150,22 @@ entries:
   kind: process.lua
   source: file://process.lua
   method: main
-  modules: [process, channel, time, funcs, uuid]
+  modules:
+  - process
+  - channel
+  - time
+  - funcs
+  - uuid
   imports:
     machine: bee.harness.carrier:machine
     placement_protocol: bee.placement.native:protocol
     lease: bee.harness.carrier:lease
   security:
-    policies: [bee.harness.security:carrier_policy, bee.harness.security:carrier_process_registry_policy, bee.harness.security:carrier_environment_policy, bee.security.desktop:workspace_host_lease_policy]
+    policies:
+    - bee.harness.security:carrier_policy
+    - bee.harness.security:carrier_process_registry_policy
+    - bee.harness.security:carrier_environment_policy
+    - bee.security.desktop:workspace_host_lease_policy
 - name: capabilities
   kind: function.lua
   source: file://capabilities_method.lua

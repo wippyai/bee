@@ -52,7 +52,7 @@ end
 
 function M.decode(raw: unknown): (Request?, string?)
     if type(raw) ~= "table" then return nil, "migration request must be an object" end
-    local value = raw :: {[string]: unknown}
+    local value = raw
     for key in pairs(value) do
         if key ~= "operation" and key ~= "entry_ids" and key ~= "components" then return nil, "migration request contains an unknown field" end
     end
@@ -70,7 +70,7 @@ end
 
 local function entry_map(entries: unknown): ({[string]: Entry}?, string?)
     if type(entries) ~= "table" then return nil, "captured registry entries are invalid" end
-    local supplied = entries :: {[number]: unknown}
+    local supplied = entries
     local count = 0
     for key in pairs(supplied) do
         if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "captured registry entries are invalid" end
@@ -81,7 +81,7 @@ local function entry_map(entries: unknown): ({[string]: Entry}?, string?)
     for index = 1, count do
         local raw = supplied[index]
         if type(raw) ~= "table" then return nil, "captured registry entry " .. tostring(index) .. " is invalid" end
-        local value = raw :: {[string]: unknown}
+        local value = raw
         local id = value.id
         if type(id) ~= "string" or id == "" or #id > 256 or not id:match("^[^:%s]+:[^:%s]+$") then
             return nil, "captured registry entry " .. tostring(index) .. " is invalid"
@@ -89,8 +89,8 @@ local function entry_map(entries: unknown): ({[string]: Entry}?, string?)
         if type(value.meta) ~= "table" or type(value.registry) ~= "table" then
             return nil, "captured registry entry " .. tostring(index) .. " has no typed metadata or ownership"
         end
-        local entry_id = id :: string
-        local entry: Entry = {id = entry_id, meta = value.meta :: {[string]: unknown}, registry = value.registry :: {[string]: unknown}}
+        local entry_id = id
+        local entry: Entry = {id = entry_id, meta = value.meta, registry = value.registry}
         if out[entry_id] then return nil, "captured registry contains a duplicate entry" end
         out[entry_id] = entry
     end
@@ -107,7 +107,7 @@ local function result_row(part: unknown, id: string): {[string]: unknown}?
     if type(part) ~= "table" or type(part.migrations) ~= "table" then return nil end
     for _, raw in ipairs(part.migrations) do
         if type(raw) == "table" then
-            local row = raw :: {[string]: unknown}
+            local row = raw
             if row.id == id and type(row.status) == "string" then return row end
         end
     end
@@ -177,7 +177,7 @@ function M.execute(source: Source, raw: unknown): (Result?, string?)
         if type(runner) ~= "table" or setup_error then
             return partial(request.operation, rows, "create migration runner for " .. target_db .. ": " .. tostring(setup_error or "invalid runner"))
         end
-        local database = runner :: DatabaseRunner
+        local database = runner
         if type(database.run_next) ~= "function" or type(database.rollback) ~= "function" then
             return partial(request.operation, rows, "create migration runner for " .. target_db .. ": invalid runner")
         end

@@ -32,6 +32,27 @@ local function define_tests()
             test.eq(result.modules[2].entries, 1)
             test.eq(result.roots[2].parameters[1].value, 8080)
         end)
+        test.it("uses the standalone lock identity with live selections and keeps pins separate", function()
+            local state = {entries = {}, resolution = {modules = {{name = "bee/bee", version = "1.1.0"}},
+                lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "1.0.0"}}}}}
+            local result = assert(inventory.decode(state, 1))
+            test.eq(result.roots[1].id, "bee:deployment")
+            test.eq(result.roots[1].owner, "")
+            test.eq(result.roots[1].version, "1.1.0")
+            test.eq(result.modules[1].locked_version, "1.0.0")
+            test.is_true(result.modules[1].direct)
+            state.resolution.lock.root_module = "bad"
+            test.is_nil(inventory.decode(state, 1))
+        end)
+        test.it("keeps the approved root and parameters after a standalone update", function()
+            local result = assert(inventory.decode({entries = {{id = "bee:deployment", kind = "ns.dependency",
+                registry = {owner = "", root = true}, data = {component = "bee/bee", version = "1.1.0",
+                    parameters = {{name = "setting", value = "kept"}}}}},
+                resolution = {modules = {{name = "bee/bee", version = "1.1.0"}},
+                    lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "1.0.0"}}}}}, 2))
+            test.eq(#result.roots, 1)
+            test.eq(result.roots[1].parameters[1].value, "kept")
+        end)
         test.it("reads a host root whose parameters address requirements by bare name", function()
             local result, problem = inventory.decode({entries = {
                 {id = "host:dependency_store", kind = "ns.dependency", registry = {owner = "", root = true},

@@ -164,7 +164,7 @@ local function define_tests()
             local open_map, open_error = preflight.check(candidate, with_kernel(context,
                 {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:approver_policies"}}))
             test.is_nil(open_map)
-            test.not_nil(string.find(tostring(open_error), "protect itself", 1, true))
+            test.not_nil((string.find(tostring(open_error), "protect itself", 1, true)))
         end)
         test.it("protects every shipped namespace the host has not opened for super edit", function()
             -- The shipped trust map itself, not a fixture: each namespace a

@@ -23,6 +23,33 @@ entries:
   variable: BEE_PLACEMENT_SENTINEL_KEY
   default: placement-sentinel-4e5f6a
   readonly: true
+- name: runner_observation
+  kind: library.lua
+  source: file://runner_observation.lua
+  meta: {type: test_support}
+- name: materialization_runner
+  kind: library.lua
+  source: file://materialization_runner.lua
+  meta: {type: test_support}
+  modules: [process, channel, security, time]
+  imports:
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    observe: bee.placement.native:runner_observation
+    types: bee.placement:types
+    bounds: bee.protocol:bounds
+- name: materialization_runner_process
+  kind: process.lua
+  source: file://materialization_runner.lua
+  method: main
+  meta: {type: test_support}
+  modules: [process, channel, security, time]
+  imports:
+    store: bee.placement.native.persist:store
+    materialization: bee.placement.native.service:materialization
+    observe: bee.placement.native:runner_observation
+    types: bee.placement:types
+    bounds: bee.protocol:bounds
 - name: apply_test_policy
   kind: security.policy
   meta: {type: test_support}
@@ -236,6 +263,7 @@ entries:
     opencode_launch: bee.driver.opencode:launch
     configuration_protocol: bee.driver:configuration
     test: wippy.test:test
+    runner_fixture: bee.placement.native:materialization_runner
     service: bee.placement.native.service:service
     identity: bee.placement.native.service:identity
     store: bee.placement.native.persist:store
@@ -263,6 +291,31 @@ entries:
     homes: bee.placement.native.service:homes
     quote: bee.driver.kit:quote
     configuration_protocol: bee.driver:configuration
+- name: grok_login_fixture
+  kind: fs.directory
+  meta: {type: test_support}
+  directory: .wippy/grok-session-login
+  auto_init: true
+- name: grok_session_test
+  kind: function.lua
+  source: file://grok_session_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "30s"}
+  modules: [funcs, security, registry, process, sql, json, time, exec]
+  security:
+    policies: [bee.placement.native:apply_test_policy, bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.credentials.security:credential_materialize_policy]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    quote: bee.driver.kit:quote
+    grok_launch: bee.driver.grok:launch
+    grok_configuration: bee.driver.grok:configuration
+    placement_service: bee.placement.native.service:service
+    runner_fixture: bee.placement.native:materialization_runner
+    homes: bee.placement.native.service:homes
+    store: bee.placement.native.persist:store
+    request_codec: bee.placement:request
+    types: bee.placement:types
 - name: fixture_builder_read_policy
   kind: security.policy
   meta: {type: test_support}
@@ -361,3 +414,14 @@ entries:
   source: file://preparer_fixture.lua
   method: cleanup
   modules: [registry]
+
+- name: provider_projection_test
+  kind: function.lua
+  source: file://provider_projection_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  imports:
+    test: wippy.test:test
+    projection: bee.placement.native.service:provider_projection
+    formats: bee.credentials:formats
+    types: bee.driver:types

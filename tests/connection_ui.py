@@ -20,12 +20,12 @@ def exercise(packed=False):
             begin(ui, 'SELECTION_F9_PROBE')
             ui.key(b'\x1b[20~')  # F9
             ui.wait('CONNECTION')
-            assert 'drag to select' not in ui.text(), ui.text()
+            assert 'Select text: drag' not in ui.text(), ui.text()
             for label in ('HIVE', 'NODE', 'CONTROL', 'WORKSPACE', 'DISPLAY'):
                 assert label in ui.text(), ui.text()
             assert 'Not reported' in ui.text(), ui.text()
             assert not re.findall(r'(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])', ui.text()), ui.text()
-            Path('/tmp/bee-connection-compact-frame.txt').write_text(ui.text())
+            Path(directory, 'bee-connection-compact-frame.txt').write_text(ui.text())
             # Clicking inside the card keeps it open; Details is a real hit target.
             ui.mouse(0, 60, 3)
             ui.mouse(0, 60, 3, True)
@@ -53,7 +53,7 @@ def exercise(packed=False):
             ui.key(b'd')
             ui.wait('Less [D]')
             assert all(identity in ui.text() for identity in identities), 'F12 changed displayed identities'
-            Path('/tmp/bee-connection-dropdown-frame.txt').write_text(ui.text())
+            Path(directory, 'bee-connection-dropdown-frame.txt').write_text(ui.text())
             ui.resize(42, 12)
             ui.pump(.3)
             for label in ('HIVE', 'NODE', 'CONTROL', 'WORKSPACE', 'DISPLAY'):

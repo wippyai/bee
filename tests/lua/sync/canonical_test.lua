@@ -32,7 +32,7 @@ local function define_tests()
             local values = {table.create(1, 0), table.create(0, 1), {},
                 {list = table.create(1, 0)}, {map = table.create(0, 1)}}
             for _, value in ipairs(values) do
-                test.eq(canonical.encode(value), json.encode(value))
+                test.eq(canonical.encode(value), (json.encode(value)))
             end
         end)
         test.it("keeps populated tables on their existing shapes", function()
@@ -44,6 +44,13 @@ local function define_tests()
             local encoded, encode_error = canonical.encode({payload = string.rep("x", bounds.MAX_JSON_BYTES)})
             test.eq(encoded, nil)
             test.eq(encode_error, "value exceeds the encoded byte bound")
+        end)
+        test.it("preserves quoted text and turn-boundary newlines through a JSON decoder", function()
+            for _, value in ipairs({'sender\nreply with ok', '"quoted"', 'path\\file'}) do
+                local encoded = assert(canonical.encode({text = value}))
+                local decoded = assert(json.decode(encoded)) :: {[string]: unknown}
+                test.eq(decoded.text, value)
+            end
         end)
         test.it("restores an encoded shape through a decode round trip", function()
             local bytes = assert(canonical.encode({modules = table.create(1, 0), imports = table.create(0, 1)}))

@@ -12,12 +12,13 @@ entries:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.console:executor_policy
     - bee.console:command_policy
-  - definition_id: bee.approvals.inbox:app
+  - definition_id: bee.approvals.inbox.app:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.security.approvals:approval_decide_policy
     - bee.security.gov:governance_delivery_lease_policy
     - bee.approvals.inbox:client_policy
+    - bee.security.storage:workspace_catalog_read_policy
 - name: base_app_policy
   kind: security.policy
   policy:
@@ -110,7 +111,7 @@ entries:
   meta:
     comment: The explicitly admitted Agent Open facade may address the selected local workspace host; it cannot publish, activate or edit the registry.
   policy:
-    expression: '((action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "process.registry.register" && resource matches "^bee[.]application[.]open/[0-9a-f-]+$") || (action == "process.registry.unregister" && resource matches "^bee[.]application[.]open/[0-9a-f-]+$") || action == "process.send")'
+    expression: '((action == "process.registry.lookup" && resource matches "^bee[.]workspace[.]host/[0-9a-f]+$") || (action == "process.registry.register" && resource matches "^bee[.]application[.](open|presentation)/[0-9a-f-]+$") || (action == "process.registry.unregister" && resource matches "^bee[.]application[.](open|presentation)/[0-9a-f-]+$") || action == "process.send")'
     actions: [process.registry.lookup, process.registry.register, process.registry.unregister, process.send]
     resources: '*'
     effect: allow

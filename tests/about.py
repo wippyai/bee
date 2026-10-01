@@ -8,8 +8,8 @@ def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-about-") as directory:
         ui = Desktop(directory, packed=packed, apps=("bee.settings:app",))
         try:
-            ui.wait("BEE SETTINGS", timeout=30)
-            ui.key(b"\t\t\t\t")
+            ui.wait("BEE SETTINGS", timeout=10)
+            ui.key(b"\t" * 4)
             ui.wait("BEE SETTINGS · ABOUT", timeout=10)
             text = ui.text()
             for label in ("Binary runtime commit", "Binary native version", "Binary native module", "Website"):

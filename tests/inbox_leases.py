@@ -25,7 +25,7 @@ def edit_project(project):
     doc = yaml.safe_load(index.read_text())
     entry = next(e for e in doc["entries"] if e["name"] == "approver_policies")
     entry["policies"].append(
-        {"name": POLICY, "approvers": [{"definition_id": "bee.approvals.inbox:app"}], "max_ttl_ms": 600000})
+        {"name": POLICY, "approvers": [{"definition_id": "bee.approvals.inbox.app:app"}], "max_ttl_ms": 600000})
     index.write_text(yaml.safe_dump(doc, sort_keys=False))
     inbox = project / "modules/approvals-inbox/src/_index.yaml"
     doc = yaml.safe_load(inbox.read_text())

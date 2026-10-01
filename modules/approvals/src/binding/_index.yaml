@@ -128,6 +128,20 @@ entries:
   imports: {service: bee.approvals:service}
   security:
     policies: [bee.security.approvals:approval_store_policy]
+- name: publication_effects
+  kind: function.lua
+  source: file://publication_effects_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security:
+    policies: [bee.security.approvals:approval_store_policy]
+- name: complete_publication_effect
+  kind: function.lua
+  source: file://complete_publication_effect_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security:
+    policies: [bee.security.approvals:approval_store_policy]
 - name: revalidate
   kind: function.lua
   source: file://revalidate_method.lua
@@ -194,3 +208,9 @@ entries:
     outbox: bee.approvals.persist:outbox
   security:
     policies: [bee.security.approvals:approval_store_policy]
+- name: attention_count
+  kind: function.lua
+  source: file://attention_count_method.lua
+  method: handle
+  imports: {service: bee.approvals:service}
+  security: {policies: [bee.security.approvals:approval_store_policy]}

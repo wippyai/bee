@@ -31,10 +31,10 @@ with tempfile.TemporaryDirectory(prefix="bee-native-modules-") as temporary:
         ui.wait("MODULES")
         ui.key(b"o")
         ui.wait("MODULES  OPERATIONS")
-        ui.wait("No Hub operations recorded")
+        ui.wait("No package changes recorded")
         ui.key(b"\x1b[24~")
         ui.wait("MODULES  OPERATIONS", timeout=8)
-        ui.wait("No Hub operations recorded")
+        ui.wait("No package changes recorded")
         ui.quit()
     finally:
         ui.close()

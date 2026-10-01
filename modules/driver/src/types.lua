@@ -57,12 +57,19 @@ type Binding = {
 -- by the user's home plus a default directory. Placement checks existence
 -- only; the driver never reads the file's contents.
 type RequiredFile = {variable: string, path: string, default_directory: string?}
--- Evidence is checked by placement in the selected provider home. Paths are
--- alternatives: any existing file is enough. The command is display text.
-type LoginEvidence = {provider: string, command: string, files: {RequiredFile}}
+-- Window advisories keep compatibility file paths and the descriptor
+-- alternatives. Placement observes files; other kinds remain unknown there.
+-- The command is display text, never an instruction to execute login.
+type LoginEvidence = {provider: string, command: string, files: {RequiredFile}, any_of: {login_evidence.Evidence}?}
+type LocateStatus = "ready" | "missing" | "unconfigured" | "incompatible" | "unknown"
+type LocatePlatform = {os: string?, arch: string?, compatible: boolean?}
+type LocateExecutable = {name: string, present: boolean?, version: string?}
+type LocateLogin = {evidence: "file_exists" | "any_of" | "not_required", path: string?, exists: boolean?}
+type LocateResult = {provider: string, status: LocateStatus, executable: LocateExecutable,
+    login: LocateLogin, platform: LocatePlatform, checked_at: string?, reason: string?}
 type ProviderHomeFile =
     {source_path: string, path: string, kind: "login", optional: boolean, write_back: boolean}
-    | {source_path: string, path: string, kind: "config", optional: boolean, write_back: false}
+    | {source_path: string, path: string, kind: "config", optional: boolean, write_back: false, container_content: string?, container_omit: {string}?}
     | {source_path: nil, path: string, kind: "state", optional: boolean, write_back: false}
 type ProviderHomeEnvironment = {variable: string, directory: string}
 -- A private managed home receives only these provider-owned files from the
@@ -102,6 +109,7 @@ type Terminal = {
 local bounds = require("bounds")
 local events = require("events")
 local values = require("values")
+local login_evidence = require("login_evidence")
 local M = {}
 -- Executable-backed provider login flows remain an explicit integration gate.
 M.AUTHENTICATION_STATUS = "unproven"
@@ -130,7 +138,8 @@ function M.decode_terminal(value: unknown): (Terminal?, string?)
     local unknown = bounds.fields(object, {"outcome", "answer", "resume_ref", "usage", "error"})
     if unknown then return nil, "terminal: " .. unknown end
     local outcome = bounds.member(object.outcome, {"succeeded", "failed", "cancelled", "uncertain"})
-    if not outcome then return nil, "terminal.outcome is not a carrier outcome" end
+    if outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain" then return nil, "terminal.outcome is not a carrier outcome" end
+    local terminal_outcome: Outcome = outcome
     local answer: string? = nil
     if object.answer ~= nil then
         answer = bounds.text(object.answer, 32768)
@@ -161,6 +170,6 @@ function M.decode_terminal(value: unknown): (Terminal?, string?)
         fault = {code = code, message = message, retryable = raw_fault.retryable}
     end
     if outcome == "failed" and not fault then return nil, "failed terminal must include an error" end
-    return {outcome = outcome :: Outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
+    return {outcome = terminal_outcome, answer = answer, resume_ref = resume_ref, usage = usage, error = fault}, nil
 end
 return M

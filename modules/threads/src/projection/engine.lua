@@ -39,7 +39,7 @@ end
 local function decode_checkpoint(spec: Spec, text: string): (Checkpoint?, string?)
     local value: unknown, err = json.decode(text)
     if err or type(value) ~= "table" then return nil, "stored checkpoint is corrupt" end
-    local checkpoint = value :: Checkpoint
+    local checkpoint = value
     if checkpoint.schema ~= spec.schema then return nil, "stored checkpoint has another schema" end
     return checkpoint, nil
 end

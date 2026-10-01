@@ -36,6 +36,23 @@ local function define_tests()
             test.eq(proposed.bindings[1].policy_id, proposed.policies[1].id)
             test.eq(proposed.thread_access, "none")
         end)
+        test.it("rejects capability request identities before catalog resolution", function()
+            local malformed: {unknown} = {false, 17, {}, "", "Threads.read", "threads.read\n", string.rep("a", 161)}
+            for _, capability in ipairs(malformed) do
+                local item = request("threads.read", {scope = "owned"})
+                item.capability_request = {capability = capability, parameters = {scope = "owned"},
+                    catalog_revision = 1, template_revision = 1, target = APP, path = ".security.policies +="}
+                local proposed, err = grants.propose(vocabulary(), OWNER, APP, {item})
+                test.is_nil(proposed)
+                test.eq(err, "capability request identity is invalid")
+            end
+            local missing = request("threads.read", {scope = "owned"})
+            missing.capability_request = {parameters = {scope = "owned"}, catalog_revision = 1,
+                template_revision = 1, target = APP, path = ".security.policies +="}
+            local proposed, err = grants.propose(vocabulary(), OWNER, APP, {missing})
+            test.is_nil(proposed)
+            test.eq(err, "capability request identity is invalid")
+        end)
         test.it("reuses only a live grant record containing the resolved set", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("threads.read", {scope = "owned"})}))
@@ -165,22 +182,22 @@ local function define_tests()
             local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
             test.eq((body.actions :: {string})[1], "funcs.call")
         end)
-        test.it("materializes managed agent launch on the exact definitions and the facade call", function()
+        test.it("materializes managed agent launch as the sessions contract on the exact definitions", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("agents.launch", {definitions = {"acme:research"}})}))
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "agents.launch")
+            test.eq(proposed.policies[1].kind, "security.policy.expr")
             local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
             local actions: {[string]: boolean} = {}
             for _, action in ipairs(body.actions :: {string}) do actions[action] = true end
-            -- The launch path first calls the facade, then checks the launch
-            -- action on the definition; one policy carries both pairings.
+            test.is_true(actions["contract.open"])
+            test.is_true(actions["contract.call"])
             test.is_true(actions["funcs.call"])
             test.is_true(actions["bee.harness.launch"])
-            local resources = body.resources :: {string}
-            test.eq(#resources, 2)
-            test.eq(resources[1], "acme:research")
-            test.eq(resources[2], "bee.harness.launch:agent_call")
+            local expression = body.expression :: string
+            test.is_true(expression:find('resource in ["acme:research"]', 1, true) ~= nil)
+            test.is_true(expression:find("agent_call", 1, true) == nil)
         end)
         test.it("grants scoped HTTP only through the host gateway", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
@@ -309,16 +326,23 @@ local function define_tests()
             local vocabulary_value = vocabulary()
             local request_value = request("hub.self_update", {})
             request_value.targets = {"bee.hub.modules:app"}
-            local cap = request_value.capability_request :: {[string]: unknown}
+            local cap = request_value.capability_request
+            if type(cap) ~= "table" then error("missing capability request") end
             cap.target = "bee.hub.modules:app"
             local proposed = assert(grants.propose(vocabulary_value, OWNER,
                 "bee.hub.modules:app", {request_value}))
-            local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
-            test.eq((body.actions :: {string})[1], "bee.hub.self_update")
-            test.eq((body.resources :: {string})[1], "bee/bee")
+            local data = proposed.policies[1].data
+            if type(data) ~= "table" then error("missing policy data") end
+            local body = data.policy
+            if type(body) ~= "table" then error("missing policy") end
+            local actions, resources = body.actions, body.resources
+            if type(actions) ~= "table" or type(resources) ~= "table" then error("missing policy scope") end
+            test.eq(actions[1], "bee.hub.self_update")
+            test.eq(resources[1], "bee/bee")
             local agent_request = request("hub.self_update", {})
             agent_request.targets = {"app.notes:agent"}
-            local agent_cap = agent_request.capability_request :: {[string]: unknown}
+            local agent_cap = agent_request.capability_request
+            if type(agent_cap) ~= "table" then error("missing capability request") end
             agent_cap.target = "app.notes:agent"
             test.is_nil(grants.propose(vocabulary_value, OWNER, "app.notes:agent", {agent_request}))
         end)

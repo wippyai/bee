@@ -48,10 +48,10 @@ end
 
 function M.decode_command(value: unknown): ApplicationCommand?
     if type(value) ~= "table" then return nil end
-    local raw = value :: {[string]: unknown}
+    local raw = value
     local data = raw
     if type(raw.data) == "table" then
-        data = raw.data :: {[string]: unknown}
+        data = raw.data
     end
     local name = data.name
     if type(name) ~= "string" or #name == 0 or #name > 40 or not name:match("^[a-z][a-z0-9_-]*$") then
@@ -72,8 +72,8 @@ function M.decode_command(value: unknown): ApplicationCommand?
     if not prefix then
         return nil
     end
-    local name_str: string = name :: string
-    local def_id_str: string = definition_id :: string
+    local name_str: string = name
+    local def_id_str: string = definition_id
     local result: ApplicationCommand = {
         name = name_str,
         definition_id = def_id_str,
@@ -131,7 +131,7 @@ function M.resolve(name: string, tail: {string}): (Launch?, string?)
             if not cmd then return nil, "Invalid application command: " .. tostring(raw.id) end
             if cmd.name == name and admitted[cmd.definition_id] then
                 if selected then return nil, "Ambiguous Bee command: " .. name end
-                if cmd.definition_id == "bee.harness.window:app" and #tail > 0 then
+                if cmd.definition_id == "bee.harness.app:app" and #tail > 0 then
                     return nil, "Managed Bee command does not accept raw arguments: " .. name
                 end
                 local values: {string} = {}

@@ -1,0 +1,40 @@
+version: '1.0'
+namespace: bee.executor.external.security
+entries:
+- name: driver_placement_calls
+  kind: security.policy
+  meta:
+    comment: External turn worker calls the selected bee.driver operations and native placement operations
+  policy:
+    actions: [funcs.call]
+    resources:
+    - bee.driver.*.binding:prepare
+    - bee.driver.*.binding:dispatch
+    - bee.driver.*.binding:normalize
+    - bee.threads.service:turn_observation
+    - bee.harness.profiles:call
+    - bee.resources.binding:grant
+    - bee.credentials.binding:issue_projection
+    - bee.placement.native.binding:prepare
+    - bee.placement.native.binding:attach
+    - bee.placement.native.binding:start
+    - bee.placement.native.binding:reconcile
+    - bee.placement.native.binding:cleanup
+    - bee.placement.native.binding:capabilities
+    - bee.placement.native.binding:measure_executable
+    - bee.gateway.binding:admit
+    - bee.gateway.binding:ready
+    - bee.gateway.binding:revoke
+    effect: allow
+- name: placement_stream
+  kind: security.policy
+  policy:
+    actions: [process.listen, process.send]
+    resources: [bee.placement.output, bee.placement.exit, bee.placement.ack]
+    effect: allow
+- name: runner_observation
+  kind: security.policy
+  policy:
+    actions: [process.monitor, process.unmonitor]
+    resources: '*'
+    effect: allow

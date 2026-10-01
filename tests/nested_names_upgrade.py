@@ -16,7 +16,7 @@ from workspace import ROOT, RUNTIME  # noqa: E402
 # replace the working tree or copy a developer's private state.
 BASE = "ddc2694acf065d5b4253cc13f231dd1a65e92dab"
 RENAMED = {
-    "bee.inbox:app": "bee.approvals.inbox:app",
+    "bee.inbox:app": "bee.approvals.inbox.app:app",
     "bee.overlays:app": "bee.gov.overlays:app",
 }
 OLD = {"bee.settings:app", *RENAMED}

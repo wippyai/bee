@@ -1,0 +1,65 @@
+version: '1.0'
+namespace: bee.driver.opencode.descriptor
+entries:
+- name: cli
+  kind: registry.entry
+  meta:
+    type: bee.driver.cli_descriptor
+    comment: OpenCode CLI command, JSON event codec, login evidence and version probe
+  data:
+    schema_revision: bee.driver.cli-descriptor@2
+    provider: opencode
+    executable: opencode
+    version_probe: {argv: [--version], pattern: '([0-9]+[.][0-9]+[.][0-9]+)'}
+    login_evidence:
+      command: opencode auth login
+      any_of:
+      - {kind: file_exists, paths: [.local/share/opencode/auth.json], variable: XDG_DATA_HOME, directory: .local/share}
+      - {kind: file_exists, paths: [.config/opencode/opencode.json, .config/opencode/opencode.jsonc], variable: XDG_CONFIG_HOME, directory: .config}
+      - {kind: env_present, names: [ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, XAI_API_KEY, OPENCODE_API_KEY, OPENCODE_CONFIG_CONTENT]}
+    platform: {os: [linux, darwin], arch: [x86_64, amd64, arm64, aarch64]}
+    codec: opencode-json-events
+    json_paths:
+      resume_id: [sessionID]
+      result_text: [part, text]
+      errors: [error, data, message]
+      usage: [part, tokens]
+    configure: opencode
+    options:
+      profiles: [window, batch]
+      unknown_prefix: ''
+      fields:
+        resume_ref: {type: id, forbid_option: true, invalid: 'resume_ref must not be a command-line option'}
+        gateway_tools: {type: ids, pattern: '^[a-z_]+$', default: [], transform: sorted, invalid: 'gateway_tools names a tool that is not a plain identifier'}
+        gateway_hooks: {type: ids, default: []}
+      rules:
+      - {kind: forbid_nonempty, field: gateway_hooks, message: 'opencode declares no hook transport for gateway hooks'}
+    flags: {}
+    argv_templates:
+      window:
+        argv:
+        - {if: resume_ref, then: [--session, {field: resume_ref}]}
+        - {if: brief, then: [--prompt, {field: brief}]}
+        readiness: terminal:attached
+        provider_home_private: false
+        login: true
+      first_turn:
+        stdin: ''
+        stdin_eof: true
+        argv: [run, --format, json, --, {field: brief}]
+        readiness: protocol:thread.started
+        provider_home_private: true
+      resume:
+        stdin: ''
+        stdin_eof: true
+        argv: [run, --format, json, --session, {field: resume_ref}, --, {field: brief}]
+        readiness: protocol:thread.started
+        provider_home_private: true
+    provider_home:
+      extra_variables:
+      - {variable: XDG_CONFIG_HOME, directory: .config}
+      - {variable: XDG_DATA_HOME, directory: .local/share}
+      files:
+      - {source_path: .local/share/opencode/auth.json, path: .local/share/opencode/auth.json, kind: login, optional: true, write_back: true}
+      - {source_path: .config/opencode/opencode.json, path: .config/opencode/.bee-global-opencode.json, kind: config, optional: true, write_back: false, container_content: '{}'}
+      - {source_path: .config/opencode/towers.key, path: .config/opencode/towers.key, kind: config, optional: true, write_back: false}

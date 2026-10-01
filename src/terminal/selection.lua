@@ -1,7 +1,7 @@
 local tty = require("tty")
 
 type Text = {cut: (string, integer, integer) -> string, plain: (string) -> string}
-local text = tty.text :: Text
+local text = tty.text
 
 type Binding = {
     view_id: string,

@@ -17,6 +17,7 @@ entries:
     interaction: bee.application:interaction
     connections: bee.host:clients
     inventory: bee.host:inventory
+    restores: bee.host:restores
     transfer: bee.host:transfer
     open_protocol: bee.apps:open_protocol
     binding_protocol: bee.host:binding_protocol
@@ -56,6 +57,11 @@ entries:
   imports:
     records: bee.workspace:recovery
     inventory: bee.host:inventory
+- name: restores
+  kind: library.lua
+  source: file://restores.lua
+  imports:
+    records: bee.workspace:recovery
 - name: protocol
   kind: library.lua
   source: file://protocol.lua

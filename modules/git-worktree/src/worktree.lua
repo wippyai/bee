@@ -163,8 +163,8 @@ function M.decode_state(value: unknown): (State?, string?)
         or (base ~= commit and not base:match("^refs/heads/[^%c]+$")) then
         return nil, "invalid ownership state"
     end
-    return {common_directory = common :: string, attempt_id = id :: string, working_directory = workdir :: string, worktree_path = path :: string, branch = branch :: string,
-        repository = repo :: string, base_ref = base :: string, base_commit = commit :: string}, nil
+    return {common_directory = common, attempt_id = id, working_directory = workdir, worktree_path = path, branch = branch,
+        repository = repo, base_ref = base, base_commit = commit}, nil
 end
 
 local function safe_parent(state: State, executor: string): string?

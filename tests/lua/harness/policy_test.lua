@@ -29,6 +29,14 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("preserves explicit empty environment values for isolated children", function()
+            local raw = entry({claude = "/bin/claude"})
+            local data = raw.data :: Entry
+            data.environment = {CLAUDECODE = "", ANTHROPIC_API_KEY = ""}
+            local decoded = assert(policy.decode("test:policy", raw))
+            test.eq(decoded.environment.CLAUDECODE, "")
+            test.eq(decoded.environment.ANTHROPIC_API_KEY, "")
+        end)
         test.it("measures MCP context and traits without retaining mutable host tables", function()
             local raw = entry({sh = "/bin/sh"})
             local data = raw.data :: Entry
@@ -103,25 +111,13 @@ local function define_tests()
             test.is_nil(invalid)
             test.eq(invalid_error, "test:policy: allow_host_home must be a boolean")
         end)
-        test.it("decodes the explicit unconfined allow-list as bounded host data", function()
-            local raw = entry({sh = "/bin/sh"})
-            local data = raw.data :: Entry
-            local bare, bare_error = policy.decode("test:policy", raw)
-            if not bare then error(tostring(bare_error)) end
-            test.eq(#bare.agent_launch_unconfined, 0)
-            data.agent_launch = {"test:worker"}
-            data.agent_launch_unconfined = {"test:worker"}
-            local flagged, flagged_error = policy.decode("test:policy", raw)
-            if not flagged then error(tostring(flagged_error)) end
-            test.eq(#flagged.agent_launch_unconfined, 1)
-            test.eq(flagged.agent_launch_unconfined[1], "test:worker")
-            test.neq(flagged.digest, bare.digest)
-            data.agent_launch_unconfined = {"test:worker", "test:worker"}
-            local doubled, doubled_error = policy.decode("test:policy", raw)
-            test.is_nil(doubled)
-            test.eq(doubled_error, "test:policy: agent_launch_unconfined names test:worker twice")
-            data.agent_launch_unconfined = "test:worker"
-            test.is_nil(policy.decode("test:policy", raw))
+        test.it("rejects fields for the removed managed-agent launch route", function()
+            for _, field in ipairs({"agent_launch", "agent_launch_unconfined"}) do
+                local raw = entry({sh = "/bin/sh"})
+                local data = raw.data :: Entry
+                data[field] = {"test:worker"}
+                test.is_nil(policy.decode("test:policy", raw))
+            end
         end)
 
         test.it("measures the surface against the host's tools, not the narrower set a profile offers", function()
@@ -240,48 +236,6 @@ local function define_tests()
             local decoded, decode_error = policy.decode("test:policy", entry({claude = "/bin/claude"}, {claude = "test:claude"}), resolve({["test:claude"] = "/opt/claude"}))
             test.is_nil(decoded)
             test.eq(decode_error, "test:policy: executable_env.claude overlaps executables")
-        end)
-
-        test.it("decodes a production push acceptance and measures it in the policy digest", function()
-            local raw = entry({claude = "/opt/claude"})
-            local data = raw.data :: Entry
-            data.inbox_push = true
-            data.push_acceptance = {adapter_ref = "bee.driver.claude:permission_adapter", acceptance_ref = "bee.harness.catalog:push_acceptance",
-                fixture_digest = string.rep("a", 64)}
-            local decoded, decode_error = policy.decode("test:policy", raw)
-            if not decoded then error(tostring(decode_error)) end
-            local push = decoded.push_acceptance
-            if not push then error("push acceptance was not decoded") end
-            test.eq(push.adapter_ref, "bee.driver.claude:permission_adapter")
-            test.eq(push.acceptance_ref, "bee.harness.catalog:push_acceptance")
-            test.eq(push.fixture_digest, string.rep("a", 64))
-            local plain = entry({claude = "/opt/claude"})
-            ;(plain.data :: Entry).inbox_push = true
-            local without, without_error = policy.decode("test:policy", plain)
-            if not without then error(tostring(without_error)) end
-            test.is_nil(without.push_acceptance)
-            test.neq(without.digest, decoded.digest)
-        end)
-
-        test.it("refuses a malformed or unscoped production push acceptance", function()
-            local raw = entry({claude = "/opt/claude"})
-            local data = raw.data :: Entry
-            data.inbox_push = true
-            data.push_acceptance = {adapter_ref = "bee.driver.claude:permission_adapter", acceptance_ref = "bee.harness.catalog:push_acceptance",
-                fixture_digest = "not-a-digest"}
-            local decoded, decode_error = policy.decode("test:policy", raw)
-            test.is_nil(decoded)
-            test.eq(decode_error, "test:policy: push_acceptance.fixture_digest must be a sha256 hex digest")
-            data.push_acceptance = {acceptance_ref = "bee.harness.catalog:push_acceptance", fixture_digest = string.rep("a", 64)}
-            local missing, missing_error = policy.decode("test:policy", raw)
-            test.is_nil(missing)
-            test.eq(missing_error, "test:policy: push_acceptance names adapter_ref, acceptance_ref and fixture_digest")
-            data.push_acceptance = {adapter_ref = "bee.driver.claude:permission_adapter", acceptance_ref = "bee.harness.catalog:push_acceptance",
-                fixture_digest = string.rep("a", 64)}
-            data.inbox_push = nil
-            local unscoped, unscoped_error = policy.decode("test:policy", raw)
-            test.is_nil(unscoped)
-            test.eq(unscoped_error, "test:policy: push_acceptance needs inbox_push")
         end)
 
         test.it("admits only workdir, thread and placement as launch overrides and measures them", function()

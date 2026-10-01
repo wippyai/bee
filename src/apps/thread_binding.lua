@@ -49,7 +49,7 @@ end
 local function object(value: unknown): Object?
     if type(value) ~= "table" then return nil end
     for key in pairs(value) do if type(key) ~= "string" then return nil end end
-    return value :: Object
+    return value
 end
 
 local function exact(value: Object, allowed: {string}): boolean
@@ -80,7 +80,9 @@ local function binding(value: unknown, workspace_id: unknown): Binding?
     local thread_id = input and bounds.id(input.thread_id)
     local owner = input and bounds.id(input.initiating_owner_id)
     if not input or not actor or input.actor_id ~= actor or not thread_id or not owner or input.role ~= "participant" then return nil end
-    return {instance_id = input.instance_id :: string, thread_id = thread_id, actor_id = actor,
+    local instance_id = bounds.id(input.instance_id)
+    if not instance_id then return nil end
+    return {instance_id = instance_id, thread_id = thread_id, actor_id = actor,
         role = "participant", initiating_owner_id = owner}
 end
 
@@ -100,7 +102,7 @@ function M.reply(value: unknown): Reply?
     local checked_code: string = code or ""
     local checked_message: string = message or ""
     return {ok = false, value = nil, replayed = input.replayed,
-        error = {code = checked_code, message = checked_message, retryable = failure.retryable :: boolean}}
+        error = {code = checked_code, message = checked_message, retryable = failure.retryable}}
 end
 
 local function get_value(reply: unknown, thread_id: string, allow_closed: boolean?): Object?

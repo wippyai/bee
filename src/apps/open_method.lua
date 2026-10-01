@@ -6,6 +6,7 @@ local ctx = require("ctx")
 local bounds = require("bounds")
 local hash = require("hash")
 local uuid = require("uuid")
+local registry = require("registry")
 local protocol = require("open_protocol")
 local arguments = require("arguments")
 local M = {}
@@ -33,13 +34,34 @@ local function request_id(action_id: string, idempotency_key: string): (string?,
 end
 
 function M.handle(raw: unknown): {[string]: unknown}
-    local gateway_context, binding_error = attribution()
-    if not gateway_context then return fail("UNAUTHENTICATED", binding_error or "gateway binding unavailable") end
-    local action_id, workspace_id = gateway_context.action_id, gateway_context.workspace_id
-    local origin = gateway_context.origin_view
     local object = bounds.object(raw)
     if not object then return fail("INVALID", "open request must be an object") end
-    local extra = bounds.fields(object, {"definition_id", "arguments", "idempotency_key"})
+    local presentation_session = object.presentation_session
+    local action_id: string
+    local workspace_id: string
+    local origin: protocol.OriginView? = nil
+    local provenance: protocol.Provenance? = nil
+    if presentation_session ~= nil then
+        local actor = security.actor()
+        local meta = actor and bounds.object(actor:meta())
+        local workspace = meta and bounds.id(meta.workspace_id)
+        if not workspace then return fail("DENIED", "session presentation requires workspace identity") end
+        if type(presentation_session) ~= "string"
+            or not presentation_session:match("^bs:[^:]+:" .. workspace .. ":[^:]+$")
+            or not security.can("bee.apps.session_present", workspace) then return fail("DENIED", "session presentation requires its host grant") end
+        local entry = type(object.definition_id) == "string" and registry.get(object.definition_id) or nil
+        local application = entry and bounds.object(entry.meta.application)
+        if not application or application.role ~= "sessions" then return fail("DENIED", "presentation must use the admitted Sessions application") end
+        local args = arguments.decode(object.arguments)
+        if not args or #args ~= 2 or args[1] ~= "--session" or args[2] ~= presentation_session then return fail("INVALID", "presentation must navigate to its exact SessionRef") end
+        action_id, workspace_id = presentation_session, workspace
+    else
+        local gateway_context, binding_error = attribution()
+        if not gateway_context then return fail("UNAUTHENTICATED", binding_error or "gateway binding unavailable") end
+        action_id, workspace_id = gateway_context.action_id, gateway_context.workspace_id
+        origin, provenance = gateway_context.origin_view, gateway_context.provenance
+    end
+    local extra = bounds.fields(object, {"definition_id", "arguments", "idempotency_key", "presentation_session"})
     if extra then return fail("INVALID", extra) end
     local definition_id = bounds.id(object.definition_id)
     local idempotency_key = bounds.id(object.idempotency_key)
@@ -51,7 +73,7 @@ function M.handle(raw: unknown): {[string]: unknown}
     local request, request_error = request_id(action_id, idempotency_key)
     if not request then return fail("INVALID", request_error or "request identity failed") end
     local nonce = uuid.v7()
-    local caller_token = CALLER_PREFIX .. nonce
+    local caller_token = (presentation_session ~= nil and "bee.application.presentation/" or CALLER_PREFIX) .. nonce
     local registered, register_error = process.registry.register(caller_token)
     if not registered then return fail("UNAVAILABLE", "open caller registration failed: " .. tostring(register_error)) end
     local host, lookup_error = process.registry.lookup(HOST_PREFIX .. workspace_id)
@@ -66,7 +88,7 @@ function M.handle(raw: unknown): {[string]: unknown}
     end
     local sent, send_error = process.send(host, "bee.host.application", {version = 1, workspace_id = workspace_id,
         request_id = request, definition_id = definition_id, arguments = args, caller_token = caller_token, origin_view = origin,
-        provenance = gateway_context.provenance})
+        provenance = provenance, presentation = presentation_session ~= nil and true or nil})
     if not sent then
         process.unlisten(replies)
         process.registry.unregister(caller_token, process.registry.LOCAL)

@@ -98,36 +98,39 @@ local function define_tests()
             test.eq(#prepared.allowed_traits, 1)
             test.eq(#granted.allowed_traits, 2)
             test.eq(granted.allowed_traits[2], "research:export")
-            local selected = surface.select(granted, {"research:export"}, {})
+            local selectable: surface.Surface = {catalog = granted.catalog, ceiling = granted.ceiling, access = granted.access, base_tools = granted.base_tools,
+                allowed_traits = granted.allowed_traits, fixed_context = granted.fixed_context, dynamic_keys = granted.dynamic_keys}
+            local selected = surface.select(selectable, {"research:export"}, {})
             if not selected then error("granted trait refused") end
             test.eq(#selected.active, 1)
             test.eq(granted.fixed_context.app, "fixed")
             test.eq(granted.fixed_context.app, prepared.fixed_context.app)
             test.is_nil(surface.select(prepared, {"research:export"}, {}))
+            local granted_access = granted.access
             granted.allowed_traits[1] = "changed:outside"
             test.eq(prepared.allowed_traits[1], "research:benchmark")
-            granted.access.traits[1] = "changed:outside"
+            granted_access.traits[1] = "changed:outside"
             test.eq(prepared.access.traits[1], "research:export")
         end)
         test.it("rejects invalid requestable declarations and grant escalation", function()
             local raw = requestable_surface()
             raw.access.traits = {"research:missing"}
-            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            test.is_nil((surface.prepare(raw, {}, {"measure", "export"})))
             raw = requestable_surface()
             raw.access.traits = {"research:export", "research:export"}
-            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            test.is_nil((surface.prepare(raw, {}, {"measure", "export"})))
             raw = requestable_surface()
             raw.base_tools = {"measure", "export"}
-            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            test.is_nil((surface.prepare(raw, {}, {"measure", "export"})))
             raw = requestable_surface()
             raw.traits[1].tools = {"measure", "export"}
-            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            test.is_nil((surface.prepare(raw, {}, {"measure", "export"})))
             raw = requestable_surface()
             raw.access.extra = true
-            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            test.is_nil((surface.prepare(raw, {}, {"measure", "export"})))
             raw = requestable_surface()
             raw.active_traits = {"research:export"}
-            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            test.is_nil((surface.prepare(raw, {}, {"measure", "export"})))
 
             raw = requestable_surface()
             local prepared = surface.prepare(raw, {}, {"measure", "export"})
@@ -153,7 +156,7 @@ local function define_tests()
         test.it("takes the approval workspace from the binding, never from the declaration", function()
             local raw = requestable_surface()
             raw.access = {policy = "research:approval", workspace_id = "declared-workspace", traits = {"research:export"}}
-            test.is_nil(surface.prepare(raw, {}, {"measure", "export"}))
+            test.is_nil((surface.prepare(raw, {}, {"measure", "export"})))
             local prepared = surface.prepare(requestable_surface(), {}, {"measure", "export"})
             if not prepared then error("requestable surface refused") end
             local unbound = {binding_id = "binding-one", subject = "bee.test.gateway", action_id = "action-one",
@@ -183,13 +186,13 @@ local function define_tests()
 
             raw = {tools = {}, traits = {}, base_tools = {"application_open"}, active_traits = {}, fixed_context = {}, dynamic_keys = {},
                 access = {policy = "application:approval", traits = {"bee.application:runtime"}}}
-            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
+            test.is_nil((surface.prepare(raw, mcp.TOOLS, {"application_open"})))
             raw.base_tools = {}
             raw.access = nil
-            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
+            test.is_nil((surface.prepare(raw, mcp.TOOLS, {"application_open"})))
             raw.access = {policy = "application:approval", traits = {"bee.application:runtime"}}
             raw.traits = {{id = "application:spoof", title = "Spoof", prompt = "Spoof", tools = {"application_open"}}}
-            test.is_nil(surface.prepare(raw, mcp.TOOLS, {"application_open"}))
+            test.is_nil((surface.prepare(raw, mcp.TOOLS, {"application_open"})))
         end)
         test.it("projects framework tools and traits with exact tool authority", function()
             local framework = {tools = {

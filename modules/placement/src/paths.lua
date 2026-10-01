@@ -17,7 +17,7 @@ function M.resolve(path: string, executor_ref: string): (string?, string?)
     local code, wait_error = proc:wait()
     executor:release()
     if code ~= 0 or wait_error or type(output) ~= "string" then return nil, "cannot resolve directory " .. path end
-    local physical = (output :: string):gsub("\n$", "")
+    local physical = (output):gsub("\n$", "")
     if physical:sub(1, 1) ~= "/" or physical:find("[%c]") then return nil, "invalid physical directory" end
     return physical, nil
 end

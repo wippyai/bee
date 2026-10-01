@@ -4,14 +4,23 @@ local decode = require("decode")
 local client = require("client")
 local arguments = require("arguments")
 local function define_tests()
+    test.describe("Application admission policy bound", function()
+        test.it("admits the reviewed native and Docker Agent policies and rejects overflow", function()
+            local policies: {string} = {}
+            for index = 1, 18 do policies[index] = "test:policy" .. tostring(index) end
+            test.not_nil(contract.binding({definition_id = "test:agent", policies = policies}))
+            for index = 19, 33 do policies[index] = "test:policy" .. tostring(index) end
+            test.is_nil(contract.binding({definition_id = "test:agent", policies = policies}))
+        end)
+    end)
     test.describe("Application launch arguments", function()
         test.it("bounds host policy composition and rejects sparse policy lists", function()
             local policies: {string} = {}
-            for index = 1, 16 do policies[index] = "test:policy" .. tostring(index) end
+            for index = 1, 32 do policies[index] = "test:policy" .. tostring(index) end
             local binding = contract.binding({definition_id = "test:app", policies = policies})
             if not binding then error("valid host policy composition was refused") end
-            test.eq(#binding.policies, 16)
-            policies[17] = "test:extra"
+            test.eq(#binding.policies, 32)
+            policies[33] = "test:extra"
             test.is_nil(contract.binding({definition_id = "test:app", policies = policies}))
             test.is_nil(contract.binding({definition_id = "test:app", policies = {[1] = "test:one", [3] = "test:three"}}))
         end)
@@ -112,6 +121,16 @@ local function define_tests()
             test.eq(launch.arguments[1], "project-a")
             test.eq(launch.arguments[2], "run-a")
             test.eq(launch.arguments[3], "")
+        end)
+        test.it("keeps navigation routing out of the public catalog", function()
+            local items = assert(decode.catalog({{definition_id = "test:app", definition_revision = "1",
+                title = "Files", icon = "F", group = "Tools", role = "inspection", singleton = true,
+                navigation_topic = "bee.files.navigate", resume_schema = "", restart_policy = "never"}}))
+            local exposed_topic = false
+            for key in pairs(items[1]) do
+                if key == "navigation_topic" then exposed_topic = true end
+            end
+            test.is_false(exposed_topic)
         end)
         test.it("keeps unbound opens and rejects malformed launch thread identity", function()
             local value = {version = 1, broker_pid = "broker", workspace_pid = "workspace",

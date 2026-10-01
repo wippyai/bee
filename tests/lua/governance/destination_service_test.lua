@@ -156,7 +156,7 @@ local function define_tests()
                     if policy.name ~= name then rows[#rows + 1] = policy end
                 end
                 local row: {[string]: unknown} = {name = name, max_ttl_ms = 60000,
-                    approvers = approvers or {{definition_id = "bee.approvals.inbox:app"}}}
+                    approvers = approvers or {{definition_id = "bee.approvals.inbox.app:app"}}}
                 if confirm ~= nil then row.confirm = confirm end
                 rows[#rows + 1] = row
                 data.policies = rows
@@ -186,28 +186,28 @@ local function define_tests()
             local expired, expired_error = service.super_edit_admission(
                 profile_of(row({expires_at = "2000-01-01T00:00:00.000Z"})))
             test.is_false(expired)
-            test.not_nil(string.find(expired_error :: string, "expired", 1, true))
+            test.not_nil((string.find(expired_error :: string, "expired", 1, true)))
             -- A dedicated approver policy that does not confirm explicitly is refused.
             install("super-edit-host", "standard")
             local unconfirmed, unconfirmed_error = service.super_edit_admission(profile_of(row({})))
             test.is_false(unconfirmed)
-            test.not_nil(string.find(unconfirmed_error :: string, "explicitly", 1, true))
+            test.not_nil((string.find(unconfirmed_error :: string, "explicitly", 1, true)))
             -- An explicit policy that names no approver is refused.
             install("super-edit-host", "explicit", {})
             local approverless, approverless_error = service.super_edit_admission(profile_of(row({})))
             test.is_false(approverless)
-            test.not_nil(string.find(approverless_error :: string, "names no approvers", 1, true))
+            test.not_nil((string.find(approverless_error :: string, "names no approvers", 1, true)))
             -- A dedicated policy absent from the host table is refused.
             local stripped = assert(registry.get("bee:approver_policies"))
             local stripped_data = stripped.data :: {[string]: unknown}
             stripped_data.policies = {{name = "workspace-application-delivery",
-                approvers = {{definition_id = "bee.approvals.inbox:app"}}, max_ttl_ms = 600000}}
+                approvers = {{definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}}
             local changes = registry.snapshot():changes()
             assert(changes:update(stripped))
             assert(changes:apply())
             local missing, missing_error = service.super_edit_admission(profile_of(row({})))
             test.is_false(missing)
-            test.not_nil(string.find(missing_error :: string, "not configured", 1, true))
+            test.not_nil((string.find(missing_error :: string, "not configured", 1, true)))
             -- A non-super-edit profile bypasses the gate entirely.
             local plain = assert(service.super_edit_admission({super_edit = false}))
             test.is_true(plain)

@@ -97,14 +97,17 @@ function M.mesh(painter: frame.Painter, rect: Rect, nodes: {MeshNode}, edges: {M
         local to = index_of[edge.to]
         if from and to and from ~= to then
             local fg = color(painter, edge.role, "border")
-            local x0, y0 = (cx[from] - rect.x) * 2, (cy[from] - rect.y) * 4 + 2
-            local x1, y1 = (cx[to] - rect.x) * 2, (cy[to] - rect.y) * 4 + 2
+            local x0: integer = (cx[from] - rect.x) * 2
+            local y0: integer = (cy[from] - rect.y) * 4 + 2
+            local x1: integer = (cx[to] - rect.x) * 2
+            local y1: integer = (cy[to] - rect.y) * 4 + 2
             local dx = math.abs(x1 - x0)
             local dy = -math.abs(y1 - y0)
             local sx = x0 < x1 and 1 or -1
             local sy = y0 < y1 and 1 or -1
             local err = dx + dy
-            local x, y = x0, y0
+            local x: integer = x0
+            local y: integer = y0
             while true do
                 local ownerx, ownery = rect.x + x // 2, rect.y + y // 4
                 if not occupied[cell(ownerx, ownery)] then

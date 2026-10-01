@@ -123,7 +123,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    hooks: bee.harness.window:hooks
+    hooks: bee.harness.app:hooks
     checkpoint: bee.harness.carrier:checkpoint
 - name: window_ready_policy
   kind: registry.entry
@@ -155,6 +155,7 @@ entries:
   data:
     schema_revision: bee.launch-definition@1
     launch_id: window-ready-fixture
+    session_resource: session
     title: Window readiness fixture
     command_names: []
     binding_ref: bee.driver.claude:binding
@@ -171,17 +172,19 @@ entries:
   meta: {type: test_support}
   modules: [process]
   imports:
-    runtime: bee.harness.window:runtime
+    runtime: bee.harness.app:runtime
 - name: window_ready_test
   kind: function.lua
   source: file://window_ready_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "120s"}
-  modules: [process, channel, time, tty, uuid]
+  modules: [process, channel, time, tty, uuid, registry, json]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
-    recovery: bee.harness.window:recovery
+    recovery: bee.harness.app:recovery
 - name: window_recovery_test
   kind: function.lua
   source: file://window_recovery_test.lua
@@ -190,8 +193,8 @@ entries:
   modules: [json, tty]
   imports:
     test: wippy.test:test
-    recovery: bee.harness.window:recovery
-    restore_view: bee.harness.window:restore_view
+    recovery: bee.harness.app:recovery
+    restore_view: bee.harness.app:restore_view
     appearance: bee.application:appearance
 - name: carrier_transport_test
   kind: function.lua
@@ -211,23 +214,6 @@ entries:
     classify: bee.harness.catalog:classify
     checkpoint: bee.harness.carrier:checkpoint
     stream_json: bee.driver.transport:stream_json
-- name: push_production_test
-  kind: function.lua
-  source: file://push_production_test.lua
-  method: run
-  meta: {type: test, suite: bee, timeout: "300s"}
-  modules: [funcs, security, process, registry, env, time, channel, json, system, exec, hash]
-  security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_store_policy, bee.gateway.security:node_policy]
-  imports:
-    test: wippy.test:test
-    principals: bee.test.principals:bound
-    catalog: bee.harness.catalog:catalog
-    adapter: bee.harness.permission:adapter
-    launch: bee.driver.claude:launch
-    driver_types: bee.driver:types
-    placement_fixture: bee.harness.catalog:placement_fixture
-    sends: bee.threads.service:sends
 - name: placement_fixture
   kind: library.lua
   source: file://placement_fixture.lua
@@ -289,7 +275,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: gateway_surface_policy
   kind: registry.entry
@@ -309,13 +295,13 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
     gateway_surface:
       tools: []
       traits:
       - {id: 'research:read', title: Read research, prompt: Read the current research thread., tools: [thread_read]}
-      - {id: 'research:wait', title: Wait for research, prompt: Wait for research changes., tools: [thread_wait]}
+      - {id: 'research:inspect', title: Inspect capabilities, prompt: Inspect the admitted research capabilities., tools: [capabilities]}
       base_tools: [thread_read]
       active_traits: []
       fixed_context: {project: managed-project}
@@ -357,7 +343,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_ttl_ms: 2500
 - name: claude_gateway_policy
   kind: registry.entry
@@ -377,7 +363,7 @@ entries:
     executables: {}
     environment: {}
     prepare_options: {permission_mode: dontAsk, max_turns: 3}
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: codex_gateway_policy
   kind: registry.entry
@@ -398,7 +384,7 @@ entries:
     environment: {}
     prepare_options: {sandbox: read-only}
     provider_ref: bee.harness.catalog:codex_fixture_provider
-    gateway_tools: [thread_read, thread_wait]
+    gateway_tools: [thread_read, capabilities]
     gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
 - name: gateway_harness_test
   kind: function.lua
@@ -426,58 +412,6 @@ entries:
     actions: [funcs.call, funcs.security]
     resources: [bee.gateway.binding:open, bee.gateway.binding:check, bee.gateway.binding:revoke, bee.gateway.binding:drain, bee.gateway.binding:ready, bee.gateway.binding:admit, bee.gateway.binding:authorize_materialization, bee.gateway.binding:materialize, bee.gateway.binding:hook_queue, bee.placement.native.binding:evidence, bee.placement.native.binding:status, bee.placement.native.binding:capabilities, bee.placement.native.binding:measure_executable]
     effect: allow
-- name: agent_launch_acceptance_test
-  kind: function.lua
-  source: file://agent_launch_acceptance_test.lua
-  method: run
-  meta: {type: test, suite: bee, timeout: "780s"}
-  modules: [funcs, security, process, registry, env, time, channel, json]
-  security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
-  imports:
-    principals: bee.test.principals:bound
-    test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
-- name: agent_confinement_acceptance_test
-  kind: function.lua
-  source: file://agent_confinement_acceptance_test.lua
-  method: run
-  meta: {type: test, suite: bee, timeout: "240s"}
-  modules: [funcs, security, registry, env, time, json]
-  security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy]
-  imports:
-    principals: bee.test.principals:bound
-    test: wippy.test:test
-- name: cross_session_acceptance_test
-  kind: function.lua
-  source: file://cross_session_acceptance_test.lua
-  method: run
-  meta: {type: test, suite: bee, timeout: "240s"}
-  modules: [funcs, security, process, registry, env, time, channel, json, system]
-  security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.credentials.security:credential_store_policy, bee.gateway.security:node_policy]
-  imports:
-    principals: bee.test.principals:bound
-    test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
-    catalog: bee.harness.catalog:catalog
-    policy: bee.harness.carrier:policy
-    sends: bee.threads.service:sends
-- name: hook_inbox_test
-  kind: function.lua
-  source: file://hook_inbox_test.lua
-  method: run
-  meta: {type: test, suite: bee, timeout: "240s"}
-  modules: [funcs, security, registry, env, time, channel, json, system, exec, base64]
-  security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.gateway:gateway_manage_policy, bee.security.gateway:gateway_admit_policy, bee.security.gateway:gateway_materialize_policy, bee.harness.catalog:workspace_catalog_call_policy, bee.security.storage:workspace_catalog_manage_policy, bee.security.gateway:gateway_session_send_workspace_policy, bee.placement.native.security:placement_exec_policy, bee.gateway.security:node_policy]
-  imports:
-    principals: bee.test.principals:bound
-    test: wippy.test:test
-    sends: bee.threads.service:sends
-    gateway: bee.gateway.binding:gateway
-    hook_inbox: bee.gateway:hook_inbox
 - name: workspace_catalog_call_policy
   kind: security.policy
   meta: {type: test_support}
@@ -485,92 +419,6 @@ entries:
     actions: [funcs.call]
     resources: [bee.workspace.catalog:create]
     effect: allow
-- name: cross_session_claude_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The scripted waiting session's launch policy under the Claude driver; the acceptance binds the fixture executable
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply]
-- name: cross_session_codex_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The scripted sending session's launch policy under the Codex driver; the acceptance binds the fixture executable, which never calls the provider
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    environment: {}
-    prepare_options: {sandbox: read-only}
-    provider_ref: bee.harness.catalog:codex_fixture_provider
-    gateway_tools: [thread_sessions, thread_read, thread_wait, thread_message, session_directory, session_send, session_inbox, session_ack, session_reply]
-- name: cross_session_claude_push_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: Fenced Claude stream-json inbox controller with a scripted second user turn
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    inbox_push: true
-    executables: {}
-    environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [session_inbox, session_ack, session_reply]
-- name: push_production_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: Production-shaped Claude inbox push policy with no fixture flag; the suite binds the pinned executable and the push acceptance at runtime
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: independent
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    inbox_push: true
-    executables: {}
-    environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: []
-- name: push_production_acceptance
-  kind: registry.entry
-  meta:
-    type: harness.permission_acceptance
-    test_support: true
-    comment: Push acceptance record for the production-shaped policy; measurements are filled by the suite
-  data:
-    acceptance: {}
 - name: gateway_carrier_test
   kind: function.lua
   source: file://gateway_carrier_test.lua
@@ -962,440 +810,6 @@ entries:
     thread_policy: {kind: new}
     credentials: [anthropic]
     presentation: {start_menu: false, fullscreen: false, reuse: never}
-- name: agent_launch_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: A launch policy whose agent allow-list names exactly the fixture batch definition; the suite binds no executable because the operation refuses before any carrier exists
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 1000
-    stop_grace_ms: 100
-    drain_ms: 100
-    runner_drain_ms: 100
-    fixture: true
-    executables: {claude: /bin/true}
-    environment: {}
-    agent_launch: [bee.harness.catalog:fixture_definition]
-- name: agent_launch_denied_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The same policy with an empty agent allow-list, so every agent launch is refused by name
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 1000
-    stop_grace_ms: 100
-    drain_ms: 100
-    runner_drain_ms: 100
-    fixture: true
-    executables: {claude: /bin/true}
-    environment: {}
-    agent_launch: []
-- name: agent_launch_orchestrator_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The scripted orchestrator's own launch policy; it may reach the gateway tools, including thread_launch, and its allow-list names exactly one worker definition
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait, thread_launch]
-    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    agent_launch: [bee.harness.catalog:agent_launch_accepted_worker]
-- name: agent_launch_worker_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The scripted worker's own launch policy; its gateway tools are exactly its own, never the orchestrator's, and it names no agent launch
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_message]
-    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    agent_launch: []
-- name: agent_launch_accepted_worker
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: The one worker definition the scripted orchestrator may launch; it runs on the caller's own thread so the bound thread tools reach it, and the host explicitly admits its own wider gateway tools
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: agent-launch-accepted-worker
-    title: Agent launch accepted worker
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: batch
-    policy_ref: bee.harness.catalog:agent_launch_worker_policy
-    default_mode: batch
-    allowed_overrides: [brief, thread]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
-    credentials: [anthropic]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-    allow_wider_tools: true
-- name: agent_confinement_orchestrator_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The confinement proof's orchestrator policy; its allow-list names exactly the confinement worker definition
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    environment: {}
-    gateway_tools: [thread_read, thread_wait, thread_launch]
-    agent_launch: [bee.harness.catalog:agent_confinement_worker]
-- name: agent_confinement_worker_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The confinement proof's worker policy; a private-home Claude batch route with no host inheritance and the default permission mode, so the probe child must show a private attempt home
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    environment: {}
-    allow_host_home: false
-    prepare_options: {permission_mode: default, max_turns: 1}
-    gateway_tools: [thread_read, thread_message]
-    gateway_hooks: []
-    agent_launch: []
-    allowed_overrides: [thread, workdir]
-- name: agent_confinement_worker
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: The confinement proof's worker definition; it runs on the caller's own thread in the granted project workdir with the broker environment login, and the host explicitly admits its wider gateway tools
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: agent-confinement-worker
-    title: Agent confinement worker
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: batch
-    policy_ref: bee.harness.catalog:agent_confinement_worker_policy
-    default_mode: batch
-    allowed_overrides: [brief, thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
-    credentials: [anthropic]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-    allow_wider_tools: true
-- name: agent_launch_wider_parent_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: A launching policy that holds no gateway tool and allow-lists two children whose own policy offers one, so the admission must refuse the unflagged child and admit the flagged one
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 1000
-    stop_grace_ms: 100
-    drain_ms: 100
-    runner_drain_ms: 100
-    fixture: true
-    executables: {claude: /bin/true}
-    environment: {}
-    gateway_tools: []
-    agent_launch: [bee.harness.catalog:agent_launch_wider_definition, bee.harness.catalog:agent_launch_flagged_definition]
-- name: agent_launch_child_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The child's own policy; it offers one gateway tool the wider parent does not hold
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 1000
-    stop_grace_ms: 100
-    drain_ms: 100
-    runner_drain_ms: 100
-    fixture: true
-    executables: {claude: /bin/true}
-    environment: {}
-    gateway_tools: [thread_read]
-    agent_launch: []
-- name: agent_launch_wider_definition
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: A child whose own policy offers a gateway tool the launching policy does not; it carries no host flag, so the admission refuses it
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: agent-launch-wider-fixture
-    title: Agent launch wider fixture
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: batch
-    policy_ref: bee.harness.catalog:agent_launch_child_policy
-    default_mode: batch
-    allowed_overrides: [brief]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
-    credentials: [anthropic]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-- name: agent_launch_flagged_definition
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: The same child explicitly flagged by the host, so its wider gateway tools are admitted
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: agent-launch-flagged-fixture
-    title: Agent launch flagged fixture
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: batch
-    policy_ref: bee.harness.catalog:agent_launch_child_policy
-    default_mode: batch
-    allowed_overrides: [brief]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
-    credentials: [anthropic]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-    allow_wider_tools: true
-- name: agent_launch_unconfined_parent_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: A launching policy that allow-lists one unconfined child without the explicit host flag, so the admission must refuse it
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 1000
-    stop_grace_ms: 100
-    drain_ms: 100
-    runner_drain_ms: 100
-    fixture: true
-    executables: {claude: /bin/true}
-    environment: {}
-    gateway_tools: [thread_read]
-    agent_launch: [bee.harness.catalog:agent_launch_unconfined_definition]
-- name: agent_launch_unconfined_flagging_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: A launching policy that allow-lists one unconfined child with the explicit host flag, so the admission reaches the wider-tools check
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 1000
-    stop_grace_ms: 100
-    drain_ms: 100
-    runner_drain_ms: 100
-    fixture: true
-    executables: {claude: /bin/true}
-    environment: {}
-    gateway_tools: [thread_read]
-    agent_launch: [bee.harness.catalog:agent_launch_unconfined_definition]
-    agent_launch_unconfined: [bee.harness.catalog:agent_launch_unconfined_definition]
-- name: agent_launch_unconfined_definition
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: A child whose CLI runs without a usable workdir confinement; the host records it as unconfined, so only an explicitly flagged launching policy admits it
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: agent-launch-unconfined-fixture
-    title: Agent launch unconfined fixture
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: batch
-    policy_ref: bee.harness.catalog:agent_launch_child_policy
-    default_mode: batch
-    allowed_overrides: [brief]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
-    credentials: [anthropic]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-    unconfined: true
-- name: agent_run_orchestrator_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The scripted orchestrator's own launch policy for the managed-run proof; it reaches thread_launch, thread_sessions, launch_definitions, capabilities and the managed-run tools, and its allow-list names exactly the one Codex worker definition it launches on a new thread
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    executables: {}
-    environment: {}
-    prepare_options: {permission_mode: dontAsk, max_turns: 1}
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_notify, thread_launch, thread_sessions, launch_definitions, capabilities, run_status, run_wait, run_cancel]
-    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    agent_launch: [bee.harness.catalog:agent_run_codex_worker]
-- name: agent_run_worker_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: The Codex worker's own launch policy; its gateway tools are its own and it names no agent launch
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 10000
-    stop_grace_ms: 500
-    drain_ms: 2000
-    runner_drain_ms: 1000
-    fixture: true
-    allowed_overrides: [thread, workdir]
-    executables: {}
-    environment: {}
-    prepare_options: {sandbox: workspace-write}
-    provider_ref: bee.harness.catalog:codex_fixture_provider
-    gateway_tools: [thread_read, thread_message]
-    agent_launch: []
-- name: agent_run_codex_worker
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: The Codex batch worker the scripted orchestrator launches on a new thread; it allows a thread override so the child runs on a thread of its own, which the orchestrator then reaches through member_thread and the managed-run tools
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: agent-run-codex-worker
-    title: Codex run worker
-    command_names: []
-    binding_ref: bee.driver.codex:binding
-    profile_id: batch
-    policy_ref: bee.harness.catalog:agent_run_worker_policy
-    default_mode: batch
-    allowed_overrides: [brief, thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
-    credentials: [codex_login]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-- name: agent_run_acceptance_test
-  kind: function.lua
-  source: file://agent_run_acceptance_test.lua
-  method: run
-  meta: {type: test, suite: bee, timeout: "300s"}
-  modules: [funcs, security, process, registry, env, time, channel, json, system]
-  security:
-    policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.credentials.security:credential_store_policy, bee.gateway.security:node_policy]
-  imports:
-    principals: bee.test.principals:bound
-    test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
-    catalog: bee.harness.catalog:catalog
-    policy: bee.harness.carrier:policy
-- name: agent_launch_window_policy
-  kind: registry.entry
-  meta:
-    type: bee.launch_policy
-    test_support: true
-    comment: A launch policy whose allow-list names a window definition, so the operation refuses the mode before any carrier exists
-  data:
-    schema_revision: bee.launch-policy@2
-    required_cleanup: direct_process
-    required_exit_observation: eof_gated
-    start_ms: 1000
-    stop_grace_ms: 100
-    drain_ms: 100
-    runner_drain_ms: 100
-    fixture: true
-    executables: {claude: /bin/true}
-    environment: {}
-    agent_launch: [bee.harness.catalog:agent_launch_window_definition]
-- name: agent_launch_window_definition
-  kind: registry.entry
-  meta:
-    type: bee.launch_definition
-    test_support: true
-    comment: A window-mode definition, which has no agent-launch carrier
-  data:
-    schema_revision: bee.launch-definition@1
-    launch_id: agent-launch-window-fixture
-    title: Agent launch window fixture
-    command_names: []
-    binding_ref: bee.driver.claude:binding
-    profile_id: window
-    policy_ref: bee.harness.catalog:agent_launch_window_policy
-    default_mode: window
-    allowed_overrides: []
-    thread_policy: {kind: new}
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-- name: agent_launch_test
-  kind: function.lua
-  source: file://agent_launch_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security, registry]
-  imports:
-    test: wippy.test:test
-    agent_launch: bee.harness.launch:agent_launch
-    definitions: bee.harness.launch:definitions
-    agent_protocol: bee.application:agent_protocol
-    record: bee.threads.records:record
-- name: launch_definitions_test
-  kind: function.lua
-  source: file://launch_definitions_test.lua
-  method: run
-  meta: {type: test, suite: bee}
-  modules: [funcs, security]
-  imports:
-    test: wippy.test:test
 - name: launch_client_policy
   kind: security.policy
   meta: {type: test_support}
@@ -1409,7 +823,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.harness.launch:agent_call_backend]
+    resources: [bee.harness.catalog:managed_run_probe]
     effect: allow
 - name: launch_recovery_runtime_policy
   kind: security.policy.expr
@@ -1418,28 +832,6 @@ entries:
     expression: 'action == "registry.snapshot" || (action == "process.registry.lookup" && resource matches "^bee[.]harness[.]carrier/attempt:[A-Za-z0-9_.:-]+$")'
     actions: [registry.snapshot, process.registry.lookup]
     resources: '*'
-    effect: allow
-- name: agents_probe
-  kind: function.lua
-  source: file://agents_probe.lua
-  method: handle
-  meta: {type: test_support}
-  imports:
-    agents: bee.application:agents
-    agent_protocol: bee.application:agent_protocol
-- name: agents_probe_policy
-  kind: security.policy
-  meta: {type: test_support, comment: Lets the suite call the agents library probe as an application}
-  policy:
-    actions: [funcs.call]
-    resources: [bee.harness.catalog:agents_probe]
-    effect: allow
-- name: app_launch_grant_policy
-  kind: security.policy
-  meta: {type: test_support, comment: The host grant that lets an application launch the fixture definition}
-  policy:
-    actions: [bee.harness.launch]
-    resources: [bee.harness.catalog:fixture_definition]
     effect: allow
 - name: setup_client_policy
   kind: security.policy.expr
@@ -1461,7 +853,7 @@ entries:
   source: file://launch_test.lua
   method: run
   meta: {type: test, suite: bee, timeout: "600s"}
-  modules: [funcs, security, process, channel, registry, env, exec, time]
+  modules: [funcs, security, process, channel, registry, env, exec, time, hash]
   security:
     policies: [bee.harness.catalog:apply_test_policy, bee.harness.catalog:carrier_spawn_policy, bee.placement.native.security:placement_store_policy]
   imports:
@@ -1526,8 +918,19 @@ entries:
   imports:
     test: wippy.test:test
     selection: bee.harness.launch:selection
-    view: bee.harness.window:picker_view
-    appearance: bee.application:appearance
+- name: locate_probe_test
+  kind: function.lua
+  source: file://locate_probe_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [channel, time, env, json]
+  security:
+    policies: [bee.harness.security:launch_locate_probe_policy]
+  imports:
+    test: wippy.test:test
+    probe_capture: bee.harness.launch:probe_capture
+    probe_version: bee.harness.launch:probe_version
+    driver_locate: bee.driver:locate
 - name: profile_environment_isolation_test
   kind: function.lua
   source: file://profile_environment_isolation_test.lua
@@ -1707,6 +1110,31 @@ entries:
     test: wippy.test:test
     principals: bee.test.principals:bound
     installation: bee.gateway.security:installation
+- name: publication_client_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:open, bee.gateway.binding:admit, bee.gateway.binding:publish_request,
+      bee.threads.service:create, bee.threads.service:get, bee.threads.service:admit_action, bee.threads.service:prepare_attempt]
+    effect: allow
+- name: publication_request_test
+  kind: function.lua
+  source: file://publication_request_test.lua
+  method: run
+  meta: {type: test, suite: bee, timeout: "120s"}
+  modules: [funcs, security, registry, time]
+  security:
+    policies: [bee.harness.catalog:publication_client_policy, bee.gateway.security:execute_policy,
+      bee.gateway.security:publication_policy, bee.gateway.security:publication_queue_policy,
+      bee.gateway.security:installation_resolver_policy,
+      bee.gateway.security:installation_worker_policy, bee.gateway.security:access_reference_policy,
+      bee.gateway.security:access_policy_read_policy, bee.security.approvals:approval_publication_effects_policy]
+  imports:
+    test: wippy.test:test
+    principals: bee.test.principals:bound
+    publish: bee.gateway.security:publish
+    publishing: bee.hub:publishing
 - name: capability_elevation_test
   kind: function.lua
   source: file://capability_elevation_test.lua
@@ -1971,8 +1399,8 @@ entries:
     claude: bee.driver.claude:launch
     machine: bee.harness.carrier:machine
     catalog: bee.harness.catalog:catalog
-    hooks: bee.harness.window:hooks
-    interrupted: bee.harness.window:interrupted
+    hooks: bee.harness.app:hooks
+    interrupted: bee.harness.app:interrupted
 - name: scope_probe_allow
   kind: security.policy
   meta: {type: test_support}
@@ -2136,3 +1564,55 @@ entries:
       capabilities: bee.placement.native.binding:capabilities
       measure_executable: bee.placement.native.binding:measure_executable
       close_stdin: bee.placement.native.binding:close_stdin
+- name: managed_run_probe
+  kind: function.lua
+  source: file://managed_run_probe.lua
+  method: handle
+  meta: {type: test_support}
+  imports:
+    managed_run: bee.harness.launch:managed_run
+    bounds: bee.threads.records:bounds
+
+- name: presentation_scope_probe
+  kind: function.lua
+  source: file://presentation_scope_probe.lua
+  method: handle
+  meta: {type: test_support}
+  modules: [process, security]
+- name: presentation_test
+  kind: function.lua
+  source: file://presentation_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry, process, tty, time, channel]
+  security:
+    policies: [bee.harness.catalog:apply_test_policy]
+  imports:
+    test: wippy.test:test
+- name: presentation_viewer
+  kind: process.lua
+  source: file://presentation_view_probe.lua
+  method: viewer
+  meta: {type: test_support}
+  modules: [process, tty, channel]
+  imports:
+    terminal_view: bee.harness.app:terminal_view
+    client: bee.application:client
+- name: presentation_producer
+  kind: process.lua
+  source: file://presentation_view_probe.lua
+  method: producer
+  meta: {type: test_support}
+  modules: [process, tty, channel]
+  imports:
+    terminal_view: bee.harness.app:terminal_view
+    client: bee.application:client
+- name: presentation_view_get
+  kind: function.lua
+  source: file://presentation_view_probe.lua
+  method: get
+  meta: {type: test_support}
+  modules: [process, tty, channel]
+  imports:
+    terminal_view: bee.harness.app:terminal_view
+    client: bee.application:client

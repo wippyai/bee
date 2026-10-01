@@ -99,6 +99,15 @@ function M.installation_effects(tx: sql.Transaction, now: integer, limit: intege
         ORDER BY approval_id LIMIT ?]], {now, limit})
 end
 
+function M.publication_effects(tx: sql.Transaction, now: integer, limit: integer): ({unknown}?, string?)
+    return query(tx, [[SELECT * FROM bee_approval_requests
+        WHERE state = 'decided' AND decision = 'approved' AND effect_completed_at IS NULL
+        AND ((consumed_effect IS NULL AND expires_ms > ?)
+            OR (consumer_id = requester_id AND consumed_effect = 'hub-publish:' || approval_id))
+        AND proposal_json LIKE '%"ref":"bee.hub:publish"%'
+        ORDER BY approval_id LIMIT ?]], {now, limit})
+end
+
 function M.complete_effect(tx: sql.Transaction, approval_id: string, completed_at: string, result_json: string, updated_at: string): string?
     return execute(tx, "UPDATE bee_approval_requests SET effect_completed_at = ?, effect_result_json = ?, updated_at = ? WHERE approval_id = ? AND effect_completed_at IS NULL",
         {completed_at, result_json, updated_at, approval_id}, "complete installation effect")
@@ -158,4 +167,11 @@ function M.forget(tx: sql.Transaction, approval_id: string): string?
     return nil
 end
 
+function M.attention_count(tx: sql.Transaction, workspace: string, now: integer): (integer?, string?)
+    local rows, err = query(tx, "SELECT COUNT(*) AS count FROM bee_approval_requests WHERE workspace_id = ? AND state = 'pending' AND expires_ms > ?", {workspace, now})
+    if err or not rows or #rows ~= 1 then return nil, err or "count attention" end
+    local row = rows[1]
+    if type(row.count) ~= "number" or row.count < 0 or row.count ~= math.floor(row.count) then return nil, "attention count is corrupt" end
+    return math.floor(row.count), nil
+end
 return M

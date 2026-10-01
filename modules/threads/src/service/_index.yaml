@@ -402,3 +402,137 @@ entries:
   method: settle
   imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
   security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_store
+  kind: library.lua
+  source: file://work_store.lua
+  modules: [sql, json, hash, uuid, system]
+  imports:
+    access: bee.threads.service:access
+    transaction: bee.threads.persist:transaction
+    thread_owner: bee.threads.persist:owner
+    reader: bee.threads.persist:reader
+    record: bee.threads.records:record
+    observation: bee.threads.records:observation
+    record_types: bee.threads.records:types
+    bounds: bee.threads.records:bounds
+    canonical: bee.protocol:canonical
+- name: session_create
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_create
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: session_attach
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_attach
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: session_describe
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_describe
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: session_scan
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_scan
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: session_transition
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_transition
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_send
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_send
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_describe
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_describe
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_history
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_history
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_scan
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_scan
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: turn_reserve
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_reserve
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: turn_recover
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_recover
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: turn_pull
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_pull
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: turn_accept
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_accept
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: turn_observation
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_observation
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_settle
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_settle
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_uncertain
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_uncertain
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: work_cancel
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_cancel
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: operation_lookup
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: operation_lookup
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: operation_describe
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: operation_describe
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}
+- name: feed_read
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: feed_read
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads.service:types}
+  security: {policies: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy, bee.security.threads:thread_node_policy]}

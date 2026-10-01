@@ -110,6 +110,12 @@ local function define_tests()
             test.is_nil(state.requirements_digest)
             test.eq(#state.requirements, 0)
         end)
+        test.it("opens the keyword filter on the catalog phase, where the footer advertises it", function()
+            test.is_true(model.keyword_phase("catalog"))
+            for _, phase in ipairs({"installed", "details", "operations", "plan", "confirm", "result", "authoring"}) do
+                test.is_false(model.keyword_phase(phase))
+            end
+        end)
         test.it("keeps keyword browsing separate from text search and emits only facade intents", function()
             local state = model.new()
             local catalog = model.catalog_intent(state)
@@ -304,6 +310,21 @@ local function define_tests()
             model.show(state, "plan")
             test.is_nil(state.plan)
         end)
+        test.it("requires a fresh measured reply before confirming a replanned request", function()
+            local state = model.new()
+            model.select(state, "userspace/docker")
+            model.select_version(state, "0.5.12")
+            local value = {digest = string.rep("b", 64), ready = true, base_revision = 7,
+                modules = {}, missing = {}, migrations = {}, starts = {}, capabilities = {},
+                request = {action = "install", component = "userspace/docker", version = "0.5.12", migration_policy = "none", parameters = {}}}
+            model.apply_plan(state, ok(value))
+            model.begin_plan(state)
+            test.is_nil(state.plan)
+            test.eq(state.phase, "plan")
+            test.eq(model.confirm(state), "prepare a plan first")
+            model.apply_plan(state, ok(value))
+            test.is_nil(model.confirm(state))
+        end)
         test.it("accepts normalized uninstall plans and keeps the public request versionless", function()
             local state = model.new()
             model.select(state, "userspace/docker")
@@ -408,6 +429,63 @@ local function define_tests()
             end
             model.select_version(state, "9.9.9")
             test.is_nil(model.confirm_intent(state))
+        end)
+        test.it("separates usable apps from developer packages and sorts usable apps first", function()
+            local state = model.new()
+            model.apply_installed(state, ok({modules = {
+                {component = "bee/terminal", version = "0.4.6", source = "builtin", direct = true, used_by = {}},
+                {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}},
+            }, roots = {}}))
+            test.eq(model.component_status(state, "bee/terminal"), "built-in")
+            test.eq(model.component_status(state, "userspace/calc"), "installed")
+            test.is_nil(model.component_status(state, "userspace/editor"))
+
+            -- Test application classification
+            test.is_true(model.is_application({component = "bee/terminal", title = "Terminal", description = "", latest_version = "0.4.6"}))
+            test.is_true(model.is_application({component = "userspace/calc", title = "Calculator", description = "App", latest_version = "1.0.0"}))
+            test.is_false(model.is_application({component = "wippy/test", title = "Test Framework", description = "Testing framework", latest_version = "0.4.19"}))
+            test.is_false(model.is_application({component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6"}))
+            test.is_false(model.is_application({component = "wippy/migration", title = "Migrations", description = "Migration utilities", latest_version = "0.3.19"}))
+            test.is_false(model.is_application({component = "bee/sync", title = "Sync", description = "Workspace sync protocol", latest_version = "0.1.0"}))
+
+            -- Catalog contains mixed apps and developer packages
+            model.apply_catalog(state, ok({total = 5, items = {
+                {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19"},
+                {component = "wippy/terminal", title = "Terminal", description = "Terminal library", latest_version = "0.4.6"},
+                {component = "userspace/editor", title = "Editor", description = "Text editor app", latest_version = "2.0.0"},
+                {component = "bee/terminal", title = "Terminal", description = "Terminal app", latest_version = "0.4.6"},
+                {component = "userspace/calc", title = "Calculator", description = "Calculator app", latest_version = "1.0.0"},
+            }}))
+
+            -- By default, developer packages are hidden and only usable apps are visible
+            test.is_false(state.developer_packages)
+            test.eq(#state.catalog, 3)
+            -- Sorted: built-in app first (bee/terminal), installed app second (userspace/calc), uninstalled app third (userspace/editor)
+            test.eq(state.catalog[1].component, "bee/terminal")
+            test.eq(state.catalog[2].component, "userspace/calc")
+            test.eq(state.catalog[3].component, "userspace/editor")
+            test.eq(state.selected, "bee/terminal")
+
+            -- Enable developer packages filter
+            model.set_developer_packages(state, true)
+            test.is_true(state.developer_packages)
+            test.eq(#state.catalog, 5)
+            test.eq(state.catalog[1].component, "bee/terminal")
+            test.eq(state.catalog[2].component, "userspace/calc")
+            test.eq(state.catalog[3].component, "userspace/editor")
+            -- Developer packages appear after usable apps
+            test.eq(state.catalog[4].component, "wippy/terminal")
+            test.eq(state.catalog[5].component, "wippy/test")
+
+            -- Toggle back off
+            model.toggle_developer_packages(state)
+            test.is_false(state.developer_packages)
+            test.eq(#state.catalog, 3)
+
+            -- Setting search query reveals developer packages matching query
+            model.set_query(state, "test")
+            test.eq(state.query, "test")
+            test.eq(#state.catalog, 5)
         end)
     end)
 end

@@ -1,8 +1,8 @@
 # Bee Codex driver
 
 Install bee/driver-codex with bee/driver and bee/threads. It supplies Codex CLI
-profiles, stream normalization, launch declarations, and the configuration
-renderer for the shared driver contract.
+profiles and a strict CLI descriptor selecting the universal launch layer and
+shared Codex JSONL codec, plus the configuration renderer.
 
 The host supplies a read-only executable environment and a launch policy for
 each route. Installing this component does not activate Codex, expose a user

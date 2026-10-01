@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/wippyai/wapp"
+	"gopkg.in/yaml.v3"
 )
 
 type packageEntry struct {
@@ -54,16 +55,64 @@ func prepareFixture(root, repo string) error {
 	if err := os.CopyFS(filepath.Join(root, "src"), os.DirFS(filepath.Join(repo, "tests/fixtures/hub_manage"))); err != nil {
 		return fmt.Errorf("copy Hub fixture: %w", err)
 	}
-	for _, module := range []string{"hub", "persist", "sync", "threads"} {
+	for _, module := range []string{"hub", "persist", "sync", "threads", "hive"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", module), os.DirFS(filepath.Join(repo, "modules", module))); err != nil {
 			return fmt.Errorf("stage Hub component dependency %s: %w", module, err)
 		}
 	}
-	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n"
+	protocolDir := filepath.Join(root, "src", "protocol")
+	if err := os.MkdirAll(protocolDir, 0700); err != nil {
+		return err
+	}
+	for _, name := range []string{"bounds.lua", "canonical.lua"} {
+		if err := copyServiceFile(filepath.Join(repo, "src", "protocol", name), filepath.Join(protocolDir, name)); err != nil {
+			return err
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(repo, "src", "protocol", "_index.yaml"))
+	if err != nil {
+		return err
+	}
+	var protocol map[string]any
+	if err := yaml.Unmarshal(data, &protocol); err != nil {
+		return err
+	}
+	selected := []any{}
+	for _, value := range protocol["entries"].([]any) {
+		entry := value.(map[string]any)
+		if entry["name"] == "bounds" || entry["name"] == "canonical" {
+			selected = append(selected, entry)
+		}
+	}
+	protocol["entries"] = selected
+	encoded, err := yaml.Marshal(protocol)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(protocolDir, "_index.yaml"), encoded, 0600); err != nil {
+		return err
+	}
+	if err := copyServiceFile(filepath.Join(repo, "src", "clock.lua"), filepath.Join(root, "src", "clock.lua")); err != nil {
+		return err
+	}
+	index, err := os.OpenFile(filepath.Join(root, "src", "_index.yaml"), os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	_, err = index.WriteString("\n- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n")
+	closeErr := index.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+
+	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n- name: bee/hub\n  version: 0.1.0-dev\n- name: bee/persist\n  version: 0.1.0-dev\n- name: bee/sync\n  version: 0.1.0-dev\n- name: bee/threads\n  version: 0.1.0-dev\n- name: bee/hive\n  version: 0.1.0-dev\n"
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write fixture lock: %w", err)
 	}
-	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	config := "version: '1.0'\nregistry:\n  enable_history: true\n  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/hive: ./modules/hive\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write fixture configuration: %w", err)
 	}

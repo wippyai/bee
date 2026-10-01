@@ -94,7 +94,7 @@ local function define_tests()
             test.eq(applications[1].definition_id, "bee.settings:app")
             test.eq(applications[1].instance_id, "instance-1")
             local resources = extension(inspected, RESOURCES)
-            test.eq(resources.title, "Resources")
+            test.eq(resources.title, "Resources", tostring(resources.error))
             test.eq(resources.total, 2)
             test.is_nil(resources.error)
             local items = resources.items :: {Object}

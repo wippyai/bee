@@ -17,6 +17,21 @@ end
 
 local function define_tests()
     test.describe("Agent application open protocol", function()
+        test.it("accepts presentation only through the protected presentation caller namespace", function()
+            local workspace = string.rep("a", 32)
+            local request: {[string]: unknown} = {version = 1, workspace_id = workspace, request_id = "present-1",
+                definition_id = "bee.harness.app:app", arguments = {"--session", "bs:n:" .. workspace .. ":s"},
+                caller_token = "bee.application.presentation/abc-123", presentation = true}
+            test.not_nil(protocol.request(request, workspace))
+            request.caller_token = "bee.application.open/abc-123"
+            test.is_nil(protocol.request(request, workspace))
+            request.caller_token = "ordinary/app"
+            test.is_nil(protocol.request(request, workspace))
+            request.caller_token = "bee.application.presentation/abc-123"
+            request.provenance = provenance(workspace)
+            test.is_nil(protocol.request(request, workspace))
+        end)
+
         test.it("accepts only the bound workspace and bounded literal arguments", function()
             local workspace = string.rep("a", 32)
             local request = protocol.request({version = 1, workspace_id = workspace, request_id = "open-1",

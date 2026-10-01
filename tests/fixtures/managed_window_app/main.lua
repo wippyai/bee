@@ -22,7 +22,8 @@ local function reply(value: unknown): {[string]: unknown}
 end
 
 local function call(target: string, value: unknown): {[string]: unknown}
-    local raw, call_error = funcs.call(target, value)
+    local actor = assert(security.new_actor(assert(security.actor()):id(), {workspace_id = WORKSPACE}))
+    local raw, call_error = funcs.new():with_actor(actor):call(target, value)
     if call_error then error(target .. ": " .. tostring(call_error)) end
     local result = reply(raw)
     if result.ok ~= true then
@@ -104,6 +105,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     end
     local plan, refused = admission.resolve(definition_ref, "window")
     if not plan then error("resolve window plan: " .. tostring(refused and refused.error and refused.error.message)) end
+    if not selected and not retained_id then
+        call("bee.harness.launch:setup", {workspace_id = WORKSPACE, definition_ref = definition_ref, expected_plan_digest = plan.plan_digest})
+    end
     local request = assert(json.encode({request_id = request_id, definition_ref = definition_ref, brief = retained_id or "managed window",
         thread_id = THREAD, expected_plan_digest = plan.plan_digest}))
     local picker_started = time.now():unix_nano()
@@ -113,7 +117,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
     local open_thread: string? = nil
     if not selected then open_thread = THREAD end
     assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open", op = "open", workspace_id = WORKSPACE,
-        definition_id = "bee.harness.window:app", thread_id = open_thread, arguments = selected and {} or {request}}))
+        definition_id = "bee.harness.app:app", thread_id = open_thread, arguments = selected and {} or {request}}))
     local opened: {[string]: unknown}? = nil
     while not opened do
         local message = receive_reply()
@@ -150,7 +154,10 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
                 if snapshot and table.concat(snapshot.rows):find(label, 1, true) then return end
                 time.sleep("25ms")
             end
-            error("Agent did not show " .. label)
+            view:send({type = "resize", width = 200, height = 12})
+            time.sleep("200ms")
+            local last = view:snapshot()
+            error("Agent did not show " .. label .. ": " .. (last and table.concat(last.rows, "|") or "no frame"))
         end
         local function wait_without(label: string)
             for _ = 1, 100 do
@@ -160,7 +167,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             end
             error("Agent did not clear " .. label)
         end
-        wait_for("No agent profiles")
+        wait_for("SESSIONS")
+        assert(view:send({type = "key", key = "n", key_type = "rune", action = "press"}))
+        wait_for("No agents are ready")
         -- An empty picker remains interactive and owns no attempt.
         apply(original_definition)
         assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
@@ -168,9 +177,9 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
         if cancel_activation then
             local resource_state = reply(call("bee.resources.binding:list", {workspace_id = WORKSPACE}).value)
             local grants_before = #(resource_state.grants :: {{[string]: unknown}})
-            assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
+            assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
             wait_for("Starting Agent")
-            assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}), "duplicate Enter was not accepted as input")
+            assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}), "duplicate attach was not accepted as input")
             assert(view:send({type = "resize", width = 36, height = 12}))
             local resized = false
             for _ = 1, 40 do
@@ -182,14 +191,14 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             local closing = time.now():unix_nano()
             local escaped = channel.new(1)
             coroutine.spawn(function()
-                escaped:send(view:send({type = "key", key = "", key_type = "escape", action = "press"}))
+                escaped:send(view:send({type = "close"}))
             end)
             local close_deadline = closing + 1500000000
             while time.now():unix_nano() < close_deadline do
                 if not view:snapshot() then break end
                 time.sleep("25ms")
             end
-            assert(not view:snapshot(), "Escape did not close the activating picker")
+            assert(not view:snapshot(), "Close did not stop the activating picker")
             assert(time.now():unix_nano() - closing < 1500000000, "activating picker did not close within bounded admission cleanup")
             local escaped_result = channel.select({escaped:case_receive(), time.after("2s"):case_receive()})
             assert(escaped_result.ok and escaped_result.channel == escaped and escaped_result.value == true,
@@ -205,7 +214,7 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
                 "cancelled picker retained an attempt-bound resource grant")
             view:close()
             assert(process.send(broker, "bee.app.request", {version = 1, request_id = "open-after-cancel", op = "open",
-                workspace_id = WORKSPACE, definition_id = "bee.harness.window:app", arguments = {}}))
+                workspace_id = WORKSPACE, definition_id = "bee.harness.app:app", arguments = {}}))
             opened = nil
             while not opened do
                 local message = receive_reply()
@@ -228,25 +237,13 @@ local function run(natural: boolean, selected: boolean?, original_definition: {[
             end
             view = assert(tty.attach(mounted))
             assert(view:send({type = "resize", width = 30, height = 10}))
+            wait_for("SESSIONS")
+            assert(view:send({type = "key", key = "n", key_type = "rune", action = "press"}))
             wait_for("Selected agent fixture")
         end
         local before = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
         assert(#(before.records :: {{[string]: unknown}}) == 0, "selector created work before selection")
-        -- Change the exact plan displayed, then prove Enter cannot use it.
-        local modified = changed(original_policy)
-        local modified_data = modified.data :: {[string]: unknown}
-        modified_data.start_ms = 11000
-        apply(modified)
-        assert(view:send({type = "key", key = "", key_type = "enter", action = "press"}))
-        -- First-use setup now rejects the stale plan before admission. Its
-        -- full message is clipped at this deliberately narrow viewport.
-        wait_for("selected launch plan")
-        local refused = reply(call("bee.threads.service:read_after", {thread_id = THREAD, cursor = 0, limit = 32}).value)
-        assert(#(refused.records :: {{[string]: unknown}}) == 0, "stale selection created work")
-        assert(view:send({type = "key", key = "r", key_type = "rune", action = "press"}))
-        wait_without("selected launch plan")
-        wait_for("Selected agent fixture")
-        assert(view:send({type = "mouse", x = 3, y = 9, button = "left", action = "press"}))
+        assert(view:send({type = "key", key = "m", key_type = "rune", action = "press"}))
     end
     if selected then
         local launched = false
@@ -716,4 +713,5 @@ M.retained = function()
     apply(mode)
     if not ok then error(tostring(failure)) end
 end
+
 return M

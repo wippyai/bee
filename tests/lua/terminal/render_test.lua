@@ -53,6 +53,19 @@ local function define_tests()
             test.is_true(card(17):find("Details [D]", 1, true) == nil)
             test.is_true(card(18):find("Details [D]", 1, true) ~= nil)
         end)
+        test.it("shows the saved workspace label with the identity behind Details", function()
+            local workspace = string.rep("c", 32)
+            local info = connection.new("{Antares@bee.client:main|one}", workspace,
+                string.rep("b", 32), "{Antares@bee.hive:supervisor|one}")
+            connection.set_workspace_label(info, "ux-demo")
+            local canvas = tty.canvas(100, 18)
+            canvas:clear(" ")
+            info.details = true
+            connection.draw(canvas, 100, 18, appearance.defaults(), info, true)
+            local text = plain_text(table.concat(canvas:rows(), "\n"))
+            test.is_true(text:find("ux-demo", 1, true) ~= nil)
+            test.is_true(text:find(workspace, 1, true) ~= nil)
+        end)
         test.it("keeps Classic terminals dark without changing application panels", function()
             local theme = appearance.theme("classic")
             local terminal = appearance.page(theme, true)
@@ -200,12 +213,53 @@ local function define_tests()
             for _ = 1, #appearance.themes() do preferences = appearance.cycle(preferences, "theme") end
             test.eq(preferences.theme, "honey")
             local items = menu.items(false, false, false, catalog)
-            test.eq(#items, 2)
+            test.eq(#items, 3)
             for _, item in ipairs(items) do test.is_true(item.enabled) end
+        end)
+        test.it("honors NO_COLOR centrally without losing the selection", function()
+            test.is_false(appearance.no_color())
+            appearance.set_no_color(true)
+            local ok, failure = pcall(function()
+                test.is_true(appearance.no_color())
+                test.eq(appearance.style("#d8e2ef", "#17202c"), "")
+                local scene = model.add(model.new(80, 24), "one", "app", "One")
+                scene = model.add(scene, "two", "app", "Two")
+                scene = model.place(scene, "one", {x = 5, y = 4, width = 20, height = 8})
+                scene = model.place(scene, "two", {x = 35, y = 4, width = 20, height = 8})
+                local first = scene.windows[1]
+                local body = layout.interior(first, model.bounds(scene, first))
+                local frozen: {string} = {}
+                for row = 1, body.height do frozen[row] = "row " .. row end
+                local active, err = selection.capture({view_id = "one", attachment = "mount-one", mount_generation = 1,
+                    width = body.width, height = body.height}, frozen)
+                test.is_nil(err)
+                test.not_nil(active)
+                if not active then error("selection capture failed") end
+                active = selection.drag(selection.press(active, 1, 1), 9, 2)
+                local contents: {[string]: render.Content} = {}
+                contents.one = {rows = {"changed live content"}}
+                contents.two = {rows = {"neighbor stays live"}}
+                local frame = render.draw(scene, {"one", "two"}, contents, nil, nil, "", "workspace", nil, nil, false,
+                    nil, nil, nil, nil, active)
+                for _, row in ipairs(frame.rows) do
+                    test.is_nil((row:find("38;2", 1, true)))
+                    test.is_nil((row:find("48;2", 1, true)))
+                end
+                local marked = false
+                for _, row in ipairs(frame.rows) do
+                    if row:find("\27[7m", 1, true) ~= nil then marked = true end
+                end
+                test.is_true(marked)
+                local text = plain_text(table.concat(frame.rows, "\n"))
+                test.is_true(text:find("neighbor stays", 1, true) ~= nil)
+            end)
+            appearance.set_no_color(nil)
+            test.is_false(appearance.no_color())
+            if not ok then error(failure) end
         end)
         test.it("keeps Start small with apps open and anchors contextual actions", function()
             local scene = model.add(model.new(80, 24), "one", "app", "One")
-            test.eq(#menu.items(true, false, true, catalog), 2)
+            test.eq(#menu.items(true, false, true, catalog), 3)
             local state: menu.State = {selected = 1, offset = 0, kind = "window", target = "one", x = 79, y = 23}
             local items = menu.entries(state, scene, false, catalog)
             local selectable = false
@@ -269,13 +323,14 @@ local function define_tests()
             local opened = menu.respond(state, panel, items, {type = "key", action = "press", key_type = "right"})
             test.eq(opened.action, "")
             local tools = menu.entries(opened.state, scene, false, catalog)
-            test.eq(tools[1].action, "open:sample:settings")
-            test.eq(tools[2].action, "open:sample:processes")
+            test.eq(tools[1].action, "group:advanced")
+            local advanced = tools[1].children or {}
+            test.eq(assert(advanced[1]).action, "open:sample:processes")
             local nested_panel = menu.panel(80, 24, #tools, opened.state)
             test.eq(nested_panel.inset, 1)
             test.is_nil(menu.hit(nested_panel, opened.state, 3, nested_panel.y + 1, #tools))
             local back = menu.respond(opened.state, nested_panel, tools, {type = "key", action = "press", key_type = "left"})
-            test.eq(#menu.entries(back.state, scene, false, catalog), 2)
+            test.eq(#menu.entries(back.state, scene, false, catalog), 3)
             test.eq(back.state.selected, 1)
             test.is_false(back.close)
         end)
@@ -325,18 +380,34 @@ local function define_tests()
             local frame = render.draw(scene, {"one", "two"}, {}, nil, nil, "", "workspace", preferences)
             test.is_true(frame.rows[1]:find("界", 1, true) ~= nil)
             test.is_true(frame.rows[1]:find("Application", 1, true) == nil)
-            test.eq(#frame.tabs, 3)
-            test.eq(frame.tabs[3].action, "connection")
-            test.is_true(frame.tabs[3].x >= frame.tabs[2].x + frame.tabs[2].width)
-            test.eq(frame.tabs[1].id, "one")
-            test.eq(frame.tabs[2].id, "two")
+            test.eq(#frame.tabs, 7)
+            test.eq(frame.tabs[7].action, "connection")
+            test.is_true(frame.tabs[7].x >= frame.tabs[6].x + frame.tabs[6].width)
+            test.eq(frame.tabs[5].id, "one")
+            test.eq(frame.tabs[6].id, "two")
             test.eq(appearance.cycle(preferences, "theme").taskbar, "icons")
             test.eq(assert(appearance.decode({theme = "honey", background = "dots"})).taskbar, "labels")
             test.is_nil(appearance.decode({theme = "honey", background = "dots", taskbar = "invalid"}))
         end)
+        test.it("keeps all primary places and honest attention availability at both frame sizes", function()
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local shown = render.draw(model.new(size[1], size[2]), {}, {}, nil, nil, "", "Workspace Bee", appearance.defaults())
+                test.eq(#shown.rows, size[2])
+                for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), size[1]) end
+                local text = plain_text(shown.rows[1])
+                test.is_true(text:find("Sessions  Needs you —  Apps  Help", 1, true) ~= nil)
+                local actions: {[string]: boolean} = {}
+                for _, hit in ipairs(shown.tabs) do
+                    test.is_true(hit.x >= 1 and hit.x + hit.width - 1 <= size[1])
+                    if hit.action then actions[hit.action] = true end
+                end
+                test.is_true(actions.sessions and actions.attention and actions.apps and actions.help)
+            end
+        end)
         test.it("tells an empty desktop that F1 opens Start", function()
             local frame = render.draw(model.new(100, 24), {}, {}, nil, nil, "", "workspace", appearance.defaults())
-            test.is_true(frame.rows[1]:find("No applications open · F1 opens Start", 1, true) ~= nil)
+            test.is_true(frame.rows[1]:find("F1 Start", 1, true) ~= nil)
+            test.is_true(frame.rows[1]:find("No applications open", 1, true) ~= nil)
         end)
         test.it("renders status badges in taskbar labels and window chrome without changing titles", function()
             local scene = model.add(model.new(80, 24), "one", "one", "Application One", "界")
@@ -349,8 +420,8 @@ local function define_tests()
             test.is_true(text:find("Waiting on you", 1, true) ~= nil)
             test.is_true(text:find("Application One", 1, true) ~= nil)
             test.eq(model.display_title(scene.windows[1]), "Application One")
-            test.eq(frame.tabs[1].x, plain.tabs[1].x)
-            test.eq(frame.tabs[1].width, plain.tabs[1].width + 2)
+            test.eq(frame.tabs[5].x, plain.tabs[5].x)
+            test.eq(frame.tabs[5].width, plain.tabs[5].width + 2)
 
             local collapsed = model.collapse(scene, "one")
             local recap = render.draw(collapsed, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
@@ -366,8 +437,8 @@ local function define_tests()
                 local plain_mode = render.draw(item.scene, {"one"}, {}, nil, nil, "", "workspace", preferences)
                 local badge_mode = render.draw(item.scene, {"one"}, {}, nil, nil, "", "workspace", preferences, nil, false, nil, nil, nil, badges)
                 test.is_true(plain_text(table.concat(badge_mode.rows, "\n")):find(item.marker, 1, true) ~= nil)
-                test.eq(badge_mode.tabs[1].x, plain_mode.tabs[1].x)
-                test.eq(badge_mode.tabs[1].width, plain_mode.tabs[1].width + 2)
+                test.eq(badge_mode.tabs[5].x, plain_mode.tabs[5].x)
+                test.eq(badge_mode.tabs[5].width, plain_mode.tabs[5].width + 2)
             end
         end)
         test.it("keeps the active tab reachable when the taskbar overflows", function()

@@ -30,7 +30,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
     local storage_pending: desktop_storage.Pending? = nil
     local announced = false
     local subscriptions: {Channel<process.Message>} = {}
-    local host = ""
+    local host: string = ""
     -- Where host-owner requests go and whose answers are trusted: the host this
     -- supervisor spawned, or the node host manager that owns a leased host.
     local route = ""
@@ -220,7 +220,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
             advance("client_boot")
             if retained_owner then
                 local client_policies: {security.Policy} = {}
-                for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy", "bee.security.storage:client_storage_policy", "bee.security.desktop:client_node_defaults_call_policy", "bee.security.desktop:client_node_defaults_read_policy",
+                for _, name in ipairs({"bee.security.desktop:desktop_policy", "bee.security.desktop:client_spawn_policy", "bee.security.desktop:presenter_actor_policy", "bee.security.storage:client_storage_policy", "bee.security.desktop:client_node_defaults_call_policy", "bee.security.desktop:client_node_defaults_read_policy",
         "bee.security.desktop:client_workspace_catalog_call_policy", "bee.security.storage:workspace_catalog_read_policy"}) do
                     client_policies[#client_policies + 1] = assert(security.policy(name))
                 end
@@ -356,7 +356,7 @@ local function run_supervisor(client: string, workspace: unknown, database_resou
                 elseif selected.channel == lease_replaced and lease and sender == route and replacing_host
                     and type(data) == "table" and data.version == 1 and data.schema == 1
                     and data.workspace_id == workspace_id and contract.text(data.host, 160) then
-                    host = data.host
+                    host = assert(contract.text(data.host, 160))
                     assert(process.monitor(host))
                     replacing_host, host_deadline = false, nil
                     host_restarts = 0

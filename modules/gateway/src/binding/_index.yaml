@@ -11,6 +11,7 @@ entries:
   - uuid
   - json
   - security
+  - contract
   - system
   - crypto
   - base64
@@ -211,9 +212,44 @@ entries:
     - bee.gateway.security:installation_policy
     - bee.gateway.security:access_reference_policy
     - bee.gateway.security:access_policy_read_policy
-- name: installation_binding
+- name: publication
+  kind: library.lua
+  source: file://publication.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    gateway: bee.gateway.binding:gateway
+    hubpublish: bee.gateway.security:publish
+- name: publish_request
   kind: function.lua
-  source: file://installation_binding_method.lua
+  source: file://publish_request_method.lua
+  method: handle
+  imports:
+    publication: bee.gateway.binding:publication
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: publish_status
+  kind: function.lua
+  source: file://publish_status_method.lua
+  method: handle
+  imports:
+    publication: bee.gateway.binding:publication
+  security:
+    policies:
+    - bee.gateway.security:store_policy
+    - bee.gateway.security:database_ref_policy
+    - bee.gateway.security:execute_policy
+    - bee.gateway.security:publication_policy
+    - bee.gateway.security:access_reference_policy
+    - bee.gateway.security:access_policy_read_policy
+- name: effect_binding
+  kind: function.lua
+  source: file://effect_binding_method.lua
   method: handle
   imports:
     gateway: bee.gateway.binding:gateway
@@ -328,6 +364,7 @@ entries:
     - bee.gateway.security:database_ref_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:directory_projection_policy
 - name: search
   kind: function.lua
   source: file://search_method.lua
@@ -341,3 +378,4 @@ entries:
     - bee.gateway.security:database_ref_policy
     - bee.gateway.security:address_policy
     - bee.gateway.security:supervisor_policy
+    - bee.gateway.security:directory_projection_policy

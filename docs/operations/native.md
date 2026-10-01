@@ -27,13 +27,15 @@ registry state remain in the selected state directory.
 ## Build and check
 
 ```sh
-make native-tools
+make native-tools BEE_NATIVE_LOCAL=1
 make check WIPPY="$PWD/.wippy/bin/bee-wippy"
 make native-check
 make native-portable-check
 ```
 
 The source tools and executable use the same compiled component selection.
+`BEE_NATIVE_LOCAL=1` builds the checked-out native sources for development
+tools and executables.
 `make native-binary-check` launches the source-free executable with literal
 arguments, checks Settings recovery, the terminal, fullscreen aliases and
 presenter rejoin. The fixture reads only disposable stores; it uses the source-free
@@ -170,13 +172,8 @@ then switches the activation record. Failure retains the previous selection.
 This offline deployment command requires Bee to stop because the state directory
 has an exclusive process-lifetime lock.
 
-For a host with an explicit `bee/bee` dependency entry, Modules offers
-**Update Bee** while Bee is running. The current standalone lock topology lacks
-that entry and the pinned runtime does not expose its implicit application root
-to Lua inventory, so standalone Modules does not offer this action. See the
-[runtime gap](../development/runtime.md#standalone-live-update-gap).
-
-The explicit-root action updates the
+Modules offers **Update Bee** while Bee is running, including a standalone
+binary whose deployment root is selected by its embedded lock. The action updates the
 host `bee/bee` dependency root through the Hub plan, approval, publication,
 receipt and migration path, resolving the Bee-owned `bee/*` pack closure while
 preserving third-party roots. It does not stop the current owner; new registry
@@ -189,6 +186,11 @@ workflow. To roll Bee's packs back, select an earlier `bee/bee` version from
 Hub version history and confirm it as a root update. `bee gov revert OWNER`
 continues to restore governed overlay activations; it does not change Bee's
 deployment root.
+About reads live installed pack versions from the registry resolution and shows
+its original lock pins separately. Standalone root identity comes from the
+permission-gated resolution lock, so Modules offers **Update Bee** through the
+same approved Hub plan and apply operation used for other packages.
+
 
 Bee packs that need native support declare `native_requirements` on an
 `ns.definition` entry's metadata, for example

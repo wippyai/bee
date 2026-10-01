@@ -3,6 +3,7 @@ local tty = require("tty")
 local view = require("view")
 local frames = require("frames")
 local appearance = require("appearance")
+local interaction = require("interaction")
 local live_updates = require("live_updates")
 local build_info = require("build_info")
 local function define_tests()
@@ -38,7 +39,7 @@ local function define_tests()
             local rows: {string} = {}
             for index, row in ipairs(drawn.rows) do rows[index] = row:gsub("\27%[[0-9;]*m", "") end
             test.is_true(rows[23]:find("‹ 1–9/16 ›", 1, true) ~= nil)
-            test.is_true(rows[24]:find("Theme: Honey  Background: dots", 1, true) ~= nil)
+            test.is_true(rows[24]:find("Theme: Honey", 1, true) ~= nil)
             test.is_true(rows[24]:find("Tab switch", 1, true) ~= nil)
             test.is_true(rows[1]:find("Use node default (D)", 1, true) ~= nil)
             local pages = 0
@@ -46,7 +47,7 @@ local function define_tests()
             test.eq(pages, 1)
             for _, pane in ipairs({"theme", "background"}) do
                 for _, row in ipairs(view.draw(80, 24, appearance.defaults(), pane, 0).rows) do
-                    test.is_nil(row:find("…", 1, true))
+                    test.eq(tty.text.width(row), 80)
                 end
             end
             local about = view.draw(80, 12, appearance.defaults(), "about", 0)
@@ -92,8 +93,8 @@ local function define_tests()
         test.it("shows live pack versions, available updates and native compatibility in About", function()
             local status = live_updates.decode({ok = true, replayed = false, value = {
                 modules = {
-                    {component = "bee/bee", installed_version = "1.0.0", available_version = "2.0.0", update_available = true},
-                    {component = "bee/application", installed_version = "1.0.0", available_version = "2.0.0", update_available = true},
+                    {component = "bee/bee", installed_version = "1.0.0", locked_version = "0.9.0", available_version = "2.0.0", update_available = true},
+                    {component = "bee/application", installed_version = "1.0.0", locked_version = "0.9.0", available_version = "2.0.0", update_available = true},
                 },
                 bee_update = {installed_version = "1.0.0", available_version = "2.0.0", update_available = true,
                     needs_new_binary = true, reason = "needs a newer Bee binary: native/launch requires 2.0.0"},
@@ -105,13 +106,15 @@ local function define_tests()
             local info = build_info.info(identity and identity.native_module, identity and identity.native_version,
                 identity and identity.runtime_commit)
             local text = table.concat(view.draw(100, 24, appearance.defaults(), "about", 0, nil, status, false, info).rows, "\n")
-            test.is_nil(text:find("Binary version", 1, true))
+            test.is_nil((text:find("Binary version", 1, true)))
             test.is_true(text:find("Binary native version", 1, true) ~= nil)
             test.is_true(text:find("v1.2.3", 1, true) ~= nil)
             test.is_true(text:find("Binary runtime commit", 1, true) ~= nil)
             test.is_true(text:find("Live Bee packs", 1, true) ~= nil)
             test.is_true(text:find("bee/application", 1, true) ~= nil)
             test.is_true(text:find("installed 1.0.0", 1, true) ~= nil)
+            test.is_true(text:find("Lock pin", 1, true) ~= nil)
+            test.is_true(text:find("0.9.0", 1, true) ~= nil)
             test.is_true(text:find("Hub 2.0.0", 1, true) ~= nil)
             test.is_true(text:find("update available", 1, true) ~= nil)
             test.is_true(text:find("needs a newer Bee binary", 1, true) ~= nil)
@@ -161,6 +164,14 @@ local function define_tests()
             local has_edit_tab = false
             for _, hit in ipairs(tabs) do if hit.kind == "edit_mode" then has_edit_tab = true end end
             test.is_true(has_edit_tab)
+        end)
+        test.it("builds a decoder-valid single-line edit-mode confirmation", function()
+            local message = view.confirm_message("bee.ux_demo --for 1m")
+            test.is_nil((message:find("%c")))
+            local spec = interaction.spec({version = 1, request_id = "r-1", id = "bee.settings:edit",
+                instance_id = "settings", kind = "confirm", title = "Confirm edit mode",
+                message = message, accept = "Enable", initial = ""})
+            test.not_nil(spec)
         end)
     end)
 end

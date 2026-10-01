@@ -12,6 +12,20 @@ local capability_grants = require("capability_grants")
 local capability_catalog = require("capability_catalog")
 local sends = require("sends")
 
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function fresh(prefix: string): string
     local id, err = uuid.v7()
     if err or not id then error("uuid: " .. tostring(err)) end
@@ -34,7 +48,7 @@ local function define_tests()
             local proposed = assert(capability_grants.propose(catalog, owner, app_id, {grant}))
             local changes = registry.snapshot():changes()
             for _, entry in ipairs(proposed.policies) do
-                local created, create_error = changes:create(entry)
+                local created, create_error = changes:create(registry_input(entry))
                 if not created then error("create generated grant: " .. tostring(create_error)) end
             end
             local applied, apply_error = changes:apply()

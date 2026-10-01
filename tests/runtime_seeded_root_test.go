@@ -32,9 +32,14 @@ import (
 	"go.uber.org/zap"
 )
 
-type standaloneRootRunner struct{}
+type seededDependency struct {
+	Component string `json:"component"`
+	Version   string `json:"version"`
+}
 
-func (*standaloneRootRunner) Transition(_ context.Context, state regapi.State, changes regapi.ChangeSet, _ func(context.Context)) (regapi.State, error) {
+type beeStandaloneRootRunner struct{}
+
+func (*beeStandaloneRootRunner) Transition(_ context.Context, state regapi.State, changes regapi.ChangeSet, _ func(context.Context)) (regapi.State, error) {
 	entries := topology.NewStateMap(state)
 	for _, change := range changes {
 		if change.Kind == regapi.EntryDelete {
@@ -46,13 +51,13 @@ func (*standaloneRootRunner) Transition(_ context.Context, state regapi.State, c
 	return topology.StateMapToSlice(entries), nil
 }
 
-func TestSeededStandaloneRootVisibleInLuaSnapshot(t *testing.T) {
+func TestBeeSeededStandaloneRootVisibleInLuaSnapshot(t *testing.T) {
 	bundle := Bundle{Root: "acme/app"}
 	for _, name := range []string{"app", "worker"} {
 		entries := []wapp.Entry{{ID: wapp.NewID("acme."+name, "definition"), Kind: regapi.NamespaceDefinition}}
 		if name == "app" {
 			entries = append(entries, wapp.Entry{ID: wapp.NewID("acme.app", "worker"), Kind: regapi.NamespaceDependency,
-				Data: map[string]any{"component": "acme/worker", "version": "1.0.0"}})
+				Data: seededDependency{Component: "acme/worker", Version: "1.0.0"}})
 		}
 		var data bytes.Buffer
 		require.NoError(t, wapp.NewWriter().PackEntries(wapp.Metadata{"namespace": "acme." + name, "name": name, "version": "1.0.0"}, entries, &data))
@@ -81,7 +86,7 @@ func TestSeededStandaloneRootVisibleInLuaSnapshot(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NoError(t, handler.PrepareRestore(ctx, history))
-	reg := registryimpl.NewRegistry(history, &standaloneRootRunner{},
+	reg := registryimpl.NewRegistry(history, &beeStandaloneRootRunner{},
 		topology.NewStateBuilder(zap.NewNop(), resolver), resolver, zap.NewNop(),
 		registryimpl.WithKindDirective(regapi.NamespaceDependency,
 			expansion.NewDependencyDirective(handler.Expand).WithResolutionTransition(handler.ReconcileResolution)))
@@ -90,7 +95,7 @@ func TestSeededStandaloneRootVisibleInLuaSnapshot(t *testing.T) {
 	baseline := regapi.State{
 		{ID: regapi.NewID("acme.app", "definition"), Kind: regapi.NamespaceDefinition, Registry: regapi.EntryMetadata{Owner: "acme/app"}},
 		{ID: regapi.NewID("acme.app", "worker"), Kind: regapi.NamespaceDependency, Registry: regapi.EntryMetadata{Owner: "acme/app", Root: true},
-			Data: payload.New(map[string]any{"component": "acme/worker", "version": "1.0.0"})},
+			Data: payload.New(seededDependency{Component: "acme/worker", Version: "1.0.0"})},
 		{ID: regapi.NewID("acme.worker", "definition"), Kind: regapi.NamespaceDefinition, Registry: regapi.EntryMetadata{Owner: "acme/worker"}},
 	}
 	require.NoError(t, reg.LoadState(ctx, baseline, version.FromParent(nil, regapi.RootVersion)))
@@ -111,16 +116,16 @@ func TestSeededStandaloneRootVisibleInLuaSnapshot(t *testing.T) {
         local first = assert(snapshot:state())
         assert(#first.resolution.roots == 1)
 
-        assert(first.resolution.deployment ~= nil, "lock-selected standalone root is absent from Lua inventory")
-        assert(first.resolution.deployment.root == "acme/app")
-        assert(first.resolution.deployment.modules[1].name == "acme/app")
-        assert(first.resolution.deployment.modules[1].version == "1.0.0")
-        assert(first.resolution.deployment.modules[1].digest == first.resolution.modules[1].digest)
-        first.resolution.deployment.root = "forged/root"
-        first.resolution.deployment.modules[1].version = "999.0.0"
+        assert(first.resolution.lock ~= nil, "lock-selected standalone root is absent from Lua inventory")
+        assert(first.resolution.lock.root_module == "acme/app")
+        assert(first.resolution.lock.modules[1].name == "acme/app")
+        assert(first.resolution.lock.modules[1].version == "1.0.0")
+        assert(first.resolution.lock.modules[1].digest == first.resolution.modules[1].digest)
+        first.resolution.lock.root_module = "forged/root"
+        first.resolution.lock.modules[1].version = "999.0.0"
         local second = assert(snapshot:state())
-        assert(second.resolution.deployment.root == "acme/app")
-        assert(second.resolution.deployment.modules[1].version == "1.0.0")
+        assert(second.resolution.lock.root_module == "acme/app")
+        assert(second.resolution.lock.modules[1].version == "1.0.0")
     `))
 	require.Equal(t, "acme/app", captured.Registry.Resolution.Deployment.Root)
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -196,7 +197,7 @@ entries:
 	if err := os.WriteFile(filepath.Join(root, "wippy.lock"), []byte(lock), 0600); err != nil {
 		return fmt.Errorf("write runtime lock: %w", err)
 	}
-config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/capability: ./modules/capability\n    bee/gov: ./modules/gov\n    bee/hive: ./modules/hive\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
+	config := "version: '1.0'\nshutdown:\n  timeout: 2s\nworkspace:\n  replacements:\n    bee/approvals: ./modules/approvals\n    bee/capability: ./modules/capability\n    bee/gov: ./modules/gov\n    bee/hive: ./modules/hive\n    bee/hub: ./modules/hub\n    bee/persist: ./modules/persist\n    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n"
 	if err := os.WriteFile(filepath.Join(root, ".wippy.yaml"), []byte(config), 0600); err != nil {
 		return fmt.Errorf("write bounded shutdown config: %w", err)
 	}
@@ -230,16 +231,36 @@ func sqlite(root, query string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+var declaredMigration = regexp.MustCompile(`\{id = (\d+), name = "([a-z_]+)"`)
+
+// declaredMigrationNames reads the migration names in id order from the governance schema module.
+func declaredMigrationNames() ([]string, error) {
+	source, err := os.ReadFile(filepath.Join("modules", "gov", "src", "migrations", "schema.lua"))
+	if err != nil {
+		return nil, fmt.Errorf("read declared governance migrations: %w", err)
+	}
+	var names []string
+	for _, match := range declaredMigration.FindAllStringSubmatch(string(source), -1) {
+		if match[1] != fmt.Sprint(len(names)+1) {
+			return nil, fmt.Errorf("declared governance migration ids are not contiguous at %s", match[0])
+		}
+		names = append(names, match[2])
+	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("no declared governance migrations found")
+	}
+	return names, nil
+}
+
 func migrationLedger(root string) (string, error) {
 	ledger, err := sqlite(root, "SELECT id || '|' || name || '|' || checksum || '|' || applied_at FROM bee_governance_migrations ORDER BY id;")
 	if err != nil {
 		return "", err
 	}
-	expected := []string{"governance_workspace_staging", "governance_received_plans",
-		"governance_plan_approval_proposal", "governance_plan_approval_incarnation",
-		"governance_activation_intents", "governance_component_slots", "governance_activation_migrations",
-		"governance_activation_application_admission", "governance_workspace_append",
-		"governance_activation_grant_reuse", "governance_activation_rollback"}
+	expected, err := declaredMigrationNames()
+	if err != nil {
+		return "", err
+	}
 	rows := strings.Split(ledger, "\n")
 	if len(rows) != len(expected) {
 		return "", fmt.Errorf("unexpected governance migration ledger: %q", ledger)

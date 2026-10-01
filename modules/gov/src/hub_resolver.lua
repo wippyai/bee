@@ -72,7 +72,7 @@ local function apply_preview(base: {Entry}, preview: RegistryPlan): ({Entry}?, s
     for _, raw in ipairs(base) do
         local entry, entry_error = copy_entry(raw)
         if not entry then return nil, entry_error end
-        local id = entry.id :: string
+        local id = entry.id
         if by_id[id] then return nil, "registry state contains duplicate entry " .. id end
         by_id[id] = entry
     end
@@ -85,7 +85,7 @@ local function apply_preview(base: {Entry}, preview: RegistryPlan): ({Entry}?, s
         local entry_error: string? = nil
         if operation then entry, entry_error = copy_entry(operation.entry) end
         if not entry then return nil, entry_error or "registry preview contains an invalid operation" end
-        local id = entry.id :: string
+        local id = entry.id
         if kind == "delete" or kind == "entry.delete" then
             by_id[id] = nil
         elseif kind == "create" or kind == "update" or kind == "entry.create" or kind == "entry.update" then
@@ -97,7 +97,7 @@ local function apply_preview(base: {Entry}, preview: RegistryPlan): ({Entry}?, s
     local result: {Entry} = {}
     for _, entry in pairs(by_id) do result[#result + 1] = entry end
     table.sort(result, function(left: Entry, right: Entry): boolean
-        return (left.id :: string) < (right.id :: string)
+        return (left.id) < (right.id)
     end)
     return result, nil
 end
@@ -179,7 +179,7 @@ local function references(entry: Entry): ({string}?, string?)
     local function add_all(value: unknown, depth: integer): string?
         if depth > 12 then return "entry reference structure nests too deeply" end
         if type(value) ~= "table" then add(value); return nil end
-        for key, child in pairs(value :: table) do
+        for key, child in pairs(value) do
             if type(key) ~= "string" and type(key) ~= "number" then return "entry reference structure is not encodable" end
             local problem = add_all(child, depth + 1)
             if problem then return problem end
@@ -192,7 +192,7 @@ local function references(entry: Entry): ({string}?, string?)
             if key and (scalar[key] or key:match("_ref$") or key:match("_env$")) then add(value) end
             return nil
         end
-        for child_key, child in pairs(value :: table) do
+        for child_key, child in pairs(value) do
             if type(child_key) == "string" then
                 local problem: string? = nil
                 if collection[child_key] then problem = add_all(child, depth + 1)
@@ -267,7 +267,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
         result_targets[#result_targets + 1] = target_entry
         local destination = object(final[target_entry])
         if not destination then return nil, "requirement target entry is absent: " .. target_entry end
-        local bound, bound_error = path_value(destination :: Entry, target.path)
+        local bound, bound_error = path_value(destination, target.path)
         local value = bounds.id(bound)
         if not value then return nil, bound_error or "requirement target has no selected binding" end
         if selected and selected ~= value then return nil, "requirement targets disagree on the selected binding" end
@@ -305,13 +305,13 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
     evidence: preflight.HostEvidence): (preflight.Context?, string?)
     if not bounds.id(policy.node_id) or not sha(policy.policy_digest) then return nil, "host policy identity is invalid" end
     for _, field in ipairs({"packages", "namespaces", "kinds", "databases", "grants", "modules", "applied"}) do
-        if type((policy :: Object)[field]) ~= "table" then return nil, "host policy is missing " .. field end
+        if type((policy)[field]) ~= "table" then return nil, "host policy is missing " .. field end
     end
     local bindings: DatabaseBindings? = nil
     if policy.database_bindings ~= nil then
         if type(policy.database_bindings) ~= "table" then return nil, "host policy database bindings are malformed" end
         bindings = {}
-        for target, raw in pairs(policy.database_bindings :: table) do
+        for target, raw in pairs(policy.database_bindings) do
             local item = object(raw)
             local database_id = item and bounds.id(item.database_id) or nil
             local prefix: string? = nil
@@ -323,7 +323,7 @@ local function policy_context(policy: Policy, captured: Captured, base_digest: s
             end
             if not bounds.id(target) or not item or bounds.fields(item, {"database_id", "table_prefix"})
                 or not database_id then return nil, "host policy database binding is malformed" end
-            bindings[target :: string] = {database_id = database_id, table_prefix = prefix}
+            bindings[target] = {database_id = database_id, table_prefix = prefix}
         end
     end
     local context: preflight.Context = {node_id = policy.node_id, registry_revision = captured.revision, registry_digest = base_digest,
@@ -377,13 +377,13 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     for _, entry in ipairs(final) do
         local package = owner(entry)
         if not package then return nil, nil, "registry preview entry has no registry-owned module" end
-        final_by_id[entry.id :: string] = entry
+        final_by_id[entry.id] = entry
         if selected[package] and entry.kind ~= "ns.dependency" then
             local clean: Entry = {}
             for field, value in pairs(entry) do if field ~= "registry" then clean[field] = value end end
             flattened[#flattened + 1] = clean
-            local bucket = package_entries[package]
-            if not bucket then bucket = {}; package_entries[package] = bucket end
+            local bucket: {Entry} = package_entries[package] or {}
+            package_entries[package] = bucket
             bucket[#bucket + 1] = entry
         end
     end
@@ -404,8 +404,11 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         local module = modules[package]
         local namespaces: {string} = {}
         local namespace_set: {[string]: boolean} = {}
-        for _, entry in ipairs(package_entries[package] or {}) do
-            local namespace = (entry.id :: string):match("^([^:]+):")
+        local entries: {Entry} = package_entries[package] or {}
+        for _, raw_entry in ipairs(entries) do
+            local entry, entry_error = copy_entry(raw_entry)
+            if not entry then return nil, nil, entry_error end
+            local namespace = assert(bounds.id(entry.id)):match("^([^:]+):")
             if namespace and not namespace_set[namespace] then
                 namespace_set[namespace], owned_namespaces[namespace] = true, true
                 namespaces[#namespaces + 1] = namespace
@@ -444,12 +447,12 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
 
     local current: {[string]: preflight.Entry} = {}
     for _, entry in ipairs(captured.entries) do
-        if not (captured.overlay_ids and captured.overlay_ids[entry.id :: string]) then
+        if not (captured.overlay_ids and captured.overlay_ids[entry.id]) then
             local package = owner(entry)
             if package == nil then return nil, nil, "captured registry entry has no registry-owned module" end
             local measured, measured_error = measured_entry(entry, package)
             if not measured then return nil, nil, measured_error end
-            current[entry.id :: string] = measured
+            current[entry.id] = measured
         end
     end
 
@@ -477,7 +480,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
     end
     if policy.database_bindings ~= nil then
         if type(policy.database_bindings) ~= "table" then return nil, nil, "host policy database bindings are malformed" end
-        for _, raw in pairs(policy.database_bindings :: table) do
+        for _, raw in pairs(policy.database_bindings) do
             local item = object(raw)
             local database_id = item and bounds.id(item.database_id) or nil
             if database_id then relevant_ids[database_id] = true end
@@ -508,7 +511,7 @@ function M.resolve_with(deps: Deps, spec_raw: unknown): (preflight.Candidate?, p
         if not projection then return nil, nil, projection_error or "application admission projection is absent" end
         evidence.application_admission = {kind = "measured", value = projection}
     end
-    local context, context_error = policy_context(policy, captured, base_digest :: string, current, kernel, evidence)
+    local context, context_error = policy_context(policy, captured, base_digest, current, kernel, evidence)
     if not context then return nil, nil, context_error end
     return {destination_node = destination, source_node = source, base_revision = captured.revision,
         base_digest = base_digest, artifacts = artifacts, entries = candidate_entries,
@@ -551,10 +554,13 @@ function M.new(config: Config): Resolver
         local captured: Captured = {revision = math.floor(revision), entries = state.entries,
             resolution = state.resolution, overlay_ids = overlay_ids, preview = function(root_entry: Entry): (RegistryPlan?, string?)
                 local changes = snapshot:changes()
-                local existing = snapshot:get(root_entry.id :: string)
+                local id, kind = bounds.id(root_entry.id), bounds.id(root_entry.kind)
+                if not id or not kind then return nil, "registry state contains an invalid entry" end
+                local input = {id = id, kind = kind, data = root_entry.data, meta = object(root_entry.meta), dependency_root = root_entry.dependency_root == true}
+                local existing = snapshot:get(id)
                 local created, create_error
-                if existing then created, create_error = changes:update(root_entry)
-                else created, create_error = changes:create(root_entry) end
+                if existing then created, create_error = changes:update(input)
+                else created, create_error = changes:create(input) end
                 if not created then return nil, tostring(create_error or "stage Hub dependency root") end
                 local plan, plan_error = changes:plan()
                 if not plan then return nil, tostring(plan_error or "plan Hub dependency root") end

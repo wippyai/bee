@@ -121,6 +121,8 @@ rollback results stay in the receipt for review and recovery; no automatic
 retry is scheduled.
 
 Modules presents the same read, plan, review, confirmation and receipt flow.
+Replanning clears the previous measured plan before dispatch, so confirmation
+becomes available only after the fresh plan reply arrives.
 Its package contents browser is read-only and binds resource reads to the
 selected artifact digest.
 
@@ -160,14 +162,53 @@ approved digest through the Hub facade with management authority added to that
 one call; a changed registry base fails with `STALE` and needs a new request.
 `approved` means the apply outcome is unknown; the next poll repeats the same
 digest-bound apply, which replays its recorded receipt. The requesting attempt
-applies the request: the approval notice wakes its `thread_wait`, and a request
-whose attempt ended before polling stays unapplied.
+applies the request when it polls `install_status`, and a request whose attempt
+ended before polling stays unapplied.
 
 The host grants these tools per launch policy (`gateway_tools`) and links their
 MCP policy through the gateway's `target_tool_install_policy`; the shipped
 policy admits filing and polling requests and never applying them. The shipped
 agent launch policies include them. The configuration link
 `target_install_configuration` fails closed when absent.
+
+## Agent publication requests
+
+An agent publishes a package to the Hub only through a person-approved grant:
+
+```json
+{"name": "publish_request", "arguments": {"component": "bee/probe", "version": "0.0.1-probe.1", "visibility": "private", "source": "/home/person/work/probe"}}
+{"name": "publish_status", "arguments": {"request_id": "<request_id>"}}
+```
+
+The worker admits the locked source tree against the configured source roots,
+seals it once into a `.wapp` file in worker-owned staging and preflights that
+file without uploading. It files one approval, bound to the agent's thread and
+attempt, under the approval policy the host configuration `bee:module_publication`
+names (`module-publication`, decided in Approvals). The approval shows the
+module, version, pack digest, visibility, organization and source tree; the plan
+digest binds all of them. Filing changes nothing on the Hub and returns
+`request_id` and `status: pending`.
+
+`publish_status` only reports `pending`, `refused`, `approved` (the owner worker
+is uploading), `applied` or `failed`; polling never uploads. Once the person
+approves, the approval commit wakes the publication effect worker, which consumes
+the decision once and uploads exactly the sealed file through the Hub facade
+with management authority added to that one call; the file is re-measured first
+and changed bytes refuse the upload. The Hub-reported digest must equal the
+approved pack digest: a version already on the Hub with the same digest replays
+its receipt, while other bytes fail with both digests named. The receipt records
+the pack digest beside the Hub digest under the plan digest. The publishing
+credential never reaches the agent: the uploader CLI reads the person's
+host-confined credential, the command carries no secret, and receipts hold
+digests only.
+
+The person selects the publishing organization, uploader executable, admitted
+source roots and pack staging root once in the host configuration
+`bee:hub_publication`; every publication must belong to that organization and
+an absent link fails closed. The uploader runs under the host-selected executor
+`bee.hub:publish_executor`, which needs a POSIX sh with sha256sum. The host
+grants the tools per launch policy and links their MCP policy through the
+gateway's `target_tool_hub_publish_policy`.
 
 ## Limits and checks
 

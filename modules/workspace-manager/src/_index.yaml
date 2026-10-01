@@ -45,6 +45,7 @@ entries:
     caller: bee.application:caller
     bounds: bee.protocol:bounds
     contract: bee.protocol:application
+    names: bee.application:names
 - name: creation
   kind: library.lua
   source: file://creation.lua

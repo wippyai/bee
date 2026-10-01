@@ -58,7 +58,7 @@ async function rpc({token=input.token, host, origin, action='container-action', 
  }
  check((await rpc()).body.result?.protocolVersion,'initialize failed');
  const tools = (await rpc({method:'tools/list'})).body.result?.tools?.map(t=>t.name).sort();
- check(JSON.stringify(tools)===JSON.stringify(['thread_read','thread_wait']),'scope changed');
+ check(JSON.stringify(tools)===JSON.stringify(['call_tool','capabilities','session','thread_read']),'scope changed');
  const page = await rpc({method:'tools/call',params:{name:'thread_read',arguments:{cursor:0}}});
  check(page.status===200 && JSON.parse(page.body.result.content[0].text).ok===true,'thread read refused');
  check((await rpc({token:''})).status===401,'missing token accepted');
@@ -88,9 +88,9 @@ async function rpc({token=input.token, host, origin, action='container-action', 
  const event={method:'tools/call',params:{name:'hook',arguments:{event:'SessionStart',session_id:'container-mcp-session',source:'startup'},
   _meta:{threadId:'container-mcp-session',progressToken:1}}};
  const mcpFirst=await hookMcp(event),mcpReplay=await hookMcp(event);
- const receipt=mcpFirst.body.result?.content?.[0]?.text;
- check(mcpFirst.status===200 && receipt?.startsWith('queued '),'MCP hook was not queued');
- check(mcpReplay.status===200 && mcpReplay.body.result?.content?.[0]?.text===receipt,'MCP hook replay duplicated its occurrence');
+ const receipt=mcpFirst.body.result?.structuredContent;
+ check(mcpFirst.status===200 && receipt?.status==='queued' && receipt?.event_id && mcpFirst.body.result?.content?.length===0,'MCP hook was not queued with empty stdout');
+ check(mcpReplay.status===200 && mcpReplay.body.result?.structuredContent?.event_id===receipt.event_id,'MCP hook replay duplicated its occurrence');
 })().catch(e=>{console.error(e.message);process.exitCode=1;});
 `
 

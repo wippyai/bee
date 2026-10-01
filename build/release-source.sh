@@ -38,6 +38,8 @@ printf '%s\n' "$version" | grep -Eq "^$number\\.$number\\.$number(-$identifier(\
 mkdir -p "$destination"
 cp -pR "$root/src" "$destination/src"
 cp -pR "$root/modules" "$destination/modules"
+mkdir -p "$destination/.wippy"
+python3 "$root/build/dependency_artifacts.py" "$root/wippy.lock" "$root/.wippy/vendor" "$destination/.wippy/vendor"
 cp -p "$root/wippy.yaml" "$root/.wippy.yaml" "$destination/"
 
 # Rewrites FILE through an awk program with the release version and keeps

@@ -1,8 +1,7 @@
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
-local function handle(value: unknown): {[string]: unknown}
-    local request, request_error = configure_protocol.decode_request(value)
-    if not request then return {ok = false, error = request_error or "invalid configuration request"} end
+local universal = require("universal")
+local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref ~= nil or request.provider ~= nil then
         return {ok = false, error = "muse accepts no provider configuration"}
     end
@@ -17,7 +16,7 @@ local function handle(value: unknown): {[string]: unknown}
             local token_file: configure_protocol.Configuration?
             local token_error: string?
             token_file, hook_token_source, token_error = configuration.hook_token_file(request.home_directory, request.attempt_id,
-                request.gateway.hook_token_environment :: string)
+                assert(request.gateway.hook_token_environment))
             if not token_file then return {ok = false, error = tostring(token_error)} end
             files[#files + 1] = token_file
         end
@@ -27,4 +26,4 @@ local function handle(value: unknown): {[string]: unknown}
     end
     return {ok = true, delivery = {arguments = {}, files = files}}
 end
-return {handle = handle}
+return {handle = universal.configure("muse", {muse = handle})}

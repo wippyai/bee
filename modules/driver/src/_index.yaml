@@ -17,8 +17,54 @@ entries:
   source: file://types.lua
   imports:
     bounds: bee.threads.records:bounds
+    login_evidence: bee.driver:login_evidence
     events: bee.driver.kit:events
     values: bee.threads.records:values
+- name: login_evidence
+  kind: library.lua
+  source: file://login_evidence.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: descriptor
+  kind: library.lua
+  source: file://descriptor.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    turn_budget: bee.driver:turn_budget
+    login_evidence: bee.driver:login_evidence
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    login_evidence: bee.driver:login_evidence
+- name: codec_registry
+  kind: library.lua
+  source: file://codec_registry.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    normalizer: bee.driver.kit:normalize
+    claude_stream_json: bee.driver.codec:claude_stream_json
+    codex_jsonl: bee.driver.codec:codex_jsonl
+    opencode_json_events: bee.driver.codec:opencode_json_events
+    agy_stream_json: bee.driver.codec:agy_stream_json
+    grok_streaming_json: bee.driver.codec:grok_streaming_json
+    muse_record_jsonl: bee.driver.codec:muse_record_jsonl
+- name: universal
+  kind: library.lua
+  source: file://universal.lua
+  modules: [registry]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    descriptor: bee.driver:descriptor
+    configuration: bee.driver:configuration
+    turn_budget: bee.driver:turn_budget
+    types: bee.driver:types
+    locate: bee.driver:locate
+    codec_registry: bee.driver:codec_registry
+    normalizer: bee.driver.kit:normalize
 - name: instructions
   kind: library.lua
   source: file://instructions.lua
@@ -37,14 +83,16 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     profile: bee.driver:profile
+    descriptor: bee.driver:descriptor
     types: bee.driver:types
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash, funcs, security]
+  modules: [hash, funcs, security, registry]
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+    driver_resolver: bee.driver:resolver
     types: bee.driver:types
     instructions: bee.driver:instructions
 - name: preferences
@@ -70,3 +118,8 @@ entries:
     description: Turn one protocol envelope into observations and, when the protocol says so, a terminal report
   - name: configure
     description: Return argv arguments and protected private-home files from host-selected configuration inputs
+- name: locate_facet
+  kind: contract.definition
+  methods:
+  - name: locate
+    description: Locate an admitted external driver profile from host-probed executable, login evidence, and platform evidence

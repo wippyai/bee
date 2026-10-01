@@ -12,6 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 with workspace.fixture_workspace(unit_tests=False) as folder:
     shutil.copytree(ROOT / "tests/fixtures/managed_window_app", folder / "src/tests/managed_window_app")
+    sessions_index = folder / "modules/sessions/src/binding/_index.yaml"
+    sessions_document = yaml.safe_load(sessions_index.read_text())
+    for entry in sessions_document["entries"]:
+        if entry["name"] == "catalog_binding":
+            entry["contracts"][0]["default"] = False
+    sessions_index.write_text(yaml.safe_dump(sessions_document, sort_keys=False))
     host = folder / "modules/harness/src/_index.yaml"
     document = yaml.safe_load(host.read_text())
     activation = next(entry for entry in document["entries"] if entry["name"] == "harness_activation")
@@ -35,6 +41,10 @@ with workspace.fixture_workspace(unit_tests=False) as folder:
         '    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,\n',
         '    if request.workspace_id == string.rep("a", 32) then time.sleep("1s") end\n'
         '    return {plan = plan, request = carrier_request, requester = requester, request_id = request.request_id,\n'))
+    security_index = folder / "modules/harness/src/security/_index.yaml"
+    security_index.write_text(security_index.read_text().replace(
+        'resource == "bee.sessions.binding:catalog_binding"',
+        'resource == "bee.sessions.binding:catalog_binding" || resource == "bee.managed.window.fixture:catalog_owner"'))
     environment = workspace.database_environment(folder)
     # The product composition is linted by `make lint`; this proof lints its fixture
     # and the harness entries it rewrites.

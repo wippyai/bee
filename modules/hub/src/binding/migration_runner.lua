@@ -14,6 +14,7 @@ local HUB_PRIVATE_POLICIES: {string} = {
     "bee.hub.security:execution_policy", "bee.hub.security:publisher_policy", "bee.hub.security:dependency_policy",
     "bee.hub.security:receipt_policy", "bee.hub.security:worker_policy", "bee.hub.security:worker_host_policy",
     "bee.hub.security:worker_name_policy", "bee.hub.security:worker_reply_policy", "bee.hub.security:migration_context_policy",
+    "bee.hub.security:publish_exec_policy",
 }
 
 local function registry_id(value: unknown): string?
@@ -32,7 +33,7 @@ local function binding_for(target: string, bindings: Bindings?): (Binding?, stri
     if bindings == nil then return {database_id = target}, nil end
     local raw: unknown = bindings[target]
     if type(raw) ~= "table" then return nil, "migration database binding is missing for " .. target end
-    local value = raw :: {[string]: unknown}
+    local value = raw
     for key in pairs(value) do
         if key ~= "database_id" and key ~= "table_prefix" then
             return nil, "migration database binding has unknown field " .. tostring(key)
@@ -163,7 +164,7 @@ function M.source(entries: {migrations.Entry}, private_policies: {string}?, bind
         if type(raw) ~= "table" or type(raw.allowed_ids) ~= "table" then error("migration IDs required") end
         local ids: {string} = {}
         local seen: {[string]: boolean} = {}
-        for _, id in ipairs(raw.allowed_ids :: {unknown}) do
+        for _, id in ipairs(raw.allowed_ids) do
             if type(id) ~= "string" then error("invalid migration ID") end
             local entry = by_id[id]
             if not entry or entry.meta.target_db ~= target or seen[id] then error("migration is outside the captured database selection") end

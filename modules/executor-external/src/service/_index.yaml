@@ -1,0 +1,13 @@
+version: '1.0'
+namespace: bee.executor.external.service
+entries:
+- name: turn
+  kind: library.lua
+  source: file://turn.lua
+  imports:
+    bounds: bee.threads.records:bounds
+- name: stream
+  kind: library.lua
+  source: file://stream.lua
+  imports:
+    stream_json: bee.driver.transport:stream_json

@@ -40,7 +40,7 @@ local function define_tests()
             local template = output.files[1]
             local before = template.content
             test.eq(template.revision, "bee.agy-mcp@2")
-            test.is_nil(before:find("BEE_GATEWAY_TOKEN", 1, true))
+            test.is_nil((before:find("BEE_GATEWAY_TOKEN", 1, true)))
             local secret = 'fixture-"quoted"-token'
             local content, content_error = placement_configuration.render(template, {BEE_GATEWAY_TOKEN = secret},
                 {endpoint = selected.endpoint, tools = selected.tools, hooks = {}, destination = selected.token_environment})
@@ -48,7 +48,7 @@ local function define_tests()
             local actual = json.decode(content) :: {mcpServers: {bee: {headers: {Authorization: string}}}}
             test.eq(actual.mcpServers.bee.headers.Authorization, "Bearer " .. secret)
             test.eq(template.content, before)
-            test.is_nil(before:find(secret, 1, true))
+            test.is_nil((before:find(secret, 1, true)))
             test.is_nil(placement_configuration.render(template, {}, {endpoint = selected.endpoint, tools = selected.tools, hooks = {}, destination = selected.token_environment}))
             test.is_nil(placement_configuration.render(template, {BEE_GATEWAY_TOKEN = secret}, nil))
             test.is_nil(placement_configuration.render(template, {BEE_GATEWAY_TOKEN = secret}, {endpoint = selected.endpoint, tools = selected.tools, hooks = {}, destination = "OTHER_TOKEN"}))

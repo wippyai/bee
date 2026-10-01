@@ -38,7 +38,7 @@ function M.revert(owner_raw: unknown): (string?, string?)
     if not listed.ok then return nil, listed.message or "list activation slots" end
     if type(slots) ~= "table" then return nil, "activation slot list is malformed" end
     local workspace_id: string? = nil
-    for _, raw in ipairs(slots :: {unknown}) do
+    for _, raw in ipairs(slots) do
         local slot = bounds.object(raw)
         if not slot then return nil, "activation slot is malformed" end
         if slot.overlay_owner == overlay_owner then

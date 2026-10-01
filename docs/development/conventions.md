@@ -61,7 +61,7 @@ their entries keep empty underlays the host fills.
 
 `bee.harness.host:environment` is not composed: Bee's native host component
 registers it at boot (`native/launch/component.go`) with the `home`, `cwd`
-and `self` facts plus executable discovery, so module defaults may reference
+and `self` facts, environment-name presence metadata, and executable discovery, so module defaults may reference
 it in every composition, including isolated module tests.
 
 A module-owned `fs.directory` with a project-relative path must set
@@ -183,4 +183,6 @@ against the manifest without modifying repository module files. Documentation
 edits need link/source consistency checks and an update to the relevant current
 contract; avoid machine-specific paths, credentials and local stores.
 
-Run `make fixture-lint` to type-check the disposable test composition without running tests.
+`make lint` and `make fixture-lint` enable strict-any: native and decoded values
+must be narrowed before use. `make fixture-lint` checks the disposable test
+composition without running tests.

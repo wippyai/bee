@@ -42,9 +42,19 @@ configuration, other owners or package resources. This covers local development
 versions that have no matching Hub artifact.
 See [the API and acceptance status](../../docs/guides/hub.md) for request examples.
 
-Management operations are `plan`, `apply` and `status`. Planning preserves other
+Management operations are `plan`, `apply` and `status`, plus publication
+operations `publish_request` and `publish_apply` for person-approved Hub
+uploads (see the publication section of the Hub guide).
+Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. Exact dependency pins do not list release history; ranges page lazily.
+Standalone inventory identifies the deployment root from
+`snapshot:state().resolution.lock.root_module`, under the Hub execution scope's
+exact `registry.resolution.get` grant. The live `resolution.modules` supplies
+installed versions; `resolution.lock.modules` supplies the unchanged shipped
+pins shown separately in About. Before the first update, the implicit root uses
+`bee:deployment`; subsequent approved updates retain that explicit root.
+
 For self-update, the request updates the installed host `bee/bee` root and
 resolves its `bee/*` closure, preserving the root's typed parameters and every
 third-party root. Bee pack components cannot be installed, updated or removed

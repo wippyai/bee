@@ -60,6 +60,14 @@ outcome is recorded, without reading the approvals table from the gateway store.
 Hub retains the complete receipt, including migration details; the approval
 owner stores only the bounded state and message needed for status.
 
+The host-authorized Hub publication worker reads its bounded queue through
+`bee.approvals.binding:publication_effects`, which returns approved publication
+requests whose effect result is not complete, and records its bounded outcome
+through `bee.approvals.binding:complete_publication_effect` under the same
+requester, digest and effect-key checks. A committed decision wakes the
+publication worker, so an approved publication uploads without any status
+poll.
+
 Approver policies are host-owned under `bee:approver_policies`:
 each names its approvers and the longest lifetime a request may ask for. An
 approver needs both the `bee.approvals.decide` action on the workspace and a
@@ -75,3 +83,5 @@ ceiling names only the feed, read and replica operations.
 | `persist/` | Approval request, history, inbox, incarnation and thread-projection outbox storage |
 | `migrations/` | Immutable approval schema ledger |
 | `service/` | Authority and outbox worker processes |
+
+Approval views expose `requesting_session` when the authenticated requester is a SessionRef. The read-only `bee.approvals.binding:attention_count` accepts `{workspace_id}` and returns `{ok=true,value={count=N}}` for pending, unexpired requests. It requires the exact `bee.approvals.attention` grant for that workspace and provides neither request details nor decision authority.

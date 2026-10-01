@@ -1,0 +1,63 @@
+-- SPDX-License-Identifier: MIT
+local process = require("process")
+local bounds = require("bounds")
+local image = require("image")
+local channel = require("channel")
+local environment = require("environment")
+local M = {}
+function M.main()
+    local requests = assert(process.listen(image.REQUEST, {message = true}))
+    assert(process.registry.register(image.OWNER))
+    local events = assert(process.events())
+    local stopping = false
+    while true do
+        local selected = channel.select({requests:case_receive(), events:case_receive()})
+        if not selected.ok then break end
+        if selected.channel == events then
+            if selected.value.kind == process.event.CANCEL then break end
+        else
+            local message = selected.value
+            local value = bounds.object(message:payload():data())
+            local id = value and bounds.id(value.request_id) or nil
+            if value and value.version == 1 and id and id:match("^[0-9a-f-]+$")
+                and not bounds.fields(value, {"version", "request_id"}) then
+                local sender = tostring(message:from())
+                local profile, reason, recipient, operation, workspace = image.authorized_request(id, sender)
+                local digest, route, failure = nil, nil, reason
+                if profile then
+                    local completed = channel.new(1)
+                    local cancel = channel.new(1)
+                    local built_image: string? = nil
+                    local built_route: string? = nil
+                    local built_error: string? = nil
+                    coroutine.spawn(function()
+                        local built: string? = nil
+                        local interactive: string? = nil
+                        local problem: string? = nil
+                        if operation and workspace then
+                            built, problem = environment.run(profile.ref, profile.digest, profile.profile.network or "none", workspace, recipient, cancel, operation == "revoke")
+                        else built, interactive, problem = image.build(profile, recipient, cancel) end
+                        built_image, built_route, built_error = built, interactive, problem
+                        completed:send(true)
+                    end)
+                    while true do
+                        local event = channel.select({completed:case_receive(), events:case_receive()})
+                        if not event.ok then stopping = true; cancel:send(true); break end
+                        if event.channel == completed then
+                            digest, route, failure = built_image, built_route, built_error
+                            break
+                        elseif event.value.kind == process.event.CANCEL then
+                            stopping = true
+                            cancel:send(true)
+                        end
+                    end
+                end
+                process.send(sender, image.REPLY, {version = 1, request_id = id, image = digest, route = route, error = failure})
+            end
+        end
+        if stopping then break end
+    end
+    process.registry.unregister(image.OWNER)
+    process.unlisten(requests)
+end
+return M

@@ -15,8 +15,8 @@ function M.decode(raw: unknown): (Request?, string?)
         "snapshot_digest", "source_node", "intent_id"})
     if extra then return nil, extra end
     local operation = value.operation
-    if type(operation) ~= "string" or not OPERATIONS[operation] then return nil, "unknown delivery operation" end
-    local selected_operation: Operation = operation :: Operation
+    if operation ~= "request" and operation ~= "status" and operation ~= "publish" and operation ~= "preflight" then return nil, "unknown delivery operation" end
+    local selected_operation: Operation = operation
     local workspace_id = bounds.id(value.workspace_id)
     local source_workspace = bounds.id(value.source_overlay_id)
     local version = bounds.id(value.version)

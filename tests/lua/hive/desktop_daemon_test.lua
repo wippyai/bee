@@ -37,7 +37,7 @@ local function define_tests()
             test.eq(state.execution, EXECUTION)
             test.is_nil(state.folder)
             test.eq(state.served_count, 0)
-            test.is_nil(next(state.served))
+            test.is_nil((next(state.served)))
             test.is_nil(owner.folder_workspace(state))
             test.is_nil(owner.listing(state).default_workspace)
             local first_execution = owner.listing(state).execution

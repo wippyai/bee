@@ -120,7 +120,7 @@ func filteredEnvironment() []string {
 		"BEE_WORKSPACE_DB": true, "BEE_THREADS_DB": true, "BEE_APPROVALS_DB": true,
 		"BEE_RESOURCES_DB": true, "BEE_CREDENTIALS_DB": true, "BEE_PLACEMENT_DB": true,
 		"BEE_GATEWAY_DB": true, "BEE_NODE_DB": true, "BEE_GOVERNANCE_DB": true, "BEE_SYNC_DB": true,
-		"BEE_CLIENT_DB": true, "BEE_PLACEMENT_ROOT": true,
+		"BEE_CLIENT_DB": true, "BEE_PLACEMENT_ROOT": true, "BEE_APP_DATABASE_ROOT": true,
 	}
 	result := make([]string, 0, len(os.Environ())+5)
 	for _, value := range os.Environ() {
@@ -1339,7 +1339,7 @@ func assertManagedRoute(state, provider string) error {
 	var app recoveryApplication
 	var saved recoverySaved
 	for _, candidate := range workspace.Applications {
-		if candidate.DefinitionID != "bee.harness.window:app" || candidate.ResumeState == "" {
+		if candidate.DefinitionID != "bee.harness.app:app" || candidate.ResumeState == "" {
 			continue
 		}
 		var value recoverySaved
@@ -1349,7 +1349,7 @@ func assertManagedRoute(state, provider string) error {
 		}
 	}
 	expectedDefinition := "bee.driver." + provider + ":default_window"
-	if app.DefinitionID != "bee.harness.window:app" || saved.DefinitionRef != expectedDefinition ||
+	if app.DefinitionID != "bee.harness.app:app" || saved.DefinitionRef != expectedDefinition ||
 		saved.ThreadID == "" || saved.PreviousAttemptID == "" || saved.OriginRequestID == "" {
 		return fmt.Errorf("managed route identity mismatch: app=%+v checkpoint=%+v, expected definition %s", app, saved, expectedDefinition)
 	}
@@ -1683,7 +1683,7 @@ func nativeAgentRecoveryMode(binary string, crash bool) (result error) {
 	app, saved, err := waitRecoveryWorkspace(state, func(snapshot recoveryWorkspace) (recoveryApplication, recoverySaved, bool) {
 		for _, candidate := range snapshot.Applications {
 			var decoded recoverySaved
-			if candidate.DefinitionID != "bee.harness.window:app" || candidate.ResumeState == "" || json.Unmarshal([]byte(candidate.ResumeState), &decoded) != nil {
+			if candidate.DefinitionID != "bee.harness.app:app" || candidate.ResumeState == "" || json.Unmarshal([]byte(candidate.ResumeState), &decoded) != nil {
 				continue
 			}
 			if decoded.PreviousAttemptID != "" && decoded.ThreadID != "" {

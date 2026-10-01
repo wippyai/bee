@@ -10,7 +10,7 @@ desktop surface. A process ID, definition ID and instance ID are different
 identities.
 
 The broker bounds one workspace at 64 admitted definitions, 16 view-owned
-instances, 16 policy bindings per definition, 16 stop waiters per instance and
+instances, 32 policy bindings per definition, 16 stop waiters per instance and
 128 completed owner request IDs. Request deduplication is bounded and in
 memory; it is not durable exactly-once execution.
 
@@ -134,88 +134,53 @@ the gap as bounded unsaved data rather than marking it seen. It closes only its
 own subscriptions; presenter reload keeps them so they can resume. Viewing
 does not mutate thread obligations or delivery history.
 
-## Starting managed agents
+## Running managed agents
 
-An application starts a managed agent with `bee.application:agents`, which
-calls `bee.harness.launch:agent_call` as the application's own actor. The host
-decides what it may start: an approved `agents.launch` grant installs one
-generated policy that carries both the facade `funcs.call` and
-`bee.harness.launch` on each named definition, so the installed application
-reaches the facade and the facade then checks the same policy for the exact
-definition. The request is
-`bee.application:agent_protocol`'s launch: `definition_ref`, `brief`,
-`idempotency_key` and optional `workspace_id`, `saved_profile_id` with
-`saved_profile_revision`, `thread`, `workdir` and `placement`. `thread`,
-`workdir` and `placement` take effect only where the definition and its launch
-policy allow the override. A window definition is refused with
-`LAUNCH_MODE_UNSUPPORTED`; launch a batch or session definition.
+An application opens and drives managed agents with `bee.application:sessions`,
+which calls the `bee.sessions` owner contracts as the application's own actor.
+The SDK grants nothing: the host admits the caller and the owner authorizes
+every operation. The flow is catalog, open, send, await, close. `send` is the
+only way to give a session work, and its receipt proves intake only; the result
+comes from `await`.
 
 ```lua
-local agents = require("agents")   -- imports: agents: bee.application:agents
+local sessions = require("sessions")   -- imports: sessions: bee.application:sessions
 
-local run, fault = agents.launch({
-    definition_ref = "bee.driver.codex:research_batch",
-    brief = "Summarize the build scripts in this folder.",
-    idempotency_key = "summarize-build-1",
-    workdir = {root_ref = "bee.env:workspace_root", path = "legacy/app"},
-    thread = {thread_id = launch.thread_id},
-})
-if not run then return fault.code .. ": " .. fault.message end
-local status = agents.wait(run, 300000)       -- blocks in slices of at most 60 s
-if status and status.state ~= "ended" then
-    agents.cancel(run)                          -- NOT_STARTED until the child runs
-end
+local ready = sessions.catalog{}                        -- definitions whose executor is ready
+local s, fault = sessions.open{definition = "bee.driver.codex:research_batch", key = "research"}
+if not s then return fault.code .. ": " .. fault.message end
+local work = s:send{input = "Summarize the build scripts in this folder."}
+local seen = work:await{timeout_ms = 30000}             -- ready, pending, blocked or uncertain
+if seen and seen.tag == "ready" then show(seen.result) end
+s:close{mode = "drain"}
 ```
 
-`launch` returns `{thread_id, action_id, attempt_id, definition_ref, title,
-brief}`; the same `idempotency_key` replays the same run. `status`, `wait` and
-`cancel` each return `status, fault`; on failure status is nil and fault is
-`{code, message}`. The status shape is `{thread_id, attempt_id, state,
-outcome?, answer?}` with `state` equal to `starting`, `running`, `cancelling`
-or `ended`. These calls read the child's thread and need the application to
-belong to it, as its creator or a member. `wait` watches the thread and
-returns at the deadline with the last status. `status`, `wait` and `cancel`
-need only `run.thread_id` and `run.attempt_id`; keep the whole launch result
-for display and later calls. `wait` blocks the calling process in slices of at
-most 60 seconds. A UI event loop can call it from a `coroutine.spawn` worker
-to keep drawing. `thread = {thread_id = id}` selects an existing thread;
-`thread = {title = text}` asks for a new one. `cancel` stops a
-running child through the placement that started it, which accepts only the
-attempt's owner; the attempt then settles `cancelled`. A run whose child has
-not started is refused with `NOT_STARTED`.
+`sessions.call{definition, input}` opens a session with its first work and
+awaits it once. Every function returns `value, Fault`; a Fault carries `code`,
+`message` and a `retry` of `never`, `same_key`, `refresh` or `reconcile`.
+`await` bounds observation, never execution: a timeout is a `pending`
+observation and the work keeps running. Every mutation carries an operation
+key, so a replayed handler receives the original receipts; a lost reply is
+`UNKNOWN_OUTCOME` and is retried with the same key. The
+`bee.application` package README documents the handle functions, joins,
+cancellation and key derivation.
 
 Launch definitions are registry entries with `meta.type = bee.launch_definition`;
-a definition ID alone does not reveal whether the
-host lets this application launch it. The installed driver definitions include
+a definition ID alone does not reveal whether the host lets this application
+open it. The installed driver definitions include
 `bee.driver.claude:research_batch`,
 `bee.driver.codex:research_batch`, `bee.driver.codex:named_batch`,
 `bee.driver.agy:research_batch`, `bee.driver.muse:research_batch` and
-`bee.driver.opencode:research_batch`. This is
-an inventory of definitions, not an authorization list. An application has no
-public API to list the definitions it may launch or saved profile IDs and
-revisions. The Agent app manages saved profiles; a caller must obtain an exact
-ID and revision from the person, and the host still decides admission.
-
-The application `agents` helper exposes launch, status, wait and cancel. It
-does not expose child thread records, intermediate output, a steering helper
-or a `thread_read` equivalent. An application with the host-generated
-`threads.message` grant for `scope: children` can steer one of its child
-actions through `bee.threads.service:send`, using a typed `request` message
-addressed to that action. The grant permits `send` and `notify`; it does not
-permit `bee.threads.service:record`. `notify` registers a one-shot notice on
-the caller's own thread, so it does not carry steering text. The `send`
-request includes the child `thread_id`, a unique `idempotency_key`, a stable
-`caller_node_id`, the canonical message, and its SHA-256 `payload_digest`.
-Address the request with the child's `principal_id` in `recipient_ids` and
-its `action_id` in `recipient_action_ids`; obtain the caller node ID with
-`system.node.id()`.
-See [Threads](threads.md#application-child-messages) for the message envelope.
+`bee.driver.opencode:research_batch`. This is an inventory of definitions, not
+an authorization list; `catalog` lists the ones that are ready, and the host
+still decides admission when `open` runs. The Agent app manages saved profiles;
+a caller must obtain an exact ID and revision from the person.
 
 `client.thread_request` routes operations for an authenticated initiating
-thread through the broker when a host grants that thread access; it does not
-route operations for a launched child. The shipped workspace-application rule
-sets `thread_access: none`. A UI may show its own run statuses and final
-`status.answer`, but cannot claim a live child transcript through this API.
+thread through the broker when a host grants that thread access. The shipped
+workspace-application rule sets `thread_access: none`. A UI may show its own
+work statuses and the results `await` returns, but cannot claim a live
+transcript of a session through this API.
 
 ## Launch and lifecycle
 
@@ -244,9 +209,16 @@ checkpoints. A singleton opened with a different live association returns
 
 An open may carry up to 16 dense string arguments, each at most 1 KiB and 8 KiB
 combined, without control characters. The broker and client validate them.
-Arguments participate in open deduplication, are launch-only, are not accepted
-on close/bind/shutdown, and are not automatically persisted. Focusing a live
-singleton does not deliver new arguments. `bee run definition-id [arguments...]`
+Arguments participate in open deduplication, are not accepted on
+close/bind/shutdown, and are not automatically persisted. A ready singleton
+reopen with nonempty arguments queues `{version = 1, instance_id, view_id,
+execution_generation, launch_token, arguments}` from the authenticated broker
+to the retained producer on the fixed `bee.application.navigate` topic before
+returning focus. The receiver calls `client.navigation(launch, sender, payload)`;
+it accepts only the current broker, instance, view, generation and launch token,
+then decodes bounded arguments. Queued delivery does not acknowledge successful
+navigation. Empty arguments only focus, and a duplicate completed open does
+not redeliver. Admission and thread-owner checks precede delivery. `bee run definition-id [arguments...]`
 uses this boundary; explicit initial arguments take precedence over a selected
 checkpoint.
 

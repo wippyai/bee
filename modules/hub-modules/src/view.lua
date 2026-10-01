@@ -8,7 +8,7 @@ local model = require("model")
 local contents = require("contents")
 local M = {}
 local RESET = "\27[0m"
-type Frame = {rows: {string}, hits: {frame.Hit}, capacity: integer, offset: integer, operation_detail_offset: integer}
+type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer, operation_detail_offset: integer}
 
 local function maximum(a: integer, b: integer): integer if a > b then return a end; return b end
 local function request_lines(request: {[string]: unknown}): {string}
@@ -16,8 +16,8 @@ local function request_lines(request: {[string]: unknown}): {string}
         .. "  migrations " .. model.text(request.migration_policy, 16)}
     if request.version ~= nil then lines[1] = lines[1] .. "  version " .. model.text(request.version, 128) end
     if type(request.parameters) == "table" then
-        for index, raw in ipairs(request.parameters :: {unknown}) do
-            local parameter = type(raw) == "table" and raw :: {[string]: unknown} or {}
+        for index, raw in ipairs(request.parameters) do
+            local parameter = type(raw) == "table" and raw or {}
             local encoded = json.encode(parameter.value) or "[unavailable]"
             lines[#lines + 1] = "  parameter " .. model.text(parameter.name, 256) .. " = " .. model.text(encoded, #encoded)
             if index >= model.MAX_PARAMETERS then break end
@@ -53,7 +53,9 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             or (kind == "requirements" and state.requirements_open) or kind == state.action
             or kind == "policy_" .. state.policy or kind == "confirm" or kind == "review" or kind == "plan"
             or kind == "recover"
-        return frame.button(painter, x, y, {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active})
+            or (kind == "developer_packages" and state.developer_packages)
+        return frame.button(painter, x, y, {kind = kind, label = label:match("^%s*(.-)%s*$") or label, enabled = enabled, active = active,
+            primary = kind == "confirm" or kind == "review" or kind == "plan" or kind == "recover" or kind == "prepare_publication"})
     end
     frame.header(painter, "MODULES  " .. string.upper(state.phase), state.selected or "Browse the Hub")
     local x = 2
@@ -71,39 +73,70 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local roomy = width >= 48 and height >= 16
         local first = roomy and 6 or 4
         local stride = roomy and 3 or 1
+        local catalog_items = model.visible_catalog(state)
         local capacity = maximum(0, (height - 2 - first) // stride)
-        local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.catalog - capacity), offset)))
+        local next_offset = math.floor(math.max(0, math.min(maximum(0, #catalog_items - capacity), offset)))
         if roomy then
             local search_x = button(2, 4, "search", " Search packages… ", true)
             search_x = button(search_x, 4, "keyword", " Change keyword ", true)
-            frame.put(painter, search_x + 1, 4, tostring(state.total) .. " packages", maximum(0, width - search_x - 2), theme.muted)
+            local dev_label = state.developer_packages and " Developer packages [x] " or " Developer packages "
+            if width < 76 then
+                dev_label = state.developer_packages and " Dev pkgs [x] " or " Dev pkgs "
+            end
+            search_x = button(search_x, 4, "developer_packages", dev_label, true)
+            local count_str = tostring(#catalog_items) .. (state.all_catalog and #state.all_catalog > #catalog_items and ("/" .. tostring(state.total)) or "") .. " packages"
+            frame.put(painter, search_x + 1, 4, count_str, maximum(0, width - search_x - 2), theme.muted)
         end
-        if #state.catalog == 0 then
-            frame.line(painter, first, "No packages on this page", theme.text)
-            if roomy then frame.line(painter, first + 1, "Try another search or clear the keyword filter.", theme.muted) end
+        if #catalog_items == 0 then
+            if state.all_catalog and #state.all_catalog > 0 then
+                frame.line(painter, first, "No applications on this page", theme.text)
+                if roomy then frame.line(painter, first + 1, "Developer packages are hidden · enable Developer packages to show libraries.", theme.muted) end
+            else
+                frame.empty(painter, first, "No packages found", "/ change the search · K change the keyword")
+            end
         end
         for slot = 1, capacity do
-            local item = state.catalog[next_offset + slot]
+            local item = catalog_items[next_offset + slot]
             if not item then break end
             local y, selected = first + (slot - 1) * stride, item.component == state.selected
             local label = item.title ~= "" and item.title or item.component
+            local status = model.component_status(state, item.component)
             local foreground = selected and appearance.selection_text(theme) or theme.text
             local background = selected and theme.accent or theme.surface
-            frame.row(painter, y, roomy and (" " .. label) or label, selected, "component", 0, item.component, nil, nil, stride)
+            local row_label = roomy and (" " .. label) or label
+            if not roomy then
+                if status == "built-in" then row_label = label .. " [built-in]"
+                elseif status == "installed" then row_label = label .. " [installed]"
+                else row_label = label .. " [install]" end
+            end
+            frame.row(painter, y, row_label, selected, "component", 0, item.component, nil, nil, stride)
             if roomy then
-                local version_width = tty.text.width(item.latest_version)
-                if version_width > 0 and tty.text.width(label) + version_width + 6 < width then
-                    frame.put(painter, width - version_width - 2, y, item.latest_version, version_width, foreground, background)
+                local action_tag = ""
+                if status == "built-in" then
+                    action_tag = item.latest_version ~= "" and ("Built-in · Open " .. item.latest_version) or "Built-in · Open"
+                elseif status == "installed" then
+                    action_tag = item.latest_version ~= "" and ("Installed · Open " .. item.latest_version) or "Installed · Open"
+                else
+                    action_tag = item.latest_version ~= "" and ("Install " .. item.latest_version) or "Install"
+                end
+                local tag_width = tty.text.width(action_tag)
+                if tag_width > 0 and tty.text.width(label) + tag_width + 6 < width then
+                    frame.put(painter, width - tag_width - 2, y, action_tag, tag_width, foreground, background)
+                elseif tty.text.width(item.latest_version) > 0 and tty.text.width(label) + tty.text.width(item.latest_version) + 6 < width then
+                    frame.put(painter, width - tty.text.width(item.latest_version) - 2, y, item.latest_version, tty.text.width(item.latest_version), foreground, background)
                 end
                 frame.line(painter, y + 1, " " .. item.component .. "  ·  " .. (item.description ~= "" and item.description or "No description provided"), theme.muted)
                 frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             end
         end
+        local sel_status = state.selected and model.component_status(state, state.selected)
         local actions = 2
         actions = button(actions, height - 1, "previous", " ‹ Previous ", state.page > 1)
         actions = button(actions, height - 1, "next", " Next › ", #state.catalog > 0 and state.total > state.page * #state.catalog)
-        frame.footer(painter, status, "/ search · K keyword · Enter open · ←/→ page")
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+        actions = button(actions, height - 1, "details", (sel_status == "built-in" or sel_status == "installed") and " Open " or " Install ", state.selected ~= nil)
+        local action_hint = (sel_status == "built-in" or sel_status == "installed") and "Enter open" or "Enter install"
+        frame.footer(painter, status, "/ search · K keyword · " .. action_hint .. " · ←/→ page")
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "installed" then
         local roomy = width >= 48 and height >= 16
@@ -112,7 +145,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local capacity = maximum(0, (height - 1 - first) // stride)
         local next_offset = math.floor(math.max(0, math.min(maximum(0, #state.installed - capacity), offset)))
         if #state.installed == 0 then
-            frame.line(painter, first, "No installed Hub modules", theme.text)
+            frame.empty(painter, first, "No packages installed", "Browse the catalog to choose a package")
             if roomy then frame.line(painter, first + 1, "Browse the catalog to find your first package.", theme.muted) end
         end
         for slot = 1, capacity do
@@ -159,14 +192,12 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             end
         end
         local actions = button(2, height - 1, "refresh", " Refresh ", true)
-        local bee_update = state.bee_update
-        if bee_update and bee_update.update_available then
-            actions = button(actions, height - 1, "bee_update", " Update Bee ", not bee_update.needs_new_binary)
+        local update = state.bee_update
+        if update and update.update_available then
+            actions = button(actions, height - 1, "bee_update", " Update Bee ", not update.needs_new_binary)
         end
-        local footer = state.update_status == "pending" and "Checking live Bee pack versions…"
-            or "↑↓ select · Enter details · U update Bee packs · R refresh · A authored version"
-        frame.footer(painter, status, footer)
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+        frame.footer(painter, status, "↑↓ select · Enter details · U update Bee · R refresh · A authored version")
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "authoring" then
         frame.line(painter, 3, "Private authored overlay version", theme.muted)
@@ -188,7 +219,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         if height >= 4 then frame.add_hit(painter, "author_component", 0, "", 1, 4, width, 1) end
         if height >= 5 then frame.add_hit(painter, "author_version", 0, "", 1, 5, width, 1) end
         if height >= 6 then frame.add_hit(painter, "author_snapshot", 0, "", 1, 6, width, 1) end
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = 1, offset = 0, operation_detail_offset = 0}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 1, offset = 0, operation_detail_offset = 0}
     end
     if state.phase == "operations" then
         frame.line(painter, 3, "Actor-owned operation history", theme.muted)
@@ -201,7 +232,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         local total_pages = math.max(1, math.ceil(state.operation_total / page_size))
         local selected_detail_offset = 0
         if #state.operations == 0 then
-            frame.line(painter, first, "No Hub operations recorded for this actor", theme.muted)
+            frame.empty(painter, first, "No package changes recorded", "Choose a package in the catalog to review a change")
         end
         for slot = 1, capacity do
             local item = state.operations[next_offset + slot]
@@ -240,11 +271,13 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             button(actions, height - 1, "recover", " Review recovery… ", true)
         end
         frame.footer(painter, status, ("Page " .. tostring(state.operation_page) .. "/" .. tostring(total_pages) .. " · select a receipt to inspect its measured result"))
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = selected_detail_offset}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = selected_detail_offset}
     end
     local detail = state.detail
     if state.phase == "details" then
-        frame.line(painter, 3, detail and (detail.title .. "  " .. detail.component) or "Select a package to read its details", theme.muted)
+        local detail_status = detail and model.component_status(state, detail.component)
+        local status_suffix = detail_status and ("  ·  " .. (detail_status == "built-in" and "Built-in" or "Installed")) or ""
+        frame.line(painter, 3, detail and (detail.title .. "  " .. detail.component .. status_suffix) or "Select a package to read its details", theme.muted)
         if detail then
             frame.line(painter, 4, (state.selected_version and ("Version " .. state.selected_version .. "  ·  ") or "") .. detail.description, theme.text)
             local tab_x = 2
@@ -283,7 +316,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 button(actions, height - 2, "content_next", " Next page ", not content.pending and content.next_offset ~= nil)
                 frame.line(painter, height - 1, content.notice, theme.muted)
                 frame.footer(painter, status, "↑↓ browse · Enter open · ⌫ back · N next")
-                return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+                return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
             if state.requirements_open then
                 local capacity = maximum(0, math.floor((height - 9) / 3))
@@ -305,7 +338,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 button(action_x, height - 2, "reset_requirement", " Clear override ", requirement ~= nil and requirement.origin == "Selected")
                 frame.line(painter, height - 1, "Defaults are used unless you choose a value.", theme.muted)
                 frame.footer(painter, status, "↑↓ select · Enter edit JSON · V versions · P prepare")
-                return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = 0, operation_detail_offset = 0}
+                return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = 0, operation_detail_offset = 0}
             end
             if reading then
                 local lines: {string} = {}
@@ -355,7 +388,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
                 action_x = button(action_x, height - 1, "requirements", " Configure ", true)
                 action_x = button(action_x, height - 1, "plan", " Review installation ", state.selected_version ~= nil)
                 frame.footer(painter, status, "↑↓ scroll · V versions · C contents · Esc catalog")
-                return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+                return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
             end
             local first, last = 6, height - 4
             local capacity = maximum(0, last - first + 1)
@@ -386,7 +419,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             if width >= 74 then frame.line(painter, height - 3, "Action " .. state.action .. " · migrations " .. state.policy .. " · " .. parameters, theme.muted) end
         end
         frame.footer(painter, status, "↑↓ version · I install · U update · X remove · P review")
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = detail and maximum(0, height - 9) or 0, offset = offset, operation_detail_offset = 0}
     end
     if state.phase == "confirm" and state.recovery then
         local recovery = state.recovery
@@ -411,7 +444,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         actions = button(actions, height - 1, "confirm", " Confirm recovery ", true)
         button(actions, height - 1, "cancel", " Back ", true)
         frame.footer(painter, status, "Enter confirms · Esc returns to operation history")
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = body_capacity, offset = body_offset, operation_detail_offset = 0}
     end
     local plan = state.plan
     if state.phase == "result" and state.result then
@@ -430,12 +463,12 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         button(2, height - 1, "status", " Check status ", state.plan ~= nil or state.selected_operation ~= nil)
         button(18, height - 1, "catalog", " Catalog ", true)
         frame.footer(painter, status, "R checks this measured operation · Esc returns to catalog")
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = 0, offset = 0, operation_detail_offset = 0}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
     if not plan then
-        frame.line(painter, 3, "No plan prepared", theme.muted)
+        frame.empty(painter, 3, "No changes prepared", "Choose a package and press P to review changes")
         frame.footer(painter, status, "P prepares a plan from the selected package")
-        return {rows = frame.rows(painter), hits = painter.hits, capacity = 0, offset = 0, operation_detail_offset = 0}
+        return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = 0, offset = 0, operation_detail_offset = 0}
     end
     frame.line(painter, 3, "Plan " .. plan.digest:sub(1, 12) .. "  registry revision " .. tostring(plan.base_revision), theme.muted)
     frame.line(painter, 4, plan.ready and "Ready for confirmation" or ("Missing: " .. table.concat(plan.missing, ", ")), plan.ready and theme.accent or theme.text)
@@ -491,7 +524,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         button(actions, height - 1, "missing", " Configure required ", #plan.missing > 0)
         frame.footer(painter, status, "Enter reviews immutable plan · R replans · edits invalidate it")
     end
-    return {rows = frame.rows(painter), hits = painter.hits, capacity = capacity, offset = next_offset, operation_detail_offset = 0}
+    return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
 end
 
 type Editor = {field: string, buffer: string, name: string?}
@@ -507,7 +540,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     -- therefore keep that mode visible and must never expose the underlying
     -- page's hit targets while keystrokes still edit the buffer.
     if width < 28 or height < 14 then
-        local compact = tty.canvas(width, height)
+        local compact_painter = frame.new(width, height, preferences)
+        local compact = compact_painter.canvas
         compact:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
         local function compact_line(y: integer, value: string, fg: string?)
             if y < 1 or y > height or width < 1 then return end
@@ -524,10 +558,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 {kind = "cancel_editor", index = 0, key = "", x = 14, y = height, width = 10, height = 1},
             }
         end
-        return {rows = compact:rows(), hits = compact_hits, capacity = 0,
+        return {rows = frame.rows(compact_painter), hits = compact_hits, capacity = 0,
             offset = base.offset, operation_detail_offset = base.operation_detail_offset}
     end
-    local canvas = tty.canvas(width, height)
+    local editor_painter = frame.new(width, height, preferences)
+    local canvas = editor_painter.canvas
     for y, row in ipairs(base.rows) do canvas:put(1, y, row, width) end
     local w = math.floor(math.min(76, width - 4))
     local h = math.floor(math.min(13, height - 4))
@@ -567,6 +602,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         {kind = "save_editor", index = 0, key = "", x = left + 2, y = top + h - 2, width = 12, height = 1},
         {kind = "cancel_editor", index = 0, key = "", x = left + 15, y = top + h - 2, width = math.floor(math.min(12, w - 17)), height = 1},
     }
-    return {rows = canvas:rows(), hits = hits, capacity = base.capacity, offset = base.offset, operation_detail_offset = base.operation_detail_offset}
+    return {rows = frame.rows(editor_painter), hits = hits, capacity = base.capacity, offset = base.offset, operation_detail_offset = base.operation_detail_offset}
 end
 return M

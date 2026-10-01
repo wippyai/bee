@@ -9,7 +9,7 @@ import (
 
 const (
 	nativeModulePath = "github.com/wippyai/bee/native"
-	runtimeCommit    = "c0d6585b5fd1afae7f7cf0b378dc156bcd0e683d"
+	runtimeCommit    = "728b75942028080264aacbb16ef0420a0f8090b4"
 )
 
 type binaryIdentityFacts struct {

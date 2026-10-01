@@ -12,17 +12,23 @@ local function reference(value: unknown): string?
     if not id or not id:match("^[%w_.%-]+:[%w_.%-]+$") then return nil end
     return id
 end
--- The supported JSON Schema subset a configured tool may advertise: an object
--- schema with typed properties, required names, enums, string and integer
--- bounds and nested objects and arrays of the same subset. Anything else is
--- refused at admission so a malformed component tool cannot be advertised.
+-- The supported JSON Schema subset a configured tool may advertise: object
+-- schemas with typed properties, required names, enums and constants, string,
+-- integer and array bounds, formats, nested objects and arrays, and the
+-- oneOf/allOf/if/then/else/not applicators over the same subset. Anything else
+-- is refused at admission so a malformed component tool cannot be advertised.
 local SCHEMA_KEYS: {[string]: boolean} = {type = true, properties = true, required = true, items = true,
-    enum = true, minimum = true, maximum = true, minLength = true, maxLength = true, maxItems = true,
-    pattern = true, description = true, additionalProperties = true, examples = true}
+    enum = true, const = true, default = true, format = true, minimum = true, maximum = true, minLength = true,
+    maxLength = true, minItems = true, maxItems = true, uniqueItems = true, pattern = true, description = true,
+    additionalProperties = true, examples = true, oneOf = true, allOf = true, ["if"] = true, ["then"] = true,
+    ["else"] = true, ["not"] = true}
 local SCHEMA_TYPES: {[string]: boolean} = {object = true, array = true, string = true, integer = true,
     number = true, boolean = true}
-local function valid_schema(value: unknown, depth: integer): boolean
-    if depth > 4 then return false end
+local SCHEMA_SCHEMAS = {"if", "then", "else", "not"}
+local SCHEMA_LISTS = {"oneOf", "allOf"}
+local SCHEMA_DEPTH = 4
+local function valid_schema(value: unknown, depth: integer, applicator: boolean): boolean
+    if depth > SCHEMA_DEPTH then return false end
     local schema = bounds.object(value)
     if not schema then return false end
     for key in pairs(schema) do if type(key) ~= "string" or not SCHEMA_KEYS[key] then return false end end
@@ -31,17 +37,35 @@ local function valid_schema(value: unknown, depth: integer): boolean
     if schema.properties ~= nil then
         local properties = bounds.object(schema.properties)
         if not properties then return false end
-        for _, child in pairs(properties) do if not valid_schema(child, depth + 1) then return false end end
+        for _, child in pairs(properties) do if not valid_schema(child, depth + 1, false) then return false end end
     end
     if schema.required ~= nil then
         local required, required_error = bounds.ids(schema.required, true)
         if not required or required_error then return false end
-        local properties = schema.properties ~= nil and bounds.object(schema.properties) or nil
-        for _, name in ipairs(required) do
-            if not properties or properties[name] == nil then return false end
+        -- An applicator branch may require names its parent declares.
+        if not applicator then
+            local properties = schema.properties ~= nil and bounds.object(schema.properties) or nil
+            for _, name in ipairs(required) do
+                if not properties or properties[name] == nil then return false end
+            end
         end
     end
-    if schema.items ~= nil and not valid_schema(schema.items, depth + 1) then return false end
+    if schema.items ~= nil and not valid_schema(schema.items, depth + 1, false) then return false end
+    for _, key in ipairs(SCHEMA_SCHEMAS) do
+        if schema[key] ~= nil and not valid_schema(schema[key], depth + 1, true) then return false end
+    end
+    for _, key in ipairs(SCHEMA_LISTS) do
+        if schema[key] ~= nil then
+            local branches = schema[key]
+            if type(branches) ~= "table" or #(branches) == 0 then return false end
+            local count = 0
+            for _ in pairs(branches) do count = count + 1 end
+            if count ~= #(branches) then return false end
+            for _, branch in ipairs(branches) do
+                if not valid_schema(branch, depth + 1, true) then return false end
+            end
+        end
+    end
     if schema.enum ~= nil then
         if type(schema.enum) ~= "table" or #schema.enum == 0 then return false end
         local count = 0
@@ -51,11 +75,13 @@ local function valid_schema(value: unknown, depth: integer): boolean
         end
         if count ~= #schema.enum then return false end
     end
-    for _, key in ipairs({"minimum", "maximum", "minLength", "maxLength", "maxItems"}) do
+    for _, key in ipairs({"minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems"}) do
         local bound = schema[key]
         if bound ~= nil and (type(bound) ~= "number" or bound ~= math.floor(bound)) then return false end
     end
     if schema.pattern ~= nil and type(schema.pattern) ~= "string" then return false end
+    if schema.format ~= nil and type(schema.format) ~= "string" then return false end
+    if schema.uniqueItems ~= nil and type(schema.uniqueItems) ~= "boolean" then return false end
     if schema.description ~= nil and type(schema.description) ~= "string" then return false end
     if schema.additionalProperties ~= nil and type(schema.additionalProperties) ~= "boolean" then return false end
     return true
@@ -96,7 +122,7 @@ function M.decode(raw: unknown): (Catalog?, string?)
     if not value then return nil, "catalog must be an object" end
     local extra = bounds.fields(value, {"tools", "traits"})
     if extra then return nil, extra end
-    local tools, tools_error = list(value.tools, 32)
+    local tools, tools_error = list(value.tools, 40)
     local traits, traits_error = list(value.traits, 16)
     if not tools then return nil, tools_error end
     if not traits then return nil, traits_error end
@@ -116,7 +142,7 @@ function M.decode(raw: unknown): (Catalog?, string?)
             return nil, "invalid or duplicate tool declaration"
         end
         for _, policy in ipairs(policies) do if not reference(policy) then return nil, "invalid policy reference" end end
-        if schema.type ~= "object" or not valid_schema(schema, 0) then
+        if schema.type ~= "object" or not valid_schema(schema, 0, false) then
             return nil, "tool schema must be an object schema in the supported subset"
         end
         if not valid_annotations(annotations) then
@@ -209,7 +235,7 @@ function M.from_framework(framework: unknown, policies: unknown): (Catalog?, str
         end
         local tool_name: string = name or ""
         local operation_id: string = operation or ""
-        if schema.type ~= "object" or not valid_schema(schema, 0) then
+        if schema.type ~= "object" or not valid_schema(schema, 0, false) then
             return nil, "tool schema must be an object schema in the supported subset"
         end
         if not valid_annotations(annotations) then

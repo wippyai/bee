@@ -18,6 +18,7 @@ entries:
   modules: [tty]
   imports:
     chrome: bee.terminal:chrome
+    appearance: bee.application:appearance
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
@@ -26,7 +27,7 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [tty, process, channel, time, uuid, ctx, logger]
+  modules: [funcs, tty, process, channel, time, uuid, ctx, logger]
   imports:
     connection: bee.terminal:connection
     workspace_menu: bee.terminal:workspace_menu

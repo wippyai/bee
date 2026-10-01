@@ -4,9 +4,11 @@ package launch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	envapi "github.com/wippyai/runtime/api/env"
@@ -61,5 +63,37 @@ func TestHostEnvironmentRejectsRelativeFacts(t *testing.T) {
 	}
 	if _, err := newHostEnvironment(resolver); err == nil {
 		t.Fatal("relative home accepted")
+	}
+}
+
+func TestHostEnvironmentExposesNamesWithoutValues(t *testing.T) {
+	t.Setenv("BEE_LOGIN_METADATA_TEST", "fixture-sensitive-value")
+	resolver := systemHostResolver()
+	storage, err := newHostEnvironment(resolver)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := storage.Get(context.Background(), "environment_names")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, "fixture-sensitive-value") {
+		t.Fatal("environment metadata exposed a value")
+	}
+	var names []string
+	if err := json.Unmarshal([]byte(raw), &names); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, name := range names {
+		if name == "BEE_LOGIN_METADATA_TEST" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("environment name missing")
+	}
+	if _, err := storage.Get(context.Background(), "BEE_LOGIN_METADATA_TEST"); !errors.Is(err, envapi.ErrVariableNotFound) {
+		t.Fatal("host storage allowed raw environment access")
 	}
 }

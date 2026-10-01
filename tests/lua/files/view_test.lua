@@ -1,0 +1,131 @@
+local test = require("test")
+local memory_source = require("memory_source")
+local model = require("model")
+local view = require("view")
+local tty = require("tty")
+local appearance = require("appearance")
+local frame = require("frame")
+
+local function plain(row: string): string
+    return row:gsub("\27%[[0-9;]*m", "")
+end
+
+
+local function define_tests()
+    local mock_fs = memory_source.new({
+        ["src"] = {is_dir = true},
+        ["src/main.lua"] = {is_dir = false, content = "local x = 1\nlocal y = 2\nlocal z = 3\n"},
+        ["README.md"] = {is_dir = false, content = "# Readme\nThis is a test\n"},
+    })
+
+    test.describe("Files application frame rendering", function()
+        test.it("renders correctly at 120x36 geometry with split panes", function()
+            local args = {"src/main.lua", "2"}
+            local state = model.new(mock_fs, "", args)
+            local prefs = appearance.defaults()
+
+            local rendered = view.render(state, 120, 36, prefs)
+            test.not_nil(rendered)
+            test.eq(#rendered.rows, 36)
+
+            for _, row in ipairs(rendered.rows) do
+                test.eq(tty.text.width(plain(row)), 120)
+            end
+
+            -- Header row 1 should contain FILES and src/main.lua
+            local r1 = plain(rendered.rows[1])
+            test.is_true(r1:find("FILES", 1, true) ~= nil)
+            test.is_true(r1:find("src/main.lua", 1, true) ~= nil)
+
+            -- Row 2 contains tree on the left and preview line 1 on the right
+            local r2 = plain(rendered.rows[2])
+            test.is_true(r2:find("src", 1, true) ~= nil or r2:find("1 │", 1, true) ~= nil)
+
+            -- Action bar row (row 35) carries the keyed actions
+            local r35 = plain(rendered.rows[35])
+            test.is_true(r35:find("Enter Open", 1, true) ~= nil)
+            test.is_true(r35:find("/ Search", 1, true) ~= nil)
+            test.is_true(r35:find("G Jump", 1, true) ~= nil)
+
+            -- Footer row (row 36) carries key hints and the frame's help
+            local r36 = plain(rendered.rows[36])
+            test.is_true(r36:find("move", 1, true) ~= nil)
+            test.is_true(r36:find("open", 1, true) ~= nil)
+            test.is_true(r36:find("? help", 1, true) ~= nil)
+        end)
+
+        test.it("renders correctly at 80x24 geometry", function()
+            local args = {"src/main.lua", "1-2"}
+            local state = model.new(mock_fs, "", args)
+            local prefs = appearance.defaults()
+
+            local rendered = view.render(state, 80, 24, prefs)
+            test.not_nil(rendered)
+            test.eq(#rendered.rows, 24)
+
+            for _, row in ipairs(rendered.rows) do
+                test.eq(tty.text.width(plain(row)), 80)
+            end
+
+            -- Header row 1
+            local r1 = plain(rendered.rows[1])
+            test.is_true(r1:find("FILES", 1, true) ~= nil)
+
+            -- Action bar row 23
+            local r23 = plain(rendered.rows[23])
+            test.is_true(r23:find("Open", 1, true) ~= nil)
+
+            -- Footer row 24
+            local r24 = plain(rendered.rows[24])
+            test.is_true(r24:find("move", 1, true) ~= nil)
+            test.is_true(r24:find("? help", 1, true) ~= nil)
+        end)
+
+        test.it("keeps the tree visible beside an empty preview", function()
+            local state = model.new(mock_fs, "", nil)
+            local rendered = view.render(state, 120, 36, appearance.defaults())
+            test.is_true(plain(rendered.rows[3]):find("README.md", 1, true) ~= nil)
+            test.is_true(plain(rendered.rows[3]):find("Select a file", 1, true) ~= nil)
+        end)
+
+        test.it("declares keyed actions to the shared frame Help", function()
+            local state = model.new(mock_fs, "", {"src/main.lua"})
+            local prefs = appearance.defaults()
+            local rendered = view.render(state, 80, 24, prefs)
+            local controls = assert(rendered.controls)
+            local kinds: {[string]: string} = {}
+            for _, button in ipairs(controls.buttons) do kinds[button.kind] = button.key or "" end
+            test.eq(kinds.open, "Enter")
+            test.eq(kinds.search, "/")
+            test.eq(kinds.jump, "G")
+            test.eq(kinds.pane, "Tab")
+            local menu = frame.menu()
+            frame.render(rendered, menu, prefs)
+            local _, consumed = frame.route(menu, {type = "key", key = "?", key_type = "runes", action = "press"})
+            test.is_true(consumed)
+            local help = view.render(state, 80, 24, prefs)
+            frame.render(help, menu, prefs)
+            local shown = table.concat(help.rows, "\n"):gsub("\27%[[0-9;]*m", "")
+            test.is_true(shown:find("HELP", 1, true) ~= nil)
+            test.is_true(shown:find("G  Jump", 1, true) ~= nil)
+            test.eq(#help.rows, 24)
+        end)
+
+        test.it("renders compact and narrow layout without crashing", function()
+            local state = model.new(mock_fs, "", nil)
+            local prefs = appearance.defaults()
+
+            for _, w in ipairs({40, 60, 80, 120}) do
+                for _, h in ipairs({10, 16, 24, 36}) do
+                    local rendered = view.render(state, w, h, prefs)
+                    test.eq(#rendered.rows, h)
+                    for _, row in ipairs(rendered.rows) do
+                        test.eq(tty.text.width(plain(row)), w)
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+return test.run_cases(define_tests)

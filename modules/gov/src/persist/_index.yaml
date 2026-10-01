@@ -41,6 +41,7 @@ entries:
     transaction: bee.persist:transaction
     migrations: bee.gov.migrations:schema
     identity_migration: bee.gov.persist:identity_migration
+    capability_model: bee.capability:model
     lease_model: bee.gov:lease_model
 - name: staging
   kind: library.lua

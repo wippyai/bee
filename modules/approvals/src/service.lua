@@ -31,8 +31,10 @@ M.MANAGE = "bee.approvals.manage"
 M.OWN = "bee.approvals.own"
 M.CONSUME = "bee.approvals.consume"
 M.INSTALLATION_EFFECTS = "installation_effects"
+M.PUBLICATION_EFFECTS = "publication_effects"
 M.WORKER_NAME = "bee.approvals.outbox"
 M.INSTALLATION_WORKER_NAME = "bee.approvals.installation_effect_worker"
+M.PUBLICATION_WORKER_NAME = "bee.approvals.publication_effect_worker"
 M.AUTHORITY_NAME = "bee.approvals.authority"
 M.THREAD_GET = "bee.threads.service:get"
 M.THREAD_READ = "bee.threads.service:read_after"
@@ -70,7 +72,7 @@ type Row = {
     expires_ms: integer, expires_at: string, created_at: string, updated_at: string?,
     effect_completed_at: string?, effect_result_json: string?, effect_result: unknown,
 }
-type ApprovalView = {
+type ApprovalView = {requesting_session: string?,
     approval_id: string, owner_node: string, owner_incarnation: integer, workspace_id: string,
     requester_id: string, request_kind: RequestKind, policy: string, proposal: Object,
     proposal_digest: string, prompt: Object, response_schema: Object, thread_id: string?,
@@ -168,6 +170,7 @@ end
 local function wake()
     wake_worker(M.WORKER_NAME)
     wake_worker(M.INSTALLATION_WORKER_NAME)
+    wake_worker(M.PUBLICATION_WORKER_NAME)
 end
 function M.reply(result: Result): Reply
     if result.ok then return {ok = true, error = nil, value = result.value, replayed = result.replayed} end
@@ -176,7 +179,7 @@ end
 local operations: {[string]: Operation} = {}
 local preparations: {[string]: Preparation} = {}
 local mutating: {[string]: boolean} = {request = true, decide = true, decide_batch = true, withdraw = true, consume = true, revalidate = true,
-    complete_installation_effect = true, reconcile = true}
+    complete_installation_effect = true, complete_publication_effect = true, reconcile = true}
 -- execute: one named operation for an actor over an explicit store. A
 -- preparation runs first, outside the transaction, for checks that call
 -- other authorities through the executor; the operation then runs inside
@@ -217,6 +220,7 @@ local function run(request: unknown, name: string): Reply
 end
 function M.view(row: Row): ApprovalView
     return {approval_id = row.approval_id, owner_node = row.owner_node, owner_incarnation = row.owner_incarnation, workspace_id = row.workspace_id,
+        requesting_session = row.requester_id:match("^bs:") and row.requester_id or nil,
         requester_id = row.requester_id, request_kind = row.request_kind, policy = row.policy, proposal = row.proposal, proposal_digest = row.proposal_digest,
         prompt = row.prompt, response_schema = row.response_schema, thread_id = row.thread_id, binding = row.binding, revision = row.revision, state = row.state,
         decision = row.decision, decider_id = row.decider_id, decided_at = row.decided_at, response = row.response, validated_incarnation = row.validated_incarnation,
@@ -438,18 +442,23 @@ decode_row = function(raw: unknown): (Row?, string?)
     if not proposal or not proposal_json or proposal_json ~= value.proposal_json or proposal_digest_check ~= proposal_digest then
         return nil, "approval proposal is corrupt: " .. tostring(proposal_error or "digest or canonical form differs")
     end
+    local stored_proposal_json: string = proposal_json
     local prompt_value, prompt_error = stored_json(value, "prompt_json", false, true)
     if prompt_error then return nil, prompt_error end
     local prompt, content_error = values.content(prompt_value)
     if not prompt then return nil, "approval prompt is corrupt: " .. tostring(content_error) end
     local prompt_json = canonical.encode(prompt)
-    if prompt_json ~= value.prompt_json then return nil, "approval prompt is not canonical" end
+    if not prompt_json or prompt_json ~= value.prompt_json then return nil, "approval prompt is not canonical" end
     local schema_value, schema_error = stored_json(value, "response_schema_json", false, true)
     if schema_error then return nil, schema_error end
+    local response_schema_json = value.response_schema_json
+    if type(response_schema_json) ~= "string" then return nil, "approval response schema is corrupt" end
     local response_schema = bounds.object(schema_value)
     if not response_schema then return nil, "approval response schema is corrupt" end
     local thread_id, thread_valid = optional_text(value, "thread_id")
     if thread_id and not bounds.id(thread_id) then thread_valid = false end
+    local binding_json, binding_text_valid = optional_text(value, "binding_json")
+    if not binding_text_valid then return nil, "approval binding is corrupt" end
     local binding_value: unknown = nil
     local binding: Object? = nil
     if value.binding_json ~= nil then
@@ -510,16 +519,16 @@ decode_row = function(raw: unknown): (Row?, string?)
         or ((effect_completed_at ~= nil) ~= (effect_result ~= nil)) then
         return nil, "approval effect metadata is corrupt"
     end
-    local row: Row = {approval_id = approval_id :: string, owner_node = owner_node :: string, owner_incarnation = owner_incarnation :: integer,
-        workspace_id = workspace_id :: string, requester_id = requester_id :: string, requester_key = requester_key :: string, request_digest = request_digest :: string,
-        request_kind = request_kind :: RequestKind, policy = policy :: string, proposal_json = value.proposal_json :: string, proposal = proposal,
-        proposal_digest = proposal_digest :: string, prompt_json = value.prompt_json :: string, prompt = prompt,
-        response_schema_json = value.response_schema_json :: string, response_schema = response_schema,
-        thread_id = thread_id, binding_json = value.binding_json :: string?, binding = binding, revision = revision, state = state,
+    local row: Row = {approval_id = approval_id, owner_node = owner_node, owner_incarnation = owner_incarnation,
+        workspace_id = workspace_id, requester_id = requester_id, requester_key = requester_key, request_digest = request_digest,
+        request_kind = request_kind, policy = policy, proposal_json = stored_proposal_json, proposal = proposal,
+        proposal_digest = proposal_digest, prompt_json = prompt_json, prompt = prompt,
+        response_schema_json = response_schema_json, response_schema = response_schema,
+        thread_id = thread_id, binding_json = binding_json, binding = binding, revision = revision, state = state,
         decision = decision, decider_id = decider_id, decided_at = decided_at,
         response_json = response_json, response = response, validated_incarnation = validated_incarnation,
         validated_by = validated_by, validated_at = validated_at, consumer_id = consumer_id, consumed_effect = consumed_effect,
-        consumed_at = consumed_at, expires_ms = expires_ms, expires_at = expires_at, created_at = created_at :: string,
+        consumed_at = consumed_at, expires_ms = expires_ms, expires_at = expires_at, created_at = created_at,
         updated_at = updated_at, effect_completed_at = effect_completed_at, effect_result_json = effect_result_json,
         effect_result = effect_result}
     return row, nil
@@ -573,7 +582,7 @@ local function prepare_request(executor: funcs.Executor, actor: string, object: 
         for _ = 1, M.BINDING_PAGES do
             local page, refused = thread_reply(executor, M.THREAD_READ, {thread_id = thread_id, cursor = cursor, filter = {kinds = {"attempt.prepared", "attempt.started"}, action_id = action_id}})
             if not page then return nil, refused end
-            local records = type(page.records) == "table" and (page.records :: {unknown}) or nil
+            local records = type(page.records) == "table" and (page.records) or nil
             if not records then return nil, failure("INTERNAL", "thread authority returned malformed records") end
             for _, raw in ipairs(records) do
                 local record = bounds.object(raw)
@@ -742,7 +751,9 @@ local function op_decide_batch(tx: sql.Transaction, actor: string, object: Objec
     end
     local views: {unknown} = {}
     for _, raw in ipairs(items) do
-        local settled = op_decide(tx, actor, raw :: Object, now, prepared)
+        local decision = bounds.object(raw)
+        if not decision then return failure("INVALID_ARGUMENT", "decision must be an object") end
+        local settled = op_decide(tx, actor, decision, now, prepared)
         if not settled.ok then
             local fault = bounds.object(raw)
             return failure(settled.code or "INTERNAL", tostring(fault and fault.approval_id) .. ": " .. tostring(settled.message), bounds.object(settled.value))
@@ -891,6 +902,60 @@ local function op_complete_installation_effect(tx: sql.Transaction, actor: strin
     if not updated then return storage("read completed installation effect") end
     return success(M.view(updated), false)
 end
+local function op_publication_effects(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"limit"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local limit = bounds.integer(object.limit == nil and 16 or object.limit)
+    if not limit or limit < 1 or limit > 64 then return failure("INVALID_ARGUMENT", "limit must be between 1 and 64") end
+    if not security.can(M.OWN, M.PUBLICATION_EFFECTS) then
+        return failure("DENIED", "caller may not enumerate approved publication effects")
+    end
+    local rows, err = store.publication_effects(tx, now, limit)
+    if err or not rows then return storage("read approved publication effects") end
+    local effects: {Object} = {}
+    for _, raw in ipairs(rows) do
+        local row, decode_error = decode_row(raw)
+        if not row then return storage("decode publication effect: " .. tostring(decode_error)) end
+        effects[#effects + 1] = M.view(row)
+    end
+    return success({effects = effects}, false)
+end
+local function op_complete_publication_effect(tx: sql.Transaction, actor: string, object: Object, now: integer, prepared: Object?): Result
+    local unknown_field = bounds.fields(object, {"approval_id", "proposal_digest", "effect_key", "result"})
+    if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
+    local approval_id = bounds.id(object.approval_id)
+    local proposal_digest = bounds.id(object.proposal_digest)
+    local effect_key = bounds.id(object.effect_key)
+    if not approval_id or not proposal_digest or not effect_key then
+        return failure("INVALID_ARGUMENT", "approval_id, proposal_digest and effect_key are required")
+    end
+    local result = bounds.object(object.result)
+    local result_json: string? = nil
+    local encode_error: string? = nil
+    if result then result_json, encode_error = canonical.encode(result, 8192) end
+    if not result or not result_json then return failure("INVALID_ARGUMENT", "result must be a bounded Hub reply: " .. tostring(encode_error or "invalid result")) end
+    if #result_json > 8192 then return failure("INVALID_ARGUMENT", "Hub reply exceeds the publication receipt bound") end
+    local row, load_error = load(tx, approval_id)
+    if load_error then return storage(load_error) end
+    if not row then return failure("NOT_FOUND", "approval request does not exist") end
+    if not security.can(M.CONSUME, text(row.workspace_id) or "") then
+        return failure("DENIED", "caller is not an effect owner for this workspace")
+    end
+    if row.requester_id ~= actor then return failure("DENIED", "only the consuming requester completes this effect") end
+    if row.state ~= "decided" or row.decision ~= "approved" or row.proposal_digest ~= proposal_digest
+        or row.consumed_effect ~= effect_key or row.consumer_id ~= actor then
+        return failure("CONFLICT", "publication effect is not consumed by this requester", M.view(row))
+    end
+    if row.effect_completed_at ~= nil then
+        if row.effect_result_json ~= result_json then return failure("CONFLICT", "publication effect already has a different receipt", M.view(row)) end
+        return success(M.view(row), true)
+    end
+    local update_error = store.complete_effect(tx, approval_id, stamp(now), result_json, stamp(now))
+    if update_error then return storage("record completed publication effect") end
+    local updated = load(tx, approval_id)
+    if not updated then return storage("read completed publication effect") end
+    return success(M.view(updated), false)
+end
 local function may_read(actor: string, row: Row): (boolean, string?)
     if row.requester_id == actor then return true, nil end
     if security.can(M.MANAGE, text(row.workspace_id) or "") then return true, nil end
@@ -941,7 +1006,7 @@ local function op_inbox(tx: sql.Transaction, actor: string, object: Object, now:
             return storage("approval inbox entry is corrupt")
         end
         next_seq = sequence
-        local row, load_error = load(tx, approval_id :: string)
+        local row, load_error = load(tx, approval_id)
         if load_error then return storage(load_error) end
         if row then
             local visible, policy_error = eligible(actor, row)
@@ -1050,7 +1115,7 @@ local function op_feed_read_after(tx: sql.Transaction, actor: string, object: Ob
     if not page.ok then return page end
     local value = bounds.object(page.value)
     if not value then return storage("read approval page") end
-    local changes = value.changes :: {Object}
+    local changes = value.changes
     local events: {Object} = {}
     local page_bytes, truncated = 0, false
     local next_cursor = value.next_seq
@@ -1157,9 +1222,19 @@ end
 function M.node(): (string?, string?)
     return node()
 end
+local function op_attention_count(tx: sql.Transaction, actor: string, object: Object, now: integer, _: Object?): Result
+    local workspace = bounds.id(object.workspace_id)
+    if not workspace or bounds.fields(object, {"workspace_id"}) then return failure("INVALID_ARGUMENT", "attention count needs one workspace") end
+    if not security.can("bee.approvals.attention", workspace) then return failure("DENIED", "caller may not count this workspace's attention") end
+    local count, count_error = store.attention_count(tx, workspace, now)
+    if count_error or count == nil then return storage(count_error or "count attention") end
+    return success({count = count}, false)
+end
+operations.attention_count = op_attention_count
 operations.decide_batch = op_decide_batch
 operations.request, operations.decide, operations.withdraw, operations.consume, operations.revalidate = op_request, op_decide, op_withdraw, op_consume, op_revalidate
 operations.installation_effects, operations.complete_installation_effect = op_installation_effects, op_complete_installation_effect
+operations.publication_effects, operations.complete_publication_effect = op_publication_effects, op_complete_publication_effect
 operations.read, operations.inbox, operations.list, operations.reconcile = op_read, op_inbox, op_list, op_reconcile
 operations.feed_snapshot, operations.feed_read_after = op_feed_snapshot, op_feed_read_after
 preparations.request = prepare_request
@@ -1170,8 +1245,11 @@ function M.withdraw(value: unknown): Reply return run(value, "withdraw") end
 function M.consume(value: unknown): Reply return run(value, "consume") end
 function M.installation_effects(value: unknown): Reply return run(value, "installation_effects") end
 function M.complete_installation_effect(value: unknown): Reply return run(value, "complete_installation_effect") end
+function M.publication_effects(value: unknown): Reply return run(value, "publication_effects") end
+function M.complete_publication_effect(value: unknown): Reply return run(value, "complete_publication_effect") end
 function M.revalidate(value: unknown): Reply return run(value, "revalidate") end
 function M.read(value: unknown): Reply return run(value, "read") end
+function M.attention_count(value: unknown): Reply return run(value, "attention_count") end
 function M.inbox(value: unknown): Reply return run(value, "inbox") end
 function M.feed_snapshot(value: unknown): Reply return run(value, "feed_snapshot") end
 function M.feed_read_after(value: unknown): Reply return run(value, "feed_read_after") end

@@ -15,6 +15,11 @@ local engine = require("engine")
 local M = {}
 type Result = transaction.Result
 type Checkpoint = {[string]: unknown}
+type OpenRequest = {sender_id: string, targets: {[string]: boolean}, remaining: integer}
+type LastOutcome = {kind: string, outcome: record_types.Outcome, at_sequence: integer}
+type Folded = {schema: string, messages: integer, actions: {[string]: string}, open_requests: {[string]: OpenRequest},
+    pending_approvals: {[string]: {requester_id: string, request_kind: string?}}, last_outcome: LastOutcome?, last_activity_sequence: integer}
+
 type Object = {[string]: unknown}
 M.SCHEMA = "bee.status@1"
 M.KIND = "status"
@@ -22,28 +27,78 @@ function M.empty(): Checkpoint
     return {schema = M.SCHEMA, messages = 0, actions = {}, open_requests = {}, pending_approvals = {},
         last_outcome = nil, last_activity_sequence = 0}
 end
+local function decoded(raw: Checkpoint): Folded?
+    local messages = bounds.count(raw.messages)
+    local raw_actions = bounds.object(raw.actions)
+    if not messages or not raw_actions then return nil end
+    local actions: {[string]: string} = {}
+    for key, value in pairs(raw_actions) do
+        if type(value) ~= "string" then return nil end
+        actions[key] = value
+    end
+    local raw_requests = bounds.object(raw.open_requests)
+    local raw_approvals = bounds.object(raw.pending_approvals)
+    local last_activity_sequence = bounds.count(raw.last_activity_sequence)
+    if not raw_requests or not raw_approvals or not last_activity_sequence then return nil end
+    local open_requests: {[string]: OpenRequest} = {}
+    for key, value in pairs(raw_requests) do
+        local request = bounds.object(value)
+        if not request or type(request.sender_id) ~= "string" then return nil end
+        local remaining = bounds.count(request.remaining)
+        local raw_targets = bounds.object(request.targets)
+        if not remaining or not raw_targets then return nil end
+        local targets: {[string]: boolean} = {}
+        for target, present in pairs(raw_targets) do
+            if type(present) ~= "boolean" then return nil end
+            targets[target] = present
+        end
+        open_requests[key] = {sender_id = request.sender_id, remaining = remaining, targets = targets}
+    end
+    local pending_approvals: {[string]: {requester_id: string, request_kind: string?}} = {}
+    for key, value in pairs(raw_approvals) do
+        local approval = bounds.object(value)
+        if not approval or type(approval.requester_id) ~= "string" then return nil end
+        local request_kind: string? = nil
+        if approval.request_kind ~= nil then
+            if type(approval.request_kind) ~= "string" then return nil end
+            request_kind = approval.request_kind
+        end
+        pending_approvals[key] = {requester_id = approval.requester_id, request_kind = request_kind}
+    end
+    local last_outcome: LastOutcome? = nil
+    if raw.last_outcome ~= nil then
+        local last = bounds.object(raw.last_outcome)
+        if not last or type(last.kind) ~= "string" then return nil end
+        local sequence = bounds.count(last.at_sequence)
+        local outcome = last.outcome
+        if not sequence or (outcome ~= "succeeded" and outcome ~= "failed" and outcome ~= "cancelled" and outcome ~= "uncertain") then return nil end
+        last_outcome = {kind = last.kind, outcome = outcome, at_sequence = sequence}
+    end
+    return {schema = M.SCHEMA, messages = messages, actions = actions, open_requests = open_requests,
+        pending_approvals = pending_approvals, last_outcome = last_outcome, last_activity_sequence = last_activity_sequence}
+end
 -- Folds one record into the checkpoint. Pure: no reads, no time. It keeps
 -- only what a status surface needs, as the record committed it.
 function M.fold(raw: Checkpoint, entry: record_types.Record): Checkpoint
-    local checkpoint = raw
-    local actions = checkpoint.actions :: {[string]: string}
-    local open_requests = checkpoint.open_requests :: {[string]: Object}
-    local pending_approvals = checkpoint.pending_approvals :: {[string]: Object}
+    local checkpoint = assert(decoded(raw), "stored checkpoint is corrupt")
+    local actions = checkpoint.actions
+    local open_requests = checkpoint.open_requests
+    local pending_approvals = checkpoint.pending_approvals
     checkpoint.last_activity_sequence = entry.sequence
     if entry.kind == "message" then
-        local body = entry.body :: record_types.Message
-        checkpoint.messages = (checkpoint.messages :: integer) + 1
+        local body = entry.body
+        checkpoint.messages = (checkpoint.messages) + 1
         if body.message_kind == "request" and #body.recipient_ids > 0 then
             local targets: {[string]: boolean} = {}
             for _, recipient in ipairs(body.recipient_ids) do targets[recipient] = true end
             open_requests[body.message_id] = {sender_id = body.sender_id, targets = targets, remaining = #body.recipient_ids}
         end
     elseif entry.kind == "request.answered" then
-        local body = entry.body :: record_types.Answered
+        local body = entry.body
         local open = open_requests[body.request_message_id]
         if open then
-            local remaining = (open.remaining :: integer) - 1
-            local targets = open.targets :: {[string]: boolean}
+            local remaining = (open.remaining) - 1
+            local targets = open.targets
             targets[body.recipient_id] = nil
             if remaining <= 0 then open_requests[body.request_message_id] = nil else open.remaining = remaining end
         end
@@ -54,7 +109,7 @@ function M.fold(raw: Checkpoint, entry: record_types.Record): Checkpoint
         -- supersedes an earlier uncertain outcome of the same action only.
         actions[entry.action_id] = "running"
     elseif entry.kind == "turn.end" and entry.turn_id then
-        local body = entry.body :: record_types.TurnEnd
+        local body = entry.body
         checkpoint.last_outcome = {kind = "turn", outcome = body.outcome, at_sequence = entry.sequence}
         -- Uncertainty is per action: this turn's outcome touches only its own
         -- action, never another's. A different action succeeding cannot clear it.
@@ -63,16 +118,16 @@ function M.fold(raw: Checkpoint, entry: record_types.Record): Checkpoint
             elseif actions[entry.action_id] == "uncertain" then actions[entry.action_id] = "running" end
         end
     elseif entry.kind == "receipt" and entry.action_id then
-        local body = entry.body :: record_types.Receipt
+        local body = entry.body
         checkpoint.last_outcome = {kind = "receipt", outcome = body.outcome, at_sequence = entry.sequence}
         if body.outcome == "uncertain" then actions[entry.action_id] = "uncertain"
         elseif body.scope == "action" then actions[entry.action_id] = nil
         elseif actions[entry.action_id] == "uncertain" then actions[entry.action_id] = "running" end
     elseif entry.kind == "approval.request" then
-        local body = entry.body :: record_types.ApprovalRequest
+        local body = entry.body
         pending_approvals[body.approval_id] = {requester_id = body.requester_id, request_kind = body.request_kind}
     elseif entry.kind == "approval.transition" then
-        local body = entry.body :: record_types.ApprovalTransition
+        local body = entry.body
         pending_approvals[body.approval_id] = nil
     end
     return checkpoint
@@ -82,10 +137,11 @@ local SPEC: engine.Spec = {schema = M.SCHEMA, kind = M.KIND, empty = M.empty, fo
 -- and the caller's own identity. Pure. "running" is a recorded start with no
 -- recorded end, not a live process; a projection behind the head is stale,
 -- reported as such rather than as certainty.
-function M.derive(checkpoint: Checkpoint, actor: string, through: integer, head: integer): Object
-    local actions = checkpoint.actions :: {[string]: string}
-    local open_requests = checkpoint.open_requests :: {[string]: Object}
-    local pending_approvals = checkpoint.pending_approvals :: {[string]: Object}
+function M.derive(raw: Checkpoint, actor: string, through: integer, head: integer): Object
+    local checkpoint = assert(decoded(raw), "stored checkpoint is corrupt")
+    local actions = checkpoint.actions
+    local open_requests = checkpoint.open_requests
+    local pending_approvals = checkpoint.pending_approvals
     local running, open_actions, uncertain_actions = 0, 0, 0
     for _, state in pairs(actions) do
         open_actions = open_actions + 1
@@ -97,7 +153,7 @@ function M.derive(checkpoint: Checkpoint, actor: string, through: integer, head:
     local waiting_on_you = false
     for message_id, open in pairs(open_requests) do
         request_count = request_count + 1
-        local targets = open.targets :: {[string]: boolean}
+        local targets = open.targets
         if targets[actor] then
             waiting_on_you = true
             waiting_message_ids[#waiting_message_ids + 1] = message_id
@@ -128,9 +184,12 @@ end
 function M.read(db: sql.DB, actor: string, request: unknown): Result
     local result = engine.read(SPEC, db, actor, request)
     if not result.ok then return result end
-    local value = result.value :: Object
-    local checkpoint = value.checkpoint :: Checkpoint
-    value.status = M.derive(checkpoint, actor, value.through_sequence :: integer, value.head_sequence :: integer)
+    local value = bounds.object(result.value)
+    if not value then return transaction.failure("INTERNAL", "projection result is corrupt") end
+    local checkpoint = bounds.object(value.checkpoint)
+    local through, head = bounds.count(value.through_sequence), bounds.count(value.head_sequence)
+    if not checkpoint or not through or not head or not decoded(checkpoint) then return transaction.failure("INTERNAL", "stored checkpoint is corrupt") end
+    value.status = M.derive(checkpoint, actor, through, head)
     return result
 end
 function M.update(db: sql.DB, actor: string, request: unknown): Result

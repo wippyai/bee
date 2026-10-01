@@ -13,12 +13,17 @@ local ELLIPSIS = "…"
 local MARKER = "›"
 
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
-type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}}
 -- A button with a key is drawn as "Key Label"; primary marks the one filled
 -- action, active a selected toggle. Disabled buttons stay visible and have no hit.
 type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
+type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?}
+type Bar = {x: integer, buttons: {Button}}
+type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}, controls: Controls, bars: {[integer]: Bar}}
+type View = {rows: {string}, hits: {Hit}, controls: Controls?}
+type Menu = {mode: string, selected: integer, offset: integer, controls: Controls, hits: {Hit}, signature: string, count: integer}
+
 type Window = {offset: integer, capacity: integer}
 -- A table column: width 0 is the single flexible column; align "right" for numbers.
 type Column = {title: string, width: integer, align: string?}
@@ -70,12 +75,21 @@ function M.new(width: integer, height: integer, preferences: appearance.Preferen
     local theme = appearance.theme(preferences.theme)
     local canvas = tty.canvas(width, height)
     canvas:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
-    return {width = width, height = height, theme = theme, canvas = canvas, hits = {}}
+    local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = ""}
+    local bars: {[integer]: Bar} = {}
+    return {width = width, height = height, theme = theme, canvas = canvas, hits = {}, controls = controls, bars = bars}
 end
 
 -- The painted rows, ready for output:present.
 function M.rows(painter: Painter): {string}
-    return painter.canvas:rows()
+    for y, bar in pairs(painter.bars) do M.actions(painter, y, bar.buttons, bar.x) end
+    painter.bars = {}
+    local rows = painter.canvas:rows()
+    for index, row in ipairs(rows) do
+        local gap = maximum(0, painter.width - tty.text.width(row))
+        rows[index] = row .. appearance.style(painter.theme.text, painter.theme.surface) .. string.rep(" ", gap) .. RESET
+    end
+    return rows
 end
 
 -- Draws value at (x, y) within room cells and returns the drawn width.
@@ -156,6 +170,9 @@ end
 -- A tab row. Every label switches to its short form when the full set does not
 -- fit. Returns the column after the last drawn tab.
 function M.tabs(painter: Painter, y: integer, tabs: {Tab}, selected: string): integer
+    for _, tab in ipairs(tabs) do
+        painter.controls.buttons[#painter.controls.buttons + 1] = {kind = tab.kind, label = tab.label, enabled = true}
+    end
     local full = 1
     for _, tab in ipairs(tabs) do full = full + tty.text.width(" " .. tab.label .. " ") + 1 end
     local compact = full > painter.width
@@ -174,8 +191,7 @@ function M.tabs(painter: Painter, y: integer, tabs: {Tab}, selected: string): in
     return x
 end
 
--- One button at (x, y); returns the next column, unchanged when it does not fit.
-function M.button(painter: Painter, x: integer, y: integer, button: Button): integer
+local function draw_button(painter: Painter, x: integer, y: integer, button: Button): integer
     local label = " " .. (button.key and (button.key .. " ") or "") .. button.label .. " "
     local size = tty.text.width(label)
     if x < 1 or x + size - 1 > painter.width - 1 or y < 1 or y > painter.height then return x end
@@ -190,11 +206,52 @@ function M.button(painter: Painter, x: integer, y: integer, button: Button): int
     return x + size + 1
 end
 
--- The action bar: buttons in order from column x (default 2) on row y.
+-- Declares one button in a row; rows() paints the row with shared overflow.
+function M.button(painter: Painter, x: integer, y: integer, button: Button): integer
+    local bar = painter.bars[y]
+    if not bar then bar = {x = x, buttons = {}}; painter.bars[y] = bar end
+    bar.buttons[#bar.buttons + 1] = button
+    return x + tty.text.width(" " .. (button.key and (button.key .. " ") or "") .. button.label .. " ") + 1
+end
+
+-- The screen's declared buttons, overflow and complete key hints.
+function M.controls(painter: Painter): Controls
+    return painter.controls
+end
+
+local function button_width(button: Button): integer
+    return tty.text.width(" " .. (button.key and (button.key .. " ") or "") .. button.label .. " ") + 1
+end
+
+-- Primary actions keep their place in a crowded bar; the rest remain in More.
 function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?): integer
     local column = x or 2
-    for _, button in ipairs(buttons) do column = M.button(painter, column, y, button) end
-    return column
+    local total = 0
+    for _, button in ipairs(buttons) do
+        total = total + button_width(button)
+        painter.controls.buttons[#painter.controls.buttons + 1] = button
+    end
+    local room = painter.width - column
+    if total - 1 <= room then
+        for _, button in ipairs(buttons) do column = draw_button(painter, column, y, button) end
+        return column
+    end
+    local more: Button = {kind = "frame_more", key = "F10", label = "More", enabled = true}
+    local available = room - button_width(more)
+    local chosen: {[integer]: boolean} = {}
+    for _, primary in ipairs({true, false}) do
+        for index, button in ipairs(buttons) do
+            if (button.primary == true) == primary and button_width(button) <= available then
+                chosen[index] = true
+                available = available - button_width(button)
+            end
+        end
+    end
+    for index, button in ipairs(buttons) do
+        if chosen[index] then column = draw_button(painter, column, y, button)
+        else painter.controls.overflow[#painter.controls.overflow + 1] = button end
+    end
+    return draw_button(painter, column, y, more)
 end
 
 -- Canonical key-hint text: "↑↓ select · Enter open · Esc close".
@@ -204,24 +261,30 @@ function M.hints(hints: {Hint}): string
     return table.concat(parts, " · ")
 end
 
--- The final row: the changing status at the left and the stable key hints at
--- the right. A status wins the row when both do not fit; with no status the
--- hints stand alone.
+-- The footer reserves a bounded region for hints and an always visible Help.
 function M.footer(painter: Painter, status: string, hints: string)
     local y = painter.height
+    painter.controls.status = status
     if y < 1 then return end
+    for part in hints:gmatch("[^·]+") do
+        local key, verb = part:match("^%s*(%S+)%s+(.+)%s*$")
+        if key and verb then painter.controls.hints[#painter.controls.hints + 1] = {key = key, verb = verb:gsub("%s+$", "")} end
+    end
     local theme = painter.theme
     M.fill(painter, y)
-    local room = painter.width - 2
-    if status == "" then
-        M.put(painter, 2, y, hints, room, theme.muted)
-        return
-    end
-    local drawn = M.put(painter, 2, y, status, room, theme.text)
-    local size = tty.text.width(hints)
-    if hints ~= "" and drawn + 4 + size <= room then
-        M.put(painter, painter.width - size, y, hints, size, theme.muted)
-    end
+    local room = maximum(0, painter.width - 2)
+    local help = M.fit("? help", room)
+    local help_size = tty.text.width(help)
+    local hint_room = maximum(0, room - help_size - 3)
+    if status ~= "" then hint_room = maximum(0, hint_room - minimum(tty.text.width(status), room // 3) - 3) end
+    local shown = M.fit(hints, hint_room)
+    local size = tty.text.width(shown)
+    local hint_x = painter.width - help_size - 3 - size
+    if status ~= "" then M.put(painter, 2, y, status, maximum(0, hint_x - 4), theme.text) end
+    if size > 0 then M.put(painter, hint_x, y, shown, size, theme.muted) end
+    local help_x = painter.width - help_size
+    M.put(painter, help_x, y, help, help_size, theme.accent)
+    M.add_hit(painter, "frame_help", 0, "", help_x, y, help_size, 1)
 end
 
 -- The visible window of a scrolling list of count rows in capacity slots,
@@ -780,6 +843,169 @@ function M.palette(painter: Painter, width: integer, height: integer, value: Pal
         draw_row(painter, content, first + slot - 1, text, index == value.selected, "choice", index, choice.key or "", nil, true)
     end
     return window
+end
+
+-- An app-owned More and Help state; the app retains it between redraws.
+function M.menu(): Menu
+    local controls: Controls = {buttons = {}, overflow = {}, hints = {}, status = ""}
+    return {mode = "", selected = 1, offset = 0, controls = controls, hits = {}, signature = "", count = 0}
+end
+
+local function choices(menu: Menu): {Button}
+    if menu.mode == "more" then return menu.controls.overflow end
+    return menu.controls.buttons
+end
+
+-- Paints a shared overlay from this screen's declared buttons and hints.
+function M.render(view: View, menu: Menu, preferences: appearance.Preferences)
+    local controls: Controls
+    if view.controls then controls = view.controls
+    else controls = {buttons = {}, overflow = {}, hints = {}, status = ""} end
+    local parts: {string} = {}
+    for _, button in ipairs(controls.buttons) do parts[#parts + 1] = button.kind end
+    for _, hint in ipairs(controls.hints) do parts[#parts + 1] = hint.key .. hint.verb end
+    local signature = table.concat(parts, "\n")
+    if signature ~= menu.signature then menu.mode, menu.selected, menu.offset = "", 1, 0 end
+    menu.signature, menu.controls = signature, controls
+    if menu.mode == "more" and #controls.overflow == 0 then menu.mode = "" end
+    if menu.mode == "" then menu.hits = view.hits; return end
+    local painter = M.new(tty.text.width(view.rows[1] or ""), #view.rows, preferences)
+    M.header(painter, menu.mode == "more" and "MORE ACTIONS" or "HELP", "Esc back")
+    M.add_hit(painter, "frame_back", 0, "", maximum(1, painter.width - 8), 1, 8, 1)
+    local items = choices(menu)
+    local lines: {string} = {}
+    for _, button in ipairs(items) do
+        lines[#lines + 1] = (button.key and (button.key .. "  ") or "") .. button.label .. (button.enabled and "" or " · unavailable")
+    end
+    if menu.mode == "help" then
+        for _, hint in ipairs(controls.hints) do lines[#lines + 1] = hint.key .. "  " .. hint.verb end
+        lines[#lines + 1] = "F10  More actions"
+        lines[#lines + 1] = "?  Help"
+        local status = controls.status or ""
+        if status ~= "" then
+            local remaining = "Status: " .. status
+            while remaining ~= "" and painter.width > 2 do
+                local shown = tty.text.truncate(remaining, painter.width - 2, "")
+                if shown == "" then break end
+                lines[#lines + 1] = shown
+                remaining = remaining:sub(#shown + 1)
+            end
+        end
+    end
+    menu.count = #lines
+    menu.selected = minimum(maximum(1, menu.selected), maximum(1, #lines))
+    local window = M.window(#lines, painter.height - 4, menu.selected, menu.offset)
+    menu.offset = window.offset
+    for slot = 1, window.capacity do
+        local index = window.offset + slot
+        if not lines[index] then break end
+        local button = items[index]
+        M.row(painter, slot + 2, lines[index], index == menu.selected, "frame_choice", index, "",
+            button and not button.enabled and painter.theme.muted or nil)
+    end
+    M.footer(painter, "", menu.mode == "more" and "↑↓ select · Enter choose · Esc back" or "↑↓ scroll · Esc back")
+    view.rows, view.hits = M.rows(painter), painter.hits
+    menu.hits = view.hits
+end
+
+local function choose(menu: Menu, index: integer): tty.TTYEvent?
+    local button = choices(menu)[index]
+    if menu.mode ~= "more" or not button or not button.enabled then return nil end
+    for _, hit in ipairs(menu.hits) do
+        if hit.kind == "frame_choice" and hit.index == index then
+            hit.kind, hit.index = button.kind, 0
+            menu.mode = ""
+            return {type = "mouse", action = "press", button = "left", x = hit.x, y = hit.y, ctrl = false, alt = false, shift = false}
+        end
+    end
+    return nil
+end
+
+local function coordinate(value: unknown): integer?
+    if type(value) ~= "number" or value ~= value or value < 1 or value > 2147483647 or value ~= math.floor(value) then return nil end
+    return math.floor(value)
+end
+local function input_event(value: unknown): tty.TTYEvent?
+    if type(value) ~= "table" then return nil end
+    if value.ctrl ~= nil and type(value.ctrl) ~= "boolean" then return nil end
+    if value.alt ~= nil and type(value.alt) ~= "boolean" then return nil end
+    if value.shift ~= nil and type(value.shift) ~= "boolean" then return nil end
+    if value.type == "key" then
+        if (value.key ~= nil and type(value.key) ~= "string") or type(value.key_type) ~= "string" or (value.action ~= "press" and value.action ~= "release") then return nil end
+        return {type = "key", key = type(value.key) == "string" and value.key or "", key_type = value.key_type, action = value.action == "release" and "release" or "press", ctrl = value.ctrl == true, alt = value.alt == true, shift = value.shift == true}
+    elseif value.type == "mouse" then
+        local x, y = coordinate(value.x), coordinate(value.y)
+        if not x or not y or type(value.button) ~= "string" or (value.action ~= "press" and value.action ~= "release" and value.action ~= "motion" and value.action ~= "wheel") then return nil end
+        return {type = "mouse", x = x, y = y, button = value.button, action = value.action == "release" and "release" or (value.action == "motion" and "motion" or (value.action == "wheel" and "wheel" or "press")), ctrl = value.ctrl == true, alt = value.alt == true, shift = value.shift == true}
+    elseif value.type == "start" or value.type == "resize" then
+        local width, height = coordinate(value.width), coordinate(value.height)
+        if not width or not height then return nil end
+        if value.type == "start" then return {type = "start", width = width, height = height} end
+        return {type = "resize", width = width, height = height}
+    elseif value.type == "paste" and type(value.text) == "string" then return {type = "paste", text = value.text}
+    elseif value.type == "focus" and type(value.focused) == "boolean" then return {type = "focus", focused = value.focused}
+    elseif value.type == "visibility" and type(value.visible) == "boolean" then return {type = "visibility", visible = value.visible}
+    elseif value.type == "close" then return {type = "close"} end
+    return nil
+end
+
+-- Returns nil for consumed input. Selected actions reuse the app's mouse path.
+-- text_entry preserves letters and '?' while a form or editor owns input.
+function M.route(menu: Menu, value: unknown, text_entry: boolean?): (tty.TTYEvent?, boolean)
+    local event = input_event(value)
+    if not event then return nil, false end
+    if event.type == "start" or event.type == "resize" or event.type == "close" then return event, false end
+    if event.type == "key" and event.action ~= "release" then
+        local key, letter = event.key_type or "", event.key or ""
+        local plain = not event.ctrl and not event.alt
+        if plain and (key == "f10" or (letter == "?" and not text_entry)) then
+            local mode = key == "f10" and "more" or "help"
+            if mode ~= "more" or #menu.controls.overflow > 0 then
+                menu.mode = menu.mode == mode and "" or mode
+                menu.selected, menu.offset = 1, 0
+                return nil, true
+            end
+        end
+        if menu.mode ~= "" then
+            if key == "esc" or key == "escape" then menu.mode = ""
+            elseif key == "up" then menu.selected = maximum(1, menu.selected - 1)
+            elseif key == "down" then menu.selected = menu.selected + 1
+            elseif key == "tab" then menu.selected = menu.selected + (event.shift and -1 or 1)
+            elseif key == "pgup" then menu.selected = maximum(1, menu.selected - 8)
+            elseif key == "pgdown" then menu.selected = menu.selected + 8
+            elseif key == "home" then menu.selected = 1
+            elseif key == "end" then menu.selected = menu.count
+            elseif key == "enter" then return choose(menu, menu.selected), true
+            elseif plain and menu.mode == "more" then
+                for index, button in ipairs(choices(menu)) do
+                    if button.key and button.key:lower() == letter:lower() then return choose(menu, index), true end
+                end
+            end
+            return nil, true
+        end
+    elseif event.type == "mouse" then
+        local hit = M.hit(menu.hits, event.x or 0, event.y or 0)
+        if event.action == "press" and event.button == "left" and hit then
+            if hit.kind == "frame_back" then
+                menu.mode = ""
+                return nil, true
+            elseif hit.kind == "frame_more" or hit.kind == "frame_help" then
+                menu.mode = hit.kind == "frame_more" and "more" or "help"
+                menu.selected, menu.offset = 1, 0
+                return nil, true
+            elseif hit.kind == "frame_choice" and menu.mode == "more" then return choose(menu, hit.index), true end
+        end
+        if menu.mode ~= "" then
+            if event.action == "wheel" then menu.selected = maximum(1, menu.selected + ((event.button == "wheel_up" or event.button == "up") and -1 or 1)) end
+            return nil, true
+        end
+    end
+    if menu.mode ~= "" then return nil, false end
+    if event.type == "key" and event.key and event.action ~= "release" and (not text_entry or event.ctrl) and not event.alt then
+        return {type = "key", action = event.action, key = event.key:lower(), key_type = event.key_type,
+            ctrl = event.ctrl, alt = event.alt, shift = event.shift}, false
+    end
+    return event, false
 end
 
 return M

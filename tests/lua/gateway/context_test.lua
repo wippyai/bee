@@ -5,6 +5,14 @@ type Object = {[string]: unknown}
 
 local function run()
     test.describe("Gateway MCP context values", function()
+        test.it("supplies the authenticated host workspace to nested owner calls", function()
+            local fixed = { ["bee.workspace_id"] = "workspace-a" }
+            local values = assert(context.compose(fixed, {}, {}))
+            local bound = assert(context.bind(values, {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a",
+                action_id = "action-a", attempt_id = "attempt-a", workspace_id = "workspace-a"}))
+            test.eq(bound["bee.workspace_id"], "workspace-a")
+            test.is_nil(context.compose(fixed, {["bee.workspace_id"] = "foreign"}, {"bee.workspace_id"}))
+        end)
         test.it("reserves binding attribution and isolates it from caller context", function()
             local identity = {binding_id = "binding-a", thread_id = "thread-a", subject = "subject-a", action_id = "action-a", attempt_id = "attempt-a",
                 origin_view = {view_id = "view-a", instance_id = "instance-a"}}

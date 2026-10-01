@@ -5,6 +5,19 @@ LINT_FLAGS ?=
 RUNTIME_CACHE_KEY := $(shell python3 -c 'import json; print(json.load(open("wippy.build.json"))["runtime"]["commit"][:12])')
 WIPPY_CACHE_DIR ?= $(abspath .wippy/test-cache/$(RUNTIME_CACHE_KEY))
 export WIPPY_CACHE_DIR
+# The toolchain is a derived artifact of wippy.build.json. Gates that run the
+# default binary rebuild it first when its provenance records a different
+# manifest; an explicit caller WIPPY override is used as is.
+ifeq ($(origin WIPPY),file)
+TOOLCHAIN_CURRENT := toolchain-current
+endif
+.PHONY: toolchain-current
+toolchain-current:
+	python3 build/verify_cached_toolchain.py current || $(MAKE) native-tools
+lint: $(TOOLCHAIN_CURRENT)
+test: $(TOOLCHAIN_CURRENT)
+fixture-lint: $(TOOLCHAIN_CURRENT)
+check: $(TOOLCHAIN_CURRENT)
 .PHONY: setup run lint test fixture-lint fixture-gateway-client threads threads-module resources-module saved-profiles-check gateway-check pack check
 setup: native-tools
 
@@ -130,7 +143,7 @@ run:
 idle-cpu-check:
 	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
 lint:
-	$(WIPPY) lint $(LINT_FLAGS) --set lua.type_system.enabled=true --set lua.type_system.strict=true
+	$(WIPPY) lint $(LINT_FLAGS) --strict-any --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
 	test -n "$(CODEX)"
@@ -454,23 +467,6 @@ managed-launch-check: fixture-gateway-client
 managed-launch-fixture-check: fixture-gateway-client
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/managed_launch_fixture.py
 
-.PHONY: thread-launch-check thread-launch-live-check thread-launch-live-long-check
-thread-launch-check: fixture-gateway-client
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py
-
-# Explicit provider login smoke. The subprocess receives no provider API key
-# variables; it uses the local CLI login file when both file and CLI exist.
-thread-launch-live-check: fixture-gateway-client
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py --live
-
-# Multi-minute Claude batch research leg; captures raw child stdout in its scratch fixture.
-thread-launch-live-long-check: fixture-gateway-client
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/thread_launch.py --live-long
-
-.PHONY: cross-session-check
-cross-session-check: fixture-gateway-client
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/cross_session.py
-
 .PHONY: nested-names-upgrade-check
 nested-names-upgrade-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/nested_names_upgrade.py
@@ -647,3 +643,15 @@ research-live-measurement-check:
 	@test -n "$(ARTIFACT)" || (echo "ARTIFACT is required"; exit 1)
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native vet ../tests/research_delivery.go ../tests/research_desktop.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/research_delivery.go ../tests/research_desktop.go -root .. -runtime "$(abspath $(WIPPY))" -artifact "$(abspath $(ARTIFACT))" -measurement -live
+
+.PHONY: docker-runtime-image
+# Explicit executable artifacts are image inputs; login sources are not build inputs.
+docker-runtime-image:
+	python3 build/docker-runtime-image.py --output "$(DOCKER_IMAGE_OUTPUT)" $(foreach artifact,$(DOCKER_RUNTIME_ARTIFACTS),--artifact "$(artifact)")
+
+.PHONY: docker-placement-live-check
+DOCKER_PROVIDER ?= claude
+DOCKER_PROOF_MODE ?= window
+docker-placement-live-check:
+	test -n "$(DOCKER_IMAGE)" -a -n "$(DOCKER_EVIDENCE)"
+	TMPDIR="$(abspath .wippy/docker-work/tmp)" python3 tests/docker_placement_live.py --image "$(DOCKER_IMAGE)" --evidence "$(DOCKER_EVIDENCE)" --provider "$(DOCKER_PROVIDER)" --mode "$(DOCKER_PROOF_MODE)" --standalone "$(abspath dist/bee)" $(if $(DOCKER_OPENCODE_MODEL),--opencode-model "$(DOCKER_OPENCODE_MODEL)")

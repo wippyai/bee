@@ -119,7 +119,7 @@ local function desired_intent(config: Config, intent: Object): ({unknown}?, Obje
         end
     end
     local bytes, digest = intent.application_admission_bytes, intent.application_admission_digest
-    if bytes == nil and digest == nil then return entries :: {unknown}, nil, nil end
+    if bytes == nil and digest == nil then return entries, nil, nil end
     if type(bytes) ~= "string" or type(digest) ~= "string" then
         return nil, nil, failure("CONFLICT", "immutable application admission blob is incomplete")
     end
@@ -131,13 +131,13 @@ local function desired_intent(config: Config, intent: Object): ({unknown}?, Obje
         or record.source_workspace ~= intent.source_workspace or record.artifact_digest ~= intent.artifact_digest then
         return nil, nil, failure("CONFLICT", "immutable application admission does not match activation identity")
     end
-    return entries :: {unknown}, {bytes = measured.bytes, digest = measured.digest}, nil
+    return entries, {bytes = measured.bytes, digest = measured.digest}, nil
 end
 
 local function composed_base_diagnostic(intent: Object, current: Object): string?
     local prior = type(intent.resolution_bytes) == "string"
-        and object(json.decode(intent.resolution_bytes :: string)) or nil
-    local next_candidate = type(current.candidate) == "table" and (current.candidate :: Object) or nil
+        and object(json.decode(intent.resolution_bytes)) or nil
+    local next_candidate = type(current.candidate) == "table" and (current.candidate) or nil
     local before = prior and prior.base_digest or nil
     local after = next_candidate and next_candidate.base_digest or nil
     if type(before) == "string" and type(after) == "string" and before ~= after then
@@ -156,8 +156,8 @@ local function unchanged(intent: Object, current: Object): Result?
                 local named = composed_base_diagnostic(intent, current)
                 if named then return failure("CONFLICT", named) end
                 local prior = type(intent.resolution_bytes) == "string"
-                    and object(json.decode(intent.resolution_bytes :: string)) or nil
-                local next_candidate = type(current.candidate) == "table" and (current.candidate :: Object) or nil
+                    and object(json.decode(intent.resolution_bytes)) or nil
+                local next_candidate = type(current.candidate) == "table" and (current.candidate) or nil
                 if prior and next_candidate then
                     for _, candidate_field in ipairs({"destination_node", "source_node", "base_revision", "base_digest"}) do
                         if prior[candidate_field] ~= next_candidate[candidate_field] then
@@ -210,9 +210,9 @@ function M.prepare(raw_config: Config, raw: unknown): Result
     local prepare_key, request_key, bind_key = key(prefix, "prepare"), key(prefix, "request"), key(prefix, "bind")
     if not prepare_key or not request_key or not bind_key then return failure("INVALID", "activation receipt_key is too long") end
     local plan, plan_error = selected(config, identity)
-    if not plan then return plan_error :: Result end
+    if not plan then return plan_error end
     local facts, facts_error = measured(config, plan)
-    if not facts then return facts_error :: Result end
+    if not facts then return facts_error end
     local admission_error = admission_owner(config, facts)
     if admission_error then return admission_error end
     local prepared = activations.call(config.activations, config.actor_id, {operation = "prepare_activation",
@@ -258,7 +258,8 @@ function M.prepare(raw_config: Config, raw: unknown): Result
     end
     local proposal = object(facts.capability_proposal)
     if review and review.requires_approval == true and installed and proposal and config.leases then
-        local proposed = proposal.capabilities :: {unknown}
+        local proposed = bounds.dense_list(proposal.capabilities, bounds.MAX_ARRAY_ITEMS, "capabilities")
+        if not proposed then return failure("INVALID", "capability proposal is invalid") end
         local lease = lease_store.find_active(config.leases, config.overlay_owner, proposed)
         local lease_key = key(prefix, "lease-authorize")
         if lease and lease_key then
@@ -281,9 +282,9 @@ end
 
 local function remeasure_selected(config: Config, intent: Object): Result?
     local plan, plan_error = selected(config, intent)
-    if not plan then return plan_error :: Result end
+    if not plan then return plan_error end
     local current, measurement_error = measured(config, plan)
-    if not current then return measurement_error :: Result end
+    if not current then return measurement_error end
     local admission_error = admission_owner(config, current)
     if admission_error then return admission_error end
     return unchanged(intent, current)
@@ -343,7 +344,7 @@ end
 
 local function remeasure_restoration(config: Config, intent: Object): Result?
     local current, measurement_error = measured(config, approved_spec(intent))
-    if not current then return measurement_error :: Result end
+    if not current then return measurement_error end
     local admission_error = admission_owner(config, current)
     if admission_error then return admission_error end
     for _, field in ipairs({"owner_node", "workspace_id", "source_node", "source_workspace", "version",
@@ -372,7 +373,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     local intent_id, prefix = bounds.id(intent_raw), bounds.id(receipt_raw)
     if not config or not intent_id or not prefix then return failure("INVALID", config_error or "activation resume identity is invalid") end
     local intent, status_error = status(config, intent_id)
-    if not intent then return status_error :: Result end
+    if not intent then return status_error end
     if intent.overlay_owner ~= config.overlay_owner then return failure("DENIED", "activation belongs to another overlay owner") end
 
     if intent.phase == "approval_bound" then
@@ -387,7 +388,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
     if intent.phase == "consuming" then
         if intent.grant_reuse_digest ~= nil then
             local current, current_error = remeasure_authorized(config, intent)
-            if not current then return current_error :: Result end
+            if not current then return current_error end
             local installed = object(current.capability_installed)
             if not installed or installed.record_digest ~= intent.grant_reuse_digest
                 or installed.approval_id ~= intent.approval_id then
@@ -432,7 +433,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
 
     if intent.phase == "authorized" then
         local current, measurement_error = remeasure_authorized(config, intent)
-        if not current then return measurement_error :: Result end
+        if not current then return measurement_error end
         if intent.consumed_consumer_id == LEASE_CONSUMER then
             local proof = config.leases and lease_store.authorized(config.leases, intent_id) or nil
             if not proof or proof.approval_id ~= intent.approval_id
@@ -504,9 +505,9 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             return transaction.success(result, false)
         end
         local spec, measurement_error = remeasure_progress(config, intent)
-        if not spec then return measurement_error :: Result end
+        if not spec then return measurement_error end
         local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
-        if not desired_entries then return desired_error :: Result end
+        if not desired_entries then return assert(desired_error) end
         local function uncertain(diagnostics: string): Result
             local outcome_key = key(prefix, "outcome-uncertain-" .. tostring(intent.revision))
             if not outcome_key then return failure("INVALID", "activation receipt key is too long") end
@@ -538,7 +539,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
             end
             local reverified, reverify_error = remeasure_progress(config, intent)
             if not reverified then
-                return uncertain(tostring((reverify_error :: Result).message
+                return uncertain(tostring((reverify_error).message
                     or "activation apply could not be remeasured against the current composed registry"))
             end
             if reverified.resolution_digest ~= spec.resolution_digest then
@@ -557,7 +558,7 @@ function M.step(raw_config: Config, intent_raw: unknown, receipt_raw: unknown): 
         local superseded = require_desired(config, intent)
         if superseded then return superseded end
         local desired_entries, desired_admission, desired_error = desired_intent(config, intent)
-        if not desired_entries then return desired_error :: Result end
+        if not desired_entries then return assert(desired_error) end
         local matches, observe_error = config.matches(config.overlay_owner, desired_entries, desired_admission, intent)
         if matches == nil then return failure("UNAVAILABLE", tostring(observe_error)) end
         if matches then return transaction.success(intent, true) end

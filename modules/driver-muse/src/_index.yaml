@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Muse driver
-    comment: Optional harness binding; host activation and launch policies authorize its use
+    comment: Optional harness binding; host activation and launch policies authorize
+      its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -53,16 +54,13 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    values: bee.threads.records:values
+    universal: bee.driver:universal
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [hash]
+  modules:
+  - hash
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -72,9 +70,12 @@ entries:
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    types: bee.driver:types
-    turn_budget: bee.driver:turn_budget
+    universal: bee.driver:universal
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: binding
   kind: contract.binding
   contracts:
@@ -84,9 +85,13 @@ entries:
       dispatch: bee.driver.muse.binding:dispatch
       normalize: bee.driver.muse.binding:normalize
       configure: bee.driver.muse.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.muse.binding:locate
   meta:
     type: harness.driver
     driver_id: muse
+    descriptor_ref: bee.driver.muse.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.muse:profiles
 - name: profiles
@@ -127,7 +132,8 @@ entries:
           strategy: per-process
           portable: false
         isolation_env:
-          variables: [HOME]
+          variables:
+          - HOME
           private_home: true
         exit_codes_trustworthy: false
         input_ready:
@@ -149,39 +155,60 @@ entries:
         mode: window
         protocol: pty
         protocol_revision: native-window-1
-        answer_path: {strategy: none}
-        resume: {strategy: none, portable: false}
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
         isolation_env:
-          variables: [HOME]
-          private_home: true
+          variables:
+          - HOME
+          private_home: false
         exit_codes_trustworthy: false
-        input_ready: {strategy: none}
-        permission_exchange: {mode: none}
+        input_ready:
+          strategy: none
+        permission_exchange:
+          mode: none
 - name: default_window
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Muse window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Muse window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: muse-window
     title: Muse CLI
-    command_names: [muse]
+    command_names:
+    - muse
     binding_ref: bee.driver.muse:binding
     profile_id: window
+    session_profile_id: batch
+    session_credentials:
+    - muse_login
+    session_mode: batch
     policy_ref: ''
     default_mode: window
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: new}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
     session_resource: session
     credentials: []
-    presentation: {start_menu: true, fullscreen: true, reuse: never}
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Muse batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned bounded Muse batch route for a host-selected coordinator
+      and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: muse-research-batch
@@ -191,12 +218,21 @@ entries:
     profile_id: batch
     policy_ref: ''
     default_mode: batch
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
     session_resource: session
-    credentials: [muse_login]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
+    credentials:
+    - muse_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
 - name: credential_format
   kind: registry.entry
   meta:
@@ -214,19 +250,21 @@ entries:
     comment: CLI command to launch Muse CLI in the agent window
   data:
     name: muse
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     arguments:
     - bee.driver.muse:default_window
     fullscreen: true
-
 - name: launch_policy_muse_batch
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Muse turn budget for agentic research actions on a caller-owned thread
+    comment: Host-selected Muse turn budget for agentic research actions on a caller-owned
+      thread
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -234,23 +272,57 @@ entries:
     drain_ms: 5000
     fixture: false
     executables: {}
-    executable_env: {muse: bee.driver.muse:executable}
+    executable_env:
+      muse: bee.driver.muse:executable
     environment: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
-    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
     hook_command_ref: bee.gateway:hook_executable
-    profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
-    prepare_options: {approval_mode: on-request, turn_budget: 128}
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+      turn_budget:
+      - 16
+      - 32
+      - 64
+      - 128
+    prepare_options:
+      approval_mode: on-request
+      turn_budget: 128
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding
 - name: launch_policy_muse_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected executable binding for the component-owned Muse window; missing host executable leaves
-      the declaration unavailable
+    comment: Host-selected executable binding for the component-owned Muse window;
+      missing host executable leaves the declaration unavailable
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -263,23 +335,18 @@ entries:
     environment: {}
     allow_host_home: true
     gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_sessions
-    - thread_notify
-    - session_directory
+    - session_catalog
+    - session_open
+    - session_run
     - session_send
-    - session_inbox
-    - session_ack
-    - session_reply
-    - overlay
-    - delivery
-    - docs
-    - components
-    - install_request
-    - uninstall_request
-    - install_status
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -293,3 +360,6 @@ entries:
       - medium
       - high
     prepare_options: {}
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding

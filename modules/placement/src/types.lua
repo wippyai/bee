@@ -28,7 +28,7 @@ type Timeouts = {start_ms: integer, stop_grace_ms: integer, drain_ms: integer, r
 -- published in a retained session home. Provider state has separate ownership.
 type SecretField = {path: {string}, environment: string, prefix: string}
 type JsonOperation = {kind: "default" | "insert" | "append", path: {string}}
-type Composition = {kind: "toml_insert", base_path: string, path: {string}} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
+type Composition = {kind: "copy", base_path: string} | {kind: "toml_insert", base_path: string, path: {string}} | {kind: "json_patch", base_path: string, operations: {JsonOperation}}
 type Configuration = {secret_fields: {SecretField}?, composition: Composition?, revision: string, path: string, content: string, digest: string, provider_ref: string}
 type ConfigurationDelivery = {arguments: {string}, files: {Configuration}, git_writable_roots_adapter: driver_types.GitWritableRootsAdapter?}
 -- The plan's measurement of the launch executable, verified by the runner
@@ -69,6 +69,8 @@ type LaunchRequest = {
     required_cleanup: Capability,
     required_exit_observation: ExitObservation,
     timeouts: Timeouts,
+    placement_profile_ref: string?,
+    placement_profile_digest: string?,
     placement_binding_ref: string?,
     placement_binding_digest: string?,
     options: WorkdirOptions?,

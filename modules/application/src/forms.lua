@@ -688,13 +688,15 @@ function M.form_dirty(form: Form): boolean
 end
 -- Restores one field to its baseline value and clears its error.
 function M.reset_field(field: Field)
-    if field.kind == "text" and field.text then M.text_set(field.text, field.baseline)
-    elseif field.kind == "number" and field.number then M.number_set(field.number, tonumber(field.baseline))
-    elseif field.kind == "textarea" and field.area then M.area_set(field.area, field.baseline)
-    elseif field.kind == "select" and field.select then M.select_set(field.select, field.baseline)
-    elseif field.kind == "checkbox" and field.checkbox then field.checkbox.checked = field.baseline == "true"
-    elseif field.kind == "radio" and field.radio then M.radio_set(field.radio, field.baseline)
-    elseif field.kind == "toggle" and field.toggle then field.toggle.on = field.baseline == "true" end
+    local text, number, area = field.text, field.number, field.area
+    local select, checkbox, radio, toggle = field.select, field.checkbox, field.radio, field.toggle
+    if field.kind == "text" and text then M.text_set(text, field.baseline)
+    elseif field.kind == "number" and number then M.number_set(number, tonumber(field.baseline))
+    elseif field.kind == "textarea" and area then M.area_set(area, field.baseline)
+    elseif field.kind == "select" and select then M.select_set(select, field.baseline)
+    elseif field.kind == "checkbox" and checkbox then checkbox.checked = field.baseline == "true"
+    elseif field.kind == "radio" and radio then M.radio_set(radio, field.baseline)
+    elseif field.kind == "toggle" and toggle then toggle.on = field.baseline == "true" end
     field.error = nil
 end
 function M.reset(form: Form) for _, field in ipairs(form.fields) do M.reset_field(field) end end

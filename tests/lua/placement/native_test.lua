@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local sql = require("sql")
 local security = require("security")
 local process = require("process")
+local runner_fixture = require("runner_fixture")
 local channel = require("channel")
 local time = require("time")
 local registry = require("registry")
@@ -49,6 +50,20 @@ local POLICY = "bee.placement.native:test_launch_policy"
 local NO_PROVIDER_POLICY = "bee.placement.native:test_launch_policy_without_provider"
 local FIXTURE_BINDING = "bee.placement.native:fixture_agent_binding"
 local counter = 0
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
+
 local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
@@ -81,7 +96,7 @@ local function admit_credential_source()
     end
     list[#list + 1] = {ref = "bee.placement.native:sentinel_key", workspace_id = "*", audience = OWNER, provider = "claude", projection_kinds = {"environment"}}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("admit credential source: " .. tostring(err)) end
 end
@@ -123,7 +138,7 @@ local function admit_login_source(source: string, private_codex_home: boolean?)
     file_policy.data.policy.resources = {source}
     write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     changes:update(file_policy)
     changes:update(write_policy)
     local applied, apply_error = changes:apply()
@@ -151,7 +166,7 @@ local function admit_claude_login_source(source: string)
     file_policy.data.policy.resources = {source}
     write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     changes:update(file_policy)
     changes:update(write_policy)
     local applied, apply_error = changes:apply()
@@ -174,7 +189,7 @@ local function admit_grok_login_source(source: string)
     file_policy.data.policy.resources = {source}
     write_policy.data.policy.resources = {source}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     changes:update(file_policy)
     changes:update(write_policy)
     local applied, apply_error = changes:apply()
@@ -186,7 +201,7 @@ local function resource_mode(mode: string)
     local data = entry.data :: {[string]: unknown}
     data.mode = mode
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("set resource mode: " .. tostring(err)) end
 end
@@ -316,7 +331,7 @@ local function grok_composition_request(attempt_id: string, session_ref: string,
     }
     return value
 end
-local function claim_materialization(db, request: types.LaunchRequest)
+local function intend_materialization(db, request: types.LaunchRequest)
     local digest, digest_error = request_codec.digest(request)
     if not digest then error(tostring(digest_error)) end
     local encoded, encode_error = json.encode(request)
@@ -324,9 +339,6 @@ local function claim_materialization(db, request: types.LaunchRequest)
     local intended = store.intend(db, request, digest, encoded,
         {capability = "direct_process", exit_observation = "eof_gated"})
     if not intended.ok then error(tostring(intended.message)) end
-    local claimed = store.transition(db, request.attempt_id, {expected_execution = "intended", execution = "starting",
-        fields = {runner_pid = process.pid()}, evidence = {kind = "test.claimed", detail = "Grok composition materialization"}})
-    if not claimed.ok then error(tostring(claimed.message)) end
 end
 local READONLY = "bee.placement.native:readonly_fixture"
 local function admit_root(ref: string)
@@ -340,7 +352,7 @@ local function admit_root(ref: string)
     roots[#roots + 1] = {root_ref = ROOT, access = "write"}
     roots[#roots + 1] = {root_ref = READONLY, access = "read"}
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("admit root: " .. tostring(err)) end
 end
@@ -352,7 +364,7 @@ local function activate_fixture_binding()
     for _, binding in ipairs(bindings) do if binding == FIXTURE_BINDING then return end end
     bindings[#bindings + 1] = FIXTURE_BINDING
     local changes = registry.snapshot():changes()
-    changes:update(entry)
+    changes:update(registry_input(entry))
     local applied, err = changes:apply()
     if not applied then error("activate fixture binding: " .. tostring(err)) end
 end
@@ -497,6 +509,7 @@ local function define_tests()
             test.eq(provider_home.variable, "CLAUDE_CONFIG_DIR")
             test.eq(provider_home.directory, ".claude")
             local provider_files = provider_home.files :: {{[string]: unknown}}
+            test.eq(#provider_files, 3)
             local login_path = ""
             for _, file in ipairs(provider_files) do
                 if file.kind == "login" then
@@ -520,6 +533,7 @@ local function define_tests()
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/.credentials.json"'
                 .. ' && test -s "$CLAUDE_CONFIG_DIR/settings.json"'
                 .. ' && test -s "$HOME/.claude.json"'
+                .. ' && test ! -e "$CLAUDE_CONFIG_DIR/.claude.json"'
                 .. ' && actual="$(find "$HOME" -type f | sed "s|^$HOME/||" | sort)"'
                 .. ' && expected="$(printf "%s\\n" .claude.json .claude/.credentials.json .claude/settings.json | sort)"'
                 .. ' && test "$actual" = "$expected"'
@@ -716,7 +730,7 @@ local function define_tests()
                 test.is_nil(materialization.prepare_login_notice(decoded, "/private-attempt-home", nil))
             end)
             local restore = registry.snapshot():changes()
-            restore:update(original)
+            restore:update(registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             if not ok then error(tostring(failure)) end
@@ -921,7 +935,7 @@ local function define_tests()
                 test.eq(attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})).cleanup_state, "complete")
             end)
             local restore = registry.snapshot():changes()
-            restore:update(original)
+            restore:update(registry_input(original))
             local restored, restore_error = restore:apply()
             if not restored then error(tostring(restore_error)) end
             if not ok then error(tostring(err)) end
@@ -1358,7 +1372,7 @@ local function define_tests()
             test.eq(measured.kind, "script")
             test.eq(measured.interpreter, "/bin/sh")
             test.eq(tostring(measured.digest):len(), 64)
-            test.eq(measured.digest, hash.sha256("#!/bin/sh\necho measured\n"))
+            test.eq(measured.digest, (hash.sha256("#!/bin/sh\necho measured\n")))
             local image = value(call(OWNER, "measure_executable", {path = "/bin/sh"}))
             test.eq(image.kind, "elf")
             test.eq(tostring(image.digest):len(), 64)
@@ -1511,7 +1525,7 @@ local function define_tests()
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                 if item.kind == "configuration.materialized" then
                     test.is_true(tostring(item.detail):find("digest " .. rendered.digest, 1, true) ~= nil)
-                    test.is_nil(tostring(item.detail):find("/home", 1, true))
+                    test.is_nil((tostring(item.detail):find("/home", 1, true)))
                 end
             end
         end)
@@ -1650,6 +1664,24 @@ local function define_tests()
             local receipt = kinds(replay.attempt_id :: string)
             test.eq(#receipt, 1)
             test.eq(receipt[1], "intent.recorded")
+        end)
+        test.it("retains structured private provider state across cleaned turn attempts", function()
+            local session_ref = fresh("private-turn-session")
+            for _, marker in ipairs({"first", "second"}) do
+                local request = retained_launch(OWNER, session_ref, marker)
+                local declared = request.launch :: {[string]: unknown}
+                declared.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex", files = {{path = ".codex/history", kind = "state", optional = true, write_back = false}}}
+                local prepared = attempt_of(call(OWNER, "prepare", request))
+                attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+                test.is_true(wait_for(function()
+                    return (value(call(OWNER, "status", {attempt_id = prepared.attempt_id})).attempt :: types.Attempt).execution_state == "exited"
+                end, 8000))
+                attempt_of(call(OWNER, "cleanup", {attempt_id = prepared.attempt_id}))
+            end
+            local key = assert(homes.session_key(OWNER, session_ref))
+            local session_path = assert(homes.ensure_session(key))
+            local home_path = assert(homes.os_path(session_path .. "/home"))
+            test.eq(shell("cat " .. quote.posix(home_path .. "/marker")), "first\nsecond\n")
         end)
         test.it("retains a selected session home and publishes changed configuration", function()
             local session_ref = fresh("session")
@@ -2002,8 +2034,8 @@ local function define_tests()
             }) do
                 local _, changed_error = homes.retain_login(session_path, changed, "different-opaque-login-bytes")
                 test.eq(changed_error, "retained login source changed")
-                test.is_nil(changed_error:find("opaque-login-not-in-errors", 1, true))
-                test.is_nil(changed_error:find("different-opaque-login-bytes", 1, true))
+                test.is_nil((changed_error:find("opaque-login-not-in-errors", 1, true)))
+                test.is_nil((changed_error:find("different-opaque-login-bytes", 1, true)))
             end
             local partial_key = assert(homes.session_key(OWNER, fresh("login-partial-session")))
             local partial_session = assert(homes.ensure_session(partial_key))
@@ -2079,6 +2111,41 @@ local function define_tests()
                 test.is_true(has(kinds(prepared.attempt_id), "child.exited"))
             end
         end)
+        test.it("retains pipe data across post-exit consumer backpressure without false truncation", function()
+            local outputs = assert(process.listen(protocol.TOPIC_OUTPUT, {message = true}))
+            local exits = assert(process.listen(protocol.TOPIC_EXIT, {message = true}))
+            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
+            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 100, retain_ms = 1500}
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            local end_deadline = time.after("10s")
+            while true do
+                local exited = channel.select({exits:case_receive(), end_deadline:case_receive()})
+                assert(exited.ok and exited.channel == exits, "producer did not exit with buffered output")
+                if exited.value:payload():data().attempt_id == prepared.attempt_id then break end
+            end
+            local hold = time.after("300ms")
+            channel.select({hold:case_receive()})
+            local received, eof, marked = 0, 0, false
+            local deadline = time.after("10s")
+            while eof < 2 do
+                local selected = channel.select({outputs:case_receive(), deadline:case_receive()})
+                assert(selected.ok and selected.channel == outputs, "buffered streams did not finish")
+                local data = selected.value:payload():data() :: {[string]: unknown}
+                if data.attempt_id == prepared.attempt_id then
+                received = received + #(type(data.data) == "string" and data.data :: string or "")
+                if data.eof == true then eof = eof + 1 end
+                if data.truncated == true then marked = true end
+                assert(process.send(tostring(selected.value:from()), protocol.TOPIC_ACK, {generation = 1, consumed_through = data.sequence}))
+                end
+            end
+            test.eq(received, 300000)
+            test.is_false(marked)
+            test.is_false(has(kinds(prepared.attempt_id), "output.drain_elapsed"))
+            process.unlisten(outputs)
+            process.unlisten(exits)
+        end)
         test.it("records unacknowledged output as lost once the retention deadline passes after exit", function()
             local request = launch({"sh", "-c", "echo one; echo two"}, "direct_process")
             request.timeouts = {start_ms = 10000, stop_grace_ms = 500, retain_ms = 300}
@@ -2098,6 +2165,19 @@ local function define_tests()
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                 if item.kind == "output.lost" then test.is_true(tostring(item.detail):find("unacknowledged chunks", 1, true) ~= nil) end
             end
+        end)
+        test.it("bounds post-exit retention when an unacknowledged burst fills the spool", function()
+            local request = launch({"sh", "-c", "head -c 300000 /dev/zero | tr '\\000' x"}, "direct_process")
+            request.timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 100, retain_ms = 300}
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            attempt_of(call(OWNER, "attach", {attempt_id = prepared.attempt_id, recipient = process.pid(), generation = 1}))
+            attempt_of(call(OWNER, "start", {attempt_id = prepared.attempt_id}))
+            time.sleep("1500ms")
+            local recorded = kinds(prepared.attempt_id)
+            test.is_true(has(recorded, "child.exited"))
+            test.is_true(has(recorded, "output.lost"))
+            test.is_true(has(recorded, "runner.finished"))
+            test.is_false(has(recorded, "output.drain_elapsed"))
         end)
         test.it("keeps supervising a live attempt without an execution identity while its runner answers", function()
             local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
@@ -2138,6 +2218,28 @@ local function define_tests()
             test.eq(stopped.execution_state, "uncertain")
             local blocked = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
             test.eq(blocked.error and blocked.error.code, "CONFLICT")
+        end)
+        test.it("keeps a starting attempt whose runner is present while it prepares the child", function()
+            local request = launch({"sh", "-c", "sleep 8"}, "direct_process")
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            local db = store.open()
+            if not db then error("store") end
+            -- A runner materializing configuration is a live host process
+            -- that does not answer status probes until its child exists.
+            local runner = tostring(assert(process.spawn("bee.host:idle_process", "bee:workers")))
+            local _, claim_error = db:execute("UPDATE bee_placement_attempts SET execution_state = 'starting', runner_pid = ?, pid = NULL, pgid = NULL, start_ticks = NULL, boot_id = NULL WHERE attempt_id = ?", {runner, prepared.attempt_id})
+            db:release()
+            if claim_error then error("claim attempt: " .. tostring(claim_error)) end
+            local reconciled = attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id}))
+            test.eq(reconciled.execution_state, "starting")
+            test.is_true(has(kinds(prepared.attempt_id), "reconcile.supervised"))
+            assert(process.cancel(runner, "runner stand-in released"))
+            local released = store.open()
+            if not released then error("store") end
+            local _, release_error = released:execute("UPDATE bee_placement_attempts SET runner_pid = NULL WHERE attempt_id = ?", {prepared.attempt_id})
+            released:release()
+            if release_error then error("release attempt: " .. tostring(release_error)) end
+            test.eq(attempt_of(call(OWNER, "reconcile", {attempt_id = prepared.attempt_id})).execution_state, "uncertain")
         end)
         test.it("resolves grants through the resource authority when the host selects granted mode", function()
             local workspace = fresh("ws")
@@ -2291,10 +2393,8 @@ local function define_tests()
                 .. ' && printf projected-fixture-ok && printf %s ' .. quote.posix(refreshed_login) .. ' > "$CODEX_HOME/auth.json"'
             local request = launch({"sh", "-c", script}, "process_group")
             request.attempt_id = attempt_id
-            request.session_ref = fresh("private-provider-session")
             request.projections = {projection.projection_id}
             local declared_launch = request.launch :: {[string]: unknown}
-            declared_launch.home_ref = "session"
             declared_launch.provider_home = {provider = "codex", private = true, variable = "CODEX_HOME", directory = ".codex",
                 files = {{source_path = ".codex/auth.json", path = ".codex/auth.json", kind = "login", optional = true, write_back = true},
                     {source_path = ".codex/config.toml", path = ".codex/config.toml", kind = "config", optional = true, write_back = false},
@@ -2331,7 +2431,7 @@ local function define_tests()
             local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
             local write_back_refused = false
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
-                test.is_nil(tostring(item.detail):find("ambient-refresh", 1, true))
+                test.is_nil((tostring(item.detail):find("ambient-refresh", 1, true)))
                 if item.kind == "credential.write_back" then error("fixture login unexpectedly wrote back") end
                 if item.kind == "credential.write_back_failed" then
                     test.is_true(tostring(item.detail):find("provider login write-back requires runtime no-follow fs", 1, true) ~= nil)
@@ -2441,8 +2541,8 @@ local function define_tests()
             local first_exit = (value(call(OWNER, "status", {attempt_id = first_id})).attempt :: types.Attempt).exit
             if not first_exit then error("environment probe has no exit receipt") end
             test.eq(first_exit.code, 0)
-            test.not_nil(child_environment:find("PROBE_VALUE=probe-42\n", 1, true))
-            test.is_nil(child_environment:find('{"fixture":"login"}', 1, true))
+            test.not_nil((child_environment:find("PROBE_VALUE=probe-42\n", 1, true)))
+            test.is_nil((child_environment:find('{"fixture":"login"}', 1, true)))
             attempt_of(call(OWNER, "cleanup", {attempt_id = first_id}))
             local session_key = assert(homes.session_key(OWNER, session_ref))
             local session_path = assert(homes.ensure_session(session_key))
@@ -2460,7 +2560,7 @@ local function define_tests()
             test.eq(shell("cat " .. home .. "/.codex/auth.json"), '{"fixture":"refreshed"}')
             local page = value(call(OWNER, "evidence", {attempt_id = second_id, limit = 64}))
             for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
-                test.is_nil(tostring(item.detail):find("refreshed", 1, true))
+                test.is_nil((tostring(item.detail):find("refreshed", 1, true)))
             end
             attempt_of(call(OWNER, "cleanup", {attempt_id = second_id}))
             local changed_request = retained_launch(OWNER, session_ref, "changed-login")
@@ -2472,7 +2572,7 @@ local function define_tests()
             test.is_false(refused.ok)
             test.eq(refused.error and refused.error.code, "UNAVAILABLE")
             test.is_true(has(kinds(changed_id), "credential.refused"))
-            test.is_nil(shell("cat " .. home .. "/marker"):find("changed-login", 1, true))
+            test.is_nil((shell("cat " .. home .. "/marker"):find("changed-login", 1, true)))
         end)
         test.it("composes Grok configuration only from the current admitted initializer", function()
             local source = "bee.credentials:codex_login_fixture"
@@ -2534,12 +2634,18 @@ local function define_tests()
                     evidence = {kind = "child.not_started", detail = "composition acceptance did not create a child"}})
                 if not retired.ok then error(tostring(retired.message or "retire Grok composition attempt")) end
             end
-            local function prepare(request: types.LaunchRequest): (PreparedConfiguration?, string?, sql.DB)
+            -- A hosted runner claims and prepares; a sweep inside its window
+            -- finds it present and leaves the attempt starting.
+            local function prepare(request: types.LaunchRequest, binding_failure: string?): (PreparedConfiguration?, string?, sql.DB)
                 local db, db_error = store.open()
                 if not db then error(tostring(db_error or "open placement store")) end
-                claim_materialization(db, request)
-                local prepared, prepare_error = materialization.prepare(db, request, request.attempt_id, 0)
-                return prepared, prepare_error, db
+                intend_materialization(db, request)
+                local runner = runner_fixture.claim("bee.placement.native:materialization_runner_process", request, 0, nil, binding_failure)
+                test.is_true(service.sweep().ok)
+                test.eq(assert(store.attempt(db, request.attempt_id)).execution_state, "starting")
+                local outcome = runner_fixture.prepare(runner)
+                runner_fixture.release(runner)
+                return outcome.prepared, outcome.error, db
             end
 
             -- The external digest binding commits before any setup file or
@@ -2550,12 +2656,7 @@ local function define_tests()
             local _, binding_projection = projection(binding_attempt)
             local binding_request = grok_composition_request(binding_attempt, binding_session,
                 binding_projection.projection_id :: string, grok_configuration.BASE_PATH)
-            local original_bind_session_file = store.bind_session_file
-            store.bind_session_file = function(_db: sql.DB, _owner_id: string, _session_ref: string, _path: string, _digest: string): string?
-                return "injected retained configuration binding failure"
-            end
-            local binding_prepared, binding_error, binding_db = prepare(binding_request)
-            store.bind_session_file = original_bind_session_file
+            local binding_prepared, binding_error, binding_db = prepare(binding_request, "injected retained configuration binding failure")
             if binding_prepared then error("Grok configuration survived a failed external binding") end
             test.eq(binding_error, "injected retained configuration binding failure")
             local _, binding_home = session_path(binding_session)
@@ -2860,12 +2961,12 @@ local function define_tests()
                 test.is_false(failed.ok)
                 local message = tostring(failed.error and failed.error.message)
                 test.is_true(message:find("ANTHROPIC_API_KEY is already assigned", 1, true) ~= nil)
-                test.is_nil(message:find(SENTINEL, 1, true))
+                test.is_nil((message:find(SENTINEL, 1, true)))
                 local page = value(call(OWNER, "evidence", {attempt_id = attempt_id, limit = 64}))
                 local refused = false
                 for _, item in ipairs(page.evidence :: {{[string]: unknown}}) do
                     test.is_true(item.kind ~= "child.started")
-                    test.is_nil(tostring(item.detail):find(SENTINEL, 1, true))
+                    test.is_nil((tostring(item.detail):find(SENTINEL, 1, true)))
                     if item.kind == "credential.refused" then refused = true end
                 end
                 test.is_true(refused)
@@ -2873,7 +2974,7 @@ local function define_tests()
                 if not db then error("placement store") end
                 local row = store.row(db, attempt_id)
                 db:release()
-                test.is_nil(tostring(row and row.request_json):find(SENTINEL, 1, true))
+                test.is_nil((tostring(row and row.request_json):find(SENTINEL, 1, true)))
             end
         end)
         test.it("sweeps live attempts in bounded batches that make progress and survives a sweeper restart", function()
@@ -3020,4 +3121,14 @@ local function define_tests()
         end
     end)
 end
-return test.run_cases(define_tests)
+local cases = test.run_cases(define_tests)
+return {run = function(options)
+    local originals: {{[string]: unknown}} = {}
+    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots", "bee.resources:resource_roots", "bee.credentials:credential_sources", "bee.credentials.security:credential_file_policy", "bee.credentials.security:credential_file_write_policy", "bee.harness:harness_activation", "bee.placement.native:codex_test_provider"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+    local ok, result = pcall(cases, options)
+    local changes = assert(registry.snapshot()):changes()
+    for _, original in ipairs(originals) do changes:update(registry_input(original)) end
+    assert(changes:apply())
+    if not ok then error(tostring(result)) end
+    return result
+end}

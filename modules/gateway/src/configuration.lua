@@ -20,25 +20,26 @@ function M.configured(): (string?, string?)
     if reference_error or not reference then return nil, "gateway endpoint is not linked by the host" end
     local linked = reference.data
     if type(linked) ~= "table" then return nil, "gateway endpoint is not linked by the host" end
-    local endpoint = (linked :: Object).resource_ref
+    local endpoint = (linked).resource_ref
     if type(endpoint) ~= "string" or endpoint == "" then return nil, "gateway endpoint is not linked by the host" end
-    local entry, err = registry.get(endpoint :: string)
+    local entry, err = registry.get(endpoint)
     if err or not entry then return nil, "gateway endpoint is not configured by the host" end
     local data = entry.data
     if type(data) ~= "table" then return nil, "gateway endpoint has no data" end
-    local address = (data :: Object).address
-    if not M.valid_address(address, true) then return nil, "gateway endpoint must be a loopback or private IPv4 host and port" end
-    return address :: string, nil
+    local address = (data).address
+    if type(address) ~= "string" or not M.valid_address(address, true) then return nil, "gateway endpoint must be a loopback or private IPv4 host and port" end
+    return address, nil
 end
 function M.current(): (Listener?, string?)
     local value, err = funcs.call("bee.gateway:address", {})
     if err then return nil, tostring(err) end
     if type(value) ~= "table" then return nil, "gateway listener address is unavailable" end
-    local data = value :: Object
-    if not M.valid_address(data.address, false) then return nil, "gateway listener address is invalid" end
+    local data = value
+    local address = data.address
+    if type(address) ~= "string" or not M.valid_address(address, false) then return nil, "gateway listener address is invalid" end
     local key = data.native_key
     if key ~= nil and (type(key) ~= "string" or #key == 0 or #key > 512) then return nil, "gateway listener execution is invalid" end
-    return {address = data.address :: string, native_key = key :: string?}, nil
+    return {address = address, native_key = key}, nil
 end
 function M.endpoint(): (string?, string?)
     local listener, err = M.current()

@@ -104,9 +104,19 @@ local function window(value: unknown): model.Window?
     if value.accent ~= nil and selected_accent == nil then return nil end
     local workspace_id = contract.workspace_id(value.workspace_id)
     if value.workspace_id ~= nil and not workspace_id then return nil end
+    local side = value.snap_side
+    local snap_side: string? = nil
+    if side == "left" or side == "right" then snap_side = side
+    elseif side ~= nil then return nil end
+    local ratio = value.snap_ratio
+    local snap_ratio: number? = nil
+    if type(ratio) == "number" and ratio > 0 and ratio <= 1 then snap_ratio = ratio
+    elseif ratio ~= nil then return nil end
+    if (snap_side == nil) ~= (snap_ratio == nil) then return nil end
     return {id = value.id, instance_id = value.instance_id, workspace_id = workspace_id, title = value.title,
         user_title = user_title, accent = selected_accent, icon = icon,
-        bounds = bounds, normal_bounds = normal, mode = mode, restore_mode = restore}
+        bounds = bounds, normal_bounds = normal, mode = mode, restore_mode = restore,
+        snap_side = snap_side, snap_ratio = snap_ratio}
 end
 function M.scene(value: unknown): model.Scene?
     if type(value) ~= "table" or type(value.windows) ~= "table" or type(value.focus) ~= "string" then return nil end

@@ -6,6 +6,7 @@ type Theme = {id: string, title: string, ground: string, surface: string, text: 
     on_accent: string?, terminal_text: string?, terminal_surface: string?}
 type Page = {foreground: string, background: string}
 type Preferences = {theme: string, background: string, taskbar: string?}
+local env = require("env")
 local M = {}
 local themes: {Theme} = {
     {id = "honey", title = "Honey", ground = "#0c1119", surface = "#17202c", text = "#d8e2ef", muted = "#8999ad", border = "#6f89a5", accent = "#ffc963", pattern = "#1c2937", ok = "#7ee787", warn = "#ffa657", error = "#ff7b72"},
@@ -127,7 +128,23 @@ end
 local function rgb(hex: string): string
     return tostring(tonumber(hex:sub(2, 3), 16)) .. ";" .. tostring(tonumber(hex:sub(4, 5), 16)) .. ";" .. tostring(tonumber(hex:sub(6, 7), 16))
 end
+-- Plain output for NO_COLOR terminals: style emits no color escapes while
+-- selection and status stay readable text with non-color emphasis. The host
+-- grants NO_COLOR visibility per process through the env module; without
+-- that grant the desktop keeps its themed colors.
+local forced: boolean? = nil
+local granted: boolean? = nil
+function M.set_no_color(value: boolean?) forced = value end
+function M.no_color(): boolean
+    if forced ~= nil then return forced end
+    if granted == nil then
+        local value, read_error = env.get("bee.env:no_color")
+        granted = read_error == nil and type(value) == "string" and value ~= ""
+    end
+    return granted == true
+end
 function M.style(foreground: string, background: string): string
+    if M.no_color() then return "" end
     return "\27[38;2;" .. rgb(foreground) .. "m\27[48;2;" .. rgb(background) .. "m"
 end
 return M

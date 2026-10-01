@@ -3,9 +3,8 @@ local json = require("json")
 local gateway = require("gateway")
 local mcp = require("mcp")
 local hooks = require("hooks")
-local hook_inbox = require("hook_inbox")
-local logger = require("logger")
 local transport_admission = require("admission")
+local boundary = require("session_boundary")
 type Object = {[string]: unknown}
 local function answer(response: http.Response, status: number, body: Object)
     response:set_status(status)
@@ -46,26 +45,22 @@ local function handle(): nil
     if class ~= "hook_engine" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "request metadata is not a hook-engine call (" .. class .. "): " .. reason)); return nil end
     local arguments = call.params.arguments
     if type(arguments) ~= "table" then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, "arguments must be an object")); return nil end
-    local reply = gateway.submit_hook(binding, arguments :: Object, "codex:" .. class)
+    local reply = gateway.submit_hook(binding, arguments, "codex:" .. class)
     if not reply.ok then
         local fault = reply.error or {code = "STORAGE", message = "hook"}
         answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INVALID_PARAMS, fault.code .. ": " .. fault.message)); return nil
     end
     -- Codex reads a hook tool's text content as hook stdout: Stop requires
-    -- JSON there, and other events turn plain text into model context. A
-    -- recorded boundary event may answer with the bound action's
-    -- outstanding inbox as that text. The read runs as the binding's
-    -- subject; a failure degrades to the proven empty content instead of
-    -- breaking the harness loop.
-    local outcome = reply.value :: Object
-    local event: string? = nil
-    if type(arguments.event) == "string" then event = arguments.event
-    elseif type(arguments.hook_event_name) == "string" then event = arguments.hook_event_name end
-    local content = table.create(1, 0)
-    local inbox_context, context_error = hook_inbox.context(binding, event)
-    if context_error then logger:warn("Gateway hook inbox context unavailable", {event = event or "unknown", cause = context_error}) end
-    local carried = hook_inbox.carry_text(event, inbox_context)
-    if carried then content = {{type = "text", text = carried}} end
+    -- JSON there, so an empty content list is the proven answer.
+    local outcome = reply.value
+    local context, boundary_error = boundary.deliver(binding, outcome)
+    if not context then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, boundary_error or "session boundary failed")); return nil end
+    local content: {Object} = {}
+    if context.hookSpecificOutput ~= nil then
+        local encoded, encode_error = json.encode(context)
+        if encode_error or not encoded then answer(response, http.STATUS.OK, mcp.failure(call.id, mcp.INTERNAL_ERROR, "context encoding failed")); return nil end
+        content[1] = {type = "text", text = encoded}
+    end
     answer(response, http.STATUS.OK, mcp.result(call.id, {content = content,
         structuredContent = {status = outcome.status, event_id = outcome.event_id}, isError = false}))
     return nil

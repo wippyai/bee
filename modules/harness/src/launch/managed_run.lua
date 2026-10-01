@@ -4,12 +4,12 @@ local time = require("time")
 local process = require("process")
 local registry = require("registry")
 local bounds = require("bounds")
-local agent_launch = require("agent_launch")
 local placement_resolver = require("placement_resolver")
 local placement_decode = require("placement_decode")
 local prestart = require("prestart")
 
 local M = {}
+local MAX_ANSWER_BYTES = 16384
 local CARRIER = "bee.threads.carrier"
 local THREADS = "bee.threads.service"
 local DELIVERY = "bee.threads.delivery"
@@ -255,7 +255,7 @@ function M.status(run: Run, options: StatusOptions?): (Status?, Reply?, {[string
     local checkpoint = bounds.object(stored.checkpoint)
     local terminal = checkpoint and bounds.object(checkpoint.terminal)
     local failure = ended and (bounds.object(stored.attempt_error) or (terminal and bounds.object(terminal.error))) or nil
-    if ended and terminal then answer = bounds.text(terminal.answer, agent_launch.MAX_ANSWER_BYTES) end
+    if ended and terminal then answer = bounds.text(terminal.answer, MAX_ANSWER_BYTES) end
     if not ended then
         local intent_state = checkpoint_intent(stored)
         if intent_state == "ended" then
@@ -446,7 +446,7 @@ function M.execute(request: ExecutionRequest, adapter: Adapter): {[string]: unkn
 
     -- Preserve the provider adapter's own checkpoint format while the shared
     -- lifecycle owns every carrier write and terminal receipt.
-    local result = adapter(context, request :: {[string]: unknown})
+    local result = adapter(context, request)
     if result.settle == false then return failed(result.error or "the in-process adapter refused the run") end
     local outcome = bounds.member(result.outcome, {"succeeded", "failed", "cancelled", "uncertain"}) or "failed"
     local terminal_checkpoint = result.checkpoint or bounds.object(context.checkpoint) or {}

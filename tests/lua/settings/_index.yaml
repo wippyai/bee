@@ -14,5 +14,6 @@ entries:
     test: wippy.test:test
     view: bee.settings:view
     appearance: bee.application:appearance
+    interaction: bee.application:interaction
     live_updates: bee.settings:live_updates
     build_info: bee.settings:build_info

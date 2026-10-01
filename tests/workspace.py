@@ -10,6 +10,7 @@ import shutil
 import socket
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import yaml
 
@@ -39,6 +40,23 @@ def registry_entries(folder, names):
                 found[name] = (index, entry)
     assert set(found) == wanted, f"missing registry entries {sorted(wanted - set(found))}"
     return found, documents
+
+
+def stage_protocol_values(folder):
+    """Stage the shared scalar/canonical values without the desktop protocol closure."""
+    source = ROOT / "src/protocol"
+    target = folder / "src/protocol"
+    target.mkdir(parents=True, exist_ok=True)
+    document = yaml.safe_load((source / "_index.yaml").read_text())
+    document["entries"] = [entry for entry in document["entries"] if entry["name"] in {"bounds", "canonical"}]
+    (target / "_index.yaml").write_text(yaml.safe_dump(document, sort_keys=False))
+    for name in ("bounds.lua", "canonical.lua"):
+        shutil.copy2(source / name, target / name)
+    shutil.copy2(ROOT / "src/clock.lua", folder / "src/clock.lua")
+    index = folder / "src/_index.yaml"
+    root = yaml.safe_load(index.read_text()) if index.exists() else {"version": "1.0", "namespace": "bee", "entries": []}
+    root["entries"].append({"name": "clock", "kind": "library.lua", "source": "file://clock.lua", "modules": ["time"]})
+    index.write_text(yaml.safe_dump(root, sort_keys=False))
 
 
 def managed_gateway_address():
@@ -198,11 +216,25 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             # The reference applications are documentation sources; the test
             # composition compiles them against the library and never ships them.
             shutil.copytree(ROOT / "docs/reference/apps", folder / "src/tests/reference_apps/apps")
+            shutil.copytree(ROOT / "tests/fixtures/sessions/src", folder / "src/tests/fixtures/sessions")
+            # SDK unit tests explicitly select their synthetic contract owners.
+            sessions_index = folder / "modules/sessions/src/binding/_index.yaml"
+            sessions_document = yaml.safe_load(sessions_index.read_text())
+            for binding in sessions_document["entries"]:
+                if binding["name"] in {"owner_binding", "catalog_binding"}:
+                    for contract in binding["contracts"]:
+                        contract["default"] = False
+            sessions_index.write_text(yaml.safe_dump(sessions_document, sort_keys=False))
             # This test-support copy overrides homes while exercising the
             # component's current materialization source; it never enters a
             # production source tree or assembled pack.
             shutil.copy2(ROOT / "modules/placement-native/src/service/materialization.lua",
                          folder / "src/tests/placement_publication/materialization.lua")
+            host_environment = folder / "src/tests/harness/host/_index.yaml"
+            host_document = yaml.safe_load(host_environment.read_text())
+            host_entry = next(entry for entry in host_document["entries"] if entry["name"] == "environment")
+            host_entry["data"]["values"]["claude"] = str(folder / "fixtures/harness/bin/claude")
+            host_environment.write_text(yaml.safe_dump(host_document, sort_keys=False))
         else:
             (folder / "src/tests").mkdir()
         # Managed harness tests own their loopback listener. Desktop proofs
@@ -228,18 +260,21 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         missing_dependency = False
         for module in lock["modules"]:
             prefix = module["name"].split("/")[1] + "-" + str(module["version"])
-            packages = list((ROOT / ".wippy/vendor/wippy").glob(prefix + "*.wapp"))
+            organization = module["name"].split("/")[0]
+            packages = list((ROOT / ".wippy/vendor" / organization).glob(prefix + "*.wapp"))
             if not packages:
                 missing_dependency = True
             for package in packages:
-                shutil.copy2(package, vendor / package.name)
+                destination = folder / ".wippy/vendor" / organization
+                destination.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(package, destination / package.name)
         host = folder / "src/_index.yaml"
         document = yaml.safe_load(host.read_text())
         document["entries"].append({"name": "test_dependency", "kind": "ns.dependency", "component": "wippy/test", "version": "0.4.17"})
         host.write_text(yaml.safe_dump(document, sort_keys=False))
         found, documents = registry_entries(folder, {"application_admission"})
         admission_index, admission = found["application_admission"]
-        admission["bindings"] += [{"definition_id": identity, "policies": ["bee.security:ordinary_app_subsystem_boundary"]} for identity in ["bee.apps:welcome", "bee.apps:palette"]]
+        admission["bindings"] += [{"definition_id": identity, "policies": ["bee.security:ordinary_app_subsystem_boundary"]} for identity in ["bee.apps:welcome", "bee.apps:palette", "bee.apps:singleton_probe"]]
         admission_index.write_text(yaml.safe_dump(documents[admission_index], sort_keys=False))
         if missing_dependency:
             subprocess.run([str(RUNTIME), "install"], cwd=folder, check=True)
@@ -262,12 +297,17 @@ def pack_deployment(folder, destination, excluded=()):
         source = Path(temporary) / "source"
         for name in ("src", "modules", ".wippy/vendor"):
             if (folder / name).exists():
-                shutil.copytree(folder / name, source / name, symlinks=True)
+                if name == ".wippy/vendor":
+                    sys.path.insert(0, str(ROOT / "build"))
+                    from dependency_artifacts import copy_dependencies
+                    copy_dependencies(ROOT / "wippy.lock", folder / name, source / name)
+                else:
+                    shutil.copytree(folder / name, source / name, symlinks=True)
         for name in ("wippy.yaml", ".wippy.yaml", "wippy.lock"):
             shutil.copy2(folder / name, source / name)
         # bee/bee is implicit in editable development; --module needs it named.
         lock = yaml.safe_load((source / "wippy.lock").read_text())
-        selected = [module for module in lock.get("modules", []) if module["name"] not in test_modules]
+        selected = [module for module in lock.get("modules", []) if module["name"] not in test_modules or module["name"] in {entry["name"] for entry in yaml.safe_load((ROOT / "wippy.lock").read_text())["modules"]}]
         lock["modules"] = [{"name": "bee/bee", "version": version, "root": True}] + lock.get("modules", [])
         (source / "wippy.lock").write_text(yaml.safe_dump(lock, sort_keys=False))
         configuration = yaml.safe_load((source / ".wippy.yaml").read_text())
@@ -281,12 +321,19 @@ def pack_deployment(folder, destination, excluded=()):
         pinned = []
         for module in [{"name": "bee/bee", "version": version}] + selected:
             organization, name = module["name"].split("/")
-            assert organization == "bee", f"deployment module {module['name']} is outside Bee"
-            pack = vendor / f"{name}-{module['version']}.wapp"
+            module_vendor = destination / ".wippy/vendor" / organization
+            module_vendor.mkdir(parents=True, exist_ok=True)
+            pack = module_vendor / f"{name}-{module['version']}.wapp"
             args = [str(RUNTIME), "pack", "--silent", "--module", module["name"], "--exclude-ns", "wippy.test"]
             for identity in sorted(excluded):
                 args += ["--exclude", identity]
-            subprocess.run(args + [str(pack)], cwd=source, check=True)
+            if organization == "bee":
+                subprocess.run(args + [str(pack)], cwd=source, check=True)
+            else:
+                upstream = source / ".wippy/vendor" / organization / pack.name
+                expected = module.get("hash", "").removeprefix("sha256:")
+                assert expected and hashlib.sha256(upstream.read_bytes()).hexdigest() == expected, f"upstream artifact changed: {module['name']}"
+                shutil.copy2(upstream, pack)
             entry = {"name": module["name"], "version": module["version"],
                      "hash": "sha256:" + hashlib.sha256(pack.read_bytes()).hexdigest()}
             if module["name"] == "bee/bee":
@@ -335,13 +382,13 @@ def deployment_copy(deployment, directory):
 # composition drops them from the lock, replacements and dependency entries.
 AGENT_PACKAGES = (
     "bee/agents", "bee/harness", "bee/credentials", "bee/placement",
-    "bee/placement-native", "bee/resources", "bee/driver", "bee/driver-agy",
+    "bee/placement-native", "bee/placement-docker", "userspace/docker", "wippy/bootloader", "wippy/migration", "wippy/security", "bee/resources", "bee/driver", "bee/driver-agy",
     "bee/driver-claude", "bee/driver-codex", "bee/driver-grok", "bee/driver-muse",
     "bee/driver-opencode", "bee/driver-wippy", "bee/git-worktree",
 )
 BUNDLE_PACKAGES = (
     "bee/hive-manager", "bee/threads-timeline", "bee/workspace-manager",
-    "bee/host-processes", "bee/hub-modules", "bee/gov-overlays", *AGENT_PACKAGES,
+    "bee/host-processes", "bee/hub-modules", "bee/gov-overlays", "bee/files", *AGENT_PACKAGES,
 )
 
 

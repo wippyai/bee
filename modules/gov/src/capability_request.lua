@@ -74,13 +74,13 @@ end
 local function grant_mapping(template: capability_model.Template, parameters: capability_model.Parameters): (string?, string?, string?)
     local raw_resources = template.resources
     if type(raw_resources) ~= "table" then return nil, nil, "capability names no workspace resource grant" end
-    local resources = raw_resources :: {unknown}
+    local resources = raw_resources
     if #resources ~= 1 then return nil, nil, "capability names no workspace resource grant" end
     local resource = bounds.object(resources[1])
     if not resource then return nil, nil, "capability names no workspace resource grant" end
     local name: string? = nil
     if type(resource.source) ~= "string" then return nil, nil, "capability has no runtime resource source" end
-    local parameter = (resource.source :: string):match("^%$([a-z_]+)$")
+    local parameter = (resource.source):match("^%$([a-z_]+)$")
     local value = parameter and parameters[parameter] or nil
     name = type(value) == "string" and bounds.id(value) or nil
     if not name then return nil, nil, "capability resource is fixed by its host resolver and cannot be elevated as a workspace association" end

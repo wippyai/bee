@@ -161,7 +161,7 @@ function M.rows(db: sql.DB, ledger: Ledger): ({{id: integer, name: string, check
     for index, row in ipairs(rows) do
         local id = integer(row.id)
         if not id or type(row.name) ~= "string" or type(row.checksum) ~= "string" then return nil, ledger.label .. " migration ledger is invalid" end
-        result[index] = {id = id, name = row.name :: string, checksum = row.checksum :: string}
+        result[index] = {id = id, name = row.name, checksum = row.checksum}
     end
     return result, nil
 end

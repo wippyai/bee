@@ -48,21 +48,24 @@ entries:
 - name: harness_setup_policy
   kind: security.policy.expr
   meta:
-    comment: Host setup runs only for the workspace the caller's host-issued identity is bound to
+    comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application
+      also resolves the public sessions contracts, whose owner authorizes each operation
   policy:
-    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup")
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding"))
     actions:
     - bee.harness.setup
     - funcs.call
+    - contract.get
+    - contract.open
+    - contract.call
     resources: '*'
     effect: allow
 - name: carrier_environment_policy
   kind: security.policy
-  groups: [bee.harness.launch:agent_launch_execution_scope]
   meta:
     comment: The managed harness boundary reads declared nonsecret executable and configuration-directory variables
-      while resolving host launch policy; the agent-launch execution scope holds the same entries so admission
-      resolves the executable_env and environment_refs of the definitions it admits
+      while resolving host launch policy, so admission resolves the executable_env and environment_refs of the
+      definitions it admits
   policy:
     actions:
     - env.get
@@ -75,6 +78,21 @@ entries:
     - bee.driver.opencode:executable
     - bee.driver.claude:config_home
     - bee.driver.codex:config_home
+    effect: allow
+- name: launch_locate_probe_policy
+  kind: security.policy.expr
+  meta:
+    comment: The host readiness probe resolves activated CLI descriptors, their nonsecret PATH executables and version strings, and alternative login metadata without reading credential contents
+  policy:
+    expression: '(action == "env.get" && (resource matches "^bee[.]driver[.](claude|codex|opencode|agy|grok|muse):executable$" || resource == "bee.harness.launch:host_environment_names" || resource == "bee.env:machine_home")) || ((action == "registry.get" || action == "registry.snapshot") && resource != "") || ((action == "exec.get" || action == "exec.run") && resource == "bee.placement.native:placement_executor") || (action == "fs.get" && resource == "bee.env:machine_login_source")'
+    actions: [registry.get, registry.snapshot, env.get, exec.get, exec.run, fs.get]
+    resources: '*'
+    effect: allow
+- name: launch_docker_readiness_policy
+  kind: security.policy
+  policy:
+    actions: [funcs.call]
+    resources: [bee.placement.docker.binding:capabilities]
     effect: allow
 - name: profile_store_policy
   kind: security.policy
@@ -120,11 +138,40 @@ entries:
     actions: [bee.workspace.manager.launch]
     resources: '*'
     effect: allow
-- name: agent_call_policy
+- name: interactive_session_policy
   kind: security.policy
-  meta:
-    comment: Lets an application call the managed-agent facade; which definitions it may launch is a separate host grant of bee.harness.launch on each definition
   policy:
-    actions: [funcs.call]
-    resources: [bee.harness.launch:agent_call]
+    actions: [bee.sessions.attach]
+    resources: '*'
+    effect: allow
+
+- name: presentation_bridge_policy
+  kind: security.policy.expr
+  groups: [presentation_execution_scope]
+  policy:
+    actions: [process.spawn, process.host, process.send, process.registry.lookup, process.registry.register, process.registry.unregister, funcs.call, process.security, bee.apps.session_present]
+    resources: '*'
+    expression: '(action == "process.security" && resource == "security") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner") || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.sessions.binding:get", "bee.apps:open_call", "bee.harness.launch:setup", "bee.harness.service:open"])'
+    effect: allow
+- name: presentation_owner_policy
+  kind: security.policy.expr
+  groups: [presentation_execution_scope]
+  policy:
+    actions: [process.spawn, process.spawn.monitored, process.host, process.context, process.cancel, process.registry.register, process.registry.unregister, tty.create, tty.mount, tty.observe, tty.input, tty.resize]
+    resources: '*'
+    expression: '(action in ["process.spawn", "process.spawn.monitored"] && resource == "bee.harness.service:presentation_executor") || (action == "process.host" && resource == "bee:workers") || action in ["process.context", "process.cancel", "tty.create", "tty.mount", "tty.observe", "tty.input", "tty.resize"] || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$")'
+    effect: allow
+- name: presentation_facade_policy
+  kind: security.policy.expr
+  policy:
+    actions: [funcs.security, funcs.call, security.policy_group.get]
+    resources: '*'
+    expression: '(action == "funcs.security" && resource == "security") || (action == "funcs.call" && resource == "bee.harness.service:open") || (action == "security.policy_group.get" && resource == "bee.harness.security:presentation_execution_scope")'
+    effect: allow
+- name: presentation_viewer_policy
+  kind: security.policy.expr
+  policy:
+    actions: [process.registry.lookup, process.registry.register, process.registry.unregister]
+    resources: '*'
+    expression: '(action == "process.registry.lookup" && resource matches "^bee[.]session[.]window/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$")'
     effect: allow

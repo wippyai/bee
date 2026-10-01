@@ -1,0 +1,93 @@
+-- MIT. The scheduler process performs an immediate boot scan and a bounded
+-- periodic pull; wake messages only shorten the delay.
+local process = require("process")
+local time = require("time")
+local channel = require("channel")
+local logger = require("logger")
+local hash = require("hash")
+local funcs = require("funcs")
+local bounds = require("bounds")
+local scheduler = require("scheduler")
+local threads_journal = require("threads_journal")
+local executors = require("executors")
+local M = {}
+M.WORKER = "bee.sessions.scheduler"
+M.TOPIC_WAKE = "bee.sessions.scheduler.wake"
+M.SCAN_INTERVAL = "5s"
+
+local function pass(only_work: string?): string?
+    local runtime, runtime_error = executors.runtime()
+    if not runtime then return runtime_error or "executor registry is unavailable" end
+    local run_id, identity_error = hash.sha256(tostring(process.pid()))
+    if not run_id then return tostring(identity_error or "scheduler identity unavailable") end
+    local service, service_error = scheduler.create(threads_journal.adapter(), runtime, nil, run_id)
+    if not service then return service_error or "scheduler could not be initialized" end
+    local report, pass_error = service.run_pass(only_work)
+    if not report then return pass_error or "scheduler scan failed" end
+    for _, issue in ipairs(report.issues) do
+        logger:error("Session scheduler work pass failed", {work = issue.work or "", stage = issue.stage, cause = issue.reason})
+    end
+    if report.uncertain > 0 then
+        logger:error("Session executor reconciliation is uncertain", {count = report.uncertain})
+    end
+    return nil
+end
+
+
+local function turn_run(request: unknown): unknown
+    local input = bounds.object(request)
+    local work = input and bounds.id(input.work)
+    if not work or bounds.fields(input, {"work"}) then return {ok = false, error = "invalid scheduled work"} end
+    local err = pass(work)
+    return {ok = err == nil, error = err}
+end
+
+type Pending = {future: funcs.Future, response: Channel<unknown>}
+local function main()
+    local events = assert(process.events())
+    local hints = assert(process.listen(M.TOPIC_WAKE, {message = true}))
+    local registered, register_error = process.registry.register(M.WORKER)
+    if not registered then error("register session scheduler: " .. tostring(register_error)) end
+    local ticker = time.ticker(M.SCAN_INTERVAL)
+    local active: {[string]: Pending} = {}
+    local function scan()
+        local page, scan_error = threads_journal.invoke("work_scan", {limit = scheduler.MAX_SCAN})
+        local decoded = bounds.object(page)
+        local rows = decoded and bounds.array(decoded.items, scheduler.MAX_SCAN)
+        if scan_error or not rows then logger:error("Session scheduler scan failed", {cause = scan_error or "malformed work page"}); return end
+        for _, raw in ipairs(rows) do
+            local due = bounds.object(raw)
+            local session, work = due and bounds.id(due.session), due and bounds.id(due.work)
+            if session and work and not active[session] then
+                local future, start_error = funcs.async("bee.sessions.service:turn_run", {work = work})
+                if future then active[session] = {future = future, response = future:response()}
+                else logger:error("Session scheduler activation failed", {work = work, cause = tostring(start_error)}) end
+            end
+        end
+    end
+    scan()
+    while true do
+        local cases = {events:case_receive(), hints:case_receive(), ticker:channel():case_receive()}
+        for _, pending in pairs(active) do cases[#cases + 1] = pending.response:case_receive() end
+        local selected = channel.select(cases)
+        if selected.channel == events then
+            if not selected.ok or selected.value.kind == process.event.CANCEL then
+                for _, pending in pairs(active) do pending.future:cancel() end
+                ticker:stop()
+                return
+            end
+        else
+            for session, pending in pairs(active) do
+                if selected.channel == pending.response then
+                    local _, completion_error = pending.future:result()
+                    if completion_error then logger:error("Session turn worker ended without a report", {session = session, cause = tostring(completion_error)}) end
+                    active[session] = nil
+                    break
+                end
+            end
+            scan()
+        end
+    end
+end
+
+return {main = main, pass = pass, turn_run = turn_run}

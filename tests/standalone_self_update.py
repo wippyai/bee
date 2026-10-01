@@ -84,7 +84,7 @@ def main(deployment):
         (probe / "_index.yaml").write_text(yaml.safe_dump({
             "version": "1.0", "namespace": "selfroot.probe", "entries": [
                 {"name": "read", "kind": "security.policy", "policy": {
-                    "actions": ["registry.get"], "resources": "*", "effect": "allow"}},
+                    "actions": ["registry.get", "registry.resolution.get"], "resources": "*", "effect": "allow"}},
                 {"name": "main", "kind": "process.lua", "source": "file://main.lua", "method": "main",
                  "modules": ["registry", "logger"], "imports": {
                      "bounds": "bee.threads.records:bounds", "inventory": "bee.hub:inventory", "plan": "bee.hub:plan", "plan_inspection": "bee.hub:inspection"},

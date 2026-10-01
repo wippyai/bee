@@ -287,7 +287,7 @@ local function define_tests()
                 state = {resumed = false, thread_id = "thread-1", foreign = true}})
             test.is_false(codex_unknown.ok)
             local codex_oversized = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
-                state = {resumed = false, answer = string.rep("x", codex.MAX_ANSWER_BYTES + 1)}})
+                state = {resumed = false, answer = string.rep("x", codex.max_answer_bytes() + 1)}})
             test.is_false(codex_oversized.ok)
             local codex_resumed = funcs.call("bee.driver.codex.binding:normalize", {index = 1, eof = true,
                 resumed = true})
@@ -426,7 +426,7 @@ local function define_tests()
             muse.normalize(state, 1, {payload_type = "runtime.command.accepted", stream = {id = "sess-bounded"}, payload = {}})
             muse.normalize(state, 2, {payload_type = "run.lifecycle.started", stream = {id = "sess-bounded"}, payload = {}})
             muse.normalize(state, 3, {payload_type = "run.output.delta", stream = {id = "sess-bounded"}, payload = {text = "prefix"}})
-            local oversized = muse.normalize(state, 4, {payload_type = "run.output.delta", stream = {id = "sess-bounded"}, payload = {text = string.rep("x", muse.MAX_ANSWER_BYTES)}})
+            local oversized = muse.normalize(state, 4, {payload_type = "run.output.delta", stream = {id = "sess-bounded"}, payload = {text = string.rep("x", muse.max_answer_bytes())}})
             test.is_true(state.answer_truncated)
             test.is_nil(state.answer)
             local saw_bound = false
@@ -446,7 +446,7 @@ local function define_tests()
             test.eq(unknown.error, "state: unknown field unknown")
             local overlong = funcs.call("bee.driver.muse.binding:normalize", {index = 1, state = {
                 resumed = false, command_accepted = false, run_started = false, answer_truncated = false,
-                answer = string.rep("x", muse.MAX_ANSWER_BYTES + 1),
+                answer = string.rep("x", muse.max_answer_bytes() + 1),
             }, eof = true})
             test.is_false(overlong.ok)
             test.eq(overlong.error, "state.answer exceeds the retained answer bound")

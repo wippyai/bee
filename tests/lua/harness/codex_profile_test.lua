@@ -29,7 +29,7 @@ local function raw_policy(ref: string): {[string]: unknown}
 end
 
 local function decoded(ref: string): policy.Policy
-    local value, err = policy.decode(ref, registry.get(ref))
+    local value, err = policy.decode(ref, (registry.get(ref)))
     if not value then error(ref .. ": " .. tostring(err)) end
     return value
 end
@@ -107,8 +107,16 @@ local function define_tests()
 
         test.it("projects the selected named profile into each private Codex route", function()
             test.eq((raw_policy(CODEX_BATCH).profile_options :: {[string]: unknown}).config_profile.kind, "text")
-            for _, profile_id in ipairs({"batch", "named_batch"}) do
-                local spec = launch.specification(assert(launch.decode({profile_id = profile_id, brief = "work", sandbox = "read-only", config_profile = PROFILE})))
+            local cases: {{profile_id: string, resume_ref: string?}} = {
+                {profile_id = "batch"},
+                {profile_id = "batch", resume_ref = "session-1"},
+                {profile_id = "named_batch"},
+                {profile_id = "named_batch", resume_ref = "session-1"},
+            }
+            for _, item in ipairs(cases) do
+                local request: {[string]: unknown} = {profile_id = item.profile_id, brief = "work", sandbox = "read-only", config_profile = PROFILE}
+                if item.resume_ref then request.resume_ref = item.resume_ref end
+                local spec = launch.specification(assert(launch.decode(request)))
                 test.is_nil(machine.required_file_refusal(spec, true))
                 test.is_nil(spec.required_files)
                 local home = spec.provider_home :: driver_types.ProviderHome
@@ -117,6 +125,7 @@ local function define_tests()
                 for _, file in ipairs(home.files) do
                     if file.path == ".codex/" .. PROFILE .. ".config.toml" then
                         test.eq(file.source_path, file.path)
+                        test.eq(file.kind, "config")
                         test.is_false(file.optional)
                         found = true
                     end

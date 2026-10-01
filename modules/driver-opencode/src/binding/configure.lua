@@ -4,9 +4,8 @@
 -- request naming one is refused rather than rendered.
 local configuration = require("configuration")
 local configure_protocol = require("configure_protocol")
-local function handle(value: unknown): {[string]: unknown}
-    local request, request_error = configure_protocol.decode_request(value)
-    if not request then return {ok = false, error = request_error or "invalid configuration request"} end
+local universal = require("universal")
+local function handle(request: configure_protocol.Request): {[string]: unknown}
     if request.provider_ref or request.provider then
         return {ok = false, error = "opencode configures no model provider; the user selects models in their own OpenCode home"}
     end
@@ -19,10 +18,13 @@ local function handle(value: unknown): {[string]: unknown}
                 return {ok = false, error = "opencode does not support gateway hook event " .. event}
             end
         end
-        return {ok = true, delivery = {arguments = {}, files = {}}}
+        if request.private_home ~= true then return {ok = true, delivery = {arguments = {}, files = {}}} end
+        local file, file_error = configuration.login_configuration()
+        if not file then return {ok = false, error = tostring(file_error)} end
+        return {ok = true, delivery = {arguments = {}, files = {file}}}
     end
     local file, file_error = configuration.settings_file(request.gateway)
     if not file then return {ok = false, error = tostring(file_error)} end
     return {ok = true, delivery = {arguments = {}, files = {file}}}
 end
-return {handle = handle}
+return {handle = universal.configure("opencode", {opencode = handle})}

@@ -3,7 +3,7 @@ local bounds = require("bounds")
 local semver = require("semver")
 local M = {}
 
-type Pack = {component: string, installed_version: string, available_version: string, update_available: boolean}
+type Pack = {component: string, installed_version: string, locked_version: string, available_version: string, update_available: boolean}
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean,
     needs_new_binary: boolean, reason: string}
 type Binary = {native_module: string, native_version: string, runtime_commit: string}
@@ -80,13 +80,14 @@ function M.decode(raw: unknown): Status
         local item = object(raw_item)
         local name = item and bounds.line(item.component, 160)
         local installed = item and version(item.installed_version, true)
+        local locked = item and version(item.locked_version == nil and "" or item.locked_version, true)
         local available = item and version(item.available_version, true)
-        if not item or bounds.fields(item, {"component", "installed_version", "available_version", "update_available"})
-            or not name or not name:match("^bee/") or seen[name] or not installed or not available
+        if not item or bounds.fields(item, {"component", "installed_version", "locked_version", "available_version", "update_available"})
+            or not name or not name:match("^bee/") or seen[name] or not installed or not available or not locked
             or type(item.update_available) ~= "boolean" then
             return error_status("Invalid Bee pack update row")
         end
-        modules[#modules + 1] = {component = name, installed_version = installed, available_version = available,
+        modules[#modules + 1] = {component = name, installed_version = installed, locked_version = locked, available_version = available,
             update_available = item.update_available}
         seen[name] = true
     end

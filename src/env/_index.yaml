@@ -66,11 +66,23 @@ entries:
   directory: .
   base: project
   auto_init: false
+- name: app_database_root
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: BEE_APP_DATABASE_ROOT
+  default: .wippy/app-db
+  readonly: true
+- name: files_root
+  kind: fs.directory
+  directory: .
+  base: project
+  auto_init: false
+  readonly: true
 - name: app_databases
   kind: fs.directory
   meta:
     comment: Host-provisioned directory holding isolated application databases; it lies under Bee state, outside every approved readable tree
-  directory: .wippy/app-db
+  directory: ${env:bee.env:app_database_root}
   base: project
   auto_init: true
   mode: '0700'
@@ -78,6 +90,12 @@ entries:
   kind: env.variable
   storage: bee.env:workspace_environment
   variable: HOME
+  readonly: true
+- name: no_color
+  kind: env.variable
+  storage: bee.env:workspace_environment
+  variable: NO_COLOR
+  default: ""
   readonly: true
 - name: machine_login_source
   kind: fs.directory
@@ -122,7 +140,8 @@ entries:
       - component: bee.threads.timeline
         definition_id: bee.threads.timeline:app
         capabilities: [threads.read]
-        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline:client_policy]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline:client_policy,
+          bee.security.threads:thread_workspace_list_policy]
         thread_access: none
       - component: bee.workspace.manager
         definition_id: bee.workspace.manager:app
@@ -150,3 +169,8 @@ entries:
           bee.security.gov:governance_delivery_read_policy, bee.security.gov:governance_delivery_manage_policy,
           bee.security.gov:governance_delivery_activate_policy]
         thread_access: none
+      - component: bee.files.app
+        definition_id: bee.files.app:app
+        capabilities: [workspace.files.read]
+        policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.files:read_policy]
+        thread_access: observe_post

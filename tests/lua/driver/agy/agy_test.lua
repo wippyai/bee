@@ -190,7 +190,7 @@ local function define_tests()
 
             local spec = launch.specification(request)
             local line = quote.line(spec.argv)
-            test.is_nil(line:find("%-%-model"))
+            test.is_nil((line:find("%-%-model")))
         end)
 
         test.it("refuses foreign permission modes and unsupported turn limits", function()
@@ -204,7 +204,7 @@ local function define_tests()
             if not request then error(tostring(request_error)) end
             local command = quote.line(launch.specification(request).argv)
             test.is_true(command:find("--mode plan", 1, true) ~= nil)
-            test.is_nil(command:find("--dangerously-skip-permissions", 1, true))
+            test.is_nil((command:find("--dangerously-skip-permissions", 1, true)))
         end)
 
         test.it("handles continuation turns with conversation resume reference", function()
@@ -865,7 +865,7 @@ local function define_tests()
             test.is_true(content:find("http://127.0.0.1:18790/mcp/act-test", 1, true) ~= nil)
             -- Agy sends literal headers. Placement fills the empty template
             -- field from the admitted gateway credential immediately before exec.
-            test.is_nil(content:find("${GATEWAY_TOKEN}", 1, true))
+            test.is_nil((content:find("${GATEWAY_TOKEN}", 1, true)))
             test.eq(file.secret_fields[1].environment, "GATEWAY_TOKEN")
             test.eq(file.secret_fields[1].prefix, "Bearer ")
 

@@ -46,7 +46,7 @@ end
 local function items(value: unknown): {Item}?
     if type(value) ~= "table" then return nil end
     local list: {Item} = {}
-    for index, item in ipairs(value :: {unknown}) do
+    for index, item in ipairs(value) do
         if index > M.MAX_ITEMS then break end
         if type(item) ~= "table" then return nil end
         local label, detail = line(item.label, M.MAX_LABEL), line(item.detail == nil and "" or item.detail, M.MAX_DETAIL)
@@ -73,7 +73,19 @@ end
 local function opened(binding: string): (Instance?, string?)
     local instance, err = contract.open(binding)
     if err or not instance then return nil, "open extension: " .. tostring(err) end
-    return instance :: Instance, nil
+    if type(instance) ~= "table" and type(instance) ~= "userdata" then return nil, "open extension: invalid instance" end
+    local describe, search = instance.describe, instance.search
+    if type(describe) ~= "function" or type(search) ~= "function" then return nil, "open extension: missing methods" end
+    return {
+        describe = function(_self: Instance, input: unknown): (unknown, unknown)
+            local result: unknown, problem: unknown = describe(instance, input)
+            return result, problem
+        end,
+        search = function(_self: Instance, input: unknown): (unknown, unknown)
+            local result: unknown, problem: unknown = search(instance, input)
+            return result, problem
+        end,
+    }, nil
 end
 
 function M.describe(binding: string, workspace_id: string): Described

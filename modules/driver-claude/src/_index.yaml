@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Claude driver
-    comment: Optional harness binding; host activation and launch policies authorize its use
+    comment: Optional harness binding; host activation and launch policies authorize
+      its use
 - name: dependency_driver
   kind: ns.dependency
   component: bee/driver
@@ -19,7 +20,8 @@ entries:
 - name: host_environment
   kind: ns.requirement
   meta:
-    comment: Read-only host environment that supplies the selected Claude executable and API key
+    comment: Read-only host environment that supplies the selected Claude executable
+      and API key
   default: bee.harness.host:environment
   targets:
   - entry: bee.driver.claude:executable
@@ -67,24 +69,25 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  modules: [json]
   imports:
-    events: bee.driver.kit:events
-    types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    universal: bee.driver:universal
 - name: launch
   kind: library.lua
   source: file://launch.lua
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    types: bee.driver:types
-    turn_budget: bee.driver:turn_budget
+    universal: bee.driver:universal
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  imports:
+    universal: bee.driver:universal
 - name: permission_adapter
   kind: registry.entry
   meta:
     type: harness.permission_adapter
-    comment: The Claude Code stream-json control protocol for interactive permissions, captured from the executable; profiles pin its digest, hosts enable it per launch policy
+    comment: The Claude Code stream-json control protocol for interactive permissions,
+      captured from the executable; profiles pin its digest, hosts enable it per launch
+      policy
   data:
     adapter:
       schema_revision: bee.permission-adapter@2
@@ -99,14 +102,23 @@ entries:
       response:
         envelope:
           type: control_response
-          response: {subtype: success}
+          response:
+            subtype: success
         correlation_field: response.request_id
         decision_field: response.response.behavior
         allow_value: allow
         deny_value: deny
         reason_field: response.response.message
-      acknowledgment: {mode: correlation_echo, event_type: tool.result, field: call_id}
-      deny_acknowledgment: {mode: terminal_denial, event_type: tool.result, field: outcome, value: failed, correlation_field: call_id}
+      acknowledgment:
+        mode: correlation_echo
+        event_type: tool.result
+        field: call_id
+      deny_acknowledgment:
+        mode: terminal_denial
+        event_type: tool.result
+        field: outcome
+        value: failed
+        correlation_field: call_id
       cancellation: deny_before_close
       proof_fixture: control
 - name: binding
@@ -118,9 +130,13 @@ entries:
       dispatch: bee.driver.claude.binding:dispatch
       normalize: bee.driver.claude.binding:normalize
       configure: bee.driver.claude.binding:configure
+  - contract: bee.driver:locate_facet
+    methods:
+      locate: bee.driver.claude.binding:locate
   meta:
     type: harness.driver
     driver_id: claude
+    descriptor_ref: bee.driver.claude.descriptor:cli
     accepts_model: true
     profiles_ref: bee.driver.claude:profiles
 - name: profiles
@@ -194,6 +210,31 @@ entries:
           - signal_group
       - id: batch
         mode: batch
+        hooks:
+          transports:
+          - command
+          - http
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - PostToolUseFailure
+          - PermissionRequest
+          - PermissionDenied
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.claude:protocol
+        inbound:
+        - next_turn
+        mcp:
+          client_transports:
+          - stdio
+          - streamable_http
+          - sse
+          initialize_timeout_ms: 30000
+          call_timeout_ceiling_ms: 120000
         protocol: stream-json
         protocol_revision: stream-json-2
         answer_path: *id001
@@ -212,45 +253,80 @@ entries:
         interrupt: *id005
       - id: window
         mode: window
+        hooks:
+          transports:
+          - command
+          - mcp_tool
+          events:
+          - SessionStart
+          - UserPromptSubmit
+          - PreToolUse
+          - PostToolUse
+          - Stop
+          - SessionEnd
+          adapter_ref: bee.driver.claude:protocol
         protocol: pty
         protocol_revision: native-window-1
-        answer_path: {strategy: none}
-        resume: {strategy: none, portable: false}
+        answer_path:
+          strategy: none
+        resume:
+          strategy: none
+          portable: false
         isolation_env:
-          variables: [HOME, CLAUDE_CONFIG_DIR]
+          variables:
+          - HOME
+          - CLAUDE_CONFIG_DIR
           private_home: false
         exit_codes_trustworthy: false
-        input_ready: {strategy: none}
+        input_ready:
+          strategy: none
         sandbox:
           providers: []
           required_placement_features: []
           git_writable_roots_adapter: claude_add_dir
-        permission_exchange: {mode: none}
+        permission_exchange:
+          mode: none
 - name: default_window
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned Claude Code window declaration; the host separately selects its policy, activation, executable and permissions
+    comment: Component-owned Claude Code window declaration; the host separately selects
+      its policy, activation, executable and permissions
   data:
     schema_revision: bee.launch-definition@1
     launch_id: claude-window
     title: Claude Code
-    command_names: [claude]
+    command_names:
+    - claude
     binding_ref: bee.driver.claude:binding
     profile_id: window
+    session_profile_id: session
+    session_credentials:
+    - claude_api_key
+    - claude_login
     policy_ref: ''
     default_mode: window
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: new}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: new
     session_resource: session
-    credentials: [claude_api_key]
-    presentation: {start_menu: true, fullscreen: true, reuse: never}
+    credentials:
+    - claude_api_key
+    presentation:
+      start_menu: true
+      fullscreen: true
+      reuse: never
 - name: research_batch
   kind: registry.entry
   meta:
     type: bee.launch_definition
-    comment: Component-owned bounded Claude batch route for a host-selected coordinator and caller-owned shared thread
+    comment: Component-owned bounded Claude batch route for a host-selected coordinator
+      and caller-owned shared thread
   data:
     schema_revision: bee.launch-definition@1
     launch_id: claude-research-batch
@@ -260,13 +336,22 @@ entries:
     profile_id: batch
     policy_ref: ''
     default_mode: batch
-    allowed_overrides: [thread, workdir]
-    workdir_policy: {kind: declared_resource, resource_ref: project}
-    thread_policy: {kind: caller}
+    allowed_overrides:
+    - thread
+    - workdir
+    workdir_policy:
+      kind: declared_resource
+      resource_ref: project
+    thread_policy:
+      kind: caller
     session_resource: session
-    credentials: [claude_api_key, claude_login]
-    presentation: {start_menu: false, fullscreen: false, reuse: never}
-
+    credentials:
+    - claude_api_key
+    - claude_login
+    presentation:
+      start_menu: false
+      fullscreen: false
+      reuse: never
 - name: credential_format
   kind: registry.entry
   meta:
@@ -287,19 +372,21 @@ entries:
     comment: CLI command to launch Claude in the agent window
   data:
     name: claude
-    definition_id: bee.harness.window:app
+    definition_id: bee.harness.app:app
     arguments:
     - bee.driver.claude:default_window
     fullscreen: true
-
 - name: launch_policy_claude_batch
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: Host-selected Claude turn budget for agentic research actions on a caller-owned thread
+    comment: Host-selected Claude turn budget for agentic research actions on a caller-owned
+      thread
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -307,27 +394,63 @@ entries:
     drain_ms: 5000
     fixture: false
     executables: {}
-    executable_env: {claude: bee.driver.claude:executable}
+    executable_env:
+      claude: bee.driver.claude:executable
     environment: {}
     environment_refs: {}
     allow_host_home: false
-    gateway_tools: [thread_read, thread_wait, thread_message, thread_sessions, thread_notify, session_directory, session_send, session_inbox, session_ack, session_reply, overlay, delivery, docs, components, install_request, uninstall_request, install_status]
-    gateway_hooks: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop]
-    profile_options: {effort: [low, medium, high], turn_budget: [16, 32, 64, 128]}
+    gateway_tools:
+    - session_catalog
+    - session_open
+    - session_run
+    - session_send
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
+    gateway_hooks:
+    - SessionStart
+    - UserPromptSubmit
+    - PreToolUse
+    - PostToolUse
+    - Stop
+    profile_options:
+      effort:
+      - low
+      - medium
+      - high
+      turn_budget:
+      - 16
+      - 32
+      - 64
+      - 128
     profile_instructions: true
-    prepare_options: {permission_mode: default, turn_budget: 128}
+    prepare_options:
+      permission_mode: default
+      turn_budget: 128
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding
 - name: launch_policy_claude_window
   kind: registry.entry
   meta:
     type: bee.launch_policy
-    comment: 'Host-selected executable binding for the component-owned Claude Code window; missing host executable
-      leaves the declaration unavailable. It is the shipped orchestrator policy - a Claude window may launch the
-      allow-listed worker definitions below, reach a child it started on a new thread through the thread tools, and
-      follow a run with the managed-run tools. A person selects it as a saved profile in the Agent window (press N
-      for a new profile, name it, and choose Claude Code).'
+    comment: Host-selected executable binding for the component-owned Claude Code
+      window; missing host executable leaves the declaration unavailable. It is the
+      shipped orchestrator policy - a Claude window may launch the allow-listed worker
+      definitions below, reach a child it started on a new thread through the thread
+      tools, and follow a run with the managed-run tools. A person selects it as a
+      saved profile in the Agent window (press N for a new profile, name it, and choose
+      Claude Code).
   data:
     schema_revision: bee.launch-policy@2
-    allowed_overrides: [thread, workdir]
+    allowed_overrides:
+    - thread
+    - workdir
     required_cleanup: process_group
     required_exit_observation: independent
     start_ms: 15000
@@ -342,38 +465,18 @@ entries:
       CLAUDE_CONFIG_DIR: bee.driver.claude:config_home
     allow_host_home: true
     gateway_tools:
-    - thread_read
-    - thread_wait
-    - thread_message
-    - thread_sessions
-    - thread_notify
-    - session_directory
+    - session_catalog
+    - session_open
+    - session_run
     - session_send
-    - session_inbox
-    - session_ack
-    - session_reply
-    - overlay
-    - delivery
-    - docs
-    - components
-    - install_request
-    - uninstall_request
-    - install_status
-    - thread_launch
-    - launch_definitions
-    - capabilities
-    - run_status
-    - run_wait
-    - run_cancel
-    agent_launch:
-    - bee.driver.codex:research_batch
-    - bee.driver.codex:named_batch
-    - bee.driver.claude:research_batch
-    - bee.driver.muse:research_batch
-    - bee.driver.agy:research_batch
-    - bee.driver.grok:research_batch
-    agent_launch_unconfined:
-    - bee.driver.grok:research_batch
+    - session_await
+    - session_join
+    - session_get
+    - session_list
+    - session_cancel
+    - session_close
+    - thread_read
+    - thread_message
     gateway_hooks:
     - SessionStart
     - UserPromptSubmit
@@ -387,3 +490,6 @@ entries:
       - high
     profile_instructions: true
     prepare_options: {}
+    placement_profiles:
+    - bee.placement:native
+    - bee.placement.docker:coding

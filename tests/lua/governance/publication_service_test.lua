@@ -25,13 +25,13 @@ local function define_tests()
                 path = "entries.json", content_base64 = nil}})
             test.is_nil(missing)
             test.eq(missing_code, "MISSING_ARTIFACT")
-            test.not_nil(string.find(missing_error :: string, "no entries.json", 1, true))
+            test.not_nil((string.find(missing_error :: string, "no entries.json", 1, true)))
             -- A present entries.json that is not a JSON list of complete entries.
             local broken, broken_error, broken_code = service.snapshot_artifact({ok = true, value = {
                 path = "entries.json", content_base64 = assert(base64.encode("[{\"id\":\"demo:x\"}]"))}})
             test.is_nil(broken)
             test.eq(broken_code, "INVALID_ARTIFACT")
-            test.not_nil(string.find(broken_error :: string, "data", 1, true))
+            test.not_nil((string.find(broken_error :: string, "data", 1, true)))
             -- A usable list measures with no refusal.
             local good, good_error, good_code = service.snapshot_artifact({ok = true, value = {
                 path = "entries.json", content_base64 = assert(base64.encode(
@@ -46,7 +46,7 @@ local function define_tests()
             test.eq(reply.code, "MISSING_ARTIFACT")
             local value = reply.value :: {[string]: unknown}
             test.not_nil(value.remedy)
-            test.not_nil(string.find(value.remedy :: string, "entries.json", 1, true))
+            test.not_nil((string.find(value.remedy :: string, "entries.json", 1, true)))
         end)
     end)
 end

@@ -28,6 +28,8 @@ type Request = {
     profile_id: string,
     brief: string,
     policy_ref: string,
+    placement_profile_ref: string?,
+    placement_profile_digest: string?,
     placement_binding_ref: string?,
     placement_binding_digest: string?,
     resources: {placement_types.ResourceGrant},
@@ -53,7 +55,7 @@ type Exchange = {
     poll_ms: integer,
     ttl_ms: integer,
 }
-type Push = {
+type Acceptance = {
     adapter: permission.Adapter,
     acceptance_ref: string,
     acceptance_digest: string,
@@ -72,12 +74,10 @@ type Plan = {
     placement_request: placement_types.LaunchRequest,
     exit_codes_trustworthy: boolean,
     exchange_refusal: string?,
-    push_refusal: string?,
     prepare_target: string,
     resume_ref: string?,
     normalize_target: string,
     exchange: Exchange?,
-    push: Push?,
     gateway: placement_types.Gateway?,
 }
 type OutputState = "open" | "complete" | "truncated" | "unobserved" | "incomplete"

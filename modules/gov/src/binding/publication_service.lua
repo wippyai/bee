@@ -164,7 +164,7 @@ function M.call(raw: unknown): Result
     if request.operation == "prepare" then
         local store, open_error = staging.open(governance_resource, node_id)
         if not store then return failure("UNAVAILABLE", open_error or "open overlay") end
-        local read = store:read_frozen(chosen.source_workspace, "entries.json", snapshot_digest :: string)
+        local read = store:read_frozen(chosen.source_workspace, "entries.json", assert(snapshot_digest))
         store:close()
         local authored, authored_error, authored_code = M.snapshot_artifact(read)
         local value = bounds.object(authored)

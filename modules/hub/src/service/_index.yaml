@@ -8,3 +8,10 @@ entries:
   modules: [process, security]
   imports: {publication: bee.hub.binding:publication, transaction: bee.persist:transaction}
   meta: {type: internal}
+- name: publish_worker
+  kind: process.lua
+  source: file://publish_worker.lua
+  method: main
+  modules: [process, security]
+  imports: {publish: bee.hub.binding:publish, transaction: bee.persist:transaction}
+  meta: {type: internal}

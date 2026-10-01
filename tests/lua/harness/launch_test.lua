@@ -13,6 +13,7 @@ local registry = require("registry")
 local env = require("env")
 local exec = require("exec")
 local time = require("time")
+local hash = require("hash")
 local admission = require("admission")
 local definitions = require("definitions")
 local launch_policy = require("launch_policy")
@@ -43,9 +44,12 @@ local function fresh(prefix: string): string
     counter = counter + 1
     return prefix .. "-" .. tostring(math.floor(time.now():unix_nano() / 1000)) .. "-" .. tostring(counter)
 end
+local function workspace_id(prefix: string): string
+    return assert(hash.sha256(fresh(prefix))):sub(1, 32)
+end
 local scope_names = {"bee.harness.catalog:saved_profile_test_policy", "bee.harness.catalog:launch_client_policy", "bee.harness.catalog:launch_recovery_client_policy", "bee.harness.catalog:launch_recovery_runtime_policy", "bee.harness.catalog:carrier_client_policy", "bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy",
     "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_carrier_policy", "bee.harness.security:carrier_policy", "bee.harness.catalog:carrier_spawn_policy", "bee.resources.security:resource_manage_policy",
-    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.catalog:setup_client_policy"}
+    "bee.resources.security:resource_grant_policy", "bee.credentials.security:credential_manage_policy", "bee.credentials.security:credential_issue_policy", "bee.harness.security:launch_spawn_policy", "bee.harness.security:interactive_session_policy", "bee.harness.catalog:setup_client_policy"}
 local function scope(extra: {string}?): security.Scope
     local policies: {security.Policy} = {}
     for index, name in ipairs(scope_names) do
@@ -130,7 +134,7 @@ local function refusal_message(reply: admission.Reply): string
 end
 local function carrier_io(): machine.IO
     return {
-        call = function(target: string, input: unknown): (unknown, string?) return call(target, input), nil end,
+        call = function(target: string, input: unknown): (unknown, string?) return call_as_bound(REQUESTER, target, input, workspace), nil end,
         send = function(target: string, topic: string, input: unknown) end,
         self_pid = function(): string return process.pid() end,
         now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
@@ -326,7 +330,15 @@ local function count(list: {string}, wanted: string): integer
 end
 local function define_tests()
     test.describe("Launch admission", function()
-        local workspace = fresh("ws")
+        local roots_entry = assert(registry.get("bee.resources:resource_roots"))
+        roots_entry.data.roots[#roots_entry.data.roots + 1] = {root_ref = ROOT, access = "write"}
+        apply(roots_entry)
+        local catalog_scope = security.new_scope({assert(security.policy("bee.workspace.catalog:call_test_policy")),
+            assert(security.policy("bee.security.storage:workspace_catalog_manage_policy"))})
+        local catalog_reply, catalog_error = funcs.new():with_actor(assert(security.new_actor(REQUESTER))):with_scope(catalog_scope)
+            :call("bee.workspace.catalog:create", {label = fresh("launch"), root_ref = "bee.harness.catalog:project_fixture", subpath = fresh("launch-home"), create_directory = true})
+        if catalog_error then error(tostring(catalog_error)) end
+        local workspace = tostring(value(catalog_reply :: admission.Reply).workspace_id)
         prepare_host(workspace)
         test.it("decodes dedicated worktrees without mutable or untyped definition options", function()
             local entry = assert(registry.get(DEFINITION))
@@ -659,6 +671,26 @@ local function define_tests()
                 test.eq(invalid == nil, false)
             end
         end)
+        test.it("pins explicit machine-login projections for structured default sessions", function()
+            for _, provider in ipairs({"claude", "codex", "agy", "muse", "grok", "opencode"}) do
+                local ref = "bee.driver." .. provider .. ":default_window"
+                local entry = assert(registry.get(ref))
+                local decoded = assert(definitions.decode(ref, entry))
+                test.not_nil(decoded.session_credentials)
+                local found = false
+                for _, name in ipairs(decoded.session_credentials or {}) do
+                    if name == provider .. "_login" then found = true end
+                end
+                test.is_true(found)
+            end
+            local entry = assert(registry.get("bee.driver.claude:default_window"))
+            local changed = {data = {}}
+            for name, value in pairs(entry.data) do changed.data[name] = value end
+            changed.data.session_credentials = {false}
+            local invalid, err = definitions.decode("bee.driver.claude:default_window", changed)
+            test.is_nil(invalid)
+            test.not_nil(err)
+        end)
         test.it("ships hidden research routes for every batch driver with bounded policies", function()
             local cases = {
                 {definition = "bee.driver.codex:research_batch", policy = "bee.driver.codex:launch_policy_codex_batch",
@@ -726,22 +758,22 @@ local function define_tests()
                     for _, tool in ipairs(policy.gateway_tools) do if tool == "thread_message" then has_thread_message = true end end
                     test.is_true(has_thread_message)
                 end
-                local has_workspace = false
-                for _, tool in ipairs(policy.gateway_tools) do if tool == "overlay" then has_workspace = true end end
-                test.is_true(has_workspace)
+                local retained_tools = {
+                    session_catalog = true, session_open = true, session_run = true, session_send = true,
+                    session_await = true, session_join = true, session_get = true, session_list = true,
+                    session_cancel = true, session_close = true, thread_read = true, thread_message = true,
+                }
+                local seen_tools: {[string]: boolean} = {}
+                for _, tool in ipairs(policy.gateway_tools) do
+                    test.is_true(retained_tools[tool] == true, selected.policy .. " admits removed tool " .. tool)
+                    test.is_false(seen_tools[tool] == true, selected.policy .. " repeats tool " .. tool)
+                    seen_tools[tool] = true
+                end
+                test.eq(#policy.gateway_tools, 12)
+                for tool in pairs(retained_tools) do test.is_true(seen_tools[tool] == true, selected.policy .. " omits " .. tool) end
             end
         end)
-        test.it("flags exactly the unconfined orchestrator worker on the shipped orchestrator policy", function()
-            local entry = assert(registry.get("bee.driver.claude:launch_policy_claude_window"))
-            local orchestrator, orchestrator_error = launch_policy.decode("bee.driver.claude:launch_policy_claude_window", entry,
-                function(ref: string): (string?, string?)
-                    if ref == "bee.driver.claude:executable" then return "/usr/bin/orchestrator-agent", nil end
-                    if ref == "bee.driver.claude:config_home" then return "", nil end
-                    return nil, "unadmitted environment reference"
-                end)
-            if not orchestrator then error(tostring(orchestrator_error)) end
-            test.eq(#orchestrator.agent_launch_unconfined, 1)
-            test.eq(orchestrator.agent_launch_unconfined[1], "bee.driver.grok:research_batch")
+        test.it("keeps the named Codex profile policy bounded", function()
             -- The named Codex route projects the selected config profile
             -- into its private home while gaining the workspace-write CLI
             -- sandbox.
@@ -1045,10 +1077,13 @@ local function define_tests()
         test.it("defers driver configuration until placement supplies the actual HOME", function()
             local binding = assert(registry.get("bee.driver.claude:binding"))
             local original = binding.data
-            binding.data = {contracts = {{contract = "bee.driver:driver", methods = {
-                prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
-                normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
-            }}}}
+            binding.data = {contracts = {
+                {contract = "bee.driver:driver", methods = {
+                    prepare = "bee.driver.claude.binding:prepare", dispatch = "bee.driver.claude.binding:dispatch",
+                    normalize = "bee.driver.claude.binding:normalize", configure = "bee.harness.catalog:configuration_probe",
+                }},
+                {contract = "bee.driver:locate_facet", methods = {locate = "bee.driver.claude.binding:locate"}},
+            }}
             local ok, failure = pcall(function()
                 apply(binding)
                 local selected = value(call("bee.harness.launch:resolve", {definition_ref = DEFINITION}))
@@ -1087,28 +1122,27 @@ local function define_tests()
             local driver_copy: {[string]: unknown} = {}
             for key, item in pairs(driver) do driver_copy[key] = item end
             local profiles: {{[string]: unknown}} = {}
-            local host_profile_added = false
+            local batch_profile_found = false
             for _, raw in ipairs(driver.profiles :: {{[string]: unknown}}) do
                 local profile: {[string]: unknown} = {}
                 for key, item in pairs(raw) do profile[key] = item end
                 if raw.id == "batch" then
+                    batch_profile_found = true
                     local isolation = raw.isolation_env :: {[string]: unknown}
                     local isolation_copy: {[string]: unknown} = {}
                     for key, item in pairs(isolation) do isolation_copy[key] = item end
                     isolation_copy.private_home = false
-                    profile.id = "batch_host_home"
                     profile.isolation_env = isolation_copy
-                    host_profile_added = true
                 end
                 profiles[#profiles + 1] = profile
             end
-            if not host_profile_added then error("Claude batch profile is missing") end
+            if not batch_profile_found then error("Claude batch profile is missing") end
             driver_copy.profiles = profiles
             profile_data.driver = driver_copy
 
             local definition_data: {[string]: unknown} = {}
             for key, item in pairs(original_definition :: {[string]: unknown}) do definition_data[key] = item end
-            definition_data.profile_id = "batch_host_home"
+            definition_data.profile_id = "batch"
             definition_data.credentials = {}
 
             local policy_data: {[string]: unknown} = {}
@@ -1169,6 +1203,7 @@ local function define_tests()
             changed_definition.binding_ref = "bee.driver.codex:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
+            changed_definition.session_resource = "session"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
             changed_policy.prepare_options = {sandbox = "read-only"}
@@ -1243,6 +1278,7 @@ local function define_tests()
             changed_definition.binding_ref = "bee.driver.codex:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
+            changed_definition.session_resource = "session"
             changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
@@ -1332,6 +1368,7 @@ local function define_tests()
             changed_definition.binding_ref = "bee.driver.codex:binding"
             changed_definition.profile_id = "window"
             changed_definition.default_mode = "window"
+            changed_definition.session_resource = "session"
             changed_definition.policy_ref = "bee.harness.catalog:codex_fixture_policy"
             changed_definition.credentials = {}
             changed_policy.executables = {codex = "/bin/true"}
@@ -1526,173 +1563,6 @@ local function define_tests()
                 end
             end)
         end)
-        test.it("launches, waits on and cancels a managed agent as an application under its host grant", function()
-            local application = "bee.application:" .. workspace .. ":launcher"
-            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
-            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
-            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
-            apply(sources_entry)
-            local function app_call(actor_id: string, names: {string}, request: {[string]: unknown}): admission.Reply
-                local policies: {security.Policy} = {}
-                for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end
-                local reply, err = funcs.new():with_actor(principals.actor(actor_id, workspace)):with_scope(security.new_scope(policies))
-                    :call("bee.harness.launch:agent_call", request)
-                if err then error("agent_call: " .. tostring(err)) end
-                return reply :: admission.Reply
-            end
-            local granted = {"bee.harness.security:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
-            local ungranted = {"bee.harness.security:agent_call_policy"}
-            local key = fresh("app-run")
-            test.eq(code(app_call(application, ungranted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key})), "LAUNCH_NOT_PERMITTED")
-            local function settle(run: {[string]: unknown}): {[string]: unknown}
-                while true do
-                    local current = value(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60000}))
-                    if current.state == "ended" then return current end
-                end
-                error("the application's run did not settle")
-            end
-            local run = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key}))
-            test.eq(run.definition_ref, DEFINITION)
-            local early = value(app_call(application, granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
-            test.is_true(early.state == "starting" or early.state == "running" or early.state == "ended")
-            local replay = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "ping", idempotency_key = key}))
-            test.eq(replay.attempt_id, run.attempt_id)
-            local settled = settle(run)
-            test.eq(settled.outcome, "succeeded")
-            test.not_nil(settled.answer)
-            local status = value(app_call(application, granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
-            test.eq(status.state, "ended")
-            -- Another application does not belong to the run's thread.
-            test.eq(code(app_call("bee.application:" .. workspace .. ":other", granted, {operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id})), "DENIED")
-            test.eq(code(app_call(application, granted, {operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60001})), "INVALID")
-            -- The application agents library drives the same facade.
-            local probe_policies = {"bee.harness.security:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy", "bee.harness.catalog:agents_probe_policy"}
-            local function probe(request: {[string]: unknown}): {[string]: unknown}
-                local policies: {security.Policy} = {}
-                for index, name in ipairs(probe_policies) do policies[index] = assert(security.policy(name)) end
-                local reply, err = funcs.new():with_actor(principals.actor(application, workspace)):with_scope(security.new_scope(policies))
-                    :call("bee.harness.catalog:agents_probe", request)
-                if err then error("agents probe: " .. tostring(err)) end
-                return reply :: {[string]: unknown}
-            end
-            local shared = fresh("app-shared")
-            value(call_as(application, "bee.threads.service:create", {thread_id = shared, idempotency_key = fresh("create"), title = "Application thread"}))
-            local through_library: {[string]: unknown} = {}
-            with_overrides({"brief", "thread"}, {"thread"}, function()
-                through_library = probe({launch = {definition_ref = DEFINITION, brief = "ping", idempotency_key = fresh("library"),
-                    thread = {thread_id = shared}}})
-            end)
-            if through_library.ok ~= true then error(tostring(((through_library.error or {}) :: {[string]: unknown}).message)) end
-            test.eq(((through_library.run :: {[string]: unknown}).thread_id), shared)
-            test.eq(((through_library.status :: {[string]: unknown}).outcome), "succeeded")
-            local unpermitted = probe({launch = {definition_ref = RETAINED_DEFINITION, brief = "ping", idempotency_key = fresh("library")}})
-            test.eq(((unpermitted.error :: {[string]: unknown}).code), "LAUNCH_NOT_PERMITTED")
-            -- A child that keeps reading its input runs until its owner cancels it.
-            local policy_entry = assert(registry.get(POLICY))
-            local policy_data = policy_entry.data :: {[string]: unknown}
-            local environment = policy_data.environment :: {[string]: unknown}
-            environment.BEE_FIXTURE_READ = "1"
-            apply(policy_entry)
-            local ok, failure = pcall(function()
-                local held = value(app_call(application, granted, {operation = "launch", definition_ref = DEFINITION, brief = "hold", idempotency_key = fresh("app-hold")}))
-                -- A wait_ms budget lets cancel itself long-poll for the
-                -- child to start and stop it, instead of a client retry
-                -- loop racing the child's own startup under a busy host.
-                local cancel_reply = app_call(application, granted, {operation = "cancel", thread_id = held.thread_id, attempt_id = held.attempt_id, wait_ms = 60000})
-                test.is_true(cancel_reply.ok)
-                -- Only the attempt's owner stops it.
-                test.eq(code(app_call("bee.application:" .. workspace .. ":other", granted, {operation = "cancel", thread_id = held.thread_id, attempt_id = held.attempt_id})), "DENIED")
-                test.eq(settle(held).outcome, "cancelled")
-                local library_cancel = probe({launch = {definition_ref = DEFINITION, brief = "hold", idempotency_key = fresh("library-hold")}, cancel = true})
-                if library_cancel.ok ~= true then error(tostring(((library_cancel.error or {}) :: {[string]: unknown}).message)) end
-                test.eq(((library_cancel.status :: {[string]: unknown}).outcome), "cancelled")
-            end)
-            environment.BEE_FIXTURE_READ = nil
-            apply(policy_entry)
-            if not ok then error(tostring(failure)) end
-        end)
-        test.it("launches an allow-listed fixture agent from the generated agents.launch grant and returns a receipt", function()
-            -- The install path writes one generated policy for an approved
-            -- agents.launch grant. Exercise that exact policy, not a test
-            -- stand-in: it must carry the facade call and the launch action on
-            -- the approved definition so the application can reach the launch
-            -- pipeline and get a durable receipt.
-            local grant_workspace = fresh("generated-grant-ws")
-            local application = "bee.application:" .. grant_workspace .. ":launcher"
-            local app_id = "app.launch_fixture:app"
-            local owner = "bee.gov.apps:" .. grant_workspace .. ".launch_fixture"
-            local vocabulary = assert(capability_catalog.decode(assert(registry.get("bee:capability_catalog"))))
-            local requirement = {id = "app.launch_fixture:launch", expected_kind = "security.policy", value = nil,
-                targets = {app_id}, capability_request = {capability = "agents.launch",
-                    parameters = {definitions = {DEFINITION}}, catalog_revision = vocabulary.revision,
-                    template_revision = 1, reason = "Launch the allow-listed fixture agent",
-                    target = app_id, path = ".security.policies +="}}
-            local message_requirement = {id = "app.launch_fixture:message", expected_kind = "security.policy", value = nil,
-                targets = {app_id}, capability_request = {capability = "threads.message",
-                    parameters = {scope = "children"}, catalog_revision = vocabulary.revision,
-                    template_revision = 1, reason = "Message the child it launched",
-                    target = app_id, path = ".security.policies +="}}
-            local proposed = assert(capability_grants.propose(vocabulary, owner, app_id, {requirement, message_requirement}))
-            local generated_policies: {string} = {}
-            local generated_changes = registry.snapshot():changes()
-            for _, entry in ipairs(proposed.policies) do
-                local created, create_error = generated_changes:create(entry)
-                if not created then error("create generated grant: " .. tostring(create_error)) end
-                generated_policies[#generated_policies + 1] = entry.id :: string
-            end
-            local generated_applied, generated_error = generated_changes:apply()
-            if not generated_applied then error("apply generated grant: " .. tostring(generated_error)) end
-            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
-            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
-            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
-            apply(sources_entry)
-            local function generated_scope(): security.Scope
-                local policies: {security.Policy} = {}
-                for index, name in ipairs({"bee.harness.security:agent_call_policy"}) do
-                    policies[index] = assert(security.policy(name))
-                end
-                for _, id in ipairs(generated_policies) do
-                    policies[#policies + 1] = assert(security.policy(id))
-                end
-                return security.new_scope(policies)
-            end
-            local function generated_call(request: {[string]: unknown}): admission.Reply
-                local reply, err = funcs.new():with_actor(principals.actor(application, grant_workspace))
-                    :with_scope(generated_scope()):call("bee.harness.launch:agent_call", request)
-                if err then error("agent_call: " .. tostring(err)) end
-                return reply :: admission.Reply
-            end
-            local run = value(generated_call({operation = "run", definition_ref = DEFINITION, brief = "ping generated",
-                idempotency_key = fresh("generated-grant")}))
-            test.eq(run.definition_ref, DEFINITION)
-            test.not_nil(run.thread_id)
-            test.not_nil(run.attempt_id)
-            test.not_nil(run.receipt)
-            -- The generated policy admits no other definition.
-            local refused = generated_call({operation = "launch", definition_ref = RETAINED_DEFINITION, brief = "ping",
-                idempotency_key = fresh("generated-foreign")})
-            test.eq(code(refused), "LAUNCH_NOT_PERMITTED")
-            local settled: {[string]: unknown}? = nil
-            while settled == nil do
-                local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 60000}))
-                if current.state == "ended" then settled = current end
-            end
-            test.not_nil(settled)
-            test.eq(settled and settled.outcome, "succeeded")
-            test.not_nil(settled and settled.answer)
-            -- The same install's threads.message grant reaches the Threads
-            -- owner's message verbs; the owner checks the sender's membership.
-            local message = {message_id = "app-generated-msg", message_kind = "notification",
-                recipient_ids = {}, content = {text = "generated message"}}
-            local payload_digest = assert(sends.payload_digest(message))
-            local sent, send_error = funcs.new():with_actor(principals.actor(application, grant_workspace))
-                :with_scope(generated_scope()):call("bee.threads.service:send", {thread_id = run.thread_id,
-                    idempotency_key = fresh("generated-send"), caller_node_id = "node-generated",
-                    payload_digest = payload_digest, message = message})
-            if send_error then error("send: " .. tostring(send_error)) end
-            local send_reply = sent :: {[string]: unknown}
-            test.eq(send_reply.ok, true)
-        end)
         test.it("reconciles a prepared and claimed attempt after its carrier disappears", function()
             local admitted = value(call("bee.harness.launch:admit", {request_id = fresh("orphan-prestart"),
                 definition_ref = DEFINITION, workspace_id = workspace, brief = "fail during placement preparation"})) :: admission.Admitted
@@ -1714,7 +1584,7 @@ local function define_tests()
                 test.is_nil(row)
 
                 local reply, call_error = funcs.new():with_actor(principals.actor(REQUESTER, workspace))
-                    :with_scope(scope()):call("bee.harness.launch:agent_call_backend", {operation = "wait",
+                    :with_scope(scope()):call("bee.harness.catalog:managed_run_probe", {operation = "wait",
                         thread_id = admitted.thread_id, attempt_id = admitted.attempt_id, wait_ms = 0})
                 if call_error then error("reconcile wait: " .. tostring(call_error)) end
                 local settled = value(reply :: admission.Reply)
@@ -1754,7 +1624,7 @@ local function define_tests()
                 end
 
                 local thread_id, attempt_id = tostring(admitted.thread_id), tostring(admitted.attempt_id)
-                local current = value(call("bee.harness.launch:agent_call_backend", {operation = "status",
+                local current = value(call("bee.harness.catalog:managed_run_probe", {operation = "status",
                     thread_id = thread_id, attempt_id = attempt_id}))
                 test.eq(current.state, "running", "placement still owns a live runner and recovery remains possible")
                 test.eq(count(kinds(thread_id), "receipt"), 0, "a missing carrier alone is not terminal")
@@ -1786,7 +1656,7 @@ local function define_tests()
                     end
                 end
 
-                current = value(call("bee.harness.launch:agent_call_backend", {operation = "status",
+                current = value(call("bee.harness.catalog:managed_run_probe", {operation = "status",
                     thread_id = thread_id, attempt_id = attempt_id}))
                 test.eq(current.outcome, "uncertain")
                 local failure = current.error :: {[string]: unknown}?
@@ -1800,288 +1670,6 @@ local function define_tests()
                 test.not_nil(row)
                 test.eq(row and row.runner_pid, "999999999", "legacy runner identity remains available for inspection")
             end)
-        end)
-        test.it("launches a shipped executable_env policy from the generated agents.launch grant and the run settles", function()
-            -- The shipped batch policies resolve their driver executable
-            -- through executable_env, so only a run against the shipped
-            -- policy proves the execution scope reads those driver entries;
-            -- a fixture absolute executables map never touches env.get.
-            local shipped_workspace = fresh("shipped-shape-ws")
-            local application = "bee.application:" .. shipped_workspace .. ":launcher"
-            local app_id = "app.shipped_shape:app"
-            local owner = "bee.gov.apps:" .. shipped_workspace .. ".shipped_shape"
-            local vocabulary = assert(capability_catalog.decode(assert(registry.get("bee:capability_catalog"))))
-            local requirement = {id = "app.shipped_shape:launch", expected_kind = "security.policy", value = nil,
-                targets = {app_id}, capability_request = {capability = "agents.launch",
-                    parameters = {definitions = {SHIPPED_SHAPE_DEFINITION}}, catalog_revision = vocabulary.revision,
-                    template_revision = 1, reason = "Launch the shipped Claude batch route",
-                    target = app_id, path = ".security.policies +="}}
-            local message_requirement = {id = "app.shipped_shape:message", expected_kind = "security.policy", value = nil,
-                targets = {app_id}, capability_request = {capability = "threads.message",
-                    parameters = {scope = "children"}, catalog_revision = vocabulary.revision,
-                    template_revision = 1, reason = "Message the child it launched",
-                    target = app_id, path = ".security.policies +="}}
-            local proposed = assert(capability_grants.propose(vocabulary, owner, app_id, {requirement, message_requirement}))
-            local generated_policies: {string} = {}
-            local generated_changes = registry.snapshot():changes()
-            for _, entry in ipairs(proposed.policies) do
-                local created, create_error = generated_changes:create(entry)
-                if not created then error("create generated grant: " .. tostring(create_error)) end
-                generated_policies[#generated_policies + 1] = entry.id :: string
-            end
-            local generated_applied, generated_error = generated_changes:apply()
-            if not generated_applied then error("apply generated grant: " .. tostring(generated_error)) end
-            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
-            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
-            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
-            apply(sources_entry)
-            -- The shipped batch policy offers gateway tools, so the carrier
-            -- admits a gateway binding for the child.
-            open_gateway()
-            local function generated_scope(): security.Scope
-                local policies: {security.Policy} = {}
-                for index, name in ipairs({"bee.harness.security:agent_call_policy"}) do
-                    policies[index] = assert(security.policy(name))
-                end
-                for _, id in ipairs(generated_policies) do
-                    policies[#policies + 1] = assert(security.policy(id))
-                end
-                return security.new_scope(policies)
-            end
-            local function generated_call(request: {[string]: unknown}): admission.Reply
-                local reply, err = funcs.new():with_actor(principals.actor(application, shipped_workspace))
-                    :with_scope(generated_scope()):call("bee.harness.launch:agent_call", request)
-                if err then error("agent_call: " .. tostring(err)) end
-                return reply :: admission.Reply
-            end
-            local _, streams = fixture_paths()
-            local policy_entry = assert(registry.get(SHIPPED_BATCH_POLICY))
-            local policy_data = policy_entry.data :: {[string]: unknown}
-            local environment = policy_data.environment :: {[string]: unknown}
-            environment.BEE_FIXTURE_STREAM = streams .. "/claude/stream-json-2/plain.jsonl"
-            apply(policy_entry)
-            with_entry(SHIPPED_BATCH_POLICY, function(changed)
-                changed.placement_binding = "bee.placement.native.binding:binding"
-                changed.placement_options = {}
-                changed.allow_host_home = true
-            end, function()
-                local started = value(generated_call({operation = "launch", definition_ref = SHIPPED_SHAPE_DEFINITION,
-                    brief = "fail during native preparation", idempotency_key = fresh("app-prepare-refused")}))
-                -- wait_ms bounds one poll's watch, not the time to settle:
-                -- it returns as soon as any new thread record lands, which
-                -- can be well before the terminal one under a loaded host.
-                -- Loop until the state is actually "ended".
-                local settled: {[string]: unknown}? = nil
-                local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 120000
-                local current: {[string]: unknown} = {}
-                while settled == nil do
-                    local remaining_ms = deadline_ms - math.floor(time.now():unix_nano() / 1000000)
-                    if remaining_ms <= 0 then
-                        error("attempt " .. tostring(started.attempt_id) .. " did not end within 120s; last state " .. tostring(current.state)
-                            .. " outcome " .. tostring(current.outcome))
-                    end
-                    current = value(generated_call({operation = "wait", thread_id = started.thread_id,
-                        attempt_id = started.attempt_id, wait_ms = math.min(60000, remaining_ms)}))
-                    if current.state == "ended" then settled = current end
-                end
-                test.not_nil(settled)
-                test.eq(settled and settled.state, "ended")
-                test.eq(settled and settled.outcome, "failed")
-                local failure = settled and settled.error :: {[string]: unknown}?
-                test.not_nil(failure)
-                test.is_true(tostring(failure and failure.message):find("native placement does not support placement_options", 1, true) ~= nil)
-                local inspected = value(generated_call({operation = "status", thread_id = started.thread_id,
-                    attempt_id = started.attempt_id}))
-                test.eq(inspected.state, "ended")
-                test.eq((inspected.error :: {[string]: unknown}).message, (failure :: {[string]: unknown}).message)
-                local db = assert(placement_store.open())
-                local row = placement_store.row(db, started.attempt_id :: string)
-                db:release()
-                test.is_nil(row)
-            end)
-            local ok, failure = pcall(function()
-                local run = value(generated_call({operation = "run", definition_ref = SHIPPED_SHAPE_DEFINITION, brief = "ping shipped",
-                    idempotency_key = fresh("shipped-shape")}))
-                test.eq(run.definition_ref, SHIPPED_SHAPE_DEFINITION)
-                test.not_nil(run.thread_id)
-                test.not_nil(run.attempt_id)
-                test.not_nil(run.receipt)
-                local settled: {[string]: unknown}? = nil
-                for _ = 1, 12 do
-                    local current = value(generated_call({operation = "wait", thread_id = run.thread_id, attempt_id = run.attempt_id, wait_ms = 5000}))
-                    if current.state == "ended" then settled = current end
-                    if settled ~= nil then break end
-                end
-                if settled == nil then
-                    local current = value(generated_call({operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
-                    local failure = type(current.error) == "table" and current.error :: {[string]: unknown} or nil
-                    error("shipped executable_env launch did not settle within 60 seconds; state=" .. tostring(current.state)
-                        .. "; outcome=" .. tostring(current.outcome) .. "; detail=" .. tostring(failure and failure.message))
-                end
-                test.not_nil(settled)
-                if settled and settled.outcome ~= "succeeded" then
-                    local failure = settled.error :: {[string]: unknown}?
-                    error("shipped executable_env launch ended " .. tostring(settled.outcome)
-                        .. ": " .. tostring(failure and failure.message))
-                end
-                test.eq(settled and settled.outcome, "succeeded")
-                test.not_nil(settled and settled.answer)
-                local status = value(generated_call({operation = "status", thread_id = run.thread_id, attempt_id = run.attempt_id}))
-                test.eq(status.state, "ended")
-                -- The same install's threads.message grant reaches the Threads
-                -- owner's message verbs; the owner checks the sender's membership.
-                local message = {message_id = "app-shipped-msg", message_kind = "notification",
-                    recipient_ids = {}, content = {text = "shipped message"}}
-                local payload_digest = assert(sends.payload_digest(message))
-                local sent, send_error = funcs.new():with_actor(principals.actor(application, shipped_workspace))
-                    :with_scope(generated_scope()):call("bee.threads.service:send", {thread_id = run.thread_id,
-                        idempotency_key = fresh("shipped-send"), caller_node_id = "node-shipped",
-                        payload_digest = payload_digest, message = message})
-                if send_error then error("send: " .. tostring(send_error)) end
-                local send_reply = sent :: {[string]: unknown}
-                test.eq(send_reply.ok, true)
-            end)
-            environment.BEE_FIXTURE_STREAM = nil
-            apply(policy_entry)
-            if not ok then error(tostring(failure)) end
-        end)
-        test.it("runs an agent as a function with durable receipts, replay, cancel before start and wait for terminal carrier record", function()
-            local run_workspace = fresh("func-run-ws")
-            local application = "bee.application:" .. run_workspace .. ":launcher"
-            local sources_entry = assert(registry.get("bee.credentials:credential_sources"))
-            local sources = (sources_entry.data :: {[string]: unknown}).sources :: {{[string]: unknown}}
-            sources[#sources + 1] = {ref = SOURCE, workspace_id = "*", audience = application, provider = "claude", projection_kinds = {"environment"}}
-            apply(sources_entry)
-            local function app_call(actor_id: string, names: {string}, request: {[string]: unknown}): admission.Reply
-                local policies: {security.Policy} = {}
-                for index, name in ipairs(names) do policies[index] = assert(security.policy(name)) end
-                local reply, err = funcs.new():with_actor(principals.actor(actor_id, run_workspace)):with_scope(security.new_scope(policies))
-                    :call("bee.harness.launch:agent_call", request)
-                if err then error("agent_call: " .. tostring(err)) end
-                return reply :: admission.Reply
-            end
-            local granted = {"bee.harness.security:agent_call_policy", "bee.harness.catalog:app_launch_grant_policy"}
-            local run_key = fresh("func-run-key")
-
-            -- 1. Run returns a durable receipt promptly
-            local run_reply = app_call(application, granted, {operation = "run", definition_ref = DEFINITION, brief = "ping function", idempotency_key = run_key})
-            test.eq(run_reply.ok, true)
-            local run_val = value(run_reply)
-            test.not_nil(run_val.thread_id)
-            test.not_nil(run_val.action_id)
-            test.not_nil(run_val.attempt_id)
-            test.eq(run_val.definition_ref, DEFINITION)
-            test.eq(run_val.brief, "ping function")
-            test.eq(run_val.idempotency_key, run_key)
-            test.is_true(run_val.state == "starting" or run_val.state == "running" or run_val.state == "ended")
-            local receipt = type(run_val.receipt) == "table" and (run_val.receipt :: {[string]: unknown}) or nil
-            test.not_nil(receipt)
-            test.eq(receipt and receipt.scope, "attempt")
-            test.eq(receipt and receipt.thread_id, run_val.thread_id)
-            test.eq(receipt and receipt.action_id, run_val.action_id)
-            test.eq(receipt and receipt.attempt_id, run_val.attempt_id)
-            test.eq(receipt and receipt.idempotency_key, run_key)
-
-            -- 2. Idempotent run replay returns identical attempt receipt
-            local replay_reply = app_call(application, granted, {operation = "run", definition_ref = DEFINITION, brief = "ping function", idempotency_key = run_key})
-            test.eq(replay_reply.ok, true)
-            local replay_val = value(replay_reply)
-            test.eq(replay_val.attempt_id, run_val.attempt_id)
-            test.eq(replay_val.action_id, run_val.action_id)
-            test.eq(replay_val.thread_id, run_val.thread_id)
-
-            -- 3. Wait for function run completion
-            local settled: {[string]: unknown}? = nil
-            while settled == nil do
-                local cur = value(app_call(application, granted, {operation = "wait", thread_id = tostring(run_val.thread_id), attempt_id = tostring(run_val.attempt_id), wait_ms = 60000}))
-                if cur.state == "ended" then settled = cur end
-            end
-            test.not_nil(settled)
-            test.eq(settled and settled.outcome, "succeeded")
-
-            local settled_replay = app_call(application, granted, {operation = "run", definition_ref = DEFINITION,
-                brief = "ping function", idempotency_key = run_key})
-            test.eq(settled_replay.ok, true)
-            local replayed_settled = value(settled_replay)
-            test.eq(replayed_settled.thread_id, run_val.thread_id)
-            test.eq(replayed_settled.action_id, run_val.action_id)
-            test.eq(replayed_settled.attempt_id, run_val.attempt_id)
-            test.eq(replayed_settled.state, "ended")
-            test.eq(replayed_settled.outcome, "succeeded")
-            test.eq(replayed_settled.answer, settled.answer)
-            local changed_replay = app_call(application, granted, {operation = "run", definition_ref = DEFINITION,
-                brief = "changed brief", idempotency_key = run_key})
-            test.eq(changed_replay.ok, false)
-            local changed_error = changed_replay.error
-            test.eq(changed_error and changed_error.code, "CONFLICT")
-
-            -- 4. Cancel before start settles attempt as cancelled with terminal receipt
-            local admit_reply = call_as(application, "bee.harness.launch:admit", {
-                request_id = fresh("cancel-before-start-req"),
-                definition_ref = DEFINITION,
-                workspace_id = run_workspace,
-                brief = "cancel before start"
-            })
-            local admitted = value(admit_reply)
-            local adm_thread = admitted.thread_id :: string
-            local adm_attempt = admitted.attempt_id :: string
-
-            local cancel_pre = app_call(application, granted, {
-                operation = "cancel",
-                thread_id = adm_thread,
-                attempt_id = adm_attempt,
-                idempotency_key = fresh("cancel-pre-key")
-            })
-            test.eq(cancel_pre.ok, true)
-            local cancel_pre_val = value(cancel_pre)
-            test.eq(cancel_pre_val.state, "ended")
-            test.eq(cancel_pre_val.outcome, "cancelled")
-
-            local status_pre = value(app_call(application, granted, {
-                operation = "status",
-                thread_id = adm_thread,
-                attempt_id = adm_attempt
-            }))
-            test.eq(status_pre.state, "ended")
-            test.eq(status_pre.outcome, "cancelled")
-
-            local replay_cancel = app_call(application, granted, {
-                operation = "cancel",
-                thread_id = adm_thread,
-                attempt_id = adm_attempt
-            })
-            test.eq(replay_cancel.ok, true)
-            test.eq(value(replay_cancel).state, "ended")
-            test.eq(value(replay_cancel).outcome, "cancelled")
-
-            -- 5. Cancel running attempt with wait for terminal carrier record
-            local policy_entry = assert(registry.get(POLICY))
-            local policy_data = policy_entry.data :: {[string]: unknown}
-            local environment = policy_data.environment :: {[string]: unknown}
-            environment.BEE_FIXTURE_READ = "1"
-            apply(policy_entry)
-            local ok, failure = pcall(function()
-                local held_run = value(app_call(application, granted, {
-                    operation = "run",
-                    definition_ref = DEFINITION,
-                    brief = "hold-run",
-                    idempotency_key = fresh("func-hold-key")
-                }))
-                local cancel_running = app_call(application, granted, {
-                    operation = "cancel",
-                    thread_id = held_run.thread_id,
-                    attempt_id = held_run.attempt_id,
-                    wait_ms = 60000,
-                    idempotency_key = fresh("cancel-run-key")
-                })
-                test.eq(cancel_running.ok, true)
-                local cr_val = value(cancel_running)
-                test.eq(cr_val.state, "ended")
-                test.eq(cr_val.outcome, "cancelled")
-            end)
-            environment.BEE_FIXTURE_READ = nil
-            apply(policy_entry)
-            if not ok then error(tostring(failure)) end
         end)
         test.it("refuses caller-selected session identities and resources before creating work", function()
             for _, field in ipairs({"session_ref", "session_resource"}) do
@@ -2280,7 +1868,7 @@ local function define_tests()
             local first = value(call("bee.harness.launch:admit", {request_id = origin, definition_ref = RETAINED_DEFINITION,
                 workspace_id = workspace, brief = ""})) :: admission.Admitted
             local transport: machine.IO = {
-                call = function(target: string, input: unknown): (unknown, string?) return call(target, input), nil end,
+                call = function(target: string, input: unknown): (unknown, string?) return call_as_bound(REQUESTER, target, input, workspace), nil end,
                 send = function(target: string, topic: string, input: unknown) end,
                 self_pid = function(): string return process.pid() end,
                 now_ms = function(): integer return math.floor(time.now():unix_nano() / 1000000) end,
@@ -2302,16 +1890,19 @@ local function define_tests()
             local request: admission.Request = {request_id = fresh("resume"), definition_ref = RETAINED_DEFINITION, workspace_id = workspace,
                 brief = "", expected_plan_digest = first.plan.plan_digest,
                 continuation = {origin_request_id = origin, previous_attempt_id = first.attempt_id, thread_id = first.thread_id}}
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             value(call("bee.threads.service:receipt", {thread_id = first.thread_id, action_id = first.action_id, attempt_id = first.attempt_id,
                 idempotency_key = fresh("receipt"), carrier_epoch = prepared.epoch, receipt = {scope = "attempt", outcome = "cancelled", evidence_refs = {},
                     error = {code = "fixture_closed", message = "predecessor fixture closed", retryable = false}}}))
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local db, db_error = placement_store.open()
             if not db then error(tostring(db_error)) end
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "starting", evidence = {kind = "fixture", detail = "no process started"}}).ok)
             test.is_true(placement_store.transition(db, first.attempt_id, {execution = "exited", evidence = {kind = "fixture", detail = "no process exists"}}).ok)
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             test.is_true(placement_store.transition(db, first.attempt_id, {cleanup = "complete", evidence = {kind = "fixture", detail = "no home materialized"}}).ok)
             db:release()
             local resumed = value(call("bee.harness.launch:admit", request)) :: admission.Admitted
@@ -2337,7 +1928,8 @@ local function define_tests()
             apply(policy_entry)
             request.request_id = fresh("reviewed-resume")
             request.continuation.reauthorize = true
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             local current, current_error = admission.resolve(RETAINED_DEFINITION, "window")
             if not current then error(tostring(current_error)) end
             request.expected_plan_digest = current.plan_digest
@@ -2357,10 +1949,12 @@ local function define_tests()
             -- Mutated saved references and changed host plans cannot select
             -- another session or silently replay under new configuration.
             request.workspace_id = fresh("foreign-workspace")
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.workspace_id = workspace
             request.expected_plan_digest = string.rep("0", 64)
-            test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT")
+            local refused_resume = call("bee.harness.launch:admit", request)
+            test.eq(code(refused_resume), "CONFLICT", tostring(refused_resume.error and refused_resume.error.message))
             request.continuation.reauthorize = true
             test.eq(code(call("bee.harness.launch:admit", request)), "CONFLICT", "review never bypasses the current plan fence")
             request.continuation.reauthorize = false

@@ -21,6 +21,7 @@ function M.decode(raw: unknown): (Request?, string?)
     if op ~= "create" and op ~= "put" and op ~= "append" and op ~= "remove" and op ~= "list" and op ~= "read" and op ~= "freeze" and op ~= "guide" then
         return nil, "unknown workspace operation"
     end
+    local operation: Operation = op
     -- guide is read-only and names no workspace: it returns this destination's
     -- authoring contract, so it is decoded before workspace identity is required.
     if op == "guide" then
@@ -71,7 +72,7 @@ function M.decode(raw: unknown): (Request?, string?)
     if value.owned ~= nil and not owned then return nil, "owned listing cannot name a workspace" end
     local identity = owned and "" or bounds.id(value.workspace_id)
     if identity == nil then return nil, "workspace_id must be a bounded identifier" end
-    local request: Request = {operation = op :: Operation, workspace_id = identity}
+    local request: Request = {operation = operation, workspace_id = identity}
     if owned then request.owned = true end
     if value.snapshot_digest ~= nil then
         local digest = value.snapshot_digest

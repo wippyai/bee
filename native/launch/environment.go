@@ -4,32 +4,48 @@ package launch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	envapi "github.com/wippyai/runtime/api/env"
 )
 
 type hostResolver struct {
-	lookPath   func(string) (string, error)
-	homeDir    func() (string, error)
-	getwd      func() (string, error)
-	executable func() (string, error)
-	binary     func() binaryIdentityFacts
+	lookPath         func(string) (string, error)
+	homeDir          func() (string, error)
+	getwd            func() (string, error)
+	executable       func() (string, error)
+	environmentNames func() []string
+	binary           func() binaryIdentityFacts
 }
 
 func systemHostResolver() hostResolver {
 	return hostResolver{
-		lookPath:   exec.LookPath,
-		homeDir:    os.UserHomeDir,
-		getwd:      os.Getwd,
-		executable: os.Executable,
-		binary:     readBinaryIdentityFacts,
+		lookPath:         exec.LookPath,
+		homeDir:          os.UserHomeDir,
+		getwd:            os.Getwd,
+		executable:       os.Executable,
+		environmentNames: systemEnvironmentNames,
+		binary:           readBinaryIdentityFacts,
 	}
+}
+
+// systemEnvironmentNames exposes only presence metadata, never values.
+func systemEnvironmentNames() []string {
+	names := make([]string, 0)
+	for _, entry := range os.Environ() {
+		if name, _, found := strings.Cut(entry, "="); found {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 // hostEnvironment is a read-only view of nonsecret host facts. The runtime's
@@ -62,10 +78,19 @@ func newHostEnvironment(resolver hostResolver) (*hostEnvironment, error) {
 			return nil, errors.New("host " + name + " must be an absolute path")
 		}
 	}
+	names := []string{}
+	if resolver.environmentNames != nil {
+		names = resolver.environmentNames()
+	}
+	encodedNames, err := json.Marshal(names)
+	if err != nil {
+		return nil, fmt.Errorf("encode host environment names: %w", err)
+	}
 	facts := map[string]string{
-		"home": home,
-		"cwd":  cwd,
-		"self": self,
+		"home":              home,
+		"cwd":               cwd,
+		"self":              self,
+		"environment_names": string(encodedNames),
 	}
 	binary := resolver.binary
 	if binary == nil {

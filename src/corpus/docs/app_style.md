@@ -34,11 +34,11 @@ and nowhere else.
 | 3 | Blank | — |
 | 4 … H−2 | Work area, columns 2 … W−1 (from row 3 without tabs) | `layout.work` |
 | H−1 | Action bar | `frame.actions` |
-| H | Footer: status left, key hints right | `frame.footer`, `frame.hints` |
+| H | Footer: bounded status left, reserved hints and ? help right | `frame.footer`, `frame.hints` |
 
 Below 6 rows the tabs and the action bar are omitted and the work area runs
 from row 2 to H−1; below 2 rows only the header remains. The key hints always
-name every action the omitted bar offered.
+retain navigation and Help. Help lists every declared action, including unavailable ones.
 
 ## 3. Size classes
 
@@ -67,7 +67,10 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
   primary.
 - A button with a key shows it first: `" R Refresh "` (`Button.key`). The key
   and the verb match the footer hint.
-- Disabled buttons stay visible in `muted` and record no hit target.
+- Disabled buttons stay visible in `muted` and record no active hit target.
+- When the bar overflows, primary actions keep space and `F10 More` opens
+  the remaining buttons. Arrow keys or Tab select, Enter chooses, Escape
+  returns; clicking More and an enabled choice uses the same action path.
 - Destructive work asks first: the footer becomes
   `Stop selected app? Enter confirms · Esc cancels` and the destructive button
   becomes the primary until the choice is made.
@@ -78,8 +81,18 @@ what the smaller class shows. Never scroll a primary workflow horizontally.
   sentence naming the latest effect or the current state: `Saved count 2`,
   `Waiting for approval`, `Paused`. The key hints at the right use
   `frame.hints`: key, space, lowercase verb, joined with ` · `.
-- When both do not fit the status wins and the hints are dropped. With no
-  status the hints stand alone at the left.
+- The footer reserves hints and a clickable `? help` at the right. Status
+  uses a bounded region at the left; long text is truncated first. Help
+  lists the screen's complete declared buttons, tabs and hints, plus the full
+  status message.
+- Each app owns a `frame.menu()` state. Return `controls = frame.controls(painter)`
+  beside rows and hits from the view; call `frame.render(view, menu, preferences)`
+  before presenting and `frame.route(menu, event, text_entry)` before app input.
+  A consumed event returns nil; the second result requests a redraw. An enabled
+  More choice returns a mouse event for the existing app handler. Pass
+  `text_entry = true` for editors so typed letters and `?` remain text;
+  Help remains available by clicking the footer. Letter shortcuts elsewhere
+  accept both cases. Application confirmations still own destructive actions.
 - The header summary (`frame.header`) is the live one-line state of the whole
   screen: `Live · 1s · 42 processes`. It is muted and truncated before the
   title.

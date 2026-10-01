@@ -8,13 +8,13 @@ M.MAX_OPTIONS = 9
 type Workdir = {root_ref: string, path: string}
 type Thread = {thread_id: string}
 type Profile = {title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string,
-    workdir: Workdir?, thread: Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
+    placement_profile_ref: string?, workdir: Workdir?, thread: Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer, idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer}
 
 function M.profile(value: unknown): (Profile?, string?)
     local object = bounds.object(value)
     if not object then return nil, "profile must be an object" end
-    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"})
+    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "placement_profile_ref"})
     if extra then return nil, extra end
     local title = bounds.line(object.title, 80)
     if not title or title:match("^%s*$") then return nil, "title must contain 1 to 80 printable bytes" end
@@ -47,6 +47,8 @@ function M.profile(value: unknown): (Profile?, string?)
             return nil, "instructions contain unsupported control bytes"
         end
     end
+    local placement_profile_ref = bounds.id(object.placement_profile_ref)
+    if object.placement_profile_ref ~= nil and not placement_profile_ref then return nil, "placement_profile_ref must be an identifier" end
     local workdir: Workdir? = nil
     if object.workdir ~= nil then
         local declared = bounds.object(object.workdir)
@@ -85,7 +87,7 @@ function M.profile(value: unknown): (Profile?, string?)
         spec_digest = digest
     end
     return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions,
-        workdir = workdir, thread = thread, agent_ref = agent_ref, owner_component_revision = owner_component_revision, spec_digest = spec_digest}, nil
+        placement_profile_ref = placement_profile_ref, workdir = workdir, thread = thread, agent_ref = agent_ref, owner_component_revision = owner_component_revision, spec_digest = spec_digest}, nil
 end
 -- agent_preferences: narrow a saved profile to one resolved agent closure.
 -- The host agent model mapping owns the model option, and the profile may
@@ -134,7 +136,7 @@ function M.decode(value: unknown): (Request?, string?)
         if object.expected_cursor ~= nil and not cursor then return nil, "expected_cursor must be a nonnegative safe integer" end
         if after_key ~= "" and not cursor then return nil, "continuation requires expected_cursor" end
         if not limit or limit < 1 or limit > 64 then return nil, "limit must be between 1 and 64" end
-        request.after_key = after_key :: string
+        request.after_key = after_key
         request.expected_cursor = cursor
         request.limit = limit
         return request, nil

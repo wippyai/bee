@@ -24,6 +24,7 @@ local function main(value: unknown)
     if not launch then error("Invalid application launch") end
     local broker = launch.broker_pid
     local input = assert(tty.events())
+    local menu = frame.menu()
     local lifecycle = assert(process.events())
     local states = assert(process.listen("bee.appearance.state", {message = true}))
     assert(tty.start())
@@ -76,25 +77,20 @@ local function main(value: unknown)
         lease = nil
         model.serve(state, nil)
     end
-    local function serve()
-        if lease then
-            release()
-            model.say(state, "Released the workspace host")
-            if standard() or state.showing then inspect() end
-            return
-        end
+    -- The host lease stays internal: opening a workspace holds it while the
+    -- viewer is open, inspecting alone never does.
+    local function hold()
         local selected = model.selected(state)
         if not selected or state.tab == "archived" then return end
+        if lease and state.served == selected.workspace_id then return end
+        release()
         local held, refusal = leases.acquire(selected.workspace_id, "30s")
         if not held then
-            model.say(state, "Could not serve " .. model.label(state, selected.workspace_id) .. ": " .. tostring(refusal))
+            model.say(state, "Could not open " .. model.label(state, selected.workspace_id) .. ": " .. tostring(refusal))
             return
         end
         lease = held
         model.serve(state, selected.workspace_id)
-        model.say(state, held.managed and "Serving " .. model.label(state, selected.workspace_id) .. " while this view is open"
-            or model.label(state, selected.workspace_id) .. " is already served by its own host")
-        inspect()
     end
     local function change()
         local intent = model.change_intent(state)
@@ -105,6 +101,12 @@ local function main(value: unknown)
         if standard() then inspect() end
     end
     local function open()
+        if state.selected == "" then return end
+        if not standard() then model.show(state, true) end
+        hold()
+        inspect()
+    end
+    local function peek()
         if state.selected == "" then return end
         if not standard() then model.show(state, true) end
         inspect()
@@ -134,6 +136,7 @@ local function main(value: unknown)
         form = nil
         model.created(state, created)
         page()
+        if model.pin(state, created.workspace_id) then open() end
     end
     local function create_act(current: creation.Form, kind: string, index: integer)
         if kind == "folder" then
@@ -157,7 +160,7 @@ local function main(value: unknown)
             elseif key == "up" then creation.field(current, -1)
             elseif key == "down" or key == "tab" then creation.field(current, 1)
             elseif key == "backspace" then creation.erase(current)
-            elseif type(data.key) == "string" and data.key ~= "" then creation.type_text(current, data.key :: string) end
+            elseif type(data.key) == "string" and data.key ~= "" then creation.type_text(current, data.key) end
             return
         end
         if key == "up" or key == "down" then
@@ -171,10 +174,10 @@ local function main(value: unknown)
     end
     local function act(kind: string, key: string)
         if kind == "open" then if state.showing then back() else open() end
+        elseif kind == "inspect" then peek()
         elseif kind == "search" or kind == "field" then model.edit(state, true)
         elseif kind == "new" then begin_create()
         elseif kind == "refresh" then page()
-        elseif kind == "serve" then serve()
         elseif kind == "change" then change()
         elseif kind == "active" or kind == "archived" then model.switch(state, kind); page()
         elseif kind == "workspace" then model.select(state, key); selected_changed() end
@@ -187,6 +190,7 @@ local function main(value: unknown)
     while running do
         if dirty then
             local drawn = view.draw(width, height, preferences, state, offset, form)
+            frame.render(drawn, menu, preferences)
             hits, capacity, offset = drawn.hits, drawn.capacity, drawn.offset
             assert(output:present(drawn.rows, {cursor = {x = 1, y = 1, visible = false}}))
             if not announced then client.ready(launch); announced = true end
@@ -203,51 +207,54 @@ local function main(value: unknown)
                 if decoded then preferences = decoded; dirty = true end
             end
         else
-            local data = event.value
-            if data.type == "close" then running = false
-            elseif data.type == "resize" then
-                width, height = data.width, data.height
-                if standard() and not state.detail then inspect() end
-                dirty = true
-            elseif data.type == "key" and data.action ~= "release" and form then
-                create_key(form, data)
-                dirty = true
-            elseif data.type == "key" and data.action ~= "release" then
-                local key = data.key_type
-                dirty = true
-                if state.editing then
-                    if key == "enter" then model.submit(state); page()
-                    elseif key == "esc" or key == "escape" then model.edit(state, false)
-                    elseif key == "backspace" then model.erase(state)
-                    elseif type(data.key) == "string" and data.key ~= "" then model.type_text(state, data.key) end
-                elseif state.confirming then
-                    if key == "enter" then change()
-                    elseif key == "esc" or key == "escape" then model.confirm(state, false) end
-                elseif key == "up" then move(-1)
-                elseif key == "down" then move(1)
-                elseif key == "pgdown" then if model.forward(state) then page() end
-                elseif key == "pgup" then if model.backward(state) then page() end
-                elseif key == "enter" then open()
-                elseif key == "tab" then model.switch(state, state.tab == "active" and "archived" or "active"); page()
-                elseif key == "esc" or key == "escape" then if not back() then running = false end
-                elseif data.key == "/" then model.edit(state, true)
-                elseif data.key == "r" then page()
-                elseif data.key == "n" then begin_create()
-                elseif data.key == "s" then serve()
-                elseif data.key == "a" then change() end
-            elseif data.type == "mouse" then
-                local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
-                local current = form
-                local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
-                if data.action == "wheel" then
-                    if current then
-                        if current.step == "folder" and folder_picker.move(current.picker, step) == "page" then load_folders(current) end
-                        dirty = true
-                    else move(step) end
-                elseif data.action == "press" and data.button == "left" then
-                    local hit = frame.hit(hits, x, y)
-                    if hit and current then create_act(current, hit.kind, hit.index)
-                    elseif hit then act(hit.kind, hit.key) end
+            local data, handled = frame.route(menu, event.value, state.editing or (form ~= nil and form.step == "details"))
+            if handled then dirty = true end
+            if data then
+                if data.type == "close" then running = false
+                elseif data.type == "resize" then
+                    width, height = data.width, data.height
+                    if standard() and not state.detail then inspect() end
+                    dirty = true
+                elseif data.type == "key" and data.action ~= "release" and form then
+                    create_key(form, data)
+                    dirty = true
+                elseif data.type == "key" and data.action ~= "release" then
+                    local key = data.key_type
+                    dirty = true
+                    if state.editing then
+                        if key == "enter" then model.submit(state); page()
+                        elseif key == "esc" or key == "escape" then model.edit(state, false)
+                        elseif key == "backspace" then model.erase(state)
+                        elseif type(data.key) == "string" and data.key ~= "" then model.type_text(state, data.key) end
+                    elseif state.confirming then
+                        if key == "enter" then change()
+                        elseif key == "esc" or key == "escape" then model.confirm(state, false) end
+                    elseif key == "up" then move(-1)
+                    elseif key == "down" then move(1)
+                    elseif key == "pgdown" then if model.forward(state) then page() end
+                    elseif key == "pgup" then if model.backward(state) then page() end
+                    elseif key == "enter" then open()
+                    elseif key == "tab" then model.switch(state, state.tab == "active" and "archived" or "active"); page()
+                    elseif key == "esc" or key == "escape" then if not back() then running = false end
+                    elseif data.key == "/" then model.edit(state, true)
+                    elseif data.key == "r" then page()
+                    elseif data.key == "n" then begin_create()
+                    elseif data.key == "i" then peek()
+                    elseif data.key == "a" then change() end
+                elseif data.type == "mouse" then
+                    local x, y = math.floor(tonumber(data.x) or 1), math.floor(tonumber(data.y) or 1)
+                    local current = form
+                    local step = (data.button == "wheel_up" or data.button == "up") and -1 or 1
+                    if data.action == "wheel" then
+                        if current then
+                            if current.step == "folder" and folder_picker.move(current.picker, step) == "page" then load_folders(current) end
+                            dirty = true
+                        else move(step) end
+                    elseif data.action == "press" and data.button == "left" then
+                        local hit = frame.hit(hits, x, y)
+                        if hit and current then create_act(current, hit.kind, hit.index)
+                        elseif hit then act(hit.kind, hit.key) end
+                    end
                 end
             end
         end

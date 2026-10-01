@@ -7,7 +7,8 @@ entries:
   readme: file://README.md
   meta:
     title: Bee native placement
-    comment: Attempts as native children under a runner process, receipts in an owned SQLite store, homes under a placement root
+    comment: Attempts as native children under a runner process, receipts in an owned
+      SQLite store, homes under a placement root
 - name: dependency_placement
   kind: ns.dependency
   component: bee/placement
@@ -55,7 +56,8 @@ entries:
 - name: target_root
   kind: ns.requirement
   meta:
-    comment: Filesystem root that holds attempt homes and retained sessions; the module default resolves against the project and the host replaces it
+    comment: Filesystem root that holds attempt homes and retained sessions; the module
+      default resolves against the project and the host replaces it
   default: bee.placement.native:root
   targets:
   - entry: bee.placement.native:root_ref
@@ -63,7 +65,8 @@ entries:
 - name: process_host
   kind: ns.requirement
   meta:
-    comment: Process host that runs attempt runners and the supervision sweeper; an assembly may override the Bee default
+    comment: Process host that runs attempt runners and the supervision sweeper; an
+      assembly may override the Bee default
   default: bee:workers
   targets:
   - entry: bee.placement.native:runner_host_ref
@@ -74,7 +77,14 @@ entries:
   kind: ns.requirement
   meta:
     comment: Host-selected policy grants for the supervision sweeper
-  default: [bee.placement.native.security:placement_store_policy, bee.placement.native.security:placement_exec_policy, bee.placement.native.security:placement_service_policy, bee.resources.security:resource_resolve_policy, bee.credentials.security:credential_materialize_policy, bee.placement.native.security:placement_sweeper_policy, bee.security.gateway:gateway_supervision_policy]
+  default:
+  - bee.placement.native.security:placement_store_policy
+  - bee.placement.native.security:placement_exec_policy
+  - bee.placement.native.security:placement_service_policy
+  - bee.resources.security:resource_resolve_policy
+  - bee.credentials.security:credential_materialize_policy
+  - bee.placement.native.security:placement_sweeper_policy
+  - bee.security.gateway:gateway_supervision_policy
   targets:
   - entry: bee.placement.native.service:sweeper_service
     path: .lifecycle.security.policies
@@ -97,7 +107,8 @@ entries:
 - name: target_admitted_roots
   kind: ns.requirement
   meta:
-    comment: Host-selected admissible resource roots; a launch request cannot choose this policy
+    comment: Host-selected admissible resource roots; a launch request cannot choose
+      this policy
   default: bee.placement.native:placement_admitted_roots
   targets:
   - entry: bee.placement.native:admitted_roots_ref
@@ -105,7 +116,8 @@ entries:
 - name: target_resource_mode
   kind: ns.requirement
   meta:
-    comment: Host-selected placement resource mode; a launch request cannot choose it
+    comment: Host-selected placement resource mode; a launch request cannot choose
+      it
   default: bee.placement.native:placement_resource_mode
   targets:
   - entry: bee.placement.native:resource_mode_ref
@@ -113,7 +125,8 @@ entries:
 - name: target_workdir_preparers
   kind: ns.requirement
   meta:
-    comment: Host-authorized workdir preparer contract bindings; registry metadata alone never authorizes
+    comment: Host-authorized workdir preparer contract bindings; registry metadata
+      alone never authorizes
   default: bee.placement.native:placement_workdir_preparers
   targets:
   - entry: bee.placement.native:workdir_preparers_ref
@@ -157,11 +170,13 @@ entries:
   kind: registry.entry
   meta:
     type: bee.resource_ref
-    comment: The linked host workdir-preparers list; target_workdir_preparers fills resource_ref
+    comment: The linked host workdir-preparers list; target_workdir_preparers fills
+      resource_ref
 - name: resources
   kind: library.lua
   source: file://resources.lua
-  modules: [registry]
+  modules:
+  - registry
   imports:
     bounds: bee.threads.records:bounds
     resource_authority: bee.resources:resources
@@ -173,7 +188,9 @@ entries:
 - name: configuration
   kind: library.lua
   source: file://configuration.lua
-  modules: [json, toml]
+  modules:
+  - json
+  - toml
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
@@ -202,7 +219,8 @@ entries:
 - name: root
   kind: fs.directory
   meta:
-    comment: Module-owned attempt-home default resolving against the project; the host replaces it through target_root
+    comment: Module-owned attempt-home default resolving against the project; the
+      host replaces it through target_root
   directory: ${env:bee.placement.native:root_path}
   base: project
   auto_init: true
@@ -211,7 +229,10 @@ entries:
   kind: registry.entry
   meta:
     type: bee.placement_roots
-    comment: fs.directory entries a launch may name as resource roots on this host with the widest access allowed; host policy, not a delegated grant. The workspace folder and its children are admitted so an agent can target a folder it chose, such as a git worktree, without a host step
+    comment: fs.directory entries a launch may name as resource roots on this host
+      with the widest access allowed; host policy, not a delegated grant. The workspace
+      folder and its children are admitted so an agent can target a folder it chose,
+      such as a git worktree, without a host step
   data:
     roots:
     - root_ref: bee.env:workspace_root
@@ -219,13 +240,15 @@ entries:
 - name: placement_executor
   kind: exec.native
   meta:
-    comment: Children start with a clean environment; PATH comes from the host, everything else from the admitted request
+    comment: Children start with a clean environment; PATH comes from the host, everything
+      else from the admitted request
   default_env:
     PATH: ${env:bee.placement.native:placement_path}
 - name: placement_host_files
   kind: fs.directory
   meta:
-    comment: The host filesystem as one volume for executable measurement; this entry requests readonly access
+    comment: The host filesystem as one volume for executable measurement; this entry
+      requests readonly access
   directory: /
   auto_init: false
   readonly: true
@@ -248,7 +271,39 @@ entries:
   kind: registry.entry
   meta:
     type: bee.placement_workdir_preparers
-    comment: Contract bindings authorized by host policy to run workdir setup and cleanup
+    comment: Contract bindings authorized by host policy to run workdir setup and
+      cleanup
   data:
     preparers: []
-
+- name: process_backend
+  kind: library.lua
+  source: file://process_backend.lua
+  modules:
+  - exec
+  - sql
+  imports:
+    types: bee.placement:types
+    materialization: bee.placement.native.service:materialization
+- name: process_runner
+  kind: library.lua
+  source: file://service/runner.lua
+  modules:
+  - process
+  - channel
+  - time
+  - sql
+  - exec
+  - funcs
+  imports:
+    service: bee.placement.native.service:service
+    materialization: bee.placement.native.service:materialization
+    store: bee.placement.native.persist:store
+    executable: bee.placement.native.service:executable
+    resources: bee.placement.native:resources
+    identity: bee.placement.native.service:identity
+    output_buffer: bee.placement.native.service:output_buffer
+    protocol: bee.placement.native:protocol
+    quote: bee.driver.kit:quote
+    types: bee.placement:types
+    process_backend: bee.placement.native:process_backend
+    bounds: bee.protocol:bounds

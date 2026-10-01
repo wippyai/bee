@@ -160,7 +160,7 @@ function M.normalize(event: string, payload: Object): (Submission?, string?)
     end
     for name, allowed in pairs(M.ENUMERATED) do
         local value = payload[name]
-        if type(value) == "string" and member(allowed, value :: string) then fields[name] = value end
+        if type(value) == "string" and member(allowed, value) then fields[name] = value end
     end
     for _, name in ipairs(M.BOOLEAN_FIELDS) do
         if type(payload[name]) == "boolean" then fields[name] = payload[name] end
@@ -170,7 +170,7 @@ function M.normalize(event: string, payload: Object): (Submission?, string?)
     end
     for _, name in ipairs(M.IDENTIFIER_FIELDS) do
         local value = payload[name]
-        if type(value) == "string" and #(value :: string) <= 128 and (value :: string):match("^[A-Za-z0-9_.:/%-]+$") then fields[name] = value end
+        if type(value) == "string" and #(value) <= 128 and (value):match("^[A-Za-z0-9_.:/%-]+$") then fields[name] = value end
     end
     local sizes: Object = {}
     local digests: Object = {}
@@ -265,7 +265,7 @@ function M.stored_fields(value: unknown): (Object?, string?)
     for name, allowed in pairs(M.ENUMERATED) do
         local val = object[name]
         if val ~= nil then
-            if type(val) ~= "string" or not member(allowed, val :: string) then
+            if type(val) ~= "string" or not member(allowed, val) then
                 return nil, "invalid enum value for " .. name
             end
             fields[name] = val

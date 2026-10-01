@@ -17,16 +17,16 @@ local function failure(code: string, message: string): Result
     return transaction.failure(code, message)
 end
 
-local function put(store: replicas.Store, item: delivery.Delivery, descriptor: unknown): Result
+local function put(store: replicas.Store, item: delivery.Delivery, descriptor: delivery.Descriptor): Result
     local begun = replicas.begin(store, descriptor, 0)
     if not begun.ok then return begun end
     local value = bounds.object(begun.value)
     if value and value.state == "available" then return begun end
-    local decoded = descriptor :: {owner_id: string, feed: string, key: string, digest: string}
+    local decoded = descriptor
     local offset = value and bounds.count(value.received_bytes, #item.bytes) or 0
     if offset == nil then return failure("INTERNAL", "published replica progress is malformed") end
     while offset < #item.bytes do
-        local ending = math.min(#item.bytes, offset + (replicas.MAX_CHUNK_BYTES :: integer))
+        local ending = math.min(#item.bytes, offset + (replicas.MAX_CHUNK_BYTES))
         local encoded, encode_error = base64.encode(item.bytes:sub(offset + 1, ending))
         if not encoded then return failure("INTERNAL", tostring(encode_error or "encode published replica chunk")) end
         local written = replicas.put(store, {source_owner = decoded.owner_id, feed = decoded.feed,
@@ -38,7 +38,7 @@ local function put(store: replicas.Store, item: delivery.Delivery, descriptor: u
         version_key = decoded.key, descriptor_digest = decoded.digest})
 end
 
-local function prepare(resource: string, source_node: unknown, raw: unknown): (delivery.Delivery?, unknown?, Result?)
+local function prepare(resource: string, source_node: unknown, raw: unknown): (delivery.Delivery?, delivery.Descriptor?, Result?)
     local node = bounds.id(source_node)
     local value = bounds.object(raw)
     if not node or not value then return nil, nil, failure("INVALID", "application publication is invalid") end
@@ -63,7 +63,7 @@ end
 -- so preparing an edit cannot distribute it.
 function M.prepare(resource: string, source_node: unknown, raw: unknown): Result
     local item, descriptor, prepare_error = prepare(resource, source_node, raw)
-    if not item or not descriptor then return prepare_error :: Result end
+    if not item or not descriptor then return assert(prepare_error) end
     return transaction.success({descriptor = descriptor, version = item.value.version,
         component = item.value.component}, false)
 end
@@ -71,7 +71,7 @@ end
 function M.publish(resource: string, source_node: unknown, raw: unknown): Result
     local node = bounds.id(source_node)
     local item, descriptor, prepare_error = prepare(resource, source_node, raw)
-    if not node or not item or not descriptor then return prepare_error :: Result end
+    if not node or not item or not descriptor then return assert(prepare_error) end
     local feed_store, feed_error = sync.open({resource = resource, owner = node})
     if not feed_store then return failure("UNAVAILABLE", feed_error or "open application publication feed") end
     local published = sync.append(feed_store, {feed = delivery.FEED, event_id = descriptor.digest,

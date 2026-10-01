@@ -12,15 +12,59 @@ local function object(value: unknown, what: string): ({[string]: unknown}?, stri
     if not result then return nil, what .. " must be an object" end
     return result, nil
 end
-local function members(value: unknown, variants: {string}, what: string): ({string}?, string?)
+local function hook_transports(value: unknown, decode: (unknown) -> types.HookTransport?, what: string): ({types.HookTransport}?, string?)
     if value == nil then return {}, nil end
     local list, list_error = bounds.ids(value, true)
     if not list then return nil, what .. ": " .. tostring(list_error) end
-    for _, item in ipairs(list) do
-        if not bounds.member(item, variants) then return nil, what .. " does not support " .. item end
+    local result: {types.HookTransport} = {}
+    for index, item in ipairs(list) do
+        local decoded = decode(item)
+        if not decoded then return nil, what .. " does not support " .. item end
+        result[index] = decoded
     end
-    return list, nil
+    return result, nil
 end
+
+local function inbound_modes(value: unknown, decode: (unknown) -> types.Inbound?, what: string): ({types.Inbound}?, string?)
+    if value == nil then return {}, nil end
+    local list, list_error = bounds.ids(value, true)
+    if not list then return nil, what .. ": " .. tostring(list_error) end
+    local result: {types.Inbound} = {}
+    for index, item in ipairs(list) do
+        local decoded = decode(item)
+        if not decoded then return nil, what .. " does not support " .. item end
+        result[index] = decoded
+    end
+    return result, nil
+end
+
+local function interrupt_methods(value: unknown, decode: (unknown) -> types.InterruptMethod?, what: string): ({types.InterruptMethod}?, string?)
+    if value == nil then return {}, nil end
+    local list, list_error = bounds.ids(value, true)
+    if not list then return nil, what .. ": " .. tostring(list_error) end
+    local result: {types.InterruptMethod} = {}
+    for index, item in ipairs(list) do
+        local decoded = decode(item)
+        if not decoded then return nil, what .. " does not support " .. item end
+        result[index] = decoded
+    end
+    return result, nil
+end
+
+local function mcp_transports(value: unknown, decode: (unknown) -> types.McpTransport?, what: string): ({types.McpTransport}?, string?)
+    if value == nil then return {}, nil end
+    local list, list_error = bounds.ids(value, true)
+    if not list then return nil, what .. ": " .. tostring(list_error) end
+    local result: {types.McpTransport} = {}
+    for index, item in ipairs(list) do
+        local decoded = decode(item)
+        if not decoded then return nil, what .. " does not support " .. item end
+        result[index] = decoded
+    end
+    return result, nil
+end
+
+
 local function optional_ref(value: {[string]: unknown}, name: string, what: string): (string?, string?)
     local raw: unknown = value[name]
     if raw == nil then return nil, nil end
@@ -41,6 +85,46 @@ local function optional_count(value: {[string]: unknown}, name: string, what: st
     if not number then return nil, what .. "." .. name .. " must be a nonnegative integer" end
     return number, nil
 end
+local function mode(value: unknown): types.Mode?
+    if value == "window" or value == "session" or value == "batch" then return value end
+    return nil
+end
+local function protocol(value: unknown): types.Protocol?
+    if value == "stream-json" or value == "acp" or value == "app-server" or value == "rpc" or value == "sdk" or value == "native" or value == "pty" or value == "http-events" then return value end
+    return nil
+end
+local function hook_transport(value: unknown): types.HookTransport?
+    if value == "command" or value == "http" or value == "mcp_tool" or value == "plugin" then return value end
+    return nil
+end
+local function answer_strategy(value: unknown): types.AnswerStrategy?
+    if value == "terminal_field" or value == "accumulate" or value == "transcript" or value == "runner" then return value end
+    return nil
+end
+local function resume_strategy(value: unknown): types.ResumeStrategy?
+    if value == "per-process" or value == "in-process" or value == "none" then return value end
+    return nil
+end
+local function inbound(value: unknown): types.Inbound?
+    if value == "next_turn" or value == "mcp_pull" or value == "stream_stdin" or value == "steering" or value == "acp" or value == "rpc" or value == "runner" then return value end
+    return nil
+end
+local function ready_strategy(value: unknown): types.ReadyStrategy?
+    if value == "protocol" or value == "hook" or value == "probe" or value == "none" then return value end
+    return nil
+end
+local function interrupt_method(value: unknown): types.InterruptMethod?
+    if value == "protocol" or value == "signal_group" or value == "runner_cancel" then return value end
+    return nil
+end
+local function mcp_transport(value: unknown): types.McpTransport?
+    if value == "stdio" or value == "streamable_http" or value == "sse" or value == "ws" then return value end
+    return nil
+end
+local function permission_mode(value: unknown): types.PermissionMode?
+    if value == "none" or value == "adapter" then return value end
+    return nil
+end
 local function decode_profile(value: unknown): (types.Profile?, string?)
     local profile, profile_error = object(value, "profile")
     if not profile then return nil, profile_error end
@@ -50,9 +134,9 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
     local id = bounds.id(profile.id)
     if not id then return nil, "profile id is not an identifier" end
     local what = "profile " .. id
-    local mode = bounds.member(profile.mode, {"window", "session", "batch"})
+    local mode = mode(profile.mode)
     if not mode then return nil, what .. ": mode must be window, session or batch" end
-    local protocol = bounds.member(profile.protocol, {"stream-json", "acp", "app-server", "rpc", "sdk", "native", "pty", "http-events"})
+    local protocol = protocol(profile.protocol)
     if not protocol then return nil, what .. ": protocol is not supported" end
     local revision = bounds.id(profile.protocol_revision)
     if not revision then return nil, what .. ": protocol_revision is not an identifier" end
@@ -62,13 +146,13 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if not declared then return nil, declared_error end
         local unknown_hook = bounds.fields(declared, {"transports", "events", "adapter_ref"})
         if unknown_hook then return nil, what .. ".hooks: " .. unknown_hook end
-        local transports, transports_error = members(declared.transports, {"command", "http", "mcp_tool", "plugin"}, what .. ".hooks.transports")
+        local transports, transports_error = hook_transports(declared.transports, hook_transport, what .. ".hooks.transports")
         if not transports then return nil, transports_error end
         local events, events_error = bounds.ids(declared.events or {}, true)
         if not events then return nil, what .. ".hooks.events: " .. tostring(events_error) end
         local adapter, adapter_error = optional_ref(declared, "adapter_ref", what .. ".hooks")
         if adapter_error then return nil, adapter_error end
-        hooks = {transports = transports :: {types.HookTransport}, events = events, adapter_ref = adapter}
+        hooks = {transports = transports, events = events, adapter_ref = adapter}
     end
     local answer, answer_error = object(profile.answer_path, what .. ".answer_path")
     if not answer then return nil, answer_error end
@@ -80,11 +164,11 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if answer.adapter_ref ~= nil then return nil, what .. ".answer_path names an adapter while disabled" end
         answer_path = {strategy = "none"}
     else
-        local strategy = bounds.member(answer.strategy, {"terminal_field", "accumulate", "transcript", "runner"})
+        local strategy = answer_strategy(answer.strategy)
         local answer_adapter = bounds.id(answer.adapter_ref)
         if not strategy then return nil, what .. ".answer_path.strategy is not supported" end
         if not answer_adapter then return nil, what .. ".answer_path.adapter_ref is not an identifier" end
-        answer_path = {strategy = strategy :: types.AnswerStrategy, adapter_ref = answer_adapter}
+        answer_path = {strategy = strategy, adapter_ref = answer_adapter}
     end
     local resume: types.Resume = {strategy = "none", portable = false}
     if profile.resume ~= nil then
@@ -92,13 +176,13 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if not declared then return nil, declared_error end
         local unknown_resume = bounds.fields(declared, {"strategy", "portable"})
         if unknown_resume then return nil, what .. ".resume: " .. unknown_resume end
-        local resume_strategy = bounds.member(declared.strategy, {"per-process", "in-process", "none"})
+        local resume_strategy = resume_strategy(declared.strategy)
         if not resume_strategy then return nil, what .. ".resume.strategy is not supported" end
         local portable, portable_error = flag(declared, "portable", false, what .. ".resume")
         if portable_error then return nil, portable_error end
-        resume = {strategy = resume_strategy :: types.ResumeStrategy, portable = portable}
+        resume = {strategy = resume_strategy, portable = portable}
     end
-    local inbound, inbound_error = members(profile.inbound, {"next_turn", "mcp_pull", "stream_stdin", "steering", "acp", "rpc", "runner"}, what .. ".inbound")
+    local inbound, inbound_error = inbound_modes(profile.inbound, inbound, what .. ".inbound")
     if not inbound then return nil, inbound_error end
     local isolation: types.IsolationEnv = {variables = {}, private_home = true}
     if profile.isolation_env ~= nil then
@@ -133,13 +217,13 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if not declared then return nil, declared_error end
         local unknown_ready = bounds.fields(declared, {"strategy", "adapter_ref", "timeout_ms"})
         if unknown_ready then return nil, what .. ".input_ready: " .. unknown_ready end
-        local ready_strategy = bounds.member(declared.strategy, {"protocol", "hook", "probe", "none"})
+        local ready_strategy = ready_strategy(declared.strategy)
         if not ready_strategy then return nil, what .. ".input_ready.strategy is not supported" end
         local adapter, adapter_error = optional_ref(declared, "adapter_ref", what .. ".input_ready")
         if adapter_error then return nil, adapter_error end
         local timeout, timeout_error = optional_count(declared, "timeout_ms", what .. ".input_ready")
         if timeout_error then return nil, timeout_error end
-        ready = {strategy = ready_strategy :: types.ReadyStrategy, adapter_ref = adapter, timeout_ms = timeout or M.DEFAULT_READY_TIMEOUT_MS}
+        ready = {strategy = ready_strategy, adapter_ref = adapter, timeout_ms = timeout or M.DEFAULT_READY_TIMEOUT_MS}
     end
     local interrupt: types.Interrupt = {methods = {}}
     if profile.interrupt ~= nil then
@@ -147,11 +231,11 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if not declared then return nil, declared_error end
         local unknown_interrupt = bounds.fields(declared, {"methods", "adapter_ref"})
         if unknown_interrupt then return nil, what .. ".interrupt: " .. unknown_interrupt end
-        local methods, methods_error = members(declared.methods, {"protocol", "signal_group", "runner_cancel"}, what .. ".interrupt.methods")
+        local methods, methods_error = interrupt_methods(declared.methods, interrupt_method, what .. ".interrupt.methods")
         if not methods then return nil, methods_error end
         local adapter, adapter_error = optional_ref(declared, "adapter_ref", what .. ".interrupt")
         if adapter_error then return nil, adapter_error end
-        interrupt = {methods = methods :: {types.InterruptMethod}, adapter_ref = adapter}
+        interrupt = {methods = methods, adapter_ref = adapter}
     end
     local mcp: types.Mcp = {client_transports = {}}
     if profile.mcp ~= nil then
@@ -159,7 +243,7 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if not declared then return nil, declared_error end
         local unknown_mcp = bounds.fields(declared, {"client_transports", "bridge_ref", "tool_filter", "initialize_timeout_ms", "call_timeout_ceiling_ms"})
         if unknown_mcp then return nil, what .. ".mcp: " .. unknown_mcp end
-        local transports, transports_error = members(declared.client_transports, {"stdio", "streamable_http", "sse", "ws"}, what .. ".mcp.client_transports")
+        local transports, transports_error = mcp_transports(declared.client_transports, mcp_transport, what .. ".mcp.client_transports")
         if not transports then return nil, transports_error end
         local bridge, bridge_error = optional_ref(declared, "bridge_ref", what .. ".mcp")
         if bridge_error then return nil, bridge_error end
@@ -177,7 +261,7 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if initialize_error then return nil, initialize_error end
         local ceiling, ceiling_error = optional_count(declared, "call_timeout_ceiling_ms", what .. ".mcp")
         if ceiling_error then return nil, ceiling_error end
-        mcp = {client_transports = transports :: {types.McpTransport}, bridge_ref = bridge, tool_filter = filter, initialize_timeout_ms = initialize, call_timeout_ceiling_ms = ceiling}
+        mcp = {client_transports = transports, bridge_ref = bridge, tool_filter = filter, initialize_timeout_ms = initialize, call_timeout_ceiling_ms = ceiling}
     end
     local sandbox: types.Sandbox = {providers = {}, required_placement_features = {}}
     if profile.sandbox ~= nil then
@@ -203,7 +287,7 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         if not declared then return nil, declared_error end
         local unknown_exchange = bounds.fields(declared, {"mode", "adapter_ref", "adapter_digest"})
         if unknown_exchange then return nil, what .. ".permission_exchange: " .. unknown_exchange end
-        local exchange_mode = bounds.member(declared.mode, {"none", "adapter"})
+        local exchange_mode = permission_mode(declared.mode)
         if not exchange_mode then return nil, what .. ".permission_exchange.mode must be none or adapter" end
         local adapter, adapter_error = optional_ref(declared, "adapter_ref", what .. ".permission_exchange")
         if adapter_error then return nil, adapter_error end
@@ -215,10 +299,10 @@ local function decode_profile(value: unknown): (types.Profile?, string?)
         end
         if exchange_mode == "adapter" and (not adapter or not adapter_digest) then return nil, what .. ".permission_exchange needs adapter_ref and adapter_digest when enabled" end
         if exchange_mode == "none" and (adapter or adapter_digest) then return nil, what .. ".permission_exchange names an adapter while disabled" end
-        exchange = {mode = exchange_mode :: types.PermissionMode, adapter_ref = adapter, adapter_digest = adapter_digest}
+        exchange = {mode = exchange_mode, adapter_ref = adapter, adapter_digest = adapter_digest}
     end
-    return {id = id, mode = mode :: types.Mode, protocol = protocol :: types.Protocol, protocol_revision = revision, hooks = hooks,
-        answer_path = answer_path, resume = resume, inbound = inbound :: {types.Inbound},
+    return {id = id, mode = mode, protocol = protocol, protocol_revision = revision, hooks = hooks,
+        answer_path = answer_path, resume = resume, inbound = inbound,
         isolation_env = isolation, trust_preanswer = trust, exit_codes_trustworthy = exit_codes, input_ready = ready, interrupt = interrupt, mcp = mcp, sandbox = sandbox,
         permission_exchange = exchange}, nil
 end

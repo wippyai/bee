@@ -38,7 +38,7 @@ end
 function M.manifest(volume: fs.FS): (Manifest?, string?)
     local read, read_error = volume:readfile("/" .. M.MANIFEST)
     if not read then return nil, "corpus manifest is unavailable: " .. tostring(read_error) end
-    local payload = read :: string
+    local payload = read
     local decoded: unknown = json.decode(payload)
     return M.decode_manifest(decoded, function(path: string): (string?, string?)
         return volume:readfile(path)
@@ -174,7 +174,7 @@ function M.search(volume: fs.FS, manifest: Manifest, query: string, topic: strin
         if topic == nil or document.topic == topic then
             local read, read_error = volume:readfile(M.path(document.id))
             if not read then return {}, offset, false, "document is unavailable: " .. tostring(read_error) end
-            local payload = read :: string
+            local payload = read
             local section = ""
             local line_number = 0
             for line in (payload .. "\n"):gmatch("([^\n]*)\n") do
@@ -203,7 +203,7 @@ function M.read(volume: fs.FS, manifest: Manifest, id: string, section: string?,
     if not document then return nil, "unknown document id" end
     local read, read_error = volume:readfile(M.path(id))
     if not read then return nil, "document is unavailable: " .. tostring(read_error) end
-    local payload = read :: string
+    local payload = read
     local start = offset
     local heading: string? = nil
     if section ~= nil then

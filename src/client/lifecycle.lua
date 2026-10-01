@@ -18,6 +18,8 @@ function M.bootstrap(value: unknown): Bootstrap?
     local mode = value.quit_mode
     if mode == nil then mode = "detach" end
     if mode ~= "detach" and mode ~= "supervisor" then return nil end
+    local quit_mode: "detach" | "supervisor" = mode
+    local legacy_desktop: unknown = value.legacy_desktop
     local args = arguments.decode(value.arguments)
     if not args or (value.fullscreen ~= nil and type(value.fullscreen) ~= "boolean") then return nil end
     if value.workspace_appearance ~= nil then return nil end
@@ -33,7 +35,7 @@ function M.bootstrap(value: unknown): Bootstrap?
         hive_supervisor = contract.text(value.hive_supervisor, 160)
         if not hive_supervisor or hive_supervisor == "" then return nil end
     end
-    return {quit_mode = mode, legacy_desktop = value.legacy_desktop, arguments = args,
+    return {quit_mode = quit_mode, legacy_desktop = legacy_desktop, arguments = args,
         fullscreen = value.fullscreen == true, secondary_application = secondary,
         inherit_appearance = value.inherit_appearance == true, node_defaults = value.node_defaults == true, desktop_id = desktop_id, hive_supervisor = hive_supervisor}
 end

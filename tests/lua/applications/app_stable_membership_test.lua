@@ -1,6 +1,6 @@
--- MIT. An app follows the runs it launched across restarts: it launches a
--- run thread, closes, reopens as a new instance, reads the run status and
--- steers the run. Another app in the same workspace is refused, and after
+-- MIT. An app follows the threads it created across restarts: it creates a
+-- run thread, closes, reopens as a new instance, reads the thread and
+-- records on it. Another app in the same workspace is refused, and after
 -- the app is uninstalled its stable family is fenced out of every thread.
 local test = require("test")
 local process = require("process")
@@ -12,15 +12,27 @@ local registry = require("registry")
 local catalog = require("catalog")
 local appearance = require("appearance")
 local ADMISSION_ID = "bee.security:application_admission"
-local DEFINITION = "bee.harness.window:app"
+local DEFINITION = "bee.harness.app:app"
 local OTHER_DEFINITION = "bee.apps:welcome"
 local RUN_THREAD = "stable-run-thread"
 local BACKFILL_THREAD = "stable-backfill-run-thread"
 local ATTEMPT = "stable-run-attempt-1"
-local BACKEND = "bee.harness.launch:agent_call_backend"
-local LAUNCH_SCOPE = "bee.harness.launch:agent_launch_execution_scope"
 local THREADS_POLICY = "bee.security.threads:thread_authority_client_policy"
 local WORKSPACE = string.rep("a", 32)
+
+
+type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
+local function registry_input(value: {[string]: unknown}): RegistryInput
+    local id, kind, meta, dependency_root = value.id, value.kind, value.meta, value.dependency_root
+    assert(type(id) == "string" and type(kind) == "string", "fixture registry entry identity")
+    local metadata: {[string]: unknown} = {}
+    if meta ~= nil then
+        assert(type(meta) == "table", "fixture registry metadata")
+        for key, item in pairs(meta) do metadata[key] = item end
+    end
+    assert(dependency_root == nil or type(dependency_root) == "boolean", "fixture registry dependency root")
+    return {id = id, kind = kind, meta = metadata, data = value.data, dependency_root = dependency_root == true}
+end
 
 local function unwrap(raw: unknown): {[string]: unknown}
     local reply = raw :: {[string]: unknown}
@@ -42,15 +54,6 @@ local function as_app(instance_id: string, target: string, request: unknown): {[
     return unwrap(raw)
 end
 
-local function run_status(instance_id: string): {[string]: unknown}
-    local scope = assert(security.named_scope(LAUNCH_SCOPE))
-    local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
-    local executor = assert(funcs.new():with_actor(actor):with_scope(scope))
-    local raw, call_error = executor:call(BACKEND, {operation = "status", thread_id = RUN_THREAD, attempt_id = ATTEMPT})
-    if call_error then error("run status: " .. tostring(call_error)) end
-    return unwrap(raw)
-end
-
 local function app_code(instance_id: string, target: string, request: unknown): string
     local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
     local policy = assert(security.policy(THREADS_POLICY))
@@ -63,11 +66,11 @@ local function app_code(instance_id: string, target: string, request: unknown): 
 end
 
 local function run_code(instance_id: string, thread_id: string?): string?
-    local scope = assert(security.named_scope(LAUNCH_SCOPE))
     local actor = assert(security.new_actor("bee.application:" .. WORKSPACE .. ":" .. instance_id))
-    local executor = assert(funcs.new():with_actor(actor):with_scope(scope))
-    local raw, call_error = executor:call(BACKEND, {operation = "status", thread_id = thread_id or RUN_THREAD, attempt_id = ATTEMPT})
-    if call_error then error("run status: " .. tostring(call_error)) end
+    local policy = assert(security.policy(THREADS_POLICY))
+    local executor = assert(funcs.new():with_actor(actor):with_scope(security.new_scope({policy})))
+    local raw, call_error = executor:call("bee.threads.service:get", {thread_id = thread_id or RUN_THREAD})
+    if call_error then error("run thread: " .. tostring(call_error)) end
     local reply = raw :: {[string]: unknown}
     if reply.ok == true then return nil end
     return tostring((reply.error :: {[string]: unknown}).code)
@@ -90,7 +93,7 @@ local function set_admission_for(definition_id: string, admitted: boolean)
         if admitted or binding.definition_id ~= definition_id then bindings[#bindings + 1] = binding end
     end
     local changes = snap:changes()
-    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = record.meta, data = {bindings = bindings}})
+    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = registry_input(record).meta, data = {bindings = bindings}})
     local applied, apply_error = changes:apply()
     if not applied then error("apply application admission: " .. tostring(apply_error)) end
 end
@@ -102,7 +105,7 @@ local function set_duplicate_admission()
     for _, binding in ipairs(baseline_bindings or {}) do bindings[#bindings + 1] = binding end
     bindings[#bindings + 1] = bindings[1]
     local changes = snap:changes()
-    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = record.meta, data = {bindings = bindings}})
+    changes:update({id = ADMISSION_ID, kind = "registry.entry", meta = registry_input(record).meta, data = {bindings = bindings}})
     local applied, apply_error = changes:apply()
     if not applied then error("apply duplicate application admission: " .. tostring(apply_error)) end
 end
@@ -187,10 +190,10 @@ local function define_tests()
             local created = as_app(first, "bee.threads.service:create",
                 {thread_id = thread_id or RUN_THREAD, idempotency_key = RUN_THREAD .. "-create", title = "Stable run"})
             test.eq(created.thread_id, RUN_THREAD)
-            test.eq(run_status(first).state, "starting")
+            test.is_nil(run_code(first))
             close(first_view)
             local second, _ = open(DEFINITION, "stable-view-2")
-            test.eq(run_status(second).state, "starting")
+            test.is_nil(run_code(second))
             local steered = as_app(second, "bee.threads.service:record",
                 {thread_id = RUN_THREAD, idempotency_key = "stable-steer-1", kind = "message",
                     body = {message_id = "stable-steer-1", message_kind = "progress",
@@ -217,7 +220,7 @@ local function define_tests()
             end
             local fenced_ok, fence_error = pcall(revoked_refused)
             set_admission(true)
-            assert(fenced_ok, fence_error)
+            assert(fenced_ok, tostring(fence_error))
 
             -- Boot can read its initial catalog before governance has
             -- reapplied a retained definition. Backfill must preserve this

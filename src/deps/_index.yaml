@@ -22,7 +22,8 @@ entries:
   - name: process_host
     value: bee:workers
   - name: waiter_policies
-    value: [bee.security.threads:thread_waiter_policy]
+    value:
+    - bee.security.threads:thread_waiter_policy
   - name: sender
     value: bee.hive.service:inbox_sender
 - name: hub
@@ -32,6 +33,8 @@ entries:
   parameters:
   - name: process_host
     value: bee:workers
+  - name: target_publish_configuration
+    value: bee:hub_publication
 - name: gov
   kind: ns.dependency
   component: bee/gov
@@ -70,16 +73,6 @@ entries:
     value: bee.security.gateway:gateway_tool_read_policy
   - name: target_tool_message_policy
     value: bee.security.gateway:gateway_tool_message_policy
-  - name: target_tool_inbox_policy
-    value: bee.security.gateway:gateway_tool_inbox_policy
-  - name: target_tool_discover_policy
-    value: bee.security.gateway:gateway_session_discover_policy
-  - name: target_tool_send_grant_policy
-    value: bee.security.gateway:gateway_session_send_workspace_policy
-  - name: target_tool_launch_policy
-    value: bee.security.gateway:gateway_tool_launch_policy
-  - name: target_tool_run_policy
-    value: bee.security.gateway:gateway_tool_run_policy
   - name: target_tool_overlay_policy
     value: bee.security.gateway:gateway_tool_overlay_policy
   - name: target_tool_docs_policy
@@ -94,10 +87,14 @@ entries:
     value: bee.security.gateway:gateway_tool_application_open_policy
   - name: target_tool_install_policy
     value: bee.security.gateway:gateway_tool_install_policy
+  - name: target_tool_session_policy
+    value: bee.security.gateway:gateway_tool_session_policy
   - name: target_install_configuration
     value: bee:module_installation
-  - name: target_remote_resolver
-    value: bee.hive.service:remote_sessions
+  - name: target_tool_hub_publish_policy
+    value: bee.security.gateway:gateway_tool_hub_publish_policy
+  - name: target_publish_configuration
+    value: bee:module_publication
 - name: hive
   kind: ns.dependency
   component: bee/hive
@@ -137,6 +134,13 @@ entries:
   kind: ns.dependency
   component: bee/approvals-inbox
   version: 0.1.0-dev
+- name: files
+  kind: ns.dependency
+  component: bee/files
+  version: 0.1.0-dev
+  parameters:
+  - name: target_workspace_root
+    value: bee.env:files_root
 - name: application
   kind: ns.dependency
   component: bee/application
@@ -164,10 +168,15 @@ entries:
   - name: process_host
     value: bee:workers
   - name: authority_policies
-    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
+    value:
+    - bee.security.approvals:approval_store_policy
+    - bee.security.approvals:approval_owner_policy
   - name: worker_policies
-    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,
-      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]
+    value:
+    - bee.security.approvals:approval_store_policy
+    - bee.security.approvals:approval_owner_policy
+    - bee.security.threads:thread_approval_policy
+    - bee.security.threads:thread_approval_client_policy
 - name: capability
   kind: ns.dependency
   component: bee/capability
@@ -183,3 +192,28 @@ entries:
   parameters:
   - name: target_workdir_preparers
     value: bee:workdir_preparers
+- name: placement_docker
+  kind: ns.dependency
+  component: bee/placement-docker
+  version: '*'
+  parameters:
+  - name: process_host
+    value: bee:workers
+  - name: environment_provisioning
+    value:
+      network: bee-coding
+      endpoint: bee:gateway_endpoint
+      listener: bee:gateway_listener
+      approval_policy: docker-environment
+      readiness_policy: bee.gateway.security:readiness_policy
+  - name: image_owner_policies
+    value:
+    - bee.placement.native.security:placement_store_policy
+    - bee.placement.native.security:placement_exec_policy
+    - bee.placement.native.security:placement_runner_policy
+    - bee.placement.docker.security:docker_policy
+    - bee.placement.docker.security:docker_socket_policy
+    - bee.placement.docker.security:image_policy
+    - bee.placement.docker.security:image_client_policy
+    - bee.placement.docker.security:environment_owner_policy
+    - bee.placement.docker.security:environment_listener_policy

@@ -7,7 +7,7 @@ local semver = require("semver")
 local binary_identity = require("binary_identity")
 local M = {}
 
-type Pack = {component: string, installed_version: string, available_version: string, update_available: boolean}
+type Pack = {component: string, installed_version: string, locked_version: string, available_version: string, update_available: boolean}
 type BeeUpdate = {installed_version: string, available_version: string, update_available: boolean, needs_new_binary: boolean, reason: string}
 type Binary = {native_module: string, native_version: string, runtime_commit: string}
 type Result = {modules: {Pack}, bee_update: BeeUpdate, catalog_error: string, binary: Binary?}
@@ -46,7 +46,7 @@ function M.read(): (Result?, string?)
         if bee_component(item.component) then
             local latest = available[item.component] or ""
             local compared = latest ~= "" and item.version ~= "" and semver.compare(latest, item.version) or nil
-            packs[#packs + 1] = {component = item.component, installed_version = item.version,
+            packs[#packs + 1] = {component = item.component, installed_version = item.version, locked_version = item.locked_version,
                 available_version = latest, update_available = compared ~= nil and compared > 0}
         end
     end

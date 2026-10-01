@@ -25,11 +25,11 @@ function M.encode(value: Provenance): (string?, string?)
 end
 function M.decode(text: unknown): (Provenance?, string?)
     if type(text) ~= "string" then return nil, "provenance must be a string" end
-    local revision, stream, first, last, envelope, event = (text :: string):match("^([^:]+):([^:]+):(%d+)%-(%d+):(%d+):(%d+)$")
+    local revision, stream, first, last, envelope, event = (text):match("^([^:]+):([^:]+):(%d+)%-(%d+):(%d+):(%d+)$")
     if revision ~= M.REVISION then return nil, "provenance revision is not " .. M.REVISION end
     if type(stream) ~= "string" then return nil, "provenance is malformed" end
-    local value: Provenance = {stream_id = stream :: string, source_first_sequence = tonumber(first) :: integer, source_last_sequence = tonumber(last) :: integer,
-        envelope_index = tonumber(envelope) :: integer, event_index = tonumber(event) :: integer}
+    local value: Provenance = {stream_id = stream, source_first_sequence = math.floor(assert(tonumber(first))), source_last_sequence = math.floor(assert(tonumber(last))),
+        envelope_index = math.floor(assert(tonumber(envelope))), event_index = math.floor(assert(tonumber(event)))}
     local problem = M.check(value)
     if problem then return nil, problem end
     return value, nil

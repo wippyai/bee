@@ -22,6 +22,7 @@ local formats = require("formats")
 local configuration = require("configuration")
 local workdir_preparers = require("workdir_preparers")
 local writable_roots_adapter = require("writable_roots_adapter")
+local provider_projection = require("provider_projection")
 local M = {}
 type WriteBack = {projection_id: string, generation: integer, source_digest: string, path: string}
 type WriteBackResult = {projection_id: string, ok: boolean, code: string?, message: string?, written: boolean?}
@@ -84,9 +85,9 @@ function M.write_back(home_path: string, writebacks: {WriteBack}, owner_id: stri
     end
     return results
 end
-local function evidence(db, attempt_id: string, kind: string, detail: string, update: {[string]: unknown}?): (boolean, string?)
-    local result = store.transition(db, attempt_id, {execution = update and update.execution :: types.ExecutionState? or nil,
-        fields = update and update.fields :: {[string]: unknown}? or nil, evidence = {kind = kind, detail = detail}})
+local function evidence(db, attempt_id: string, kind: string, detail: string, update: {execution: types.ExecutionState?, fields: {[string]: unknown}?}?): (boolean, string?)
+    local result = store.transition(db, attempt_id, {execution = update and update.execution or nil,
+        fields = update and update.fields or nil, evidence = {kind = kind, detail = detail}})
     if not result.ok then return false, result.message end
     return true, nil
 end
@@ -149,6 +150,11 @@ function M.login_notice(request: types.LaunchRequest, selected_home: string,
         if path == projected_login_path then return nil end
         local present = is_file(path)
         if present == nil or present == true then return nil end
+    end
+    -- This advisory has no authority to execute a status command or inspect
+    -- environment credentials. Unobserved alternatives leave login unknown.
+    for _, evidence in ipairs(login.any_of or {}) do
+        if evidence.kind ~= "file_exists" then return nil end
     end
     return {code = "LOGIN_REQUIRED", provider = login.provider, command = login.command}
 end
@@ -289,7 +295,7 @@ local function prepare_workdir_and_arguments(db: sql.DB, request: types.LaunchRe
     end
     return work_dir, sandbox_args, nil
 end
-function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?): (Prepared?, string?, string?)
+function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string, generation: integer, expected_binding: string?, materialization_key: string?, guest_home: string?): (Prepared?, string?, string?)
     local gateway_binding: string? = nil
     local writebacks: {WriteBack} = {}
     local function finish_stopped_without_child(): boolean
@@ -338,7 +344,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
     local selected_home_path = home_path
     local retained_home = false
     local provider_home = request.launch.provider_home
-    if request.session_ref and (not provider_home or provider_home.private ~= true) then
+    if request.session_ref then
         local session_key, session_key_error = homes.session_key(request.owner_id, request.session_ref)
         local session_path = session_key and homes.ensure_session(session_key) or nil
         if not session_path then
@@ -358,7 +364,7 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
         evidence(db, attempt_id, "home.failed", home_os_error or "home path", {execution = "exited"})
         return refused(home_os_error or "home path")
     end
-    local environment, environment_error = resolve_environment(request, home_os)
+    local environment, environment_error = resolve_environment(request, guest_home or home_os)
     if not environment then
         evidence(db, attempt_id, "environment.failed", environment_error or "environment", {execution = "exited"})
         return refused(environment_error or "environment")
@@ -463,6 +469,29 @@ function M.prepare(db: sql.DB, request: types.LaunchRequest, attempt_id: string,
                 or not provider_home_matches(provider_home, projected.source_path, projected.format, projected.write_back)) then
                 evidence(db, attempt_id, "credential.refused", "provider login files do not match the driver declaration", {execution = "exited"})
                 return refused("provider login files do not match the driver declaration")
+            end
+            if guest_home then
+                local roots: {string} = {guest_home}
+                if request.placement_profile_ref then
+                    local selected, profile_error = provider_projection.roots(request.placement_profile_ref)
+                    if not selected then return refused(profile_error or "container projection roots unavailable") end
+                    for _, root in ipairs(selected) do roots[#roots + 1] = root end
+                end
+                local format, format_error = provider_projection.container(provider_home, source.format, roots)
+                if not format then
+                    evidence(db, attempt_id, "configuration.refused", format_error or "container projection refused", {execution = "exited"})
+                    return refused(format_error or "container projection refused")
+                end
+                source.format = format
+            elseif provider_home and provider_home.private then
+                local machine_home, machine_home_error = env.get("bee.env:machine_home")
+                if type(machine_home) ~= "string" or machine_home_error then return refused("provider source home unavailable") end
+                local projected_format, format_error = provider_projection.native(provider_home, source.format, machine_home, home_os)
+                if not projected_format then
+                    evidence(db, attempt_id, "configuration.refused", format_error or "provider configuration projection refused", {execution = "exited"})
+                    return refused(format_error or "provider configuration projection refused")
+                end
+                source.format = projected_format
             end
             local login_path = source.path
             if not login_path then return refused("file login path unavailable") end

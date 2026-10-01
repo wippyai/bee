@@ -8,6 +8,15 @@ local configure = require("configure")
 
 local function define_tests()
     test.describe("Grok configuration", function()
+        test.it("publishes admitted private login config without gateway tools", function()
+            local reply = configure.handle({fixture = false, private_home = true})
+            test.is_true(reply.ok)
+            local files = (reply.delivery :: {files: {{composition: {kind: string, base_path: string}, path: string}}}).files
+            test.eq(#files, 1)
+            test.eq(files[1].composition.kind, "copy")
+            test.eq(files[1].path, configuration.PATH)
+            test.eq(files[1].composition.base_path, configuration.BASE_PATH)
+        end)
         test.it("renders only the scoped MCP subtree", function()
             local gateway: configuration.Gateway = {
                 endpoint = "127.0.0.1:4321",
@@ -17,8 +26,8 @@ local function define_tests()
                 token_environment = "BEE_GATEWAY_TOKEN",
             }
             local toml = configuration.render_gateway(gateway)
-            test.is_nil(toml:find("[permission]", 1, true))
-            test.is_nil(toml:find('"MCPTool(bee__*)"', 1, true))
+            test.is_nil((toml:find("[permission]", 1, true)))
+            test.is_nil((toml:find('"MCPTool(bee__*)"', 1, true)))
             test.is_true(toml:find("[mcp_servers.bee]", 1, true) ~= nil)
             test.is_true(toml:find('url = "http://127.0.0.1:4321/mcp/act-test-123"', 1, true) ~= nil)
             test.is_true(toml:find("enabled = true", 1, true) ~= nil)

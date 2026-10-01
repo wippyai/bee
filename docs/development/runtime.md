@@ -10,6 +10,16 @@ and manifest. Wippy owns application deployment, Hub resolution, command
 dispatch, state opening and shutdown; Bee registers its native components
 through Wippy boot.
 
+## Toolchain currency
+
+The binary at `.wippy/bin/bee-wippy` derives from `wippy.build.json`; its
+provenance records the manifest it was built from. `make lint`, `make test`,
+`make fixture-lint` and `make check` run `build/verify_cached_toolchain.py
+current` first and rebuild through `make native-tools` when the recorded
+manifest inputs differ or the provenance is missing. The comparison uses file
+content, not modification times. An explicit caller `WIPPY` override runs as
+is with no rebuild.
+
 ## Update procedure
 
 1. Select an upstream commit that contains the required runtime APIs.
@@ -35,17 +45,16 @@ A runtime change is ready only when the manifest, patch checks and Bee's
 relevant acceptance gates agree. Experimental upstream work remains outside the
 published integration until its own acceptance contract exists.
 
-## Standalone live-update gap
+## Standalone live update
 
-The pinned runtime records a standalone lock root in
-`DependencyResolution.Deployment.Root`. Its Lua `snapshot:state()` adapter
-omits the deployment record, so Bee cannot inventory that implicit root.
-The standalone Modules app therefore does not offer **Update Bee**, even when
-About shows a newer Hub pack. The explicit registry-root topology remains
-covered by the planner tests; it does not prove standalone self-update.
+Runtime #884 exposes the standalone deployment baseline as
+`resolution.lock = {root_module, modules, digest}`. The entire resolution graph
+requires `registry.resolution.get`; registry entry reads do not grant it.
+Hub grants this read within its execution scope, inventories the implicit root
+from `lock.root_module`, and reports installed versions from the live
+`resolution.modules`. The original lock pins stay separate in About.
 
-`make hub-self-update-runtime-check` includes a regression using
-`cmd/app.Bundle.Seed`, with no synthetic application dependency. It fails on
-the current pin at the missing Lua deployment record. An upstream adapter fix
-and subsequent Bee integration are required before standalone live-update
-proof can pass. No local runtime patch or fabricated registry root is applied.
+Modules updates the `bee/bee` closure through the existing approved Hub plan
+and apply path. Registry history and cached artifacts restore that selection
+offline. `make hub-self-update-runtime-check` tests the seeded root adapter and
+continuity; `make hub-self-update-standalone-check` exercises source-free packs.

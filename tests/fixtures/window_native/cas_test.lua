@@ -10,8 +10,8 @@ local function run()
     local _, insert_error = db:execute([[INSERT INTO bee_placement_attempts
         (attempt_id, owner_id, owner_incarnation, action_id, idempotency_key, request_digest, request_json,
          execution_state, cleanup_state, capability, required_cleanup, exit_observation, evidence_count, created_at, updated_at)
-        VALUES (?, 'cas-owner', 1, 'cas-action', 'cas-key', 'digest', '{}', 'intended', 'pending',
-         'direct_process', 'direct_process', 'eof_gated', 1, 'before', 'before')]], {attempt_id})
+        VALUES (?, 'cas-owner', 1, 'cas-action', 'cas-key', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '{}', 'intended', 'pending',
+         'direct_process', 'direct_process', 'eof_gated', 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')]], {attempt_id})
     if insert_error then db:release(); error(tostring(insert_error)) end
     local _, evidence_error = db:execute([[INSERT INTO bee_placement_evidence (attempt_id, sequence, at, kind, detail)
         VALUES (?, 1, 'before', 'cas.intent', 'both contenders observed intended')]], {attempt_id})
@@ -23,7 +23,7 @@ local function run()
     test.eq(second_observation and second_observation.execution_state, "intended")
     local first = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting",
         fields = {runner_pid = "first-contender"}, evidence = {kind = "cas.first", detail = "first contender claimed"}})
-    test.eq(first.ok, true)
+    test.eq(first.ok, true, first.message)
     local second = store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting",
         fields = {runner_pid = "second-contender"}, evidence = {kind = "cas.second", detail = "stale contender claimed"}})
     test.eq(second.ok, false)

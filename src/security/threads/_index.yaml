@@ -260,3 +260,11 @@ entries:
     actions: [db.get, registry.get, system.read, process.registry.lookup, process.listen, process.unlisten, process.send, channel.select]
     resources: '*'
     effect: allow
+- name: thread_sessions_owner_policy
+  kind: security.policy
+  meta:
+    comment: Grant only to the Sessions owner for canonical session, work and turn operations
+  policy:
+    actions: [bee.threads.sessions_owner]
+    resources: '*'
+    effect: allow

@@ -2,7 +2,7 @@
 local bounds = require("bounds")
 local requirements = require("requirements")
 local M = {}
-type Module = {component: string, version: string, source: string, direct: boolean,
+type Module = {component: string, version: string, locked_version: string, source: string, direct: boolean,
     roots: {string}, used_by: {string}, entries: integer}
 type Root = {id: string, owner: string, component: string, version: string, parameters: {requirements.Parameter}}
 type Result = {version: integer, modules: {Module}, roots: {Root}}
@@ -48,11 +48,12 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     local function module(name: string): Module
         local found = by_name[name]
         if found then return found end
-        local item: Module = {component = name, version = "", source = "", direct = false,
+        local item: Module = {component = name, version = "", locked_version = "", source = "", direct = false,
             roots = {}, used_by = {}, entries = 0}
         by_name[name] = item
         return item
     end
+    local deployment: string? = nil
     if state.resolution ~= nil then
         local resolution = bounds.object(state.resolution)
         if not resolution then return nil, "invalid registry resolution" end
@@ -67,6 +68,29 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             if not name or not selected or not source or by_name[name] then return nil, "invalid or duplicate resolved module" end
             local bucket = module(name)
             bucket.version, bucket.source = selected, source
+        end
+        if resolution.lock ~= nil then
+            local lock = bounds.object(resolution.lock)
+            if not lock then return nil, "invalid deployment lock" end
+            if lock.root_module ~= "" then
+                deployment = component(lock.root_module)
+                if not deployment then return nil, "invalid deployment root" end
+            end
+            local pins, pins_error = rows(lock.modules, 512)
+            if not pins then return nil, pins_error end
+            local pinned: {[string]: boolean} = {}
+            for _, raw_pin in ipairs(pins) do
+                local pin = bounds.object(raw_pin)
+                local name = pin and component(pin.name)
+                local selected = pin and bounds.line(pin.version, 128)
+                if not name or not selected or pinned[name] then return nil, "invalid or duplicate lock module" end
+                pinned[name] = true
+                local live = by_name[name]
+                if live then live.locked_version = selected end
+            end
+            if deployment and (not pinned[deployment] or module(deployment).version == "") then
+                return nil, "deployment root is missing from resolution"
+            end
         end
     end
     local roots: {Root} = {}
@@ -101,6 +125,19 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
                 add_once(bucket.roots, id)
                 bucket.direct = true
             end
+        end
+    end
+    if deployment then
+        local declared = false
+        for _, root in ipairs(roots) do
+            if root.component == deployment and root.owner == "" then declared = true end
+        end
+        if not declared then
+            local bucket = module(deployment)
+            roots[#roots + 1] = {id = "bee:deployment", owner = "", component = deployment,
+                version = bucket.version, parameters = {}}
+            add_once(bucket.roots, "bee:deployment")
+            bucket.direct = true
         end
     end
     local modules: {Module} = {}
@@ -221,7 +258,7 @@ function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unkno
     local raw_entries = state.entries
     if type(raw_entries) ~= "table" then return nil, "invalid registry entries" end
     local entries: {{id: string, kind: string, bytes: integer}} = {}
-    for _, raw_entry in ipairs(raw_entries :: {unknown}) do
+    for _, raw_entry in ipairs(raw_entries) do
         local entry = bounds.object(raw_entry)
         local owned = entry and bounds.object(entry.registry)
         if owned and owned.owner == name and entry then
@@ -229,7 +266,7 @@ function M.sources(raw_state: unknown, raw_revision: unknown, raw_request: unkno
             local data = bounds.object(entry.data)
             local id = bounds.id(entry.id)
             if kind and data and id and type(data.source) == "string" then
-                local source = data.source :: string
+                local source = data.source
                 if wanted == id then
                     return source_page(name, selected, revision, id, source, from, length), nil
                 end

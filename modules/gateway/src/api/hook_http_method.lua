@@ -2,9 +2,8 @@ local http = require("http")
 local json = require("json")
 local gateway = require("gateway")
 local hooks = require("hooks")
-local hook_inbox = require("hook_inbox")
-local logger = require("logger")
 local transport_admission = require("admission")
+local boundary = require("session_boundary")
 type Object = {[string]: unknown}
 local function refuse(response: http.Response, status: number, message: string): nil
     response:set_content_type("text/plain; charset=utf-8")
@@ -32,36 +31,25 @@ local function submit(): nil
     local binding = admitted(request, response)
     if not binding then return nil end
     local raw = request:body() or ""
-    if #raw > hooks.MAX_PAYLOAD_BYTES then return refuse(response, 413, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes") end
+    if #raw > hooks.MAX_PAYLOAD_BYTES then refuse(response, 413, "hook payload exceeds " .. tostring(hooks.MAX_PAYLOAD_BYTES) .. " bytes"); return nil end
     local body: unknown, body_error = json.decode(raw)
-    if body_error or type(body) ~= "table" then return refuse(response, http.STATUS.BAD_REQUEST, "hook payload is not a JSON object") end
-    local reply = gateway.submit_hook(binding, body :: Object, "http")
+    if body_error or type(body) ~= "table" then refuse(response, http.STATUS.BAD_REQUEST, "hook payload is not a JSON object"); return nil end
+    local reply = gateway.submit_hook(binding, body, "http")
     if not reply.ok then
         local fault = reply.error or {code = "STORAGE", message = "hook"}
         if fault.code == "OVERLOAD" then response:set_header("Retry-After", tostring(math.ceil(hooks.RETRY_AFTER_MS / 1000))) end
-        return refuse(response, status_of(fault.code), fault.message)
+        refuse(response, status_of(fault.code), fault.message)
+        return nil
     end
-    local outcome = reply.value :: Object
+    local outcome = reply.value
     response:set_header("X-Bee-Event", tostring(outcome.event_id))
     -- A replay of a terminally rejected occurrence is told so with a status
     -- and plain text, never a body a harness could act on.
-    if outcome.status == "rejected" then return refuse(response, http.STATUS.GONE, "rejected: " .. tostring(outcome.rejected_reason or "no reason")) end
-    -- A recorded boundary event may answer with the bound action's
-    -- outstanding inbox as Claude additionalContext. The read runs as the
-    -- binding's subject; a failure keeps the proven empty body instead of
-    -- breaking the harness loop.
-    local submitted = body :: Object
-    local event: string? = nil
-    if type(submitted.hook_event_name) == "string" then event = submitted.hook_event_name
-    elseif type(submitted.event) == "string" then event = submitted.event end
-    local context_text, context_error = hook_inbox.context(binding, event)
-    if context_error then logger:warn("Gateway hook inbox context unavailable", {event = event or "unknown", cause = context_error}) end
-    local context_body = hook_inbox.http_body(context_text)
+    if outcome.status == "rejected" then refuse(response, http.STATUS.GONE, "rejected: " .. tostring(outcome.rejected_reason or "no reason")); return nil end
+    local context, boundary_error = boundary.deliver(binding, outcome)
+    if not context then refuse(response, http.STATUS.INTERNAL_ERROR, boundary_error or "session boundary failed"); return nil end
+    if context.hookSpecificOutput ~= nil then response:set_content_type(http.CONTENT.JSON); response:write_json(context) end
     if outcome.status == "committed" then response:set_status(http.STATUS.OK) else response:set_status(http.STATUS.ACCEPTED) end
-    if context_body then
-        response:set_content_type(http.CONTENT.JSON)
-        response:write_json(context_body)
-    end
     return nil
 end
 local function status(): nil
@@ -71,11 +59,12 @@ local function status(): nil
     local binding = admitted(request, response)
     if not binding then return nil end
     local event_id = request:param("event") or ""
-    if event_id == "" or #event_id > 128 then return refuse(response, http.STATUS.BAD_REQUEST, "event id required") end
+    if event_id == "" or #event_id > 128 then refuse(response, http.STATUS.BAD_REQUEST, "event id required"); return nil end
     local reply = gateway.hook_status(binding, event_id)
     if not reply.ok then
         local fault = reply.error or {code = "STORAGE", message = "hook"}
-        return refuse(response, status_of(fault.code), fault.message)
+        refuse(response, status_of(fault.code), fault.message)
+        return nil
     end
     response:set_content_type(http.CONTENT.JSON)
     response:set_status(http.STATUS.OK)

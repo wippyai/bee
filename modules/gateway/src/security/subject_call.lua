@@ -6,6 +6,7 @@
 -- effect key, revalidated when the approval authority restarted.
 local funcs = require("funcs")
 local security = require("security")
+local contract = require("contract")
 local registry = require("registry")
 local bounds = require("bounds")
 local context = require("context")
@@ -41,7 +42,11 @@ function M.approval_policies(): ({string}?, Reply?)
     return {request, consume}, nil
 end
 
-function M.executor(binding: Binding, policies: {security.Policy}, values: Object, grant: RuntimeGrant?): (funcs.Executor?, Reply?)
+type Attribution = {actor: security.Actor, context: Object}
+
+-- attribution: the bound subject as an actor and its authenticated call
+-- context; owners read caller identity from these and never from a payload.
+local function attribution(binding: Binding, values: Object, grant: RuntimeGrant?): (Attribution?, Reply?)
     local meta: {[string]: string} = {}
     if binding.workspace_id then meta.workspace_id = binding.workspace_id end
     local actor, actor_error = security.new_actor(binding.subject, meta)
@@ -58,14 +63,50 @@ function M.executor(binding: Binding, policies: {security.Policy}, values: Objec
         attempt_id = binding.attempt_id, policy_ref = binding.policy_ref, workspace_id = binding.workspace_id,
         origin_view = binding.origin_view, application_runtime = runtime})
     if not attributed then return nil, M.fail("DENIED", tostring(attribution_error)) end
+    return {actor = actor, context = attributed}, nil
+end
+
+function M.executor(binding: Binding, policies: {security.Policy}, values: Object, grant: RuntimeGrant?): (funcs.Executor?, Reply?)
+    local who, failure = attribution(binding, values, grant)
+    if not who then return nil, failure end
     local executor = funcs.new()
-    local contextual, context_error = executor:with_context(attributed)
+    local contextual, context_error = executor:with_context(who.context)
     if not contextual then return nil, M.fail("DENIED", tostring(context_error)) end
-    local acted, actor_failure = contextual:with_actor(actor)
+    local acted, actor_failure = contextual:with_actor(who.actor)
     if not acted then return nil, M.fail("DENIED", tostring(actor_failure)) end
     local scoped, scope_error = acted:with_scope(security.new_scope(policies))
     if not scoped then return nil, M.fail("DENIED", tostring(scope_error)) end
     return scoped, nil
+end
+
+-- contract: the host-selected binding of one owner contract, opened as the
+-- bound subject under exactly these policies with the same authenticated
+-- context an owner function call carries.
+function M.contract(binding: Binding, policies: {security.Policy}, values: Object, contract_id: string): (Object?, Reply?)
+    local who, failure = attribution(binding, values, nil)
+    if not who then return nil, failure end
+    local definition, get_error = contract.get(contract_id)
+    if not definition then return nil, M.fail("UNAVAILABLE", tostring(get_error)) end
+    local contextual, context_error = definition:with_context(who.context)
+    if not contextual then return nil, M.fail("DENIED", tostring(context_error)) end
+    local acted, actor_failure = contextual:with_actor(who.actor)
+    if not acted then return nil, M.fail("DENIED", tostring(actor_failure)) end
+    local scoped, scope_error = acted:with_scope(security.new_scope(policies))
+    if not scoped then return nil, M.fail("DENIED", tostring(scope_error)) end
+    local instance, open_error = scoped:open()
+    if not instance then return nil, M.fail("UNAVAILABLE", tostring(open_error)) end
+    if type(instance) ~= "table" and type(instance) ~= "userdata" then
+        return nil, M.fail("UNAVAILABLE", "owner binding is not an object")
+    end
+    local methods: Object = {}
+    for _, method in ipairs(definition:methods()) do
+        local invoke = instance[method.name]
+        if type(invoke) ~= "function" then return nil, M.fail("UNAVAILABLE", "owner binding has no method " .. method.name) end
+        methods[method.name] = function(_self: unknown, request: Object): (unknown, unknown)
+            return invoke(instance, request)
+        end
+    end
+    return methods, nil
 end
 
 -- raw_call: one call as the bound subject under exactly these policies; the
@@ -104,7 +145,7 @@ end
 function M.approvals(binding: Binding, call_policy: string, extra: {string}?): Approvals
     return function(operation: string, value: Object): Reply
         local linked, link_error = M.approval_policies()
-        if not linked then return link_error :: Reply end
+        if not linked then return assert(link_error) end
         local ids: {string} = {call_policy, linked[1], linked[2]}
         for _, id in ipairs(extra or {}) do ids[#ids + 1] = id end
         return M.call(binding, ids, "bee.approvals.binding:" .. operation, value)

@@ -29,7 +29,7 @@ local function approvals(binding: Binding): Approvals
 end
 local function grant(binding: Binding, value: Object): Reply
     local linked, link_error = subject_call.approval_policies()
-    if not linked then return link_error :: Reply end
+    if not linked then return link_error end
     return subject_call.call(binding, {M.ELEVATION_CALL_POLICY, linked[1], linked[2], M.GRANT_THREAD_POLICY},
         M.GRANT_CALL, value)
 end
@@ -58,9 +58,9 @@ function M.request(binding: Binding, policy_name: string, raw: unknown): Reply
     local workspace_id = binding.workspace_id
     if not workspace_id then return fail("DENIED", "this binding names no workspace to elevate a capability in") end
     local entry, entry_error = catalog_entry()
-    if not entry then return entry_error :: Reply end
+    if not entry then return entry_error end
     local request, measure_error = measured(entry, binding, raw)
-    if not request then return measure_error :: Reply end
+    if not request then return measure_error end
     local resource = check_resource(binding, request)
     if not resource.ok then return resource end
     return approvals(binding)("request", {workspace_id = workspace_id, idempotency_key = "capability:" .. capability.request_key(request),
@@ -112,14 +112,14 @@ function M.status(binding: Binding, policy_name: string, approval_id_raw: unknow
     local approval_id = bounds.id(approval_id_raw)
     if not approval_id then return fail("INVALID", "approval_id is required") end
     local entry, entry_error = catalog_entry()
-    if not entry then return entry_error :: Reply end
+    if not entry then return entry_error end
     local owner = approvals(binding)
     local read = owner("read", {approval_id = approval_id})
     if not read.ok then return read end
     local view = bounds.object(read.value)
     if not view then return fail("UNAVAILABLE", "invalid approval read") end
     local request, expected, verify_error = verified(binding, policy_name, entry, view)
-    if not request or not expected then return verify_error :: Reply end
+    if not request or not expected then return assert(verify_error) end
     if view.state ~= "decided" or view.decision ~= "approved" then
         return {ok = true, value = {approval_id = approval_id, status = view.decision or view.state}}
     end

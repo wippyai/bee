@@ -88,49 +88,6 @@ entries:
     resources: [bee.threads.service:inbox_send, bee.threads.service:inbox_reply, bee.threads.service:inbox_list,
       bee.threads.service:inbox_ack, bee.threads.service:inbox_describe]
     effect: allow
-- name: gateway_session_discover_policy
-  kind: security.policy
-  meta: {comment: Workspace peers may discover local action addresses through the owner; the owner checks the caller workspace}
-  policy:
-    actions: [bee.sessions.discover]
-    resources: '*'
-    effect: allow
-- name: gateway_session_send_denied_policy
-  kind: security.policy
-  meta: {comment: No session send grant until the host selects an exact address policy}
-  policy:
-    actions: [bee.sessions.send]
-    resources: [unassigned-session-address]
-    effect: allow
-- name: gateway_session_send_workspace_policy
-  kind: security.policy
-  meta: {comment: Bundled host grants local workspace agents a send attempt; the Threads owner checks authenticated workspace, target address, recipient acceptance and current grant epoch}
-  policy:
-    actions: [bee.sessions.send]
-    resources: '*'
-    effect: allow
-- name: gateway_tool_launch_policy
-  kind: security.policy
-  meta:
-    comment: The bound MCP subject may start one host-allow-listed managed launch through the launch facade and read its own admitted launch definitions; both run as itself in its own workspace, the facade reads the caller's own launch policy and refuses anything it does not name, and this grants no grant, credential, trait or overlay authority
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.harness.launch:agent_launch_call
-    - bee.harness.launch:launch_definitions_call
-    effect: allow
-- name: gateway_tool_run_policy
-  kind: security.policy
-  meta:
-    comment: The bound MCP subject may read, wait on and cancel managed runs through the launch facade's own run operation, as itself and in its own workspace; the backend answers only for a run the caller launched, and this grants no launch, grant, credential, trait or overlay authority
-  policy:
-    actions:
-    - funcs.call
-    resources:
-    - bee.harness.launch:agent_run_call
-    - bee.threads.service:get
-    effect: allow
 - name: gateway_tool_overlay_policy
   kind: security.policy.expr
   meta:
@@ -189,6 +146,15 @@ entries:
     actions: [funcs.call]
     resources: [bee.apps:open_call]
     effect: allow
+- name: gateway_tool_session_policy
+  kind: security.policy.expr
+  meta:
+    comment: A bound MCP subject supplies its authenticated context and scope to the bee.sessions owner contracts for the default session tools; owners authorize every operation against that subject again
+  policy:
+    expression: '(action == "contract.context" && resource == "context") || (action == "contract.security" && resource == "security") || (action == "contract.open" && (resource matches "^bee[.]sessions:[A-Za-z0-9_.-]+$" || resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")) || (action == "contract.call" && resource in ["open", "run", "send", "get", "list", "await", "join", "cancel", "close"]) || (action == "funcs.call" && resource matches "^bee[.]sessions[.]binding:[A-Za-z0-9_.-]+$")'
+    actions: [contract.context, contract.security, contract.open, contract.call, funcs.call]
+    resources: ['*']
+    effect: allow
 - name: gateway_tool_install_policy
   kind: security.policy
   meta:
@@ -196,4 +162,12 @@ entries:
   policy:
     actions: [funcs.call]
     resources: [bee.gateway.binding:install_request, bee.gateway.binding:uninstall_request, bee.gateway.binding:install_status]
+    effect: allow
+- name: gateway_tool_hub_publish_policy
+  kind: security.policy
+  meta:
+    comment: A bound MCP subject may file Hub publication requests and poll them; the person's thread-bound approval is the only authority to upload one, and this grants no Hub management or registry write
+  policy:
+    actions: [funcs.call]
+    resources: [bee.gateway.binding:publish_request, bee.gateway.binding:publish_status]
     effect: allow

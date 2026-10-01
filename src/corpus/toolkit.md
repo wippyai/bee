@@ -72,10 +72,14 @@ to one rectangle when a detail pane shares the screen.
 
 ```lua
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
-type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}}
 type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
+type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?}
+type Bar = {x: integer, buttons: {Button}}
+type Painter = {width: integer, height: integer, theme: appearance.Theme, canvas: tty.Canvas, hits: {Hit}, controls: Controls, bars: {[integer]: Bar}}
+type View = {rows: {string}, hits: {Hit}, controls: Controls?}
+type Menu = {mode: string, selected: integer, offset: integer, controls: Controls, hits: {Hit}, signature: string, count: integer}
 type Window = {offset: integer, capacity: integer}
 type Column = {title: string, width: integer, align: string?}
 type Rect = {x: integer, y: integer, width: integer, height: integer}
@@ -107,10 +111,11 @@ type Palette = {query: string, choices: {Choice}, selected: integer, offset: int
 | `frame.hit(hits: {Hit}, x: integer, y: integer) -> Hit?` | The first recorded target containing the cell (x, y), if any. |
 | `frame.header(painter: Painter, title: string, summary: string?)` | Row 1: the uppercase identity at the left and an optional muted live summary aligned right. The summary never overlaps the title; it is truncated first and omitted when fewer than four cells remain. |
 | `frame.tabs(painter: Painter, y: integer, tabs: {Tab}, selected: string) -> integer` | A tab row. Every label switches to its short form when the full set does not fit. Returns the column after the last drawn tab. |
-| `frame.button(painter: Painter, x: integer, y: integer, button: Button) -> integer` | One button at (x, y); returns the next column, unchanged when it does not fit. |
-| `frame.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?) -> integer` | The action bar: buttons in order from column x (default 2) on row y. |
+| `frame.button(painter: Painter, x: integer, y: integer, button: Button) -> integer` | Declares one button in a row; rows() paints the row with shared overflow. |
+| `frame.controls(painter: Painter) -> Controls` | The screen's declared buttons, overflow and complete key hints. |
+| `frame.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?) -> integer` | Primary actions keep their place in a crowded bar; the rest remain in More. |
 | `frame.hints(hints: {Hint}) -> string` | Canonical key-hint text: "↑↓ select · Enter open · Esc close". |
-| `frame.footer(painter: Painter, status: string, hints: string)` | The final row: the changing status at the left and the stable key hints at the right. A status wins the row when both do not fit; with no status the hints stand alone. |
+| `frame.footer(painter: Painter, status: string, hints: string)` | The footer reserves a bounded region for hints and an always visible Help. |
 | `frame.window(count: integer, capacity: integer, selected: integer, offset: integer) -> Window` | The visible window of a scrolling list of count rows in capacity slots, keeping the selected index (0 for none) visible. |
 | `frame.row(painter: Painter, y: integer, value: string, selected: boolean, kind: string, index: integer, key: string, fg: string?, focused: boolean?, span: integer?)` | See the source. |
 | `frame.table(painter: Painter, first: integer, last: integer, value: Table) -> Window` | A table between rows first and last: a muted column caption on row first and rows below it. On a narrow canvas each row becomes its first cell followed by the other nonempty cells joined with " · ". Returns the visible window. |
@@ -134,6 +139,9 @@ type Palette = {query: string, choices: {Choice}, selected: integer, offset: int
 | `frame.fuzzy(query: string, text: string) -> integer?` | A subsequence match score for a command palette: nil when query's characters (case-folded) do not all appear in order within text, else a score where a lower number ranks a tighter, earlier match higher. |
 | `frame.ranked(query: string, labels: {string}) -> {Choice}` | The palette choices for query over labels: every label that fuzzy matches, best match first and in list order among equal scores, each keyed by its label. |
 | `frame.palette(painter: Painter, width: integer, height: integer, value: Palette) -> Window` | A command palette overlay: a modal titled "Command Palette" sized to width by height, the query on its first content row with a block caret, and the choices below as selectable rows carrying hit kind "choice" and each choice's key. An empty choices list draws the empty state instead of a list. Returns the visible window of choices. |
+| `frame.menu() -> Menu` | An app-owned More and Help state; the app retains it between redraws. |
+| `frame.render(view: View, menu: Menu, preferences: appearance.Preferences)` | Paints a shared overlay from this screen's declared buttons and hints. |
+| `frame.route(menu: Menu, value: unknown, text_entry: boolean?) -> (tty.TTYEvent?, boolean)` | Returns nil for consumed input. Selected actions reuse the app's mouse path. text_entry preserves letters and '?' while a form or editor owns input. |
 
 ## Visualization kit
 
@@ -629,7 +637,7 @@ including negotiated close, shell queries and appearance.
 `tty` members this repository's client, shared toolkit and bundled views call:
 
 ```
-tty.Canvas tty.canvas tty.text.truncate tty.text.width
+tty.Canvas tty.TTYEvent tty.canvas tty.text.truncate tty.text.width
 ```
 
 The runtime module pages retained with this toolkit cover process, channel,

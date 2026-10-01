@@ -1,0 +1,83 @@
+version: '1.0'
+namespace: bee.sessions.service
+entries:
+- name: process_host
+  kind: ns.requirement
+  default: bee:workers
+  meta:
+    comment: Host process tree that supervises the durable session scheduler
+  targets:
+  - entry: bee.sessions.service:scheduler_service
+    path: .host
+- name: scheduler_policies
+  kind: ns.requirement
+  default: [bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy,
+    bee.security.threads:thread_node_policy, bee.security.threads:thread_sessions_owner_policy,
+    bee.sessions.security:scheduler_policy, bee.sessions.security:scheduler_principal_policy]
+  meta:
+    comment: Host-selected policy allowlist for the scheduler actor
+  targets:
+  - entry: bee.sessions.service:scheduler_service
+    path: .lifecycle.security.policies
+  - entry: bee.sessions.service:turn_run
+    path: .security.policies
+- name: locate
+  kind: library.lua
+  source: file://locate.lua
+  modules: [time]
+- name: catalog
+  kind: library.lua
+  source: file://catalog.lua
+  modules: [funcs, time]
+  imports:
+    bounds: bee.threads.records:bounds
+    harness_catalog: bee.harness.catalog:catalog
+    definition: bee.harness.launch:definitions
+    admission: bee.harness.launch:admission
+    profile_protocol: bee.harness.profiles:protocol
+    locate: bee.sessions.service:locate
+    readiness: bee.harness.launch:readiness
+- name: scheduler
+  kind: library.lua
+  source: file://scheduler.lua
+  modules: [funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    cancellation: bee.sessions.service:cancellation
+- name: cancellation
+  kind: library.lua
+  source: file://cancellation.lua
+  modules: [funcs, security]
+  imports: {bounds: bee.threads.records:bounds}
+- name: scheduler_worker
+  kind: process.lua
+  source: file://scheduler_worker.lua
+  method: main
+  modules: [process, time, channel, logger, hash, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    scheduler: bee.sessions.service:scheduler
+    threads_journal: bee.sessions:threads_journal
+    executors: bee.sessions:executor_registry
+- name: scheduler_service
+  kind: process.service
+  process: bee.sessions.service:scheduler_worker
+  host: bee:workers
+  lifecycle:
+    auto_start: true
+    security:
+      actor: {id: bee.sessions.scheduler}
+      policies: []
+
+- name: turn_run
+  kind: function.lua
+  source: file://scheduler_worker.lua
+  method: turn_run
+  modules: [process, time, channel, logger, hash, funcs]
+  imports:
+    bounds: bee.threads.records:bounds
+    scheduler: bee.sessions.service:scheduler
+    threads_journal: bee.sessions:threads_journal
+    executors: bee.sessions:executor_registry
+  security: {policies: []}

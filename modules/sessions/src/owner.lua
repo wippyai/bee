@@ -238,7 +238,7 @@ local function attach(request: Object): Reply
         created, err = journal.invoke("session_create", {thread_id = thread, operation_key = operation_key,
             title = plan.title or definition, route = {definition = definition, plan_digest = plan.plan_digest,
                 delivery = "hook", driver_binding_ref = driver, provider = driver:match("^bee%.driver%.([^:]+):"),
-                profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
+                saved_profile_id = profile_id, saved_profile_revision = revision, profile_id = plan.profile_id, placement_methods = plan.placement_methods}})
         if err or not created then return unavailable(err or "interactive session is unavailable", operation_key) end
     end
     local receipt = object(created)
@@ -307,8 +307,9 @@ local function hook_boundary(request: Object): Reply
     local caller = identity()
     local session, event, event_key = ref(request.session), request.event, key(request.operation_key)
     local attempt = bounds.id(request.attempt_id)
-    if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id"})
-        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
+    if not session or caller ~= session or not event_key or not attempt or bounds.fields(request, {"session", "event", "operation_key", "attempt_id", "permission", "input"})
+        or (event ~= "UserPromptSubmit" and event ~= "Stop" and event ~= "StopFailure" and event ~= "PermissionRequest") then return fail("INVALID", "hook boundary identity is invalid", event_key) end
+    if request.input ~= nil and (event ~= "UserPromptSubmit" or bounds.text(request.input, 65536) == nil) then return fail("INVALID", "native prompt is invalid", event_key) end
     if not security.can("bee.sessions.hook_boundary", session) then return fail("DENIED", "hook boundary requires the authenticated gateway", event_key) end
     local raw, err = journal.invoke("session_describe", {session = session})
     local stored = object(raw)
@@ -316,6 +317,24 @@ local function hook_boundary(request: Object): Reply
     if err or not route then return unavailable(err or "interactive route unavailable", event_key) end
     if route.delivery ~= "hook" then return succeed({}) end
     if route.native_attempt_id ~= attempt then return fail("STALE", "hook belongs to an earlier native attachment", event_key) end
+    if event == "PermissionRequest" then
+        local permission = bounds.object(request.permission)
+        local active = bounds.object(stored.active_turn)
+        if not permission or not active then return fail("CONFLICT", "permission requires a current interactive turn", event_key) end
+        local fields: Object = {session = session, definition = route.definition, plan_digest = route.plan_digest,
+            attempt_id = attempt, thread_id = stored.thread_ref, action_id = permission.action_id, binding_id = permission.binding_id,
+            turn = active.turn, claim = active.claim, event_id = event_key, payload = permission.payload,
+            saved_profile_id = route.saved_profile_id, saved_profile_revision = route.saved_profile_revision, transport = permission.transport}
+        local response, response_error = funcs.call("bee.executor.external.binding:answer_hook", fields)
+        if response_error then return unavailable(tostring(response_error), event_key) end
+        local reply = bounds.object(response)
+        if not reply or type(reply.ok) ~= "boolean" then return unavailable("invalid permission hook reply", event_key) end
+        if reply.ok ~= true then
+            local fault = bounds.object(reply.error)
+            return fail("PERMISSION_REFUSED", fault and bounds.text(fault.message, 4096) or "permission hook refused", event_key)
+        end
+        return succeed(reply.value)
+    end
     local event_digest, digest_error = hash.sha256(event_key)
     if not event_digest then return unavailable(tostring(digest_error), event_key) end
     local boundary_key = event_digest
@@ -340,6 +359,16 @@ local function hook_boundary(request: Object): Reply
     local reserved, reserve_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-start:" .. boundary_key})
     local turn = object(reserved)
     if reserve_error or not turn then return unavailable(reserve_error or "interactive work reserve unavailable", event_key) end
+    local native_input = false
+    if not turn.turn and request.input ~= nil and not bounds.object(stored.active_turn) then
+        local sent, send_error = journal.invoke("work_send", {session = session, operation_key = "hook-native:" .. boundary_key,
+            input = request.input, output_schema = "bee:Text@1"})
+        if send_error or not sent then return unavailable(send_error or "native prompt journal unavailable", event_key) end
+        local reserved_native, reserve_native_error = journal.invoke("turn_reserve", {session = session, operation_key = "hook-native-start:" .. boundary_key})
+        turn = object(reserved_native)
+        if reserve_native_error or not turn then return unavailable(reserve_native_error or "native prompt turn unavailable", event_key) end
+        native_input = true
+    end
     if not turn.turn then return succeed({}) end
     local pulled, pull_error = journal.invoke("turn_pull", {turn = turn.turn, claim = turn.claim})
     local input = object(pulled)
@@ -349,6 +378,7 @@ local function hook_boundary(request: Object): Reply
     local accepted, accept_error = journal.invoke("turn_accept", {turn = turn.turn, claim = turn.claim, input_digest = input.input_digest,
         checkpoint = {attempt_id = route.native_attempt_id, hook_event = event_key}, operation_key = "hook-accept:" .. boundary_key})
     if accept_error or not accepted then return unavailable(accept_error or "interactive turn accept unavailable", event_key) end
+    if native_input or (sender.id == session and request.input ~= nil) then return succeed({}) end
     local prompt, prompt_error = scheduler.prompt(input.input)
     if not prompt then return unavailable(prompt_error or "interactive input unavailable", event_key) end
     return succeed({additional_context = "[Bee message from " .. tostring(sender.id) .. "]\n" .. prompt})

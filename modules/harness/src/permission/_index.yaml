@@ -16,3 +16,13 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     canonical: bee.threads.records:canonical
+- name: exchange
+  kind: library.lua
+  source: file://exchange.lua
+  modules: [json]
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    permission: bee.harness.permission:adapter
+    checkpoint: bee.harness.carrier:checkpoint
+    service_reply: bee.protocol:reply

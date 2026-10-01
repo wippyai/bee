@@ -25,6 +25,19 @@ entries:
       errors: [error, message]
       usage: [usage]
     configure: codex
+    capabilities:
+      permission_answers:
+        window:
+          transport: hook_mcp
+          adapter_ref: bee.driver:permission_request_hook
+        first_turn:
+          transport: provider
+          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel.
+            The window uses PermissionRequest hooks. App-server JSON-RPC approvals require a different driver mode.
+        resume:
+          transport: provider
+          reason: Bee runs codex exec --json with prompt stdin closed; exec has no client approval-response channel.
+            The window uses PermissionRequest hooks. App-server JSON-RPC approvals require a different driver mode.
     options:
       profiles: [window, batch, named_batch]
       fields:

@@ -114,6 +114,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     preferences: bee.driver:preferences
 - name: window_hooks_test
@@ -208,6 +209,7 @@ entries:
     test: wippy.test:test
     machine: bee.harness.carrier:machine
     driver_types: bee.driver:types
+    placement_decode: bee.placement:decode
     bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     placement_types: bee.placement:types
@@ -1616,3 +1618,16 @@ entries:
   imports:
     terminal_view: bee.harness.app:terminal_view
     client: bee.application:client
+- name: permission_exchange_test
+  kind: function.lua
+  source: file://permission_exchange_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, hash, funcs, security]
+  imports:
+    test: wippy.test:test
+    exchange: bee.harness.permission:exchange
+    adapter: bee.harness.permission:adapter
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    harness: bee.threads:harness

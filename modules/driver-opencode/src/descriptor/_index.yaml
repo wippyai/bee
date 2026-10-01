@@ -25,6 +25,20 @@ entries:
       errors: [error, data, message]
       usage: [part, tokens]
     configure: opencode
+    capabilities:
+      permission_answers:
+        window:
+          transport: provider
+          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission
+            API. The window retains provider prompts; no Bee hook transport is selected.
+        first_turn:
+          transport: provider
+          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission
+            API. The window retains provider prompts; no Bee hook transport is selected.
+        resume:
+          transport: provider
+          reason: Bee runs opencode run --format json with stdin closed. It does not run the HTTP server permission
+            API. The window retains provider prompts; no Bee hook transport is selected.
     options:
       profiles: [window, batch]
       unknown_prefix: ''

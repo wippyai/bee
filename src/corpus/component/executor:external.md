@@ -10,9 +10,12 @@ checkpoint is ready for the authenticated Sessions worker to commit. Missing
 terminal or exit proof is uncertain.
 
 The driver's launch and normalization operations define prompts,
-resume identity, events and usage. The executor does not write to a live
-CLI session; each turn uses only the launch defined by the selected
-driver contract.
+resume identity, events and usage. Each turn uses the launch defined by the selected
+driver contract. When the descriptor declares an answer transport, the shared
+Harness permission exchange sends durable Allow/Deny decisions to the waiting
+CLI. A terminal result closes stdin when the launch selects `stdin_close`,
+after pending permission responses are acknowledged. The executor records the
+closure intent before calling placement and still waits for process exit.
 
 Each attempt records progress before prepare, gateway admission and CLI start.
 Normalized assistant text, tool events and usage are appended live through the

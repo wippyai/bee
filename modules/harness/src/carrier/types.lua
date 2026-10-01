@@ -45,6 +45,8 @@ type Request = {
     options: placement_types.WorkdirOptions?,
 }
 type Exchange = {
+    transport: string?,
+    answer_mode: string?,
     adapter: permission.Adapter,
     acceptance_ref: string,
     acceptance_digest: string,

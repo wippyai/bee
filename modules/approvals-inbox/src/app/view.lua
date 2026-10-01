@@ -7,8 +7,25 @@ local frame = require("frame")
 local model = require("model")
 local leases = require("leases")
 local names = require("names")
+local tty = require("tty")
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?, capacity: integer, offset: integer}
 local M = {}
+local function prompt_lines(prompt: string, width: integer): {string}
+    local rest = "Asked: " .. prompt
+    local room = math.floor(math.max(1, width - 2))
+    local lines: {string} = {}
+    repeat
+        local part = tty.text.cut(rest, 0, room)
+        local cut = #part
+        if cut < #rest then
+            local space = part:find("%s[^%s]*$")
+            if space and space > 1 then cut = space - 1 end
+        end
+        lines[#lines + 1] = rest:sub(1, cut)
+        rest = rest:sub(cut + 1):gsub("^%s+", "")
+    until rest == ""
+    return lines
+end
 local function state_label(row: model.Row): string
     if row.state == "decided" then return row.decision or "decided" end
     return row.state
@@ -113,9 +130,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local selected = model.selected_row(state)
     local detail_rows = 0
     local permission_lines: {string} = {}
+    local asked_lines: {string} = {}
     if detail and selected and detail.approval_id == selected.approval_id and height >= 12 then
         permission_lines = model.permission_lines(detail)
-        local needed = 5 + #permission_lines
+        asked_lines = prompt_lines(selected.prompt, width)
+        local needed = 4 + #asked_lines + #permission_lines
         if state.technical then needed = needed + 2 + #model.payload_lines(detail) end
         detail_rows = math.floor(math.max(6, math.min(height - 5, needed)))
     end
@@ -144,8 +163,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.rule(painter, y)
         local lines: {string} = {
             "Effect: " .. selected.effect .. "  target " .. selected.target,
-            "Asked: " .. selected.prompt,
         }
+        for _, asked_line in ipairs(asked_lines) do lines[#lines + 1] = asked_line end
         for _, permission_line in ipairs(permission_lines) do
             lines[#lines + 1] = permission_line
         end

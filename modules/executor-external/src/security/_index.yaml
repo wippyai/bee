@@ -17,11 +17,13 @@ entries:
     - bee.credentials.binding:issue_projection
     - bee.placement.native.binding:prepare
     - bee.placement.native.binding:attach
+    - bee.placement.native.binding:close_stdin
     - bee.placement.native.binding:start
     - bee.placement.native.binding:reconcile
     - bee.placement.native.binding:cleanup
     - bee.placement.native.binding:capabilities
     - bee.placement.native.binding:measure_executable
+    - bee.gateway.binding:check
     - bee.gateway.binding:admit
     - bee.gateway.binding:ready
     - bee.gateway.binding:revoke

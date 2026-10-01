@@ -29,6 +29,7 @@ type Policy = {
     ref: string,
     digest: string,
     permission_exchange: PermissionExchange?,
+    permission_answers: string,
     provider_ref: string?,
     instructions: string?,
     instruction_builder: configuration.InstructionBuilder?,
@@ -195,10 +196,15 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not poll_ms or poll_ms < 50 or not ttl_ms or ttl_ms < 1000 then return nil, ref .. ": permission_exchange poll_ms and ttl_ms are out of range" end
         exchange = {adapter_ref = adapter_ref, acceptance_ref = acceptance_ref, fixture_digest = fixture_digest, approver_policy = approver, poll_ms = poll_ms, ttl_ms = ttl_ms}
     end
+    local answer_mode = exchange and "ask" or "provider"
+    if selected and selected.bee and selected.bee.permission_answers then answer_mode = selected.bee.permission_answers end
+    if answer_mode ~= "provider" and not exchange then return nil, "bee.permission_answers=" .. answer_mode .. " requires a host-accepted permission transport" end
+    if answer_mode == "provider" then exchange = nil end
     local digest_input: {[string]: unknown} = {}
     for key, value in pairs(data) do digest_input[key] = value end
     digest_input.executables = executables
     digest_input.environment = environment
+    digest_input.permission_answers = answer_mode
     local encoded, encode_error = canonical.encode(digest_input)
     if not encoded then return nil, ref .. ": " .. tostring(encode_error) end
     local digest, hash_error = hash.sha256(encoded)
@@ -325,7 +331,7 @@ function M.decode(ref: string, entry: {[string]: unknown}, resolver: Environment
         if not declared or declared < 1000 or declared > 86400000 then return nil, ref .. ": gateway_ttl_ms must be between 1000 and 86400000" end
         gateway_ttl_ms = declared
     end
-    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = required_cleanup, required_exit_observation = required_observation,
+    local decoded: Policy = {ref = ref, digest = digest, permission_exchange = exchange, permission_answers = answer_mode, provider_ref = provider_ref, instructions = instructions, instruction_builder = instruction_builder, prepare_options = options, required_cleanup = required_cleanup, required_exit_observation = required_observation,
         start_ms = start_ms, stop_grace_ms = stop_grace_ms, drain_ms = drain_ms, runner_drain_ms = runner_drain_ms, retain_ms = retain_ms, executables = executables, environment = environment, host_environment = host_environment, allow_host_home = allow_host_home, gateway_tools = gateway_tools, gateway_surface = gateway_surface, agent_model_map = agent_model_map, agent_delegates = agent_delegates, gateway_ttl_ms = gateway_ttl_ms, gateway_hooks = gateway_hooks, hook_command_ref = hook_command_ref, fixture = fixture, placement_profiles = placement_profiles, placement_binding = placement_binding, placement_options = placement_options, allowed_overrides = allowed_overrides}
     return decoded, nil
 end

@@ -215,16 +215,8 @@ entries:
       - id: window
         mode: window
         hooks:
-          transports:
-          - command
-          - mcp_tool
-          events:
-          - SessionStart
-          - UserPromptSubmit
-          - PreToolUse
-          - PostToolUse
-          - Stop
-          - SessionEnd
+          transports: [command, mcp_tool]
+          events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest, Stop, SessionEnd]
           adapter_ref: bee.driver.codex:protocol
         protocol: pty
         protocol_revision: native-window-1
@@ -246,8 +238,7 @@ entries:
           - codex-sandbox
           required_placement_features: []
           git_writable_roots_adapter: codex_workspace_write
-        permission_exchange:
-          mode: none
+        permission_exchange: {mode: adapter, adapter_ref: bee.driver:permission_request_hook, adapter_digest: a9b3fec616bd9b96c628352d4f1e8d5078f0a708444c9507a148f68d17c72867}
 - name: default_window
   kind: registry.entry
   meta:
@@ -519,6 +510,7 @@ entries:
     - UserPromptSubmit
     - PreToolUse
     - PostToolUse
+    - PermissionRequest
     - Stop
     profile_options:
       effort:

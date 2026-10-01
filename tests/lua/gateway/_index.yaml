@@ -206,3 +206,26 @@ entries:
     catalog: bee.gateway:catalog
     surface: bee.gateway:surface
     session_tools: bee.gateway:session_tools
+- name: session_boundary_probe_policy
+  kind: security.policy
+  meta: {type: test_support}
+  policy: {actions: [funcs.call], resources: [bee.gateway:session_boundary_probe], effect: allow}
+- name: session_boundary_probe
+  kind: function.lua
+  source: file://session_boundary_probe.lua
+  method: probe
+  meta: {type: test_support}
+  modules: [funcs, security]
+  imports:
+    bounds: bee.threads.records:bounds
+    boundary: bee.gateway.api:session_boundary
+- name: session_boundary_test
+  kind: function.lua
+  source: file://session_boundary_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [funcs, security, registry]
+  imports:
+    test: wippy.test:test
+    harness: bee.threads:harness
+    bounds: bee.threads.records:bounds

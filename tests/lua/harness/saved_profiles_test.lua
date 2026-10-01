@@ -3,6 +3,16 @@ local test = require("test")
 local protocol = require("protocol")
 local function define_tests()
     test.describe("Saved agent profile boundary", function()
+        test.it("decodes and forwards one bounded Bee permission answer preference", function()
+            for _, mode in ipairs({"provider", "ask", "deny"}) do
+                local profile = assert(protocol.profile({title = "Permission", definition_ref = "bee:claude", bee = {permission_answers = mode}}))
+                local preferences = assert(protocol.agent_preferences(profile, {}))
+                test.eq(preferences.bee and preferences.bee.permission_answers, mode)
+            end
+            for _, value in ipairs({{permission_answers = "bypass"}, {permission_answers = true}, {permission_answers = "deny", executable = "sh"}}) do
+                test.eq(protocol.profile({title = "Permission", definition_ref = "bee:claude", bee = value}), nil)
+            end
+        end)
         test.it("copies preferences without sharing caller-owned maps", function()
             local options = {model = "small", verbose = false, temperature = 0.5}
             local tools = {"bee.threads:read"}

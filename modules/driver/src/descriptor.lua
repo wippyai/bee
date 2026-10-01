@@ -4,6 +4,27 @@ local registry = require("registry")
 local turn_budget = require("turn_budget")
 local login_evidence = require("login_evidence")
 local M = {}
+type PermissionAnswer = {transport: string, adapter_ref: string?, reason: string?}
+type Capabilities = {permission_answers: {[string]: PermissionAnswer}}
+local function capabilities(value: unknown): (Capabilities?, string?)
+    if value == nil then return {permission_answers = {}}, nil end
+    local object = bounds.object(value)
+    if not object or bounds.fields(object, {"permission_answers"}) then return nil, "CLI descriptor.capabilities is malformed" end
+    local answers = bounds.object(object.permission_answers)
+    if not answers or bounds.fields(answers, {"window", "first_turn", "resume"}) then return nil, "CLI descriptor permission_answers contexts are malformed" end
+    local result: {[string]: PermissionAnswer} = {}
+    for _, context in ipairs({"window", "first_turn", "resume"}) do
+        local item = bounds.object(answers[context])
+        if not item or bounds.fields(item, {"transport", "adapter_ref", "reason"}) then return nil, "permission_answers." .. context .. " is malformed" end
+        local transport = bounds.member(item.transport, {"stdio", "hook_http", "hook_mcp", "provider"})
+        local adapter_ref = item.adapter_ref == nil and nil or bounds.id(item.adapter_ref)
+        local reason = item.reason == nil and nil or bounds.text(item.reason, 1024)
+        if not transport or (transport == "provider" and (not reason or adapter_ref ~= nil))
+            or (transport ~= "provider" and (not adapter_ref or item.reason ~= nil)) then return nil, "permission_answers." .. context .. " needs an adapter or an unsupported reason" end
+        result[context] = {transport = transport, adapter_ref = adapter_ref, reason = reason}
+    end
+    return {permission_answers = result}, nil
+end
 M.TYPE = "bee.driver.cli_descriptor"
 M.SCHEMA = "bee.driver.cli-descriptor@2"
 M.MAX_TEMPLATE_ITEMS = 128
@@ -26,6 +47,7 @@ type Descriptor = {
     flags: Object,
     provider_home: Object,
     configure: string,
+    capabilities: Capabilities?,
 }
 
 local function object(value: unknown, label: string): (Object?, string?)
@@ -357,7 +379,7 @@ end
 function M.decode(value: unknown): (Descriptor?, string?)
     local item, object_error = object(value, "CLI descriptor")
     if not item then return nil, object_error end
-    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure"})
+    local extra = bounds.fields(item, {"schema_revision", "provider", "executable", "version_probe", "login_evidence", "platform", "codec", "json_paths", "argv_templates", "options", "flags", "provider_home", "configure", "capabilities"})
     if extra then return nil, "CLI descriptor: " .. extra end
     if item.schema_revision ~= M.SCHEMA then return nil, "CLI descriptor schema_revision is unsupported" end
     local provider, executable, codec, configure = bounds.id(item.provider), bounds.id(item.executable), bounds.member(item.codec, M.CODECS), bounds.id(item.configure)
@@ -568,9 +590,20 @@ function M.decode(value: unknown): (Descriptor?, string?)
         if template_error then return nil, template_error end
     end
 
+    local declared, capability_error = capabilities(item.capabilities)
+    if not declared then return nil, capability_error end
     return {schema_revision = M.SCHEMA, provider = provider, executable = executable, version_probe = probe,
         login_evidence = login, platform = platform, codec = codec, json_paths = paths, argv_templates = templates,
-        options = options, flags = flags, provider_home = home, configure = configure}, nil
+        options = options, flags = flags, provider_home = home, configure = configure, capabilities = declared}, nil
+end
+
+function M.permission_answer(item: Descriptor, context: string): PermissionAnswer
+    local declared = item.capabilities
+    if declared then
+        local selected: PermissionAnswer? = declared.permission_answers[context]
+        if selected then return selected end
+    end
+    return {transport = "provider", reason = "No permission answer transport is declared for " .. context}
 end
 
 function M.find_provider(pinned: registry.Snapshot, provider: string): (Descriptor?, string?)

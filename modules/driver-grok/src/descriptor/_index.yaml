@@ -24,6 +24,20 @@ entries:
       errors: [message]
       usage: [usage]
     configure: grok
+    capabilities:
+      permission_answers:
+        window:
+          transport: provider
+          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval
+            channel is selected. The window retains provider prompts; command hooks are observations only.
+        first_turn:
+          transport: provider
+          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval
+            channel is selected. The window retains provider prompts; command hooks are observations only.
+        resume:
+          transport: provider
+          reason: Bee runs print streaming-json (ACP updates on stdout), with prompt stdin closed. No duplex ACP approval
+            channel is selected. The window retains provider prompts; command hooks are observations only.
     options:
       profiles: [window, session, batch]
       unknown_prefix: 'launch request: '

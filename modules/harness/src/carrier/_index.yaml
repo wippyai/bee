@@ -47,18 +47,6 @@ entries:
     checkpoint: bee.harness.carrier:checkpoint
     service_reply: bee.protocol:reply
     carrier_types: bee.harness.carrier:types
-- name: permission_exchange
-  kind: library.lua
-  source: file://permission_exchange.lua
-  modules:
-  - json
-  imports:
-    bounds: bee.threads.records:bounds
-    permission: bee.harness.permission:adapter
-    checkpoint: bee.harness.carrier:checkpoint
-    placement_decode: bee.placement:decode
-    service_reply: bee.protocol:reply
-    carrier_types: bee.harness.carrier:types
 - name: settle
   kind: library.lua
   source: file://settle.lua
@@ -138,7 +126,8 @@ entries:
     service_reply: bee.protocol:reply
     carrier_types: bee.harness.carrier:types
     hints: bee.harness.carrier:hints
-    permission_exchange: bee.harness.carrier:permission_exchange
+    permission_exchange: bee.harness.permission:exchange
+    descriptor: bee.driver:descriptor
     hook_records: bee.harness.carrier:hook_records
     placement_profiles: bee.placement:profiles
 - name: lease

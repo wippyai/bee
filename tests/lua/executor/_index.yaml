@@ -10,3 +10,15 @@ entries:
     test: wippy.test:test
     turn: bee.executor.external.service:turn
     stream: bee.executor.external.service:stream
+- name: permissions_test
+  kind: function.lua
+  source: file://permissions_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, hash]
+  imports:
+    test: wippy.test:test
+    permissions: bee.harness.permission:exchange
+    adapter: bee.harness.permission:adapter
+    canonical: bee.threads.records:canonical
+    bounds: bee.threads.records:bounds

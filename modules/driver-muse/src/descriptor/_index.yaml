@@ -24,6 +24,20 @@ entries:
       errors: [payload, reason]
       usage: null
     configure: muse
+    capabilities:
+      permission_answers:
+        window:
+          transport: provider
+          reason: Bee runs muse exec --record with stdin closed. Its recorded events are observations, not the MSP server
+            approval RPC. The window retains provider approval prompts; Bee hooks are observations only.
+        first_turn:
+          transport: provider
+          reason: Bee runs muse exec --record with stdin closed. Its recorded events are observations, not the MSP server
+            approval RPC. The window retains provider approval prompts; Bee hooks are observations only.
+        resume:
+          transport: provider
+          reason: Bee runs muse exec --record with stdin closed. Its recorded events are observations, not the MSP server
+            approval RPC. The window retains provider approval prompts; Bee hooks are observations only.
     options:
       profiles: [window, batch]
       fields:

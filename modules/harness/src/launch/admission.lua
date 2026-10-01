@@ -53,6 +53,7 @@ type Plan = {
     policy_digest: string,
     placement_profile_ref: string?,
     placement_profile_digest: string?,
+    permission_answers: string,
     placement_binding_ref: string,
     placement_binding_digest: string,
     placement_methods: {[string]: string},
@@ -174,7 +175,7 @@ local function selected_profile(workspace: string, id: string, revision: integer
 end
 local function preference_value(selected: Selected?): placement_types.Preferences?
     if not selected then return nil end
-    return {options = selected.profile.options, mcp_tools = selected.profile.mcp_tools, instructions = selected.profile.instructions}
+    return {bee = selected.profile.bee, options = selected.profile.options, mcp_tools = selected.profile.mcp_tools, instructions = selected.profile.instructions}
 end
 -- agent_preferences: the carrier preferences for one admitted agent closure.
 -- The run offers exactly the closure's tool aliases through the gateway and
@@ -209,7 +210,7 @@ local function agent_preferences(selected: Selected?, closure: agent_resolver.Cl
     if #instructions > M.MAX_AGENT_INSTRUCTIONS_BYTES then
         return nil, fail("INVALID", "agent instructions exceed " .. tostring(M.MAX_AGENT_INSTRUCTIONS_BYTES) .. " bytes for this route")
     end
-    return {options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
+    return {bee = selected and selected.profile.bee or nil, options = options, mcp_tools = closure.tool_names, instructions = instructions}, nil
 end
 local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mode: string?, selected: Selected?, req_agent_ref: string?, req_owner_rev: integer?, req_spec_digest: string?, session_route: boolean?): (Plan?, Reply?, placement_types.Preferences?)
     if session_route and launch.session_profile_id then
@@ -361,7 +362,7 @@ local function resolve(pinned: catalog.Pinned, launch: definition.Definition, mo
         owner_component_revision = effective_owner_rev})
     if not plan_digest then return nil, fail("INVALID", digest_error or "plan") end
     return {title = launch.title, definition_ref = definition_ref, definition_digest = launch.digest, launch_id = launch.launch_id, binding_ref = launch.binding_ref, binding_digest = binding_digest,
-        profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest,
+        profile_id = launch.profile_id, profile_digest = profile_digest, policy_ref = launch.policy_ref, policy_digest = launch_policy.digest, permission_answers = launch_policy.permission_answers,
         placement_profile_ref = resolved_profile and resolved_profile.ref or nil, placement_profile_digest = resolved_profile and resolved_profile.digest or nil,
         session_resource = launch.session_resource,
         placement_binding_ref = placement.binding_id, placement_binding_digest = placement.binding_digest,

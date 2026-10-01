@@ -149,22 +149,23 @@ function M.gateway_section(gateway: Gateway): string
     end
     return table.concat(lines, "\n")
 end
-local HOOK_LABELS = {SessionStart = "session_start", UserPromptSubmit = "user_prompt_submit", PreToolUse = "pre_tool_use", PostToolUse = "post_tool_use", Stop = "stop"}
+local HOOK_LABELS = {SessionStart = "session_start", UserPromptSubmit = "user_prompt_submit", PreToolUse = "pre_tool_use", PostToolUse = "post_tool_use", Stop = "stop", PermissionRequest = "permission_request"}
 local HOOK_TEMPLATES = {
     SessionStart = {event = "${hook_event_name}", session_id = "${session_id}", source = "${source}"},
     UserPromptSubmit = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", prompt = "${prompt}"},
     PreToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_input = "${tool_input}"},
+    PermissionRequest = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_input = "${tool_input}"},
     PostToolUse = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", tool_name = "${tool_name}", tool_use_id = "${tool_use_id}", tool_response = "${tool_response}"},
     Stop = {event = "${hook_event_name}", session_id = "${session_id}", turn_id = "${turn_id}", last_assistant_message = "${last_assistant_message}"},
 }
-type HookHandler = {type: "mcp_tool", server: "bee_hooks", tool: "hook", input: {[string]: string}, timeout: 2}
+type HookHandler = {type: "mcp_tool", server: "bee_hooks", tool: "hook", input: {[string]: string}, timeout: integer}
 type ProjectedHook = {event: string, label: string, handler: HookHandler, trusted_hash: string}
 local function hook_projection(events: {string}): ({ProjectedHook}?, string?)
     local result: {ProjectedHook} = {}
     for index, event in ipairs(events) do
         local template, label = HOOK_TEMPLATES[event], HOOK_LABELS[event]
         if not template or not label then return nil, "Codex does not support gateway hook event " .. event end
-        local handler: HookHandler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = 2}
+        local handler: HookHandler = {type = "mcp_tool", server = "bee_hooks", tool = "hook", input = template, timeout = event == "PermissionRequest" and 650 or 2}
         local identity, identity_error = canonical.encode({event_name = label, hooks = {handler}})
         if not identity then return nil, identity_error end
         local digest, digest_error = hash.sha256(identity)
@@ -233,7 +234,7 @@ function M.session_arguments(gateway: Gateway?, instructions: string?): ({string
         table.sort(names)
         local input: {string} = {}
         for _, name in ipairs(names) do input[#input + 1] = toml.string(name) .. "=" .. toml.string(hook.handler.input[name]) end
-        option("hooks." .. hook.event .. '=[{hooks=[{type="mcp_tool",server="bee_hooks",tool="hook",timeout=2,input={'
+        option("hooks." .. hook.event .. '=[{hooks=[{type="mcp_tool",server="bee_hooks",tool="hook",timeout=' .. tostring(hook.handler.timeout) .. ',input={'
             .. table.concat(input, ",") .. "}}]}]")
         -- Supply the whole table: CLI dotted-key parsing does not preserve
         -- dots within a quoted source-path key.

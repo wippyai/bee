@@ -51,7 +51,14 @@ local function define_tests()
             local stranger = harness.principal("stranger", {"bee.threads:session_owner_test_policy"}, WORKSPACE)
             test.eq(harness.code(stranger:call("session_attach", {session = opened.session, attempt_id = "forged", operation_key = harness.key()})), "DENIED")
             local sent = harness.value(sessions:call("work_send", {session = opened.session, input = "peer message", operation_key = harness.key()}))
-            test.eq(#harness.value(sessions:call("work_scan", {})).items, 0)
+            local headless = harness.value(sessions:call("session_create", {operation_key = harness.key()}))
+            local eligible = harness.value(sessions:call("work_send", {session = headless.session, input = "headless work", operation_key = harness.key()}))
+            local found_headless = false
+            for _, row in ipairs(harness.value(sessions:call("work_scan", {})).items) do
+                test.ok(row.work ~= sent.work, "hook work must not enter the pull executor")
+                if row.work == eligible.work then found_headless = true end
+            end
+            test.is_true(found_headless)
             local turn = harness.value(sessions:call("turn_reserve", {session = opened.session, operation_key = harness.key()}))
             test.eq(turn.work, sent.work)
             local pulled = harness.value(sessions:call("turn_pull", {turn = turn.turn, claim = turn.claim}))
@@ -311,12 +318,14 @@ local function define_tests()
             local event = {type = "text", event_key = "claude:1:assistant", data = {type = "text", segment_id = "answer",
                 operation = "append", text = "live text", channel = "answer"}}
             local operation_key = harness.key()
-            local request = {turn = reservation.turn, claim = reservation.claim, operation_key = operation_key, observation = event}
+            local request = {turn = reservation.turn, claim = reservation.claim, operation_key = operation_key, observation = event, checkpoint = {permission_checkpoint = {phase = "requested"}}}
             local appended = harness.value(sessions:call("turn_observation", request))
             test.eq(appended.session, opened.session)
             test.eq(appended.work, work.work)
             test.eq(appended.event_key, event.event_key)
             test.is_true(sessions:call("turn_observation", request).replayed)
+            local saved = harness.value(sessions:call("turn_pull", {turn = reservation.turn, claim = reservation.claim}))
+            test.eq(saved.checkpoint.permission_checkpoint.phase, "requested")
             local page = harness.value(sessions:call("feed_read", {session = opened.session, after_sequence = 0, limit = 64}))
             local found = false
             for _, row in ipairs(page.events) do

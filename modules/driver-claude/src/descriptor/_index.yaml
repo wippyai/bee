@@ -25,6 +25,17 @@ entries:
       errors: [terminal_reason]
       usage: [usage]
     configure: claude
+    capabilities:
+      permission_answers:
+        window:
+          transport: hook_http
+          adapter_ref: bee.driver:permission_request_hook
+        first_turn:
+          transport: stdio
+          adapter_ref: bee.driver.claude:permission_adapter
+        resume:
+          transport: stdio
+          adapter_ref: bee.driver.claude:permission_adapter
     options:
       profiles: [session, batch, window]
       fields:

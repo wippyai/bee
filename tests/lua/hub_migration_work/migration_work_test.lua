@@ -16,7 +16,7 @@ end
 local function prepared(entry: {[string]: unknown}, displayed: {[string]: unknown}?): plan.Prepared
     local migration = displayed or {id = ID, component = COMPONENT, target_db = TARGET, timestamp = TIMESTAMP}
     return {
-        plan = {request = {}, base_revision = 1, root_id = "bee.hub.deps:test", digest = "", modules = {},
+        plan = {request = {}, base_revision = 1, root_id = "bee.hub.deps:test", root_operation = "create", digest = "", modules = {},
             missing = {}, migrations = {migration}, starts = {}, capabilities = {}, ready = true},
         resolved = {packages = {{component = COMPONENT, version = "1.0.0", digest = "", entries = {entry},
             dependencies = {}, requirements = {requirements = {}, missing = {}}}}, missing = {}},

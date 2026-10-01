@@ -46,12 +46,15 @@ local function probe(): integer
     local prepared, problem = plan.prepare(state, revision, request, source, {native_module = "fixture/native", native_version = "1.0.0",
         native_modules = {["fixture/native"] = "1.0.0"}, runtime_commit = "runtime"})
     logger:info("STANDALONE_SELF_UPDATE_PLAN", {problem = problem or "", offered = prepared ~= nil})
-    local found = false
+    assert(installed.deployment == "bee/bee", "standalone Bee deployment selection is missing")
     for _, root in ipairs(installed.roots) do
-        if root.component == "bee/bee" and root.owner == "" then found = true end
+        assert(root.component ~= "bee/bee", "inventory synthesized a standalone registry entry")
     end
-    assert(found, "standalone Bee root is missing from inventory")
     assert(prepared ~= nil, problem or "standalone Bee update plan is missing")
+    if prepared then
+        assert(prepared.plan.root_operation == "create", "standalone update selects an absent-entry update")
+        assert(not snapshot:get(prepared.plan.root_id), "first selection destination is already resident")
+    end
     return 0
 end
 local function main(): integer

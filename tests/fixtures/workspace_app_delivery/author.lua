@@ -86,7 +86,7 @@ local function agent_report(): Object?
     local cursor = 0
     for _ = 1, 64 do
         local page = call("bee.threads.service:read_after", {thread_id = THREAD, cursor = cursor, limit = 64})
-        for _, raw in ipairs((page.records or {}) :: {unknown}) do
+        for _, raw in ipairs(assert(bounds.array((page.records or {})))) do
             local record = bounds.object(raw)
             local body = record and bounds.object(record.body)
             local data = body and bounds.object(body.data)

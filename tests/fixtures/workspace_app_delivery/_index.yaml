@@ -165,6 +165,7 @@ entries:
   method: main
   modules: [registry, env, logger, time, fs, json]
   imports:
+    bounds: bee.protocol:bounds
     catalog: bee.apps:catalog
     workspace_applications: bee.gov:workspace_applications
     capability_grants: bee.gov:capability_grants

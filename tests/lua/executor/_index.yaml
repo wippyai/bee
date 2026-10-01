@@ -18,7 +18,7 @@ entries:
   modules: [json, hash]
   imports:
     test: wippy.test:test
-    permissions: bee.executor.external.service:permissions
+    permissions: bee.harness.permission:exchange
     adapter: bee.harness.permission:adapter
     canonical: bee.threads.records:canonical
     bounds: bee.threads.records:bounds

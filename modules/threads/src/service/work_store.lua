@@ -1245,7 +1245,7 @@ function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end
     local input = object(request)
-    if not input or not has_only(input, {turn = true, claim = true, operation_key = true, observation = true}) then
+    if not input or not has_only(input, {turn = true, claim = true, operation_key = true, observation = true, checkpoint = true}) then
         return missing_request()
     end
     local turn_ref, claim_token, operation_key = ref(input.turn), text(input.claim, 128), key(input.operation_key)
@@ -1254,7 +1254,14 @@ function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
     if not turn_ref or not claim_token or not operation_key or not decoded_observation or not observation_json then
         return failure("INVALID_ARGUMENT", observation_error or "turn observation fields are invalid")
     end
-    local arguments = {turn = turn_ref, claim = claim_token, observation = observation_json}
+    local checkpoint_json: string? = nil
+    if input.checkpoint ~= nil then
+        if not object(input.checkpoint) then return failure("INVALID_ARGUMENT", "turn checkpoint must be an object") end
+        local checkpoint_error: string?
+        checkpoint_json, checkpoint_error = encode(input.checkpoint)
+        if not checkpoint_json or #checkpoint_json > 65536 then return failure("INVALID_ARGUMENT", checkpoint_error or "turn checkpoint exceeds 65536 bytes") end
+    end
+    local arguments = {turn = turn_ref, claim = claim_token, observation = observation_json, checkpoint = checkpoint_json}
     return transaction.write(db, function(tx: sql.Transaction): Result
         local turn_identity, turn_error = get_turn(tx, turn_ref :: string)
         if turn_error then return transaction.storage_failure(turn_error) end
@@ -1277,6 +1284,11 @@ function M.turn_observation(db: sql.DB, actor: string, request: unknown): Result
         local record_id, sequence, event_error = append_event(tx, session, caller :: string, op_ref, "turn.observation",
             work.work_ref, work.revision, {turn = turn.turn_ref, observation = decoded_observation})
         if not record_id or not sequence then return failure("INTERNAL", event_error or "append turn observation") end
+        if checkpoint_json then
+            local checkpoint_error = execute(tx, "UPDATE bee_session_turns SET checkpoint_json = ? WHERE turn_ref = ? AND owner_epoch = ?",
+                {checkpoint_json, turn.turn_ref, turn.owner_epoch}, "checkpoint turn observation")
+            if checkpoint_error then return transaction.storage_failure(checkpoint_error) end
+        end
         local receipt = {session = session.session_ref, work = work.work_ref, turn = turn.turn_ref,
             event_key = decoded_observation.event_key, operation = op_ref, committed_at = now, sequence = sequence}
         return finish_operation(tx, caller :: string, scope_workspace, operation_key :: string, op_ref,

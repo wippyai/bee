@@ -12,9 +12,15 @@ local function gateway_delivery(gateway)
     -- none, since Claude reads a settings literal it cannot parse as a path.
     if #gateway.hooks == 0 then return {arguments = {"--mcp-config", mcp}, files = {}}, nil end
     local hook_url = "http://" .. gateway.endpoint .. "/hook/" .. gateway.action_id
-    local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. (gateway.hook_token_environment :: string) .. "}"}, allowedEnvVars = {gateway.hook_token_environment}, timeout = 2}
+    local hook_token = gateway.hook_token_environment
+    if not hook_token then return nil, "Claude hooks require a token environment" end
+    local handler = {type = "http", url = hook_url, headers = {Authorization = "Bearer ${" .. hook_token .. "}"}, allowedEnvVars = {gateway.hook_token_environment}, timeout = 2}
     local events = {}
-    for _, event in ipairs(gateway.hooks) do events[event] = {{matcher = "", hooks = {handler}}} end
+    for _, event in ipairs(gateway.hooks) do
+        local event_handler = {type = handler.type, url = handler.url, headers = handler.headers,
+            allowedEnvVars = handler.allowedEnvVars, timeout = event == "PermissionRequest" and 650 or 2}
+        events[event] = {{matcher = "", hooks = {event_handler}}}
+    end
     local settings, settings_error = canonical.encode({hooks = events, allowedHttpHookUrls = {hook_url},
         httpHookAllowedEnvVars = {gateway.hook_token_environment}})
     if not settings then return nil, settings_error end

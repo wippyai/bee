@@ -1,11 +1,13 @@
 # Gateway hooks
 
 Gateway hooks carry bounded lifecycle observations from a managed harness to its
-bound thread. They cannot approve work, extend an attempt or create authority. For an
+bound thread. For an
 interactive Session, the authenticated turn boundary also pulls queued Work and
 returns its prompt and owner-set sender as additional context. Stop records that
 interactive Work as completed; StopFailure records failure. Managed executor
-turns retain their driver-terminal and placement-exit settlement path.
+turns retain their driver-terminal and placement-exit settlement path. An admitted
+interactive PermissionRequest can also wait for an Allow or Deny from Needs you.
+The existing approvals owner records the decision; hook metadata grants no authority.
 
 The hook HTTP handlers are `bee.gateway.api:*`; queue, claim, acknowledgment,
 rejection, and sealing calls are `bee.gateway.binding:*`. The host owns the
@@ -24,10 +26,35 @@ payload bounds and selected event before accepting an observation.
 
 An accepted HTTP submission returns its event ID and, when interactive Work is
 ready, a context-only `hookSpecificOutput`. MCP returns the same context as JSON
-text content; otherwise it carries empty text content. Refusals are status
-responses or JSON-RPC errors. Responses never carry a permission decision or
-continuation flag. The gateway derives SessionRef, workspace and attachment from
+text content; otherwise it carries empty text content. An admitted PermissionRequest
+returns `hookSpecificOutput.decision.behavior` (`allow` or `deny`) through the
+driver's declared HTTP or MCP hook transport. Refusals are status
+responses or JSON-RPC errors. The gateway derives SessionRef, workspace and attachment from
 the authenticated binding; payload fields cannot choose the receiving identity.
+
+## Permission answers
+
+`bee.harness.permission:exchange` owns detection-to-decision progression for
+carrier streams, external executor turns and interactive hooks, using
+`bee.harness.permission:adapter` as the single request decoder. The host must
+select an adapter, executable-bound acceptance record and approver policy.
+Saved preferences may select `bee.permission_answers`: `provider` leaves the
+provider in charge, `ask` waits for Needs you, and `deny` answers denied directly.
+Ask and deny require a host-accepted transport; unsupported routes reject them.
+Allow is consumed against the exact proposal before dispatch. Denial, expiry,
+withdrawal and timeout never consume an effect or grant consent. Permission
+intent, decision and response progress are checkpointed with thread observations.
+Hook delivery is recorded as prepared with acknowledgment unproven.
+
+CLI descriptors declare `capabilities.permission_answers` for `window`,
+`first_turn` and `resume`. Claude uses stream-json control requests for headless
+turns and PermissionRequest HTTP hooks for windows. Codex windows use its
+PermissionRequest MCP hooks. Bee's `codex exec --json` route has no approval
+response channel; app-server JSON-RPC approvals require a different driver mode.
+Agy, Grok, Muse and OpenCode keep provider approval behavior in Bee's current
+modes; their descriptors state the unavailable answer channel. No deny is
+translated into a permission bypass. Standing approval leases are not selected
+by this exchange.
 
 ## Durable intake
 

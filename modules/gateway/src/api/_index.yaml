@@ -4,6 +4,7 @@ entries:
 - name: session_boundary
   kind: library.lua
   source: file://session_boundary.lua
+  modules: [json]
   imports:
     bounds: bee.threads.records:bounds
     subject_call: bee.gateway.security:subject_call
@@ -30,6 +31,7 @@ entries:
     hooks: bee.gateway:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
+    bounds: bee.threads.records:bounds
   security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:session_boundary_resolver_policy]}
 - name: hook_status_http
   kind: function.lua
@@ -41,6 +43,7 @@ entries:
     hooks: bee.gateway:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
+    bounds: bee.threads.records:bounds
   security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: hook_mcp_http
   kind: function.lua
@@ -53,6 +56,7 @@ entries:
     hooks: bee.gateway:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
+    bounds: bee.threads.records:bounds
   security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:session_boundary_resolver_policy]}
 - name: mcp_http
   kind: function.lua

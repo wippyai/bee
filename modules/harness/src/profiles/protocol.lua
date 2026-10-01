@@ -7,14 +7,15 @@ M.MAX_OPTIONS = 9
 -- the definition's own folder and a new thread are used.
 type Workdir = {root_ref: string, path: string}
 type Thread = {thread_id: string}
-type Profile = {title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string,
+type Bee = {permission_answers: string?}
+type Profile = {bee: Bee?, title: string, definition_ref: string, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string,
     workdir: Workdir?, thread: Thread?, agent_ref: string?, owner_component_revision: integer?, spec_digest: string?}
 type Request = {operation: string, workspace_id: string, profile_id: string, profile: Profile?, expected_revision: integer, idempotency_key: string, after_key: string, expected_cursor: integer?, limit: integer}
 
 function M.profile(value: unknown): (Profile?, string?)
     local object = bounds.object(value)
     if not object then return nil, "profile must be an object" end
-    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest"})
+    local extra = bounds.fields(object, {"title", "definition_ref", "options", "mcp_tools", "instructions", "workdir", "thread", "agent_ref", "owner_component_revision", "spec_digest", "bee"})
     if extra then return nil, extra end
     local title = bounds.line(object.title, 80)
     if not title or title:match("^%s*$") then return nil, "title must contain 1 to 80 printable bytes" end
@@ -84,14 +85,25 @@ function M.profile(value: unknown): (Profile?, string?)
         end
         spec_digest = digest
     end
-    return {title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions,
+    local bee: Bee? = nil
+    if object.bee ~= nil then
+        local selected = bounds.object(object.bee)
+        if not selected or bounds.fields(selected, {"permission_answers"}) then return nil, "bee must name only permission_answers" end
+        local mode: string? = nil
+        if selected.permission_answers ~= nil then
+            mode = bounds.member(selected.permission_answers, {"provider", "ask", "deny"})
+            if not mode then return nil, "bee.permission_answers must be provider, ask or deny" end
+        end
+        bee = {permission_answers = mode}
+    end
+    return {bee = bee, title = title, definition_ref = definition_ref, options = options, mcp_tools = tools, instructions = instructions,
         workdir = workdir, thread = thread, agent_ref = agent_ref, owner_component_revision = owner_component_revision, spec_digest = spec_digest}, nil
 end
 -- agent_preferences: narrow a saved profile to one resolved agent closure.
 -- The host agent model mapping owns the model option, and the profile may
 -- only offer tools the closure names; anything else is refused, never
 -- narrowed silently.
-type AgentValue = {options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string}
+type AgentValue = {bee: Bee?, options: {[string]: string | number | boolean}, mcp_tools: {string}, instructions: string}
 function M.agent_preferences(profile: Profile, tool_names: {string}): (AgentValue?, string?)
     if profile.options.model ~= nil then
         return nil, "option model is owned by the host agent model mapping"
@@ -107,7 +119,7 @@ function M.agent_preferences(profile: Profile, tool_names: {string}): (AgentValu
     for name, item in pairs(profile.options) do options[name] = item end
     local tools: {string} = {}
     for _, name in ipairs(profile.mcp_tools) do tools[#tools + 1] = name end
-    return {options = options, mcp_tools = tools, instructions = profile.instructions}, nil
+    return {bee = profile.bee, options = options, mcp_tools = tools, instructions = profile.instructions}, nil
 end
 
 function M.decode(value: unknown): (Request?, string?)

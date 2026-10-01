@@ -3,6 +3,7 @@
 local test = require("test")
 local policy = require("policy")
 local preferences = require("preferences")
+local bounds = require("bounds")
 
 type Entry = {[string]: unknown}
 type Resolver = (string) -> (string?, string?)
@@ -29,6 +30,22 @@ end
 
 local function define_tests()
     test.describe("Launch-policy executable environment", function()
+        test.it("keeps answer preferences below the host acceptance ceiling", function()
+            local raw = entry({sh = "/bin/sh"})
+            local data = assert(bounds.object(raw.data))
+            for _, mode in ipairs({"ask", "deny"}) do
+                test.eq(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = mode}}), nil)
+            end
+            data.permission_exchange = {adapter_ref = "host:adapter", acceptance_ref = "host:acceptance", fixture_digest = string.rep("a", 64),
+                approver_policy = "person", poll_ms = 50, ttl_ms = 1000}
+            local asking = assert(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = "ask"}}))
+            local denying = assert(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = "deny"}}))
+            local provider = assert(policy.decode("test:policy", raw, nil, {options = {}, mcp_tools = {}, bee = {permission_answers = "provider"}}))
+            test.eq(provider.permission_exchange, nil)
+            test.eq(denying.permission_answers, "deny")
+            test.neq(asking.digest, denying.digest)
+            test.neq(asking.digest, provider.digest)
+        end)
         test.it("measures MCP context and traits without retaining mutable host tables", function()
             local raw = entry({sh = "/bin/sh"})
             local data = raw.data :: Entry

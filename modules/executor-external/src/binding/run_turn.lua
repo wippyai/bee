@@ -13,18 +13,16 @@ local machine = require("machine")
 local canonical = require("canonical")
 local clock = require("clock")
 local time = require("time")
-local permission = require("permission")
-local permissions = require("permissions")
+local exchange = require("exchange")
+local checkpoint = require("checkpoint")
+local placement_decode = require("placement_decode")
 
 type Listener = {outputs: unknown, exits: unknown, events: unknown}
 type Object = {[string]: unknown}
-type Drive = permissions.Drive
-type Answered = {ask: permissions.Pending, outcome: string}
-local MAX_ASKS = 4
 
 local function error_text(value: unknown): string
     if type(value) == "table" then
-        local object = value :: {[string]: unknown}
+        local object = bounds.object(value) or {}
         if type(object.message) == "string" then return object.message end
         if type(object.code) == "string" then return object.code end
     end
@@ -68,11 +66,12 @@ local function normalizer_call(target: string, state: unknown, index: integer, e
 end
 
 local function observe(listener_value: unknown, attempt_value: unknown, normalizer_target: string, resumed: boolean,
-    request: {[string]: unknown}, drive: Drive?): (unknown, string?)
-    local listener = bounds.object(listener_value) :: Listener?
+    request: turn.Request, plan: machine.Plan?): (unknown, string?)
+    local listener = bounds.object(listener_value)
     local attempt, attempt_error = unwrap_attempt(attempt_value)
     if not listener or not attempt then return nil, attempt_error or "output listener or attempt is malformed" end
-    local attempt_object = attempt :: {[string]: unknown}
+    local attempt_object = bounds.object(attempt)
+    if not attempt_object then return nil, "placement attempt is malformed" end
     local attempt_id = tostring(attempt_object.attempt_id)
     local runner = bounds.id(attempt_object.runner)
     local generation = bounds.integer(attempt_object.attachment_generation)
@@ -80,21 +79,15 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local observation_target = tostring(request.observation_target)
     local claim = tostring(request.claim)
     local acks = assert(process.listen(placement_protocol.TOPIC_ACK, {message = true}))
-    local pendings: {permissions.Pending} = {}
-    local seen: {[string]: boolean} = {}
-    local unacked: {[string]: boolean} = {}
-    local answered: {Answered} = {}
+    local permission_context: exchange.Context? = nil
+    local permission_point: checkpoint.Checkpoint? = nil
     local poller = nil
-    if drive and drive.exchange then poller = time.ticker(tostring(drive.exchange.poll_ms) .. "ms") end
-    local function note(phase: string, ask: permissions.Pending, outcome: string?)
-        local payload = canonical.encode({approval_id = ask.approval_id, outcome = outcome}) or "{}"
-        local key, key_error = hash.sha256(attempt_id .. "\n" .. ask.request.permission_request_id .. "\n" .. phase)
-        if key_error or not key then return "measure permission note identity" end
-        local _, append_error = service_call(observation_target, {turn = attempt_id, claim = claim,
-            operation_key = "perm:" .. phase .. ":" .. key,
-            observation = {type = "extension", event_key = "permission:" .. ask.request.permission_request_id .. ":" .. phase,
-                data = {type = "extension", event_name = "bee.executor.permission", event_revision = "1", payload_json = payload}}})
-        return append_error
+    if plan and plan.exchange then
+        if plan.exchange_refusal then return nil, plan.exchange_refusal end
+        if not plan.request.workspace_id or not plan.request.session_ref then return nil, "permission exchange omitted workspace or session" end
+        permission_point = checkpoint.new({binding_ref = plan.binding.binding_id, binding_digest = plan.binding.binding_digest.entry,
+            profile_id = plan.profile.id, profile_digest = plan.binding.profile_digest.entry, plan_digest = plan.plan_digest}, generation)
+        poller = time.ticker(tostring(plan.exchange.poll_ms) .. "ms")
     end
     local monitored = process.monitor(runner)
     local decoder = stream.new()
@@ -139,133 +132,115 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         end
         return nil
     end
-    local function owner_value(target: string, fields: Object): (Object?, string?)
-        local raw, call_error = funcs.call(target, fields)
-        if call_error then return nil, tostring(call_error) end
-        local reply = bounds.object(raw)
-        if not reply then return nil, target .. " returned a malformed reply" end
-        if reply.ok == true then
-            local value = bounds.object(reply.value)
-            if not value then return nil, target .. " returned no value" end
-            return value, nil
+    local function commit_permissions(records: {Object}): (boolean, string?)
+        for _, record in ipairs(records) do
+            local body = bounds.object(record.body)
+            if not body then return false, "permission record omitted its observation" end
+            local event_key = bounds.id(body.event_key)
+            if not event_key then return false, "permission record omitted its identity" end
+            local identity, identity_error = hash.sha256(attempt_id .. "\n" .. event_key)
+            if not identity then return false, tostring(identity_error) end
+            local saved: Object = {}
+            for name, field in pairs(request.checkpoint or {}) do saved[name] = field end
+            saved.permission_checkpoint = permission_point
+            local _, append_error = service_call(observation_target, {turn = attempt_id, claim = claim,
+                operation_key = "turnobs:" .. identity, observation = body, checkpoint = saved})
+            if append_error then return false, append_error end
         end
-        local fault = bounds.object(reply.error)
-        local code = fault and bounds.id(fault.code) or "UNKNOWN"
-        local message = fault and bounds.text(fault.message, 512) or "unknown"
-        return nil, tostring(code) .. ": " .. tostring(message)
+        return true, nil
     end
-    local function consume_call(approval_id: string, proposal_digest: string, effect_key: string,
-        incarnation: integer): (boolean, string?, integer?)
-        local raw, call_error = funcs.call("bee.approvals.binding:consume",
-            {approval_id = approval_id, proposal_digest = proposal_digest, effect_key = effect_key,
-                owner_incarnation = incarnation})
-        if call_error then return false, tostring(call_error), nil end
-        local reply = bounds.object(raw)
-        if not reply then return false, "approvals consume returned a malformed reply", nil end
-        if reply.ok == true then return true, nil, nil end
-        local fault = bounds.object(reply.error)
-        local code = fault and bounds.id(fault.code) or "UNKNOWN"
-        local message = fault and bounds.text(fault.message, 512) or "unknown"
-        if code == "REVALIDATE" then
-            local detail = bounds.object(reply.value)
-            local current = detail and bounds.count(detail.current_incarnation) or nil
-            if current then return false, "REVALIDATE", current end
+    if plan and plan.exchange and permission_point then
+        local point = permission_point
+        local planned = plan
+        local permission_state: exchange.State = {request = planned.request, plan_digest = planned.plan_digest,
+            exchange = planned.exchange, permissions = point.permissions, epoch = generation}
+        permission_context = {state = permission_state, now_ms = clock.milliseconds, approvals = "bee.approvals.binding", max_consume_attempts = exchange.MAX_CONSUME_ATTEMPTS,
+            commit = commit_permissions,
+            call = function(target: string, fields: unknown): (unknown, string?)
+                local value, err = funcs.call(target, fields)
+                if err then return nil, tostring(err) end
+                return value, nil
+            end,
+            digest_of = function(value: unknown): (string?, string?)
+                local text, err = canonical.encode(value)
+                if not text then return nil, err end
+                return hash.sha256(text)
+            end,
+            step = function(_: string) end,
+            waiting = function(): boolean return not exited and not stopped and not stdout_eof and terminal == nil end,
+            settled = function(): boolean return exited or terminal ~= nil end,
+            revalidate = function(): string?
+                local host_io: machine.IO = {call = function(target: string, fields: unknown): (unknown, string?)
+                        local value, err = funcs.call(target, fields)
+                        if err then return nil, tostring(err) end
+                        return value, nil
+                    end, send = function(_: string, _: string, _: unknown) end,
+                    self_pid = function(): string return process.pid() end, now_ms = clock.milliseconds,
+                    key = function(): string return attempt_id end}
+                local fresh, plan_error = machine.session_plan(host_io, planned.request, planned.resume_ref)
+                if not fresh then return "permission plan unavailable: " .. tostring(plan_error) end
+                if fresh.exchange_refusal then return fresh.exchange_refusal end
+                if fresh.plan_digest ~= point.plan_digest then return "permission plan changed" end
+                local raw, err = service_call(placement_target(request, "reconcile"), {attempt_id = attempt_id})
+                if err then return err end
+                local current, decode_error = placement_decode.attempt(raw)
+                if not current then return decode_error end
+                if current.execution_state ~= "running" then return "placement no longer running" end
+                return nil
+            end,
+            write = function(write_id: string, line: string): (boolean, string?)
+                local digest, err = canonical.encode(line)
+                if not digest then return false, err end
+                local sum, hash_error = hash.sha256(digest)
+                if not sum then return false, tostring(hash_error) end
+                point.pending_writes[#point.pending_writes + 1] = {write_id = write_id, input_digest = sum, data = line, dispatched = false}
+                local record: Object = {body = {type = "extension", event_key = "write:" .. write_id .. ":intended",
+                    data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1",
+                        payload_json = canonical.encode({write_id = write_id, phase = "intended", input_digest = sum})}}}
+                local committed, commit_error = commit_permissions({record})
+                if not committed then return false, commit_error end
+                local sent, send_error = process.send(runner, placement_protocol.TOPIC_INPUT,
+                    {write_id = write_id, generation = generation, data = line})
+                if not sent then return false, tostring(send_error) end
+                point.pending_writes[#point.pending_writes].dispatched = true
+                return true, nil
+            end}
+    end
+    local function accept_observations(fresh: {Object})
+        local ctx = permission_context
+        if not ctx then return end
+        local records: {Object} = {}
+        for _, body in ipairs(fresh) do records[#records + 1] = {body = body} end
+        local _, detect_error = exchange.detect(ctx, records)
+        if detect_error then output_error = output_error or detect_error; return end
+        exchange.acknowledge(ctx, records)
+        if #records > #fresh then
+            local added: {Object} = {}
+            for index = #fresh + 1, #records do added[#added + 1] = records[index] end
+            local _, commit_error = ctx.commit(added)
+            output_error = output_error or commit_error
         end
-        return false, tostring(code) .. ": " .. tostring(message), nil
+        local _, advance_error = exchange.advance(ctx, false)
+        output_error = output_error or advance_error
     end
-    local exchange_io: permissions.IO = {
-        request_approval = function(fields: Object): (Object?, string?)
-            return owner_value("bee.approvals.binding:request", fields)
-        end,
-        read_approval = function(approval_id: string): (Object?, string?)
-            return owner_value("bee.approvals.binding:read", {approval_id = approval_id})
-        end,
-        consume = consume_call,
-        revalidate = function(approval_id: string, proposal_digest: string, incarnation: integer): (boolean, string?)
-            local _, revalidate_error = owner_value("bee.approvals.binding:revalidate",
-                {approval_id = approval_id, proposal_digest = proposal_digest, owner_incarnation = incarnation})
-            if revalidate_error then return false, revalidate_error end
-            return true, nil
-        end,
-        write_stdin = function(write_id: string, data: string): (boolean, string?)
-            process.send(runner, placement_protocol.TOPIC_INPUT,
-                {write_id = write_id, generation = generation, data = data})
-            unacked[write_id] = true
-            return true, nil
-        end,
-        wait_ms = function(_: integer) end,
-        now_ms = function(): integer return clock.milliseconds() end,
-        waiting = function(): boolean return runner ~= nil and not exited and not stopped end,
-    }
-    local function track_answer(ask: permissions.Pending, outcome: string)
-        answered[#answered + 1] = {ask = ask, outcome = outcome}
-        output_error = output_error or note("answered", ask, outcome)
-    end
-    local function ask_new(fresh: {unknown})
-        if not drive then return end
-        local found, scan_error = permissions.scan(drive.adapter, fresh)
-        if scan_error then output_error = output_error or scan_error; return end
-        for _, item in ipairs(found) do
-            if not seen[item.permission_request_id] then
-                seen[item.permission_request_id] = true
-                if drive.broken or not drive.exchange or not drive.labels then
-                    output_error = output_error or (drive.broken or "permission exchange is not enabled for this turn")
-                elseif #pendings >= MAX_ASKS then
-                    output_error = output_error or "too many permission questions in one turn"
-                else
-                    local ask, ask_error = permissions.request(exchange_io, drive.exchange, drive.labels, item)
-                    if not ask then
-                        output_error = output_error or ask_error
-                    else
-                        pendings[#pendings + 1] = ask
-                        output_error = output_error or note("requested", ask, nil)
-                    end
-                end
-            end
-        end
-    end
-    local function poll_asks()
-        if not drive or not drive.exchange then return end
-        for index = #pendings, 1, -1 do
-            local outcome, poll_error = permissions.poll(exchange_io, drive.exchange, pendings[index])
-            if not outcome then
-                output_error = output_error or poll_error
-                table.remove(pendings, index)
-            elseif outcome == "allowed" or outcome == "denied" then
-                track_answer(pendings[index], outcome)
-                table.remove(pendings, index)
-            elseif outcome == "closed" then
-                table.remove(pendings, index)
-            end
-        end
-    end
-    local function track_echo(fresh: {unknown})
-        if not drive or #answered == 0 then return end
-        for _, raw in ipairs(fresh) do
-            for index = #answered, 1, -1 do
-                local entry = answered[index]
-                local echoed = false
-                if entry.outcome == "allowed" then
-                    echoed = permission.acknowledged(drive.adapter, entry.ask.request, raw)
-                else
-                    echoed = permission.deny_acknowledged(drive.adapter, entry.ask.request, raw)
-                end
-                if echoed then
-                    output_error = output_error or note("acknowledged", entry.ask, entry.outcome)
-                    table.remove(answered, index)
-                end
-            end
-        end
-    end
-    local function answer_acks(raw: unknown)
+    local function answer_acks(sender: string, raw: unknown)
+        local point = permission_point
+        if not point or sender ~= runner then return end
         local data = bounds.object(raw)
-        if not data or data.attempt_id ~= attempt_id then return end
+        if not data or data.attempt_id ~= attempt_id or data.generation ~= generation then return end
         local write_id = bounds.id(data.write_id)
-        if not write_id or not unacked[write_id] then return end
-        if data.accepted == true then
-            unacked[write_id] = nil
-        else
-            output_error = output_error or "stdin refused the permission response: " .. tostring(data.reason or "unknown")
+        if not write_id then return end
+        for index, pending in ipairs(point.pending_writes) do
+            if pending.write_id == write_id then
+                table.remove(point.pending_writes, index)
+                local phase = data.accepted == true and "accepted" or "uncertain"
+                local _, err = commit_permissions({{body = {type = "extension", event_key = "write:" .. write_id .. ":" .. phase,
+                    data = {type = "extension", event_name = "bee.carrier.write", event_revision = "1",
+                        payload_json = canonical.encode({write_id = write_id, phase = phase})}}}})
+                output_error = output_error or err
+                if data.accepted ~= true then output_error = output_error or "stdin refused the permission response" end
+                return
+            end
         end
     end
     local function finish_stdout()
@@ -277,10 +252,9 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         local apply_error = apply(reply)
         if apply_error then output_error = output_error or apply_error end
         if #observations > base then
-            local fresh: {unknown} = {}
+            local fresh: {Object} = {}
             for index = base + 1, #observations do fresh[#fresh + 1] = observations[index] end
-            ask_new(fresh)
-            track_echo(fresh)
+            accept_observations(fresh)
         end
     end
     local function accept_output(sender: string, raw: unknown)
@@ -308,10 +282,9 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                 if apply_error then output_error = output_error or apply_error; break end
             end
             if #observations > base then
-                local fresh: {unknown} = {}
+                local fresh: {Object} = {}
                 for index = base + 1, #observations do fresh[#fresh + 1] = observations[index] end
-                ask_new(fresh)
-                track_echo(fresh)
+                accept_observations(fresh)
             end
         end
         if not output.eof and output_stream == "stderr" and type(output.data) == "string" and stderr_bytes < 4096 then
@@ -344,10 +317,13 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
                 output_error = output_error or completion_event("process_exited")
             end
         elseif poller and selected.channel == poller:channel() then
-            poll_asks()
+            if permission_context then
+                local _, err = exchange.advance(permission_context, true)
+                output_error = output_error or err
+            end
         elseif selected.channel == acks then
             local message = selected.value
-            answer_acks(message:payload():data())
+            answer_acks(tostring(message:from()), message:payload():data())
         else
             local event = selected.value
             if event.kind == process.event.CANCEL then output_error = output_error or "executor worker was interrupted"; break end
@@ -360,8 +336,9 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     if monitored then process.unmonitor(runner) end
     process.unlisten(acks)
     if poller then poller:stop() end
-    for _, entry in ipairs(answered) do
-        if entry.outcome == "denied" then note("unproven", entry.ask, entry.outcome) end
+    if permission_context then
+        local _, close_error = exchange.close(permission_context)
+        output_error = output_error or close_error
     end
     if output_error then return {terminal = terminal, observations = observations, stopped = stopped}, output_error end
     if exit_uncertain then return {terminal = terminal, observations = observations, stopped = stopped}, "placement runner did not prove process exit" end
@@ -453,8 +430,7 @@ local function handle(value: unknown): ({[string]: unknown}?, string?)
         end,
         observe = function(listener: unknown, attempt: unknown, normalizer_target: string, resumed: boolean,
             _checkpoint: unknown?, turn_request: turn.Request)
-            return observe(listener, attempt, normalizer_target, resumed, turn_request :: {[string]: unknown},
-                permissions.drive(current_plan))
+            return observe(listener, attempt, normalizer_target, resumed, turn_request, current_plan)
         end,
         close = function(value: unknown)
             local listener = bounds.object(value)

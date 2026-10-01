@@ -12,6 +12,21 @@ end
 
 local function define_tests()
     test.describe("External CLI descriptors", function()
+        test.it("declares permission answer transports for the launch context without provider dispatch", function()
+            local expected: {[string]: {string}} = {
+                claude = {"stdio", "hook_http"}, codex = {"provider", "hook_mcp"},
+                agy = {"provider", "provider"}, grok = {"provider", "provider"},
+                muse = {"provider", "provider"}, opencode = {"provider", "provider"}}
+            for provider, transports in pairs(expected) do
+                local loaded = assert(descriptor.load("bee.driver." .. provider .. ".descriptor:cli"))
+                local headless = descriptor.permission_answer(loaded, "first_turn")
+                local window = descriptor.permission_answer(loaded, "window")
+                test.eq(headless.transport, transports[1])
+                test.eq(window.transport, transports[2])
+                test.eq(descriptor.permission_answer(loaded, "resume").transport, transports[1])
+                if headless.transport == "provider" then test.not_nil(headless.reason) else test.not_nil(headless.adapter_ref) end
+            end
+        end)
         test.it("decodes bounded any-of login evidence and rejects malformed alternatives", function()
             local loaded = assert(descriptor.load("bee.driver.claude.descriptor:cli")) :: Object
             local changed = copy_object(loaded)

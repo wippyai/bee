@@ -121,3 +121,33 @@ entries:
   methods:
   - name: locate
     description: Locate an admitted external driver profile from host-probed executable, login evidence, and platform evidence
+- name: permission_request_hook
+  kind: registry.entry
+  meta:
+    type: harness.permission_adapter
+    comment: Claude and Codex PermissionRequest hook response protocol; host acceptance
+      separately authorizes answers
+  data:
+    adapter:
+      schema_revision: bee.permission-adapter@2
+      event_name: permission.hook
+      event_revision: '1'
+      request:
+        correlation: event_id
+        tool: tool_name
+        input: tool_input
+      response:
+        mode: hook
+        envelope:
+          hookSpecificOutput:
+            hookEventName: PermissionRequest
+        decision_field: hookSpecificOutput.decision.behavior
+        allow_value: allow
+        deny_value: deny
+        reason_field: hookSpecificOutput.decision.message
+      acknowledgment:
+        mode: continued_output
+      deny_acknowledgment:
+        mode: unproven
+      cancellation: deny_before_close
+      proof_fixture: permission_request_hook

@@ -22,6 +22,7 @@ entries:
     - bee.placement.native.binding:cleanup
     - bee.placement.native.binding:capabilities
     - bee.placement.native.binding:measure_executable
+    - bee.gateway.binding:check
     - bee.gateway.binding:admit
     - bee.gateway.binding:ready
     - bee.gateway.binding:revoke

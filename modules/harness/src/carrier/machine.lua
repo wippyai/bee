@@ -40,6 +40,7 @@ local hook_records = require("hook_records")
 local carrier_types = require("carrier_types")
 local hints = require("hints")
 local permission_exchange = require("permission_exchange")
+local descriptor = require("descriptor")
 local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
@@ -64,14 +65,9 @@ type Plan = carrier_types.Plan
 type OutputState = carrier_types.OutputState
 type Session = carrier_types.Session
 local inbox_context_value: hints.Context? = nil
-local permission_context_value: permission_exchange.Context? = nil
 local function inbox_context(): hints.Context
     if inbox_context_value == nil then error("carrier inbox context is not initialized") end
     return inbox_context_value
-end
-local function permission_context(): permission_exchange.Context
-    if permission_context_value == nil then error("carrier permission context is not initialized") end
-    return permission_context_value
 end
 
 function M.open_hints(io: IO, session: Session): (integer?, string?)
@@ -209,7 +205,7 @@ type Measured = {generation: integer, binding: classify.Binding, profile: classi
 -- and proof fixture. The permission exchange stands on this record type;
 -- the label names which check failed.
 type DeclaredAcceptance = {adapter_ref: string, acceptance_ref: string, fixture_digest: string}
-local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAcceptance, binding: classify.Binding, profile: classify.Profile, fixture: boolean, label: string): (Acceptance?, string?)
+function M.verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAcceptance, binding: classify.Binding, profile: classify.Profile, fixture: boolean, label: string): (Acceptance?, string?)
     if not fixture and (not profile.permission.eligible or profile.permission.adapter_ref ~= declared.adapter_ref) then
         return nil, "profile " .. profile.id .. " does not pin permission adapter " .. declared.adapter_ref
     end
@@ -236,7 +232,7 @@ local function verify_acceptance(pinned: registry.Snapshot, declared: DeclaredAc
     if mismatch then return nil, label .. " acceptance: " .. mismatch end
     return {adapter = adapter, acceptance_ref = declared.acceptance_ref, acceptance_digest = record.digest, executable_revision = record.executable_revision, executable_kind = record.executable_kind, executable_digest = record.executable_digest}, nil
 end
-local function measure(request: Request, session_turn: boolean?): (Measured?, string?)
+local function measure(request: Request, session_turn: boolean?, resumed: boolean?): (Measured?, string?)
     local pinned, pin_error = catalog.pin()
     if not pinned then return nil, pin_error end
     local snapshot, snapshot_error = catalog.read(pinned, nil)
@@ -270,9 +266,19 @@ local function measure(request: Request, session_turn: boolean?): (Measured?, st
     local declared = launch_policy.permission_exchange
     if declared then
         if not request.workspace_id then return nil, "a permission exchange needs the request's workspace" end
-        local verified, verify_error = verify_acceptance(pinned, declared, binding, profile, launch_policy.fixture, "permission exchange")
+        local verified, verify_error = M.verify_acceptance(pinned, declared, binding, profile, launch_policy.fixture, "permission exchange")
         if not verified then return nil, verify_error end
-        exchange = {adapter = verified.adapter, acceptance_ref = verified.acceptance_ref, acceptance_digest = verified.acceptance_digest,
+        local transport = "stdio"
+        if not launch_policy.fixture then
+            local capability, capability_error = descriptor.find_provider(pinned, binding.driver_id)
+            if not capability then return nil, capability_error end
+            local context = profile.mode == "window" and "window" or (resumed and "resume" or "first_turn")
+            local answer = descriptor.permission_answer(capability, context)
+            if answer.transport == "provider" then return nil, answer.reason end
+            if answer.adapter_ref ~= declared.adapter_ref then return nil, "host permission adapter differs from the driver's declared transport" end
+            transport = answer.transport
+        end
+        exchange = {transport = transport, answer_mode = launch_policy.permission_answers, adapter = verified.adapter, acceptance_ref = verified.acceptance_ref, acceptance_digest = verified.acceptance_digest,
             executable_revision = verified.executable_revision, executable_kind = verified.executable_kind, executable_digest = verified.executable_digest,
             approver_policy = declared.approver_policy, poll_ms = declared.poll_ms, ttl_ms = declared.ttl_ms}
     end
@@ -328,7 +334,7 @@ end
 -- plan: pin the usable binding and profile, take the driver's declarative
 -- launch, bind executables and requirements from the host policy.
 local function build_plan(io: IO, request: Request, session_turn: boolean?, session_resume_ref: string?): (Plan?, string?)
-    local measured, measure_error = measure(request, session_turn)
+    local measured, measure_error = measure(request, session_turn, session_resume_ref ~= nil)
     if not measured then return nil, measure_error end
     local binding, profile, launch_policy, placement_binding, exchange, configuration_digest, gateway = measured.binding, measured.profile, measured.policy, measured.placement_binding, measured.exchange, measured.configuration_digest, measured.gateway
     if launch_policy.provider_ref and not profile.private_home then
@@ -375,7 +381,7 @@ local function build_plan(io: IO, request: Request, session_turn: boolean?, sess
     prepare_request.resume_ref = resume_ref
     -- The host enabled an interactive permission exchange: the driver
     -- prepares the launch shape that keeps stdin open for the responses.
-    if exchange then prepare_request.permission_exchange = true end
+    if exchange and (exchange.transport == nil or exchange.transport == "stdio") then prepare_request.permission_exchange = true end
     -- The driver shapes its launch to reach the admitted gateway tools and
     -- to load the hook adapter the runner writes.
     if gateway then
@@ -1139,6 +1145,50 @@ local function acknowledged_through(session: Session, sequence: integer): intege
     if held and held - 1 < sequence then return held - 1 end
     return sequence
 end
+local function revalidate_permission(io: IO, session: Session): string?
+    local exchange = session.plan.exchange
+    if not exchange then return "permission exchange no longer enabled" end
+    if session.terminal or session.settled or not session.runner then return "attempt no longer waiting" end
+    local recorded = session.checkpoint.plan_digest
+    if not recorded then return "the checkpoint records no plan digest" end
+    local fresh, plan_error = M.plan(io, session.plan.request)
+    if not fresh then return "measurements unavailable: " .. tostring(plan_error) end
+    if fresh.exchange_refusal then return fresh.exchange_refusal end
+    if fresh.plan_digest ~= recorded then return "plan measurements changed since the checkpoint" end
+    local current = fresh.exchange
+    if not current then return "permission exchange no longer enabled" end
+    if current.adapter.digest ~= exchange.adapter.digest then return "permission adapter changed" end
+    if current.acceptance_digest ~= exchange.acceptance_digest then return "acceptance record changed" end
+    for _, state in ipairs(session.checkpoint.permissions) do
+        local found: permission.Request = {permission_request_id = state.permission_request_id, correlation_id = state.correlation_id,
+            acknowledgment_id = state.acknowledgment_id or state.correlation_id, tool_name = state.tool_name,
+            input_digest = state.input_digest, input = {}, prompt = state.prompt}
+        local proposal_digest = digest_of(permission.proposal(exchange.adapter, {action_id = session.plan.request.action_id,
+            attempt_id = session.plan.request.attempt_id, plan_digest = session.plan.plan_digest}, found))
+        if proposal_digest ~= state.proposal_digest then return "proposal no longer digests as recorded" end
+    end
+    local reconcile_target = M.placement_target(session.plan, "reconcile")
+    if not reconcile_target then return "selected placement binds no reconcile" end
+    local reconciled, reconcile_error = must(io, reconcile_target, {attempt_id = session.plan.request.attempt_id})
+    if reconcile_error then return "placement reconcile: " .. reconcile_error end
+    local attempt, attempt_decode_error = placement_decode.attempt(reconciled)
+    if not attempt then return "placement reconcile returned an invalid attempt: " .. tostring(attempt_decode_error) end
+    if attempt.execution_state ~= "running" then return "placement is " .. tostring(attempt.execution_state) .. " under its grants and projections" end
+    return nil
+end
+local function permission_context(io: IO, session: Session): permission_exchange.Context
+    return {state = {request = session.plan.request, plan_digest = session.plan.plan_digest, exchange = session.plan.exchange,
+            permissions = session.checkpoint.permissions, epoch = session.epoch, turn_id = session.turn_open and session.turn_id or nil},
+        now_ms = io.now_ms, approvals = M.APPROVALS, max_consume_attempts = permission_exchange.MAX_CONSUME_ATTEMPTS,
+        commit = function(records: {Object}): (boolean, string?) return M.commit(io, session, records) end,
+        call = io.call, digest_of = digest_of,
+        step = function(name: string) step(io, name) end,
+        write = function(write_id: string, line: string): (boolean, string?) return M.write(io, session, write_id, line) end,
+        revalidate = function(): string? return revalidate_permission(io, session) end,
+        recovered = session.recovered,
+        waiting = function(): boolean return not session.terminal and not session.eof.stdout and session.runner ~= nil end,
+        settled = function(): boolean return session.settled ~= nil or session.terminal ~= nil end}
+end
 function M.on_output(io: IO, session: Session, sender: string, message: placement_protocol.Output): (boolean, string?)
     if not from_runner(session, sender, message.generation) then return true, nil end
     if message.sequence <= session.last_sequence[message.stream] then
@@ -1239,9 +1289,9 @@ function M.on_output(io: IO, session: Session, sender: string, message: placemen
     -- stdout position; records committed beyond it replay idempotently from
     -- the chunks the runner still holds.
     local at_boundary = session.held_from == nil
-    local detected, detect_error = permission_exchange.detect(permission_context(), session, records)
+    local detected, detect_error = permission_exchange.detect(permission_context(io, session), records)
     if detect_error then return refuse(detect_error) end
-    permission_exchange.acknowledge(session, records)
+    permission_exchange.acknowledge(permission_context(io, session), records)
     local total = #records
     local offset = 0
     while true do
@@ -1524,10 +1574,18 @@ function M.on_write_status(io: IO, session: Session, sender: string, message: pl
     return true, nil
 end
 function M.advance_permissions(io: IO, session: Session, poll: boolean): (boolean, string?)
-    return permission_exchange.advance(permission_context(), io, session, poll)
+    return permission_exchange.advance(permission_context(io, session), poll)
 end
 function M.close_exchanges(io: IO, session: Session, drain_elapsed: boolean): (boolean, string?)
-    return permission_exchange.close_exchanges(permission_context(), io, session, drain_elapsed)
+    if #session.checkpoint.pending_writes > 0 then
+        if not drain_elapsed then return false, nil end
+        local pending = session.checkpoint.pending_writes
+        for _, write in ipairs(pending) do
+            local settled, err = settle_write(io, session, write.write_id, "uncertain", "no acknowledgment before settlement")
+            if not settled then return false, err end
+        end
+    end
+    return permission_exchange.close(permission_context(io, session))
 end
 
 function M.settle(io: IO, session: Session, drain_elapsed: boolean): (settle.Settlement?, string?)
@@ -1585,7 +1643,5 @@ function M.capabilities(): {[string]: unknown}
 end
 inbox_context_value = {threads = M.THREADS, delivery = M.DELIVERY, must = must, commit = M.commit, step = step,
     thread_call = thread_call, write = M.write}
-permission_context_value = {approvals = M.APPROVALS, max_consume_attempts = permission_exchange.MAX_CONSUME_ATTEMPTS, commit = M.commit, must = must, step = step,
-    digest_of = digest_of, plan = M.plan, placement_target = M.placement_target, write = M.write, settle_write = settle_write,
-    thread_call = thread_call, drain_hooks = M.drain_hooks}
+
 return M

@@ -114,6 +114,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
+    bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     preferences: bee.driver:preferences
 - name: window_hooks_test
@@ -1547,3 +1548,16 @@ entries:
   imports:
     managed_run: bee.harness.launch:managed_run
     bounds: bee.threads.records:bounds
+
+- name: permission_exchange_test
+  kind: function.lua
+  source: file://permission_exchange_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [json, hash]
+  imports:
+    test: wippy.test:test
+    exchange: bee.harness.permission:exchange
+    adapter: bee.harness.permission:adapter
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical

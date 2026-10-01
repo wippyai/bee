@@ -24,6 +24,20 @@ entries:
       errors: [error]
       usage: [usage]
     configure: agy
+    capabilities:
+      permission_answers:
+        window:
+          transport: provider
+          reason: 'Bee runs print stream-json: user messages are supported, but no permission-response channel is declared
+            by this CLI. The window retains provider approval prompts; Bee command hooks are observations only.'
+        first_turn:
+          transport: provider
+          reason: 'Bee runs print stream-json: user messages are supported, but no permission-response channel is declared
+            by this CLI. The window retains provider approval prompts; Bee command hooks are observations only.'
+        resume:
+          transport: provider
+          reason: 'Bee runs print stream-json: user messages are supported, but no permission-response channel is declared
+            by this CLI. The window retains provider approval prompts; Bee command hooks are observations only.'
     options:
       profiles: [window, session, batch]
       unknown_prefix: ''

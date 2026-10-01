@@ -10,6 +10,7 @@ entries:
   - bee.executor.external.security:runner_observation
   - bee.security.approvals:approval_request_policy
   - bee.security.approvals:approval_consume_policy
+  - bee.security.threads:thread_sessions_owner_policy
   - bee.harness.security:carrier_policy
   - bee.harness.security:carrier_environment_policy
   - bee.harness.security:profile_workspace_policy
@@ -24,6 +25,8 @@ entries:
   - bee.security.gateway:gateway_supervision_policy
   - bee.security.storage:workspace_folder_browse_policy
   targets:
+  - entry: bee.executor.external.binding:answer_hook
+    path: .security.policies
   - entry: bee.executor.external.binding:run_turn
     path: .security.policies
 - name: run_turn
@@ -39,9 +42,27 @@ entries:
     canonical: bee.threads.records:canonical
     clock: bee:clock
     machine: bee.harness.carrier:machine
-    permission: bee.harness.permission:adapter
-    permissions: bee.executor.external.service:permissions
+    exchange: bee.harness.permission:exchange
+    checkpoint: bee.harness.carrier:checkpoint
+    placement_decode: bee.placement:decode
     stream: bee.executor.external.service:stream
     placement_protocol: bee.placement.native:protocol
     driver_types: bee.driver:types
     turn: bee.executor.external.service:turn
+- name: answer_hook
+  kind: function.lua
+  source: file://answer_hook.lua
+  method: handle
+  modules: [funcs, security, time, hash]
+  security: {policies: []}
+  imports:
+    bounds: bee.threads.records:bounds
+    canonical: bee.threads.records:canonical
+    exchange: bee.harness.permission:exchange
+    checkpoint: bee.harness.carrier:checkpoint
+    admission: bee.harness.launch:admission
+    catalog: bee.harness.catalog:catalog
+    classify: bee.harness.catalog:classify
+    policy: bee.harness.carrier:policy
+    machine: bee.harness.carrier:machine
+    descriptor: bee.driver:descriptor

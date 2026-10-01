@@ -14,7 +14,7 @@ M.RETRY_AFTER_MS = 500
 type Object = {[string]: unknown}
 -- The closed catalog of events a binding may admit, as both harnesses name
 -- them. Nothing outside it is accepted, whatever a harness sends.
-M.EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "Stop", "StopFailure", "SessionEnd"}
+M.EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "Stop", "StopFailure", "SessionEnd"}
 -- Fields kept verbatim: event kind, the harness's correlation claims and
 -- explicitly selected non-content values. Content fields are never kept;
 -- their byte length and a sha256 over their canonical JSON are, so a
@@ -63,7 +63,7 @@ end
 -- delivery and never merged.
 function M.occurrence(event: string, payload: Object): (string, boolean)
     local session = bounds.id(payload.session_id) or ""
-    if event == "PreToolUse" or event == "PostToolUse" or event == "PostToolUseFailure" then
+    if event == "PreToolUse" or event == "PostToolUse" or event == "PostToolUseFailure" or event == "PermissionRequest" then
         local id = bounds.id(payload.tool_use_id)
         if id then return "tool:" .. id, false end
         return "tool:" .. session, true

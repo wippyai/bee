@@ -138,6 +138,18 @@ local function define_tests()
             local escaped = assert(configuration.hook_files(gateway, '/private/"owner\\home'))
             test.is_true(escaped[2].content:find('"/private/\\"owner\\\\home/.codex/hooks.json:session_start:0:0"', 1, true) ~= nil)
         end)
+        test.it("renders a real permission request with a decision timeout and no invented tool identity", function()
+            local gateway: configuration.Gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {},
+                hooks = {"PermissionRequest"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_HOOK_TOKEN"}
+            local args, err = configuration.session_arguments(gateway, nil)
+            if not args then error(tostring(err)) end
+            test.ok(args[6]:find("hooks.PermissionRequest=", 1, true) ~= nil)
+            test.ok(args[6]:find("timeout=650", 1, true) ~= nil)
+            test.ok(args[6]:find("tool_input", 1, true) ~= nil)
+            test.eq(args[6]:find("tool_use_id", 1, true), nil)
+            local files = assert(configuration.hook_files(gateway, "/private/home"))
+            test.ok(files[2].content:find("permission_request", 1, true) ~= nil)
+        end)
         test.it("rejects gateway hooks Codex cannot deliver", function()
             local gateway: configuration.Gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {"thread_read"}, hooks = {"SessionEnd"}, token_environment = "BEE_GATEWAY_TOKEN", hook_token_environment = "BEE_GATEWAY_HOOK_TOKEN"}
             local files, err = configuration.hook_files(gateway, "/private/owner/home")

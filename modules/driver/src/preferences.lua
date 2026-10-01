@@ -18,7 +18,8 @@ M.MAX_TURN_BUDGET = turn_budget.MAX
 type Object = {[string]: unknown}
 type Scalar = string | number | boolean
 type Option = {kind: "enum", values: {Scalar}} | {kind: "text", max_bytes: integer}
-type Value = {options: {[string]: Scalar}, mcp_tools: {string}, instructions: string}
+type Bee = {permission_answers: string?}
+type Value = {bee: Bee?, options: {[string]: Scalar}, mcp_tools: {string}, instructions: string}
 
 local RESERVED_OPTIONS: {[string]: boolean} = {
     profile_id = true,
@@ -183,7 +184,7 @@ end
 function M.decode(value: unknown): (Value?, string?)
     local object = bounds.object(value)
     if not object then return nil, "saved preferences must be an object" end
-    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions"})
+    local unexpected = bounds.fields(object, {"options", "mcp_tools", "instructions", "bee"})
     if unexpected then return nil, unexpected end
     local options, options_error = decode_options(object.options == nil and {} or object.options, "options")
     if not options then return nil, options_error end
@@ -191,7 +192,18 @@ function M.decode(value: unknown): (Value?, string?)
     if not mcp_tools then return nil, tools_error end
     local text, instructions_error = instructions.decode(object.instructions, "instructions", true)
     if not text then return nil, instructions_error end
-    return {options = options, mcp_tools = mcp_tools, instructions = text}, nil
+    local bee: Bee? = nil
+    if object.bee ~= nil then
+        local declared = bounds.object(object.bee)
+        if not declared or bounds.fields(declared, {"permission_answers"}) then return nil, "bee preferences must name only permission_answers" end
+        local mode: string? = nil
+        if declared.permission_answers ~= nil then
+            mode = bounds.member(declared.permission_answers, {"provider", "ask", "deny"})
+            if not mode then return nil, "bee.permission_answers must be provider, ask or deny" end
+        end
+        bee = {permission_answers = mode}
+    end
+    return {bee = bee, options = options, mcp_tools = mcp_tools, instructions = text}, nil
 end
 
 local function allowed_value(values: {Scalar}, selected: Scalar): boolean

@@ -48,6 +48,18 @@ local function key(name: string, rune: string?)
 end
 local function define_tests()
     test.describe("Agent profile form input", function()
+        test.it("shows Docker revoke under Advanced at both frame sizes", function()
+            local current = state()
+            current.form.draft.placement_profile_ref = "bee.placement.docker:coding"
+            current.advanced = true
+            for _, size in ipairs({{120, 36}, {80, 24}}) do
+                local shown = view.draw(size[1], size[2], appearance.defaults(), current)
+                test.is_true(shown.rows[size[2] - 1]:find("Revoke Docker access", 1, true) ~= nil)
+            end
+            view.action(current, "revoke_docker")
+            test.is_true(current.confirming_revoke == true)
+        end)
+
         test.it("requires confirmation before the person revokes Docker access", function()
             local s = state()
             s.form.draft.placement_profile_ref = "bee.placement.docker:coding"

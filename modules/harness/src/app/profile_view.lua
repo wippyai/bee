@@ -353,6 +353,9 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         state.confirming_remove and painter.theme.text or painter.theme.muted)
     if height >= 3 then
         local buttons: {frame.Button} = {{kind = "save", key = "Ctrl+S", label = "Save", enabled = not state.confirming_remove and state.form.pending ~= "remove", primary = true}}
+        if state.advanced and state.form.draft.placement_profile_ref == "bee.placement.docker:coding" then
+            buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
+        end
         if state.form.revision > 0 then
             buttons[#buttons + 1] = {kind = "remove", key = "Ctrl+D", label = state.confirming_remove and "Confirm" or "Remove",
                 enabled = state.form.pending ~= "save", primary = state.confirming_remove}

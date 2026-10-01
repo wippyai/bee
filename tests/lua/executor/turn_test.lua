@@ -21,13 +21,15 @@ local function base_request(): {[string]: unknown}
 end
 
 local function plan_for(request: unknown, with_gateway: boolean?): {[string]: unknown}
-    local value = request :: {[string]: unknown}
-    local admission = value.admission :: {[string]: unknown}
+    local value = assert(bounds.object(request))
+    local admission = assert(bounds.object(value.admission))
     test.eq(value.prompt, "[Bee sender principal owner]\ncontinue the task")
     test.eq(admission.brief, "continue the task")
+    local methods = assert(bounds.object(value.placement_methods))
+    if type(methods.prepare) ~= "string" then error("placement prepare method must be text") end
     local placement_request: {[string]: unknown} = {
         attempt_id = "attempt-current", binding_ref = "bee.driver.fixture:binding", profile_id = "session",
-        placement_binding_ref = ((value.placement_methods :: {[string]: string}).prepare):gsub("prepare$", "binding"),
+        placement_binding_ref = methods.prepare:gsub("prepare$", "binding"),
         launch = {executable = "fixture-cli", argv = {"--prompt"}, environment = {}, readiness = "protocol:ready"},
     }
     if with_gateway then placement_request.gateway = {tools = {"session_send"}, hooks = {"SessionStart"}} end
@@ -48,14 +50,14 @@ local function success_io(calls: {string}?, expect_resume: boolean?, resume_iden
         end,
         plan = function(request: unknown)
             seen[#seen + 1] = "plan"
-            local value = request :: {[string]: unknown}
-            local checkpoint = value.checkpoint and value.checkpoint :: {[string]: unknown} or nil
+            local value = assert(bounds.object(request))
+            local checkpoint = value.checkpoint and assert(bounds.object(value.checkpoint)) or nil
             test.eq(checkpoint and checkpoint.resume_ref, expect_resume and selected_resume_ref or nil)
             return plan_for(request, with_gateway), nil
         end,
         prepare = function(request: unknown)
             seen[#seen + 1] = "prepare"
-            local args = request :: {[string]: unknown}
+            local args = assert(bounds.object(request))
             test.not_nil(args.launch)
             return {attempt_id = "attempt-current", execution_state = "intended", cleanup_state = "pending"}, nil
         end,
@@ -105,7 +107,7 @@ local function define_tests()
     test.describe("External executor turn", function()
         test.it("executes the admitted Docker placement through the shared turn lifecycle", function()
             local request = base_request()
-            local methods = request.placement_methods :: {[string]: string}
+            local methods = assert(bounds.object(request.placement_methods))
             for name in pairs(methods) do methods[name] = "bee.placement.docker.binding:" .. name end
             local calls: {string} = {}
             local result, reason = turn.execute(success_io(calls), request)
@@ -114,7 +116,7 @@ local function define_tests()
         end)
         test.it("refuses mixed placement operations before invoking the host", function()
             local request = base_request()
-            local methods = request.placement_methods :: {[string]: string}
+            local methods = assert(bounds.object(request.placement_methods))
             methods.prepare = "bee.placement.docker.binding:prepare"
             local calls: {string} = {}
             local result, reason = turn.execute(success_io(calls), request)
@@ -208,8 +210,8 @@ local function define_tests()
             test.eq(result.state, "settled")
             test.eq(result.outcome, "succeeded")
             test.eq(result.answer, "done")
-            test.eq((result.checkpoint :: {[string]: unknown}).resume_ref, "conversation-1")
-            test.eq((result.usage :: {[string]: unknown}).input_tokens, 5)
+            test.eq((assert(bounds.object(result.checkpoint))).resume_ref, "conversation-1")
+            test.eq((assert(bounds.object(result.usage))).input_tokens, 5)
             test.eq(table.concat(calls, ","), "plan,prepare,listen,attach,start,observe,close,reconcile:attempt-current")
         end)
 
@@ -338,8 +340,8 @@ local function define_tests()
             local result, err = turn.execute(success_io(calls, true, "opaque-driver-owned-identity"), request)
             if not result then error(tostring(err)) end
             test.eq(result.outcome, "succeeded")
-            test.eq((result.checkpoint :: {[string]: unknown}).resume_ref, "opaque-driver-owned-identity")
-            test.eq((result.usage :: {[string]: unknown}).output_tokens, 7)
+            test.eq((assert(bounds.object(result.checkpoint))).resume_ref, "opaque-driver-owned-identity")
+            test.eq((assert(bounds.object(result.usage))).output_tokens, 7)
             test.eq(calls[1], "plan")
         end)
 
@@ -361,7 +363,7 @@ local function define_tests()
 
         test.it("rejects admission for a different profile", function()
             local request = base_request()
-            local admission = request.admission :: {[string]: unknown}
+            local admission = assert(bounds.object(request.admission))
             admission.profile_id = "batch"
             local result, err = turn.execute(success_io(), request)
             test.is_nil(result)

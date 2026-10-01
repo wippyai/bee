@@ -81,14 +81,14 @@ modules:
 - name: bee/placement-docker
   version: 0.1.0-dev
 - name: userspace/docker
-  version: 0.5.12
-  hash: sha256:e1a897dc2147731aa3be69b56c92c88595afe0a64a38b8efefe695cfc5f20021
+  version: 0.5.17
+  hash: ac04ada5befd174f81773606f7ffc14cdc70874002375c04370a541a58fae204
 - name: wippy/bootloader
   version: 0.3.16
   hash: a31e9c64ec482ced0b0095bc0c85b2a69a7b1361c207ab43ffae807da473f6bc
 - name: wippy/migration
-  version: 0.3.19
-  hash: 3067a844cc4a453a6f39a8adc332def9ee7c00e4eba2afb27d7e3ddacb3cda1c
+  version: 0.3.20
+  hash: bb209bb88ee6493884f711e8e0d58300e878783d82813dfeb0f7f2c4d4a0be5c
 - name: wippy/security
   version: 0.4.3
   hash: f636859979e88b23647a78fb9aa8a553799de18750b0fb5fb085cbe21542c86c

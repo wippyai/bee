@@ -97,13 +97,14 @@ local function decode(value: unknown): (Request?, string?)
     local prepare_target = id(placement_methods.prepare)
     local placement_prefix = prepare_target and prepare_target:match("^(bee[.]placement[.][A-Za-z0-9_.-]+[.]binding:)prepare$")
     if not placement_prefix then return nil, "placement prepare is not a Bee placement operation" end
+    local resolved_placement: {[string]: string} = {}
     for _, method in ipairs({"prepare", "attach", "start", "reconcile", "cleanup"}) do
-        if placement_methods[method] ~= placement_prefix .. method then
+        local target = placement_prefix .. method
+        if placement_methods[method] ~= target then
             return nil, "placement_methods." .. method .. " differs from the selected placement binding"
         end
+        resolved_placement[method] = target
     end
-    local resolved_placement: {[string]: string} = {}
-    for method, target in pairs(PLACEMENT_METHODS) do resolved_placement[method] = target end
     local admission = object(request.admission)
     if not admission or admission.attempt_id ~= attempt_id then return nil, "session admission attempt differs from the turn" end
     if admission.profile_id ~= profile_id then return nil, "session admission profile differs from the selected profile" end

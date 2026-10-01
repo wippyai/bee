@@ -18,7 +18,7 @@ entries:
 - name: dependency_docker
   kind: ns.dependency
   component: userspace/docker
-  version: 0.5.12
+  version: 0.5.17
 - name: protected_namespace
   kind: ns.requirement
   default: bee.placement.docker

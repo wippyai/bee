@@ -209,6 +209,7 @@ entries:
     test: wippy.test:test
     machine: bee.harness.carrier:machine
     driver_types: bee.driver:types
+    placement_decode: bee.placement:decode
     bounds: bee.threads.records:bounds
     policy: bee.harness.carrier:policy
     placement_types: bee.placement:types

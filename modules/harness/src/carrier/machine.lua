@@ -165,24 +165,6 @@ local function thread_page(value: unknown, cursor: integer, limit: integer): (Th
     if #records > 0 and page_cursor < previous_sequence then return nil, "page cursor precedes its final record" end
     return {records = records, scanned_through = page_cursor, has_more = has_more}, nil
 end
-type StdinClosure = {closed: boolean, reason: string?}
-local function stdin_closure(value: unknown, attempt_id: string): (StdinClosure?, string?)
-    local object = bounds.object(value)
-    if not object then return nil, "close_stdin result must be an object" end
-    local unknown_field = bounds.fields(object, {"attempt", "closed", "reason"})
-    if unknown_field then return nil, "close_stdin: " .. unknown_field end
-    local attempt, attempt_error = placement_decode.attempt(object.attempt)
-    if not attempt then return nil, "close_stdin attempt: " .. tostring(attempt_error) end
-    if attempt.attempt_id ~= attempt_id then return nil, "close_stdin returned another attempt" end
-    if type(object.closed) ~= "boolean" then return nil, "close_stdin closed flag is invalid" end
-    local reason: string? = nil
-    if object.reason ~= nil then
-        reason = bounds.text(object.reason, 4096)
-        if not reason or reason == "" then return nil, "close_stdin refusal reason is invalid" end
-    end
-    if (object.closed == true and reason ~= nil) or (object.closed == false and reason == nil) then return nil, "close_stdin result and reason disagree" end
-    return {closed = object.closed, reason = reason}, nil
-end
 local function must(io: IO, target: string, request: unknown): (unknown, string?)
     local raw, call_error = io.call(target, request)
     local reply, reply_error = reply_of(raw, call_error)
@@ -1406,7 +1388,7 @@ function M.end_session(io: IO, session: Session, record: boolean): (string, stri
         local closed = false
         local reason = "stdin could not be closed"
         if reply.ok then
-            local answer, answer_error = stdin_closure(reply.value, session.plan.request.attempt_id)
+            local answer, answer_error = placement_decode.stdin_closure(reply.value, session.plan.request.attempt_id)
             if not answer then return "none", "placement returned malformed close_stdin data: " .. tostring(answer_error) end
             closed = answer.closed
             if answer.reason then reason = answer.reason end

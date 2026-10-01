@@ -8,6 +8,7 @@ local classify = require("classify")
 local checkpoint = require("checkpoint")
 local stream_json = require("stream_json")
 local bounds = require("bounds")
+local placement_decode = require("placement_decode")
 local function claim_reply(epoch: integer): {[string]: unknown}
     return {ok = true, value = {attempt_id = "attempt", action_id = "action", carrier_epoch = epoch,
         checkpoint_revision = 0, attempt_state = "prepared"}}
@@ -69,6 +70,18 @@ local function plan(mode: string, protocol: string): machine.Plan
 end
 local function define_tests()
     test.describe("Carrier transport ownership", function()
+        test.it("validates stdin closure against the selected attempt and explicit refusal", function()
+            local value, err = placement_decode.stdin_closure({attempt = placement_attempt(nil), closed = true}, "attempt")
+            test.is_nil(err)
+            test.is_true(value and value.closed == true)
+            local wrong, wrong_error = placement_decode.stdin_closure({attempt = placement_attempt(nil), closed = true}, "other")
+            test.is_nil(wrong)
+            test.eq(wrong_error, "close_stdin returned another attempt")
+            local invalid = placement_decode.stdin_closure({attempt = placement_attempt(nil), closed = false}, "attempt")
+            test.is_nil(invalid)
+            local refused = placement_decode.stdin_closure({attempt = placement_attempt(nil), closed = false, reason = "runner unavailable"}, "attempt")
+            test.eq(refused and refused.reason, "runner unavailable")
+        end)
         test.it("refuses an unserializable normalizer state before commit or output acknowledgment", function()
             local selected = plan("session", "stream-json")
             local point = checkpoint.new({binding_ref = "binding", binding_digest = "binding-digest", profile_id = "window", profile_digest = "profile-digest"}, 1)

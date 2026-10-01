@@ -98,6 +98,7 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
     local stopped = false
     local output_error: string? = nil
     local exit_uncertain = false
+    local input_close_attempted = false
     local stderr_bytes: integer = 0
     local function completion_event(stage: string): string?
         local _, err = service_call(tostring(request.observation_target), {turn = request.attempt_id, claim = request.claim,
@@ -298,7 +299,34 @@ local function observe(listener_value: unknown, attempt_value: unknown, normaliz
         end
         process.send(sender, placement_protocol.TOPIC_ACK, {generation = generation, consumed_through = sequence})
     end
+    local function finish_input(): string?
+        if input_close_attempted or exited or terminal == nil or not plan or plan.launch.session_end ~= "stdin_close" then return nil end
+        if permission_point and #permission_point.pending_writes > 0 then return nil end
+        input_close_attempted = true
+        local target = plan.placement_binding.methods.close_stdin
+        if not target then return "selected placement cannot close stdin" end
+        if permission_point then
+            permission_point.input_closed = true
+            local committed, err = commit_permissions({{body = {type = "extension", event_key = "executor:input_close_intended",
+                data = {type = "extension", event_name = "bee.carrier.input", event_revision = "1",
+                    payload_json = canonical.encode({phase = "close_intended"})}}}})
+            if not committed then return err end
+        else
+            local err = completion_event("input_close_intended")
+            if err then return err end
+        end
+        local raw, call_error = service_call(target, {attempt_id = attempt_id})
+        local answer, decode_error = placement_decode.stdin_closure(raw, attempt_id)
+        if not answer then
+            completion_event("input_close_uncertain")
+            return call_error or decode_error
+        end
+        local err = completion_event(answer.closed and "input_closed" or "input_close_uncertain")
+        return err or (not answer.closed and answer.reason or nil)
+    end
     while not (stdout_eof and stderr_eof and exited) do
+        local close_error = finish_input()
+        if close_error then output_error = output_error or close_error; break end
         local cases = {listener.outputs:case_receive(), listener.exits:case_receive(), listener.events:case_receive(),
             acks:case_receive()}
         if poller then cases[#cases + 1] = poller:channel():case_receive() end

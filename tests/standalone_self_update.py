@@ -1,6 +1,7 @@
 """Prove source-free self-update, exact approval, live About, and offline restore."""
 from pathlib import Path
 import json
+import hashlib
 import os
 import selectors
 import shutil
@@ -8,9 +9,11 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 
 import yaml
 from workspace import ROOT, RUNTIME, database_environment
+from native_self_update import exercise as native_exercise
 
 PROBE = r'''
 local registry = require("registry")
@@ -183,6 +186,49 @@ def artifact_paths(deployment):
     return lock, result
 
 
+def build_native(folder, baseline):
+    """Embed the exact baseline packs in the real public native launcher."""
+    supplied = os.environ.get("BEE_SELF_UPDATE_BINARY")
+    if supplied:
+        binary = Path(supplied).resolve()
+        provenance = json.loads(binary.with_name(binary.name + ".provenance.json").read_text())
+        assert hashlib.sha256(binary.read_bytes()).hexdigest() == provenance["artifacts"]["binary"], "native binary digest changed"
+        lock, _ = artifact_paths(baseline)
+        expected = {(row["name"], row["version"], row["hash"].removeprefix("sha256:")) for row in lock["modules"]}
+        actual = {(pack["module"], pack["version"], pack["sha256"]) for pack in provenance["manifest"]["application"]["packs"]}
+        assert actual == expected, "native binary does not embed the exact baseline packs"
+        return binary
+    manifest = json.loads(RUNTIME.with_name(RUNTIME.name + ".provenance.json").read_text())["manifest"]
+    lock, paths = artifact_paths(baseline)
+    manifest["application"]["packs"] = [
+        {"module": row["name"], "version": row["version"],
+         "path": os.path.relpath(paths[f"{row['name']}@{row['version']}"], folder),
+         "sha256": row["hash"].removeprefix("sha256:")}
+        for row in lock["modules"]]
+    bundle = folder / "native.build.json"
+    bundle.write_text(json.dumps(manifest))
+    binary = folder / "bee"
+    subprocess.run(["make", "standalone-sealed", f"BEE_BUNDLE_MANIFEST={bundle}",
+                    f"BEE_BINARY={binary}"], cwd=ROOT, check=True, timeout=600)
+    return binary
+
+
+def native_attached(folder, baseline, target, url):
+    """Apply through Modules on a PTY, then navigate About and detach."""
+    binary = build_native(folder, baseline)
+    scratch = folder / "native"
+    for name in ("project", "tmp", "home/.config"):
+        (scratch / name).mkdir(parents=True, exist_ok=True)
+    baseline_lock, _ = artifact_paths(baseline)
+    target_lock, _ = artifact_paths(target)
+    versions = [next(row["version"] for row in lock["modules"] if row.get("root"))
+                for lock in (baseline_lock, target_lock)]
+    args = SimpleNamespace(binary=binary, from_version=versions[0], to_version=versions[1],
+                           marker=versions[1], evidence=folder, hub_url=url)
+    native_exercise(args, scratch, "live")
+    return args, scratch
+
+
 def run_probe(folder, environment, command, marker, offline=False):
     arguments = [str(RUNTIME), "run", "--verbose", command, "--host", "bee:workers"]
     if offline:
@@ -283,11 +329,16 @@ def exercise(folder, baseline, target):
                                   cwd=project, env=environment, text=True, capture_output=True, timeout=120)
             assert lint.returncode == 0, lint.stdout + lint.stderr
             run_probe(project, environment, "standalone-self-update", "STANDALONE_SELF_UPDATE_APPLIED")
+            native_args, native_scratch = native_attached(folder, baseline, target, url)
             server.terminate()
             server.wait(timeout=10)
             # The same registry/history and cached artifacts boot with no Hub
             # and no network interface in a fresh runtime owner.
             run_probe(project, environment, "standalone-self-update-offline", "STANDALONE_SELF_UPDATE_OFFLINE_PASS", offline=True)
+            subprocess.run(["unshare", "--user", "--map-root-user", "--net", "--", sys.executable,
+                            str(Path(__file__).resolve()), "--native-offline", str(native_args.binary),
+                            str(native_scratch), str(folder), native_args.from_version, native_args.to_version],
+                           check=True, timeout=300)
         finally:
             if server.poll() is None:
                 server.terminate()
@@ -315,8 +366,18 @@ def main(deployment=None):
         print(f"Standalone fixture retained: {folder}", flush=True)
         raise
     else:
+        if os.environ.get("BEE_SELF_UPDATE_EVIDENCE"):
+            evidence = Path(os.environ["BEE_SELF_UPDATE_EVIDENCE"]).resolve()
+            evidence.mkdir(parents=True, exist_ok=True)
+            for artifact in (*folder.glob("*.frame.txt"), *folder.glob("*.pids.json")):
+                shutil.copy2(artifact, evidence / artifact.name)
         shutil.rmtree(folder)
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    if len(sys.argv) > 1 and sys.argv[1] == "--native-offline":
+        args = SimpleNamespace(binary=Path(sys.argv[2]), evidence=Path(sys.argv[4]),
+                               from_version=sys.argv[5], to_version=sys.argv[6], marker=sys.argv[6])
+        native_exercise(args, Path(sys.argv[3]), "offline")
+    else:
+        main(sys.argv[1] if len(sys.argv) > 1 else None)

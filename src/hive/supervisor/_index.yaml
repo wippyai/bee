@@ -84,14 +84,6 @@ entries:
   security: {policies: [bee.security.hive:hive_names_policy, bee.security.hive:hive_advertise_policy]}
   imports:
     types: bee.hive:types
-- name: enrollment_nodes
-  kind: registry.entry
-  meta:
-    type: bee.hive.supervisor_enrollment
-    comment: Host-owned table of the local client nodes and Hive peers the supervisor admits after boot; the host writes it, and empty lists admit no post-boot node
-  data:
-    nodes: []
-    peers: []
 - name: audiences
   kind: library.lua
   source: file://exposure_audiences.lua

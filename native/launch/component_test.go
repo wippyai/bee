@@ -277,6 +277,11 @@ func TestHostStartAddsEnrollmentPublisherForOwner(t *testing.T) {
 // enrollmentRegistryStub is an inert registry for the host Start test.
 type enrollmentRegistryStub struct{}
 
+func (enrollmentRegistryStub) GetOverlay(string) (registry.State, uint64, error) { return nil, 0, nil }
+func (enrollmentRegistryStub) ApplyOverlay(context.Context, string, uint64, registry.ChangeSet) (uint64, error) {
+	return 1, nil
+}
+
 func (enrollmentRegistryStub) GetAllEntries() ([]registry.Entry, error) { return nil, nil }
 func (enrollmentRegistryStub) GetEntry(registry.ID) (registry.Entry, error) {
 	return registry.Entry{}, nil

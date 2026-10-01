@@ -35,6 +35,15 @@ func main() {
 		mustPack(err)
 		entries, err := reader.GetEntries()
 		mustPack(err)
+		// Native enrollment is host-owned now; old sealed seeds still contain
+		// the retired package default. Current fixture packs omit that entry.
+		filtered := entries[:0]
+		for _, entry := range entries {
+			if entry.ID.String() != "bee.hive.supervisor:enrollment_nodes" {
+				filtered = append(filtered, entry)
+			}
+		}
+		entries = filtered
 		for i := range entries {
 			entry := &entries[i]
 			fields, ok := entry.Data.(map[string]any)
@@ -67,6 +76,7 @@ func main() {
 		}
 		metadata, err := reader.GetMetadata()
 		mustPack(err)
+		metadata["version"] = pack.Version
 		var output bytes.Buffer
 		mustPack(wapp.NewWriter().PackWithResources(metadata, entries, resources, &output))
 		mustPack(os.MkdirAll(filepath.Dir(pack.Output), 0700))

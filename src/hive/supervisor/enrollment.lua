@@ -5,9 +5,9 @@
 local bounds = require("bounds")
 local M = {}
 type State = {configured_nodes: {[string]: boolean}}
--- ENTRY is the host-owned registry entry. A host overlay replaces its data with
--- the nodes it admits; discovery and membership never write it.
-M.ENTRY = "bee.hive.supervisor:enrollment_nodes"
+-- ENTRY is published by the native host as a process-local registry overlay.
+-- Package replacement cannot write it; discovery and membership never write it.
+M.ENTRY = "bee.hive.host:enrollment"
 M.TYPE = "bee.hive.supervisor_enrollment"
 -- nodes are local clients of this owner: they reach the desktop bridge and the
 -- invite operations. peers are nodes of this node's hive: they establish a

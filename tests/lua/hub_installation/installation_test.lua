@@ -2,6 +2,8 @@
 -- body a person decides on, ownership of a recorded request and the outcome
 -- an apply reply reports. Pure; no Hub or approval owner runs.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local installation = require("installation")
 type Object = {[string]: unknown}
 local DIGEST = string.rep("a", 64)
@@ -81,22 +83,22 @@ local function define_tests()
             test.eq(prompt, "Install acme/tool 1.2.0 from the Hub?")
             test.eq(proposal.ref, installation.REF)
             test.eq(proposal.input_digest, DIGEST)
-            local payload = proposal.payload :: Object
+            local payload = assert(bounds.object(proposal.payload))
             test.eq(payload.source, "hub")
             test.eq(payload.version, "1.2.0")
             test.eq(payload.binding_id, "binding-1")
             test.eq(payload.attempt_id, "attempt-1")
-            local dependencies = payload.dependency_changes :: {string}
+            local dependencies = principals.strings(payload.dependency_changes)
             test.eq(#dependencies, 3)
             test.eq(dependencies[1], "install acme/tool 1.2.0")
             test.eq(dependencies[2], "update acme/lib 1.0.0 -> 2.0.0")
             test.eq(dependencies[3], "remove acme/old 0.3.0")
-            local policies = payload.permission_changes :: {string}
+            local policies = principals.strings(payload.permission_changes)
             test.eq(policies[1], "added: acme.tool:files allows fs.get, fs.list on acme.tool:data")
             test.eq(policies[2], "replaced: acme.lib:net allows http_client.request on * where its expression holds")
             test.eq(policies[3], "removed: acme.old:reader allows registry.get on *")
-            test.eq((payload.migrations :: {string})[1], "runs: acme.tool:m1 on acme.tool:db")
-            test.eq((payload.auto_start :: {string})[1], "acme.tool:service")
+            test.eq((principals.strings(payload.migrations))[1], "runs: acme.tool:m1 on acme.tool:db")
+            test.eq((principals.strings(payload.auto_start))[1], "acme.tool:service")
         end)
 
         test.it("refuses a plan that still needs requirement values", function()
@@ -163,7 +165,7 @@ local function define_tests()
                 message = "Hub operation completed", migration_work = {entries = {{source = string.rep("x", 12000)}}}}})
             test.eq(saved.ok, true)
             test.eq(saved.replayed, true)
-            local receipt = saved.value :: Object
+            local receipt = assert(bounds.object(saved.value))
             test.eq(receipt.state, "complete")
             test.eq(receipt.message, "Hub operation completed")
             test.is_nil(receipt.migration_work)

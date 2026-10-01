@@ -1,5 +1,6 @@
 -- MIT. Grok retained homes keep projected login and conversation state across turns.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -36,9 +37,9 @@ local function credential(method: string, value: unknown): {[string]: unknown}
     local caller = funcs.new():with_actor(principals.actor(OWNER, principals.workspace(value))):with_scope(security.new_scope(policies))
     local reply, err = caller:call("bee.credentials.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    local decoded = reply :: {ok: boolean, value: {[string]: unknown}, error: {code: string, message: string}?}
+    local decoded = principals.reply(reply)
     if not decoded.ok then error(method .. ": " .. tostring(decoded.error and decoded.error.code)) end
-    return decoded.value
+    return assert(bounds.object(decoded.value))
 end
 
 local function command(argv: {string}, environment: {[string]: string}?): string
@@ -61,7 +62,7 @@ end
 
 local function admit_source()
     local entry = assert(registry.get("bee.credentials:credential_sources"))
-    local data = entry.data :: {sources: {{[string]: unknown}}}
+    local data = entry.data
     data.sources[#data.sources + 1] = {ref = SOURCE, workspace_id = "*", audience = OWNER, provider = "grok",
         projection_kinds = {"file"}, path = ".grok/auth.json", write_back = true,
         setup_path = ".grok/config.toml", setup_destination = configuration.BASE_PATH,
@@ -122,7 +123,7 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
         idempotency_key = fresh("key"), owner_id = OWNER, owner_incarnation = 1, action_id = fresh("action"), attempt_id = attempt_id,
         binding_ref = "bee.driver.grok:binding", policy_ref = "bee.placement.native:test_launch_policy_without_provider",
         profile_id = profile, binding_digest = DIGEST, profile_digest = DIGEST, launch = selected, session_ref = session_ref,
-        resources = resources, environment = {}, environment_refs = {}, projections = {projection.projection_id :: string},
+        resources = resources, environment = {}, environment_refs = {}, projections = {assert(bounds.id(projection.projection_id))},
         required_cleanup = "direct_process", required_exit_observation = "eof_gated",
         timeouts = {start_ms = 10000, stop_grace_ms = 500, drain_ms = 1000, retain_ms = 1000},
     }
@@ -163,7 +164,7 @@ local function define_tests()
         changes:update(mode)
         assert(changes:apply())
         local window = assert(registry.get("bee.driver.grok:default_window"))
-        local definition = window.data :: {credentials: {string}, session_resource: string}
+        local definition = window.data
         test.eq(definition.credentials[1], "grok_login")
         test.eq(definition.session_resource, "session")
         for _, profile in ipairs({"window", "session"}) do

@@ -40,8 +40,8 @@ function M.build(args: unknown): string
     end
 
     local tag = "default"
-    if type(args) == "table" and type((args :: {[string]: unknown}).tag) == "string" then
-        tag = (args :: {[string]: unknown}).tag :: string
+    if type(args) == "table" and type(args.tag) == "string" then
+        tag = args.tag
     end
 
     return "Dynamic guidance: actor=" .. actor_id .. " marker=" .. tostring(ctx_marker) .. " sentinel=" .. tostring(sentinel_val) .. " tag=" .. tag

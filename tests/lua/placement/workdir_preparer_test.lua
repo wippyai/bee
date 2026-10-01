@@ -33,7 +33,7 @@ local function run_cmd(args: {string}): (string?, integer?, string?)
     if not started then return nil, 1, tostring(start_err) end
     local data = out:read(65536)
     local code = proc:wait()
-    local exit_code: integer = type(code) == "number" and math.floor(code :: number) or 0
+    local exit_code: integer = type(code) == "number" and math.floor(code) or 0
     return data and tostring(data) or "", exit_code, nil
 end
 

@@ -1,6 +1,7 @@
 -- MIT. Native placement acceptance for a provider configured through a third
 -- driver binding. The denied paths must leave no durable placement intent.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -46,7 +47,7 @@ end
 local function call(actor: string, method: string, value: unknown): service.Reply
     local reply, err = caller(actor, principals.workspace(value)):call("bee.placement.native.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
-    return reply :: service.Reply
+    return principals.reply(reply)
 end
 
 local function admit_root()
@@ -59,8 +60,9 @@ local function admit_root()
     if not mode_ok then error(tostring(mode_error)) end
     local entry = registry.get(ROOTS)
     if not entry then error("admitted roots entry") end
-    local data = entry.data :: {[string]: unknown}
-    local roots = data.roots :: {{[string]: unknown}}
+    local data = assert(bounds.object(entry.data))
+    local roots = principals.objects(data.roots)
+    data.roots = roots
     for _, root in ipairs(roots) do
         if root.root_ref == ROOT then return end
     end
@@ -76,7 +78,7 @@ local function clone_object(value: unknown): {[string]: unknown}
     if not encoded then error(tostring(encode_error or "encode registry state")) end
     local copied, decode_error = json.decode(encoded)
     if type(copied) ~= "table" then error(tostring(decode_error or "decode registry state")) end
-    return copied :: {[string]: unknown}
+    return assert(bounds.object(copied))
 end
 
 local function registry_state(): RegistryState
@@ -106,8 +108,8 @@ end
 local function set_activation(enabled: boolean)
     local entry = registry.get(ACTIVATION)
     if not entry then error("activation entry") end
-    local data = entry.data :: {[string]: unknown}
-    local current = data.bindings :: {unknown}
+    local data = assert(bounds.object(entry.data))
+    local current = principals.items(data.bindings)
     local bindings: {string} = {}
     for _, item in ipairs(current) do
         local binding = tostring(item)
@@ -144,7 +146,7 @@ local function assert_provider_argument_isolated()
     -- The fixture mutates request.provider.data. Check the exact table held by
     -- this caller after the cross-function call, rather than re-reading the
     -- registry (which may itself return a copy).
-    test.is_nil((held_data :: {[string]: unknown}).mutation_probe)
+    test.is_nil((assert(bounds.object(held_data))).mutation_probe)
 end
 
 local function launch(attempt_id: string): {[string]: unknown}
@@ -162,7 +164,8 @@ local function denied_without_intent(request: {[string]: unknown}, expected: str
     if expected ~= "" then test.is_true(tostring(refused.error and refused.error.message):find(expected, 1, true) ~= nil) end
     local db, open_error = store.open()
     if not db then error(open_error or "placement store") end
-    local attempt, read_error = store.attempt(db, request.attempt_id :: string)
+    if type(request.attempt_id) ~= "string" then error("invalid fixture request.attempt_id") end
+    local attempt, read_error = store.attempt(db, request.attempt_id)
     db:release()
     if read_error then error(read_error) end
     test.is_nil(attempt)
@@ -177,7 +180,7 @@ local function shell(command: string): string
     while true do
         local chunk: unknown = stdout:read(4096)
         if type(chunk) ~= "string" or chunk == "" then break end
-        output = output .. (chunk :: string)
+        output = output .. (chunk)
     end
     proc:wait()
     stdout:close()
@@ -193,11 +196,11 @@ local function wait_for_exit(attempt_id: string)
     local deadline = time.now():unix_nano() + 5000 * 1000000
     while time.now():unix_nano() < deadline do
         local status = call(OWNER, "status", {attempt_id = attempt_id})
-        if status.ok and type(status.value) == "table" and (status.value :: {[string]: unknown}).attempt ~= nil then
-            local attempt = (status.value :: {[string]: unknown}).attempt :: {[string]: unknown}
+        if status.ok and type(status.value) == "table" and (assert(bounds.object(status.value))).attempt ~= nil then
+            local attempt = assert(bounds.object((assert(bounds.object(status.value))).attempt))
             if attempt.execution_state == "exited" then
                 local exit = attempt.exit
-                if type(exit) ~= "table" or (exit :: {[string]: unknown}).code ~= 0 then error("third-driver child exited unsuccessfully") end
+                if type(exit) ~= "table" or (assert(bounds.object(exit))).code ~= 0 then error("third-driver child exited unsuccessfully") end
                 return
             end
         end
@@ -209,8 +212,8 @@ end
 local function cleanup_attempt(attempt_id: string)
     local status = call(OWNER, "status", {attempt_id = attempt_id})
     if status.ok and type(status.value) == "table" then
-        local attempt = (status.value :: {[string]: unknown}).attempt
-        if type(attempt) == "table" and (attempt :: {[string]: unknown}).execution_state ~= "exited" then
+        local attempt = (assert(bounds.object(status.value))).attempt
+        if type(attempt) == "table" and (assert(bounds.object(attempt))).execution_state ~= "exited" then
             call(OWNER, "stop", {attempt_id = attempt_id, mode = "forced"})
         end
     end
@@ -218,8 +221,8 @@ local function cleanup_attempt(attempt_id: string)
     while time.now():unix_nano() < deadline do
         local current = call(OWNER, "status", {attempt_id = attempt_id})
         if current.ok and type(current.value) == "table" then
-            local attempt = (current.value :: {[string]: unknown}).attempt
-            if type(attempt) == "table" and (attempt :: {[string]: unknown}).execution_state == "exited" then break end
+            local attempt = (assert(bounds.object(current.value))).attempt
+            if type(attempt) == "table" and (assert(bounds.object(attempt))).execution_state == "exited" then break end
         end
         time.sleep("50ms")
     end
@@ -242,7 +245,8 @@ local function define_tests()
                 test.eq(refused_preferences.error and refused_preferences.error.code, "DENIED")
                 local profile_db, profile_db_error = store.open()
                 if not profile_db then error(tostring(profile_db_error)) end
-                local profile_intent, profile_intent_error = store.attempt(profile_db, unadmitted_preferences.attempt_id :: string)
+                if type(unadmitted_preferences.attempt_id) ~= "string" then error("invalid fixture unadmitted_preferences.attempt_id") end
+                local profile_intent, profile_intent_error = store.attempt(profile_db, unadmitted_preferences.attempt_id)
                 profile_db:release()
                 test.is_nil(profile_intent_error)
                 test.is_nil(profile_intent)
@@ -265,7 +269,8 @@ local function define_tests()
                     test.eq(reply.error and reply.error.code, "CONFLICT")
                     local db, db_error = store.open()
                     if not db then error(tostring(db_error)) end
-                    local recorded, record_error = store.attempt(db, stale.attempt_id :: string)
+                    if type(stale.attempt_id) ~= "string" then error("invalid fixture stale.attempt_id") end
+                    local recorded, record_error = store.attempt(db, stale.attempt_id)
                     db:release()
                     if record_error then error(record_error) end
                     test.is_nil(recorded)
@@ -284,7 +289,8 @@ local function define_tests()
                 test.is_true(tostring(forged_refused.error and forged_refused.error.message):find("delivery", 1, true) ~= nil)
                 local forged_db, forged_open_error = store.open()
                 if not forged_db then error(forged_open_error or "placement store") end
-                local forged_attempt, forged_read_error = store.attempt(forged_db, forged.attempt_id :: string)
+                if type(forged.attempt_id) ~= "string" then error("invalid fixture forged.attempt_id") end
+                local forged_attempt, forged_read_error = store.attempt(forged_db, forged.attempt_id)
                 forged_db:release()
                 if forged_read_error then error(forged_read_error) end
                 test.is_nil(forged_attempt)
@@ -297,15 +303,15 @@ local function define_tests()
                 local request = launch(fresh("attempt"))
                 local prepared_reply = call(OWNER, "prepare", request)
                 test.is_true(prepared_reply.ok)
-                local prepared = prepared_reply.value :: {[string]: unknown}
-                prepared_attempt_id = prepared.attempt_id :: string
+                local prepared = assert(bounds.object(prepared_reply.value))
+                prepared_attempt_id = prepared.attempt_id
                 test.eq(prepared.execution_state, "intended")
                 local started_reply = call(OWNER, "start", {attempt_id = prepared.attempt_id})
                 test.is_true(started_reply.ok)
-                local started = started_reply.value :: {[string]: unknown}
+                local started = assert(bounds.object(started_reply.value))
                 test.eq(started.execution_state, "running")
 
-                local key = assert(homes.attempt_key(OWNER, prepared.attempt_id :: string))
+                local key = assert(homes.attempt_key(OWNER, prepared.attempt_id))
                 local path = assert(homes.os_path("/attempts/" .. key .. "/home/.fixture-agent/provider.json"))
                 local bytes = run_command({"wc", "-c", path}):match("%d+")
                 test.is_true(bytes ~= nil and tonumber(bytes) ~= nil and tonumber(bytes) > 0)
@@ -315,9 +321,10 @@ local function define_tests()
                 local current_provider = registry.get(PROVIDER)
                 local current_data = current_provider and current_provider.data
                 test.is_true(type(current_data) == "table")
-                test.is_nil((current_data :: {[string]: unknown}).mutation_probe)
+                test.is_nil((assert(bounds.object(current_data))).mutation_probe)
 
-                wait_for_exit(prepared.attempt_id :: string)
+                if type(prepared.attempt_id) ~= "string" then error("invalid fixture prepared.attempt_id") end
+                wait_for_exit(prepared.attempt_id)
                 local cleaned = call(OWNER, "cleanup", {attempt_id = prepared.attempt_id})
                 test.is_true(cleaned.ok)
                 prepared_attempt_id = nil

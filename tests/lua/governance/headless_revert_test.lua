@@ -1,4 +1,5 @@
 local test = require("test")
+local bounds = require("bounds")
 local transaction = require("transaction")
 local headless_revert = require("headless_revert")
 local activation_store = require("activation_store")
@@ -26,13 +27,13 @@ local function define_tests()
             assert(activation_store.close(store))
             test.is_true(result.ok)
             test.eq(seen_actor, "bee.gov.recovery")
-            local request = seen_request :: {[string]: unknown}
+            local request = assert(bounds.object(seen_request))
             test.eq(request.operation, "revert_activation")
             test.eq(request.overlay_owner, OWNER)
             test.eq(request.expected_revision, 7)
-            local compensation = request.compensation :: {[string]: unknown}
-            test.is_true(#(compensation.bytes :: string) > 0)
-            test.eq(#(compensation.digest :: string), 64)
+            local compensation = assert(bounds.object(request.compensation))
+            test.is_true(#(compensation.bytes) > 0)
+            test.eq(#(compensation.digest), 64)
         end)
 
         test.it("refuses migration facts without an applied compensation plan", function()

@@ -1,5 +1,7 @@
 -- MIT. Lease persistence: bounded grant, atomic use, revocation and audit rows.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local uuid = require("uuid")
 local store = require("lease_store")
 
@@ -14,7 +16,7 @@ local OUTSIDE: Object = {capability = "workspace.files.write", template_revision
 
 local function ok(result: Object): Object
     test.is_true(result.ok == true, tostring(result.code) .. ": " .. tostring(result.message))
-    return result.value :: Object
+    return assert(bounds.object(result.value))
 end
 
 local function grant_input(key: string, lease_id: string, approval: string, extra: Object?): Object
@@ -58,8 +60,8 @@ local function define_tests()
             test.eq(used.applies_used, 1)
             test.eq(used.revision, 2)
             local listed = ok(store.list(state, "bee.gov:overlay"))
-            local leases = listed.leases :: {Object}
-            test.eq(#(leases[1].uses :: {Object}), 1)
+            local leases = principals.objects(listed.leases)
+            test.eq(#(principals.objects(leases[1].uses)), 1)
             assert(store.close(state))
         end)
         test.it("refuses a proposal outside the envelope without consuming the lease", function()
@@ -113,10 +115,10 @@ local function define_tests()
             ok(store.call(state, "actor-a", grant_input("g-2", "lease-2", "approval-2", {max_applies = 1})))
             ok(store.call(state, "actor-a", {operation = "revoke", idempotency_key = "r-1", lease_id = "lease-2",
                 expected_revision = 1, revoked_by = "person-a"}))
-            local active = ok(store.list(state, nil)).leases :: {Object}
+            local active = principals.objects(ok(store.list(state, nil)).leases)
             test.eq(#active, 1)
             test.eq(active[1].lease_id, "lease-1")
-            local history = ok(store.list(state, nil, true)).leases :: {Object}
+            local history = principals.objects(ok(store.list(state, nil, true)).leases)
             test.eq(#history, 1)
             test.eq(history[1].state, "revoked")
             test.eq(ok(store.by_approval(state, "approval-2")).lease_id, "lease-2")
@@ -138,15 +140,15 @@ local function define_tests()
             ok(store.call(state, "actor-a", grant_input("g-1", "lease-1", "approval-1", {max_applies = 1})))
             ok(store.call(state, "actor-a", {operation = "use", idempotency_key = "u-1", lease_id = "lease-1",
                 expected_revision = 1, intent_id = "intent-1", proposal_capabilities = {NARROW}}))
-            local listed = ok(store.list(state, nil)).leases :: {Object}
+            local listed = principals.objects(ok(store.list(state, nil)).leases)
             test.eq(#listed, 1)
             test.eq(listed[1].state, "exhausted")
-            local uses = listed[1].uses :: {Object}
+            local uses = principals.objects(listed[1].uses)
             test.eq(uses[1].state, "reserved")
             local revoked = ok(store.call(state, "actor-a", {operation = "revoke", idempotency_key = "r-1", lease_id = "lease-1",
                 expected_revision = listed[1].revision, revoked_by = "person-a"}))
-            test.eq((revoked.fenced_intents :: {string})[1], "intent-1")
-            test.eq(#(ok(store.list(state, nil)).leases :: {Object}), 0)
+            test.eq((principals.strings(revoked.fenced_intents))[1], "intent-1")
+            test.eq(#(principals.objects(ok(store.list(state, nil)).leases)), 0)
             assert(store.close(state))
         end)
         test.it("replays a lost revocation reply with the fenced and started intents", function()
@@ -159,9 +161,9 @@ local function define_tests()
             local first = ok(store.call(state, "actor-a", request))
             local again = store.call(state, "actor-a", request)
             test.is_true(again.ok == true and again.replayed == true)
-            local value = again.value :: Object
-            test.eq((value.fenced_intents :: {string})[1], "intent-1")
-            test.eq(#(value.started_effects :: {string}), #(first.started_effects :: {string}))
+            local value = assert(bounds.object(again.value))
+            test.eq((principals.strings(value.fenced_intents))[1], "intent-1")
+            test.eq(#(principals.strings(value.started_effects)), #(principals.strings(first.started_effects)))
             assert(store.close(state))
         end)
         test.it("finds only an active lease that covers the proposal", function()

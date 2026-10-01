@@ -1,5 +1,7 @@
 -- MIT. Installed grant records and generated policy bindings are host output.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local capability_model = require("capability_model")
 local grants = require("capability_grants")
 local registry = require("registry")
@@ -60,11 +62,11 @@ local function define_tests()
                 "approval-first", 1))
             local decoded = assert(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
             local installed_entries: {[string]: unknown} = {}
-            installed_entries[proposed.policies[1].id :: string] = proposed.policies[1]
+            installed_entries[proposed.policies[1].id] = proposed.policies[1]
             installed_entries["app.notes:request"] = {kind = "ns.requirement",
                 data = {default = proposed.policies[1].id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
-            installed_entries[proposed.policies[1].id :: string] = nil
+            installed_entries[proposed.policies[1].id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
             local same = assert(grants.diff(vocabulary(), decoded, proposed))
             test.is_false(same.requires_approval)
@@ -76,14 +78,14 @@ local function define_tests()
             test.is_true(widening.requires_approval)
             test.eq(#widening.added, 1)
             test.is_true(table.concat(widening.lines, "\n"):find("Read owned threads", 1, true) ~= nil)
-            local changed = first.data :: {[string]: unknown}
+            local changed = assert(bounds.object(first.data))
             changed.revision = 0
             test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
             changed.revision = 1
             changed.digest = string.rep("0", 64)
             test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
             changed.digest = proposed.digest
-            local policies = changed.policies :: {{[string]: unknown}}
+            local policies = principals.objects(changed.policies)
             policies[1].data = {policy = {actions = {"registry.overlay.apply"}, resources = "*", effect = "allow"}}
             test.is_nil(grants.decode(first, OWNER, "workspace-1", APP, vocabulary()))
         end)
@@ -94,12 +96,12 @@ local function define_tests()
             local proposed = assert(grants.propose(words, OWNER, APP,
                 {request("threads.read", {scope = "owned"})}))
             local compared = assert(grants.diff(words, {capabilities = previous}, proposed))
-            test.eq(#(compared.changed :: {unknown}), 1)
-            local revocation = compared.revocation :: Object
-            local revoked = revocation.grants :: {Object}
+            test.eq(#(principals.items(compared.changed)), 1)
+            local revocation = compared.revocation
+            local revoked = revocation.grants
             test.eq(#revoked, 1)
-            test.eq(revoked[1].template_revision :: number, 2)
-            test.is_true(table.concat(compared.lines :: {string}, "\n"):find("revoked:", 1, true) ~= nil)
+            test.eq(revoked[1].template_revision, 2)
+            test.is_true(table.concat(principals.strings(compared.lines), "\n"):find("revoked:", 1, true) ~= nil)
         end)
         test.it("reads approval-bound grants installed before the namespace rename", function()
             local old_owner = "bee.governance.workspace_applications:workspace-1.notes"
@@ -110,7 +112,7 @@ local function define_tests()
             test.eq(record.id, "bee.governance.grants:record." .. assert(hash.sha256(old_owner)))
             test.is_true(grants.reserved(record.id))
             local decoded = assert(grants.decode(record, old_owner, "workspace-1", APP, vocabulary()))
-            test.eq((decoded.policies :: {{[string]: unknown}})[1].id, proposed.policies[1].id)
+            test.eq((principals.objects(decoded.policies))[1].id, proposed.policies[1].id)
             record.id = "bee.governance.grants:record." .. string.rep("0", 64)
             test.is_nil(grants.decode(record, old_owner, "workspace-1", APP, vocabulary()))
         end)
@@ -126,7 +128,7 @@ local function define_tests()
                 named("app.notes:threads", "threads.read", {scope = "owned"})}, nil, FOLDER))
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-several", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
-            test.eq(#(decoded.capabilities :: {unknown}), 3)
+            test.eq(#(principals.items(decoded.capabilities)), 3)
         end)
         test.it("materializes a verified workspace file volume and its policy", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
@@ -137,20 +139,20 @@ local function define_tests()
             test.eq(proposed.policies[1].kind, "security.policy")
             test.eq(#proposed.volumes, 1)
             test.eq(proposed.volumes[1].kind, "fs.directory")
-            test.eq((proposed.volumes[1].data :: {[string]: unknown}).directory, "alpha/docs")
+            test.eq((assert(bounds.object(proposed.volumes[1].data))).directory, "alpha/docs")
             test.is_nil(grants.propose(vocabulary(), OWNER, APP,
                 {request("workspace.files.read", {subpath = "docs"})}))
-            test.is_true((proposed.volumes[1].data :: {[string]: unknown}).readonly)
+            test.is_true((assert(bounds.object(proposed.volumes[1].data))).readonly)
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed,
                 "approval-files", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
             local installed_entries: {[string]: unknown} = {}
-            installed_entries[proposed.policies[1].id :: string] = proposed.policies[1]
-            installed_entries[proposed.volumes[1].id :: string] = proposed.volumes[1]
+            installed_entries[proposed.policies[1].id] = proposed.policies[1]
+            installed_entries[proposed.volumes[1].id] = proposed.volumes[1]
             installed_entries["app.notes:request"] = {kind = "ns.requirement",
                 data = {default = proposed.policies[1].id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
-            installed_entries[proposed.volumes[1].id :: string] = nil
+            installed_entries[proposed.volumes[1].id] = nil
             test.is_false(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
         end)
         test.it("materializes an isolated application database and its policy", function()
@@ -164,7 +166,7 @@ local function define_tests()
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed,
                 "approval-database", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
-            test.eq(#(decoded.databases :: {unknown}), 1)
+            test.eq(#(principals.items(decoded.databases)), 1)
         end)
         test.it("refuses private workspace subroots and foreign app targets", function()
             test.is_nil(grants.propose(vocabulary(), OWNER, APP,
@@ -179,8 +181,8 @@ local function define_tests()
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "threads.message")
             test.eq(#proposed.policies, 1)
-            local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
-            test.eq((body.actions :: {string})[1], "funcs.call")
+            local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
+            test.eq((principals.strings(body.actions))[1], "funcs.call")
         end)
         test.it("materializes managed agent launch as the sessions contract on the exact definitions", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
@@ -188,14 +190,14 @@ local function define_tests()
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "agents.launch")
             test.eq(proposed.policies[1].kind, "security.policy.expr")
-            local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
+            local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
             local actions: {[string]: boolean} = {}
-            for _, action in ipairs(body.actions :: {string}) do actions[action] = true end
+            for _, action in ipairs(principals.strings(body.actions)) do actions[action] = true end
             test.is_true(actions["contract.open"])
             test.is_true(actions["contract.call"])
             test.is_true(actions["funcs.call"])
             test.is_true(actions["bee.harness.launch"])
-            local expression = body.expression :: string
+            local expression = body.expression
             test.is_true(expression:find('resource in ["acme:research"]', 1, true) ~= nil)
             test.is_true(expression:find("agent_call", 1, true) == nil)
         end)
@@ -205,13 +207,13 @@ local function define_tests()
                     methods = {"GET"}, path_prefix = "/v1"})}))
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "http.request")
-            local scope = proposed.capabilities[1].scope :: {[string]: unknown}
+            local scope = assert(bounds.object(proposed.capabilities[1].scope))
             test.eq(scope.path_prefix, "/v1")
             test.eq(proposed.policies[1].kind, "security.policy")
-            local body = (proposed.policies[1].data :: {[string]: unknown}).policy :: {[string]: unknown}
-            test.eq((body.actions :: {string})[1], "funcs.call")
-            test.eq(#(body.resources :: {string}), 1)
-            test.eq((body.resources :: {string})[1], "bee.gov.binding:http_request")
+            local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
+            test.eq((principals.strings(body.actions))[1], "funcs.call")
+            test.eq(#(principals.strings(body.resources)), 1)
+            test.eq((principals.strings(body.resources))[1], "bee.gov.binding:http_request")
         end)
         test.it("generates Hive exposure over exactly the approved operations", function()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
@@ -220,22 +222,22 @@ local function define_tests()
             test.eq(#proposed.capabilities, 1)
             test.eq(proposed.capabilities[1].operation, "hive.expose")
             test.eq(proposed.capabilities[1].resource, "open")
-            local scope = proposed.capabilities[1].scope :: {[string]: unknown}
-            local operations = scope.operations :: {string}
+            local scope = assert(bounds.object(proposed.capabilities[1].scope))
+            local operations = principals.strings(scope.operations)
             test.eq(#operations, 2)
             test.eq(operations[1], "bee.hive.telemetry:presence")
             test.eq(operations[2], "bee.hive.telemetry:stats")
             test.eq(#proposed.policies, 1)
-            local generated = proposed.policies[1] :: {[string]: unknown}
+            local generated = assert(bounds.object(proposed.policies[1]))
             test.eq(generated.kind, "security.policy")
-            local groups = generated.groups :: {string}
+            local groups = principals.strings(generated.groups)
             test.eq(#groups, 1)
             test.eq(groups[1], "bee.security.hive:hive_exposure_scope")
-            local body = (generated.data :: {[string]: unknown}).policy :: {[string]: unknown}
-            local actions = body.actions :: {string}
+            local body = assert(bounds.object((assert(bounds.object(generated.data))).policy))
+            local actions = principals.strings(body.actions)
             test.eq(#actions, 1)
             test.eq(actions[1], "hive.expose.open")
-            local resources = body.resources :: {string}
+            local resources = principals.strings(body.resources)
             test.eq(#resources, 2)
             test.eq(resources[1], "bee.hive.telemetry:presence")
             test.eq(resources[2], "bee.hive.telemetry:stats")
@@ -245,7 +247,7 @@ local function define_tests()
             local record = assert(grants.record(OWNER, "workspace-1", APP, proposed, "approval-expose", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary()))
             local installed_entries: {[string]: unknown} = {}
-            installed_entries[generated.id :: string] = generated
+            installed_entries[generated.id] = generated
             installed_entries["app.notes:request"] = {kind = "ns.requirement",
                 data = {default = generated.id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))
@@ -256,14 +258,14 @@ local function define_tests()
             local proposed = assert(grants.propose(vocabulary(), OWNER, APP,
                 {request("hive.expose", {operations = {"bee.hive:probe_open"},
                     mode = "open", audiences = {"node-1"}}, 2)}))
-            local generated = proposed.policies[1] :: {[string]: unknown}
+            local generated = assert(bounds.object(proposed.policies[1]))
             test.eq(generated.kind, "security.policy")
-            local groups = generated.groups :: {string}
+            local groups = principals.strings(generated.groups)
             test.eq(#groups, 1)
             test.eq(groups[1], "bee.security.hive:hive_exposure_scope")
-            local body = (generated.data :: {[string]: unknown}).policy :: {[string]: unknown}
-            test.eq((body.actions :: {string})[1], "hive.expose.open")
-            test.eq((body.resources :: {string})[1], "bee.hive:probe_open")
+            local body = assert(bounds.object((assert(bounds.object(generated.data))).policy))
+            test.eq((principals.strings(body.actions))[1], "hive.expose.open")
+            test.eq((principals.strings(body.resources))[1], "bee.hive:probe_open")
             test.eq(body.effect, "allow")
         end)
         test.it("materializes the package capabilities with their reviewed bodies", function()
@@ -293,10 +295,9 @@ local function define_tests()
                     {request(case.capability, {})}))
                 test.eq(proposed.capabilities[1].operation, case.operation)
                 test.eq(proposed.policies[1].kind, case.kind)
-                local body = (proposed.policies[1].data :: {[string]: unknown}).policy
-                    :: {[string]: unknown}
+                local body = assert(bounds.object((assert(bounds.object(proposed.policies[1].data))).policy))
                 local found = false
-                for _, action in ipairs(body.actions :: {string}) do
+                for _, action in ipairs(principals.strings(body.actions)) do
                     for _, wanted in ipairs(case.actions) do
                         if action == wanted then found = true end
                     end
@@ -314,7 +315,7 @@ local function define_tests()
                 "approval-package", 1))
             local decoded = assert(grants.decode(record, OWNER, "workspace-1", APP, vocabulary_value))
             local installed_entries: {[string]: unknown} = {}
-            installed_entries[proposed.policies[1].id :: string] = proposed.policies[1]
+            installed_entries[proposed.policies[1].id] = proposed.policies[1]
             installed_entries["app.notes:request"] = {kind = "ns.requirement",
                 data = {default = proposed.policies[1].id}}
             test.is_true(grants.live(decoded, function(id: string): unknown return installed_entries[id] end))

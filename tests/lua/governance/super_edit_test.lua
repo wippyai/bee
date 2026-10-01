@@ -1,4 +1,6 @@
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local super_edit = require("super_edit")
 
 local WORKSPACE = "0123456789abcdef0123456789abcdef"
@@ -8,9 +10,9 @@ local function define_tests()
             local namespaces, duration, invalid = super_edit.parse_enable("vendor.alpha app.clock --for 45m")
             test.is_nil(invalid)
             test.eq(duration, "45m")
-            test.eq(#(namespaces :: {string}), 2)
-            test.eq((namespaces :: {string})[1], "app.clock")
-            test.eq((namespaces :: {string})[2], "vendor.alpha")
+            test.eq(#(principals.strings(namespaces)), 2)
+            test.eq((principals.strings(namespaces))[1], "app.clock")
+            test.eq((principals.strings(namespaces))[2], "vendor.alpha")
             test.eq(super_edit.duration("1d"), "24h")
             test.is_nil(super_edit.duration("25h"))
             test.is_nil(super_edit.parse_enable("vendor.alpha vendor.alpha --for 5m"))
@@ -22,19 +24,19 @@ local function define_tests()
             local changed, err = super_edit.enable({profiles = {}, workspace_applications = true}, WORKSPACE,
                 "node-local", namespaces, "2030-01-01T00:00:00.000Z", {"bee.gov", "bee.security"})
             if not changed then error(tostring(err)) end
-            local rows = changed.profiles :: {{[string]: unknown}}
+            local rows = principals.objects(changed.profiles)
             test.eq(#rows, 2)
             test.eq(rows[1].source_workspace, "app.clock")
             test.eq(rows[1].component, "app.clock")
             local owner_prefix = "bee.super_edit:" .. WORKSPACE .. "."
-            test.eq(string.sub(rows[1].overlay_owner :: string, 1, #owner_prefix), owner_prefix)
+            test.eq(string.sub(rows[1].overlay_owner, 1, #owner_prefix), owner_prefix)
             test.eq(rows[1].approval_policy, "super-edit-person")
             test.eq(rows[1].expires_at, "2030-01-01T00:00:00.000Z")
-            local allow = rows[1].allow :: {[string]: unknown}
+            local allow = assert(bounds.object(rows[1].allow))
             test.eq(allow.auto_start, false)
-            test.eq(#(allow.grants :: {unknown}), 0)
-            test.eq(#(allow.namespaces :: {unknown}), 1)
-            test.eq((allow.namespaces :: {string})[1], "app.clock")
+            test.eq(#(principals.items(allow.grants)), 0)
+            test.eq(#(principals.items(allow.namespaces)), 1)
+            test.eq((principals.strings(allow.namespaces))[1], "app.clock")
             test.eq(changed.workspace_applications, true)
         end)
 
@@ -64,7 +66,7 @@ local function define_tests()
                     expires_at = "2030-01-01T00:00:00.000Z"}}}
             local changed, err = super_edit.disable(config, WORKSPACE)
             if not changed then error(tostring(err)) end
-            local rows = changed.profiles :: {{[string]: unknown}}
+            local rows = principals.objects(changed.profiles)
             test.eq(#rows, 2)
             test.eq(rows[1].source_workspace, "vendor.normal")
             test.eq(rows[2].source_workspace, "vendor.other")
@@ -81,9 +83,9 @@ local function define_tests()
             test.eq(#owners, 2)
             test.eq(owners[1], "bee.super_edit:" .. WORKSPACE .. ".vendor.alpha.y")
             test.eq(owners[2], "bee.super_edit:" .. WORKSPACE .. ".vendor.beta.x")
-            local rows = changed.profiles :: {unknown}
+            local rows = principals.items(changed.profiles)
             test.eq(#rows, 1)
-            test.eq((rows[1] :: {[string]: unknown}).overlay_owner, "bee.packages:" .. WORKSPACE .. ".normal")
+            test.eq((assert(bounds.object(rows[1]))).overlay_owner, "bee.packages:" .. WORKSPACE .. ".normal")
         end)
     end)
 end

@@ -1,6 +1,8 @@
 -- MIT. The authoring guide is a product surface: bounded, self-describing and
 -- derived from the rules the destination actually enforces.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local guide = require("guide")
 local artifact = require("artifact")
 local preflight = require("preflight")
@@ -30,7 +32,7 @@ local function define_tests()
             local identity = assert(naming.identity(string.rep("a", 32), guide.OVERLAY_ID))
             test.eq(guide.DEFINITION_ID, identity.definition_id)
             test.eq(guide.NAMESPACE, identity.namespace)
-            test.eq((guide.example()[1] :: {[string]: unknown}).id, identity.definition_id)
+            test.eq((assert(bounds.object(guide.example()[1]))).id, identity.definition_id)
         end)
         test.it("points at the offline platform documentation the docs tool reads", function()
             local document = guide.document()
@@ -85,29 +87,30 @@ local function define_tests()
         test.it("returns a short index first, sections on request and the example separately", function()
             local index = guide.value()
             test.eq(index.revision, guide.REVISION)
-            local short = index.document :: string
+            local short = index.document
             test.is_true(#short < 1500)
-            test.is_nil((index :: {[string]: unknown}).example)
+            test.is_nil((assert(bounds.object(index))).example)
             test.not_nil((string.find(short, "entries.json", 1, true)))
-            local sections = index.sections :: {{[string]: string}}
+            local sections = index.sections
             test.is_true(#sections >= 8)
             for _, section in ipairs(guide.section_list()) do
                 test.not_nil((string.find(short, section.id, 1, true)))
                 local read = guide.value({section = section.id})
                 test.eq(read.section, section.id)
                 test.eq(read.text, guide.section_text(section.id))
-                test.is_nil((read :: {[string]: unknown}).example)
+                test.is_nil((assert(bounds.object(read))).example)
             end
             local unknown = guide.value({section = "no-such-section"})
-            test.not_nil((unknown :: {[string]: unknown}).error)
+            test.not_nil((assert(bounds.object(unknown))).error)
             local example = guide.value({include_example = true})
-            local entry = (example :: {[string]: unknown}).example :: {[string]: unknown}
+            local entry = assert(bounds.object((assert(bounds.object(example))).example))
             test.eq(entry.definition_id, guide.DEFINITION_ID)
-            test.not_nil((string.find(entry.entries_json :: string, "process.lua", 1, true)))
+            test.not_nil((string.find(entry.entries_json, "process.lua", 1, true)))
         end)
         test.it("carries one measurable example entry with inline source", function()
             local encoded = guide.example_json()
-            local decoded, decode_error = json.decode(encoded :: string)
+            if type(encoded) ~= "string" then error("invalid fixture encoded") end
+            local decoded, decode_error = json.decode(encoded)
             test.is_nil(decode_error)
             local measured, measure_error = artifact.create(decoded)
             test.is_nil(measure_error)
@@ -117,10 +120,10 @@ local function define_tests()
             local metadata = measured.entries[1].meta
             if type(metadata) ~= "table" then error("example metadata is not an object") end
             test.eq(metadata.type, "bee.app")
-            local data = measured.entries[1].data :: {[string]: unknown}
-            local source = data.source :: string
-            local modules = data.modules :: {string}
-            local imports = data.imports :: {[string]: unknown}
+            local data = assert(bounds.object(measured.entries[1].data))
+            local source = data.source
+            local modules = principals.strings(data.modules)
+            local imports = assert(bounds.object(data.imports))
             test.eq(#modules, 4)
             test.eq(modules[1], "tty")
             test.eq(modules[2], "process")
@@ -152,7 +155,7 @@ local function define_tests()
             test.eq(lists[1], "modules")
             test.eq(objects[1], "imports")
             test.not_nil((string.find(source, "client.checkpoint", 1, true)))
-            local application = (measured.entries[1].meta :: {[string]: unknown}).application :: {[string]: unknown}
+            local application = assert(bounds.object((assert(bounds.object(measured.entries[1].meta))).application))
             test.eq(application.resume_schema, "guide-counter.v1")
             test.eq(application.restart_policy, "automatic")
         end)

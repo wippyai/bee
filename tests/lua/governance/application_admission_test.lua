@@ -1,5 +1,7 @@
 -- MIT. Pure governed application-admission value tests.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local admission = require("application_admission")
 
 local DIGEST = string.rep("a", 64)
@@ -83,7 +85,8 @@ local function define_tests()
 
         test.it("rejects unknown authority and malformed thread access", function()
             local value = record()
-            local rows = value.bindings :: {{[string]: unknown}}
+            local rows = principals.objects(value.bindings)
+            value.bindings = rows
             rows[1].thread_access = "all"
             test.is_nil(admission.measure(value))
             rows[1].thread_access = "observe_post"
@@ -93,7 +96,8 @@ local function define_tests()
 
         test.it("carries governed binding flags with bounded close grace", function()
             local value = record()
-            local rows = value.bindings :: {{[string]: unknown}}
+            local rows = principals.objects(value.bindings)
+            value.bindings = rows
             rows[1].appearance_write = true
             rows[1].application_stop = true
             rows[1].scope_management = true
@@ -112,33 +116,34 @@ local function define_tests()
             local repeated = assert(admission.measure(measured.record))
             test.eq(repeated.bytes, measured.bytes)
             value = record()
-            rows = value.bindings :: {{[string]: unknown}}
+            rows = principals.objects(value.bindings)
             rows[1].appearance_write = "yes"
             test.is_nil(admission.measure(value))
             value = record()
-            rows = value.bindings :: {{[string]: unknown}}
+            rows = principals.objects(value.bindings)
             rows[1].close_grace_ms = 60001
             test.is_nil(admission.measure(value))
             value = record()
-            rows = value.bindings :: {{[string]: unknown}}
+            rows = principals.objects(value.bindings)
             rows[1].close_grace_ms = 1.5
             test.is_nil(admission.measure(value))
         end)
 
         test.it("rejects sparse, duplicate and over-bound selections", function()
             local value = record()
-            local rows = value.bindings :: {{[string]: unknown}}
+            local rows = principals.objects(value.bindings)
+            value.bindings = rows
             rows[2] = nil
             rows[3] = {definition_id = "vendor.app:third", policies = {}}
             test.is_nil(admission.measure(value))
 
             value = record()
-            rows = value.bindings :: {{[string]: unknown}}
+            rows = principals.objects(value.bindings)
             rows[2].definition_id = rows[1].definition_id
             test.is_nil(admission.measure(value))
 
             value = record()
-            rows = value.bindings :: {{[string]: unknown}}
+            rows = principals.objects(value.bindings)
             rows[1].policies = {"bee:policy-a", "bee:policy-a"}
             test.is_nil(admission.measure(value))
 
@@ -165,8 +170,8 @@ local function define_tests()
             local first, first_error = admission.project(value)
             if not first then error(tostring(first_error)) end
             test.eq(first.record.bindings[1].thread_access, "observe_post")
-            local registry_entries = value.registry_entries :: {{[string]: unknown}}
-            local policy = registry_entries[1].policy :: {[string]: unknown}
+            local registry_entries = principals.objects(value.registry_entries)
+            local policy = assert(bounds.object(registry_entries[1].policy))
             policy.comment = "changed"
             local changed = assert(admission.project(value))
             test.is_true(changed.record.policy_digest ~= first.record.policy_digest)
@@ -175,15 +180,16 @@ local function define_tests()
 
         test.it("requires exact artifact applications and external policies", function()
             local value = projection()
-            local artifact_entries = value.artifact_entries :: {{[string]: unknown}}
+            local artifact_entries = principals.objects(value.artifact_entries)
+            value.artifact_entries = artifact_entries
             artifact_entries[1].kind = "function.lua"
             test.is_nil(admission.project(value))
             artifact_entries[1].kind = "process.lua"
-            local meta = artifact_entries[1].meta :: {[string]: unknown}
+            local meta = assert(bounds.object(artifact_entries[1].meta))
             meta.type = "ordinary"
             test.is_nil(admission.project(value))
             meta.type = "bee.app"
-            local registry_entries = value.registry_entries :: {{[string]: unknown}}
+            local registry_entries = principals.objects(value.registry_entries)
             registry_entries[1].kind = "function.lua"
             test.is_nil(admission.project(value))
             registry_entries[1].kind = "security.policy"
@@ -196,7 +202,7 @@ local function define_tests()
         test.it("measures a host-generated policy in the same atomic overlay", function()
             local value = projection()
             local id = "bee.gov.grants:policy." .. DIGEST
-            local binding = (value.bindings :: {{[string]: unknown}})[1]
+            local binding = (principals.objects(value.bindings))[1]
             binding.policies = {"bee:ordinary-policy", id}
             value.overlay_ids = {[id] = true}
             value.generated_policies = {{id = id, kind = "security.policy",

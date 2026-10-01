@@ -7,6 +7,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     delivery_protocol: bee.gov:delivery_protocol
 - name: guide_test
@@ -16,6 +18,8 @@ entries:
   modules: [json]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     guide: bee.gov.traits:guide
     artifact: bee.gov:artifact
@@ -43,7 +47,7 @@ entries:
   modules: [funcs, security]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:gateway_test_policy]}
-  imports: {test: wippy.test:test}
+  imports: {bounds: bee.protocol:bounds, test: wippy.test:test}
 - name: destination_public_test
   kind: function.lua
   source: file://destination_public_test.lua
@@ -51,7 +55,7 @@ entries:
   modules: [funcs]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:destination_public_test_policy]}
-  imports: {test: wippy.test:test}
+  imports: {principals: bee.test.principals:bound, bounds: bee.protocol:bounds, test: wippy.test:test}
 - name: destination_service_test
   kind: function.lua
   source: file://destination_service_test.lua
@@ -59,6 +63,8 @@ entries:
   modules: [registry]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     destination_service: bee.gov.binding:destination_service
 - name: super_edit_test
@@ -68,6 +74,8 @@ entries:
   modules: [hash]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     super_edit: bee.gov:super_edit
 - name: headless_revert_test
@@ -77,6 +85,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     transaction: bee.persist:transaction
     headless_revert: bee.gov:headless_revert
@@ -96,6 +105,8 @@ entries:
   modules: [registry]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     activation_profiles: bee.gov:activation_profile_decoder
     workspace_applications: bee.gov:workspace_applications
@@ -108,6 +119,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [base64]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     artifact: bee.gov:artifact
     publication_service: bee.gov.binding:publication_service
@@ -152,6 +164,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     plan_store: bee.gov.persist:plan_store
     database: bee.persist:database
@@ -165,6 +178,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    bounds: bee.protocol:bounds
     canonical: bee.sync:canonical
     test: wippy.test:test
     activation_store: bee.gov.persist:activation_store
@@ -179,6 +193,8 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     lease_store: bee.gov.persist:lease_store
 - name: activation_measure_test
@@ -188,6 +204,7 @@ entries:
   modules: [hash]
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     activation_measure: bee.gov:activation_measure
     artifact: bee.gov:artifact
@@ -214,6 +231,8 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     canonical: bee.sync:canonical
     artifact: bee.gov:artifact
@@ -240,6 +259,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     application_admission: bee.gov:governed_application_admission
 - name: activation_profiles_test
@@ -249,6 +270,8 @@ entries:
   modules: [registry]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     activation_profiles: bee.gov:activation_profile_decoder
 - name: materializer_test
@@ -257,6 +280,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     materializer: bee.gov:materializer
     artifact: bee.gov:artifact
@@ -268,6 +292,7 @@ entries:
   modules: [hash]
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     approval: bee.gov.binding:approval
     canonical: bee.sync:canonical
@@ -279,6 +304,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     destination: bee.gov.binding:destination
     plan_store: bee.gov.persist:plan_store
@@ -307,6 +333,8 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     publisher: bee.gov.binding:publisher
     delivery: bee.gov:delivery
@@ -328,6 +356,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     protocol: bee.gov:workspace_protocol
 - name: workspace_method_test_policy
@@ -346,6 +376,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:workspace_method_test_policy]}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
 - name: preflight_test
   kind: function.lua
@@ -354,6 +385,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [hash, registry]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     preflight: bee.gov:preflight
     protected_kernel: bee.gov:protected_kernel
@@ -366,6 +398,8 @@ entries:
   modules: [registry]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     capability_catalog: bee.capability:model
 - name: capability_containment_test
@@ -374,6 +408,8 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     capability_containment: bee.capability:model
 - name: lease_grants_test
@@ -384,6 +420,8 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     capability_model: bee.capability:model
     lease_grants: bee.gov.binding:lease_grants
@@ -404,6 +442,8 @@ entries:
   modules: [registry, hash]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     capability_model: bee.capability:model
     capability_grants: bee.gov:capability_grants
@@ -414,6 +454,8 @@ entries:
   modules: [hash]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     capability_files: bee.gov:capability_files
 - name: capability_gateway_test
@@ -423,6 +465,8 @@ entries:
   modules: [registry, hash]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     capability_catalog: bee.capability:model
     capability_grants: bee.gov:capability_grants
@@ -452,6 +496,7 @@ entries:
   modules: [hash]
   meta: {type: test, suite: bee}
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     artifact: bee.gov:artifact
     hub_resolver: bee.gov:hub_resolver
@@ -463,6 +508,8 @@ entries:
   modules: [hash]
   meta: {type: test, suite: bee}
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     canonical: bee.sync:canonical
     artifact: bee.gov:artifact

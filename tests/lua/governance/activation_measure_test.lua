@@ -1,5 +1,6 @@
 -- MIT. Trusted local measurements replace transferred readiness claims.
 local test = require("test")
+local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local measure = require("activation_measure")
@@ -56,16 +57,17 @@ local function define_tests()
             if not result then error(tostring(err)) end
             test.eq(result.plan_revision, 3)
             test.eq(result.selection_revision, 2)
-            test.is_true((result.report :: preflight.Report).ready)
+            test.is_true((result.report).ready)
             test.is_nil(result.application_admission)
         end)
         test.it("retains only a canonical measured application admission projection", function()
             local plan, candidate, context = facts()
-            local measured_admission = application_admission(plan.artifact_digest :: string, SHA)
+            if type(plan.artifact_digest) ~= "string" then error("invalid fixture plan.artifact_digest") end
+            local measured_admission = application_admission(plan.artifact_digest, SHA)
             context.host_evidence.application_admission = {kind = "measured", value = measured_admission}
             local result, err = measure.measure(plan, candidate, context)
             if not result then error(tostring(err)) end
-            test.eq((result.application_admission :: {[string]: unknown}).digest,
+            test.eq((assert(bounds.object(result.application_admission))).digest,
                 measured_admission.digest)
             test.eq(result.application_admission_digest,
                 measured_admission.digest)
@@ -92,7 +94,7 @@ local function define_tests()
                 kind = "function.lua", data = {source = "return true"}}}))
             plan.artifact_bytes, plan.artifact_digest = forged.bytes, forged.digest
             local entry_bytes = assert(canonical.encode(forged.entries[1]))
-            candidate.entries[1].id = forged.entries[1].id :: string
+            candidate.entries[1].id = forged.entries[1].id
             candidate.entries[1].digest = assert(hash.sha256(entry_bytes))
             test.is_nil(measure.measure(plan, candidate, context))
         end)
@@ -123,8 +125,8 @@ local function define_tests()
                 host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
             local result, problem = measure.measure(plan, candidate, context)
             if not result then error(tostring(problem)) end
-            test.eq(#((result.report :: preflight.Report).pending_migrations), 1)
-            test.is_true(type((result.migration_work :: {[string]: unknown}).bytes) == "string")
+            test.eq(#((result.report).pending_migrations), 1)
+            test.is_true(type((assert(bounds.object(result.migration_work))).bytes) == "string")
         end)
     end)
 end

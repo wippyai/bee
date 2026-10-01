@@ -1,5 +1,7 @@
 -- MIT. Host vocabulary is decoded before it can describe an app request.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local catalog = require("capability_catalog")
 local registry = require("registry")
 
@@ -61,12 +63,12 @@ local function define_tests()
                 origin = "https://API.Example.COM:443", methods = {"POST", "GET"}, path_prefix = "/v1/"}))
             test.eq(http.origin, "https://api.example.com")
             test.eq(http.path_prefix, "/v1")
-            test.eq((http.methods :: {string})[1], "GET")
+            test.eq((principals.strings(http.methods))[1], "GET")
         end)
         test.it("rejects altered catalog shape and never-listed capability", function()
             local raw = fixture()
-            local data = raw.data :: {[string]: unknown}
-            local rows = data.capabilities :: {{[string]: unknown}}
+            local data = assert(bounds.object(raw.data))
+            local rows = principals.objects(data.capabilities)
             rows[1].id = "exec"
             test.is_nil(catalog.decode(raw))
             rows[1].id = "workspace.files.read"
@@ -97,7 +99,7 @@ local function define_tests()
             local params = {operations = {"bee.hive.telemetry:stats", "bee.hive.telemetry:presence"},
                 mode = "open", audiences = {"*"}}
             local normalized = assert(catalog.normalize(shipped, "hive.expose", params))
-            local operations = normalized.operations :: {string}
+            local operations = principals.strings(normalized.operations)
             test.eq(#operations, 2)
             test.eq(operations[1], "bee.hive.telemetry:presence")
             test.eq(operations[2], "bee.hive.telemetry:stats")
@@ -105,9 +107,9 @@ local function define_tests()
             local grant = assert(catalog.resolve(shipped, "hive.expose", params))
             test.eq(grant[1].operation, "hive.expose")
             test.eq(grant[1].resource, "open")
-            local scope = grant[1].scope :: {[string]: unknown}
-            test.eq((scope.operations :: {string})[1], "bee.hive.telemetry:presence")
-            test.eq((scope.audiences :: {string})[1], "*")
+            local scope = assert(bounds.object(grant[1].scope))
+            test.eq((principals.strings(scope.operations))[1], "bee.hive.telemetry:presence")
+            test.eq((principals.strings(scope.audiences))[1], "*")
             local lines = assert(catalog.render(shipped, grant))
             local all = table.concat(lines, "\n")
             test.is_true(all:find("Expose Hive operations bee.hive.telemetry:presence, bee.hive.telemetry:stats in open mode", 1, true) ~= nil)
@@ -123,7 +125,7 @@ local function define_tests()
             test.is_nil(catalog.normalize(shipped, "hive.expose", {operations = {"bee.hive.telemetry:presence"}, mode = "open"}))
             local policy = {operations = {"bee.hive.telemetry:presence"}, mode = "policy", audiences = {"node-2", "node-1"}}
             local normalized = assert(catalog.normalize(shipped, "hive.expose", policy))
-            local audiences = normalized.audiences :: {string}
+            local audiences = principals.strings(normalized.audiences)
             test.eq(#audiences, 2)
             test.eq(audiences[1], "node-1")
             test.eq(audiences[2], "node-2")

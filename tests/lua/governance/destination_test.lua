@@ -1,5 +1,6 @@
 -- MIT. Destination coordination asks local Approvals only after review and selection.
 local test = require("test")
+local bounds = require("bounds")
 local KERNEL: {revision: integer, namespaces: {string}, super_edit: {string}, entries: {string}} =
     {revision = 1, namespaces = {"bee.gov"}, super_edit = {}, entries = {"bee:protected_kernel"}}
 local destination = require("destination")
@@ -21,20 +22,20 @@ end
 
 local function executor(): destination.Executor
     local selected = {}
-    function selected:call(method: string, raw: unknown): (unknown?, unknown?)
+    function selected.call(self: destination.Executor, method: string, raw: unknown): (unknown?, unknown?)
         if method ~= "bee.approvals.binding:request" then return nil, "unexpected method" end
-        local request = raw :: {[string]: unknown}
+        local request = assert(bounds.object(raw))
         local proposal = request.proposal
         local bytes = assert(canonical.encode(proposal))
         return {ok = true, replayed = false, value = {approval_id = "approval-destination",
             proposal = proposal, proposal_digest = assert(hash.sha256(bytes)), owner_incarnation = 4}}, nil
     end
-    return selected :: destination.Executor
+    return selected
 end
 
 local function ok(result: {[string]: unknown}): {[string]: unknown}
     if result.ok ~= true then error(tostring(result.code) .. ": " .. tostring(result.message)) end
-    return result.value :: {[string]: unknown}
+    return assert(bounds.object(result.value))
 end
 
 local function application(source_node: string, source_workspace: string, component: string): delivery.Delivery
@@ -49,8 +50,8 @@ end
 
 local function resolver(): destination.Resolver
     local value = {}
-    function value:resolve(raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
-        local spec = raw :: {[string]: unknown}
+    function value.resolve(self: destination.Resolver, raw: unknown): (preflight.Candidate?, preflight.Context?, string?)
+        local spec = assert(bounds.object(raw))
         test.eq(spec.owner_node, "node-d")
         test.eq(spec.workspace_id, "workspace-d")
         test.eq(spec.source_workspace, "source/application")
@@ -58,8 +59,8 @@ local function resolver(): destination.Resolver
         test.is_true(type(spec.source_node) == "string" and #spec.source_node > 0)
         test.is_true(type(spec.artifact_bytes) == "string" and #spec.artifact_bytes > 0)
         test.is_true(type(spec.artifact_digest) == "string" and #spec.artifact_digest == 64)
-        local digest = spec.artifact_digest :: string
-        local candidate: preflight.Candidate = {destination_node = "node-d", source_node = spec.source_node :: string,
+        local digest = spec.artifact_digest
+        local candidate: preflight.Candidate = {destination_node = "node-d", source_node = spec.source_node,
             base_revision = 1, base_digest = string.rep("a", 64),
             artifacts = {{component = "sample/app", version = "v1", digest = digest,
                 dependencies = {}, namespaces = {"sample"}}},
@@ -72,7 +73,7 @@ local function resolver(): destination.Resolver
             host_evidence = {application_admission = {kind = "absent"}, capability = {kind = "absent"}}}
         return candidate, context, nil
     end
-    return value :: destination.Resolver
+    return value
 end
 
 local function replicate(target: replicas.Store, item: delivery.Delivery): version.Descriptor
@@ -81,7 +82,7 @@ local function replicate(target: replicas.Store, item: delivery.Delivery): versi
     test.is_true(replicas.begin(target, descriptor, 1).ok)
     local offset = 0
     while offset < #item.bytes do
-        local last = math.min(#item.bytes, offset + (replicas.MAX_CHUNK_BYTES :: integer))
+        local last = math.min(#item.bytes, offset + (replicas.MAX_CHUNK_BYTES))
         local encoded = assert(base64.encode(item.bytes:sub(offset + 1, last)))
         test.is_true(replicas.put(target, {source_owner = descriptor.owner_id, feed = descriptor.feed,
             version_key = descriptor.key, descriptor_digest = descriptor.digest}, offset, encoded).ok)

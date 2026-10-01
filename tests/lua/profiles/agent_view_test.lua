@@ -128,6 +128,15 @@ local function define_tests()
                 test.is_true(shown.rows[size[2]]:find("Ctrl+K stop work", 1, true) ~= nil)
             end
         end)
+        test.it("updates the sidebar marker from the session snapshot", function()
+            local rows: {protocol.SessionSnapshot} = {}
+            local conv = conversation("working", {})
+            local decoded = protocol.decode_snapshot({session = "bs:n:w:worker", revision = 1, incarnation = 1, title = "Fix API", lifecycle = "active", activity = "blocked", queue_count = 0,
+                execution = {state = "absent", evidence_at = "2026-09-30T12:00:00Z", stale = false}, effective_limits = {}, continuity = {mode = "fresh"}, actions = {}})
+            rows[1] = assert(decoded)
+            local shown = session_view.draw(120, 36, appearance.defaults(), conv, "", "", rows)
+            test.is_true(screen(shown.rows):find("blocked", 1, true) ~= nil)
+        end)
         test.it("shows the session rail on a wide conversation and preserves mouse coordinates", function()
             local conv = conversation("working", {{input = "fix", state = "working", text = ""}}, "bs:n:w:s")
             local rows: any = {{session = "bs:n:w:s", title = "Fix API"}, {session = "bs:n:w:other", title = "Review docs"}}

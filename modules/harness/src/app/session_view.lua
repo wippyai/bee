@@ -103,7 +103,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         for slot = 1, window.capacity do
             local index = window.offset + slot
             local item = sidebar[index]
-            if item then frame.row(rail, slot + 2, text.bound(item.title, 128), index == selected, "sidebar_session", index, "") end
+            if item then frame.row(rail, slot + 2, (item.activity or "idle") .. " · " .. text.bound(item.title, 128), index == selected, "sidebar_session", index, "") end
         end
         frame.fill(rail, height)
         frame.put(rail, 2, height, "Esc sessions", rail_width - 2, rail.theme.muted)

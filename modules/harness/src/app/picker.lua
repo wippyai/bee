@@ -75,7 +75,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         loads_pending[value.serial] = value
         loads:send(value.serial)
     end
-    local ticker: time.Ticker? = nil
+    local ticker: time.Ticker? = time.ticker("1s")
     local function finish(admitted: admission.Admitted?, err: string?): (admission.Admitted?, string?)
         running = false
         load_serial = load_serial + 1
@@ -167,7 +167,6 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end)
     end
     local function leave_session()
-        if ticker then ticker:stop(); ticker = nil end
         conversation, draft, status, session_busy = nil, "", "", false
         queued_tasks, queued_text = {}, nil
         catalog_open = false
@@ -332,6 +331,10 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             local result = event.value
             if result.conversation == conversation then
                 session_busy = false; dirty = true
+                for index, row in ipairs(directory) do
+                    if row.session == result.conversation.session:ref() then directory[index] = result.conversation.session.snapshot end
+                end
+                client.title(launch, result.conversation.title)
                 if result.error then status = "Session operation failed: " .. result.error end
                 local next_task = table.remove(queued_tasks, 1)
                 if next_task then start_task(next_task) end
@@ -339,6 +342,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         elseif ticker and event.channel == ticker:channel() then
             local shown = conversation
             ticks = ticks + 1
+            if not catalog_open and not editing and ticks % 5 == 0 then load() end
             if shown and not session_busy and (agents.pending(shown) or shown.activity ~= "idle" or ticks % 5 == 0) then
                 start_task(function(current: agents.Conversation) agents.refresh(current) end)
             end

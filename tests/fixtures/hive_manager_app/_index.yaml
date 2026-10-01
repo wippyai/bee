@@ -14,6 +14,7 @@ entries:
   method: main
   modules: [process, time, security, tty, io]
   imports:
+    bounds: bee.protocol:bounds
     appearance: bee.app:appearance
   security:
     policies: [bee.hive.manager.probe:policy]

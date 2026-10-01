@@ -1,6 +1,7 @@
 local test = require("test")
 local dialog = require("dialog")
 local tty = require("tty")
+local frame = require("frame")
 local appearance = require("appearance")
 
 local function confirm_spec(): dialog.Spec
@@ -70,10 +71,11 @@ local function define_tests()
             local preferences = appearance.defaults()
             for _, width in ipairs({1, 2, 3, 8, 24, 80}) do
                 for _, height in ipairs({1, 2, 3, 5, 12, 24}) do
-                    local canvas = tty.canvas(width, height)
+                    local painter = frame.new(width, height, appearance.defaults())
+                    local canvas = painter.canvas
                     canvas:clear(appearance.style("#ffffff", "#000000") .. " \27[0m")
                     local cursor = dialog.draw(canvas, state, width, height, preferences)
-                    for _, row in ipairs(canvas:rows()) do test.eq(tty.text.width(row), width) end
+                    for _, row in ipairs(frame.rows(painter)) do test.eq(tty.text.width(row), width) end
                     if cursor.visible then
                         test.is_true(cursor.x >= 1 and cursor.x <= width)
                         test.is_true(cursor.y >= 1 and cursor.y <= height)

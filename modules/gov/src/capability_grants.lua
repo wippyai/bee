@@ -69,7 +69,7 @@ local function plain(actions: {string}, resources: unknown, comment: string, id:
         data = {policy = {actions = actions, resources = resources, effect = "allow"}}}
 end
 
-local function package_policy(grant: Object, id: string): Object?
+local function package_policy(grant: Object, id: string, app: string): Object?
     if grant.capability == "hive.view" and grant.operation == "hive.view"
         and grant.resource == "cluster" then
         return plain({"registry.get", "system.read"}, {"bee.hive.manager:names", "cluster"},
@@ -110,6 +110,10 @@ local function package_policy(grant: Object, id: string): Object?
         and grant.resource == "components" then
         return plain({"bee.hub.read", "bee.hub.manage"}, "*", "Host-generated Hub management grant", id)
     end
+    if app == "bee.hub.modules:app" and grant.capability == "hub.self_update"
+        and grant.operation == "hub.self_update" and grant.resource == "bee/bee" then
+        return plain({"bee.hub.self_update"}, {"bee/bee"}, "Host-generated Bee deployment self-update grant", id)
+    end
     if grant.capability == "gov.delivery.manage" and grant.operation == "gov.delivery.manage"
         and grant.resource == "overlays" then
         return plain({"bee.gov.delivery.manage"}, "*", "Host-generated delivery management grant", id)
@@ -125,7 +129,7 @@ end
 -- policy plus the host-created volume or database it authorizes. A Hive
 -- exposure grant materializes into an exposure-scope policy over exactly the
 -- approved operations; other review-vocabulary entries have no app grant.
-local function policy(owner: string, grant: capability_model.Grant, id: string, folder: unknown): (Object?, Object?, Object?, string?)
+local function policy(owner: string, grant: capability_model.Grant, id: string, folder: unknown, app: string): (Object?, Object?, Object?, string?)
     local scope = grant.scope
     if grant.capability == "threads.read" and grant.operation == "threads.read"
         and grant.resource == "threads" and scope.scope == "owned" then
@@ -204,7 +208,7 @@ local function policy(owner: string, grant: capability_model.Grant, id: string, 
                 resources = operations, effect = "allow"}}}, nil, nil, nil
     end
     if next(scope) == nil then
-        local generated = package_policy(grant, id)
+        local generated = package_policy(grant, id, app)
         if generated then return generated, nil, nil, nil end
     end
     return nil, nil, nil, "capability has no application-installable enforcement"
@@ -217,7 +221,7 @@ function M.installable(operations: {capability_model.Grant}): (boolean?, string?
     if #operations ~= 1 then return nil, "capability template needs unsupported policy count" end
     local folder: Object = {root_ref = "bee.resources:capability_check", directory = ".", subpath = ""}
     local generated, _, _, realize_error = policy("capability_check", operations[1],
-        M.PREFIX .. "policy.check", folder)
+        M.PREFIX .. "policy.check", folder, "capability_check:app")
     if not generated then return nil, realize_error or "capability has no application-installable enforcement" end
     return true, nil
 end
@@ -283,7 +287,7 @@ function M.propose(vocabulary: capability_model.Vocabulary, owner_raw: unknown, 
         if #resolved_operations ~= 1 then return nil, "capability template needs unsupported policy count" end
         local id = policy_id(owner, requirement_id, prior and PRIOR_PREFIX or nil)
         if not id then return nil, "measure generated policy identity" end
-        local generated, volume, database, policy_error = policy(owner, resolved_operations[1], id, folder)
+        local generated, volume, database, policy_error = policy(owner, resolved_operations[1], id, folder, app)
         if not generated then return nil, policy_error end
         seen[requirement_id] = true
         requirement_of[resolved_operations[1]] = requirement_id

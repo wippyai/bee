@@ -2,9 +2,9 @@
 local bounds = require("bounds")
 local requirements = require("requirements")
 local M = {}
-type Module = {component: string, version: string, source: string, direct: boolean,
+type Module = {component: string, version: string, locked_version: string, digest: string, source: string, direct: boolean,
     roots: {string}, used_by: {string}, entries: integer}
-type Root = {id: string, component: string, version: string, parameters: {requirements.Parameter}}
+type Root = {id: string, owner: string, component: string, version: string, parameters: {requirements.Parameter}}
 type Result = {version: integer, modules: {Module}, roots: {Root}}
 
 local function component(raw: unknown): string?
@@ -37,6 +37,18 @@ local function add_once(values: {string}, value: string)
     for _, current in ipairs(values) do if current == value then return end end
     values[#values + 1] = value
 end
+local function digest(raw: unknown): string?
+    if raw == nil then return "" end
+    local text = bounds.line(raw, 80)
+    if not text then return nil end
+    local value = text:lower():gsub("^sha256:", "")
+    if value:sub(1, 15) == "sha256-tree-v1:" then
+        if #value == 79 and value:sub(16):match("^[0-9a-f]+$") then return value end
+        return nil
+    end
+    if #value ~= 64 or not value:match("^[0-9a-f]+$") then return nil end
+    return value
+end
 
 function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     local state = bounds.object(raw)
@@ -48,11 +60,12 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
     local function module(name: string): Module
         local found = by_name[name]
         if found then return found end
-        local item: Module = {component = name, version = "", source = "", direct = false,
+        local item: Module = {component = name, version = "", locked_version = "", digest = "", source = "", direct = false,
             roots = {}, used_by = {}, entries = 0}
         by_name[name] = item
         return item
     end
+    local deployment: string? = nil
     if state.resolution ~= nil then
         local resolution = bounds.object(state.resolution)
         if not resolution then return nil, "invalid registry resolution" end
@@ -64,9 +77,33 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             local name = component(item.name)
             local selected = bounds.line(item.version, 128)
             local source = optional_text(item.source)
-            if not name or not selected or not source or by_name[name] then return nil, "invalid or duplicate resolved module" end
+            local artifact_digest = digest(item.digest)
+            if not name or not selected or not source or not artifact_digest or by_name[name] then return nil, "invalid or duplicate resolved module" end
             local bucket = module(name)
-            bucket.version, bucket.source = selected, source
+            bucket.version, bucket.source, bucket.digest = selected, source, artifact_digest
+        end
+        if resolution.lock ~= nil then
+            local lock = bounds.object(resolution.lock)
+            if not lock then return nil, "invalid deployment lock" end
+            if lock.root_module ~= "" then
+                deployment = component(lock.root_module)
+                if not deployment then return nil, "invalid deployment root" end
+            end
+            local pins, pins_error = rows(lock.modules, 512)
+            if not pins then return nil, pins_error end
+            local pinned: {[string]: boolean} = {}
+            for _, raw_pin in ipairs(pins) do
+                local pin = bounds.object(raw_pin)
+                local name = pin and component(pin.name)
+                local selected = pin and bounds.line(pin.version, 128)
+                if not name or not selected or pinned[name] then return nil, "invalid or duplicate lock module" end
+                pinned[name] = true
+                local live = by_name[name]
+                if live then live.locked_version = selected end
+            end
+            if deployment and (not pinned[deployment] or module(deployment).version == "") then
+                return nil, "deployment root is missing from resolution"
+            end
         end
     end
     local roots: {Root} = {}
@@ -97,10 +134,23 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
                 if supplied == nil then supplied = {} end
                 local parameters, parameter_error = requirements.parameters(supplied)
                 if not parameters then return nil, parameter_error end
-                roots[#roots + 1] = {id = id, component = target, version = constraint, parameters = parameters}
+                roots[#roots + 1] = {id = id, owner = owner, component = target, version = constraint, parameters = parameters}
                 add_once(bucket.roots, id)
                 bucket.direct = true
             end
+        end
+    end
+    if deployment then
+        local declared = false
+        for _, root in ipairs(roots) do
+            if root.component == deployment and root.owner == "" then declared = true end
+        end
+        if not declared then
+            local bucket = module(deployment)
+            roots[#roots + 1] = {id = "bee:deployment", owner = "", component = deployment,
+                version = bucket.version, parameters = {}}
+            add_once(bucket.roots, "bee:deployment")
+            bucket.direct = true
         end
     end
     local modules: {Module} = {}
@@ -117,10 +167,14 @@ end
 
 -- Hub owns only roots it published. Host-declared component roots remain
 -- resident deployment configuration and must not become Hub plan inputs.
-function M.dependency_members(state: Result): {[string]: boolean}
+function M.dependency_members(state: Result, self_update: boolean?): {[string]: boolean}
     local host_members: {[string]: boolean} = {}
     for _, root in ipairs(state.roots) do
-        if root.id:sub(1, 13) ~= "bee.hub.deps:" then host_members[root.component] = true end
+        local bee_root_child = self_update == true and root.owner == "bee/bee"
+        local bee_deployment_root = self_update == true and root.component == "bee/bee" and root.owner == ""
+        if root.id:sub(1, 13) ~= "bee.hub.deps:" and not bee_root_child and not bee_deployment_root then
+            host_members[root.component] = true
+        end
     end
     -- First retain the complete closure of host roots. A Hub root may share
     -- any member of that closure, but cannot replace or remove it.
@@ -149,6 +203,21 @@ function M.dependency_members(state: Result): {[string]: boolean}
                 end
             end
         end
+    end
+    if self_update == true then
+        local bee_members: {[string]: boolean} = { ["bee/bee"] = true }
+        changed = true
+        while changed do
+            changed = false
+            for _, item in ipairs(state.modules) do
+                if not bee_members[item.component] and not host_members[item.component] then
+                    for _, owner in ipairs(item.used_by) do
+                        if bee_members[owner] then bee_members[item.component] = true; changed = true; break end
+                    end
+                end
+            end
+        end
+        for name in pairs(bee_members) do members[name] = true end
     end
     return members
 end

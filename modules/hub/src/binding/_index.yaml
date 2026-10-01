@@ -6,6 +6,16 @@ entries:
   source: file://catalog.lua
   modules: [hub]
   imports: {bounds: bee.threads.records:bounds}
+- name: updates
+  kind: library.lua
+  source: file://updates.lua
+  modules: [registry]
+  imports:
+    binary_identity: bee.hub:binary_identity
+    catalog: bee.hub.binding:catalog
+    inventory: bee.hub:inventory
+    publication: bee.hub.binding:publication
+    semver: bee.hub:semver
 - name: inspect
   kind: library.lua
   source: file://inspect.lua
@@ -33,6 +43,7 @@ entries:
     inspect: bee.hub.binding:inspect
     inspection: bee.hub:inspection
     transaction: bee.persist:transaction
+    hub_result: bee.hub:result
     inventory: bee.hub:inventory
     inventory_reader: bee.hub:inventory_reader
     migration_runner: bee.hub.binding:migration_runner
@@ -58,6 +69,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     catalog: bee.hub.binding:catalog
+    updates: bee.hub.binding:updates
     inventory_reader: bee.hub:inventory_reader
     inspect: bee.hub.binding:inspect
     publication: bee.hub.binding:publication
@@ -77,6 +89,7 @@ entries:
     plan: bee.hub:plan
     publishing: bee.hub:publishing
     transaction: bee.persist:transaction
+    hub_result: bee.hub:result
     preview: bee.hub.binding:preview
   security: {policies: [bee.hub.security:facade_policy]}
-  meta: {type: tool, title: Component explorer, llm_alias: BeeComponents, llm_description: Inspect effective installed component state and exact Hub packages without applying them, input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","plan"]},"request":{"type":"object"}}}'}
+  meta: {type: tool, title: Component explorer, llm_alias: BeeComponents, llm_description: Inspect effective installed component state and exact Hub packages without applying them, input_schema: '{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"type":"string","enum":["catalog","details","inspect","state","files","read_file","installed","installed_source","updates","plan"]},"request":{"type":"object"}}}'}

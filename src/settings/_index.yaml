@@ -17,8 +17,10 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     view: bee.settings:view
+    build_info: bee.settings:build_info
     client: bee.application:client
     super_edit: bee.gov.binding:super_edit_call
+    live_updates: bee.settings:live_updates
   meta:
     type: bee.application
     application:
@@ -41,6 +43,13 @@ entries:
     frame: bee.application:frame
     appearance: bee.application:appearance
     build_info: bee.settings:build_info
+    live_updates: bee.settings:live_updates
 - name: build_info
   kind: library.lua
   source: file://build_info.lua
+- name: live_updates
+  kind: library.lua
+  source: file://live_updates.lua
+  imports:
+    bounds: bee.threads.records:bounds
+    semver: bee.hub:semver

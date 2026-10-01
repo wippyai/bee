@@ -5,6 +5,8 @@ local canonical = require("canonical")
 local hash = require("hash")
 local graph = require("graph")
 local inventory = require("inventory")
+local binary_identity = require("binary_identity")
+local native_compat = require("native_compat")
 local requirements = require("requirements")
 local semver = require("semver")
 local M = {}
@@ -74,10 +76,16 @@ function M.root_id(component: string): (string?, string?)
     return "bee.hub.deps:" .. digest, nil
 end
 
-function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source): (Prepared?, string?)
+function M.prepare(state: unknown, revision: integer, request: Request, source: graph.Source,
+	 baked_identity: binary_identity.Baked?): (Prepared?, string?)
     local installed, inventory_error = inventory.decode(state, revision)
     if not installed then return nil, inventory_error end
-    local controlled = inventory.dependency_members(installed)
+    local self_update = request.component == "bee/bee"
+    if self_update and request.action ~= "update" then return nil, "the Bee deployment root can only be updated" end
+    if request.component:match("^bee/") and not self_update then
+        return nil, "Bee packs update through the bee/bee deployment root"
+    end
+    local controlled = inventory.dependency_members(installed, self_update)
     local raw_state = bounds.object(state)
     if not raw_state or type(raw_state.entries) ~= "table" then return nil, "invalid captured registry" end
     local root_id, root_error = M.root_id(request.component)
@@ -92,6 +100,19 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             elseif controlled[root.component] then
                 roots[#roots + 1] = {component = root.component, version = root.version, parameters = root.parameters}
             end
+        elseif self_update and root.component == "bee/bee" and root.owner == "" then
+            if existing then return nil, "Bee has multiple deployment roots; host configuration needs review" end
+            existing = root
+        end
+    end
+    if self_update then
+        if not existing then return nil, "Bee deployment root is not installed" end
+        root_id = existing.id
+        if #request.parameters > 0 and canonical.encode(request.parameters) ~= canonical.encode(existing.parameters) then
+            return nil, "self-update must preserve the host deployment parameters"
+        end
+        if #request.parameters == 0 and #existing.parameters > 0 then
+            return nil, "self-update requires the host deployment parameters"
         end
     end
     for _, item in ipairs(installed.modules) do
@@ -128,6 +149,10 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     end
     local resolved, graph_error = graph.resolve(roots, source)
     if not resolved then return nil, graph_error end
+    if self_update then
+        local compatibility_error = native_compat.check(resolved.packages, baked_identity)
+        if compatibility_error then return nil, compatibility_error end
+    end
     local owners: {[string]: string} = {}
     for _, raw_entry in ipairs(raw_state.entries) do
         local entry = bounds.object(raw_entry)
@@ -150,6 +175,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     local policy_changes: {PolicyChange} = {}
     local proposed_policies: {[string]: boolean} = {}
     local changed_components: {[string]: boolean} = {}
+    local missing: {string} = {}
     local remaining: {[string]: boolean} = {}
     for _, item in ipairs(resolved.packages) do
         remaining[item.component] = true
@@ -159,6 +185,10 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             return nil, "dependency would replace a host-deployment module: " .. item.component
         end
         local change = previous == "" and "install" or ((semver.compare(previous, item.version) or 1) == 0 and "keep" or "update")
+        local same_digest = item.digest == "" or (old and old.digest ~= "" and old.digest == item.digest:lower():gsub("^sha256:", ""))
+        if change ~= "keep" or item.component == request.component or not same_digest then
+            for _, id in ipairs(item.requirements.missing) do missing[#missing + 1] = id end
+        end
         modules[#modules + 1] = {component = item.component, version = item.version, previous_version = previous,
             digest = item.digest, change = change, entries = #item.entries, requirements = item.requirements}
         if change ~= "keep" then changed_components[item.component] = true end
@@ -221,10 +251,11 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     table.sort(migrations, function(a: Migration, b: Migration): boolean return a.id < b.id end)
     table.sort(policy_changes, function(a: PolicyChange, b: PolicyChange): boolean return a.id < b.id end)
     table.sort(starts); table.sort(capabilities)
+    table.sort(missing)
     local plan: Plan = {request = request, base_revision = revision, root_id = root_id, digest = "", modules = modules,
-        missing = resolved.missing, migrations = migrations, starts = starts, capabilities = capabilities,
-        policy_changes = policy_changes, ready = #resolved.missing == 0}
-    local encoded, encode_error = canonical.encode(plan)
+        missing = missing, migrations = migrations, starts = starts, capabilities = capabilities,
+        policy_changes = policy_changes, ready = #missing == 0}
+    local encoded, encode_error = canonical.encode(plan, 1048576)
     if not encoded then return nil, encode_error end
     local digest, digest_error = hash.sha256(encoded)
     if not digest then return nil, tostring(digest_error) end

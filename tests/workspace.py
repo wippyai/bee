@@ -230,6 +230,11 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
             # production source tree or assembled pack.
             shutil.copy2(ROOT / "modules/placement-native/src/service/materialization.lua",
                          folder / "src/tests/placement_publication/materialization.lua")
+            host_environment = folder / "src/tests/harness/host/_index.yaml"
+            host_document = yaml.safe_load(host_environment.read_text())
+            host_entry = next(entry for entry in host_document["entries"] if entry["name"] == "environment")
+            host_entry["data"]["values"]["claude"] = str(folder / "fixtures/harness/bin/claude")
+            host_environment.write_text(yaml.safe_dump(host_document, sort_keys=False))
         else:
             (folder / "src/tests").mkdir()
         # Managed harness tests own their loopback listener. Desktop proofs

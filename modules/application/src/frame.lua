@@ -81,7 +81,7 @@ function M.new(width: integer, height: integer, preferences: appearance.Preferen
 end
 
 -- The painted rows, ready for output:present.
-function M.rows(painter: Painter): {string}
+function M.rows(painter: Painter, background: string?): {string}
     for y, bar in pairs(painter.bars) do M.actions(painter, y, bar.buttons, bar.x) end
     painter.bars = {}
     local painted = painter.canvas:rows()
@@ -91,7 +91,7 @@ function M.rows(painter: Painter): {string}
         -- The compositor may omit trailing blank cells. A frame publishes a
         -- complete rectangle, including its surface at the right edge.
         local gap = maximum(0, painter.width - tty.text.width(row))
-        rows[y] = row .. appearance.style(painter.theme.text, painter.theme.surface) .. string.rep(" ", gap) .. RESET
+        rows[y] = row .. appearance.style(painter.theme.text, background or painter.theme.surface) .. string.rep(" ", gap) .. RESET
     end
     return rows
 end

@@ -39,6 +39,9 @@ local function main()
     local changes = assert(baseline:changes())
     local staged = changes:create({id = "bee.hub.deps:forbidden", kind = "ns.dependency", data = {component = "wippy/test", version = "0.4.17"}})
     if staged then assert(not changes:apply(), "caller obtained direct registry publication") end
+    local self_update = call("plan", {action = "update", component = "bee/bee", version = "0.2.0"})
+    assert(self_update.ok == false and self_update.code == "DENIED",
+        "ordinary Hub management authority could update the Bee deployment root")
     local install = {action = "install", component = "wippy/test", version = "0.4.16"}
     local install_digest = prepare(install)
     assert(assert(registry.snapshot()):version():id() == baseline:version():id(), "planning changed registry history")

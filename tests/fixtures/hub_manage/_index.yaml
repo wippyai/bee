@@ -45,8 +45,8 @@ entries:
   - name: bee.hub:process_host
     value: bee:hub_workers
   - name: bee.hub:target_publish_configuration
-    value: bee:hub_publication
-- name: hub_publication
+    value: bee:hub_publish_configuration
+- name: hub_publish_configuration
   kind: registry.entry
   meta: {type: bee.hub_publication}
   data: {organization: "", cli: "", source_roots: [], staging_root: ""}
@@ -57,3 +57,10 @@ entries:
 - name: fixture_terminal
   kind: terminal.host
   lifecycle: {auto_start: true}
+
+- name: hub_publish_configuration
+  kind: registry.entry
+  data: {}
+- name: protected_kernel
+  kind: registry.entry
+  data: {namespaces: []}

@@ -101,7 +101,7 @@ type Palette = {query: string, choices: {Choice}, selected: integer, offset: int
 | `frame.fit(value: string, room: integer) -> string` | Replaces control characters and truncates to a display width with an ellipsis. |
 | `frame.pad(value: string, room: integer, align: string?) -> string` | Pads a fitted value to exactly room cells, aligned left or right. |
 | `frame.new(width: integer, height: integer, preferences: appearance.Preferences) -> Painter` | A painter over a canvas cleared to the theme's surface, with no hits yet. |
-| `frame.rows(painter: Painter) -> {string}` | The painted rows, ready for output:present. |
+| `frame.rows(painter: Painter, background: string?) -> {string}` | The painted rows, ready for output:present. |
 | `frame.put(painter: Painter, x: integer, y: integer, value: string, room: integer, fg: string?, bg: string?) -> integer` | Draws value at (x, y) within room cells and returns the drawn width. |
 | `frame.clip(painter: Painter, x: integer, y: integer, value: string, room: integer, fg: string?, bg: string?) -> integer` | Draws a decorative value (a pattern, a swatch or a border run) clipped to room cells with no ellipsis; text a reader needs uses put. |
 | `frame.fill(painter: Painter, y: integer, bg: string?)` | Clears row y to the surface, or to bg. |

@@ -7,7 +7,7 @@ with fixture_workspace(managed_gateway=True) as folder:
     count = 0
     for manifest in (folder / "src/tests").rglob("_index.yaml"):
         document = yaml.safe_load(manifest.read_text())
-        selected = str(document.get("namespace", "")).startswith(("bee.hub", "tests.hub_", "tests.modules"))
+        selected = str(document.get("namespace", "")).startswith(("bee.hub", "tests.hub.", "tests.hub_", "tests.modules"))
         changed = False
         for entry in document.get("entries", []):
             meta = entry.get("meta", {})

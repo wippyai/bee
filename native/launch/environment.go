@@ -22,6 +22,7 @@ type hostResolver struct {
 	getwd            func() (string, error)
 	executable       func() (string, error)
 	environmentNames func() []string
+	binary           func() binaryIdentityFacts
 }
 
 func systemHostResolver() hostResolver {
@@ -31,6 +32,7 @@ func systemHostResolver() hostResolver {
 		getwd:            os.Getwd,
 		executable:       os.Executable,
 		environmentNames: systemEnvironmentNames,
+		binary:           readBinaryIdentityFacts,
 	}
 }
 
@@ -84,12 +86,28 @@ func newHostEnvironment(resolver hostResolver) (*hostEnvironment, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode host environment names: %w", err)
 	}
-	return &hostEnvironment{resolver: resolver, facts: map[string]string{
+	facts := map[string]string{
 		"home":              home,
 		"cwd":               cwd,
 		"self":              self,
 		"environment_names": string(encodedNames),
-	}}, nil
+	}
+	binary := resolver.binary
+	if binary == nil {
+		binary = readBinaryIdentityFacts
+	}
+	identity := binary()
+	for name, value := range map[string]string{
+		"binary_native_module":  identity.NativeModule,
+		"binary_native_version": identity.NativeVersion,
+		"binary_native_modules": identity.NativeModules,
+		"binary_runtime_commit": identity.RuntimeCommit,
+	} {
+		if value != "" {
+			facts[name] = value
+		}
+	}
+	return &hostEnvironment{resolver: resolver, facts: facts}, nil
 }
 
 func safeExecutableName(name string) bool {

@@ -1,10 +1,50 @@
 version: '1.0'
 namespace: bee.env
 entries:
+- name: binary_identity
+  kind: registry.entry
+  meta:
+    type: bee.binary_identity
+    comment: Build metadata and native requirements for this Bee root pack; the executable identity comes from the native launch host
+  data:
+    version: development (unknown)
+    build: development (unknown)
+    source: development source (unknown)
+    source_revision: development source (unknown)
+    runtime: https://github.com/wippyai/runtime
+    runtime_commit: c0d6585b5fd1afae7f7cf0b378dc156bcd0e683d
+    native: github.com/wippyai/bee/native
+    native_version: v0.0.0-20260930012307-d85fcc6635ac
+    website: https://bee.wippy.ai
+    native_components:
+    - package: github.com/wippyai/bee/native/ioevents
+      version: v0.0.0-20260930012307-d85fcc6635ac
+    - package: github.com/wippyai/bee/native/launch
+      version: v0.0.0-20260930012307-d85fcc6635ac
 - name: workspace_environment
   kind: env.storage.os
   lifecycle:
     auto_start: true
+- name: binary_native_module
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_native_module
+  readonly: true
+- name: binary_native_version
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_native_version
+  readonly: true
+- name: binary_native_modules
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_native_modules
+  readonly: true
+- name: binary_runtime_commit
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: binary_runtime_commit
+  readonly: true
 - name: workspace_db_path
   kind: env.variable
   storage: bee.env:workspace_environment
@@ -118,9 +158,9 @@ entries:
         thread_access: none
       - component: bee.hub.modules
         definition_id: bee.hub.modules:app
-        capabilities: [hub.manage]
+        capabilities: [hub.manage, hub.self_update]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.hub.modules:client_policy,
-          bee.hub.modules:hub_policy, bee.hub.modules:publication_policy]
+          bee.hub.modules:hub_policy, bee.hub.modules:self_update_policy, bee.hub.modules:publication_policy]
         thread_access: none
       - component: bee.gov.overlays
         definition_id: bee.gov.overlays:app

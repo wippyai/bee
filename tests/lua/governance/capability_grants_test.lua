@@ -322,6 +322,30 @@ local function define_tests()
             test.is_true(compared.requires_approval)
             test.is_true(table.concat(compared.lines, "\n"):find("Plan and apply Hub", 1, true) ~= nil)
         end)
+        test.it("grants Bee self-update only to the host Modules app", function()
+            local vocabulary_value = vocabulary()
+            local request_value = request("hub.self_update", {})
+            request_value.targets = {"bee.hub.modules:app"}
+            local cap = request_value.capability_request
+            if type(cap) ~= "table" then error("missing capability request") end
+            cap.target = "bee.hub.modules:app"
+            local proposed = assert(grants.propose(vocabulary_value, OWNER,
+                "bee.hub.modules:app", {request_value}))
+            local data = proposed.policies[1].data
+            if type(data) ~= "table" then error("missing policy data") end
+            local body = data.policy
+            if type(body) ~= "table" then error("missing policy") end
+            local actions, resources = body.actions, body.resources
+            if type(actions) ~= "table" or type(resources) ~= "table" then error("missing policy scope") end
+            test.eq(actions[1], "bee.hub.self_update")
+            test.eq(resources[1], "bee/bee")
+            local agent_request = request("hub.self_update", {})
+            agent_request.targets = {"app.notes:agent"}
+            local agent_cap = agent_request.capability_request
+            if type(agent_cap) ~= "table" then error("missing capability request") end
+            agent_cap.target = "app.notes:agent"
+            test.is_nil(grants.propose(vocabulary_value, OWNER, "app.notes:agent", {agent_request}))
+        end)
     end)
 end
 return test.run_cases(define_tests)

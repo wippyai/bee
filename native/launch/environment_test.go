@@ -21,6 +21,12 @@ func TestHostEnvironmentCapturesOnlyAbsoluteFacts(t *testing.T) {
 		homeDir:    func() (string, error) { return filepath.Join(root, "home"), nil },
 		getwd:      func() (string, error) { return filepath.Join(root, "work"), nil },
 		executable: func() (string, error) { return filepath.Join(root, "bin", "bee"), nil },
+		binary: func() binaryIdentityFacts {
+			return binaryIdentityFacts{
+				NativeModule: nativeModulePath, NativeVersion: "v1.2.3",
+				NativeModules: `{"github.com/wippyai/bee/native":"v1.2.3"}`, RuntimeCommit: runtimeCommit,
+			}
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -28,6 +34,16 @@ func TestHostEnvironmentCapturesOnlyAbsoluteFacts(t *testing.T) {
 	for _, name := range []string{"home", "cwd", "self"} {
 		if value, err := storage.Get(context.Background(), name); err != nil || !filepath.IsAbs(value) {
 			t.Fatalf("%s = %q, %v", name, value, err)
+		}
+	}
+	for name, expected := range map[string]string{
+		"binary_native_module":  nativeModulePath,
+		"binary_native_version": "v1.2.3",
+		"binary_native_modules": `{"github.com/wippyai/bee/native":"v1.2.3"}`,
+		"binary_runtime_commit": runtimeCommit,
+	} {
+		if value, err := storage.Get(context.Background(), name); err != nil || value != expected {
+			t.Fatalf("%s = %q, %v; want %q", name, value, err, expected)
 		}
 	}
 	for _, name := range []string{"", ".", "..", "../bee", filepath.Join(root, "bee"), "foo..bar"} {

@@ -1,5 +1,6 @@
 -- Draw a value snapshot. This library cannot launch, message or resize apps.
 local tty = require("tty")
+local frame = require("frame")
 local title_editor = require("title_editor")
 local dialog = require("dialog")
 local model = require("model")
@@ -32,7 +33,8 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     local theme = appearance.theme(prefs.theme)
     local FRAME = appearance.style(theme.border, theme.surface)
     local width, height = scene.width, scene.height
-    local canvas = tty.canvas(width, height)
+    local painter = frame.new(width, height, prefs)
+    local canvas = painter.canvas
     local cursor: Cursor = {x = 1, y = 1, visible = false}
     local selected_snapshot: selection.Snapshot? = active_selection and selection.snapshot(active_selection) or nil
     local selected_span = active_selection and selection.range(active_selection) or nil
@@ -109,6 +111,6 @@ function M.draw(scene: model.Scene, order: {string}, contents: {[string]: Conten
     if editor then cursor = title_editor.draw(canvas, editor, width, height, prefs) end
     if modal then cursor = dialog.draw(canvas, modal, width, height, prefs) end
     if selected_snapshot then cursor.visible = false end
-    return {rows = canvas:rows(), tabs = hits, cursor = cursor}
+    return {rows = frame.rows(painter, theme.ground), tabs = hits, cursor = cursor}
 end
 return M

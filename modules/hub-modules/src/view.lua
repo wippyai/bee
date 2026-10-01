@@ -155,20 +155,48 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
             local foreground = selected and appearance.selection_text(theme) or theme.text
             local background = selected and theme.accent or theme.surface
             if roomy then
+                local update: model.PackUpdate? = nil
+                for _, candidate in ipairs(state.pack_updates) do
+                    if candidate.component == item.component then update = candidate; break end
+                end
                 local version_width = tty.text.width(item.version)
                 local name_width = maximum(0, width - version_width - 7)
                 frame.row(painter, y, " " .. tty.text.truncate(item.component, name_width, "…"), selected, "component", 0, item.component, nil, nil, stride)
                 frame.put(painter, width - version_width - 2, y, item.version, version_width, foreground, background)
                 local description = item.direct and "Direct installation" or "Dependency"
                 if #item.used_by > 0 then description = description .. " · Required by " .. table.concat(item.used_by, ", ") end
+                if item.component:match("^bee/") and update then
+                    if update.available_version ~= "" then
+                        description = description .. " · Hub " .. update.available_version
+                        if item.component == "bee/bee" and state.bee_update and state.bee_update.needs_new_binary then
+                            description = description .. " · needs a newer Bee binary"
+                        elseif item.component == "bee/bee" and state.bee_update and state.bee_update.update_available then
+                            description = description .. " · U updates the Bee packs together"
+                        elseif update.update_available then description = description .. " · updates with bee/bee" end
+                    elseif state.update_status == "pending" then description = description .. " · checking Hub version…" end
+                end
                 frame.line(painter, y + 1, " " .. description, theme.muted)
                 frame.line(painter, y + 2, string.rep("─", maximum(0, width - 4)), theme.border)
             else
-                frame.row(painter, y, item.component .. "  " .. item.version, selected, "component", 0, item.component)
+                local label = item.component .. "  " .. item.version
+                if item.component:match("^bee/") then
+                    for _, candidate in ipairs(state.pack_updates) do
+                        if candidate.component == item.component and candidate.available_version ~= "" then
+                            label = label .. " · Hub " .. candidate.available_version
+                            if candidate.update_available then label = label .. " · update with Bee" end
+                            break
+                        end
+                    end
+                end
+                frame.row(painter, y, label, selected, "component", 0, item.component)
             end
         end
         local actions = button(2, height - 1, "refresh", " Refresh ", true)
-        frame.footer(painter, status, "↑↓ select · Enter details · R refresh · A authored version")
+        local update = state.bee_update
+        if update and update.update_available then
+            actions = button(actions, height - 1, "bee_update", " Update Bee ", not update.needs_new_binary)
+        end
+        frame.footer(painter, status, "↑↓ select · Enter details · U update Bee · R refresh · A authored version")
         return {rows = frame.rows(painter), hits = painter.hits, controls = frame.controls(painter), capacity = capacity, offset = next_offset, operation_detail_offset = 0}
     end
     if state.phase == "authoring" then
@@ -512,7 +540,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     -- therefore keep that mode visible and must never expose the underlying
     -- page's hit targets while keystrokes still edit the buffer.
     if width < 28 or height < 14 then
-        local compact = tty.canvas(width, height)
+        local compact_painter = frame.new(width, height, preferences)
+        local compact = compact_painter.canvas
         compact:clear(appearance.style(theme.text, theme.surface) .. " " .. RESET)
         local function compact_line(y: integer, value: string, fg: string?)
             if y < 1 or y > height or width < 1 then return end
@@ -529,10 +558,11 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 {kind = "cancel_editor", index = 0, key = "", x = 14, y = height, width = 10, height = 1},
             }
         end
-        return {rows = compact:rows(), hits = compact_hits, capacity = 0,
+        return {rows = frame.rows(compact_painter), hits = compact_hits, capacity = 0,
             offset = base.offset, operation_detail_offset = base.operation_detail_offset}
     end
-    local canvas = tty.canvas(width, height)
+    local editor_painter = frame.new(width, height, preferences)
+    local canvas = editor_painter.canvas
     for y, row in ipairs(base.rows) do canvas:put(1, y, row, width) end
     local w = math.floor(math.min(76, width - 4))
     local h = math.floor(math.min(13, height - 4))
@@ -572,6 +602,6 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         {kind = "save_editor", index = 0, key = "", x = left + 2, y = top + h - 2, width = 12, height = 1},
         {kind = "cancel_editor", index = 0, key = "", x = left + 15, y = top + h - 2, width = math.floor(math.min(12, w - 17)), height = 1},
     }
-    return {rows = canvas:rows(), hits = hits, capacity = base.capacity, offset = base.offset, operation_detail_offset = base.operation_detail_offset}
+    return {rows = frame.rows(editor_painter), hits = hits, capacity = base.capacity, offset = base.offset, operation_detail_offset = base.operation_detail_offset}
 end
 return M

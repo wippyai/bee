@@ -94,3 +94,11 @@ entries:
     actions: [bee.hub.read, bee.hub.manage]
     resources: '*'
     effect: allow
+- name: self_update_policy
+  kind: security.policy
+  meta:
+    comment: Only Bee's person-operated Modules app may update the host deployment root; agents and overlays receive no self-update authority.
+  policy:
+    actions: [bee.hub.self_update]
+    resources: [bee/bee]
+    effect: allow

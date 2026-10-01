@@ -29,6 +29,7 @@ AGENT_DIGEST = "d" * 64
 FACADE = '''
 local security = require("security")
 local recovered = false
+local agent_install_applied = false
 -- The agent-requested package: reads never carry management authority; the
 -- approved apply does, for exactly the approved digest and request.
 local function agent_tool(raw: {[string]: unknown}): {[string]: unknown}
@@ -49,6 +50,7 @@ local function agent_tool(raw: {[string]: unknown}): {[string]: unknown}
     assert(manage, "approved apply lacks Hub management authority")
     assert(raw.expected_digest == AGENT_DIGEST and request.action == "install" and request.version == "1.0.0"
         and request.migration_policy == "up", "agent apply changed the approved plan")
+    agent_install_applied = true
     return {ok = true, replayed = false, value = {state = "complete", message = "Agent tool installed"}}
 end
 local function handle(raw: unknown): {[string]: unknown}
@@ -57,6 +59,10 @@ local function handle(raw: unknown): {[string]: unknown}
         and raw.request.component == "bee/agent-tool" then return agent_tool(raw) end
     if raw.operation == "installed" then
         return {ok = true, replayed = false, value = {version = 1, modules = {}, roots = {}}}
+    elseif raw.operation == "updates" then
+        return {ok = true, replayed = false, value = {modules = {}, bee_update = {
+            installed_version = "", available_version = "", update_available = false,
+            needs_new_binary = false, reason = ""}, catalog_error = ""}}
     end
     if raw.operation == "catalog" then
         return {ok = true, replayed = false, value = {total = 1, items = {{
@@ -100,6 +106,12 @@ local function handle(raw: unknown): {[string]: unknown}
                 "fixture:07", "fixture:08", "fixture:09", "fixture:10", "fixture:11", "fixture:12",
                 "fixture:last"}}}
     elseif raw.operation == "status" then
+        if raw.expected_digest == AGENT_DIGEST then
+            if not agent_install_applied then
+                return {ok = false, replayed = false, code = "NOT_FOUND", message = "Agent install has no Hub receipt yet"}
+            end
+            return {ok = true, replayed = false, value = {state = "complete", message = "Agent tool installed"}}
+        end
         local rows = {}
         for index = 1, 12 do rows[index] = {id = "recovery:step" .. tostring(index), target_db = "recovery:db", module = "bee/recovery", status = "applied"} end
         local receipt = {digest = string.rep("b", 64), action = "install", component = "bee/recovery",
@@ -395,15 +407,7 @@ def exercise_real_facade(project, packed, pack):
                 ui.wait("Search: dummy")
                 ui.wait("Dummy Module", timeout=30)
 
-            def configure_router():
-                ui.key(b"e")
-                ui.wait("wippy.dummy:router")
-                ui.key(b"\r")
-                ui.wait("Configure package")
-                ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
-                ui.wait("Selected")
-                ui.key(b"v")
-
+            ui.resize(180, 40)
             ui.wait("MODULES", timeout=20)
             ui.wait("Keyword: bee")
             ui.key(b"K")
@@ -417,8 +421,13 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"v")
             ui.wait("9.9.1355", timeout=30)
             click("9.9.1355")
-            configure_router()
             ui.key(b"i")
+            ui.key(b"e")
+            ui.wait("wippy.dummy:router")
+            ui.key(b"\r")
+            ui.wait("Configure package")
+            ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
+            ui.wait("Selected")
             ui.key(b"p")
             ui.wait("Ready for confirmation", timeout=30)
             ui.wait("install  wippy/dummy  9.9.1355")
@@ -445,8 +454,13 @@ def exercise_real_facade(project, packed, pack):
             ui.key(b"v")
             ui.wait("9.9.1355", timeout=30)
             click("9.9.1355")
-            configure_router()
             ui.key(b"i")
+            ui.key(b"e")
+            ui.wait("wippy.dummy:router")
+            ui.key(b"\r")
+            ui.wait("Configure package")
+            ui.key(b"\x7f" * 32 + b'"bee:gateway_router"\r')
+            ui.wait("Selected")
             ui.key(b"p")
             ui.wait("Ready for confirmation", timeout=30)
             ui.key(b"\r")
@@ -456,7 +470,7 @@ def exercise_real_facade(project, packed, pack):
             ui.wait("Receipt state: complete")
             click("Installed")
             ui.wait("MODULES  INSTALLED", timeout=20)
-            # wippy/dummy sorts after Bee's own modules;
+            # The installed package follows Bee's own modules.
             # select down to its row before reading the installed version.
             ui.key(b"\x1b[B" * (len(baseline) + 2))
             ui.wait("wippy/dummy", timeout=20)
@@ -490,6 +504,7 @@ def exercise_authored_publication(project, packed, pack):
         ui = Desktop(directory, packed=packed, project=project, deployment=pack,
                      apps=("bee.hub.modules:app",))
         try:
+            ui.resize(180, 40)
             ui.wait("MODULES", timeout=20)
             ui.key(b"a")
             ui.wait("MODULES  AUTHORING")
@@ -553,9 +568,6 @@ def main():
         exercise_agent_install(project, False, pack)
         exercise_agent_install(project, True, pack)
     with fixture_workspace(unit_tests=False) as project:
-        # Bootloader owns wippy/test and its terminal dependency even without
-        # the fixture's test root. Install the public requirement-system dummy
-        # instead, preserving the host deployment and the real Hub flow.
         exercise_real_facade(project, False, None)
     with fixture_workspace(unit_tests=False) as project:
         (project / "modules/hub/src/binding/facade.lua").write_text(FACADE)

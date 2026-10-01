@@ -7,6 +7,7 @@ local time = require("time")
 local channel = require("channel")
 local bounds = require("bounds")
 local catalog = require("catalog")
+local updates = require("updates")
 local inventory_reader = require("inventory_reader")
 local inspect = require("inspect")
 local preview = require("preview")
@@ -79,6 +80,10 @@ local function handle(raw: unknown): Result
     elseif value.operation == "installed" then
         local result, problem = inventory_reader.read()
         if not result then return transaction.failure("UNAVAILABLE", problem or "inventory unavailable") end
+        return transaction.success(result, false)
+    elseif value.operation == "updates" then
+        local result, problem = updates.read()
+        if not result then return transaction.failure("UNAVAILABLE", problem or "Bee update status unavailable") end
         return transaction.success(result, false)
     elseif value.operation == "plan" then
         local result, problem = publication.prepare(value.request)

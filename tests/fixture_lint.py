@@ -21,6 +21,7 @@ def environment(folder):
             "BEE_FIXTURE_BIN": str(fixture_bin),
             "BEE_FIXTURE_STREAMS": str(folder / "fixtures/drivers"),
             "BEE_AMBIENT_LIVE_PROVIDER": "none",
+            "NO_COLOR": "",
             "HOME": str(fixture_home),
             "PATH": str(fixture_bin) + os.pathsep + os.environ.get("PATH", "")}
 

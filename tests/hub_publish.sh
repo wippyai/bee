@@ -17,6 +17,7 @@ fixture=$(mktemp -d "$root/.wippy/hub-publish-fixture.XXXXXXXX")
 cleanup() { rm -rf "$fixture"; }
 trap cleanup EXIT HUP INT TERM
 version=0.0.1-alpha.1
+count=$(($(find "$root/modules" -name wippy.yaml | wc -l) + 1))
 
 # The mock records each call and reports the digest of the pack it was given,
 # or MOCK_DIGEST when a test needs the Hub to disagree.
@@ -61,11 +62,14 @@ run() {
 position() { grep -n "^$1 " "$fixture/calls" | cut -d: -f1; }
 
 deploy "$fixture/release" "$version"
+mkdir -p "$fixture/release/.wippy/vendor/upstream"
+printf 'upstream sealed pack\n' > "$fixture/release/.wippy/vendor/upstream/helper-2.0.0.wapp"
+printf '  - name: upstream/helper\n    version: 2.0.0\n    hash: sha256:%s\n' "$(sha256sum "$fixture/release/.wippy/vendor/upstream/helper-2.0.0.wapp" | awk '{print $1}')" >> "$fixture/release/wippy.lock"
 run "$fixture/release" check || { cat "$fixture/out" >&2; fail 'check refused a coherent release deployment'; }
-[ "$(grep -c 'lock sha256:' "$fixture/out")" = 23 ] || fail 'check did not report 23 lock hash and digest pairs'
+[ "$(grep -c 'lock sha256:' "$fixture/out")" = "$count" ] || fail 'check did not report $count lock hash and digest pairs'
 awk '$1 == "hub" && $4 ~ /^bee\// && $7 != $9 { exit 1 }' "$fixture/out" || fail 'a reported digest differs from its lock hash'
-[ "$(wc -l < "$fixture/calls" | tr -d ' ')" = 23 ] || fail 'check did not dry-run every module'
-[ "$(grep -c -- '--dry-run' "$fixture/calls")" = 23 ] || fail 'check uploaded without --dry-run'
+[ "$(wc -l < "$fixture/calls" | tr -d ' ')" = "$count" ] || fail 'check did not dry-run every module'
+[ "$(grep -c -- '--dry-run' "$fixture/calls")" = "$count" ] || fail 'check uploaded without --dry-run'
 ! grep -q -- '--create' "$fixture/calls" || fail 'check requested module creation'
 [ "$(tail -n 1 "$fixture/calls" | cut -d' ' -f1)" = bee ] || fail 'bee/bee is not published last'
 [ "$(position persist)" -lt "$(position threads)" ] || fail 'bee/threads precedes its dependency bee/persist'
@@ -73,8 +77,13 @@ awk '$1 == "hub" && $4 ~ /^bee\// && $7 != $9 { exit 1 }' "$fixture/out" || fail
 grep -q "^gateway gateway-$version.wapp " "$fixture/calls" || fail 'the sealed gateway pack was not uploaded'
 
 run "$fixture/release" publish || { cat "$fixture/out" >&2; fail 'publish refused a coherent release deployment'; }
-[ "$(grep -c -- '--create --protected --module-visibility public' "$fixture/calls")" = 23 ] || fail 'publish did not create, protect and set visibility for every module'
+[ "$(grep -c -- '--create --protected --module-visibility public' "$fixture/calls")" = "$count" ] || fail 'publish did not create, protect and set visibility for every module'
 ! grep -q -- '--dry-run' "$fixture/calls" || fail 'publish ran a dry run'
+
+printf 'tampered upstream\n' >> "$fixture/release/.wippy/vendor/upstream/helper-2.0.0.wapp"
+run "$fixture/release" check && fail 'check accepted a tampered upstream pack'
+grep -q 'upstream/helper-2.0.0.wapp does not match' "$fixture/out" || fail 'tampered upstream pack was not named'
+printf 'upstream sealed pack\n' > "$fixture/release/.wippy/vendor/upstream/helper-2.0.0.wapp"
 
 MOCK_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000 run "$fixture/release" check && fail 'check accepted a Hub digest that differs from the lock hash'
 grep -q 'differs from lock hash' "$fixture/out" || fail 'digest mismatch was not named'

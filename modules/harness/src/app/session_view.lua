@@ -26,7 +26,7 @@ local function wrap(value: string, room: integer): {string}
             local remaining = clean
             while tty.text.width(remaining) > width do
                 local piece = tty.text.cut(remaining, 0, width)
-                local boundary = piece:match("^.*()%s")
+                local boundary = tonumber(piece:match("^.*()%s"))
                 if remaining:sub(#piece + 1, #piece + 1):match("%s") then boundary = #piece + 1 end
                 if boundary and boundary > 1 then
                     out[#out + 1] = piece:sub(1, boundary - 1)
@@ -129,7 +129,17 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     local input_row = height - 3
     local last = input_row - 1
     local lines = M.lines(conv, math.floor(math.max(1, width - 2)))
-    if height >= 7 then frame.line(painter, 3, "Work queue · " .. (conv.session.snapshot.provider or "Agent") .. " · " .. conv.session:ref(), theme.muted) end
+    if height >= 7 then frame.line(painter, 3, "Conversation · " .. (conv.session.snapshot.provider or "Agent"), theme.muted) end
+    if conv.details then
+        lines = {{text = "Session: " .. conv.session:ref()}, {text = "Definition: " .. (conv.session.snapshot.definition or "Unavailable")},
+            {text = "Workspace: " .. (conv.session.snapshot.workspace or "Unavailable")}}
+        for _, turn in ipairs(conv.turns) do
+            lines[#lines + 1] = {text = "Work: " .. turn.work:ref()}
+            for _, row in ipairs(wrap(turn.diagnostics or "", width - 4)) do
+                if row ~= "" then lines[#lines + 1] = {text = row, role = "muted"} end
+            end
+        end
+    end
     if #lines == 0 and height >= 9 then
         frame.empty(painter, 4, "Ready for work", "Type below, then Enter sends work to this session")
     end
@@ -141,6 +151,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.actions(painter, height - 1, {
             {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start new session from this" or "Send", enabled = conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active", primary = true},
             {kind = "back", key = "Esc", label = "Sessions", enabled = true},
+            {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true},
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = agents.pending(conv)},
             {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = conv.lifecycle == "active"},
         })

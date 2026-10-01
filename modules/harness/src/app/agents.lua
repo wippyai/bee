@@ -26,7 +26,7 @@ type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncert
 type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?, tools: {[string]: string}?, diagnostics: string?}
 type Unsent = {text: string, key: string}
 type Conversation = {session: sessions.Session, title: string, lifecycle: string, activity: string, queued: integer,
-    turns: {Turn}, unsent: Unsent?, notice: string, thread_cursor: integer?}
+    turns: {Turn}, details: boolean?, unsent: Unsent?, notice: string, thread_cursor: integer?}
 
 local function describe(fault: Fault?): string
     if not fault then return "sessions contract returned no reason" end

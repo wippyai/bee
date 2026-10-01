@@ -133,7 +133,8 @@ local function define_tests()
                     {input = "Fix API", state = "working", text = ""}}), "next", "Working")
                 test.eq(#shown.rows, size[2])
                 for _, row in ipairs(shown.rows) do test.eq(tty.text.width(row), size[1]) end
-                test.is_true(screen(shown.rows):find("Work queue", 1, true) ~= nil)
+                test.is_true(screen(shown.rows):find("Conversation", 1, true) ~= nil)
+                test.is_nil((screen(shown.rows):find("bs:", 1, true)))
                 test.is_true(screen(shown.rows):find("Stop current work", 1, true) ~= nil)
                 test.is_true(shown.rows[size[2]]:find("Ctrl+K stop work", 1, true) ~= nil)
             end

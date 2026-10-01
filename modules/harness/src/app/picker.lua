@@ -390,7 +390,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         elseif confirming == "close" then confirming = ""; status = ""; close_session()
                         elseif conversation.lifecycle == "closed" then start_from_session()
                         else submit() end
-                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then status = "Details · " .. conversation.session:ref(); dirty = true
+                    elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "d" then conversation.details = not conversation.details; dirty = true
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "x" then confirming = "close"; status = "Close session? Accepted work finishes; new work is refused. Enter confirms · Esc keeps it"; dirty = true
                     elseif data.type == "key" and data.action == "press" and data.ctrl and data.key == "k" then confirming = "stop"; status = "Stop current work? Session stays available. Enter confirms · Esc keeps it"; dirty = true
                     elseif data.type == "mouse" and data.action == "press" and data.button == "left" then
@@ -399,6 +399,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         if kind == "sidebar_session" and hit and not session_busy then
                             selected = hit.index; open_existing(selected)
                         elseif kind == "back" then leave_session()
+                        elseif kind == "details" then conversation.details = not conversation.details; dirty = true
                         elseif kind == "new_from_session" then start_from_session()
                         elseif kind == "send" then submit()
                         elseif kind == "close_session" then confirming = "close"; status = "Close session? Enter confirms · Esc keeps it"; dirty = true

@@ -271,7 +271,7 @@ local function other_actor()
     end
     error("no foreign operation available for actor test")
 end
-return {newdb_rollback_tamper = function() new_database("newdb_rollback_tamper") end, newdb_rollback_changed = new_database_rollback_changed,
+local cases = {newdb_rollback_tamper = function() new_database("newdb_rollback_tamper") end, newdb_rollback_changed = new_database_rollback_changed,
     newdb_default = function() new_database("newdb_default") end, newdb_linked = function() new_database("newdb_linked") end,
     newdb = function() new_database("newdb") end,
     newdb_collision = function() new_database("newdb_collision") end, newdb_denied = function() new_database("newdb_denied") end,
@@ -285,3 +285,15 @@ return {newdb_rollback_tamper = function() new_database("newdb_rollback_tamper")
     rollback_finish = function() rollback_recover(true, false) end,
     rollback_changed = function() rollback_recover(false, true) end,
     history = history, other_actor = other_actor, linked = linked, partial = partial, crash = crash, recover = function() recover(false) end, tamper = function() recover(true) end, absent = function() run("absent") end, applied = function() run("applied") end, denied = function() run("denied") end}
+
+local reported = {}
+for name, run_case in pairs(cases) do
+    reported[name] = function()
+        local ok, err = pcall(run_case)
+        if not ok then
+            logger:error(tostring(err))
+            error(err)
+        end
+    end
+end
+return reported

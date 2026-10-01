@@ -24,10 +24,10 @@ local function define_tests()
             test.is_nil(decode_error)
             if type(decoded) ~= "table" then error("host presence metadata is malformed") end
             local found = false
-            for _, name in ipairs(decoded :: {unknown}) do
-                test.eq(type(name), "string")
-                if name == "PATH" then found = true end
-                test.is_nil(((name :: string):find("=", 1, true)))
+            for _, value in ipairs(decoded) do
+                if type(value) ~= "string" then error("host presence metadata contains a non-string name") end
+                if value == "PATH" then found = true end
+                test.is_false(value:find("=", 1, true) ~= nil)
             end
             test.is_true(found)
         end)

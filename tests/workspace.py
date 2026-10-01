@@ -240,6 +240,11 @@ def fixture_workspace(presenter_probe=False, managed_gateway=False, unit_tests=T
         shutil.copytree(ROOT / "tests/fixtures/desktop_apps", folder / "src/fixtures")
         shutil.copytree(ROOT / "tests/fixtures/drivers", folder / "fixtures/drivers")
         shutil.copytree(ROOT / "tests/fixtures/harness", folder / "fixtures/harness")
+        host_environment = folder / "src/tests/harness/host/_index.yaml"
+        host_document = yaml.safe_load(host_environment.read_text())
+        host_entry = next(entry for entry in host_document["entries"] if entry["name"] == "environment")
+        host_entry["data"]["values"]["claude"] = str(folder / "fixtures/harness/bin/claude")
+        host_environment.write_text(yaml.safe_dump(host_document, sort_keys=False))
         shutil.copy2(ROOT / ".wippy.yaml", folder / ".wippy.yaml")
         # Carry the production embed declaration so a packed fixture embeds the
         # offline documentation corpus read-only instead of resolving a project

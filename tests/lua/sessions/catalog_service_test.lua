@@ -38,6 +38,7 @@ local function define_tests()
                 if candidate.ref == "bee.driver.claude:default_window" then found = candidate end
             end
             test.not_nil(found)
+            if found and found.status ~= "ready" then error(table.concat(found.reasons, "; ")) end
             test.eq(found and found.status, "ready")
             local entry = assert(registry.get("bee.driver.claude:default_window"))
             local definition = entry.data :: {binding_ref: string, profile_id: string, policy_ref: string}

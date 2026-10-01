@@ -1,0 +1,11 @@
+version: '1.0'
+namespace: bee.harness.host
+entries:
+- name: environment
+  kind: env.storage.static
+  meta:
+    test_support: true
+    comment: Unit tests provide the host presence fact without loading Bee's native host component.
+  data:
+    values:
+      environment_names: '["PATH"]'

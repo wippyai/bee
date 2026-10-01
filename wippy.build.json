@@ -3,7 +3,7 @@
   "name": "bee",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "bf086169381c7e45448925d99b03633b84055753",
+    "commit": "728b75942028080264aacbb16ef0420a0f8090b4",
     "go": "1.27.0",
     "tags": [
       "fts5",

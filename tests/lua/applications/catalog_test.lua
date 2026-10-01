@@ -41,7 +41,7 @@ end
 
 local function app(id: string?): Object
     return {id = id or APP, kind = "process.lua", data = {source = "return {}"},
-        meta = {type = "bee.application", application = {api_version = 1, title = "Governed catalog probe",
+        meta = {type = "bee.app", application = {api_version = 1, title = "Governed catalog probe",
             lifetime = "view", revision = "1", instance_policy = "multiple", restart_policy = "never"}}}
 end
 
@@ -158,7 +158,7 @@ local function define_tests()
             assert(withdraw:apply())
             local after = catalog.read(WORKSPACE)
             test.is_false(has(after, APP))
-            test.is_true(has(after, "bee.settings:app"))
+            test.is_true(has(after, "bee.settings.app:app"))
 
             local cleanup = registry.snapshot():changes()
             assert(cleanup:update(original))
@@ -365,7 +365,7 @@ local function define_tests()
             test.eq(policies[2], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(policies[3], "bee.threads.timeline:client_policy")
             test.eq(timeline.thread_access, "none")
-            local processes = bindings["bee.host.processes:app"]
+            local processes = bindings["bee.host.processes.app:app"]
             if not processes then error("processes package binding missing") end
             test.is_true(processes.application_stop == true)
             test.is_false(processes.appearance_write == true)
@@ -375,14 +375,14 @@ local function define_tests()
             test.eq(#(manager.policies :: {string}), 3)
             test.is_true(has(selected, "bee.workspace.manager.app:app"))
             test.is_true(has(selected, "bee.hub.modules.app:app"))
-            test.is_true(has(selected, "bee.gov.overlays:app"))
+            test.is_true(has(selected, "bee.gov.overlays.app:app"))
             local files = bindings["bee.files.app:app"]
             if not files then error("Files package binding missing") end
             test.eq(#(files.policies :: {string}), 2)
             test.eq((files.policies :: {string})[1], "bee.security.files:read_policy")
             test.eq((files.policies :: {string})[2], "bee.security:ordinary_app_subsystem_boundary")
             test.eq(files.thread_access, "observe_post")
-            test.is_true(has(selected, "bee.settings:app"))
+            test.is_true(has(selected, "bee.settings.app:app"))
             test.is_true(selected.evidence ~= "")
             test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline.app:app"))
         end)
@@ -391,7 +391,7 @@ local function define_tests()
             local visible = catalog.read(WORKSPACE) :: Selection
             local stale: Selection = {revision = visible.revision, evidence = "", bindings = {}, items = {}}
             local refreshes = 0
-            local selected, binding, descriptor = catalog.resolve_open("bee.settings:app", function()
+            local selected, binding, descriptor = catalog.resolve_open("bee.settings.app:app", function()
                 refreshes = refreshes + 1
                 return refreshes == 1 and stale or visible
             end)

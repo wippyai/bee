@@ -16,7 +16,7 @@ entries:
   imports:
     test: wippy.test:test
     syntax: bee.files:syntax
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua
@@ -66,8 +66,8 @@ entries:
     memory_source: bee.files.test:memory_source
     model: bee.files.app:model
     view: bee.files.app:view
-    appearance: bee.application:appearance
-    frame: bee.application:frame
+    appearance: bee.app:appearance
+    frame: bee.app:frame
 - name: access_probe
   kind: function.lua
   source: file://access_probe.lua

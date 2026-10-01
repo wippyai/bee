@@ -314,8 +314,8 @@ def contract_findings(report):
         return ("the application entry must be " + DEFINITION_ID + " of kind process.lua; it is "
                 + str(entry.get("id")) + " of kind " + str(entry.get("kind")))
     application = (entry.get("meta") or {}).get("application") or {}
-    if (entry.get("meta") or {}).get("type") != "bee.application":
-        return "the application entry declares no meta.type bee.application"
+    if (entry.get("meta") or {}).get("type") != "bee.app":
+        return "the application entry declares no meta.type bee.app"
     if application.get("title") != TITLE:
         return "the application metadata must declare the title " + TITLE + "; it declares " + str(application.get("title"))
     if not application.get("resume_schema"):

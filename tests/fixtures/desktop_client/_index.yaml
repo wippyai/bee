@@ -49,8 +49,8 @@ entries:
     store: bee.client:store
     decode: bee.protocol:decode
     launch_protocol: bee.launch:protocol
-    interaction: bee.application:interaction
-    names: bee.application:names
+    interaction: bee.app:interaction
+    names: bee.app:names
   security:
     policies: [bee.desktop.client.probe:root_policy]
   meta:

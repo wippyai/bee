@@ -135,7 +135,7 @@ entries:
   kind: library.lua
   source: file://lease.lua
   imports:
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
 - name: process
   kind: process.lua
   source: file://process.lua

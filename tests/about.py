@@ -6,7 +6,7 @@ from tui_smoke import Desktop
 
 def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-about-") as directory:
-        ui = Desktop(directory, packed=packed, apps=("bee.settings:app",))
+        ui = Desktop(directory, packed=packed, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS", timeout=10)
             ui.key(b"\t" * 4)

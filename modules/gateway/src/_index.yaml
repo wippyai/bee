@@ -250,7 +250,7 @@ entries:
 - name: sessions
   kind: library.lua
   source: file://sessions.lua
-  imports: {protocol: bee.application:sessions_protocol}
+  imports: {protocol: bee.app:sessions_protocol}
 - name: hooks
   kind: library.lua
   source: file://hooks.lua
@@ -282,7 +282,7 @@ entries:
     session_tools: bee.gateway:session_tools
     bounds: bee.threads.records:bounds
     message: bee.threads.records:message
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
     workspace_protocol: bee.gov:workspace_protocol
     delivery_protocol: bee.gov:delivery_protocol
     docs_protocol: bee.docs:protocol

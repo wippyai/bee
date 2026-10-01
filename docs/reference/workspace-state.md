@@ -69,13 +69,28 @@ ledgers fail explicitly; Bee does not delete or downgrade the database. Stale
 store handles cannot overwrite a newer generation. These guarantees are tested
 in `tests/storage.py`; source/pack restoration is tested in `tests/recovery.py`.
 
-Migration 9 translates the classic catalog root and Bee-owned saved application
-definition IDs. The workspace recovery decoder also accepts older definition IDs
-in JSON written with different spacing. The client layout stores view and
-instance IDs, not application definition IDs, so its three applied migrations
-stay unchanged. `make nested-names-upgrade-check` boots state from the pre-rename
-main revision and verifies restored Settings and Approvals windows retain their
-identities and client layout.
+Migrations 9–11 translate the classic catalog root and earlier application IDs.
+Migration 12 moves Settings, Terminal, Process Manager and Overlays to their
+module application children and completes earlier definition translations in
+JSON with arbitrary spacing. It updates only saved application `definition_id`
+fields and workspace thread binding definitions; opaque resume state stays intact.
+The recovery decoder reads current IDs without aliases. Client layouts contain
+view and instance IDs, so their migration ledger stays unchanged.
+`make app-layout-upgrade-check` restarts state written by main `463ac2ea` and
+checks application identities, layout and the new ledger.
+
+Threads schema migration 28 and data ledger `bee_thread_definition_migrations:1`
+move the four relocated definitions and their derived stable memberships,
+Sessions ownership, operational filters and receipts in one transaction.
+Historical journal records keep their original evidence.
+
+Sync migration 7 updates SDK references in saved profiles, feed events and
+idempotency receipts. Gateway migration 15 updates stored surfaces, active
+traits and grant receipt trait lists. Both owners translate exact SDK reference
+strings without changing approval proposal digests, actor identities or wire
+topics. The version-1 `bee.application.*` lifecycle protocol and
+`bee.application:<workspace>:…` principals are independent of registry namespace
+`bee.app` and retain their identities.
 
 Workspace database schema, registry revision, app revision and app resume schema
 are different version domains. Apps own interpretation of their opaque state;

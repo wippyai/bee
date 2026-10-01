@@ -9,7 +9,7 @@ local time = require("time")
 local appearance = require("appearance")
 
 local WORKSPACE = string.rep("c", 32)
-local DEFINITION = "bee.console:app"
+local DEFINITION = "bee.console.app:app"
 
 local function define_tests()
     test.describe("Workspace broker application exit", function()

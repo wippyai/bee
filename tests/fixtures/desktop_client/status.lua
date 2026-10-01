@@ -136,7 +136,7 @@ local function main()
     local waiting_record_id = waiting_value.record_id
 
     assert(process.send(host, "bee.app.request", {version = 1, request_id = "thread-bound-open", op = "open",
-        workspace_id = workspace_id, definition_id = "bee.console:app", thread_id = thread_id,
+        workspace_id = workspace_id, definition_id = "bee.console.app:app", thread_id = thread_id,
         arguments = {"bash", "--noprofile", "--norc", "-i"}}))
     local opened = host_reply("thread-bound-open", "open")
     assert(opened.error_code == "" and opened.thread_id == thread_id and opened.id ~= "" and opened.instance_id ~= "",

@@ -286,7 +286,7 @@ function M.main()
         request_id = open_req_id,
         op = "open",
         workspace_id = ws1,
-        definition_id = "bee.settings:app",
+        definition_id = "bee.settings.app:app",
         thread_id = associated_thread,
     })
     assert(open_sent, "Failed to send open request to host 1")
@@ -300,13 +300,13 @@ function M.main()
 
     local checkpoint_record = wait_checkpoint(host_1, ws1)
     assert(checkpoint_record.instance_id == opened_instance_id, "Checkpoint instance_id must match opened app")
-    assert(checkpoint_record.definition_id == "bee.settings:app", "Checkpoint definition_id must match Settings")
+    assert(checkpoint_record.definition_id == "bee.settings.app:app", "Checkpoint definition_id must match Settings")
     assert(checkpoint_record.thread_id == associated_thread, "Checkpoint lost its host-owned thread association")
     assert(process.send(host_1, "bee.app.request", {version = 1, request_id = open_req_id,
-        op = "open", workspace_id = ws1, definition_id = "bee.settings:app", thread_id = "different-thread"}))
+        op = "open", workspace_id = ws1, definition_id = "bee.settings.app:app", thread_id = "different-thread"}))
     assert(wait_reply(host_1, open_req_id, "open").error_code == "request_conflict", "Retry changed thread association")
     assert(process.send(host_1, "bee.app.request", {version = 1, request_id = "singleton-thread-conflict",
-        op = "open", workspace_id = ws1, definition_id = "bee.settings:app", thread_id = "different-thread"}))
+        op = "open", workspace_id = ws1, definition_id = "bee.settings.app:app", thread_id = "different-thread"}))
     assert(wait_reply(host_1, "singleton-thread-conflict", "open").error_code == "thread_conflict", "Singleton was rebound")
     logger:info("Settings opened and checkpointed on host 1", {instance_id = opened_instance_id})
 
@@ -326,7 +326,7 @@ function M.main()
         request_id = id_a,
         op = "open",
         workspace_id = ws1,
-        definition_id = "bee.settings:app",
+        definition_id = "bee.settings.app:app",
     })
     assert(sent_a2, "Failed to send req A to host 2")
 
@@ -345,7 +345,7 @@ function M.main()
         request_id = id_b,
         op = "open",
         workspace_id = ws2,
-        definition_id = "bee.settings:app",
+        definition_id = "bee.settings.app:app",
     })
     assert(sent_b1, "Failed to send req B to host 1")
     local sent_b2 = process.send(host_2, "bee.app.request", {

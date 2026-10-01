@@ -356,7 +356,7 @@ entries:
 - name: command
   kind: registry.entry
   meta:
-    type: bee.application_command
+    type: bee.app_command
     comment: CLI command to launch Codex CLI in the agent window
   data:
     name: codex

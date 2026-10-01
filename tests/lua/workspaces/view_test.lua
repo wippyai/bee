@@ -40,7 +40,7 @@ local function populated(): model.State
     model.apply_page(state, ok({items = items, next_after = "cursor"}))
     model.move(state, 1)
     model.apply_inspect(state, state.selected, ok({live = true,
-        applications = {{definition_id = "bee.settings:app", instance_id = "i-1", restart_policy = "automatic"}},
+        applications = {{definition_id = "bee.settings.app:app", instance_id = "i-1", restart_policy = "automatic"}},
         extensions = {{binding = "bee.resources:resources_workspace_extension", title = "Resources", total = 1, items = {{label = "project", detail = "bee.env:workspace_root · write"}}},
             {binding = "bee:gateway_workspace_extension", title = "Agent sessions", total = 0, items = {}}}}))
     model.apply_threads(state, state.selected, ok({threads = {{thread_id = "t-1", title = "Migrate billing", state = "open"}}}))
@@ -70,7 +70,7 @@ local function define_tests()
                 local shown = table.concat(check(size[1], size[2], state), "\n")
                 test.is_nil((shown:find(state.selected, 1, true)))
                 test.is_nil((shown:find("bee.env:", 1, true)))
-                test.is_nil((shown:find("bee.settings:app", 1, true)))
+                test.is_nil((shown:find("bee.settings.app:app", 1, true)))
                 test.is_true(shown:find("Serve", 1, true) ~= nil)
             end
         end)
@@ -108,7 +108,7 @@ local function define_tests()
             test.contains(detail[6], "Served")
             test.not_nil(find(detail, "Folder   legacy/2"))
             test.not_nil(find(detail, "APPLICATIONS"))
-            test.not_nil(find(detail, "bee.settings:app"))
+            test.not_nil(find(detail, "bee.settings.app:app"))
             test.contains(detail[23], "Esc Back")
         end)
 

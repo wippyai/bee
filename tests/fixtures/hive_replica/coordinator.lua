@@ -116,7 +116,7 @@ local function exact_agent_artifact(scenario: AgentScenario): artifact.Artifact
     local data, meta = object(definition.data), object(definition.meta)
     local application = object(meta.application)
     if definition.id ~= AGENT_DEFINITION or definition.kind ~= "process.lua" or type(data.source) ~= "string"
-        or meta.type ~= "bee.application" or application.title ~= "Agent App" or application.revision ~= "2" then
+        or meta.type ~= "bee.app" or application.title ~= "Agent App" or application.revision ~= "2" then
         error("updated agent artifact is not the retained Agent App v2 definition")
     end
     return exact

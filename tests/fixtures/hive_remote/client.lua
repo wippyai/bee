@@ -89,7 +89,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         op = "open",
         workspace_id = workspace_id,
         connection_id = "unadmitted-pre-admit-desktop",
-        definition_id = "bee.console:app",
+        definition_id = "bee.console.app:app",
     }))
 
     assert(io.print("BEE_HIVE_REMOTE client_ready " .. self))
@@ -105,7 +105,7 @@ local function run_desktop(self: string, host_pid: string, workspace_id: string,
         :with_context({["bee.client_owner"] = self})
         :with_scope(client_scope)
         :spawn_monitored("bee.client:main", "bee:workers", self, host_pid, workspace_id, "bee.env:client_db",
-            "bee.console:app", {version = 1, quit_mode = "detach", fullscreen = true})))
+            "bee.console.app:app", {version = 1, quit_mode = "detach", fullscreen = true})))
 
     local c1_ready_msg = hop(client_readies, "client 1 ready")
     assert(tostring(c1_ready_msg:from()) == client1_pid, "Client 1 ready sender mismatch")
@@ -389,7 +389,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         op = "open",
         workspace_id = workspace_id,
         connection_id = "unadmitted-pre-admit",
-        definition_id = "bee.console:app",
+        definition_id = "bee.console.app:app",
     }))
 
     assert(io.print("BEE_HIVE_REMOTE client_ready " .. self))
@@ -416,9 +416,9 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     assert(cat.connection_id == connection_id, "Catalog connection mismatch")
     local has_terminal = false
     for _, item in ipairs(cat.items) do
-        if item.definition_id == "bee.console:app" then has_terminal = true end
+        if item.definition_id == "bee.console.app:app" then has_terminal = true end
     end
-    assert(has_terminal, "Host catalog missing bee.console:app")
+    assert(has_terminal, "Host catalog missing bee.console.app:app")
 
     -- 3. Receive initial views snapshot from host; verify pre-admission request had no side effect
     local view_msg = assert(updates:receive())
@@ -462,7 +462,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         local presenter_pid = tostring(assert(process.with_options({terminal = grant})
             :with_context({["bee.workspace_owner"] = self, ["bee.workspace_id"] = workspace_id})
             :with_scope(pres_scope)
-            :spawn_monitored("bee.terminal:main", "bee:workers", self, "bee.console:app", nil)))
+            :spawn_monitored("bee.terminal:main", "bee:workers", self, "bee.console.app:app", nil)))
 
         local ready_timer = time.after("3s")
         local ready_sel = channel.select({controls:case_receive(), ready_timer:case_receive()})
@@ -504,7 +504,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
             op = "open",
             workspace_id = workspace_id,
             connection_id = connection_id,
-            definition_id = "bee.console:app",
+            definition_id = "bee.console.app:app",
         }))
         opened = wait_reply("open-1", "open")
         if opened.error_code ~= "" then error("Failed to open terminal: " .. opened.error) end
@@ -685,14 +685,14 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         assert(wait_for(view, "BEE_AFTER_PRESENTER_VAR_([%w_]+)") == proof_token,
             "Presenter retirement lost destination shell state")
     else
-        -- 4. Open terminal (bee.console:app)
+        -- 4. Open terminal (bee.console.app:app)
         assert(process.send(host_pid, "bee.app.request", {
             version = 1,
             request_id = "open-1",
             op = "open",
             workspace_id = workspace_id,
             connection_id = connection_id,
-            definition_id = "bee.console:app",
+            definition_id = "bee.console.app:app",
         }))
         opened = wait_reply("open-1", "open")
         if opened.error_code ~= "" then error("Failed to open terminal: " .. opened.error) end
@@ -771,7 +771,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         op = "open",
         workspace_id = workspace_id,
         connection_id = "fabricated-connection-id",
-        definition_id = "bee.console:app",
+        definition_id = "bee.console.app:app",
     }))
     local unadmitted_reply = wait_reply("unadmitted-fake-conn", "open")
     assert(unadmitted_reply.error_code == "permission_denied", "Unadmitted connection was not denied")
@@ -793,7 +793,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
     assert(process.send(host_pid, "bee.app.request", {
         version = 1, request_id = "foreign-workspace", op = "open",
         workspace_id = foreign_workspace, connection_id = connection_id,
-        definition_id = "bee.console:app",
+        definition_id = "bee.console.app:app",
     }))
     assert(wait_reply("foreign-workspace", "open").error_code == "workspace_mismatch",
         "Foreign workspace request was not rejected")
@@ -829,7 +829,7 @@ local function main(host_pid: string, workspace_id: string, supervisor_pid: stri
         op = "open",
         workspace_id = workspace_id,
         connection_id = connection_id,
-        definition_id = "bee.console:app",
+        definition_id = "bee.console.app:app",
     }))
     -- Unadmitted actors receive no host inventory or reply. Re-admit this
     -- execution and verify that the old-connection request created no app.

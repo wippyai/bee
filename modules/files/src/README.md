@@ -19,7 +19,7 @@ files in loaded directories, and G jumps to a line. The shared frame's
 F10 More and `?` Help remain available on compact frames. Private `.wippy` and `.git` trees, traversal and
 absolute paths are rejected. Directory loads and search results are bounded.
 
-An agent with approved `bee.application:runtime` access opens Files through
+An agent with approved `bee.app:runtime` access opens Files through
 `application_open`, with `definition_id: bee.files.app:app` and literal
 `arguments: ["src/clock.lua:2-4"]`. The preview marks the requested range.
 Files uses singleton admission; opening an existing instance with new arguments

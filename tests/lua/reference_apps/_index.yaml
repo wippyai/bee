@@ -5,55 +5,55 @@ entries:
   kind: library.lua
   source: file://apps/deploy_board.lua
   imports:
-    frame: bee.application:frame
-    viz: bee.application:viz
+    frame: bee.app:frame
+    viz: bee.app:viz
 - name: ci_bench
   kind: library.lua
   source: file://apps/ci_bench.lua
   imports:
-    frame: bee.application:frame
-    viz: bee.application:viz
+    frame: bee.app:frame
+    viz: bee.app:viz
 - name: inbox
   kind: library.lua
   source: file://apps/inbox.lua
   imports:
-    frame: bee.application:frame
+    frame: bee.app:frame
 - name: log_viewer
   kind: library.lua
   source: file://apps/log_viewer.lua
   imports:
-    frame: bee.application:frame
+    frame: bee.app:frame
 - name: topology
   kind: library.lua
   source: file://apps/topology.lua
   imports:
-    frame: bee.application:frame
-    viz: bee.application:viz
-    diagram: bee.application:diagram
+    frame: bee.app:frame
+    viz: bee.app:viz
+    diagram: bee.app:diagram
 - name: workflow
   kind: library.lua
   source: file://apps/workflow.lua
   imports:
-    frame: bee.application:frame
-    viz: bee.application:viz
-    diagram: bee.application:diagram
+    frame: bee.app:frame
+    viz: bee.app:viz
+    diagram: bee.app:diagram
 - name: metrics
   kind: library.lua
   source: file://apps/metrics.lua
   imports:
-    frame: bee.application:frame
-    viz: bee.application:viz
+    frame: bee.app:frame
+    viz: bee.app:viz
 - name: deploy_form
   kind: library.lua
   source: file://apps/deploy_form.lua
   imports:
-    frame: bee.application:frame
-    forms: bee.application:forms
+    frame: bee.app:frame
+    forms: bee.app:forms
 - name: overlays
   kind: library.lua
   source: file://apps/overlays.lua
   imports:
-    frame: bee.application:frame
+    frame: bee.app:frame
 - name: reference_apps_test
   kind: function.lua
   source: file://reference_apps_test.lua
@@ -62,9 +62,9 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    frame: bee.application:frame
-    forms: bee.application:forms
-    appearance: bee.application:appearance
+    frame: bee.app:frame
+    forms: bee.app:forms
+    appearance: bee.app:appearance
     deploy_board: bee.application.reference.test:deploy_board
     ci_bench: bee.application.reference.test:ci_bench
     inbox: bee.application.reference.test:inbox

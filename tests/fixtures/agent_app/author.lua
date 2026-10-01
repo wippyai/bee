@@ -176,7 +176,7 @@ local function first_brief(source_workspace: string, marker: string, round: stri
         .. "entries.json holds exactly one entry with id " .. DEFINITION_ID .. " and kind process.lua, with its Lua source inline in data.source. "
         .. "No other entry and no other namespace is admitted by this destination. "
         .. "The destination admits only the namespace " .. NAMESPACE .. ", only the kind process.lua, "
-        .. "only the native modules tty, process, channel and json, and only the import bee.application:client. "
+        .. "only the native modules tty, process, channel and json, and only the import bee.app:client. "
         .. "Its application metadata declares title " .. TITLE .. ", api_version 1, lifetime view, revision 1, instance_policy multiple, "
         .. "resume_schema agent-app.v1 and restart_policy automatic. "
         .. "The window paints three lines and nothing else: row 1 is exactly " .. MARKER_LINE .. ", "

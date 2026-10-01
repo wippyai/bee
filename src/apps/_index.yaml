@@ -16,15 +16,15 @@ entries:
     lifecycle: bee.apps:lifecycle
     decode: bee.protocol:decode
     shutdown: bee.apps:shutdown
-    interaction: bee.application:interaction
+    interaction: bee.app:interaction
     interactions: bee.apps:interactions
     clock: bee:clock
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     open_protocol: bee.apps:open_protocol
     binding_protocol: bee.host:binding_protocol
     thread_binding: bee.apps:thread_binding
     thread_binding_reducer: bee.apps:thread_binding_reducer
-    thread_protocol: bee.application:thread_protocol
+    thread_protocol: bee.app:thread_protocol
     app_identity: bee.threads.records:app_identity
   security:
     policies: [bee.security.desktop:broker_policy, bee.security.threads:application_thread_membership_policy,
@@ -50,7 +50,7 @@ entries:
   modules: [registry]
   imports:
     catalog: bee.apps:catalog
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
@@ -64,7 +64,7 @@ entries:
   kind: library.lua
   source: file://interactions.lua
   imports:
-    protocol: bee.application:interaction
+    protocol: bee.app:interaction
 - name: shutdown
   kind: library.lua
   source: file://shutdown.lua
@@ -72,7 +72,7 @@ entries:
   kind: library.lua
   source: file://open_protocol.lua
   imports:
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
     contract: bee.protocol:application
     decode: bee.protocol:decode
     bounds: bee.threads.records:bounds
@@ -100,7 +100,7 @@ entries:
   modules: [process, security, channel, time, ctx, hash, uuid, registry]
   imports:
     bounds: bee.threads.records:bounds
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
     open_protocol: bee.apps:open_protocol
   security:
     policies: [bee.security:application_open_facade_policy]

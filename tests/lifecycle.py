@@ -69,8 +69,8 @@ def run():
         entries = []
         for name in ["early", "never", "delayed", "stubborn"]:
             entries.append({"name": name, "kind": "process.lua", "source": "file://app.lua", "method": "main",
-                            "modules": ["tty", "process", "channel", "time"], "imports": {"client": "bee.application:client"},
-                            "meta": {"type": "bee.application", "application": {"api_version": 1, "lifetime": "view",
+                            "modules": ["tty", "process", "channel", "time"], "imports": {"client": "bee.app:client"},
+                            "meta": {"type": "bee.app", "application": {"api_version": 1, "lifetime": "view",
                             "title": name, "revision": "1", "instance_policy": "multiple", "group": "Probe"}}})
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": entries}, sort_keys=False))
         index = project / "src/security/_index.yaml"

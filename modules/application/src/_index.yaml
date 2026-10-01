@@ -1,5 +1,5 @@
 version: '1.0'
-namespace: bee.application
+namespace: bee.app
 entries:
 - name: definition
   kind: ns.definition
@@ -20,10 +20,10 @@ entries:
   - process
   - uuid
   imports:
-    arguments: bee.application:arguments
-    interaction: bee.application:interaction
+    arguments: bee.app:arguments
+    interaction: bee.app:interaction
     thread_bounds: bee.threads.records:bounds
-    thread_protocol: bee.application:thread_protocol
+    thread_protocol: bee.app:thread_protocol
 - name: sessions_protocol
   kind: library.lua
   source: file://sessions_protocol.lua
@@ -41,7 +41,7 @@ entries:
   - contract
   imports:
     bounds: bee.protocol:bounds
-    protocol: bee.application:sessions_protocol
+    protocol: bee.app:sessions_protocol
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
@@ -57,9 +57,9 @@ entries:
   kind: library.lua
   source: file://folder_picker.lua
   imports:
-    text: bee.application:text
-    caller: bee.application:caller
-    frame: bee.application:frame
+    text: bee.app:text
+    caller: bee.app:caller
+    frame: bee.app:frame
     bounds: bee.threads.records:bounds
 - name: agent_protocol
   kind: library.lua
@@ -81,8 +81,8 @@ entries:
   source: file://status_reader.lua
   imports:
     bounds: bee.threads.records:bounds
-    caller: bee.application:caller
-    text: bee.application:text
+    caller: bee.app:caller
+    text: bee.app:text
 - name: status_surface
   kind: library.lua
   source: file://status_surface.lua
@@ -104,7 +104,7 @@ entries:
   modules:
   - tty
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: names
   kind: library.lua
   source: file://names.lua
@@ -121,22 +121,22 @@ entries:
   modules:
   - tty
   imports:
-    appearance: bee.application:appearance
-    frame: bee.application:frame
+    appearance: bee.app:appearance
+    frame: bee.app:frame
 - name: forms
   kind: library.lua
   source: file://forms.lua
   modules:
   - tty
   imports:
-    appearance: bee.application:appearance
-    frame: bee.application:frame
+    appearance: bee.app:appearance
+    frame: bee.app:frame
 - name: diagram
   kind: library.lua
   source: file://diagram.lua
   modules:
   - tty
   imports:
-    appearance: bee.application:appearance
-    frame: bee.application:frame
-    viz: bee.application:viz
+    appearance: bee.app:appearance
+    frame: bee.app:frame
+    viz: bee.app:viz

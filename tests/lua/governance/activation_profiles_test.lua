@@ -160,7 +160,7 @@ local function define_tests()
         test.it("admits composed packages and drops an entry whose definition is not composed", function()
             local configured = assert(profiles.decode({profiles = {}, packages = rule()}))
             local definition = {id = "bee.probe.manager:app", kind = "process.lua",
-                meta = {type = "bee.application"}, data = {}}
+                meta = {type = "bee.app"}, data = {}}
             local policy = {id = "bee.probe.manager:client_policy", kind = "security.policy",
                 data = {policy = {actions = {}, resources = "*", effect = "allow"}}}
             local base = {id = "bee.security:ordinary_app_subsystem_boundary", kind = "security.policy",

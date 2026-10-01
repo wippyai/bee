@@ -9,7 +9,7 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
     bounds: bee.protocol:bounds
     contract: bee.protocol:application
     workspace_query: bee.hive:workspace_query
@@ -58,7 +58,7 @@ entries:
   method: command
   imports:
     display: bee.hive.desktop:display
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
   meta:
     command:
       name: bee-display

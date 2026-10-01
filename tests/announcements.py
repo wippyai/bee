@@ -15,7 +15,7 @@ def exercise(packed):
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in (".wippy.yaml", "wippy.lock", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        source = project / "src/settings/app.lua"
+        source = project / "modules/settings/src/app/app.lua"
         code = source.read_text()
         anchor = "            local data = event.value"
         assert anchor in code
@@ -50,7 +50,7 @@ def exercise(packed):
         pack = project / "titles-deployment"
         if packed:
             pack_deployment(project, pack)
-        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.settings:app",))
+        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS")
             ui.key(b"!")

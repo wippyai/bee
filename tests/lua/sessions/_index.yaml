@@ -149,7 +149,7 @@ entries:
   method: run
   meta: {type: test_support}
   imports:
-    sessions: bee.application:sessions
+    sessions: bee.app:sessions
 - name: probe_policy
   kind: security.policy
   meta: {type: test_support}
@@ -164,7 +164,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    protocol: bee.application:sessions_protocol
+    protocol: bee.app:sessions_protocol
 - name: client_test
   kind: function.lua
   source: file://client_test.lua
@@ -173,8 +173,8 @@ entries:
   modules: [funcs, security]
   imports:
     test: wippy.test:test
-    sessions: bee.application:sessions
-    protocol: bee.application:sessions_protocol
+    sessions: bee.app:sessions
+    protocol: bee.app:sessions_protocol
 - name: wiring_test
   kind: function.lua
   source: file://wiring_test.lua

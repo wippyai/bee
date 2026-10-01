@@ -17,7 +17,7 @@ local function define_tests()
             end
             test.is_nil(handler.decode({{name = "sample", fullscreen = "yes"}}))
         end)
-        test.it("decodes bounded bee.application_command registry entries and rejects invalid or reserved aliases", function()
+        test.it("decodes bounded bee.app_command registry entries and rejects invalid or reserved aliases", function()
             local valid_entry = {
                 id = "bee.driver.claude:command",
                 data = {

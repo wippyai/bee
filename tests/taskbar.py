@@ -5,7 +5,7 @@ from tui_smoke import Desktop
 
 def exercise(packed):
     with tempfile.TemporaryDirectory(prefix="bee-taskbar-") as directory:
-        ui = Desktop(directory, packed, apps=("bee.settings:app",))
+        ui = Desktop(directory, packed, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS")
             ui.key(b"\t\t")

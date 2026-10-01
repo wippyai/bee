@@ -144,7 +144,7 @@ local function define_tests()
             data.gateway_tools = {"thread_read", "application_open"}
             data.gateway_surface = {tools = {}, traits = {}, base_tools = {"thread_read"}, active_traits = {},
                 fixed_context = {}, dynamic_keys = {},
-                access = {policy = "app-open-runtime", traits = {"bee.application:runtime"}}}
+                access = {policy = "app-open-runtime", traits = {"bee.app:runtime"}}}
             local host, host_error = policy.decode("test:policy", raw)
             if not host or not host.gateway_surface then error(tostring(host_error)) end
             -- A profile chooses what to offer the child out of what the host

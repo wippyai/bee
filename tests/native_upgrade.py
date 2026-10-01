@@ -62,7 +62,7 @@ def run(previous, current, added_application=None):
     with tempfile.TemporaryDirectory(prefix="bee-native-upgrade-") as temporary:
         folder = Path(temporary)
         state = folder / "state"
-        old = PreviousDesktop(previous, folder, state, "bee.settings:app")
+        old = PreviousDesktop(previous, folder, state, "bee.settings.app:app")
         try:
             old.wait("Settings")
             old.wait("Theme: Honey")

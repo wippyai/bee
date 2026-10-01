@@ -104,7 +104,7 @@ local function seed(workspace_id: string, events: Channel<process.Event>): (stri
     await(ready, "seed readiness", function(_: unknown): boolean return true end)
     local open_id = "open-" .. uuid.v7()
     assert(process.send(host, "bee.app.request", {version = 1, request_id = open_id, op = "open", workspace_id = workspace_id,
-        definition_id = "bee.settings:app", thread_id = "lazy-" .. uuid.v7()}))
+        definition_id = "bee.settings.app:app", thread_id = "lazy-" .. uuid.v7()}))
     local opened = decode.reply(await(replies, "seed open", function(data: unknown): boolean
         local reply = decode.reply(data)
         return reply ~= nil and reply.request_id == open_id

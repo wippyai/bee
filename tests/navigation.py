@@ -54,7 +54,7 @@ finally:
     os.write(1, b'\\x1b[?1l')
     termios.tcsetattr(0, termios.TCSANOW, saved)
 ''')
-    ui = Desktop(folder, project=project, apps=('bee.console:app',))
+    ui = Desktop(folder, project=project, apps=('bee.console.app:app',))
     try:
         ui.wait('Terminal')
         ui.key(('python3 ' + str(reader) + '\r').encode())

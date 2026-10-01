@@ -20,7 +20,7 @@ entries:
   modules: [process, channel, time, security, registry, tty, logger]
   imports:
     decode: bee.protocol:decode
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
   meta:
     command:
       name: app-admission-probe
@@ -33,9 +33,9 @@ entries:
   method: main
   modules: [process, security, tty]
   imports:
-    client: bee.application:client
+    client: bee.app:client
   meta:
-    type: bee.application
+    type: bee.app
     policies: [bee.admission.probe:grant]
     application:
       api_version: 1

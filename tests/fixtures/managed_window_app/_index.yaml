@@ -88,7 +88,7 @@ entries:
   method: run
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -101,7 +101,7 @@ entries:
   method: natural
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -113,7 +113,7 @@ entries:
   method: checkpoint_ack
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -132,9 +132,9 @@ entries:
   method: main
   modules: [process, channel, tty]
   imports:
-    client: bee.application:client
+    client: bee.app:client
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Checkpoint fixture
@@ -167,7 +167,7 @@ entries:
   method: select
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:
@@ -216,7 +216,7 @@ entries:
   method: retained
   modules: [process, channel, time, security, tty, funcs, json, registry, fs]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     homes: bee.placement.native.service:homes
   security:

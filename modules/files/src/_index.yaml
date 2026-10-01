@@ -27,7 +27,7 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
 - name: gitignore
   kind: library.lua
   source: file://gitignore.lua
@@ -47,4 +47,4 @@ entries:
   source: file://syntax.lua
   modules: [treesitter]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance

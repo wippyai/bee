@@ -151,7 +151,7 @@ entries:
           bee.security.threads:thread_workspace_list_policy, bee.security.desktop:workspace_host_lease_policy]
         thread_access: none
       - component: bee.host.processes
-        definition_id: bee.host.processes:app
+        definition_id: bee.host.processes.app:app
         capabilities: [desktop.application_stop]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.security.desktop:processes_policy]
         application_stop: true
@@ -163,7 +163,7 @@ entries:
           bee.hub.modules:hub_policy, bee.hub.modules:self_update_policy, bee.hub.modules:publication_policy]
         thread_access: none
       - component: bee.gov.overlays
-        definition_id: bee.gov.overlays:app
+        definition_id: bee.gov.overlays.app:app
         capabilities: [gov.delivery.manage, gov.delivery.activate]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.gov.overlays:client_policy,
           bee.security.gov:governance_delivery_read_policy, bee.security.gov:governance_delivery_manage_policy,

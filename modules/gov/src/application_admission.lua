@@ -285,7 +285,7 @@ function M.project(raw: unknown): (Measurement?, string?)
     for _, selected in ipairs(bindings) do
         local definition = artifacts[selected.definition_id]
         local meta = definition and bounds.object(definition.meta) or nil
-        if not definition or definition.kind ~= "process.lua" or not meta or meta.type ~= "bee.application" then
+        if not definition or definition.kind ~= "process.lua" or not meta or meta.type ~= "bee.app" then
             return nil, "admitted application is not an exact artifact application: " .. selected.definition_id
         end
         for _, policy in ipairs(selected.policies) do

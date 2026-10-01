@@ -1,4 +1,4 @@
-# bee.application
+# bee.app
 
 The public application SDK. It provides bounded launch arguments, application
 client and interaction values, caller and status helpers, semantic appearance
@@ -45,7 +45,7 @@ clickable. Neither overlay grants permissions or bypasses app confirmations.
 
 ## Sessions client
 
-`sessions` (`bee.application:sessions`) calls the `bee.sessions:contract` and
+`sessions` (`bee.app:sessions`) calls the `bee.sessions:contract` and
 `bee.sessions:catalog` owner contracts through their default bindings, as the
 calling process's own actor. It grants nothing; the host admits the caller and
 the owner authorizes every operation. Each function returns `value, Fault?`;
@@ -99,3 +99,7 @@ to the existing nonsecret `bee.env:no_color` flag. Appearance reads it under
 the active caller scope. The presenter also strips color from incoming app
 rows when NO_COLOR is set, including rows produced on another node; selection
 stays visible through glyphs and reverse video.
+
+The SDK root is `bee.app`; a feature UI child such as `bee.files.app` is a
+separate namespace with its own app entry. Lifecycle topics and actor identities
+retain their version-1 `bee.application` protocol spelling.

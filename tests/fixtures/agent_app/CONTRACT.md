@@ -12,8 +12,8 @@ An application is one `process.lua` entry:
     {"id": "<namespace>:<name>", "kind": "process.lua",
      "data": {"source": "...", "method": "main",
               "modules": ["tty", "process", "channel", "json"],
-              "imports": {"client": "bee.application:client"}},
-     "meta": {"type": "bee.application",
+              "imports": {"client": "bee.app:client"}},
+     "meta": {"type": "bee.app",
               "application": {"api_version": 1, "lifetime": "view", "revision": "1",
                               "title": "...", "instance_policy": "multiple",
                               "resume_schema": "...", "restart_policy": "automatic"}}}

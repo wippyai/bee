@@ -845,6 +845,9 @@ ALTER TABLE bee_session_work ADD COLUMN budget_json TEXT NOT NULL DEFAULT '{}';
 ALTER TABLE bee_session_turns ADD COLUMN last_progress_at_ms INTEGER NOT NULL DEFAULT 0
   CHECK(last_progress_at_ms >= 0);
 ]]
+local APP_DEFINITION_SQL = [[
+CREATE TABLE bee_thread_definition_migrations (id INTEGER PRIMARY KEY CHECK(id = 1));
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -890,6 +893,7 @@ ALTER TABLE bee_sessions ADD COLUMN provider_steps INTEGER NOT NULL DEFAULT 0 CH
 ALTER TABLE bee_sessions ADD COLUMN tool_calls INTEGER NOT NULL DEFAULT 0 CHECK(tool_calls >= 0);
 ALTER TABLE bee_sessions ADD COLUMN tokens INTEGER NOT NULL DEFAULT 0 CHECK(tokens >= 0);
 ]]},
+    {id = 28, name = "app_child_definition_data", sql = APP_DEFINITION_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

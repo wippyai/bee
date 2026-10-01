@@ -259,7 +259,7 @@ entries:
 - name: command
   kind: registry.entry
   meta:
-    type: bee.application_command
+    type: bee.app_command
     comment: CLI command to launch Grok CLI in the agent window
   data:
     name: grok

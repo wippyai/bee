@@ -152,7 +152,7 @@ entries:
   method: main
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -169,7 +169,7 @@ entries:
   method: crash
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -186,7 +186,7 @@ entries:
   method: pending_hook
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -203,7 +203,7 @@ entries:
   method: cancel_recovery
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -220,7 +220,7 @@ entries:
   method: command_hooks
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -237,7 +237,7 @@ entries:
   method: run
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:

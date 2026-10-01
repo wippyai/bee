@@ -66,7 +66,7 @@ local function exact_request(request: Object, workspace_id: string, thread_id: s
     local traits = capability_scope and bounds.ids(capability_scope.traits, true)
     if not proposal or not payload or proposal.kind ~= "attempt" or proposal.revision ~= "bee.capability-model@1"
         or proposal.action_id ~= action_id or proposal.ref ~= attempt_id or not traits or #traits ~= 1
-        or traits[1] ~= "bee.application:runtime" then
+        or traits[1] ~= "bee.app:runtime" then
         return "proposal differs"
     end
     if not capability or capability.capability ~= "mcp.access" or capability.operation ~= "mcp.traits"

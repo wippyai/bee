@@ -51,7 +51,7 @@ def run():
 
         # Remove the package and boot the same state again.
         strip_dependencies(project, (PACKAGE,))
-        ui = Desktop(str(state), project=project, apps=("bee.settings:app",))
+        ui = Desktop(str(state), project=project, apps=("bee.settings.app:app",))
         try:
             ui.wait("BEE SETTINGS", timeout=90)
             ui.pump(1.0)

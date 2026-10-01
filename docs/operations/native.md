@@ -146,7 +146,7 @@ release jobs run it with networking disabled.
 ```sh
 ./dist/bee
 ./dist/bee --state /path/to/bee-state
-./dist/bee run bee.settings:app
+./dist/bee run bee.settings.app:app
 ./dist/bee update
 ./dist/bee recover
 ./dist/bee wippy auth --help

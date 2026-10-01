@@ -169,7 +169,7 @@ activation status. Check a candidate with preflight before requesting
 delivery. delivery stages versions, so it is not annotated read-only.
 
 application_open is available only through the active, approval-granted
-bee.application:runtime trait. It accepts definition_id, literal arguments and
+bee.app:runtime trait. It accepts definition_id, literal arguments and
 an idempotency key, then routes only an already applied, admitted definition
 through the workspace host and applications broker. It cannot publish, activate,
 write the registry or apply an overlay. The trusted binding supplies the

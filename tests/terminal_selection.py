@@ -66,7 +66,7 @@ def exercise(packed):
         if packed:
             pack_deployment(project, pack)
         ui = Desktop(folder, packed, project=project, deployment=pack,
-                     apps=('bee.console:app',))
+                     apps=('bee.console.app:app',))
         try:
             ui.wait('Terminal')
             # Open two distinct instances; positional launch aliases deduplicate.

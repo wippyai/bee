@@ -331,6 +331,49 @@ UPDATE workspace_state SET value = replace(value,
 WHERE instr(value, '"definition_id":"bee.hub.modules:app"') > 0;
 ]]
 
+local APP_CHILD_NAMES_SQL = [[
+UPDATE workspace_application_thread_bindings SET definition_id = CASE definition_id
+    WHEN 'bee.settings:app' THEN 'bee.settings.app:app'
+    WHEN 'bee.console:app' THEN 'bee.console.app:app'
+    WHEN 'bee.host.processes:app' THEN 'bee.host.processes.app:app'
+    WHEN 'bee.gov.overlays:app' THEN 'bee.gov.overlays.app:app'
+    WHEN 'bee.threads.timeline:app' THEN 'bee.threads.timeline.app:app'
+    WHEN 'bee.workspace.manager:app' THEN 'bee.workspace.manager.app:app'
+    WHEN 'bee.hive.manager:app' THEN 'bee.hive.manager.app:app'
+    WHEN 'bee.hive_manager:app' THEN 'bee.hive.manager.app:app'
+    WHEN 'bee.inbox:app' THEN 'bee.approvals.inbox.app:app'
+    WHEN 'bee.modules:app' THEN 'bee.hub.modules.app:app'
+    WHEN 'bee.hub.modules:app' THEN 'bee.hub.modules.app:app'
+    WHEN 'bee.overlays:app' THEN 'bee.gov.overlays.app:app'
+    WHEN 'bee.workspaces:app' THEN 'bee.workspace.manager.app:app'
+    WHEN 'bee.timeline:app' THEN 'bee.threads.timeline.app:app'
+    WHEN 'bee.processes:app' THEN 'bee.host.processes.app:app'
+    ELSE definition_id END;
+UPDATE workspace_state SET value = json_set(value, '$.applications',
+    json((SELECT json_group_array(json(json_set(item.value, '$.definition_id',
+CASE json_extract(item.value, '$.definition_id')
+    WHEN 'bee.settings:app' THEN 'bee.settings.app:app'
+    WHEN 'bee.console:app' THEN 'bee.console.app:app'
+    WHEN 'bee.host.processes:app' THEN 'bee.host.processes.app:app'
+    WHEN 'bee.gov.overlays:app' THEN 'bee.gov.overlays.app:app'
+    WHEN 'bee.threads.timeline:app' THEN 'bee.threads.timeline.app:app'
+    WHEN 'bee.workspace.manager:app' THEN 'bee.workspace.manager.app:app'
+    WHEN 'bee.hive.manager:app' THEN 'bee.hive.manager.app:app'
+    WHEN 'bee.hive_manager:app' THEN 'bee.hive.manager.app:app'
+    WHEN 'bee.inbox:app' THEN 'bee.approvals.inbox.app:app'
+    WHEN 'bee.modules:app' THEN 'bee.hub.modules.app:app'
+    WHEN 'bee.hub.modules:app' THEN 'bee.hub.modules.app:app'
+    WHEN 'bee.overlays:app' THEN 'bee.gov.overlays.app:app'
+    WHEN 'bee.workspaces:app' THEN 'bee.workspace.manager.app:app'
+    WHEN 'bee.timeline:app' THEN 'bee.threads.timeline.app:app'
+    WHEN 'bee.processes:app' THEN 'bee.host.processes.app:app'
+    ELSE json_extract(item.value, '$.definition_id') END)))
+          FROM json_each(workspace_state.value, '$.applications') AS item)))
+WHERE json_type(value, '$.applications') = 'array' AND EXISTS
+    (SELECT 1 FROM json_each(workspace_state.value, '$.applications') AS item
+     WHERE json_extract(item.value, '$.definition_id') IN ('bee.settings:app','bee.console:app','bee.host.processes:app','bee.gov.overlays:app','bee.threads.timeline:app','bee.workspace.manager:app','bee.hive.manager:app','bee.hive_manager:app','bee.inbox:app','bee.modules:app','bee.hub.modules:app','bee.overlays:app','bee.workspaces:app','bee.timeline:app','bee.processes:app'));
+]]
+
 local migrations: {Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
@@ -343,6 +386,7 @@ local migrations: {Migration} = {
     {id = 9, name = "nested_bee_names_v1", sql = NESTED_NAMES_SQL},
     {id = 10, name = "application_child_names_v1", sql = APPLICATION_NAMES_SQL},
     {id = 11, name = "modules_application_child_names_v1", sql = MODULES_APPLICATION_NAMES_SQL},
+    {id = 12, name = "app_child_names_v2", sql = APP_CHILD_NAMES_SQL},
 }
 
 local function error_text(prefix: string, err: unknown): string

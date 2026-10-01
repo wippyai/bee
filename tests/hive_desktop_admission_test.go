@@ -150,7 +150,7 @@ func runHiveDesktopAdmission(t *testing.T, catalogOnly bool) {
 			}
 			serviceAnchor := "  input:\n  - configured_nodes: []\n"
 			expiry := time.Now().Add(5 * time.Minute).UTC().Format("2006-01-02T15:04:05.000Z")
-			input := serviceAnchor + "    desktop:\n      execution: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      expires_at: '" + expiry + "'\n      allowed_nodes: [node-1, node-2]\n      application: bee.console:app\n"
+			input := serviceAnchor + "    desktop:\n      execution: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n      expires_at: '" + expiry + "'\n      allowed_nodes: [node-1, node-2]\n      application: bee.console.app:app\n"
 			if strings.Count(string(service), serviceAnchor) != 1 {
 				t.Fatal("desktop supervisor input anchor changed")
 			}

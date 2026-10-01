@@ -7,16 +7,16 @@ window has room. The `Honey` appearance is the canonical expression of the
 brand; every other appearance preserves the same semantic roles.
 
 Every Bee application, bundled or agent-built, draws through the shared
-application frame, `bee.application:frame`. The exact placement, color, state
+application frame, `bee.app:frame`. The exact placement, color, state
 and breakpoint rules, with one layout per application archetype, are in
 [Application visual style](app-style.md); read it before drawing. The offline
 toolkit reference gives compact examples of the frame and the visualization
-kit `bee.application:viz`, with each chart example taken from a test. Use those
+kit `bee.app:viz`, with each chart example taken from a test. Use those
 calls with application-owned state and actions.
 
 ## Semantic palette
 
-Use `bee.application:appearance`; never embed the Honey hex values in an app.
+Use `bee.app:appearance`; never embed the Honey hex values in an app.
 
 | Role | Honey | Use |
 |---|---:|---|
@@ -125,7 +125,7 @@ and `T` opens Details. `F10` opens More and `?` opens shared Help. Ignore key-re
 must not trigger remote work.
 
 Treat all external text as hostile presentation data. Pass it through
-`bee.application:text.bound`, replace controls, set a byte ceiling at the
+`bee.app:text.bound`, replace controls, set a byte ceiling at the
 decoder, and then truncate by terminal display width. A rendered row must always
 occupy exactly the current canvas width. Do not place raw ANSI from a remote
 source into a styled run.
@@ -149,7 +149,7 @@ continues afterward.
 
 - Raw hex colors or a private theme table inside an application.
 - Private copies of header, button, row, table, footer, sparkline or chart
-  drawing; use the frame and `bee.application:viz`.
+  drawing; use the frame and `bee.app:viz`.
 - Accent on text that is neither focus, selection, the primary action nor the
   primary chart series.
 - A status role on a whole row, a background, a border or a title.
@@ -164,7 +164,7 @@ continues afterward.
 
 ## Authoring checklist
 
-Before delivery, verify that the app draws through `bee.application:frame`, uses
+Before delivery, verify that the app draws through `bee.app:frame`, uses
 semantic appearance roles, repaints on resize, has bounded external text, supports keyboard and mouse, preserves a
 useful compact state, keeps remote work out of rendering, and has focused tests
 for the user-visible behavior. Run `make lint`, the focused view tests, the

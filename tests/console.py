@@ -52,11 +52,14 @@ def exercise(packed, theme="honey"):
             appearance.write_text(source.replace(anchor, f'function M.defaults(): Preferences return {{theme = "{theme}",'))
         for name in ["wippy.lock", ".wippy.yaml", "wippy.yaml"]:
             shutil.copy2(ROOT / name, project / name)
-        app = project / "src/console/app.lua"
+        app = project / "modules/console/src/app/app.lua"
         app.write_text(app.read_text().replace('    local input = assert(tty.events())', PROBE + '\n    local input = assert(tty.events())'))
         index = project / "src/console/_index.yaml"
         doc = yaml.safe_load(index.read_text())
-        doc["entries"][0]["modules"] += ["security", "registry", "sql"]
+        app_index = project / "modules/console/src/app/_index.yaml"
+        app_doc = yaml.safe_load(app_index.read_text())
+        next(entry for entry in app_doc["entries"] if entry["name"] == "app")["modules"] += ["security", "registry", "sql"]
+        app_index.write_text(yaml.safe_dump(app_doc, sort_keys=False))
         executor_entry = next(entry for entry in doc["entries"] if entry["name"] == "executor")
         executor_entry["default_env"].update({"HOME": str(folder), "HISTFILE": "/dev/null", "PS1": "$ "})
         index.write_text(yaml.safe_dump(doc, sort_keys=False))
@@ -67,13 +70,13 @@ def exercise(packed, theme="honey"):
             "actions": ["db.get", "registry.apply", "registry.apply_version", "registry.overlay.apply"],
             "resources": "*", "effect": "allow"}})
         bindings = next(e for e in host["entries"] if e["name"] == "application_admission")["bindings"]
-        next(b for b in bindings if b["definition_id"] == "bee.console:app")["policies"].append("bee.security:probe_broad_policy")
+        next(b for b in bindings if b["definition_id"] == "bee.console.app:app")["policies"].append("bee.security:probe_broad_policy")
         host_index.write_text(yaml.safe_dump(host, sort_keys=False))
         subprocess.run([str(RUNTIME), "lint"], cwd=project, check=True)
         pack = project / "probe-deployment"
         if packed:
             pack_deployment(project, pack)
-        ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.console:app", "bee.console:app"))
+        ui = Desktop(folder, packed, project=project, deployment=pack, apps=("bee.console.app:app", "bee.console.app:app"))
         shell = None
         try:
             ui.wait("Terminal")
@@ -156,7 +159,7 @@ def command_handlers(packed):
         shutil.copytree(ROOT / "modules", project / "modules")
         for name in ("wippy.lock", ".wippy.yaml", "wippy.yaml"):
             shutil.copy2(ROOT / name, project / name)
-        index = project / "src/console/_index.yaml"
+        index = project / "modules/console/src/app/_index.yaml"
         document = yaml.safe_load(index.read_text())
         app = next(e for e in document["entries"] if e["name"] == "app")
         # A newly registered name exercises discovery without core/provider edits.
@@ -176,7 +179,7 @@ def command_handlers(packed):
         finally:
             ui.close()
         # Admitted duplicate aliases must not silently select one executable.
-        other = project / "src/settings/_index.yaml"
+        other = project / "modules/settings/src/app/_index.yaml"
         settings = yaml.safe_load(other.read_text())
         next(e for e in settings["entries"] if e["name"] == "app")["meta"]["application"]["commands"] = [{"name": "probe"}]
         other.write_text(yaml.safe_dump(settings, sort_keys=False))
@@ -188,7 +191,7 @@ def command_handlers(packed):
         host = project / "src/security/_index.yaml"
         composition = yaml.safe_load(host.read_text())
         admission = next(e for e in composition["entries"] if e["name"] == "application_admission")
-        admission["bindings"] = [b for b in admission["bindings"] if b["definition_id"] != "bee.console:app"]
+        admission["bindings"] = [b for b in admission["bindings"] if b["definition_id"] != "bee.console.app:app"]
         host.write_text(yaml.safe_dump(composition, sort_keys=False))
         result = subprocess.run([str(RUNTIME), "run", "bee", "probe"], cwd=project,
                                 capture_output=True, text=True, timeout=10)

@@ -455,8 +455,8 @@ local function main()
 
     seed_shared_database()
     local entries = {{id = DEFINITION_ID, kind = "process.lua", data = {source = APP_SOURCE, method = "main",
-        modules = {"tty", "process", "channel", "json", "time"}, imports = {client = "bee.application:client"}},
-        meta = {type = "bee.application", application = {api_version = 1, lifetime = "view", revision = "1",
+        modules = {"tty", "process", "channel", "json", "time"}, imports = {client = "bee.app:client"}},
+        meta = {type = "bee.app", application = {api_version = 1, lifetime = "view", revision = "1",
             title = APP_TITLE, instance_policy = "multiple", resume_schema = "app-journey.v1",
             restart_policy = "automatic"}}},
         {id = MIGRATION_ID, kind = "function.lua", data = {source = MIGRATION_SOURCE, method = "run", modules = {"sql"}},

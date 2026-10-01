@@ -31,7 +31,7 @@ entries:
     clients_probe: bee.attachment.probe:clients
     decode: bee.protocol:decode
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     recovery: bee.workspace:recovery
     store: bee.storage:store
   meta:
@@ -83,7 +83,7 @@ entries:
     recovery: bee.workspace:recovery
     persistence: bee.workspace:persistence
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: host_guest
   kind: process.lua
   source: file://host.lua
@@ -95,7 +95,7 @@ entries:
     recovery: bee.workspace:recovery
     persistence: bee.workspace:persistence
     model: bee.desktop:model
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: observer_producer
   kind: process.lua
   source: file://observation.lua
@@ -112,7 +112,7 @@ entries:
   modules: [process, security, tty, time]
   imports:
     decode: bee.protocol:decode
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
     store: bee.storage:store
 - name: controller
   kind: process.lua
@@ -125,9 +125,9 @@ entries:
   method: main
   modules: [tty, process, channel, uuid]
   imports:
-    client: bee.application:client
+    client: bee.app:client
   meta:
-    type: bee.application
+    type: bee.app
     application:
       api_version: 1
       title: Detached probe

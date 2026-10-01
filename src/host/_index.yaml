@@ -13,8 +13,8 @@ entries:
     contract: bee.protocol:application
     decode: bee.protocol:decode
     model: bee.desktop:model
-    appearance: bee.application:appearance
-    interaction: bee.application:interaction
+    appearance: bee.app:appearance
+    interaction: bee.app:interaction
     connections: bee.host:clients
     inventory: bee.host:inventory
     restores: bee.host:restores
@@ -49,7 +49,7 @@ entries:
     contract: bee.protocol:application
     inventory: bee.host:inventory
     questions: bee.interaction:delivery
-    interaction: bee.application:interaction
+    interaction: bee.app:interaction
     transfer: bee.host:transfer
 - name: recovery
   kind: library.lua
@@ -69,7 +69,7 @@ entries:
     contract: bee.protocol:application
     decode: bee.protocol:decode
     inventory: bee.host:inventory
-    appearance: bee.application:appearance
+    appearance: bee.app:appearance
 - name: transfer
   kind: library.lua
   source: file://transfer.lua

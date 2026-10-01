@@ -105,8 +105,8 @@ local function define_tests()
             state.notice = "unsafe \27[31m notice \7"
             for _ = 1, 3 do
             model.toggle_pane(state)
-            for _, width in ipairs({1, 12, 40, 100}) do
-                for _, height in ipairs({1, 3, 8, 24}) do
+            for _, width in ipairs({1, 12, 40, 80, 100, 120}) do
+                for _, height in ipairs({1, 3, 8, 24, 36}) do
                     local frame = view.draw(width, height, appearance.defaults(), state, 0)
                     test.eq(#frame.rows, height)
                     for _, row in ipairs(frame.rows) do

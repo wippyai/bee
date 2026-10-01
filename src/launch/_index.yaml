@@ -38,7 +38,7 @@ entries:
   kind: library.lua
   source: file://retained_protocol.lua
   imports:
-    arguments: bee.application:arguments
+    arguments: bee.app:arguments
     clipboard: bee.client:clipboard
     contract: bee.protocol:application
 - name: headless
@@ -85,7 +85,7 @@ entries:
   method: main
   modules: [process, channel, security, ctx, time, uuid, logger]
   imports: &supervisor_imports
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
     workspaces: bee.storage:binding
     desktop_lifecycle: bee.launch:desktop_lifecycle
     desktop_storage: bee.launch:desktop_storage
@@ -95,7 +95,7 @@ entries:
     protocol: bee.launch:protocol
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    interaction: bee.application:interaction
+    interaction: bee.app:interaction
 - name: retained
   kind: process.lua
   source: file://supervisor.lua
@@ -132,7 +132,7 @@ entries:
   method: main
   modules: [process, channel, time, io, system, logger]
   imports:
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
     command_stop: bee.launch:command_stop
     types: bee.hive:types
   meta:
@@ -162,7 +162,7 @@ entries:
   imports:
     clock: bee:clock
     hosts: bee.launch:hosts
-    leases: bee.application:host_leases
+    leases: bee.app:host_leases
     protocol: bee.launch:protocol
     decode: bee.protocol:decode
     contract: bee.protocol:application

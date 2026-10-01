@@ -38,7 +38,7 @@ def exercise(packed, responsive=True):
         label = '"Workspace " .. names.label(workspace_id)'
         assert presentation.count(label) == 1
         presenter.write_text(presentation.replace(label, label + ' .. " P:" .. tostring(process.pid()):sub(-8)'))
-        source = project / "src/console/app.lua"
+        source = project / "modules/console/src/app/app.lua"
         code = source.read_text()
         handler = '''        elseif selected.channel == closes then
             local request = client.close_request(launch, tostring(selected.value:from()), selected.value:payload():data())
@@ -70,7 +70,7 @@ def exercise(packed, responsive=True):
         pack = project / "guarded-deployment"
         if packed:
             pack_deployment(project, pack)
-        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.console:app",))
+        ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.console.app:app",))
         prompt = "Close terminal?" if responsive else "Application did not respond"
         try:
             ui.wait("Terminal")
@@ -105,7 +105,7 @@ def exercise(packed, responsive=True):
             assert prompt not in ui.text(), ui.text()
             ui.quit()
             ui.close()
-            ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.console:app", "bee.console:app"))
+            ui = Desktop(directory, packed, project=project, deployment=pack, apps=("bee.console.app:app", "bee.console.app:app"))
             ui.wait("Terminal")
             ui.key(b"\x0e")
             deadline = time.monotonic() + DESKTOP_HANG_SECONDS

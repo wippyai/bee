@@ -83,7 +83,7 @@ local function define_tests()
             end
             local saved = assert(persistence.open(nil, {workspace_id = id}))
             assert(saved:write({version = 1, desktop = {scene = model.new(80, 24), tabs = {}, preferences = appearance.defaults()},
-                applications = {{id = "view-1", instance_id = "instance-1", definition_id = "bee.settings:app", resume_schema = "settings.v1",
+                applications = {{id = "view-1", instance_id = "instance-1", definition_id = "bee.settings.app:app", resume_schema = "settings.v1",
                     restart_policy = "automatic", resume_state = ""}}}))
             saved:close()
             local inspected = value(call(reader, "bee.workspace.catalog:inspect", {workspace_id = id}))
@@ -91,7 +91,7 @@ local function define_tests()
             test.eq(inspected.live, false)
             local applications = inspected.applications :: {Object}
             test.eq(#applications, 1)
-            test.eq(applications[1].definition_id, "bee.settings:app")
+            test.eq(applications[1].definition_id, "bee.settings.app:app")
             test.eq(applications[1].instance_id, "instance-1")
             local resources = extension(inspected, RESOURCES)
             test.eq(resources.title, "Resources", tostring(resources.error))

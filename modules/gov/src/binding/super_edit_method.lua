@@ -22,7 +22,7 @@ function M.handle(raw: unknown): {[string]: unknown}
     local metadata = actor and actor:meta() or nil
     if fields or not request or (operation ~= "enable" and operation ~= "disable")
         or not workspace_id or #workspace_id ~= 32 or workspace_id:find("[^0-9a-f]")
-        or not actor or type(metadata) ~= "table" or metadata.definition_id ~= "bee.settings:app" then
+        or not actor or type(metadata) ~= "table" or metadata.definition_id ~= "bee.settings.app:app" then
         return {ok = false, code = "DENIED", message = "edit mode is available only from Bee Settings", replayed = false}
     end
     if (operation == "enable" and (type(request.input) ~= "string" or #request.input > 1024))

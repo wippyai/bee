@@ -12,7 +12,7 @@ local uuid = require("uuid")
 local appearance = require("appearance")
 
 local WORKSPACE = string.rep("b", 32)
-local DEFINITION = "bee.console:app"
+local DEFINITION = "bee.console.app:app"
 
 local function running(marker: string): boolean
     local executor = assert(exec.get("bee.placement.native:placement_executor"))

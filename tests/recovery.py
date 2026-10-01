@@ -92,8 +92,8 @@ def run(packed):
         fixture.mkdir()
         (fixture / "app.lua").write_text(SOURCE)
         entry = {"name": "app", "kind": "process.lua", "source": "file://app.lua", "method": "main",
-                 "modules": ["tty", "process", "channel", "json"], "imports": {"client": "bee.application:client"},
-                 "meta": {"type": "bee.application", "application": {"api_version": 1, "lifetime": "view", "revision": "1",
+                 "modules": ["tty", "process", "channel", "json"], "imports": {"client": "bee.app:client"},
+                 "meta": {"type": "bee.app", "application": {"api_version": 1, "lifetime": "view", "revision": "1",
                  "title": "Counter", "instance_policy": "multiple", "resume_schema": "counter.v1", "restart_policy": "automatic"}}}
         (fixture / "_index.yaml").write_text(yaml.safe_dump({"version": "1.0", "namespace": "probe", "entries": [entry]}, sort_keys=False))
         index = project / "src/security/_index.yaml"

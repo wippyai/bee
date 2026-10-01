@@ -660,3 +660,12 @@ docker-placement-live-check:
 check: no-color-check
 no-color-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/no_color.py
+
+.PHONY: app-layout-ui-check app-layout-standalone-check app-layout-upgrade-check
+app-layout-ui-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/app_layout_smoke.py
+app-layout-standalone-check:
+	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))"
+app-layout-upgrade-check:
+	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
+	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"

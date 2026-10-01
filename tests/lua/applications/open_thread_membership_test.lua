@@ -5,6 +5,7 @@
 -- starts, so the app's own admission and every later carrier commit can read
 -- the thread it was launched for.
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -22,12 +23,12 @@ local function unwrap(reply: unknown): {[string]: unknown}
     local object = type(reply) == "table" and reply or nil
     if not object then error("call returned " .. type(reply)) end
     if object.ok == false then
-        local fault = object.error :: {[string]: unknown}?
+        local fault = bounds.object(object.error)
         error("call refused: " .. tostring(fault and fault.code) .. ": " .. tostring(fault and fault.message))
     end
     if object.ok == true then
         if type(object.value) ~= "table" then error("call returned no value") end
-        return object.value :: {[string]: unknown}
+        return assert(bounds.object(object.value))
     end
     return object
 end
@@ -77,15 +78,15 @@ local function define_tests()
                 local message = received.value
                 if tostring(message:from()) == broker then
                     local data: unknown = message:payload():data()
-                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == request_id
-                        and (data :: {[string]: unknown}).op == "open" then opened = data :: {[string]: unknown} end
+                    if type(data) == "table" and (assert(bounds.object(data))).request_id == request_id
+                        and (assert(bounds.object(data))).op == "open" then opened = assert(bounds.object(data)) end
                 end
             end
             assert(opened.error_code == "", "managed window did not become ready: " .. tostring(opened.error))
-            local instance_id = assert(opened.instance_id) :: string
+            local instance_id = assert(opened.instance_id)
 
             local joined = as_application(instance_id, "bee.threads.service:get", {thread_id = THREAD})
-            local member = assert(joined.membership) :: {[string]: unknown}
+            local member = assert(bounds.object(assert(joined.membership)))
             test.eq(member.member_id, "bee.application:" .. WORKSPACE .. ":" .. instance_id)
             test.eq(member.role, "participant")
             test.is_true(member.active == true)
@@ -114,12 +115,12 @@ local function define_tests()
                 local message = received.value
                 if tostring(message:from()) == broker then
                     local data: unknown = message:payload():data()
-                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == request_id
-                        and (data :: {[string]: unknown}).op == "open" then opened = data :: {[string]: unknown} end
+                    if type(data) == "table" and (assert(bounds.object(data))).request_id == request_id
+                        and (assert(bounds.object(data))).op == "open" then opened = assert(bounds.object(data)) end
                 end
             end
             assert(opened.error_code == "", "window that names a missing thread did not become ready: " .. tostring(opened.error))
-            local instance_id = assert(opened.instance_id) :: string
+            local instance_id = assert(opened.instance_id)
 
             local ok, fault = pcall(as_application, instance_id, "bee.threads.service:get", {thread_id = missing})
             if ok then error("broker fabricated membership for a missing thread") end
@@ -148,12 +149,12 @@ local function define_tests()
                 local message = received.value
                 if tostring(message:from()) == broker then
                     local data: unknown = message:payload():data()
-                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == "fence-thread-open"
-                        and (data :: {[string]: unknown}).op == "open" then opened = data :: {[string]: unknown} end
+                    if type(data) == "table" and (assert(bounds.object(data))).request_id == "fence-thread-open"
+                        and (assert(bounds.object(data))).op == "open" then opened = assert(bounds.object(data)) end
                 end
             end
             assert(opened.error_code == "", "managed window did not become ready: " .. tostring(opened.error))
-            local instance_id = assert(opened.instance_id) :: string
+            local instance_id = assert(opened.instance_id)
             assert(process.send(broker, "bee.app.fence", {version = 1, request_id = "fence-thread", thread_id = THREAD}))
             local acked: {[string]: unknown}? = nil
             deadline = time.after("30s")
@@ -163,8 +164,8 @@ local function define_tests()
                 local message = received.value
                 if tostring(message:from()) == broker then
                     local data: unknown = message:payload():data()
-                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == "fence-thread"
-                        and (data :: {[string]: unknown}).op == "fence" then acked = data :: {[string]: unknown} end
+                    if type(data) == "table" and (assert(bounds.object(data))).request_id == "fence-thread"
+                        and (assert(bounds.object(data))).op == "fence" then acked = assert(bounds.object(data)) end
                 end
             end
             test.eq(acked.error_code, "")

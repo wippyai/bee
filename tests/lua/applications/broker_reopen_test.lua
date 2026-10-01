@@ -1,5 +1,6 @@
 -- MIT. Singleton reopens deliver arguments to the retained producer.
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -26,7 +27,7 @@ local function journey(definition: string, check: (tty.Viewport, string, integer
             local message = selected.value
             local raw: unknown = message:payload():data()
             if tostring(message:from()) == broker and type(raw) == "table" and raw.request_id == id then
-                return raw :: {[string]: unknown}
+                return assert(bounds.object(raw))
             end
         end
         error("broker reply channel closed")

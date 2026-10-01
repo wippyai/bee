@@ -1,4 +1,5 @@
 local test = require("test")
+local bounds = require("bounds")
 local reducer = require("reducer")
 
 local DIGEST = string.rep("a", 64)
@@ -33,7 +34,7 @@ end
 
 local function field(effect: Effect?, name: string): unknown
     if type(effect) ~= "table" then return nil end
-    return (effect :: {[string]: unknown})[name]
+    return (assert(bounds.object(effect)))[name]
 end
 local function open_event(): Event return {kind = "open", value = prepare()} end
 local function recover_event(value: Binding): Event return {kind = "recover", binding = value} end
@@ -68,7 +69,7 @@ local function define_tests()
             state, effect = reducer.reduce(state, membership_event("application", "after_join", "active", 10, 9))
             test.eq(field(effect, "kind"), "host")
             test.eq(field(effect, "op"), "activate")
-            local activate_value = field(effect, "value") :: {[string]: unknown}
+            local activate_value = assert(bounds.object(field(effect, "value")))
             test.eq(activate_value.membership_revision, 9)
             state, effect = reducer.reduce(state, host_event("activate", "success", host("active", 2, 9, 0, nil, 7)))
             test.eq(effect, "active")
@@ -89,14 +90,14 @@ local function define_tests()
             state, effect = reducer.reduce(state, membership_event("owner", "join_refresh", "active", 12, nil))
             test.eq(field(effect, "kind"), "host")
             test.eq(field(effect, "op"), "refresh_join")
-            test.eq((field(effect, "value") :: {[string]: unknown}).join_expected_revision, 12)
+            test.eq((assert(bounds.object(field(effect, "value")))).join_expected_revision, 12)
             state, effect = reducer.reduce(state, host_event("refresh_join", "success", host("pending", 2, nil, 0, nil, 12)))
             test.eq(field(effect, "kind"), "join")
             test.eq(field(effect, "expected_revision"), 12)
             state, effect = reducer.reduce(state, join_event("conflict"))
             test.eq(field(effect, "kind"), "host")
             test.eq(field(effect, "op"), "begin_revoke")
-            test.eq((field(effect, "value") :: {[string]: unknown}).cleanup_expected_revision, 12)
+            test.eq((assert(bounds.object(field(effect, "value")))).cleanup_expected_revision, 12)
         end)
 
         test.it("requires the exact membership revision during active recovery", function()
@@ -152,8 +153,8 @@ local function define_tests()
             test.eq(state.intent, "revoke")
             state, effect = reducer.reduce(state, host_event("activate", "success", host("active", 2, 9, 0, nil, 7)))
             test.eq(field(effect, "op"), "begin_revoke")
-            test.eq((field(effect, "value") :: {[string]: unknown}).expected_state, "active")
-            test.eq((field(effect, "value") :: {[string]: unknown}).cleanup_expected_revision, 7)
+            test.eq((assert(bounds.object(field(effect, "value")))).expected_state, "active")
+            test.eq((assert(bounds.object(field(effect, "value")))).cleanup_expected_revision, 7)
         end)
 
         test.it("does not turn unknown join or leave outcomes into absence", function()

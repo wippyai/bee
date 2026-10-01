@@ -1,4 +1,5 @@
 local test = require("test")
+local bounds = require("bounds")
 local protocol = require("protocol")
 local contract = require("contract")
 
@@ -12,7 +13,7 @@ end
 local function provenance(workspace: string): {[string]: unknown}
     local runtime = gateway_context(workspace).application_runtime
     if type(runtime) ~= "table" then error("fixture runtime provenance is absent") end
-    return runtime :: {[string]: unknown}
+    return assert(bounds.object(runtime))
 end
 
 local function define_tests()

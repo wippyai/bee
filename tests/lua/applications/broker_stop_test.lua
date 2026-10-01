@@ -3,6 +3,7 @@
 -- here ignores SIGTERM, as an interactive shell does, so only an application
 -- that waits for its child's completion can satisfy the order.
 local test = require("test")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local security = require("security")
@@ -51,8 +52,8 @@ local function define_tests()
                 local message = received.value
                 if tostring(message:from()) == broker then
                     local data: unknown = message:payload():data()
-                    if type(data) == "table" and (data :: {[string]: unknown}).request_id == request_id
-                        and (data :: {[string]: unknown}).op == "open" then opened = data :: {[string]: unknown} end
+                    if type(data) == "table" and (assert(bounds.object(data))).request_id == request_id
+                        and (assert(bounds.object(data))).op == "open" then opened = assert(bounds.object(data)) end
                 end
             end
             test.eq(opened.error_code, "", "terminal did not become ready: " .. tostring(opened.error))
@@ -90,7 +91,7 @@ local function define_tests()
                     assert(received.ok and received.channel == replies, op .. " reply timed out")
                     local data: unknown = received.value:payload():data()
                     if type(data) == "table" then
-                        local reply = data :: {[string]: unknown}
+                        local reply = assert(bounds.object(data))
                         if reply.request_id == request_id and reply.op == op then return reply end
                     end
                 end

@@ -6,7 +6,8 @@ entries:
   module: threads-timeline
   meta:
     title: Bee threads timeline
-    comment: Thread timeline viewer; host composition and policy selection remain in Bee
+    comment: Thread timeline viewer; host composition and policy selection remain
+      in Bee
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -15,63 +16,24 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
-- name: app
-  kind: process.lua
-  source: file://app.lua
-  method: main
-  modules: [tty, process, channel, time, uuid, funcs]
-  imports:
-    frame: bee.application:frame
-    client: bee.application:client
-    appearance: bee.application:appearance
-    caller: bee.application:caller
-    model: bee.threads.timeline:model
-    view: bee.threads.timeline:view
-  meta:
-    type: bee.application
-    application:
-      api_version: 1
-      title: Timeline
-      icon: L
-      lifetime: view
-      revision: '1'
-      instance_policy: multiple
-      group: Tools
-      role: timeline
-      resume_schema: timeline.v1
-      restart_policy: manual
-- name: format
-  kind: library.lua
-  source: file://format.lua
-  imports:
-    text: bee.application:text
-    record_types: bee.threads.records:types
-- name: model
-  kind: library.lua
-  source: file://model.lua
-  modules: [json]
-  imports:
-    text: bee.application:text
-    caller: bee.application:caller
-    session: bee.threads.delivery:session
-    record: bee.threads.records:record
-    record_types: bee.threads.records:types
-    bounds: bee.threads.records:bounds
-    contract: bee.protocol:application
-    format: bee.threads.timeline:format
-- name: view
-  kind: library.lua
-  source: file://view.lua
-  imports:
-    frame: bee.application:frame
-    appearance: bee.application:appearance
-    model: bee.threads.timeline:model
 - name: client_policy
   kind: security.policy
   meta:
-    comment: The timeline lists its workspace's threads and reads threads the process actor is a member of, holds its own subscription cursor and waits without claiming; it can acknowledge no delivery and settle nothing
+    comment: The timeline lists its workspace's threads and reads threads the process
+      actor is a member of, holds its own subscription cursor and waits without claiming;
+      it can acknowledge no delivery and settle nothing
   policy:
-    actions: [funcs.call]
-    resources: [bee.threads.service:list, bee.threads.service:list_workspace, bee.threads.service:get, bee.threads.delivery:subscribe, bee.threads.delivery:page, bee.threads.delivery:ack_page,
-      bee.threads.delivery:resume, bee.threads.delivery:wait, bee.threads.delivery:watch, bee.threads.projection:recap_read]
+    actions:
+    - funcs.call
+    resources:
+    - bee.threads.service:list
+    - bee.threads.service:list_workspace
+    - bee.threads.service:get
+    - bee.threads.delivery:subscribe
+    - bee.threads.delivery:page
+    - bee.threads.delivery:ack_page
+    - bee.threads.delivery:resume
+    - bee.threads.delivery:wait
+    - bee.threads.delivery:watch
+    - bee.threads.projection:recap_read
     effect: allow

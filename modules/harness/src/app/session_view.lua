@@ -26,7 +26,7 @@ local function wrap(value: string, room: integer): {string}
             local remaining = clean
             while tty.text.width(remaining) > width do
                 local piece = tty.text.cut(remaining, 0, width)
-                local boundary = tonumber(piece:match("^.*()%s"))
+                local boundary = tonumber((piece:match("^.*()%s")))
                 if remaining:sub(#piece + 1, #piece + 1):match("%s") then boundary = #piece + 1 end
                 if boundary and boundary > 1 then
                     out[#out + 1] = piece:sub(1, boundary - 1)
@@ -151,7 +151,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         frame.actions(painter, height - 1, {
             {kind = conv.lifecycle == "closed" and "new_from_session" or "send", key = "Enter", label = conv.lifecycle == "closed" and "Start new session from this" or "Send", enabled = conv.lifecycle == "closed" or draft ~= "" and conv.lifecycle == "active", primary = true},
             {kind = "back", key = "Esc", label = "Sessions", enabled = true},
-            {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true},
+            {kind = "details", key = "Ctrl+D", label = conv.details and "Hide details" or "Details", enabled = true, more = true},
             {kind = "stop_work", key = "Ctrl+K", label = "Stop current work", enabled = agents.pending(conv)},
             {kind = "close_session", key = "Ctrl+X", label = "Close session", enabled = conv.lifecycle == "active"},
         })

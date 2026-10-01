@@ -30,7 +30,7 @@ local function tabstrip(scene: model.Scene, order: {string}, width: integer, ico
     for _, id in ipairs(order) do
         for _, win in ipairs(scene.windows) do
             if win.id == id then
-                local title = tty.text.truncate(string.gsub(model.display_title(win), "%c", " "), math.floor(math.max(1, math.min(22, width - 7))), "…")
+                local title = tty.text.truncate(string.gsub(model.display_title(win), "%c", " "), math.floor(math.max(1, math.min(22, width - 4))), "…")
                 if icons then
                     title = tty.text.truncate(win.icon ~= nil and win.icon ~= "" and win.icon or title, 2, "")
                     if tty.text.width(title) == 0 then title = "•" end

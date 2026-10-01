@@ -16,7 +16,7 @@ from tui_smoke import Desktop  # noqa: E402
 from workspace import ROOT, classic_workspace, client_layout, strip_dependencies, workspace_checkpoint  # noqa: E402
 
 PACKAGE = "bee/threads-timeline"
-DEFINITION = "bee.threads.timeline:app"
+DEFINITION = "bee.threads.timeline.app:app"
 
 
 def run():

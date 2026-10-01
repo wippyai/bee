@@ -143,7 +143,7 @@ local function define_tests()
             local rows: {protocol.SessionSnapshot} = {}
             local conv = conversation("working", {})
             local decoded = protocol.decode_snapshot({session = "bs:n:w:worker", revision = 1, incarnation = 1, title = "Fix API", lifecycle = "active", activity = "blocked", queue_count = 0,
-                execution = {state = "absent", evidence_at = "2026-09-30T12:00:00Z", stale = false}, effective_limits = {}, continuity = {mode = "fresh"}, actions = {}})
+                execution = {state = "absent", evidence_at = "2026-09-30T12:00:00.000Z", stale = false}, effective_limits = {}, continuity = {mode = "fresh"}, actions = {}})
             rows[1] = assert(decoded)
             local shown = session_view.draw(120, 36, appearance.defaults(), conv, "", "", rows)
             test.is_true(screen(shown.rows):find("blocked", 1, true) ~= nil)

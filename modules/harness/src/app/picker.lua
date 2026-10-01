@@ -66,6 +66,7 @@ end
 function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channel<process.Event>,
     closes: Channel<process.Message>): (admission.Admitted?, string?)
     local states = assert(process.listen("bee.appearance.state", {message = true}))
+    local navigation = assert(process.listen("bee.application.navigate", {message = true}))
     local output = assert(tty.surface())
     local running = true
     local load_serial = 0
@@ -80,6 +81,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         running = false
         load_serial = load_serial + 1
         process.unlisten(states)
+        process.unlisten(navigation)
         if ticker then ticker:stop(); ticker = nil end
         local closed, close_error = output:close()
         return admitted, not closed and ("Close profile screen: " .. tostring(close_error)) or err
@@ -271,7 +273,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         end
         if load_serial == 0 then load() end
         local cases = {input = input:case_receive(), lifecycle = lifecycle:case_receive(), closes = closes:case_receive(),
-            states = states:case_receive(), loads = loads:case_receive(),
+            states = states:case_receive(), navigation = navigation:case_receive(), loads = loads:case_receive(),
             opens = opens:case_receive(), progress = progress:case_receive()}
         if ticker then cases.ticks = ticker:channel():case_receive() end
         local event = channel.select(cases)
@@ -284,6 +286,18 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         elseif event.channel == closes then
             local close = client.close_request(launch, tostring(event.value:from()), event.value:payload():data())
             if close then client.close_reply(launch, close.request_id, {action = "accept"}); return finish(nil, nil) end
+        elseif event.channel == navigation then
+            local args = client.navigation(launch, tostring(event.value:from()), event.value:payload():data())
+            local target = args and args[1] == "--session" and sessions_protocol.ref("session", args[2]) or nil
+            if target and not opening then
+                open_serial = open_serial + 1
+                local serial = open_serial
+                opening = true; status = "Opening session…"; dirty = true
+                coroutine.spawn(function()
+                    local conv, err = agents.resume(sessions.client(), target)
+                    if running and serial == open_serial then opens:send({serial = serial, conversation = conv, error = err}) end
+                end)
+            end
         elseif event.channel == states then
             if event.value:from() == launch.broker_pid then
                 local payload: unknown = event.value:payload():data()
@@ -334,7 +348,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     ticks = 0
                     if ticker then ticker:stop() end
                     ticker = time.ticker("1s")
-                    client.title(launch, result.conversation.title)
+                    client.title(launch, conversation.title)
                 else
                     status = result.error or "Agent session did not open"
                 end
@@ -342,12 +356,12 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
             end
         elseif event.channel == progress then
             local result = event.value
-            if result.conversation == conversation then
+            if conversation and result.conversation == conversation then
                 session_busy = false; dirty = true
                 for index, row in ipairs(directory) do
-                    if row.session == result.conversation.session:ref() then directory[index] = result.conversation.session.snapshot end
+                    if row.session == conversation.session:ref() then directory[index] = conversation.session.snapshot end
                 end
-                client.title(launch, result.conversation.title)
+                client.title(launch, conversation.title)
                 if result.error then status = "Session operation failed: " .. result.error end
                 local next_task = table.remove(queued_tasks, 1)
                 if next_task then start_task(next_task) end

@@ -84,7 +84,11 @@ end
 function M.rows(painter: Painter): {string}
     for y, bar in pairs(painter.bars) do M.actions(painter, y, bar.buttons, bar.x) end
     painter.bars = {}
-    return painter.canvas:rows()
+    local rows = painter.canvas:rows()
+    for index, row in ipairs(rows) do
+        rows[index] = row .. string.rep(" ", maximum(0, painter.width - tty.text.width(row)))
+    end
+    return rows
 end
 
 -- Draws value at (x, y) within room cells and returns the drawn width.

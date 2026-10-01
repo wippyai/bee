@@ -148,7 +148,7 @@ local function define_tests()
                 definition_revision = "1", execution_generation = 1}
             local sibling = probe("bee.application:" .. workspace_id .. ":timeline-instance",
                 {workspace_id = workspace, approval_id = approval_id},
-                {workspace_id = workspace_id, definition_id = "bee.threads.timeline:app",
+                {workspace_id = workspace_id, definition_id = "bee.threads.timeline.app:app",
                     definition_revision = "1", execution_generation = 1})
             test.eq(sibling.visible, 0)
             test.eq(sibling.read, "refused: DENIED")

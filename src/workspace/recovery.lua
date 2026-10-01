@@ -18,7 +18,7 @@ local prior_definitions: {[string]: string} = {
     ["bee.modules:app"] = "bee.hub.modules:app",
     ["bee.overlays:app"] = "bee.gov.overlays:app",
     ["bee.workspaces:app"] = "bee.workspace.manager:app",
-    ["bee.timeline:app"] = "bee.threads.timeline:app",
+    ["bee.timeline:app"] = "bee.threads.timeline.app:app",
     ["bee.processes:app"] = "bee.host.processes:app",
 }
 function M.record(value: unknown): Record?

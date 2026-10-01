@@ -355,7 +355,7 @@ local function define_tests()
             for _, binding in ipairs(selected.bindings) do
                 bindings[binding.definition_id] = binding :: Object
             end
-            local timeline = bindings["bee.threads.timeline:app"]
+            local timeline = bindings["bee.threads.timeline.app:app"]
             if not timeline then error("timeline package binding missing") end
             -- Measured admissions carry sorted distinct policies.
             local policies = timeline.policies
@@ -384,7 +384,7 @@ local function define_tests()
             test.eq(files.thread_access, "observe_post")
             test.is_true(has(selected, "bee.settings:app"))
             test.is_true(selected.evidence ~= "")
-            test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline:app"))
+            test.is_true(has(catalog.read(FOREIGN), "bee.threads.timeline.app:app"))
         end)
 
         test.it("refreshes a missing open selection once before refusing it", function()

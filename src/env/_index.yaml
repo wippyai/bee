@@ -98,7 +98,7 @@ entries:
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.hive.manager:client_policy, bee.hive.manager:viewer_policy]
         thread_access: none
       - component: bee.threads.timeline
-        definition_id: bee.threads.timeline:app
+        definition_id: bee.threads.timeline.app:app
         capabilities: [threads.read]
         policies: [bee.security:ordinary_app_subsystem_boundary, bee.threads.timeline:client_policy,
           bee.security.threads:thread_workspace_list_policy]

@@ -3,6 +3,8 @@
 -- catalog operation under the policies the host attached to that worker, not
 -- the client's or the supervisor's own. Catalog answers become Hive replies.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -24,7 +26,9 @@ local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.superviso
 local function admit()
     local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
-    local roots = (entry.data :: Object).roots :: {Object}
+    local roots_owner = assert(bounds.object(entry.data))
+    local roots = principals.objects(roots_owner.roots)
+    roots_owner.roots = roots
     for _, root in ipairs(roots) do if root.root_ref == PROJECTS then return end end
     roots[#roots + 1] = {root_ref = PROJECTS, access = "write"}
     local changes = registry.snapshot():changes()
@@ -68,7 +72,7 @@ local function define_tests()
             local identity: types.FaultIdentity = {operation_ref = "bee.workspace:create", idempotency_key = "key-1"}
             local done = commands.reply("r", identity, {ok = true, value = {workspace_id = "x"}})
             test.is_true(done.ok)
-            test.eq((done.value :: Object).workspace_id, "x")
+            test.eq((assert(bounds.object(done.value))).workspace_id, "x")
             local cases: {{string}} = {{"INVALID", "INVALID_ARGUMENT"}, {"UNAUTHENTICATED", "DENIED"}, {"DENIED", "DENIED"},
                 {"FORBIDDEN", "DENIED"}, {"NOT_FOUND", "NOT_FOUND"}, {"CONFLICT", "CONFLICT"}, {"BUSY", "INVALID_STATE"},
                 {"STORAGE", "INTERNAL"}, {"UNAVAILABLE", "UNAVAILABLE"}, {"ELSEWHERE", "INTERNAL"}}
@@ -89,7 +93,7 @@ local function define_tests()
             local roots = run("bee.workspace:roots", {})
             test.is_true(roots.ok)
             local found = false
-            for _, root in ipairs((roots.value :: Object).roots :: {Object}) do
+            for _, root in ipairs(principals.objects((assert(bounds.object(roots.value))).roots)) do
                 if root.root_ref == PROJECTS then found = root.access == "write" end
             end
             test.is_true(found)
@@ -97,14 +101,14 @@ local function define_tests()
             local created = run("bee.workspace:create", {label = "Command " .. name, root_ref = PROJECTS, subpath = name, create_directory = true})
             test.is_true(created.ok)
             test.eq(created.request_id, "exchange-1")
-            local id = tostring((created.value :: Object).workspace_id)
+            local id = tostring((assert(bounds.object(created.value))).workspace_id)
             test.eq(#id, 32)
             test.eq(run("bee.workspace:create", {label = "Again", root_ref = PROJECTS, subpath = name}).error.code, "CONFLICT")
             local archived = run("bee.workspace:archive", {workspace_id = id})
-            test.eq((archived.value :: Object).state, "archived")
+            test.eq((assert(bounds.object(archived.value))).state, "archived")
             local listed = run("bee.workspace:list", {state = "archived", limit = 100})
             test.is_true(listed.ok)
-            test.eq((run("bee.workspace:restore", {workspace_id = id}).value :: Object).state, "active")
+            test.eq((assert(bounds.object(run("bee.workspace:restore", {workspace_id = id}).value))).state, "active")
             test.eq(run("bee.workspace:create", {label = "", root_ref = PROJECTS}).error.code, "INVALID_ARGUMENT")
             test.eq(run("bee.workspace:rename", {workspace_id = id, label = "No"}).error.code, "INVALID_ARGUMENT")
         end)

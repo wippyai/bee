@@ -43,6 +43,8 @@ entries:
   security:
     policies: [bee.approvals:apply_test_policy, bee.approvals:store_test_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_owner_policy]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     service: bee.approvals:service
     worker: bee.approvals.service:worker
@@ -68,6 +70,7 @@ entries:
   security:
     policies: [bee.approvals:lease_flow_test_policy, bee.security.approvals:approval_request_policy, bee.security.approvals:approval_decide_policy, bee.security.approvals:approval_consume_policy, bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]
   imports:
+    principals: bee.test.principals:bound
     test: wippy.test:test
     capability_model: bee.capability:model
     bounds: bee.threads.records:bounds

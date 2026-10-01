@@ -8,7 +8,7 @@ local input_decode = require("input_decode")
 local function main(owner: string)
     local configure = assert(process.listen("physical.configure", {message = true}))
     assert(process.send(owner, "physical.boot", {}))
-    local message = assert(configure:receive())
+    local message = assert((configure:receive()))
     assert(tostring(message:from()) == owner)
     local value: unknown = message:payload():data()
     if type(value) ~= "table" or type(value.mount) ~= "string" then error("Invalid physical attachment") end

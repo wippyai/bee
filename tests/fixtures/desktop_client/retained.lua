@@ -42,7 +42,7 @@ local function main(mode: string?)
     local forger_policy = assert(security.policy("bee.desktop.client.probe:root_policy"))
     local forger = tostring(assert(process.with_options({}):with_scope(security.new_scope({forger_policy}))
         :spawn("bee.desktop.client.probe:forger", "bee:workers", owner, supervisor, workspace_id, desktop_id)))
-    assert(tostring(assert(forged:receive()):from()) == forger)
+    assert(tostring(assert((forged:receive())):from()) == forger)
     local sequence = 0
     local function request(recipient: string, op: string, mode: string?, selected_id: string?): (string, string)
         sequence = sequence + 1
@@ -94,7 +94,7 @@ local function main(mode: string?)
         local root_policy = assert(security.policy("bee.desktop.client.probe:root_policy"))
         local pid = tostring(assert(process.with_options({terminal = assert(screen:grant())})
             :with_scope(security.new_scope({root_policy})):spawn_monitored("bee.desktop.client.probe:physical", "bee:workers", owner)))
-        assert(tostring(assert(boots:receive()):from()) == pid)
+        assert(tostring(assert((boots:receive())):from()) == pid)
         local mount, code = request(pid, "attach", mode or "control", selected_id)
         for _ = 1, 300 do
             if code ~= "busy" then break end
@@ -102,7 +102,7 @@ local function main(mode: string?)
         end
         assert(code == "", "Supervisor did not release exited controller")
         assert(process.send(pid, "physical.configure", {mount = mount}))
-        assert(tostring(assert(displays:receive()):from()) == pid)
+        assert(tostring(assert((displays:receive())):from()) == pid)
         wait_text(screen, selected_id and "BEE" or "$ ")
         return pid, screen
     end
@@ -181,12 +181,13 @@ local function main(mode: string?)
                 assert(type(value) == "table" and value.version == 1 and value.schema == 1
                     and value.workspace_id == workspace_id and type(value.pid) == "string")
                 updated[value.display_id] = true
-                local changed_id: string = value.display_id :: string
+                local changed_id = value.display_id
+                assert(type(changed_id) == "string")
                 local recipient = changed_id == desktop_id and first or extra
                 local mount, code = request(recipient, "attach", "control", changed_id)
                 assert(code == "", "Physical grant reissue failed: " .. code)
                 assert(process.send(recipient, "physical.configure", {mount = mount}))
-                assert(tostring(assert(displays:receive()):from()) == recipient)
+                assert(tostring(assert((displays:receive())):from()) == recipient)
             end
         end
         storage("list", nil, "OK", 2)
@@ -230,12 +231,13 @@ local function main(mode: string?)
                     assert(type(value) == "table" and value.version == 1 and value.schema == 1
                         and value.workspace_id == workspace_id and type(value.pid) == "string")
                     updated[value.display_id] = true
-                    local changed_id: string = value.display_id :: string
+                    local changed_id = value.display_id
+                assert(type(changed_id) == "string")
                     local recipient = changed_id == desktop_id and first or extra
                     local mount, code = request(recipient, "attach", "control", changed_id)
                     assert(code == "", "Physical grant reissue failed: " .. code)
                     assert(process.send(recipient, "physical.configure", {mount = mount}))
-                    assert(tostring(assert(displays:receive()):from()) == recipient)
+                    assert(tostring(assert((displays:receive())):from()) == recipient)
                 end
             end
             command(first_screen, "printf 'RETAINED_UPGRADE_FIRST_%s_END\\n' \"$$\"")

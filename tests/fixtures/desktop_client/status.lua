@@ -1,3 +1,4 @@
+local bounds = require("bounds")
 -- MIT. Physical status acceptance through a host-admitted thread association.
 -- The saved client target contains only the host reply's view identity. The
 -- thread ID reaches the session solely from the fresh host inventory.
@@ -79,7 +80,7 @@ local function main()
     local host = tostring(assert(process.with_options({}):with_context({["bee.host_owner"] = owner}):with_scope(scope({
         "bee.security.desktop:host_policy", "bee.security.desktop:host_spawn_policy", "bee.security.storage:workspace_storage_policy"})):spawn_monitored(
             "bee.host:main", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""})))
-    local host_ready = assert(hosts:receive())
+    local host_ready = assert((hosts:receive()))
     assert(tostring(host_ready:from()) == host)
     local ready: unknown = host_ready:payload():data()
     if type(ready) ~= "table" or type(ready.workspace_id) ~= "string" then error("Invalid host readiness") end
@@ -118,10 +119,10 @@ local function main()
     local function thread_call(target: string, request: unknown): {[string]: unknown}
         local reply, err = funcs.new():with_actor(thread_actor):with_scope(thread_scope):call(target, request)
         if err or type(reply) ~= "table" then error("Thread call failed: " .. tostring(err)) end
-        local result = reply :: {[string]: unknown}
+        local result = assert(bounds.object(reply))
         if result.ok ~= true then
             local failure: unknown = result.error
-            error("Thread owner rejected call: " .. tostring(failure and (failure :: {[string]: unknown}).code))
+            error("Thread owner rejected call: " .. tostring(failure and (assert(bounds.object(failure))).code))
         end
         return result
     end
@@ -179,7 +180,7 @@ local function main()
             "bee.desktop.client.probe:status_policy"}))
         if not desktop then error(tostring(start_error)) end
         local client = desktop.pid
-        local ready_message = assert(clients:receive())
+        local ready_message = assert((clients:receive()))
         assert(tostring(ready_message:from()) == client)
         local ready = launch_protocol.ready(ready_message:payload():data(), workspace_id, false)
         if not ready then error("Invalid client readiness") end
@@ -187,7 +188,7 @@ local function main()
             workspace_id = workspace_id, recipient = client, display_id = ready.client_id,
             permissions = {open = true, close = true, control = true, appearance = false}}))
         result("status-admit")
-        local renderer_message = assert(renderers:receive())
+        local renderer_message = assert((renderers:receive()))
         assert(tostring(renderer_message:from()) == client)
         local renderer: unknown = renderer_message:payload():data()
         if type(renderer) ~= "table" or type(renderer.renderer) ~= "string" then error("Invalid renderer") end
@@ -203,7 +204,7 @@ local function main()
     wait_frame(screen, "THREAD_OWNER_retained", "Waiting on you")
 
     assert(screen:send({type = "key", key = "f12", key_type = "f12", action = "press"}))
-    local rejoin = assert(renderers:receive())
+    local rejoin = assert((renderers:receive()))
     assert(tostring(rejoin:from()) == client)
     local replacement: unknown = rejoin:payload():data()
     if type(replacement) ~= "table" or type(replacement.renderer) ~= "string" then error("Invalid replacement renderer") end

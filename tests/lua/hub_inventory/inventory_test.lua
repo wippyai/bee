@@ -33,13 +33,14 @@ local function define_tests()
             test.eq(result.roots[2].parameters[1].value, 8080)
         end)
         test.it("uses the standalone lock identity with live selections and keeps pins separate", function()
-            local state = {entries = {}, resolution = {modules = {{name = "bee/bee", version = "1.1.0"}},
+            local state = {entries = {}, resolution = {modules = {{name = "bee/bee", version = "1.1.0", digest = "sha256:" .. string.rep("a", 64)}},
                 lock = {root_module = "bee/bee", modules = {{name = "bee/bee", version = "1.0.0"}}}}}
             local result = assert(inventory.decode(state, 1))
             test.eq(result.roots[1].id, "bee:deployment")
             test.eq(result.roots[1].owner, "")
             test.eq(result.roots[1].version, "1.1.0")
             test.eq(result.modules[1].locked_version, "1.0.0")
+            test.eq(result.modules[1].digest, string.rep("a", 64))
             test.is_true(result.modules[1].direct)
             state.resolution.lock.root_module = "bad"
             test.is_nil(inventory.decode(state, 1))

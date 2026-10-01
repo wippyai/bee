@@ -175,6 +175,7 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     local policy_changes: {PolicyChange} = {}
     local proposed_policies: {[string]: boolean} = {}
     local changed_components: {[string]: boolean} = {}
+    local missing: {string} = {}
     local remaining: {[string]: boolean} = {}
     for _, item in ipairs(resolved.packages) do
         remaining[item.component] = true
@@ -184,6 +185,10 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
             return nil, "dependency would replace a host-deployment module: " .. item.component
         end
         local change = previous == "" and "install" or ((semver.compare(previous, item.version) or 1) == 0 and "keep" or "update")
+        local same_digest = item.digest == "" or (old and old.digest ~= "" and old.digest == item.digest:lower():gsub("^sha256:", ""))
+        if change ~= "keep" or item.component == request.component or not same_digest then
+            for _, id in ipairs(item.requirements.missing) do missing[#missing + 1] = id end
+        end
         modules[#modules + 1] = {component = item.component, version = item.version, previous_version = previous,
             digest = item.digest, change = change, entries = #item.entries, requirements = item.requirements}
         if change ~= "keep" then changed_components[item.component] = true end
@@ -246,9 +251,10 @@ function M.prepare(state: unknown, revision: integer, request: Request, source: 
     table.sort(migrations, function(a: Migration, b: Migration): boolean return a.id < b.id end)
     table.sort(policy_changes, function(a: PolicyChange, b: PolicyChange): boolean return a.id < b.id end)
     table.sort(starts); table.sort(capabilities)
+    table.sort(missing)
     local plan: Plan = {request = request, base_revision = revision, root_id = root_id, digest = "", modules = modules,
-        missing = resolved.missing, migrations = migrations, starts = starts, capabilities = capabilities,
-        policy_changes = policy_changes, ready = #resolved.missing == 0}
+        missing = missing, migrations = migrations, starts = starts, capabilities = capabilities,
+        policy_changes = policy_changes, ready = #missing == 0}
     local encoded, encode_error = canonical.encode(plan, 1048576)
     if not encoded then return nil, encode_error end
     local digest, digest_error = hash.sha256(encoded)

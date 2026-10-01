@@ -94,6 +94,9 @@ Planning follows requirement targets that set another requirement's `.default`,
 including dependency chains. Explicit parameters take precedence over these
 defaults. Conflicting default writers, cycles and chains beyond 128 requirements
 are refused; native linking owns other target paths.
+Readiness checks missing bindings in the requested component and new or changed
+artifacts. A dependency retained at the same version and digest keeps its existing
+bindings, matching runtime enforcement for untouched modules.
 
 Planning is read-only. It may fetch and verify package artifacts into the local
 cache, but does not publish registry state or execute a migration. `ready` means

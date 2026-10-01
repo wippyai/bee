@@ -70,6 +70,29 @@ end
 
 local function define_tests()
     test.describe("Hub dependency plan", function()
+        for _, changed in ipairs({false, true}) do
+            test.it(changed and "requires bindings when a kept version's artifact changes" or "preserves untouched dependency requirement holes", function()
+                local captured = state({root("acme/app", "1.0.0"),
+                    {id = "acme.app:dependency", kind = "ns.dependency", registry = {owner = "acme/app"},
+                        data = {component = "acme/lib", version = "1.0.0", parameters = {}}},
+                }, {{name = "acme/app", version = "1.0.0", digest = string.rep("a", 64)},
+                    {name = "acme/lib", version = "1.0.0", digest = string.rep("c", 64)}})
+                local targets = {{entry = "acme.lib:main", path = ".database"}}
+                local prepared, problem = plan.prepare(captured, 1,
+                    request({action = "update", component = "acme/app", version = "2.0.0"}), source({
+                        ["acme/app@2.0.0"] = package("acme/app", "2.0.0", "b", {
+                            {id = "acme.app:dependency", kind = "ns.dependency", meta = {},
+                                data = {component = "acme/lib", version = "1.0.0", parameters = {}}}}),
+                        ["acme/lib@1.0.0"] = package("acme/lib", "1.0.0", changed and "d" or "c", {
+                            {id = "acme.lib:database", kind = "ns.requirement", meta = {}, data = {targets = targets}}}),
+                    }))
+                test.is_nil(problem); test.not_nil(prepared)
+                if prepared then
+                    test.eq(prepared.plan.ready, not changed)
+                    test.eq(#prepared.plan.missing, changed and 1 or 0)
+                end
+            end)
+        end
         test.it("reads the native host manifest through the declared environment module", function()
             local identity, problem = host_identity.read_host()
             test.is_nil(problem)

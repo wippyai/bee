@@ -15,7 +15,7 @@ local MARKER = "›"
 type Hit = {kind: string, index: integer, key: string, x: integer, y: integer, width: integer, height: integer}
 -- A button with a key is drawn as "Key Label"; primary marks the one filled
 -- action, active a selected toggle. Disabled buttons stay visible and have no hit.
-type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?}
+type Button = {kind: string, label: string, enabled: boolean, primary: boolean?, active: boolean?, key: string?, more: boolean?}
 type Tab = {kind: string, label: string, short: string?}
 type Hint = {key: string, verb: string}
 type Controls = {buttons: {Button}, overflow: {Button}, hints: {Hint}, status: string?}
@@ -222,12 +222,14 @@ end
 function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?): integer
     local column = x or 2
     local total = 0
+    local forced = false
     for _, button in ipairs(buttons) do
         total = total + button_width(button)
+        if button.more then forced = true end
         painter.controls.buttons[#painter.controls.buttons + 1] = button
     end
     local room = painter.width - column
-    if total - 1 <= room then
+    if not forced and total - 1 <= room then
         for _, button in ipairs(buttons) do column = draw_button(painter, column, y, button) end
         return column
     end
@@ -236,7 +238,7 @@ function M.actions(painter: Painter, y: integer, buttons: {Button}, x: integer?)
     local chosen: {[integer]: boolean} = {}
     for _, primary in ipairs({true, false}) do
         for index, button in ipairs(buttons) do
-            if (button.primary == true) == primary and button_width(button) <= available then
+            if not button.more and (button.primary == true) == primary and button_width(button) <= available then
                 chosen[index] = true
                 available = available - button_width(button)
             end

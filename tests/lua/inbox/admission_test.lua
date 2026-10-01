@@ -8,6 +8,8 @@
 -- policy does not list sees nothing and is refused, however admitted the
 -- application is.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -41,10 +43,10 @@ local function admitted_scope(): security.Scope
     local names: {string} = {}
     for _, item in ipairs(BASE) do names[#names + 1] = item end
     local found = false
-    for _, binding in ipairs((entry.data :: Object).bindings :: {Object}) do
+    for _, binding in ipairs(principals.objects((assert(bounds.object(entry.data))).bindings)) do
         if binding.definition_id == "bee.approvals.inbox.app:app" then
             found = true
-            for _, name in ipairs(binding.policies :: {string}) do names[#names + 1] = name end
+            for _, name in ipairs(principals.strings(binding.policies)) do names[#names + 1] = name end
         end
     end
     if not found then error("the inbox application is not admitted") end
@@ -53,8 +55,9 @@ end
 local function install_policy()
     local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
-    local data = entry.data :: Object
-    local policies = data.policies :: {Object}
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
+    data.policies = policies
     local found_policy, found_selector = false, false
     for _, policy in ipairs(policies) do
         if policy.name == POLICY then found_policy = true end
@@ -79,7 +82,7 @@ local function file(workspace: string, policy: string?): string
     local reply, err = requester():call("bee.approvals.binding:request", {workspace_id = workspace, idempotency_key = key(), request_kind = "permission", policy = policy or POLICY,
         proposal = {kind = "attempt", ref = "attempt-" .. key(), revision = "r1", action_id = "action-1", payload = {tool_name = "Bash"}}, prompt = {text = "touch proof.txt"}})
     if err then error("request: " .. tostring(err)) end
-    local typed = reply :: {ok: boolean, error: {code: string}?, value: Object}
+    local typed = reply
     if not typed.ok then error("request: " .. tostring(typed.error and typed.error.code)) end
     return tostring(typed.value.approval_id)
 end
@@ -98,10 +101,10 @@ local function probe(actor: string, input: Object, metadata: Object?): Object
         if event.kind == process.event.EXIT and tostring(event.from) == tostring(pid) then
             local result = event.result or {}
             if result.error then error("probe failed: " .. tostring(result.error)) end
-            report = result.value :: Object
+            report = assert(bounds.object(result.value))
         end
     end
-    return report :: Object
+    return assert(bounds.object(report))
 end
 local function starts(value: unknown, prefix: string): boolean
     return tostring(value):sub(1, #prefix) == prefix
@@ -135,7 +138,7 @@ local function define_tests()
             test.eq(approver.visible, 1)
             test.eq(approver.decide, "ok")
             test.is_true(starts(approver.store_after_decide, "denied"))
-            local record = requester():call("bee.approvals.binding:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
+            local record = requester():call("bee.approvals.binding:read", {approval_id = approval_id})
             test.eq(record.value.decision, "denied")
             test.eq(record.value.decider_id, ALICE)
         end)
@@ -159,7 +162,7 @@ local function define_tests()
             local approver = probe(app_actor, {workspace_id = workspace, approval_id = approval_id, decide = true, decision = "approved"}, app_metadata)
             test.eq(approver.visible, 1)
             test.eq(approver.decide, "ok")
-            local record = requester():call("bee.approvals.binding:read", {approval_id = approval_id}) :: {ok: boolean, value: Object}
+            local record = requester():call("bee.approvals.binding:read", {approval_id = approval_id})
             test.eq(record.value.decider_id, app_actor)
         end)
     end)

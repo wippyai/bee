@@ -6,6 +6,8 @@
 -- the decision; and a headless owner restart with no inbox open recovers
 -- requests, decisions and pending delivery on its own.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local registry = require("registry")
@@ -21,7 +23,7 @@ local REQUESTER, ALICE = "bee.test.inbox_requester", "bee.test.inbox_alice"
 local POLICY = "inbox-test"
 local AUTHORITY, WORKER = "bee.approvals.authority", "bee.approvals.outbox"
 type Object = {[string]: unknown}
-type Reply = app_caller.Reply
+type Reply = app_caller.Envelope
 local function key(): string
     local id, err = uuid.v4()
     if err or not id then error("uuid: " .. tostring(err)) end
@@ -55,17 +57,18 @@ end
 local function call(executor: funcs.Executor, target: string, request: unknown): Reply
     local raw, err = executor:call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    return raw :: Reply
+    return assert(app_caller.envelope(raw))
 end
 local function value(reply: Reply): Object
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function install_policy()
     local entry = registry.get("bee:approver_policies")
     if not entry then error("approver policies entry") end
-    local data = entry.data :: Object
-    local policies = data.policies :: {Object}
+    local data = assert(bounds.object(entry.data))
+    local policies = principals.objects(data.policies)
+    data.policies = policies
     for _, policy in ipairs(policies) do
         if policy.name == POLICY then return end
     end
@@ -88,10 +91,10 @@ local function file_on_thread(workspace: string): (string, string, string)
 end
 local function thread_records(thread_id: string): {Object}
     local page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"approval.request", "approval.transition"}}}))
-    return page.records :: {Object}
+    return principals.objects(page.records)
 end
 local function delivery_status(approval_id: string): string
-    local deliveries = value(call(requester, "bee.approvals.binding:deliveries", {approval_id = approval_id})).deliveries :: {Object}
+    local deliveries = principals.objects(value(call(requester, "bee.approvals.binding:deliveries", {approval_id = approval_id})).deliveries)
     local summaries: {string} = {}
     for _, delivery in ipairs(deliveries) do
         summaries[#summaries + 1] = tostring(delivery.kind) .. " thread=" .. tostring(delivery.thread_id) .. " attempts=" .. tostring(delivery.attempts) ..
@@ -106,19 +109,19 @@ local function until_records(thread_id: string, count: integer, approval_id: str
     while true do
         local page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64,
             filter = {kinds = {"approval.request", "approval.transition"}}}))
-        local records = page.records :: {Object}
+        local records = principals.objects(page.records)
         for _, record in ipairs(records) do collected[#collected + 1] = record end
         if #collected >= count then return collected end
         local remaining = deadline_ms - math.floor(time.now():unix_nano() / 1000000)
         if remaining <= 0 then
             local page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64}))
             local observed: {string} = {}
-            for _, record in ipairs(page.records :: {Object}) do
+            for _, record in ipairs(principals.objects(page.records)) do
                 observed[#observed + 1] = tostring(record.sequence) .. ":" .. tostring(record.kind)
             end
             local filtered = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64,
                 filter = {kinds = {"approval.request", "approval.transition"}}}))
-            local matching = filtered.records :: {Object}
+            local matching = principals.objects(filtered.records)
             error("thread records did not arrive; matching=" .. tostring(#matching) .. " scanned=" .. tostring(filtered.scanned_through) ..
                 " observed=" .. table.concat(observed, ",") .. " outbox: " .. delivery_status(approval_id))
         end
@@ -224,21 +227,21 @@ local function define_tests()
             -- The delivery worker is gone when the decision commits.
             stop(WORKER)
             decide(state, owner, "approved")
-            test.eq((state.detail :: Object).decision, "approved")
+            test.eq((assert(bounds.object(state.detail))).decision, "approved")
             test.eq(#thread_records(thread_id), 1)
             -- The owner authority and the inbox both restart.
             restart(AUTHORITY)
             local reopened = model.new({workspace})
             refresh(reopened, owner)
             open(reopened, owner, approval_id)
-            local detail = reopened.detail :: Object
+            local detail = assert(bounds.object(reopened.detail))
             test.eq(detail.state, "decided")
             test.eq(detail.decision, "approved")
             test.eq(detail.decider_id, ALICE)
-            test.eq(detail.revision, (state.detail :: Object).revision)
+            test.eq(detail.revision, (assert(bounds.object(state.detail))).revision)
             local records = until_records(thread_id, 2, approval_id)
             test.eq(#records, 2)
-            test.eq((records[2].body :: Object).state, "approved")
+            test.eq((assert(bounds.object(records[2].body))).state, "approved")
             local _, refused = model.decision_intent(reopened, key(), "denied")
             test.eq(refused, "the request is decided")
             wait_for_no_more_records(thread_id, 2)
@@ -286,20 +289,20 @@ local function define_tests()
             refresh(state, owner)
             open(state, owner, approval_id)
             decide(state, owner, "approved")
-            local incarnation = math.floor(tonumber((state.detail :: Object).owner_incarnation) or 0)
+            local incarnation = math.floor(tonumber((assert(bounds.object(state.detail))).owner_incarnation) or 0)
             local revoked = call(unconsuming, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = incarnation})
             test.is_false(revoked.ok)
             test.eq(revoked.error and revoked.error.code, "DENIED")
             refresh(state, owner)
             open(state, owner, approval_id)
-            local detail = state.detail :: Object
+            local detail = assert(bounds.object(state.detail))
             test.eq(detail.decision, "approved")
             test.eq(detail.decider_id, ALICE)
             test.is_nil(detail.consumer_id)
             local consumed = value(call(requester, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = incarnation}))
             test.eq(consumed.consumed_effect, "e1")
             open(state, owner, approval_id)
-            test.eq((state.detail :: Object).consumer_id, REQUESTER)
+            test.eq((assert(bounds.object(state.detail))).consumer_id, REQUESTER)
         end)
         test.it("recovers requests, decisions and pending delivery after a headless owner restart with no inbox open", function()
             local workspace = "ws-" .. key():sub(1, 8)
@@ -314,13 +317,13 @@ local function define_tests()
             local state = model.new({workspace})
             refresh(state, owner)
             open(state, owner, approval_id)
-            local detail = state.detail :: Object
+            local detail = assert(bounds.object(state.detail))
             test.eq(detail.state, "pending")
             test.eq(detail.revision, 1)
             decide(state, owner, "approved")
             local stale = call(requester, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = math.floor(tonumber(detail.owner_incarnation) or 0)})
             test.eq(stale.error and stale.error.code, "REVALIDATE")
-            local current = math.floor(tonumber((stale.value :: Object).current_incarnation) or 0)
+            local current = math.floor(tonumber((assert(bounds.object(stale.value))).current_incarnation) or 0)
             value(call(requester, "bee.approvals.binding:revalidate", {approval_id = approval_id, proposal_digest = digest, owner_incarnation = current}))
             test.eq(value(call(requester, "bee.approvals.binding:consume", {approval_id = approval_id, proposal_digest = digest, effect_key = "e1", owner_incarnation = current})).consumed_effect, "e1")
             test.eq(#until_records(thread_id, 2, approval_id), 2)

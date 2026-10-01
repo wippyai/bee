@@ -1,3 +1,5 @@
+local principals = require("principals")
+local bounds = require("bounds")
 -- MIT. A process run under the exact scope the broker composes for the
 -- inbox application, reporting what that scope lets it reach: the
 -- approval store directly, the owner's methods, unlisted owner operations
@@ -17,13 +19,13 @@ local function call(target: string, request: unknown): string
     local raw, err = funcs.new():call(target, request)
     if err then return "error: " .. tostring(err) end
     if type(raw) ~= "table" then return "no reply" end
-    local reply = raw :: Object
+    local reply = assert(bounds.object(raw))
     if reply.ok == true then return "ok" end
-    local fault = type(reply.error) == "table" and reply.error :: Object or {}
+    local fault = type(reply.error) == "table" and assert(bounds.object(reply.error)) or {}
     return "refused: " .. tostring(fault.code)
 end
 local function main(value: unknown): Object
-    local input = type(value) == "table" and value :: Object or {}
+    local input = type(value) == "table" and assert(bounds.object(value)) or {}
     local workspace = tostring(input.workspace_id or "")
     local approval_id = tostring(input.approval_id or "")
     local decision = tostring(input.decision or "approved")
@@ -32,9 +34,9 @@ local function main(value: unknown): Object
     report.inbox = call("bee.approvals.binding:inbox", {workspace_id = workspace})
     local inbox_raw = funcs.new():call("bee.approvals.binding:inbox", {workspace_id = workspace})
     local visible = 0
-    if type(inbox_raw) == "table" and (inbox_raw :: Object).ok == true then
-        local page = (inbox_raw :: Object).value :: Object
-        for _ in ipairs(page.changes :: {unknown}) do visible = visible + 1 end
+    if type(inbox_raw) == "table" and (assert(bounds.object(inbox_raw))).ok == true then
+        local page = assert(bounds.object((assert(bounds.object(inbox_raw))).value))
+        for _ in ipairs(principals.items(page.changes)) do visible = visible + 1 end
     end
     report.visible = visible
     report.read = call("bee.approvals.binding:read", {approval_id = approval_id})
@@ -45,8 +47,8 @@ local function main(value: unknown): Object
     if input.decide == true then
         local read_raw = funcs.new():call("bee.approvals.binding:read", {approval_id = approval_id})
         local digest, revision = "", 1
-        if type(read_raw) == "table" and (read_raw :: Object).ok == true then
-            local view = (read_raw :: Object).value :: Object
+        if type(read_raw) == "table" and (assert(bounds.object(read_raw))).ok == true then
+            local view = assert(bounds.object((assert(bounds.object(read_raw))).value))
             digest, revision = tostring(view.proposal_digest), math.floor(tonumber(view.revision) or 1)
         end
         local decision_request: Object = {approval_id = approval_id, expected_revision = revision, decision = decision, proposal_digest = digest}

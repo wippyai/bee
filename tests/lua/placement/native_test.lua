@@ -8,6 +8,7 @@ local funcs = require("funcs")
 local sql = require("sql")
 local security = require("security")
 local process = require("process")
+local runner_fixture = require("runner_fixture")
 local channel = require("channel")
 local time = require("time")
 local registry = require("registry")
@@ -316,7 +317,7 @@ local function grok_composition_request(attempt_id: string, session_ref: string,
     }
     return value
 end
-local function claim_materialization(db, request: types.LaunchRequest)
+local function intend_materialization(db, request: types.LaunchRequest)
     local digest, digest_error = request_codec.digest(request)
     if not digest then error(tostring(digest_error)) end
     local encoded, encode_error = json.encode(request)
@@ -324,9 +325,6 @@ local function claim_materialization(db, request: types.LaunchRequest)
     local intended = store.intend(db, request, digest, encoded,
         {capability = "direct_process", exit_observation = "eof_gated"})
     if not intended.ok then error(tostring(intended.message)) end
-    local claimed = store.transition(db, request.attempt_id, {expected_execution = "intended", execution = "starting",
-        fields = {runner_pid = process.pid()}, evidence = {kind = "test.claimed", detail = "Grok composition materialization"}})
-    if not claimed.ok then error(tostring(claimed.message)) end
 end
 local READONLY = "bee.placement.native:readonly_fixture"
 local function admit_root(ref: string)
@@ -2622,12 +2620,18 @@ local function define_tests()
                     evidence = {kind = "child.not_started", detail = "composition acceptance did not create a child"}})
                 if not retired.ok then error(tostring(retired.message or "retire Grok composition attempt")) end
             end
-            local function prepare(request: types.LaunchRequest): (PreparedConfiguration?, string?, sql.DB)
+            -- A hosted runner claims and prepares; a sweep inside its window
+            -- finds it present and leaves the attempt starting.
+            local function prepare(request: types.LaunchRequest, binding_failure: string?): (PreparedConfiguration?, string?, sql.DB)
                 local db, db_error = store.open()
                 if not db then error(tostring(db_error or "open placement store")) end
-                claim_materialization(db, request)
-                local prepared, prepare_error = materialization.prepare(db, request, request.attempt_id, 0)
-                return prepared, prepare_error, db
+                intend_materialization(db, request)
+                local runner = runner_fixture.claim("bee.placement.native:materialization_runner_process", request, 0, nil, binding_failure)
+                test.is_true(service.sweep().ok)
+                test.eq(assert(store.attempt(db, request.attempt_id)).execution_state, "starting")
+                local outcome = runner_fixture.prepare(runner)
+                runner_fixture.release(runner)
+                return outcome.prepared, outcome.error, db
             end
 
             -- The external digest binding commits before any setup file or
@@ -2638,12 +2642,7 @@ local function define_tests()
             local _, binding_projection = projection(binding_attempt)
             local binding_request = grok_composition_request(binding_attempt, binding_session,
                 binding_projection.projection_id :: string, grok_configuration.BASE_PATH)
-            local original_bind_session_file = store.bind_session_file
-            store.bind_session_file = function(_db: sql.DB, _owner_id: string, _session_ref: string, _path: string, _digest: string): string?
-                return "injected retained configuration binding failure"
-            end
-            local binding_prepared, binding_error, binding_db = prepare(binding_request)
-            store.bind_session_file = original_bind_session_file
+            local binding_prepared, binding_error, binding_db = prepare(binding_request, "injected retained configuration binding failure")
             if binding_prepared then error("Grok configuration survived a failed external binding") end
             test.eq(binding_error, "injected retained configuration binding failure")
             local _, binding_home = session_path(binding_session)

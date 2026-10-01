@@ -12,11 +12,10 @@ local exec = require("exec")
 local quote = require("quote")
 local launch = require("grok_launch")
 local configuration = require("grok_configuration")
-local materialization = require("materialization")
 local homes = require("homes")
 local store = require("store")
 local placement_service = require("placement_service")
-local protocol = require("protocol")
+local runner_fixture = require("runner_fixture")
 local request_codec = require("request_codec")
 local types = require("types")
 
@@ -132,28 +131,14 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
     local intended = store.intend(db, request, assert(request_codec.digest(request)), assert(json.encode(request)),
         {capability = "direct_process", exit_observation = "eof_gated"})
     test.is_true(intended.ok)
-    test.is_true(store.transition(db, attempt_id, {expected_execution = "intended", execution = "starting",
-        fields = {runner_pid = process.pid()}, evidence = {kind = "test.claimed", detail = "Grok turn materialization"}}).ok)
-    local controls = assert(process.listen(protocol.TOPIC_CONTROL, {message = true}))
-    local control_token = assert(store.runner_authority(db, attempt_id, fresh("grok-control")))
-    coroutine.spawn(function()
-        while true do
-            local message = controls:receive()
-            if not message then return end
-            local data: unknown = message:payload():data()
-            if type(data) == "table" and data.control_token == control_token and data.attempt_id == attempt_id
-                and data.command == "status" and type(data.probe) == "string" then
-                assert(process.send(tostring(message:from()), protocol.TOPIC_STATUS, {attempt_id = attempt_id,
-                    generation = 0, probe = data.probe, execution = "starting", eof_seen = 0,
-                    pending_outputs = 0, remembered_writes = 0, truncated = false}))
-            end
-        end
-    end)
-    local supervised = placement_service.reconcile_attempt(assert(store.attempt(db, attempt_id)))
-    test.is_true(supervised.ok)
-    test.eq((supervised.value :: types.Attempt).execution_state, "starting")
-    local prepared, err = materialization.prepare(db, request, attempt_id, 0)
-    if not prepared then error(tostring(err)) end
+    local runner = runner_fixture.claim("bee.placement.native:materialization_runner_process", request, 0)
+    -- A sweep inside the materialization window finds the hosted runner
+    -- present and leaves its attempt starting.
+    test.is_true(placement_service.sweep().ok)
+    test.eq(assert(store.attempt(db, attempt_id)).execution_state, "starting")
+    local outcome = runner_fixture.prepare(runner)
+    local prepared = outcome.prepared
+    if not prepared then runner_fixture.release(runner); error(tostring(outcome.error)) end
     if session_ref then
         local key = assert(homes.session_key(OWNER, session_ref))
         test.eq(prepared.home_path, assert(homes.ensure_session(key)))
@@ -165,7 +150,7 @@ local function turn(db: sql.DB, workspace: string, profile: string, session_ref:
     test.is_true(store.transition(db, attempt_id, {expected_execution = "starting", execution = "exited", cleanup = "complete",
         fields = {runner_pid = sql.NULL, exit_source = "runner", exit_code = 0},
         evidence = {kind = "test.child_exited", detail = "fixture child wait proves direct-process exit"}}).ok)
-    process.unlisten(controls)
+    runner_fixture.release(runner)
     return prepared.home_path, assert(prepared.environment.GROK_HOME)
 end
 

@@ -2,6 +2,8 @@
 -- with the node's displays, identical listings answered by one read, an
 -- exclusive allocation, and deadlines that never claim an unknown outcome.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local process = require("process")
 local channel = require("channel")
 local time = require("time")
@@ -33,8 +35,9 @@ local manager = funcs.new():with_actor(security.new_actor("bee.test.desktop_cata
 local function admit()
     local entry = registry.get("bee.resources:resource_roots")
     if not entry then error("admitted roots entry") end
-    local data = entry.data :: Object
-    local roots = data.roots :: {Object}
+    local data = assert(bounds.object(entry.data))
+    local roots = principals.objects(data.roots)
+    data.roots = roots
     for _, root in ipairs(roots) do
         if root.root_ref == PROJECTS then return end
     end
@@ -48,10 +51,10 @@ local function create(label: string, subpath: string): string
     admit()
     local reply, err = manager:call("bee.workspace.catalog:create", {label = label, root_ref = PROJECTS, subpath = subpath, create_directory = true})
     if err or type(reply) ~= "table" or reply.ok ~= true then
-        local failure = type(reply) == "table" and (reply :: Object).error or err
-        error("create " .. label .. ": " .. tostring(type(failure) == "table" and (failure :: Object).message or failure))
+        local failure = type(reply) == "table" and (assert(bounds.object(reply))).error or err
+        error("create " .. label .. ": " .. tostring(type(failure) == "table" and (assert(bounds.object(failure))).message or failure))
     end
-    local value = (reply :: Object).value :: Object
+    local value = assert(bounds.object((assert(bounds.object(reply))).value))
     return tostring(value.workspace_id)
 end
 local function call(id: string, operation: string): types.Call
@@ -108,13 +111,13 @@ local function define_tests()
             drain(state, view, 1)
             local page = receive(replies)
             if not page.ok then error(tostring(page.error and page.error.message)) end
-            local value = page.value :: Object
+            local value = assert(bounds.object(page.value))
             test.eq(value.owner_execution, EXECUTION)
             test.eq(value.default_workspace, first)
-            local desktops = value.desktops :: {Object}
+            local desktops = principals.objects(value.desktops)
             test.is_true(#desktops >= 1)
             test.eq(desktops[1].is_default, true)
-            local rows = value.workspaces :: {Object}
+            local rows = principals.objects(value.workspaces)
             test.eq(#rows, 2)
             test.eq(rows[1].workspace_id, first)
             test.eq(rows[1].label, prefix .. " a")
@@ -126,10 +129,10 @@ local function define_tests()
             catalog.list(state, bridge, self, call("page-2", protocol.LIST), {label = prefix, after = cursor, limit = 2}, 100)
             drain(state, view, 1)
             local last = receive(replies)
-            local rest = (last.value :: Object).workspaces :: {Object}
+            local rest = principals.objects((assert(bounds.object(last.value))).workspaces)
             test.eq(#rest, 1)
             test.eq(rest[1].workspace_id, third)
-            test.is_nil((last.value :: Object).next_after)
+            test.is_nil((assert(bounds.object(last.value))).next_after)
             process.unlisten(replies)
         end)
         test.it("answers identical listings from one read and keeps allocation exclusive", function()
@@ -167,7 +170,7 @@ local function define_tests()
             drain(state, listing({}, nil), 1)
             local reply = receive(replies)
             if not reply.ok then error(tostring(reply.error and reply.error.message)) end
-            local value = reply.value :: Object
+            local value = assert(bounds.object(reply.value))
             test.eq(value.owner_execution, EXECUTION)
             test.eq(value.desktop_id, desktop)
             test.is_nil(value.workspace_id)

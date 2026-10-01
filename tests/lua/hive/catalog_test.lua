@@ -1,6 +1,7 @@
 -- MIT. The exposure catalog: host ceilings, malformed declarations, and
 -- interfaces that narrow but never widen.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local catalog = require("catalog")
@@ -15,7 +16,7 @@ local function probe(policies: {string}): Probe
     end
     local result, err = funcs.new():with_scope(security.new_scope(list)):call("bee.hive:catalog_probe", {})
     if err or type(result) ~= "table" then error("probe: " .. tostring(err)) end
-    return result :: Probe
+    return result
 end
 local function has(list: {string}, item: string): boolean
     for _, candidate in ipairs(list) do if candidate == item then return true end end
@@ -118,8 +119,8 @@ local function define_tests()
             test.eq(unexposed, "operation bee.hive:nothing is not exposed")
             local summaries = catalog.summaries(snapshot)
             for _, summary in ipairs(summaries) do
-                test.is_nil((summary :: {[string]: unknown}).input_schema)
-                test.is_nil((summary :: {[string]: unknown}).measured)
+                test.is_nil((assert(bounds.object(summary))).input_schema)
+                test.is_nil((assert(bounds.object(summary))).measured)
             end
         end)
         test.it("re-resolves an operation at admission under the current ceiling", function()

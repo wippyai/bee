@@ -8,6 +8,7 @@
 -- duplicating, on both the outbox row and the destination item; and a
 -- forwarded commit settles destination notices and watches.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local registry = require("registry")
 local time = require("time")
@@ -42,7 +43,7 @@ local MEMBER_POLICIES = {"bee.security.threads:thread_observe_policy", "bee.secu
 local function install(mappings: {Object})
     local entry = registry.get(principals.ENTRY)
     if not entry then error("mappings entry") end
-    (entry.data :: Object).mappings = mappings
+    (assert(bounds.object(entry.data))).mappings = mappings
     local changes = registry.snapshot():changes()
     changes:update(entry)
     local applied, err = changes:apply()
@@ -82,7 +83,7 @@ local function code(reply: types.Reply): string
 end
 local function value(reply: types.Reply): Object
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function admitted_for(principal_id: string): {[string]: unknown}
     local value = harness.admitted()
@@ -117,7 +118,7 @@ local function define_tests()
             request.node_id = REMOTE
             local queued = harness.value(sender:call("inbox_send", request))
             test.eq(queued.queued, true)
-            local row = queued.outbox :: Object
+            local row = assert(bounds.object(queued.outbox))
             test.eq(row.state, "queued")
             test.eq(row.dest_node_id, REMOTE)
             test.eq(row.dest_action_id, "action-b")
@@ -128,8 +129,8 @@ local function define_tests()
             -- A resent send returns the row's current state, not a new row.
             local status = harness.value(sender:call("inbox_send", request))
             test.eq(status.queued, true)
-            test.eq(tostring((status.outbox :: Object).outbox_id), first_id)
-            test.eq(tostring((status.outbox :: Object).state), "queued")
+            test.eq(tostring((assert(bounds.object(status.outbox))).outbox_id), first_id)
+            test.eq(tostring((assert(bounds.object(status.outbox))).state), "queued")
             -- Anything else under the key conflicts.
             local changed: {[string]: unknown} = {}
             for name, item in pairs(request) do changed[name] = item end
@@ -157,10 +158,10 @@ local function define_tests()
             local request = send_payload(dest_thread, sender_thread, "action-a", WORKSPACE, 1, harness.key(), "m-9", content)
             request.node_id = REMOTE
             local queued = harness.value(sender:call("inbox_send", request))
-            local row = queued.outbox :: Object
+            local row = assert(bounds.object(queued.outbox))
             local claimed = harness.value(sender:call("inbox_outbox_claim", {holder = "pump-1"}))
             test.eq(#claimed.deliveries, 1)
-            local delivery = claimed.deliveries[1] :: Object
+            local delivery = assert(bounds.object(claimed.deliveries[1]))
             test.eq(delivery.node_id, REMOTE)
             test.eq(delivery.target_action_id, "action-b")
             test.eq(delivery.message_id, "m-9")
@@ -184,8 +185,8 @@ local function define_tests()
             local again = harness.value(sender:call("inbox_outbox_claim", {holder = "pump-1"}))
             test.eq(#again.deliveries, 0)
             local status = harness.value(sender:call("inbox_send", request))
-            test.eq(tostring((status.outbox :: Object).state), "delivered")
-            test.eq(tostring(((status.outbox :: Object).receipt :: Object).record_id), record_id)
+            test.eq(tostring((assert(bounds.object(status.outbox))).state), "delivered")
+            test.eq(tostring((assert(bounds.object((assert(bounds.object(status.outbox))).receipt))).record_id), record_id)
             -- Only the row's sender settles it.
             test.eq(harness.code(owner:call("inbox_outbox_settle", {outbox_id = tostring(row.outbox_id), delivered = true})), "NOT_FOUND")
         end)
@@ -271,7 +272,7 @@ local function define_tests()
             local input = send_payload(dest_thread, sender_thread, "remote-action", WORKSPACE, 1, harness.key(), "m-r1", content)
             value(admitted(forwarded("bee.threads.service:inbox_send", input, ALPHA)))
             local page = harness.value(owner:call("inbox_list", {thread_id = dest_thread, action_id = "action-b", after_sequence = 0}))
-            local record_id = tostring((page.items[1] :: Object).record_id)
+            local record_id = tostring((assert(bounds.object(page.items[1]))).record_id)
             -- The destination re-checks the reply correlation and commits the
             -- reply under the authenticated caller node.
             local reply_payload: Object = {thread_id = dest_thread, target_action_id = "action-b", sender_thread_id = sender_thread,
@@ -327,7 +328,7 @@ local function define_tests()
             local page = harness.value(owner:call("read_after", {thread_id = watcher, cursor = 0, limit = 64}))
             local told = 0
             for _, item in ipairs(page.records) do
-                local body = item.body :: Object
+                local body = assert(bounds.object(item.body))
                 if item.kind == "message" and tostring(body.message_id):sub(1, 7) == "notice:" then told = told + 1 end
             end
             test.eq(told, 1)

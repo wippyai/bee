@@ -1,5 +1,6 @@
 -- MIT. Focused tests for the Bee Antigravity CLI (agy) harness child component.
 local test = require("test")
+local principals = require("principals")
 local json = require("json")
 local hash = require("hash")
 local registry = require("registry")
@@ -23,7 +24,7 @@ end
 
 local function quoted_arguments(value: unknown): string?
     if type(value) ~= "table" then return nil end
-    local raw = value :: {unknown}
+    local raw = principals.items(value)
     local arguments: {string} = {}
     for index, argument in ipairs(raw) do
         if type(argument) ~= "string" then return nil end
@@ -585,7 +586,7 @@ local function define_tests()
             protocol.normalize(state, 1, {event = "init", conversation_id = "c1", init = {}})
 
             -- verify tools map is nil / not accumulating
-            test.is_nil((state :: {[string]: unknown}).tools)
+            test.is_nil((assert(bounds.object(state))).tools)
 
             -- Stream delta chunks totaling > the retained answer bound. Every
             -- bounded frame must remain present in observations even though

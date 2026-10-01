@@ -1,5 +1,6 @@
 -- MIT. The universal contract owns shared configure decoding and bounds.
 local test = require("test")
+local bounds = require("bounds")
 local universal = require("universal")
 local codec_registry = require("codec_registry")
 local descriptor = require("descriptor")
@@ -52,11 +53,11 @@ local function define_tests()
             test.eq(legacy_property(protocol, "MAX_ANSWER_BYTES"), protocol.max_answer_bytes())
             local handle = universal.normalize("bee.driver.opencode.descriptor:cli")
             local started = handle({index = 0, envelope = {type = "step_start", sessionID = "ses_universal"}})
-            local reply = started :: {[string]: unknown}
+            local reply = assert(bounds.object(started))
             test.eq(reply.ok, true)
             test.is_true(type(reply.observations) == "table")
-            local ended = handle({state = reply.state, index = 1, eof = true}) :: {[string]: unknown}
-            local terminal = ended.terminal :: {[string]: unknown}
+            local ended = assert(bounds.object(handle({state = reply.state, index = 1, eof = true})))
+            local terminal = assert(bounds.object(ended.terminal))
             test.eq(terminal.outcome, "succeeded")
             test.eq(terminal.resume_ref, "ses_universal")
         end)
@@ -64,13 +65,13 @@ local function define_tests()
         test.it("settles Muse failure and cancellation terminal envelopes", function()
             for _, outcome in ipairs({"failed", "cancelled"}) do
                 local handle = universal.normalize("bee.driver.muse.descriptor:cli")
-                local accepted = handle({index = 1, envelope = {payload_type = "runtime.command.accepted", stream = {id = "muse-session"}, payload = {}}}) :: {[string]: unknown}
-                local started = handle({state = accepted.state, index = 2, envelope = {payload_type = "run.lifecycle.started", payload = {}}}) :: {[string]: unknown}
-                local ended = handle({state = started.state, index = 3, envelope = {payload_type = "run.terminal." .. outcome,
-                    payload = {terminal = outcome, reason = "provider refused"}}}) :: {[string]: unknown}
-                local terminal = ended.terminal :: {[string]: unknown}
+                local accepted = assert(bounds.object(handle({index = 1, envelope = {payload_type = "runtime.command.accepted", stream = {id = "muse-session"}, payload = {}}})))
+                local started = assert(bounds.object(handle({state = accepted.state, index = 2, envelope = {payload_type = "run.lifecycle.started", payload = {}}})))
+                local ended = assert(bounds.object(handle({state = started.state, index = 3, envelope = {payload_type = "run.terminal." .. outcome,
+                    payload = {terminal = outcome, reason = "provider refused"}}})))
+                local terminal = assert(bounds.object(ended.terminal))
                 test.eq(terminal.outcome, outcome)
-                test.eq((terminal.error :: {[string]: unknown}).message, "provider refused")
+                test.eq((assert(bounds.object(terminal.error))).message, "provider refused")
             end
         end)
 
@@ -95,7 +96,7 @@ local function define_tests()
                 usage = {"stats"},
             })
             test.not_nil(protocol)
-            local selected = protocol :: codec_registry.Protocol
+            local selected = protocol
             local state = selected.new(false)
             selected.normalize(state, 0, {type = "thread.started", conversation_key = "thread_selected"})
             selected.normalize(state, 1, {type = "item.completed", item = {type = "agent_message", message = "selected answer"}})

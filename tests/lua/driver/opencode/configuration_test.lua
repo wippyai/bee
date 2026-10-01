@@ -2,6 +2,8 @@
 -- bee remote MCP entry, strict refusal of providers, instructions and hook
 -- events, and deterministic SHA-256 measurement.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local json = require("json")
 local registry = require("registry")
 local configuration = require("configuration")
@@ -18,7 +20,7 @@ local function define_tests()
         test.it("publishes admitted private login config without gateway tools", function()
             local reply = configure.handle({fixture = false, private_home = true})
             test.is_true(reply.ok)
-            local files = (reply.delivery :: {files: {{composition: {kind: string, base_path: string}, path: string}}}).files
+            local files = (reply.delivery).files
             test.eq(#files, 1)
             test.eq(files[1].composition.kind, "copy")
             test.eq(files[1].path, configuration.PATH)
@@ -28,8 +30,8 @@ local function define_tests()
             for _, ref in ipairs({"bee.driver.opencode:launch_policy_opencode_window", "bee.driver.opencode:launch_policy_opencode_batch"}) do
                 local entry, entry_error = registry.get(ref)
                 if not entry then error(tostring(entry_error or (ref .. " is missing"))) end
-                local data = entry.data :: {[string]: unknown}
-                test.eq(#(data.gateway_hooks :: {unknown}), 0)
+                local data = assert(bounds.object(entry.data))
+                test.eq(#(principals.items(data.gateway_hooks)), 0)
                 test.is_nil(data.hook_command_ref)
             end
         end)
@@ -103,14 +105,14 @@ local function define_tests()
                 gateway = {endpoint = "127.0.0.1:4312", action_id = "action-1", tools = {"thread_read"},
                     hooks = {}, token_environment = "BEE_GATEWAY_TOKEN"}})
             test.is_true(reply.ok)
-            local delivery = reply.delivery :: {[string]: unknown}
-            local files = delivery.files :: {{[string]: unknown}}
+            local delivery = assert(bounds.object(reply.delivery))
+            local files = principals.objects(delivery.files)
             test.eq(#files, 1)
             test.eq(files[1].path, ".config/opencode/opencode.json")
-            test.eq(#(delivery.arguments :: {unknown}), 0)
+            test.eq(#(principals.items(delivery.arguments)), 0)
             local empty = configure.handle({fixture = false})
             test.is_true(empty.ok)
-            test.eq(#((empty.delivery :: {[string]: unknown}).files :: {unknown}), 0)
+            test.eq(#(principals.items((assert(bounds.object(empty.delivery))).files)), 0)
         end)
     end)
 end

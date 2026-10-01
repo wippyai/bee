@@ -3,8 +3,8 @@ local M = {}
 
 function M.build_ok(args: unknown): string
     local tag = "default"
-    if type(args) == "table" and type((args :: {[string]: unknown}).tag) == "string" then
-        tag = (args :: {[string]: unknown}).tag :: string
+    if type(args) == "table" and type(args.tag) == "string" then
+        tag = args.tag
     end
     return "Dynamic memory rules from " .. tag
 end

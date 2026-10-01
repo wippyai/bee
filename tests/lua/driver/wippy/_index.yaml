@@ -28,6 +28,8 @@ entries:
   source: file://mock_server.lua
   method: handle
   modules: [http, json]
+  imports: {principals: bee.test.principals:bound, bounds: bee.protocol:bounds}
+
 - name: driver_wippy_test
   kind: function.lua
   source: file://driver_wippy_test.lua
@@ -38,6 +40,8 @@ entries:
     timeout: "60s"
   modules: [system, json, registry, funcs, security, time, events, channel]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     runner: bee.driver.wippy:runner
     client: bee.driver.wippy:client

@@ -47,7 +47,7 @@ local function define_tests()
             local content, content_error = placement_configuration.render(template, {BEE_GATEWAY_TOKEN = secret},
                 {endpoint = selected.endpoint, tools = selected.tools, hooks = {}, destination = selected.token_environment})
             if not content then error(tostring(content_error)) end
-            local actual = json.decode(content) :: {mcpServers: {bee: {headers: {Authorization: string}}}}
+            local actual = json.decode(content)
             test.eq(actual.mcpServers.bee.headers.Authorization, "Bearer " .. secret)
             test.eq(template.content, before)
             test.is_nil((before:find(secret, 1, true)))
@@ -87,7 +87,7 @@ local function define_tests()
             local selected: placement_types.Gateway = {endpoint = "127.0.0.1:4312", tools = {"thread_read"}, hooks = {}, destination = "BEE_GATEWAY_TOKEN"}
             local content, err = placement_configuration.render(decoded, {BEE_GATEWAY_TOKEN = "PRIVATE_FIXTURE_TOKEN"}, selected)
             test.is_nil(content); test.eq(err, "configuration secret target must be an empty string")
-            item.content = '{"auth":""}'; item.digest = assert(hash.sha256(item.content :: string))
+            item.content = '{"auth":""}'; item.digest = assert(hash.sha256(item.content))
             decoded, decode_error = configuration.decode_file(item)
             if not decoded then error(tostring(decode_error)) end
             content, err = placement_configuration.render(decoded, {BEE_GATEWAY_TOKEN = string.rep("x", 8192)}, selected)
@@ -155,8 +155,7 @@ local function define_tests()
             test.eq(output.files[1].path, ".agents/hooks.json")
             local raw, decode_error = json.decode(output.files[1].content)
             if decode_error then error(tostring(decode_error)) end
-            local doc = raw :: {bee: {PreToolUse: {{matcher: string, hooks: {{type: string, command: string}}}},
-                PostToolUse: {{hooks: {{type: string}}}}, Stop: {{type: string, command: string, hooks: unknown}}}}
+            local doc = raw
             test.eq(doc.bee.PreToolUse[1].matcher, "")
             test.eq(doc.bee.PreToolUse[1].hooks[1].type, "command")
             test.eq(doc.bee.PostToolUse[1].hooks[1].type, "command")

@@ -24,28 +24,40 @@ entries:
   source: file://fixture_builder.lua
   method: build_ok
   meta: {type: test_support}
+  imports: {bounds: bee.protocol:bounds}
+
 - name: fixture_builder_bad_output
   kind: function.lua
   source: file://fixture_builder.lua
   method: build_bad_output
   meta: {type: test_support}
+  imports: {bounds: bee.protocol:bounds}
+
 - name: fixture_builder_control_chars
   kind: function.lua
   source: file://fixture_builder.lua
   method: build_control_chars
   meta: {type: test_support}
+  imports: {bounds: bee.protocol:bounds}
+
 - name: fixture_builder_oversized
   kind: function.lua
   source: file://fixture_builder.lua
   method: build_oversized
   meta: {type: test_support}
+  imports: {bounds: bee.protocol:bounds}
+
 - name: fixture_builder_error
   kind: function.lua
   source: file://fixture_builder.lua
   method: build_error
   meta: {type: test_support}
+  imports: {bounds: bee.protocol:bounds}
+
 - name: fixture_builder_empty
   kind: function.lua
   source: file://fixture_builder.lua
   method: build_empty
   meta: {type: test_support}
+
+  imports: {bounds: bee.protocol:bounds}

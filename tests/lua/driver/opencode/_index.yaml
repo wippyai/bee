@@ -19,6 +19,8 @@ entries:
   meta: {type: test, suite: bee}
   modules: [json]
   imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     registry: registry
     configuration: bee.driver.opencode:configuration
@@ -33,6 +35,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [fs]
   imports:
+    bounds: bee.protocol:bounds
     test: wippy.test:test
     protocol: bee.driver.opencode:protocol
     normalize: bee.driver.opencode.binding:normalize

@@ -2,6 +2,7 @@
 -- auto-started turn/session state, thought reasoning, text accumulation,
 -- tool calls and updates, terminal end events, and EOF fallback.
 local test = require("test")
+local bounds = require("bounds")
 local protocol = require("protocol")
 local normalize = require("normalize")
 
@@ -25,18 +26,18 @@ local function define_tests()
 
             -- First observation: session.state
             test.eq(step1.observations[1].type, "session.state")
-            local sess_data = step1.observations[1].data :: {[string]: unknown}
+            local sess_data = assert(bounds.object(step1.observations[1].data))
             test.eq(sess_data.state, "started")
             test.eq(sess_data.resume_ref, "session-abc")
 
             -- Second observation: turn.signal started
             test.eq(step1.observations[2].type, "turn.signal")
-            local turn_data = step1.observations[2].data :: {[string]: unknown}
+            local turn_data = assert(bounds.object(step1.observations[2].data))
             test.eq(turn_data.phase, "started")
 
             -- Third observation: text reasoning
             test.eq(step1.observations[3].type, "text")
-            local text_data = step1.observations[3].data :: {[string]: unknown}
+            local text_data = assert(bounds.object(step1.observations[3].data))
             test.eq(text_data.channel, "reasoning_summary")
             test.eq(text_data.segment_id, "reasoning")
             test.eq(text_data.operation, "append")
@@ -54,7 +55,7 @@ local function define_tests()
 
             local step = protocol.normalize(state, 1, {type = "text", data = "hello", sessionId = "sess-2"})
             test.is_true(state.started)
-            local sess_data = step.observations[1].data :: {[string]: unknown}
+            local sess_data = assert(bounds.object(step.observations[1].data))
             test.eq(sess_data.state, "resumed")
         end)
 
@@ -77,11 +78,11 @@ local function define_tests()
             -- First envelope auto-starts (3 observations total)
             local tool_call = call_step.observations[3]
             test.eq(tool_call.type, "tool.call")
-            local call_data = tool_call.data :: {[string]: unknown}
+            local call_data = assert(bounds.object(tool_call.data))
             test.eq(call_data.call_id, "call-001")
             test.eq(call_data.tool_name, "bee__read_file")
-            local input_content = call_data.input :: {[string]: unknown}
-            test.is_true((input_content.text :: string):find("config.json", 1, true) ~= nil)
+            local input_content = assert(bounds.object(call_data.input))
+            test.is_true((input_content.text):find("config.json", 1, true) ~= nil)
 
             -- Successful tool result
             local update_ok = protocol.normalize(state, 2, {
@@ -93,10 +94,10 @@ local function define_tests()
             test.eq(#update_ok.observations, 1)
             local res_ok = update_ok.observations[1]
             test.eq(res_ok.type, "tool.result")
-            local ok_data = res_ok.data :: {[string]: unknown}
+            local ok_data = assert(bounds.object(res_ok.data))
             test.eq(ok_data.call_id, "call-001")
             test.eq(ok_data.outcome, "succeeded")
-            local ok_content = ok_data.output :: {[string]: unknown}
+            local ok_content = assert(bounds.object(ok_data.output))
             test.eq(ok_content.text, "content of config")
             test.is_nil(ok_data.error)
 
@@ -110,10 +111,10 @@ local function define_tests()
             test.eq(#update_fail.observations, 1)
             local res_fail = update_fail.observations[1]
             test.eq(res_fail.type, "tool.result")
-            local fail_data = res_fail.data :: {[string]: unknown}
+            local fail_data = assert(bounds.object(res_fail.data))
             test.eq(fail_data.outcome, "failed")
             test.not_nil(fail_data.error)
-            local fault = fail_data.error :: {[string]: unknown}
+            local fault = assert(bounds.object(fail_data.error))
             test.eq(fault.code, "tool_error")
             test.eq(fault.message, "permission denied")
 
@@ -126,7 +127,7 @@ local function define_tests()
             })
             test.eq(#update_running.observations, 1)
             test.eq(update_running.observations[1].type, "extension")
-            local running_data = update_running.observations[1].data :: {[string]: unknown}
+            local running_data = assert(bounds.object(update_running.observations[1].data))
             test.eq(running_data.event_name, "grok.tool_call_update")
         end)
 
@@ -151,7 +152,7 @@ local function define_tests()
             })
             test.eq(#cmd_step.observations, 1)
             test.eq(cmd_step.observations[1].type, "extension")
-            local cmd_data = cmd_step.observations[1].data :: {[string]: unknown}
+            local cmd_data = assert(bounds.object(cmd_step.observations[1].data))
             test.eq(cmd_data.event_name, "grok.available_commands")
 
             -- Plan extension
@@ -161,7 +162,7 @@ local function define_tests()
             })
             test.eq(#plan_step.observations, 1)
             test.eq(plan_step.observations[1].type, "extension")
-            local plan_data = plan_step.observations[1].data :: {[string]: unknown}
+            local plan_data = assert(bounds.object(plan_step.observations[1].data))
             test.eq(plan_data.event_name, "grok.plan")
 
             -- Error notice
@@ -171,9 +172,9 @@ local function define_tests()
             })
             test.eq(#err_step.observations, 1)
             test.eq(err_step.observations[1].type, "notice")
-            local err_data = err_step.observations[1].data :: {[string]: unknown}
+            local err_data = assert(bounds.object(err_step.observations[1].data))
             test.eq(err_data.code, "provider_error")
-            local notice_content = err_data.content :: {[string]: unknown}
+            local notice_content = assert(bounds.object(err_data.content))
             test.eq(notice_content.text, "Rate limit reached. Try again later.")
         end)
 
@@ -197,7 +198,7 @@ local function define_tests()
             -- Verify turn ended observation was emitted
             local turn_obs = end_step.observations[1]
             test.eq(turn_obs.type, "turn.signal")
-            local turn_data = turn_obs.data :: {[string]: unknown}
+            local turn_data = assert(bounds.object(turn_obs.data))
             test.eq(turn_data.phase, "ended")
             test.eq(turn_data.reported_outcome, "succeeded")
 
@@ -206,7 +207,7 @@ local function define_tests()
             test.is_nil(after_step.terminal)
             test.eq(#after_step.observations, 1)
             test.eq(after_step.observations[1].type, "notice")
-            local after_data = after_step.observations[1].data :: {[string]: unknown}
+            local after_data = assert(bounds.object(after_step.observations[1].data))
             test.eq(after_data.code, "after_terminal")
 
             -- Finish after terminal is a quiet no-op
@@ -264,7 +265,7 @@ local function define_tests()
 
             local turn_obs = finish_step.observations[1]
             test.eq(turn_obs.type, "turn.signal")
-            local turn_data = turn_obs.data :: {[string]: unknown}
+            local turn_data = assert(bounds.object(turn_obs.data))
             test.eq(turn_data.phase, "ended")
             test.eq(turn_data.reported_outcome, "uncertain")
         end)
@@ -284,7 +285,7 @@ local function define_tests()
             local changed = protocol.normalize(state, 2, {type = "text", data = " second", sessionId = "sess-other"})
             test.eq(state.session_id, "sess-original")
             test.eq(changed.observations[1].type, "notice")
-            local notice = changed.observations[1].data :: {[string]: unknown}
+            local notice = assert(bounds.object(changed.observations[1].data))
             test.eq(notice.code, "session_mismatch")
 
             protocol.normalize(state, 3, {type = "text", data = string.rep("x", protocol.max_answer_bytes())})

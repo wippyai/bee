@@ -1,3 +1,5 @@
+local principals = require("principals")
+local bounds = require("bounds")
 -- MIT. Mock OpenAI-compatible chat completions server for native Wippy driver testing.
 local http = require("http")
 local json = require("json")
@@ -16,15 +18,15 @@ local function handle(): nil
         return nil
     end
 
-    local payload = body :: {[string]: unknown}
-    local messages = (type(payload.messages) == "table" and payload.messages or {}) :: {{[string]: unknown}}
+    local payload = assert(bounds.object(body))
+    local messages = principals.objects((type(payload.messages) == "table" and payload.messages or {}))
     local is_stream = payload.stream == true
 
     local function user_prompt_of(): string
         local prompt = ""
         for _, msg in ipairs(messages) do
             if msg.role == "user" and type(msg.content) == "string" then
-                prompt = msg.content :: string
+                prompt = msg.content
             end
         end
         return prompt
@@ -175,7 +177,7 @@ local function handle(): nil
     local user_prompt = ""
     for _, msg in ipairs(messages) do
         if msg.role == "user" and type(msg.content) == "string" then
-            user_prompt = msg.content :: string
+            user_prompt = msg.content
         end
     end
 

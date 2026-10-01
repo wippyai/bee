@@ -5,6 +5,8 @@
 -- 3. Cancellation receipts and terminal state
 -- 4. Restart, checkpoint continuation and epoch fencing
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local system = require("system")
 local json = require("json")
 local registry = require("registry")
@@ -16,7 +18,7 @@ local channel = require("channel")
 local time = require("time")
 
 type Object = {[string]: unknown}
-type Reply = {ok: boolean, error: {code: string, message: string, retryable: boolean}?, value: any}
+type Reply = {ok: boolean, error: {code: string, message: string, retryable: boolean}?, value: unknown}
 type InboxInvoker = (string, Object) -> (unknown, string?)
 local WORKSPACE_ID = string.rep("a", 32)
 
@@ -57,7 +59,7 @@ local function get_mock_url(): string
         end
         local raw_event = selected.value
         if type(raw_event) == "table" then
-            local event = raw_event :: Object
+            local event = assert(bounds.object(raw_event))
             if event.system == "supervisor" and event.kind == "service.update" and event.path == reference then
                 state, state_error = system.supervisor.state(reference)
                 if state_error or not state then
@@ -100,7 +102,7 @@ local function raw_call(target: string, req: Object): Object
     local reply, err = caller:call(target, request)
     if err then error("call " .. target .. ": " .. tostring(err)) end
     if type(reply) ~= "table" then error(target .. " returned " .. type(reply)) end
-    return reply :: Object
+    return assert(bounds.object(reply))
 end
 
 local function one_chunk(value: string): (integer) -> (string?, string?)
@@ -139,7 +141,7 @@ local function driver_call(operation: string, req: Object): Object
     for k, v in pairs(req) do payload[k] = v end
     payload.operation = operation
     local rep = raw_call("bee.driver.wippy:run", payload)
-    if not rep.ok and (not rep.value or (rep.value :: Object).outcome ~= "cancelled") then
+    if not rep.ok and (not rep.value or (assert(bounds.object(rep.value))).outcome ~= "cancelled") then
         error("driver_call " .. operation .. " failed: " .. json.encode(rep))
     end
     return rep
@@ -303,11 +305,11 @@ end
         end
 
         local function has_attempt_event(thread_id: string, prefix: string): boolean
-            local page = harness.value(carrier_client:call("read_after", {thread_id = thread_id, cursor = 0})) :: Object
-            for _, record in ipairs(page.records :: {Object}) do
+            local page = assert(bounds.object(harness.value(carrier_client:call("read_after", {thread_id = thread_id, cursor = 0}))))
+            for _, record in ipairs(principals.objects(page.records)) do
                 local body = record.body
                 if type(body) == "table" then
-                    local event_key = (body :: Object).event_key
+                    local event_key = (assert(bounds.object(body))).event_key
                     if type(event_key) == "string" and event_key:find(prefix, 1, true) then return true end
                 end
             end
@@ -335,7 +337,7 @@ end
             })
 
             test.is_true(res.ok)
-            local val = res.value :: Object
+            local val = assert(bounds.object(res.value))
             test.eq(val.outcome, "succeeded")
             test.eq(val.state, "ended")
             test.not_nil(val.answer)
@@ -343,23 +345,23 @@ end
             test.is_true(tostring(val.answer):find("nonstream-review-done", 1, true) ~= nil)
 
             -- Verify receipt
-            local receipt = val.receipt :: Object
+            local receipt = assert(bounds.object(val.receipt))
             test.not_nil(receipt)
             test.eq(receipt.scope, "attempt")
             test.eq(receipt.state, "ended")
 
             -- Verify carrier events recorded tool calls
-            local page = harness.value(carrier_client:call("read_after", {
+            local page = assert(bounds.object(harness.value(carrier_client:call("read_after", {
                 thread_id = thread_id,
                 cursor = 0,
-            })) :: Object
-            local records = page.records :: {Object}
+            }))))
+            local records = principals.objects(page.records)
             test.is_true(#records > 0)
 
             local found_tool_call = false
             local found_tool_result = false
             for _, rec in ipairs(records) do
-                local body = rec.body :: Object
+                local body = assert(bounds.object(rec.body))
                 if body and type(body.event_key) == "string" then
                     if tostring(body.event_key):find("tool_call:att-tc-1:1:call_tc_1", 1, true) then
                         found_tool_call = true
@@ -395,7 +397,7 @@ end
             })
 
             test.is_true(res.ok)
-            local val = res.value :: Object
+            local val = assert(bounds.object(res.value))
             test.eq(val.outcome, "succeeded")
             test.eq(val.state, "ended")
             test.not_nil(val.answer)
@@ -427,7 +429,7 @@ end
             })
 
             test.is_true(res.ok)
-            local val = res.value :: Object
+            local val = assert(bounds.object(res.value))
             test.eq(val.outcome, "succeeded")
             test.eq(val.state, "ended")
             test.eq(val.answer, "Streamed answer success!")
@@ -452,7 +454,7 @@ end
             })
 
             test.is_true(res2.ok)
-            local val2 = res2.value :: Object
+            local val2 = assert(bounds.object(res2.value))
             test.eq(val2.outcome, "succeeded")
             test.eq(val2.state, "ended")
             test.not_nil(val2.answer)
@@ -509,7 +511,7 @@ end
                 host_config = {endpoint = get_mock_url(), stream = true},
             })
             test.is_false(res.ok)
-            test.eq((res.value :: Object).outcome, "failed")
+            test.eq((assert(bounds.object(res.value))).outcome, "failed")
             test.is_false(has_attempt_event(thread_id, "tool_call:" .. attempt_id .. ":"))
             test.is_false(has_attempt_event(thread_id, "tool_result:" .. attempt_id .. ":"))
         end)
@@ -524,8 +526,8 @@ end
                 host_config = {endpoint = get_mock_url(), stream = false},
             })
             test.is_false(res.ok)
-            test.eq((res.value :: Object).outcome, "failed")
-            test.is_true(tostring((res.error :: Object).message):find("prospective tool checkpoint", 1, true) ~= nil)
+            test.eq((assert(bounds.object(res.value))).outcome, "failed")
+            test.is_true(tostring((assert(bounds.object(res.error))).message):find("prospective tool checkpoint", 1, true) ~= nil)
             test.is_false(has_attempt_event(thread_id, "tool_call:" .. attempt_id .. ":"))
             test.is_false(has_attempt_event(thread_id, "tool_result:" .. attempt_id .. ":"))
         end)
@@ -613,7 +615,7 @@ end
                 attempt_id = attempt_id,
             })
             test.is_true(can_res.ok)
-            local can_val = can_res.value :: Object
+            local can_val = assert(bounds.object(can_res.value))
             test.eq(can_val.state, "cancelling")
             test.eq(can_val.scope, "attempt")
 
@@ -623,7 +625,7 @@ end
                 attempt_id = attempt_id,
             })
             test.is_true(st_res.ok)
-            local st_val = st_res.value :: Object
+            local st_val = assert(bounds.object(st_res.value))
             test.eq(st_val.scope, "attempt")
             test.is_true(st_val.state == "cancelling" or st_val.state == "ended")
 
@@ -643,7 +645,7 @@ end
             })
 
             -- Result is cancelled
-            local r_val = run_res.value :: Object
+            local r_val = assert(bounds.object(run_res.value))
             test.eq(r_val.outcome, "cancelled")
             test.eq(r_val.state, "ended")
         end)
@@ -666,7 +668,7 @@ end
                 host_config = {endpoint = url, stream = false},
             })
             test.is_true(res1.ok)
-            local val1 = res1.value :: Object
+            local val1 = assert(bounds.object(res1.value))
             test.eq(val1.outcome, "succeeded")
             test.eq(val1.state, "ended")
 
@@ -684,16 +686,16 @@ end
                 host_config = {endpoint = url, stream = false},
             })
             test.is_true(res2.ok)
-            local val2 = res2.value :: Object
+            local val2 = assert(bounds.object(res2.value))
             test.eq(val2.outcome, "succeeded")
             test.eq(val2.state, "ended")
 
             -- Check that carrier checkpoint advanced and records are preserved across attempts
-            local page = harness.value(carrier_client:call("read_after", {
+            local page = assert(bounds.object(harness.value(carrier_client:call("read_after", {
                 thread_id = thread_id,
                 cursor = 0,
-            })) :: Object
-            local records = page.records :: {Object}
+            }))))
+            local records = principals.objects(page.records)
             test.is_true(#records >= 2) -- at least answer from turn 1 and turn 2
         end)
 
@@ -713,7 +715,7 @@ end
                 host_config = {endpoint = url, stream = false},
             })
             test.is_true(res.ok)
-            local val = res.value :: Object
+            local val = assert(bounds.object(res.value))
             test.eq(val.outcome, "succeeded")
             test.eq(val.state, "ended")
             test.eq(val.answer, "long-run-completed")
@@ -737,9 +739,9 @@ end
                 host_config = {endpoint = url, stream = false},
             })
             test.is_false(res.ok)
-            local val = res.value :: Object
+            local val = assert(bounds.object(res.value))
             test.eq(val.outcome, "failed")
-            local rep_err = res.error :: Object
+            local rep_err = assert(bounds.object(res.error))
             test.is_true(tostring(rep_err.message):find("tool_calls", 1, true) ~= nil)
         end)
 
@@ -761,9 +763,9 @@ end
                 host_config = {endpoint = url, stream = false},
             })
             test.is_false(res.ok)
-            local val = res.value :: Object
+            local val = assert(bounds.object(res.value))
             test.eq(val.outcome, "failed")
-            test.is_true(tostring((res.error :: Object).message):find("carrier epoch moved", 1, true) ~= nil)
+            test.is_true(tostring((assert(bounds.object(res.error))).message):find("carrier epoch moved", 1, true) ~= nil)
         end)
 
         test.it("refuses invalid host configuration with typed errors", function()
@@ -783,7 +785,7 @@ end
                 host_config = {endpoint = "http://example.com/v1", stream = false},
             })
             test.is_false(plain.ok)
-            test.is_true(tostring((plain.error :: Object).message):find("plain http", 1, true) ~= nil)
+            test.is_true(tostring((assert(bounds.object(plain.error))).message):find("plain http", 1, true) ~= nil)
 
             local cred = raw_call("bee.driver.wippy:run", {
                 operation = "run",
@@ -796,7 +798,7 @@ end
                     credential_ref = "bee.driver.wippy.test:missing_cred"},
             })
             test.is_false(cred.ok)
-            test.is_true(tostring((cred.error :: Object).message):find("resolve credential", 1, true) ~= nil)
+            test.is_true(tostring((assert(bounds.object(cred.error))).message):find("resolve credential", 1, true) ~= nil)
 
             local unknown = raw_call("bee.driver.wippy:run", {
                 operation = "run",
@@ -808,17 +810,17 @@ end
                 host_config = {endpoint = url, stream = false, bogus_field = 1},
             })
             test.is_false(unknown.ok)
-            test.is_true(tostring((unknown.error :: Object).message):find("unknown field", 1, true) ~= nil)
+            test.is_true(tostring((assert(bounds.object(unknown.error))).message):find("unknown field", 1, true) ~= nil)
         end)
 
         test.it("validates run, status, wait and cancel requests", function()
             local url = get_mock_url()
-            test.eq((raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t"}).error :: Object).code, "INVALID")
-            test.eq((raw_call("bee.driver.wippy:run", {operation = "bogus"}).error :: Object).code, "INVALID")
-            test.eq((raw_call("bee.driver.wippy:run", {operation = "wait", thread_id = "t", attempt_id = "a", wait_ms = -1}).error :: Object).code, "INVALID")
-            test.eq((raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t", action_id = "a", attempt_id = "b", workspace_id = 42}).error :: Object).code, "INVALID")
-            test.eq((raw_call("bee.driver.wippy:run", {operation = "status", thread_id = "t", attempt_id = "a", workspace_id = "extra"}).error :: Object).code, "INVALID")
-            test.eq((raw_call("bee.driver.wippy:run", {operation = "cancel", thread_id = "t", attempt_id = "a", wait_ms = "soon"}).error :: Object).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t"}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "bogus"}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "wait", thread_id = "t", attempt_id = "a", wait_ms = -1}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "run", thread_id = "t", action_id = "a", attempt_id = "b", workspace_id = 42}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "status", thread_id = "t", attempt_id = "a", workspace_id = "extra"}).error))).code, "INVALID")
+            test.eq((assert(bounds.object(raw_call("bee.driver.wippy:run", {operation = "cancel", thread_id = "t", attempt_id = "a", wait_ms = "soon"}).error))).code, "INVALID")
 
             local thread_id = new_thread("Validate Thread")
             local action_id = "act-val-1"
@@ -833,16 +835,16 @@ end
                 brief = "Just checking status flow",
                 host_config = {endpoint = url, stream = false},
             })
-            local val = res.value :: Object
+            local val = assert(bounds.object(res.value))
             test.eq(val.answer, "Standard answer: Just checking status flow")
 
             local st = driver_call("status", {thread_id = thread_id, attempt_id = attempt_id})
-            local st_val = st.value :: Object
+            local st_val = assert(bounds.object(st.value))
             test.eq(st_val.state, "ended")
             test.eq(st_val.answer, "Standard answer: Just checking status flow")
 
             local waited = driver_call("wait", {thread_id = thread_id, attempt_id = attempt_id, wait_ms = 50})
-            test.eq((waited.value :: Object).state, "ended")
+            test.eq((assert(bounds.object(waited.value))).state, "ended")
         end)
 
         test.it("resolves credentials by reference and never sends the reference as the key", function()
@@ -870,7 +872,7 @@ end
                     credential_ref = "bee.driver.wippy.test:api_key"},
             })
             test.is_true(res.ok)
-            test.eq((res.value :: Object).outcome, "succeeded")
+            test.eq((assert(bounds.object(res.value))).outcome, "succeeded")
         end)
 
         test.it("denies tool execution when a declared scope is not admitted", function()
@@ -878,7 +880,7 @@ end
                 {ref = "bee.driver.wippy.test:test_tool", scopes = {"bee.driver.wippy.test:missing_policy"}},
                 {}, "att-scope-1", "default")
             test.is_false(ok_exec)
-            test.eq((denied :: Object).code, "DENIED")
+            test.eq((assert(bounds.object(denied))).code, "DENIED")
         end)
 
         test.it("refuses unproven trait capabilities but admits memory on the native route", function()
@@ -923,7 +925,7 @@ end
             local normalized = raw_call("bee.driver.wippy.binding:normalize", {index = 0,
                 envelope = {observations = {{source = "bee", body = {type = "note"}}}}})
             test.is_true(normalized.ok)
-            test.eq(#(normalized.observations :: {Object}), 1)
+            test.eq(#(principals.objects(normalized.observations)), 1)
 
             local finished = raw_call("bee.driver.wippy.binding:normalize", {index = 1, eof = true})
             test.is_true(finished.ok)
@@ -939,9 +941,9 @@ end
 
             local configured = raw_call("bee.driver.wippy.binding:configure", {fixture = false})
             test.is_true(configured.ok)
-            local delivery = configured.delivery :: Object
-            test.eq(#(delivery.arguments :: {unknown}), 0)
-            test.eq(#(delivery.files :: {unknown}), 0)
+            local delivery = assert(bounds.object(configured.delivery))
+            test.eq(#(principals.items(delivery.arguments)), 0)
+            test.eq(#(principals.items(delivery.files)), 0)
 
             local provided = raw_call("bee.driver.wippy.binding:configure", {fixture = false, provider_ref = "bee:gateway_endpoint"})
             test.is_false(provided.ok)

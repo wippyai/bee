@@ -10,6 +10,10 @@ local caller = require("caller")
 local folder_picker = require("folder_picker")
 local editor = require("editor")
 local forms = require("forms")
+local canonical = require("canonical")
+local json = require("json")
+local budget_values = require("budget_values")
+local bounds = require("bounds")
 local M = {}
 M.THREADS = "bee.threads.service:list"
 M.THREAD_PAGE = 64
@@ -18,7 +22,7 @@ type Field = {kind: string, name: string, label: string, option_kind: string?, m
 -- A thread row; thread_id nil is the new thread the launch opens.
 type ThreadRow = {thread_id: string?, title: string}
 type Threads = {items: {ThreadRow}, selected: integer, error: string?}
-type State = {form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
+type State = {settings: {[string]: string}, form: forms.Form, title: string, guidance: string, option_text: {[string]: string}, selected: integer,
     status: string, confirming_remove: boolean, confirming_revoke: boolean?, ask: Ask, browsing: folder_picker.Picker?, threads: Threads?,
     thread_titles: {[string]: string}, list_offset: integer, advanced: boolean}
 type Frame = {rows: {string}, hits: {frame.Hit}, controls: frame.Controls?}
@@ -31,8 +35,12 @@ function M.new(form: forms.Form, ask: Ask): State
             option_text[option.name] = type(option.value) == "string" and option.value or ""
         end
     end
-    return {form = form, title = form.draft.title, guidance = form.draft.instructions,
-        option_text = option_text, selected = 1, status = "", confirming_remove = false, confirming_revoke = false, ask = ask,
+    local placement = form.draft.placement
+    local settings: {[string]: string} = {budgets = form.draft.budgets and (canonical.encode(form.draft.budgets) or "") or "",
+        supervision = form.draft.supervision and (canonical.encode(form.draft.supervision) or "") or "",
+        docker = placement and placement.kind == "docker" and placement.overrides and (canonical.encode(placement.overrides) or "") or ""}
+    return {settings = settings, form = form, title = form.draft.name, guidance = (form.draft.provider.system_prompt_append or ""),
+        option_text = option_text, selected = 1, status = form.migration_diagnostic and "Migration needs repair before launch. Original values are retained." or "", confirming_remove = false, confirming_revoke = false, ask = ask,
         browsing = nil, threads = nil, thread_titles = {}, list_offset = 0, advanced = false}
 end
 local function folder_label(state: State): string
@@ -62,23 +70,46 @@ end
 local function fields(state: State): {Field}
     local result: {Field} = {{kind = "title", name = "", label = "Name"}}
     if state.form.draft._allowed.workdir then result[#result + 1] = {kind = "workdir", name = "", label = folder_label(state)} end
-    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Placement: " .. (state.form.draft.placement_profile_ref or "bee.placement:native")} end
+    if #(state.form.draft._allowed.placements or {}) > 1 then result[#result + 1] = {kind = "placement", name = "", label = "Placement: " .. (editor.placement_ref(state.form.draft) or "bee.placement:native")} end
     local options = editor.options(state.form.draft)
+    local metadata = state.form.fields or {}
+    table.sort(options or {}, function(a: {name: string}, b: {name: string}): boolean
+        local x, y = metadata[a.name], metadata[b.name]
+        local first, second = x and x.order or 0, y and y.order or 0
+        if first ~= second then return first < second end
+        return a.name < b.name
+    end)
     for _, option in ipairs(options or {}) do
-        if option.name == "model" then
+        if (metadata[option.name] and metadata[option.name].section == "basic") or (not metadata[option.name] and (option.name == "model" or option.name == "effort")) then
             result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
-                max_bytes = option.max_bytes, label = "Model: " .. (option.value == nil and "Default" or tostring(option.value))}
+                max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
         end
     end
+    result[#result + 1] = {kind = "presentation", name = "", label = "Presentation: " .. (state.form.draft.presentation or "Default")}
+    if state.form.repair_json then result[#result + 1] = {kind = "repair", name = "", label = "Migration repair"} end
     if state.advanced then
+        local placement = state.form.draft.placement
+        if not placement or placement.kind == "native" then result[#result + 1] = {kind = "home", name = "", label = "Native home: " .. (placement and placement.home or "Definition default")} end
+        if state.form.migration_diagnostic then
+            local reasons = bounds.ids(state.form.migration_diagnostic.reasons, true) or {}
+            for _, reason in ipairs(reasons) do result[#result + 1] = {kind = "info", name = "", label = reason} end
+            result[#result + 1] = {kind = "info", name = "", label = "Original: " .. (canonical.encode(state.form.migration_diagnostic.source) or "Unavailable")}
+        end
+        result[#result + 1] = {kind = "answers", name = "", label = "Permission answers: " .. (state.form.draft.bee.permission_answers or "provider")}
         if state.form.draft._allowed.instructions then result[#result + 1] = {kind = "guidance", name = "", label = "Instructions"} end
         if state.form.draft._allowed.thread then result[#result + 1] = {kind = "thread", name = "", label = thread_label(state)} end
         for _, option in ipairs(options or {}) do
-            if option.name ~= "model" then
+            if (metadata[option.name] and metadata[option.name].section == "advanced") or (not metadata[option.name] and option.name ~= "model" and option.name ~= "effort") then
                 result[#result + 1] = {kind = "option", name = option.name, option_kind = option.kind,
-                    max_bytes = option.max_bytes, label = human(option.name) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
+                    max_bytes = option.max_bytes, label = (metadata[option.name] and metadata[option.name].label or human(option.name)) .. ": " .. (option.value == nil and "Default" or tostring(option.value))}
             end
         end
+        result[#result + 1] = {kind = "settings", name = "budgets", label = "Budgets (turn/session JSON)"}
+        result[#result + 1] = {kind = "settings", name = "supervision", label = "Supervision (JSON)"}
+        if state.form.draft.placement and state.form.draft.placement.kind == "docker" then
+            result[#result + 1] = {kind = "settings", name = "docker", label = "Docker overrides (JSON)"}
+        end
+        for index, reason in ipairs(state.form.unsupported or {}) do result[#result + 1] = {kind = "unsupported", name = tostring(index), label = reason} end
         for _, tool in ipairs(editor.tools(state.form.draft) or {}) do
             result[#result + 1] = {kind = "tool", name = tool.name,
                 label = (tool.selected and "[x] " or "[ ] ") .. (TOOL_NAMES[tool.name] or human(tool.name))}
@@ -99,7 +130,7 @@ function M.action(state: State, action: string): string?
     if action == "advanced" and not state.form.pending then
         state.advanced = not state.advanced; state.selected = 1; return nil
     end
-    if action == "revoke_docker" and state.form.draft.placement_profile_ref == "bee.placement.docker:coding" then
+    if action == "revoke_docker" and state.advanced and (state.form.draft.placement and state.form.draft.placement.kind == "docker") then
         state.confirming_revoke = true
         state.status = "Revoke Docker network and gateway access? Enter confirms; Esc keeps it."
         return nil
@@ -115,6 +146,7 @@ function M.action(state: State, action: string): string?
         state.confirming_remove = true
         return nil
     end
+    if action == "copy" or action == "reload" then return action end
     if action == "save" then
         if state.confirming_remove then return nil end
         if state.form.pending then return state.form.pending end
@@ -125,6 +157,30 @@ function M.action(state: State, action: string): string?
         for name, value in pairs(state.option_text) do
             local changed, option_error = editor.set_text_option(state.form.draft, name, value)
             if not changed then state.status = option_error or "Invalid option"; return nil end
+        end
+        for name, text in pairs(state.settings) do
+            local value: unknown = nil
+            if text ~= "" then
+                local decoded, err = json.decode(text)
+                if err then state.status = name .. " requires valid JSON"; return nil end
+                value = decoded
+            end
+            if name == "budgets" then
+                local checked, err = budget_values.budgets(value)
+                if err then state.status = err; return nil end
+                state.form.draft.budgets = checked
+            elseif name == "supervision" then
+                local checked, err = budget_values.supervision(value)
+                if err then state.status = err; return nil end
+                state.form.draft.supervision = checked
+            elseif name == "docker" then
+                local placement = state.form.draft.placement
+                if placement and placement.kind == "docker" then
+                    local overrides = bounds.object(value)
+                    if value ~= nil and not overrides then state.status = "Docker overrides require an object"; return nil end
+                    placement.overrides = overrides
+                end
+            end
         end
         return "save"
     end
@@ -233,7 +289,7 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         if state.confirming_revoke then
             if event.key_type == "enter" then
                 local reply = state.ask("bee.placement.docker.binding:prepare_environment", {workspace_id = state.form.workspace_id,
-                    placement_profile_ref = state.form.draft.placement_profile_ref, revoke = true})
+                    placement_profile_ref = editor.placement_ref(state.form.draft), revoke = true})
                 state.status = reply.ok and "Docker network and gateway access revoked" or reply.error and reply.error.message or "Revocation did not answer"
                 state.confirming_revoke = false
             end
@@ -255,28 +311,34 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
     end
     if state.form.pending or state.confirming_remove then return nil end
     local field = listed[state.selected]
-    if not field then return nil end
+    if not field or field.kind == "unsupported" or field.kind == "info" then return nil end
     if field.kind == "workdir" or field.kind == "thread" then
         if event.type == "key" and event.action == "press" and (event.key_type == "enter" or event.key_type == "space" or event.key == " ") then
             if field.kind == "workdir" then browse(state) else choose_thread(state) end
         end
         return nil
     end
-    if field.kind == "placement" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
+    if field.kind == "home" or field.kind == "presentation" or field.kind == "answers" or field.kind == "placement" or field.kind == "tool" or (field.kind == "option" and field.option_kind == "enum") then
         if event.type == "key" and event.action == "press" and
             (event.key_type == "enter" or event.key_type == "space" or event.key == " " or event.key_type == "left" or event.key_type == "right") then
             local ok: boolean = false
             local err: string? = nil
-            if field.kind == "placement" then ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
+            if field.kind == "home" then ok, err = editor.cycle_home(state.form.draft)
+            elseif field.kind == "presentation" then
+                state.form.draft.presentation = state.form.draft.presentation == "window" and "headless" or "window"; ok = true
+            elseif field.kind == "answers" then
+                local current = state.form.draft.bee.permission_answers
+                state.form.draft.bee.permission_answers = current == "provider" and "ask" or current == "ask" and "deny" or "provider"; ok = true
+            elseif field.kind == "placement" then ok, err = editor.cycle_placement(state.form.draft, event.key_type == "left" and -1 or 1)
             elseif field.kind == "tool" then ok, err = editor.toggle_tool(state.form.draft, field.name)
             else ok, err = editor.cycle_option(state.form.draft, field.name, event.key_type == "left" and -1 or 1) end
             state.status = ok and "" or (err or "Option is unavailable")
         end
         return nil
     end
-    local value = field.kind == "title" and state.title
+    local value = field.kind == "settings" and (state.settings[field.name] or "") or field.kind == "repair" and (state.form.repair_json or "") or field.kind == "title" and state.title
         or (field.kind == "option" and (state.option_text[field.name] or "") or state.guidance)
-    local limit = field.kind == "title" and editor.MAX_TITLE_BYTES
+    local limit = field.kind == "settings" and 8192 or field.kind == "repair" and 65536 or field.kind == "title" and editor.MAX_TITLE_BYTES
         or (field.kind == "option" and (field.max_bytes or editor.MAX_INSTRUCTIONS_BYTES) or editor.MAX_INSTRUCTIONS_BYTES)
     if event.type == "paste" then value = value .. event.text
     elseif event.type == "key" and event.action == "press" then
@@ -287,14 +349,16 @@ function M.input(state: State, event: tty.TTYEvent, drawn: Frame): string?
         elseif not event.ctrl and not event.alt and event.key ~= "" and not event.key:find("%c") then value = value .. event.key end
     end
     if #value > limit then state.status = "Text exceeds " .. tostring(limit) .. " bytes"; return nil end
-    if field.kind == "title" then state.title = value
+    if field.kind == "settings" then state.settings[field.name] = value
+    elseif field.kind == "repair" then state.form.repair_json = value
+    elseif field.kind == "title" then state.title = value
     elseif field.kind == "option" then state.option_text[field.name] = value
     else state.guidance = value end
     return nil
 end
 
 local HINTS = frame.hints({{key = "Tab", verb = "fields"}, {key = "Ctrl+S", verb = "save"},
-    {key = "Ctrl+P", verb = "permissions"}, {key = "Ctrl+R", verb = "revoke Docker access"}, {key = "Esc", verb = "cancel"}})
+    {key = "Ctrl+P", verb = "Advanced"}, {key = "Esc", verb = "cancel"}})
 local FOLDER_HINTS = frame.hints({{key = "Enter", verb = "open"}, {key = "⌫", verb = "up"}, {key = "U", verb = "use this folder"},
     {key = "D", verb = "definition folder"}, {key = "Esc", verb = "back"}})
 local THREAD_HINTS = frame.hints({{key = "Enter", verb = "choose"}, {key = "Esc", verb = "back"}})
@@ -333,7 +397,7 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
     if picker then return draw_folders(painter, state, picker) end
     local threads = state.threads
     if threads then return draw_threads(painter, state, threads) end
-    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced permissions" or "Name · folder · model")
+    frame.header(painter, state.form.revision > 0 and "EDIT AGENT PROFILE" or "CUSTOMIZE COPY", state.advanced and "Advanced" or "Name · folder · model")
     local listed = fields(state)
     local capacity = math.floor(math.max(0, height - 7))
     local window = frame.window(#listed, capacity, state.selected, 0)
@@ -345,6 +409,8 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
         if field.kind == "title" then label = label .. ": " .. state.title
         elseif field.kind == "option" and field.option_kind == "text" then
             label = human(field.name) .. ": " .. (state.option_text[field.name] or "Default")
+        elseif field.kind == "settings" then label = label .. ": " .. (state.settings[field.name] or "")
+        elseif field.kind == "repair" then label = label .. ": " .. (state.form.repair_json or "")
         elseif field.kind == "guidance" then label = label .. ": " .. state.guidance:gsub("\r?\n", " ↵ ") end
         frame.row(painter, slot + 2, text.bound(label, 4096), index == state.selected, "field", index, "")
     end
@@ -358,7 +424,14 @@ function M.draw(width: integer, height: integer, preferences: appearance.Prefere
                 enabled = state.form.pending ~= "save", primary = state.confirming_remove}
         end
         buttons[#buttons + 1] = {kind = "cancel", key = "Esc", label = "Cancel", enabled = true}
-        buttons[#buttons + 1] = {kind = "advanced", key = "Ctrl+P", label = state.advanced and "Basic fields" or "Advanced permissions", enabled = not state.form.pending}
+        if state.advanced and (state.form.draft.placement and state.form.draft.placement.kind == "docker") then
+            buttons[#buttons + 1] = {kind = "revoke_docker", key = "Ctrl+R", label = "Revoke Docker access", enabled = not state.form.pending}
+        end
+        buttons[#buttons + 1] = {kind = "advanced", key = "Ctrl+P", label = state.advanced and "Basic fields" or "Advanced", enabled = not state.form.pending}
+        if state.form.conflict then
+            buttons[#buttons + 1] = {kind = "copy", key = "", label = "Save copy", enabled = true}
+            buttons[#buttons + 1] = {kind = "reload", key = "", label = "Reload", enabled = true}
+        end
         frame.actions(painter, height - 1, buttons)
     end
     if state.status ~= "" and height >= 7 then frame.line(painter, height - 2, text.bound(state.status, 4096), painter.theme.text) end

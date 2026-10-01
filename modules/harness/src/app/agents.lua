@@ -19,8 +19,8 @@ M.MAX_HISTORY_ITEMS = 64
 
 type Fault = {code: string, message: string, retry: string, operation_key: string?}
 type Entry = {ref: string, kind: "definition" | "profile", revision: integer?, title: string,
-    status: string, ready: boolean, reason: string}
-type EntrySortKey = {ref: string, title: string, ready: boolean}
+    status: string, ready: boolean, reason: string, driver: string?}
+type EntrySortKey = {ref: string, title: string, ready: boolean, driver: string?}
 type Listing = {items: {Entry}, unavailable: integer, notes: {string}}
 type TurnState = "queued" | "working" | "ready" | "failed" | "blocked" | "uncertain" | "budget_exceeded"
 type Turn = {work: sessions.Work, input: string, state: TurnState, text: string, cancel_key: string?, segments: {[string]: string}?}
@@ -36,18 +36,20 @@ M.describe = describe
 
 -- Ready entries first, then title order. include_unavailable adds the
 -- candidates the catalog could not confirm, each with its reason.
-function M.list(client: sessions.Client, include_unavailable: boolean): (Listing?, string?)
+function M.list(client: sessions.Client, include_unavailable: boolean, query: string?, sort: "name" | "driver"?): (Listing?, string?)
     local listing: Listing = {items = {}, unavailable = 0, notes = {}}
     local cursor: string? = nil
-    for _ = 1, M.MAX_PAGES do
-        local page, fault = client:catalog({include_unavailable = include_unavailable, cursor = cursor})
+    while true do
+        local page, fault = client:catalog({include_unavailable = include_unavailable, cursor = cursor, query = query ~= "" and query or nil, sort = sort})
         if not page then return nil, describe(fault) end
         for _, candidate in ipairs(page.items) do
             if candidate.kind ~= "executor" then
                 local ready = candidate.status == "ready"
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
+                local driver: string? = nil
+                for _, feature in ipairs(candidate.features) do driver = feature:match("^driver:(.+)$") or driver end
                 listing.items[#listing.items + 1] = {ref = candidate.ref, kind = candidate.kind, revision = candidate.revision,
-                    title = candidate.title, status = candidate.status, ready = ready, reason = reason}
+                    title = candidate.title, status = candidate.status, ready = ready, reason = reason, driver = driver}
             end
         end
         listing.unavailable = page.unavailable_count
@@ -57,6 +59,7 @@ function M.list(client: sessions.Client, include_unavailable: boolean): (Listing
     end
     table.sort(listing.items, function(left: EntrySortKey, right: EntrySortKey): boolean
         if left.ready ~= right.ready then return left.ready end
+        if sort == "driver" and left.driver ~= right.driver then return (left.driver or "") < (right.driver or "") end
         if left.title ~= right.title then return left.title < right.title end
         return left.ref < right.ref
     end)

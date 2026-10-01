@@ -89,6 +89,9 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
     local function no_agents(): agents.Listing return {items = {}, unavailable = 0, notes = {}} end
     local directory: {sessions_protocol.SessionSnapshot} = {}
     local workspace_names: {[string]: agents.Workspace} = {}
+    local query = ""
+    local sort: "name" | "driver" = "name"
+    local searching = false
     local catalog_open = false
     local filtered = false
     local remembered: {[string]: agents.Conversation} = {}
@@ -128,10 +131,11 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
         dirty = true
         local include = show_unavailable
         local catalog_requested = catalog_open
+        local catalog_query, catalog_sort = query, sort
         local workspace_filter = filtered and launch.workspace_id or nil
         coroutine.spawn(function()
             if catalog_requested then
-                local found, load_error = agents.list(sessions.client(), include)
+                local found, load_error = agents.list(sessions.client(), include, catalog_query, catalog_sort)
                 if running and serial == load_serial then
                     local sent: Loaded = {serial = serial, listing = found, error = load_error}
                     send_loads(sent)
@@ -249,7 +253,7 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             else
-                drawn = view.draw(width, height, preferences, listed, selected, status, opening, show_unavailable)
+                drawn = view.draw(width, height, preferences, listed, selected, status, opening, show_unavailable, query, sort, searching)
                 frame.render(drawn, menu, preferences)
                 rows = drawn.rows
             end
@@ -356,6 +360,13 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                 elseif editing then
                     local action = profile_view.input(editing, data, edit_frame)
                     if action == "cancel" then editing = nil
+                    elseif action == "copy" then
+                        local ok, err = forms.copy(editing.form)
+                        if ok then ok, err = forms.save(editing.form) end
+                        if ok then editing = nil; refresh = true else editing.status = err or "Copy failed" end
+                    elseif action == "reload" then
+                        local form, err = forms.reload(editing.form)
+                        if form then editing = profile_view.new(form, ask) else editing.status = err or "Reload failed" end
                     elseif action == "save" or action == "remove" then
                         local ok: boolean = false
                         local err: string? = nil
@@ -409,7 +420,13 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                     if kind == "new_session" then catalog_open = true; selected = 0; refresh = true
                     elseif kind == "workspace" then filtered = not filtered; refresh = true end
                 elseif data.type == "key" and data.action == "press" then
-                    if data.key_type == "escape" or data.key_type == "esc" then catalog_open = false; refresh = true
+                    if searching then
+                        if data.key_type == "escape" or data.key_type == "esc" or data.key_type == "enter" then searching = false; dirty = true
+                        elseif data.key_type == "backspace" then query = query:gsub("[%z\1-\127\194-\244][\128-\191]*$", ""); refresh = true
+                        elseif not data.ctrl and not data.alt and (data.key_type == "char" or data.key_type == "rune") and #query + #data.key <= 256 then query = query .. data.key; refresh = true end
+                    elseif data.ctrl and data.key:lower() == "s" then sort = sort == "name" and "driver" or "name"; refresh = true
+                    elseif data.key == "/" then searching = true; dirty = true
+                    elseif data.key_type == "escape" or data.key_type == "esc" then catalog_open = false; refresh = true
                     elseif data.key_type == "up" and selected > 0 and idle() then selected = math.floor(math.max(1, selected - 1)); dirty = true
                     elseif data.key_type == "down" and selected > 0 and idle() then selected = math.floor(math.min(#listed.items, selected + 1)); dirty = true
                     elseif data.key_type == "enter" and idle() then
@@ -432,6 +449,8 @@ function M.run(launch: client.Launch, input: tty.EventChannel, lifecycle: Channe
                         local hit = frame.hit(drawn.hits, math.floor(tonumber(data.x) or 0), math.floor(tonumber(data.y) or 0))
                         local kind = hit and hit.kind or ""
                         if kind == "close" then catalog_open = false; refresh = true
+                        elseif kind == "search" then searching = true; dirty = true
+                        elseif kind == "sort" then sort = sort == "name" and "driver" or "name"; refresh = true
                         elseif kind == "setup" then setup_agent()
                         elseif kind == "open" then open = true
                         elseif kind == "attach" then attach = true

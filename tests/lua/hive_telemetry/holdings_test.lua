@@ -5,6 +5,7 @@
 -- end to end, an invalid request must refuse, and a malformed manager answer
 -- must refuse rather than look like an empty node.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local time = require("time")
 local leases = require("leases")
@@ -13,7 +14,9 @@ local OP = "bee.hive.telemetry:holdings"
 local function call(request: {[string]: unknown}): {[string]: unknown}
     local result, err = funcs.call(OP, request)
     if err or type(result) ~= "table" then error(OP .. ": " .. tostring(err)) end
-    return result :: {[string]: unknown}
+    local value = bounds.object(result)
+    if not value then error("telemetry result must be an object") end
+    return value
 end
 local function define_tests()
     test.describe("Hive workspace holdings", function()
@@ -22,12 +25,13 @@ local function define_tests()
             test.is_true(type(page.node_id) == "string")
             test.is_true(type(page.has_more) == "boolean")
             test.is_true(type(page.workspaces) == "table")
-            local rows = page.workspaces :: {{[string]: unknown}}
+            local rows = assert(bounds.array(page.workspaces, 50))
             test.is_true(#rows <= 50)
-            for _, row in ipairs(rows) do
-                test.is_true(type(row.workspace_id) == "string" and #(row.workspace_id :: string) == 32)
+            for _, raw in ipairs(rows) do
+                local row = assert(bounds.object(raw))
+                test.is_true(type(row.workspace_id) == "string" and #(row.workspace_id) == 32)
                 test.is_true(row.phase == "starting" or row.phase == "ready" or row.phase == "stopping")
-                test.is_true(type(row.lease_count) == "number" and (row.lease_count :: number) >= 0)
+                test.is_true(type(row.lease_count) == "number" and (row.lease_count) >= 0)
             end
             -- A cursor the page returned continues the listing without error.
             if page.next_after then

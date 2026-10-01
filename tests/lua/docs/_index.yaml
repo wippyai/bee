@@ -6,7 +6,7 @@ entries:
   source: file://protocol_test.lua
   method: run
   meta: {type: test, suite: bee}
-  imports: {test: wippy.test:test, protocol: bee.docs:protocol}
+  imports: {test: wippy.test:test, protocol: bee.docs:protocol, bounds: bee.protocol:bounds}
 - name: corpus_test
   kind: function.lua
   source: file://corpus_test.lua
@@ -14,4 +14,4 @@ entries:
   modules: [fs, hash]
   meta: {type: test, suite: bee}
   security: {policies: [bee.security.docs:docs_policy]}
-  imports: {test: wippy.test:test, corpus: bee.docs:corpus, protocol: bee.docs:protocol, resources: bee.docs:resources, method: bee.docs.binding:call}
+  imports: {test: wippy.test:test, corpus: bee.docs:corpus, protocol: bee.docs:protocol, bounds: bee.protocol:bounds, resources: bee.docs:resources, method: bee.docs.binding:call}

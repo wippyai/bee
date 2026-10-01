@@ -8,6 +8,7 @@ local corpus = require("corpus")
 local protocol = require("protocol")
 local resources = require("resources")
 local method = require("method")
+local bounds = require("bounds")
 local function volume(): fs.FS
     local resource, resource_error = resources.corpus()
     if not resource then error(tostring(resource_error)) end
@@ -17,11 +18,14 @@ local function volume(): fs.FS
 end
 local function reply(value: unknown): {[string]: unknown}
     if type(value) ~= "table" then error("docs tool returned no reply") end
-    local result = value :: {[string]: unknown}
+    local result = bounds.object(value)
+    if not result then error("docs reply must be an object") end
     if result.ok ~= true then
         error("docs " .. tostring(result.code) .. ": " .. tostring(result.message))
     end
-    return result.value :: {[string]: unknown}
+    local payload = bounds.object(result.value)
+    if not payload then error("docs reply value must be an object") end
+    return payload
 end
 local function call(request: unknown): {[string]: unknown}
     local decoded, decode_error = protocol.decode(request)
@@ -47,7 +51,7 @@ local function define_tests()
             for _, document in ipairs(manifest.documents) do
                 local payload, read_error = volume:readfile(corpus.path(document.id))
                 if not payload then error("missing corpus document " .. document.id .. ": " .. tostring(read_error)) end
-                test.eq(#(payload :: string), document.bytes)
+                test.eq(#payload, document.bytes)
                 if string.sub(document.id, 1, 8) == "runtime/" then
                     runtime_count = runtime_count + 1
                     runtime_ids[document.id] = true
@@ -78,47 +82,54 @@ local function define_tests()
             local listed = call({operation = "list"})
             test.eq(listed.operation, "list")
             test.eq(type(listed.selection_rule), "string")
-            local topics = listed.topics :: {{[string]: unknown}}
+            local topics = assert(bounds.array(listed.topics, protocol.MAX_LIST))
             test.is_true(#topics > 0)
             local names: {[string]: boolean} = {}
-            for _, topic in ipairs(topics) do names[tostring(topic.topic)] = true end
+            for _, raw in ipairs(topics) do
+                local topic = assert(bounds.object(raw))
+                names[tostring(topic.topic)] = true
+            end
             for _, required in ipairs({"cluster", "terminal", "storage", "threads", "registry"}) do
                 test.is_true(names[required] == true)
             end
-            local page = listed.documents :: {{[string]: unknown}}
+            local page = assert(bounds.array(listed.documents, protocol.MAX_LIST))
             test.is_true(#page > 0 and #page <= protocol.MAX_LIST)
-            for _, document in ipairs(page) do
+            for _, raw in ipairs(page) do
+                local document = assert(bounds.object(raw))
+                if type(document.title) ~= "string" then error("document title must be text") end
                 test.eq(type(document.id), "string")
                 test.eq(type(document.title), "string")
                 test.is_true(#document.title > 0)
             end
             -- The topic filter narrows exactly to one topic.
             local filtered = call({operation = "list", topic = "cluster", limit = 64})
-            local cluster = filtered.documents :: {{[string]: unknown}}
+            local cluster = assert(bounds.array(filtered.documents, protocol.MAX_LIST))
             test.is_true(#cluster > 0)
-            for _, document in ipairs(cluster) do test.eq(document.topic, "cluster") end
+            for _, raw in ipairs(cluster) do test.eq(assert(bounds.object(raw)).topic, "cluster") end
             local _, refused = protocol.decode({operation = "list", topic = "nope"})
             test.eq(refused, nil)
-            local bad = method.handle({operation = "list", topic = "nope"}) :: {[string]: unknown}
+            local bad = method.handle({operation = "list", topic = "nope"})
             test.eq(bad.ok, false)
             test.eq(bad.code, "INVALID_ARGUMENT")
         end)
         test.it("searches the corpus and returns the section a match sits under", function()
             local found = call({operation = "search", query = "tty.canvas"})
-            local results = found.results :: {{[string]: unknown}}
+            local results = assert(bounds.array(found.results, protocol.MAX_RESULTS))
             test.is_true(#results > 0 and #results <= protocol.MAX_RESULTS)
             local ids: {[string]: boolean} = {}
-            for _, result in ipairs(results) do
+            for _, raw in ipairs(results) do
+                local result = assert(bounds.object(raw))
+                if type(result.text) ~= "string" then error("search result text must be text") end
                 test.eq(type(result.section), "string")
                 test.eq(type(result.line), "number")
-                test.not_nil((string.find(string.lower(result.text :: string), "tty.canvas", 1, true)))
+                test.not_nil((string.find(string.lower(result.text), "tty.canvas", 1, true)))
                 ids[tostring(result.id)] = true
             end
             -- The terminal toolkit is reachable from a bare search, so an agent
             -- that only knows the phrase can find the reference.
             test.is_true(ids["toolkit"] == true or ids["runtime/lua/system/tty"] == true)
             local too_many = call({operation = "search", query = "the", topic = "cluster", limit = 4})
-            local bounded = too_many.results :: {{[string]: unknown}}
+            local bounded = assert(bounds.array(too_many.results, protocol.MAX_RESULTS))
             test.is_true(#bounded <= 4)
             test.eq(too_many.more, true)
         end)
@@ -129,31 +140,33 @@ local function define_tests()
             local declared = corpus.find(manifest, "runtime/lua/core/process")
             if not declared then error("process module is absent from the corpus") end
             local read = call({operation = "read", id = "runtime/lua/core/process", limit = 1024})
+            if type(read.content) ~= "string" then error("read content must be text") end
             test.eq(read.operation, "read")
             test.eq(read.topic, "core")
             test.eq(read.size, declared.bytes)
-            test.is_true(#(read.content :: string) <= 1024)
+            test.is_true(#(read.content) <= 1024)
             test.eq(read.offset, 0)
             test.eq(read.eof, false)
-            test.eq(read.next_offset, #(read.content :: string))
+            test.eq(read.next_offset, #(read.content))
             local next_window = call({operation = "read", id = "runtime/lua/core/process", offset = read.next_offset, limit = 1024})
             test.eq(next_window.offset, read.next_offset)
             -- An id that is not in the corpus is refused, not widened.
-            local missing = method.handle({operation = "read", id = "runtime/lua/core/nope"}) :: {[string]: unknown}
+            local missing = method.handle({operation = "read", id = "runtime/lua/core/nope"})
             test.eq(missing.ok, false)
             test.eq(missing.code, "NOT_FOUND")
         end)
         test.it("reads from a heading anchor and reports the section", function()
             local read = call({operation = "read", id = "toolkit", section = "lifecycle", limit = 600})
+            if type(read.content) ~= "string" or type(read.offset) ~= "number" then error("invalid read window") end
             test.eq(read.section, "Lifecycle")
-            test.is_true(string.find(read.content :: string, "tty.surface", 1, true) ~= nil)
+            test.is_true(string.find(read.content, "tty.surface", 1, true) ~= nil)
             local paged = call({operation = "read", id = "toolkit", section = "lifecycle", offset = 100, limit = 400})
             test.eq(paged.section, "Lifecycle")
-            test.eq(paged.offset, (read.offset :: number) + 100)
-            test.eq(paged.content, (read.content :: string):sub(101, 500))
+            test.eq(paged.offset, (read.offset) + 100)
+            test.eq(paged.content, (read.content):sub(101, 500))
             local _, unknown = protocol.decode({operation = "read", id = "toolkit", section = "no-such-heading"})
             test.eq(unknown, nil)
-            local refused = method.handle({operation = "read", id = "toolkit", section = "no-such-heading"}) :: {[string]: unknown}
+            local refused = method.handle({operation = "read", id = "toolkit", section = "no-such-heading"})
             test.eq(refused.ok, false)
             test.eq(refused.code, "INVALID_ARGUMENT")
         end)

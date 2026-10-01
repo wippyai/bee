@@ -4,6 +4,7 @@
 -- any status poll. The Hub facade is a recorded fixture; the approvals
 -- owner, thread binding and gateway authority are the real ones.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -42,15 +43,15 @@ end
 local function raw_call(actor_id: string, workspace: string, target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace)):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    return result :: Object
+    return assert(bounds.object(result))
 end
 local function call(actor_id: string, workspace: string, target: string, request: unknown): Object
     local reply = raw_call(actor_id, workspace, target, request)
     if not reply.ok then
-        local fault = reply.error :: Object
+        local fault = assert(bounds.object(reply.error))
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function apply(entry: Object)
     local changes = registry.snapshot():changes()
@@ -61,12 +62,14 @@ end
 local function endpoint(): string
     local entry = registry.get("bee:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
-    return tostring((entry.data :: Object).address)
+    return tostring((assert(bounds.object(entry.data))).address)
 end
 local function ensure_approver_policy(name: string)
     local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
-    local list = (policies_entry.data :: Object).policies :: {Object}
+    local list_owner = assert(bounds.object(policies_entry.data))
+    local list = principals.objects(list_owner.policies)
+    list_owner.policies = list
     for _, item in ipairs(list) do
         if item.name == name then return end
     end
@@ -76,7 +79,7 @@ end
 local function select_policy(name: string): string
     local entry = registry.get(CONFIGURATION)
     if not entry then error("module publication configuration") end
-    local data = entry.data :: Object
+    local data = assert(bounds.object(entry.data))
     local previous = tostring(data.approval_policy)
     data.approval_policy = name
     apply(entry)
@@ -85,7 +88,7 @@ end
 -- One admitted attempt with its gateway binding, as the carrier admits it.
 local function attempt(workspace: string): Binding
     local thread = call(AGENT, workspace, "bee.threads.service:create",
-        {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Publication"}).thread_id :: string
+        {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Publication"}).thread_id
     local attempt_id = fresh("attempt")
     local action = "action-" .. attempt_id
     call(AGENT, workspace, "bee.threads.service:admit_action", {thread_id = thread, action_id = action,
@@ -100,7 +103,8 @@ local function attempt(workspace: string): Binding
         attempt_id = attempt_id, thread_id = thread, owner_incarnation = 1, carrier_epoch = 1, tools = tools,
         ttl_ms = 600000, idempotency_key = fresh("admit"), workspace_id = workspace,
         surface = {tools = {}, traits = {}, base_tools = tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}})
-    local binding_id = (admitted.binding :: Object).binding_id :: string
+    local binding_id = (assert(bounds.object(admitted.binding))).binding_id
+    assert(type(binding_id) == "string" and type(thread) == "string")
     return {binding_id = binding_id, subject = AGENT, action_id = action, attempt_id = attempt_id,
         thread_id = thread, workspace_id = workspace}
 end
@@ -151,10 +155,10 @@ local function drain(fixture: Hub): (integer, string?)
 end
 local function value_of(reply: Object): Object
     if not reply.ok then
-        local fault = reply.error :: Object
+        local fault = assert(bounds.object(reply.error))
         error(tostring(fault.code) .. ": " .. tostring(fault.message))
     end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function define_tests()
     test.describe("Agent publication requests", function()
@@ -174,7 +178,7 @@ local function define_tests()
                 test.eq(filed.component, "bee/publish-probe")
                 test.eq(filed.version, "0.0.1-probe.1")
                 test.eq(filed.digest, PACK)
-                local request_id = filed.request_id :: string
+                local request_id = filed.request_id
                 local plan_digest = tostring(filed.plan_digest)
                 local pending = value_of(publish.status(selected, binding, APPROVER_POLICY, {request_id = request_id}))
                 test.eq(pending.status, "pending")
@@ -182,8 +186,8 @@ local function define_tests()
                 local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = request_id})
                 test.eq(read.requester_id, AGENT)
                 test.eq(read.thread_id, binding.thread_id)
-                test.eq((read.prompt :: Object).text, "Publish bee/publish-probe 0.0.1-probe.1 (private)?")
-                local payload = (read.proposal :: Object).payload :: Object
+                test.eq((assert(bounds.object(read.prompt))).text, "Publish bee/publish-probe 0.0.1-probe.1 (private)?")
+                local payload = assert(bounds.object((assert(bounds.object(read.proposal))).payload))
                 test.eq(payload.digest, PACK)
                 test.eq(payload.plan_digest, plan_digest)
                 test.eq(payload.binding_id, binding.binding_id)
@@ -256,10 +260,10 @@ local function define_tests()
                 {binding_id = binding.binding_id, component = "bee/publish-probe",
                     version = "0.0.1-probe.1", visibility = "private", source = "/home/person/work/probe"})
             test.is_false(foreign.ok)
-            test.eq((foreign.error :: Object).code, "DENIED")
+            test.eq((assert(bounds.object(foreign.error))).code, "DENIED")
             local reference = registry.get(publish.CONFIGURATION_REF)
             if not reference then error("publication configuration reference") end
-            local data = reference.data :: Object
+            local data = assert(bounds.object(reference.data))
             local linked = data.resource_ref
             data.resource_ref = nil
             apply(reference)
@@ -269,7 +273,7 @@ local function define_tests()
             data.resource_ref = linked
             apply(reference)
             test.is_false(unlinked.ok)
-            test.eq((unlinked.error :: Object).code, "DENIED")
+            test.eq((assert(bounds.object(unlinked.error))).code, "DENIED")
         end)
     end)
 end

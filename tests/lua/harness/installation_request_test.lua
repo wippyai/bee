@@ -4,6 +4,7 @@
 -- Hub facade is a recorded fixture; the approvals owner, thread binding and
 -- gateway authority are the real ones.
 local test = require("test")
+local bounds = require("bounds")
 local principals = require("principals")
 local funcs = require("funcs")
 local security = require("security")
@@ -43,15 +44,15 @@ end
 local function raw_call(actor_id: string, workspace: string, target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(actor_id, workspace)):with_scope(scope()):call(target, request)
     if err then error(target .. ": " .. tostring(err)) end
-    return result :: Object
+    return assert(bounds.object(result))
 end
 local function call(actor_id: string, workspace: string, target: string, request: unknown): Object
     local reply = raw_call(actor_id, workspace, target, request)
     if not reply.ok then
-        local fault = reply.error :: Object
+        local fault = assert(bounds.object(reply.error))
         error(target .. ": " .. tostring(fault.code) .. ": " .. tostring(fault.message))
     end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function apply(entry: Object)
     local changes = registry.snapshot():changes()
@@ -62,12 +63,14 @@ end
 local function endpoint(): string
     local entry = registry.get("bee:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
-    return tostring((entry.data :: Object).address)
+    return tostring((assert(bounds.object(entry.data))).address)
 end
 local function ensure_approver_policy(name: string)
     local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
-    local list = (policies_entry.data :: Object).policies :: {Object}
+    local list_owner = assert(bounds.object(policies_entry.data))
+    local list = principals.objects(list_owner.policies)
+    list_owner.policies = list
     for _, item in ipairs(list) do
         if item.name == name then return end
     end
@@ -77,7 +80,7 @@ end
 local function select_policy(name: string): string
     local entry = registry.get(CONFIGURATION)
     if not entry then error("module installation configuration") end
-    local data = entry.data :: Object
+    local data = assert(bounds.object(entry.data))
     local previous = tostring(data.approval_policy)
     data.approval_policy = name
     apply(entry)
@@ -86,7 +89,7 @@ end
 -- One admitted attempt with its gateway binding, as the carrier admits it.
 local function attempt(workspace: string): Binding
     local thread = call(AGENT, workspace, "bee.threads.service:create",
-        {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Installation"}).thread_id :: string
+        {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Installation"}).thread_id
     local attempt_id = fresh("attempt")
     local action = "action-" .. attempt_id
     call(AGENT, workspace, "bee.threads.service:admit_action", {thread_id = thread, action_id = action,
@@ -101,7 +104,8 @@ local function attempt(workspace: string): Binding
         attempt_id = attempt_id, thread_id = thread, owner_incarnation = 1, carrier_epoch = 1, tools = tools,
         ttl_ms = 600000, idempotency_key = fresh("admit"), workspace_id = workspace,
         surface = {tools = {}, traits = {}, base_tools = tools, active_traits = {}, fixed_context = {}, dynamic_keys = {}}})
-    local binding_id = (admitted.binding :: Object).binding_id :: string
+    local binding_id = (assert(bounds.object(admitted.binding))).binding_id
+    assert(type(binding_id) == "string" and type(thread) == "string")
     return {binding_id = binding_id, subject = AGENT, action_id = action, attempt_id = attempt_id,
         thread_id = thread, workspace_id = workspace}
 end
@@ -116,7 +120,7 @@ local function port(binding: Binding, fixture: Hub): installation.Port
     local selected = base_port(binding)
     selected.hub = function(value: Object, manage: boolean): Object
         fixture.calls[#fixture.calls + 1] = {operation = value.operation, manage = manage}
-        local request = (value.request or {}) :: Object
+        local request = assert(bounds.object((value.request or {})))
         if value.operation == "installed" then return {ok = true, replayed = false, value = {version = 1, modules = {}, roots = {}}} end
         if value.operation == "details" then
             return {ok = true, replayed = false, value = {component = request.component, versions = {
@@ -152,12 +156,12 @@ local function port(binding: Binding, fixture: Hub): installation.Port
             if fixture.uncertain_after_apply then
                 fixture.uncertain_after_apply = false
                 local receipt = fixture.apply_reply.value
-                if type(receipt) == "table" then fixture.receipts[expected] = receipt :: Object end
+                if type(receipt) == "table" then fixture.receipts[expected] = assert(bounds.object(receipt)) end
                 return {ok = false, replayed = false, code = "UNCERTAIN", message = "Hub reply was lost after publication"}
             end
             if fixture.apply_reply.ok == true then
                 local receipt = fixture.apply_reply.value
-                if type(receipt) == "table" then fixture.receipts[expected] = receipt :: Object end
+                if type(receipt) == "table" then fixture.receipts[expected] = assert(bounds.object(receipt)) end
             end
             return fixture.apply_reply
         end
@@ -181,10 +185,10 @@ local function drain(fixture: Hub): (integer, string?)
 end
 local function value_of(reply: Object): Object
     if not reply.ok then
-        local fault = reply.error :: Object
+        local fault = assert(bounds.object(reply.error))
         error(tostring(fault.code) .. ": " .. tostring(fault.message))
     end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function define_tests()
     test.describe("Agent installation requests", function()
@@ -202,7 +206,7 @@ local function define_tests()
                 test.eq(filed.status, "pending")
                 test.eq(filed.version, "1.1.0")
                 test.eq(filed.action, "install")
-                local request_id = filed.request_id :: string
+                local request_id = filed.request_id
                 local replayed = value_of(installation.request(selected, binding, APPROVER_POLICY, "install",
                     {component = "acme/tool", version = "1.1.0"}))
                 test.eq(replayed.request_id, request_id)
@@ -212,13 +216,13 @@ local function define_tests()
                 local read = call(APPROVER, workspace, "bee.approvals.binding:read", {approval_id = request_id})
                 test.eq(read.requester_id, AGENT)
                 test.eq(read.thread_id, binding.thread_id)
-                test.eq((read.prompt :: Object).text, "Install acme/tool 1.1.0 from the Hub?")
-                local payload = (read.proposal :: Object).payload :: Object
+                test.eq((assert(bounds.object(read.prompt))).text, "Install acme/tool 1.1.0 from the Hub?")
+                local payload = assert(bounds.object((assert(bounds.object(read.proposal))).payload))
                 test.eq(payload.source, "hub")
                 test.eq(payload.binding_id, binding.binding_id)
                 test.eq(payload.plan_digest, DIGEST)
-                test.eq((payload.dependency_changes :: {string})[1], "install acme/tool 1.1.0")
-                test.eq((payload.permission_changes :: {string})[1], "added: acme.tool:files allows fs.get on acme.tool:data")
+                test.eq((principals.strings(payload.dependency_changes))[1], "install acme/tool 1.1.0")
+                test.eq((principals.strings(payload.permission_changes))[1], "added: acme.tool:files allows fs.get on acme.tool:data")
                 call(APPROVER, workspace, "bee.approvals.binding:decide", {approval_id = request_id,
                     expected_revision = read.revision, decision = "approved", proposal_digest = read.proposal_digest})
                 local drained, drain_error = drain(fixture)
@@ -239,7 +243,7 @@ local function define_tests()
                 test.is_nil(recovery_error)
                 test.eq(recovered, 1)
                 test.eq(#fixture.applies, 2)
-                local applied_request = fixture.applies[2].request :: Object
+                local applied_request = assert(bounds.object(fixture.applies[2].request))
                 test.eq(fixture.applies[2].expected_digest, DIGEST)
                 test.eq(fixture.applies[2].replayed, true)
                 test.eq(applied_request.action, "install")
@@ -253,7 +257,7 @@ local function define_tests()
                 test.eq(completed.consumer_id, AGENT)
                 test.eq(completed.consumed_effect, "hub-install:" .. request_id)
                 test.not_nil(completed.effect_completed_at)
-                test.eq((completed.effect_result :: Object).replayed, true)
+                test.eq((assert(bounds.object(completed.effect_result))).replayed, true)
                 local again = value_of(installation.status(selected, binding, APPROVER_POLICY, {request_id = request_id}))
                 test.eq(again.status, "applied")
                 test.eq(again.replayed, true)
@@ -337,7 +341,7 @@ local function define_tests()
                 test.eq(consumed.consumer_id, OTHER)
                 local refused = installation.status(selected, binding, APPROVER_POLICY, {request_id = filed.request_id})
                 test.is_false(refused.ok)
-                test.eq((refused.error :: Object).code, "DENIED")
+                test.eq((assert(bounds.object(refused.error))).code, "DENIED")
                 local drained, drain_error = drain(fixture)
                 test.is_nil(drain_error)
                 test.eq(drained, 0)
@@ -384,10 +388,10 @@ local function define_tests()
             local foreign = raw_call(OTHER, workspace, "bee.gateway.binding:install_request",
                 {binding_id = binding.binding_id, component = "acme/tool", version = "1.0.0"})
             test.is_false(foreign.ok)
-            test.eq((foreign.error :: Object).code, "DENIED")
+            test.eq((assert(bounds.object(foreign.error))).code, "DENIED")
             local reference = registry.get(installation.CONFIGURATION_REF)
             if not reference then error("installation configuration reference") end
-            local data = reference.data :: Object
+            local data = assert(bounds.object(reference.data))
             local linked = data.resource_ref
             data.resource_ref = nil
             apply(reference)
@@ -396,7 +400,7 @@ local function define_tests()
             data.resource_ref = linked
             apply(reference)
             test.is_false(unlinked.ok)
-            test.eq((unlinked.error :: Object).code, "DENIED")
+            test.eq((assert(bounds.object(unlinked.error))).code, "DENIED")
         end)
     end)
 end

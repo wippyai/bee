@@ -14,7 +14,7 @@ local function claim_reply(epoch: integer): {[string]: unknown}
         checkpoint_revision = 0, attempt_state = "prepared"}}
 end
 local function commit_reply(request_value: unknown, revision: integer): {[string]: unknown}
-    local request = request_value :: {[string]: unknown}
+    local request = assert(bounds.object(request_value))
     return {ok = true, value = {attempt_id = request.attempt_id, carrier_epoch = request.carrier_epoch,
         checkpoint_revision = revision, records = {}}}
 end
@@ -276,7 +276,7 @@ local function define_tests()
                         }, has_more = false, scanned_through = 9}}, nil
                     end
                     if target == "bee.threads.service:prepare_attempt" then
-                        prepared_body = value :: {[string]: unknown}
+                        prepared_body = assert(bounds.object(value))
                         return {ok = true, value = {}}, nil
                     end
                     if target == "bee.threads.carrier:claim" then return claim_reply(2), nil end

@@ -3,6 +3,7 @@
 -- native open are durable work of unbounded length; the broker's startup
 -- deadline bounds surface readiness only, so readiness never waits for them.
 local test = require("test")
+local bounds = require("bounds")
 local registry = require("registry")
 local principals = require("principals")
 local process = require("process")
@@ -33,7 +34,7 @@ local function define_tests()
             mode.data = {mode = "granted"}
             apply(mode)
             local fixture = assert(registry.get(ref))
-            local data = fixture.data :: {[string]: unknown}
+            local data = assert(bounds.object(fixture.data))
             -- This fixture tests the file advisory and its Enter continuation,
             -- independently from unobservable host environment/keychain login.
             data.login_evidence = {command = "claude", any_of = {{kind = "file_exists",

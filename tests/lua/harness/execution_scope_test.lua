@@ -1,5 +1,6 @@
 -- MIT. Protected host policy composition keeps ordinary apps restricted.
 local test = require("test")
+local bounds = require("bounds")
 local registry = require("registry")
 local security = require("security")
 local funcs = require("funcs")
@@ -20,7 +21,7 @@ local function probe(names: {string}): {[string]: boolean}
     if err then error(tostring(err)) end
     if type(raw) ~= "table" then error("access probe returned no object") end
     local result: {[string]: boolean} = {}
-    for key, value in pairs(raw :: {[string]: unknown}) do
+    for key, value in pairs(assert(bounds.object(raw))) do
         if type(value) ~= "boolean" then error("access result is not boolean") end
         result[key] = value
     end
@@ -31,7 +32,7 @@ local function define_tests()
         test.it("keeps every ordinary binding's subsystem deny effective even against a broad allow", function()
             local entry = registry.get("bee.security:application_admission")
             if not entry then error("missing application admission") end
-            local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
+            local data = entry.data
             for _, binding in ipairs(data.bindings) do
                 if binding.definition_id ~= "bee.harness.app:app" then
                     local names: {string} = {"bee.harness.catalog:scope_probe_allow", "bee.harness.catalog:scope_probe_broad_store"}
@@ -46,7 +47,7 @@ local function define_tests()
         test.it("checks the managed window's actual binding without granting core store access", function()
             local entry = registry.get("bee.security:application_admission")
             if not entry then error("missing application admission") end
-            local data = entry.data :: {bindings: {{definition_id: string, policies: {string}}}}
+            local data = entry.data
             local found = false
             for _, binding in ipairs(data.bindings) do
                 if binding.definition_id == "bee.harness.app:app" then

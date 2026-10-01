@@ -5,6 +5,8 @@
 -- recovers without a second approval, a second response or an invented
 -- resend. Fixture only: the shipped profiles stay none.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -54,9 +56,9 @@ local actor = security.new_actor(ACTOR)
 local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
 local function reply_value(target: string, result: unknown, err: unknown): Object
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
+    local reply = result
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function call(target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call(target, request)
@@ -82,7 +84,7 @@ local function shell(command: string): string
     while true do
         local chunk: unknown = stdout:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        output = output .. (chunk :: string)
+        output = output .. (chunk)
     end
     proc:wait()
     stdout:close()
@@ -98,7 +100,7 @@ local function file_digest(path: string): string
     while true do
         local chunk: unknown = stdout:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk :: string)
+        content = content .. (chunk)
     end
     proc:wait()
     stdout:close()
@@ -116,7 +118,7 @@ end
 local function fixture_adapter(): adapter.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("fixture adapter entry") end
-    local data = entry.data :: Object
+    local data = assert(bounds.object(entry.data))
     local decoded, err = adapter.decode(ADAPTER, data.adapter)
     if not decoded then error(tostring(err)) end
     return decoded
@@ -131,9 +133,9 @@ type Measured = {revision: string, kind: string, digest: string}
 local function measure_executable(path: string): Measured
     local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call("bee.placement.native.binding:measure_executable", {path = path})
     if err then error("measure executable: " .. tostring(err)) end
-    local reply = raw :: {ok: boolean, value: Object?}
+    local reply = raw
     if reply.ok and reply.value then
-        local measured = reply.value :: Object
+        local measured = assert(bounds.object(reply.value))
         return {revision = tostring(measured.revision), kind = tostring(measured.kind), digest = tostring(measured.digest)}
     end
     return {revision = "bee.executable-measurement@1", kind = "other", digest = string.rep("0", 64)}
@@ -154,12 +156,12 @@ local function prepare_host(): string
     if binding_digest == "" then error("the Claude binding is not usable on this host") end
     local record = registry.get(ACCEPTANCE)
     if not record then error("acceptance entry") end
-    (record.data :: Object).acceptance = {schema_revision = "bee.permission-acceptance@2", binding_id = BINDING, profile_id = "batch", binding_digest = binding_digest, profile_digest = profile_digest,
+    (assert(bounds.object(record.data))).acceptance = {schema_revision = "bee.permission-acceptance@2", binding_id = BINDING, profile_id = "batch", binding_digest = binding_digest, profile_digest = profile_digest,
         adapter_ref = ADAPTER, adapter_digest = pinned.digest, fixture_digest = fixture_digest, executable_revision = measure_executable(executable).revision, executable_kind = measure_executable(executable).kind, executable_digest = measure_executable(executable).digest, proof_revision = "bee.permission-proof@1", accepted_by = "bee.test.operator", accepted_at = "2026-09-09T00:00:00.000Z"}
     apply(record)
     local policy = registry.get(POLICY)
     if not policy then error("permission policy entry") end
-    local data = policy.data :: Object
+    local data = assert(bounds.object(policy.data))
     data.executables = {claude = executable}
     data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 2000, ttl_ms = 60000}
     apply(policy)
@@ -168,7 +170,7 @@ local function prepare_host(): string
     -- fixture adapter no profile pins.
     local real_entry = registry.get(REAL_ADAPTER)
     if not real_entry then error("real adapter entry") end
-    local real_adapter, real_error = adapter.decode(REAL_ADAPTER, (real_entry.data :: Object).adapter)
+    local real_adapter, real_error = adapter.decode(REAL_ADAPTER, (assert(bounds.object(real_entry.data))).adapter)
     if not real_adapter then error(tostring(real_error)) end
     local streams, streams_error = env.get("bee.harness.catalog:fixture_streams")
     if streams_error or type(streams) ~= "string" then error("BEE_FIXTURE_STREAMS is not set for the test runtime") end
@@ -176,20 +178,20 @@ local function prepare_host(): string
     local production_record = registry.get(PRODUCTION_ACCEPTANCE)
     if not production_record then error("production acceptance entry") end
     local measured_fixture = measure_executable(executable)
-    local production_acceptance = production_record.data :: Object
+    local production_acceptance = assert(bounds.object(production_record.data))
     production_acceptance.acceptance = {schema_revision = "bee.permission-acceptance@2", binding_id = BINDING, profile_id = "batch", binding_digest = binding_digest, profile_digest = profile_digest,
         adapter_ref = REAL_ADAPTER, adapter_digest = real_adapter.digest, fixture_digest = capture_digest, executable_revision = measured_fixture.revision, executable_kind = measured_fixture.kind,
         executable_digest = measured_fixture.digest, proof_revision = "bee.permission-proof@1", accepted_by = "bee.test.operator", accepted_at = "2026-09-09T00:00:00.000Z"}
     apply(production_record)
     local production = registry.get(PRODUCTION_POLICY)
     if not production then error("production policy entry") end
-    local production_data = production.data :: Object
+    local production_data = assert(bounds.object(production.data))
     production_data.executables = {claude = executable}
     production_data.permission_exchange = {adapter_ref = REAL_ADAPTER, acceptance_ref = PRODUCTION_ACCEPTANCE, fixture_digest = capture_digest, approver_policy = APPROVER_POLICY, poll_ms = 2000, ttl_ms = 60000}
     apply(production)
     local unpinned = registry.get(UNPINNED_POLICY)
     if not unpinned then error("unpinned policy entry") end
-    local unpinned_data = unpinned.data :: Object
+    local unpinned_data = assert(bounds.object(unpinned.data))
     unpinned_data.executables = {claude = executable}
     unpinned_data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 2000, ttl_ms = 60000}
     apply(unpinned)
@@ -199,7 +201,9 @@ local function prepare_host(): string
     apply(mode)
     local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
-    local list = (policies_entry.data :: Object).policies :: {Object}
+    local list_owner = assert(bounds.object(policies_entry.data))
+    local list = principals.objects(list_owner.policies)
+    list_owner.policies = list
     local present = false
     for _, item in ipairs(list) do
         if item.name == APPROVER_POLICY then present = true end
@@ -210,7 +214,9 @@ local function prepare_host(): string
     end
     local roots = registry.get("bee.placement.native:placement_admitted_roots")
     if not roots then error("admitted roots entry") end
-    local root_list = (roots.data :: Object).roots :: {Object}
+    local root_list_owner = assert(bounds.object(roots.data))
+    local root_list = principals.objects(root_list_owner.roots)
+    root_list_owner.roots = root_list
     local admitted = false
     for _, root in ipairs(root_list) do
         if root.root_ref == ROOT then admitted = true end
@@ -223,7 +229,8 @@ local function prepare_host(): string
 end
 local function thread(): string
     local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Permission carrier"})
-    return created.thread_id :: string
+    if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
+    return created.thread_id
 end
 local function request(thread_id: string, attempt_id: string, workspace: string, stream: string, timeout: string): Object
     local placement = placement_fixture.resolve()
@@ -267,7 +274,7 @@ local function await_carriers(pids: {string}, label: string?): {[string]: Outcom
         if event.kind == process.event.EXIT then
             local result = event.result or {}
             local value: Object? = nil
-            if type(result.value) == "table" then value = result.value :: Object end
+            if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
             exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
         end
     end
@@ -276,15 +283,15 @@ local function await_carriers(pids: {string}, label: string?): {[string]: Outcom
     return outcomes
 end
 local function await_carrier(pid: string, label: string?): Outcome
-    return await_carriers({pid}, label)[pid] :: Outcome
+    return assert(await_carriers({pid}, label)[pid])
 end
 -- The approver's side: catch up on the workspace inbox until the request
 -- is pending, then decide it for the recorded proposal digest.
 local function await_request(workspace: string): Object
     for _ = 1, 200 do
         local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
-        for _, change in ipairs(page.changes :: {Object}) do
-            local view = change.request :: Object
+        for _, change in ipairs(principals.objects(page.changes)) do
+            local view = assert(bounds.object(change.request))
             if view.state == "pending" then return view end
         end
         time.sleep("50ms")
@@ -299,19 +306,20 @@ local function records_of(thread_id: string): {Object}
     local cursor = 0
     for _ = 1, 32 do
         local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
-        for _, item in ipairs(page.records :: {Object}) do all[#all + 1] = item end
+        for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
-        cursor = math.floor(page.scanned_through :: number)
+        if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
+        cursor = math.floor(page.scanned_through)
     end
     return all
 end
 local function payloads(records: {Object}, event_name: string): {Object}
     local found: {Object} = {}
     for _, item in ipairs(records) do
-        local body = item.body :: Object
+        local body = assert(bounds.object(item.body))
         if body.type == "extension" then
-            local data = body.data :: Object
-            if data.event_name == event_name then found[#found + 1] = json.decode(tostring(data.payload_json)) :: Object end
+            local data = assert(bounds.object(body.data))
+            if data.event_name == event_name then found[#found + 1] = assert(bounds.object(json.decode(tostring(data.payload_json)))) end
         end
     end
     return found
@@ -336,9 +344,9 @@ end
 local function tool_results(records: {Object}): integer
     local total = 0
     for _, item in ipairs(records) do
-        local body = item.body :: Object
+        local body = assert(bounds.object(item.body))
         if body.type == "tool.result" then
-            local data = body.data :: Object
+            local data = assert(bounds.object(body.data))
             if data.call_id == REQUEST_ID then total = total + 1 end
         end
     end
@@ -347,9 +355,9 @@ end
 local function stderr_mentions(records: {Object}, marker: string): integer
     local total = 0
     for _, item in ipairs(records) do
-        local body = item.body :: Object
+        local body = assert(bounds.object(item.body))
         if body.type == "notice" then
-            local data = body.data :: Object
+            local data = assert(bounds.object(body.data))
             local content = bounds_text(data.content)
             if data.code == "stderr" and content:find(marker, 1, true) then total = total + 1 end
         end
@@ -358,18 +366,18 @@ local function stderr_mentions(records: {Object}, marker: string): integer
 end
 function bounds_text(value: unknown): string
     if type(value) ~= "table" then return "" end
-    return tostring((value :: Object).text or "")
+    return tostring((assert(bounds.object(value))).text or "")
 end
 local function hint(pid: string, thread_id: string)
     process.send(pid, "bee.carrier.hints." .. pid, {woke = true, thread_id = thread_id})
 end
 local function settlement_of(outcome: Outcome, label: string): Object
     if not outcome.value then error(label .. ": " .. tostring(outcome.error)) end
-    return outcome.value.settlement :: Object
+    return assert(bounds.object(outcome.value.settlement))
 end
 local function approvals_in(workspace: string): integer
     local listed = call("bee.approvals.binding:list", {workspace_id = workspace})
-    return #(listed.requests :: {unknown})
+    return #(principals.items(listed.requests))
 end
 local function define_tests()
     test.describe("Carrier permission exchange", function()
@@ -379,14 +387,14 @@ local function define_tests()
             -- successful answer must then come from the approval hint, even
             -- when the machine is too busy to meet a wall-clock speed target.
             local policy = assert(registry.get(POLICY))
-            local exchange = ((policy.data :: Object).permission_exchange :: Object)
+            local exchange = (assert(bounds.object((assert(bounds.object(policy.data))).permission_exchange)))
             exchange.poll_ms = 120000
             apply(policy)
             local thread_id, workspace, attempt_id = thread(), fresh("ws"), fresh("attempt")
             local pid = spawn_carrier("bee.harness.carrier:process", request(thread_id, attempt_id, workspace, stream, "45"), "open", nil)
             local view = await_request(workspace)
             test.eq(view.request_kind, "permission")
-            test.eq((view.proposal :: Object).kind, "attempt")
+            test.eq((assert(bounds.object(view.proposal))).kind, "attempt")
             for _ = 1, 3 do hint(pid, thread_id) end
             decide(view, "approved")
             for _ = 1, 3 do hint(pid, thread_id) end
@@ -394,7 +402,7 @@ local function define_tests()
             exchange.poll_ms = 2000
             apply(policy)
             if not finished then error(tostring(outcome)) end
-            local settlement = settlement_of(outcome :: Outcome, "allow run")
+            local settlement = settlement_of(outcome, "allow run")
             test.eq(settlement.outcome, "succeeded")
             test.eq(settlement.answer, "The file says: hello from notes")
             local records = records_of(thread_id)
@@ -412,7 +420,7 @@ local function define_tests()
             -- the runtime cannot close stdin; either is on record apart
             -- from input acceptance and exit.
             local evidence: {string} = {}
-            for _, item in ipairs(call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64}).evidence :: {Object}) do evidence[#evidence + 1] = tostring(item.kind) end
+            for _, item in ipairs(principals.objects(call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64}).evidence)) do evidence[#evidence + 1] = tostring(item.kind) end
             local input_phases: {string} = {}
             for _, payload in ipairs(payloads(records_of(thread_id), "bee.carrier.input")) do input_phases[#input_phases + 1] = tostring(payload.phase) end
             if count(evidence, "stdin.closed") == 1 then
@@ -512,8 +520,8 @@ local function define_tests()
             local pid = spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "open", nil, "hints_opened")
             await_paused(paused, pid, "hints_opened")
             process.unlisten(paused)
-            local stored = call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = launch.attempt_id :: string})
-            local point = stored.checkpoint :: Object
+            local stored = call("bee.threads.carrier:checkpoint", {thread_id = thread_id, attempt_id = launch.attempt_id})
+            local point = assert(bounds.object(stored.checkpoint))
             local subscription_id = tostring(point.hint_subscription)
             test.is_true(#subscription_id > 0)
             call("bee.threads.delivery:unsubscribe", {thread_id = thread_id, idempotency_key = fresh("key"), subscription_id = subscription_id})
@@ -535,7 +543,7 @@ local function define_tests()
             test.is_true(tostring(crashed.error):find("crash after permission_consumed", 1, true) ~= nil)
             local policy = registry.get(POLICY)
             if not policy then error("permission policy entry") end
-            local data = policy.data :: Object
+            local data = assert(bounds.object(policy.data))
             local drain = data.drain_ms
             data.drain_ms = 2500
             apply(policy)
@@ -561,7 +569,7 @@ local function define_tests()
             shell("cp " .. original .. " " .. copy .. " && chmod +x " .. copy)
             local policy = registry.get(POLICY)
             if not policy then error("permission policy entry") end
-            local data = policy.data :: Object
+            local data = assert(bounds.object(policy.data))
             data.executables = {claude = shell("pwd"):gsub("%s+$", "") .. "/" .. copy}
             apply(policy)
             return copy, original
@@ -569,7 +577,7 @@ local function define_tests()
         local function unbind_copy(original: string, copy: string)
             local policy = registry.get(POLICY)
             if not policy then error("permission policy entry") end
-            local data = policy.data :: Object
+            local data = assert(bounds.object(policy.data))
             data.executables = {claude = original}
             apply(policy)
             shell("rm -f " .. copy)
@@ -642,7 +650,7 @@ local function define_tests()
             test.is_true(tostring(crashed.error):find("crash after write_intended", 1, true) ~= nil)
             -- The runner is lost: its child is ended by the host, not by a
             -- permission window that a busy host could outlast or undershoot.
-            call("bee.placement.native.binding:stop", {attempt_id = launch.attempt_id :: string, mode = "forced"})
+            call("bee.placement.native.binding:stop", {attempt_id = launch.attempt_id, mode = "forced"})
             local settlement = settlement_of(await_carrier(spawn_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil), "lost runner"), "lost runner")
             test.neq(settlement.outcome, "succeeded")
             local records = records_of(thread_id)

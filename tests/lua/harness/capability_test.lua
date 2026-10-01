@@ -5,6 +5,7 @@
 -- resources grant row for the authenticated thread actor; a different
 -- attempt, including any child, cannot consume or inherit it.
 local test = require("test")
+local principals = require("principals")
 local capability = require("capability")
 local bounds = require("bounds")
 
@@ -36,7 +37,7 @@ local function define_tests()
             test.eq(request.capability, "app.database")
             test.eq(request.template_revision, 1)
             test.eq(request.ttl_ms, capability.DEFAULT_TTL_MS)
-            test.eq((request.parameters :: {[string]: unknown}).name, "journal")
+            test.eq((assert(bounds.object(request.parameters))).name, "journal")
             test.eq(#request.parameters_digest, 64)
         end)
         test.it("refuses unknown, never-listed and malformed requests", function()
@@ -127,7 +128,7 @@ local function define_tests()
         end)
         test.it("rejects capabilities that the install-time generator cannot realize", function()
             local decoded = fixture()
-            local rows = ((decoded.data :: {[string]: unknown}).capabilities) :: {unknown}
+            local rows = principals.items(((assert(bounds.object(decoded.data))).capabilities))
             rows[#rows + 1] = {id = "test.elevation", revision = 1, confirm = "standard",
                 parameters = {name = "name"}, text = "Use test database {name}",
                 policies = {{operation = "database.use", resource = "$name", scope = {name = "$name"}}},
@@ -145,7 +146,7 @@ local function define_tests()
             local proposal = capability.proposal(request)
             local payload = bounds.object(proposal.payload)
             if not payload then error("proposal payload") end
-            local digest = payload.proposal_digest :: string
+            local digest = payload.proposal_digest
             local approval = {approval_id = "approval-1", proposal_digest = digest, thread_id = "thread-1",
                 attempt_id = "attempt-1", capability = "app.database", template_revision = 1,
                 parameters_digest = request.parameters_digest}

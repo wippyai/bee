@@ -8,6 +8,7 @@
 -- silence authorize nothing and leave the harness waiting. Without the
 -- executable the gate is reported open.
 local test = require("test")
+local bounds = require("bounds")
 local exec = require("exec")
 local env = require("env")
 local registry = require("registry")
@@ -42,7 +43,7 @@ local function read_all(stream): string
     while true do
         local chunk: unknown = stream:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk :: string)
+        content = content .. (chunk)
     end
     return content
 end
@@ -65,12 +66,12 @@ end
 local function real_adapter(): adapter.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("adapter entry") end
-    local decoded, err = adapter.decode(ADAPTER, (entry.data :: Object).adapter)
+    local decoded, err = adapter.decode(ADAPTER, (assert(bounds.object(entry.data))).adapter)
     if not decoded then error(tostring(err)) end
     return decoded
 end
 -- The endpoint answers one Bash tool_use of the given command, then text.
-local function start_endpoint(record: string, command: string): (string, any, any)
+local function start_endpoint(record: string, command: string): (string, exec.Process, exec.Executor)
     local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
     if not proc then error("endpoint: " .. tostring(err)) end
@@ -82,7 +83,7 @@ local function start_endpoint(record: string, command: string): (string, any, an
     end
     error("the endpoint did not report its port")
 end
-type Session = {proc: any, executor: any, chunks: any, feed: (string) -> (), run: Run, ended: boolean}
+type Session = {proc: exec.Process, executor: exec.Executor, chunks: channel.Channel<string>, feed: (string) -> (), run: Run, ended: boolean}
 -- open runs the executable exactly as the driver launches it for an
 -- exchange: the brief as the first stdin line, stdin kept open.
 local function open(pinned: adapter.Adapter, claude: string, port: string, work: string, home: string): Session
@@ -114,7 +115,7 @@ local function open(pinned: adapter.Adapter, claude: string, port: string, work:
         for _, envelope in ipairs(stream_json.feed(decoder, data)) do
             local step = protocol.normalize(state, envelope.index, envelope.value)
             for _, observation in ipairs(step.observations) do
-                run.observations[#run.observations + 1] = observation :: Object
+                run.observations[#run.observations + 1] = assert(bounds.object(observation))
                 if not run.request then
                     local found = adapter.request(pinned, observation)
                     if found then run.request = found end
@@ -132,11 +133,12 @@ local function observe(session: Session, deadline: string, done: (Run) -> boolea
         if session.ended then return false end
         local selected = channel.select({session.chunks:case_receive(), timer:case_receive()})
         if not selected.ok or selected.channel == timer then return false end
-        local data = selected.value :: string
+        local data = selected.value
         if data == "" then
             session.ended = true
             return done(session.run)
         end
+        if type(data) ~= "string" then error("invalid fixture data") end
         session.feed(data)
     end
     return true
@@ -148,7 +150,7 @@ local function tool_result_after(run: Run, outcome: string?): Object?
     for index = run.boundary + 1, #run.observations do
         local observation = run.observations[index]
         if observation.type == "tool.result" then
-            local data = observation.data :: Object
+            local data = assert(bounds.object(observation.data))
             if data.call_id == "toolu_bee_1" and (not outcome or data.outcome == outcome) then return observation end
         end
     end
@@ -156,7 +158,7 @@ local function tool_result_after(run: Run, outcome: string?): Object?
 end
 local function ended(run: Run): boolean
     for _, observation in ipairs(run.observations) do
-        local data = observation.data :: Object
+        local data = assert(bounds.object(observation.data))
         if observation.type == "turn.signal" and data.phase == "ended" then return true end
     end
     return false
@@ -190,7 +192,7 @@ local function define_tests()
                 local port, endpoint, endpoint_executor = start_endpoint(record, "touch proof.txt")
                 local session = open(pinned, claude, port, work, home)
                 if not observe(session, "20s", has_request) then error(name .. ": no permission request observed; observations " .. tostring(#session.run.observations)) end
-                local request = session.run.request :: adapter.Request
+                local request = session.run.request
                 test.eq(request.tool_name, "Bash")
                 test.eq(request.acknowledgment_id, "toolu_bee_1")
                 test.is_nil(tool_result_after(session.run, nil))
@@ -207,13 +209,13 @@ local function define_tests()
                 end
             end
             case("allow", function(session: Session, work: string)
-                local request = session.run.request :: adapter.Request
+                local request = session.run.request
                 respond(session, encoded(adapter.allow(pinned, request, nil)))
                 if not observe(session, "20s", ended) then
                     local seen: {string} = {}
                     for index = session.run.boundary + 1, #session.run.observations do
                         local observation = session.run.observations[index]
-                        seen[#seen + 1] = tostring(observation.type) .. ":" .. tostring((observation.data :: Object).code or (observation.data :: Object).event_name or (observation.data :: Object).phase or "")
+                        seen[#seen + 1] = tostring(observation.type) .. ":" .. tostring((assert(bounds.object(observation.data))).code or (assert(bounds.object(observation.data))).event_name or (assert(bounds.object(observation.data))).phase or "")
                     end
                     error("allow: the turn did not end; ended " .. tostring(session.ended) .. "; marker " .. shell("ls " .. work) .. "; after the response: " .. table.concat(seen, ","))
                 end
@@ -225,7 +227,7 @@ local function define_tests()
                 if not consistent then error("allow: " .. tostring(err)) end
             end)
             case("deny", function(session: Session, work: string)
-                local request = session.run.request :: adapter.Request
+                local request = session.run.request
                 respond(session, encoded(adapter.deny(pinned, request, "decision denied")))
                 if not observe(session, "20s", ended) then error("deny: the turn did not end") end
                 local denial = tool_result_after(session.run, "failed")
@@ -235,9 +237,9 @@ local function define_tests()
                 test.eq(shell("ls " .. work):find("proof.txt", 1, true), nil)
             end)
             case("wrong", function(session: Session, work: string)
-                local request = session.run.request :: adapter.Request
-                local other: adapter.Request = {permission_request_id = request.permission_request_id, correlation_id = "not-" .. request.correlation_id, acknowledgment_id = request.acknowledgment_id,
-                    tool_name = request.tool_name, input_digest = request.input_digest, input = request.input, prompt = request.prompt}
+                local request = session.run.request
+                local other: adapter.Request = {permission_request_id = assert(request.permission_request_id), correlation_id = "not-" .. request.correlation_id, acknowledgment_id = assert(request.acknowledgment_id),
+                    tool_name = assert(request.tool_name), input_digest = assert(request.input_digest), input = assert(request.input), prompt = assert(request.prompt)}
                 respond(session, encoded(adapter.allow(pinned, other, nil)))
                 test.is_false(observe(session, "3s", function(run: Run): boolean return tool_result_after(run, nil) ~= nil or ended(run) end))
                 test.is_false(session.ended)
@@ -249,7 +251,7 @@ local function define_tests()
                 test.eq(shell("ls " .. work):find("proof.txt", 1, true) ~= nil, true)
             end)
             case("silence", function(session: Session, work: string)
-                local request = session.run.request :: adapter.Request
+                local request = session.run.request
                 test.is_false(observe(session, "3s", function(run: Run): boolean return tool_result_after(run, nil) ~= nil or ended(run) end))
                 test.is_false(session.ended)
                 test.eq(shell("ls " .. work):find("proof.txt", 1, true), nil)

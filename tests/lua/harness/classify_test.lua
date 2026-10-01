@@ -2,6 +2,8 @@
 -- methods is compatible only when every rule holds, and each broken rule
 -- names itself once.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local classify = require("classify")
 local permission = require("permission")
 type Entry = {[string]: unknown}
@@ -34,13 +36,13 @@ local function classified(input: Entry?, entry: Entry?, table: {[string]: Entry?
     return classify.binding(request)
 end
 local function meta_of(entry: Entry): {[string]: unknown}
-    return entry.meta :: {[string]: unknown}
+    return assert(bounds.object(entry.meta))
 end
 local function data_of(entry: Entry): {[string]: unknown}
-    return entry.data :: {[string]: unknown}
+    return assert(bounds.object(entry.data))
 end
 local function driver_of(entry: Entry): {[string]: unknown}
-    return data_of(entry).driver :: {[string]: unknown}
+    return assert(bounds.object(data_of(entry).driver))
 end
 local function has(list: {string}, wanted: string): boolean
     for _, item in ipairs(list) do
@@ -61,7 +63,7 @@ local function define_tests()
             local entry = adapter_entry()
             local measured = assert(permission.decode("fake:permission", data_of(entry).adapter))
             local pinned = declaration()
-            local profiles = driver_of(pinned).profiles :: {{[string]: unknown}}
+            local profiles = principals.objects(driver_of(pinned).profiles)
             profiles[1].permission_exchange = {mode = "adapter", adapter_ref = "fake:permission", adapter_digest = measured.digest}
             local absent = classify.binding({binding = binding(), declaration = pinned, methods = methods(), activated = false})
             test.eq(absent.state, "incompatible")
@@ -74,7 +76,7 @@ local function define_tests()
             test.eq(present.profiles[2].permission.mode, "none")
             test.is_false(absent.profiles[1].permission.eligible)
             local changed = adapter_entry()
-            local changed_adapter = data_of(changed).adapter :: {[string]: unknown}
+            local changed_adapter = assert(bounds.object(data_of(changed).adapter))
             changed_adapter.cancellation = "unsupported"
             local mismatched = classify.binding({binding = binding(), declaration = pinned, methods = methods(), adapters = {["fake:permission"] = changed}, activated = false})
             test.eq(mismatched.state, "incompatible")
@@ -137,7 +139,7 @@ local function define_tests()
             test.is_true(has(unsupported.diagnostics, "no profile uses a supported protocol"))
             test.is_false(unsupported.profiles[1].supported)
             local default_only = declaration()
-            local profiles = driver_of(default_only).profiles :: {{[string]: unknown}}
+            local profiles = principals.objects(driver_of(default_only).profiles)
             profiles[1].protocol = "pty"
             local partial = classified(default_only)
             test.eq(partial.state, "incompatible")
@@ -149,7 +151,7 @@ local function define_tests()
         end)
         test.it("matches transports to execution modes independently of fixture metadata", function()
             local entry = declaration()
-            local profiles = driver_of(entry).profiles :: {{[string]: unknown}}
+            local profiles = principals.objects(driver_of(entry).profiles)
             profiles[2].mode = "window"
             profiles[2].protocol = "pty"
             local accepted = classified(entry)
@@ -167,8 +169,8 @@ local function define_tests()
             data_of(other).contracts = {{contract = "bee.other:contract", methods = {}}}
             test.is_true(has(classified(nil, other).diagnostics, "binding does not implement bee.driver:driver"))
             local unbound = binding()
-            local contracts = data_of(unbound).contracts :: {{[string]: unknown}}
-            local bound = contracts[1].methods :: {[string]: unknown}
+            local contracts = principals.objects(data_of(unbound).contracts)
+            local bound = assert(bounds.object(contracts[1].methods))
             bound.normalize = nil
             test.is_true(has(classified(nil, unbound).diagnostics, "method normalize is not bound"))
             local absent = methods()
@@ -188,7 +190,8 @@ local function define_tests()
         end)
         test.it("keeps existing non-external drivers compatible without the locate facet", function()
             local legacy = binding()
-            local contracts = data_of(legacy).contracts :: {{[string]: unknown}}
+            local contracts = principals.objects(data_of(legacy).contracts)
+            data_of(legacy).contracts = contracts
             contracts[2] = nil
             local available = methods()
             available["fake:locate"] = nil
@@ -201,8 +204,8 @@ local function define_tests()
             test.eq(result.state, "compatible")
             test.eq(result.methods.locate, "fake:locate")
             local misplaced = binding()
-            local contracts = data_of(misplaced).contracts :: {{[string]: unknown}}
-            local driver_methods = contracts[1].methods :: {[string]: unknown}
+            local contracts = principals.objects(data_of(misplaced).contracts)
+            local driver_methods = assert(bounds.object(contracts[1].methods))
             driver_methods.locate = "fake:locate"
             local invalid = classified(nil, misplaced)
             test.eq(invalid.state, "incompatible")

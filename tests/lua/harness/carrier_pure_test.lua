@@ -2,6 +2,7 @@
 -- chunking; checkpoints decode exactly and only move forward; settlement
 -- follows the terminal envelope and never process exit alone.
 local test = require("test")
+local bounds = require("bounds")
 local provenance = require("provenance")
 local checkpoint = require("checkpoint")
 local settle = require("settle")
@@ -102,7 +103,7 @@ local function define_tests()
             local repinned = checkpoint.new({binding_ref = "b", binding_digest = "other", profile_id = "batch", profile_digest = "p"}, 1)
             repinned.consumed.stdout = 9
             test.eq(checkpoint.continues(redecoded, repinned), "pinned measurements changed")
-            local kept = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            local kept = assert(bounds.object(checkpoint.new(pinned, 1)))
             kept.output = "truncated"
             local decoded_kept, kept_error = checkpoint.decode(kept)
             if not decoded_kept then error(tostring(kept_error)) end
@@ -110,7 +111,7 @@ local function define_tests()
             kept.output = "unobserved"
             local _, conclusion_error = checkpoint.decode(kept)
             test.eq(conclusion_error, "output must be open, complete or truncated")
-            local ended = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            local ended = assert(bounds.object(checkpoint.new(pinned, 1)))
             ended.stream_ended = true
             local decoded_ended, ended_error = checkpoint.decode(ended)
             if not decoded_ended then error(tostring(ended_error)) end
@@ -118,23 +119,23 @@ local function define_tests()
             ended.stream_ended = "yes"
             local _, flag_error = checkpoint.decode(ended)
             test.eq(flag_error, "stream_ended must be a boolean")
-            local loose = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            local loose = assert(bounds.object(checkpoint.new(pinned, 1)))
             loose.extra = true
             test.is_nil(checkpoint.decode(loose))
             local wrong = checkpoint.new(pinned, 1)
             wrong.schema_revision = "bee.carrier.checkpoint@0"
             test.is_nil(checkpoint.decode(wrong))
-            local sparse = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            local sparse = assert(bounds.object(checkpoint.new(pinned, 1)))
             sparse.pending_writes = {[1] = {}, [3] = {}}
             local sparse_decoded, sparse_error = checkpoint.decode(sparse)
             test.is_nil(sparse_decoded)
             test.eq(sparse_error, "pending_writes must be a bounded dense list: list keys must be dense")
-            local keyed = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            local keyed = assert(bounds.object(checkpoint.new(pinned, 1)))
             keyed.pending_writes = {unexpected = {}}
             local keyed_decoded, keyed_error = checkpoint.decode(keyed)
             test.is_nil(keyed_decoded)
             test.eq(keyed_error, "pending_writes must be a bounded dense list: list keys must be dense")
-            local too_many = checkpoint.new(pinned, 1) :: {[string]: unknown}
+            local too_many = assert(bounds.object(checkpoint.new(pinned, 1)))
             local writes: {[integer]: unknown} = {}
             for index = 1, checkpoint.MAX_PENDING_WRITES + 1 do writes[index] = {} end
             too_many.pending_writes = writes
@@ -239,13 +240,13 @@ local function define_tests()
             if not missing then error("drained exit decides") end
             test.eq(missing.outcome, "uncertain")
             local killed = settle.decide({terminal = nil, exit = {code = 137, signal = 9, uncertain = false}, stream_ended = false, drained = true, exit_codes_trustworthy = false})
-            test.eq((killed :: settle.Settlement).outcome, "cancelled")
+            test.eq((killed).outcome, "cancelled")
             local disagreeing = settle.decide({terminal = terminal, exit = {code = 3, signal = nil, uncertain = false}, stream_ended = false, drained = true, exit_codes_trustworthy = true})
-            test.eq((disagreeing :: settle.Settlement).outcome, "uncertain")
-            test.eq((disagreeing :: settle.Settlement).answer, "42")
+            test.eq((disagreeing).outcome, "uncertain")
+            test.eq((disagreeing).answer, "42")
             local untrusted = settle.decide({terminal = terminal, exit = {code = 3, signal = nil, uncertain = false}, stream_ended = false, drained = true, exit_codes_trustworthy = false})
-            test.eq((untrusted :: settle.Settlement).outcome, "succeeded")
-            test.is_true((untrusted :: settle.Settlement).exit_reconciled)
+            test.eq((untrusted).outcome, "succeeded")
+            test.is_true((untrusted).exit_reconciled)
         end)
         test.it("decides a stream that ended without a result envelope only after exit and the drain", function()
             local ended: driver_types.Terminal = {outcome = "uncertain", answer = nil, resume_ref = "s1", usage = nil,
@@ -264,17 +265,17 @@ local function define_tests()
         test.it("settles a child stopped on request without a result envelope as cancelled", function()
             local stopped = {code = nil, signal = nil, uncertain = true, stopped = true}
             local bare = settle.decide({terminal = nil, stream_ended = false, exit = stopped, drained = true, exit_codes_trustworthy = false})
-            test.eq((bare :: settle.Settlement).outcome, "cancelled")
+            test.eq((bare).outcome, "cancelled")
             test.is_nil(settle.decide({terminal = nil, stream_ended = false, exit = stopped, drained = false, exit_codes_trustworthy = false}))
             local ended: driver_types.Terminal = {outcome = "uncertain", answer = nil, resume_ref = "s1", usage = nil,
                 error = {code = "stream_ended", message = "the stream ended without a result envelope", retryable = false}}
             local cut = settle.decide({terminal = ended, stream_ended = true, exit = stopped, drained = true, exit_codes_trustworthy = false})
-            test.eq((cut :: settle.Settlement).outcome, "cancelled")
-            test.eq((cut :: settle.Settlement).resume_ref, "s1")
+            test.eq((cut).outcome, "cancelled")
+            test.eq((cut).resume_ref, "s1")
             -- A result the driver reported before the stop still decides.
             local answered: driver_types.Terminal = {outcome = "succeeded", answer = "done", resume_ref = nil, usage = nil, error = nil}
             local finished = settle.decide({terminal = answered, stream_ended = false, exit = stopped, drained = true, exit_codes_trustworthy = false})
-            test.eq((finished :: settle.Settlement).outcome, "succeeded")
+            test.eq((finished).outcome, "succeeded")
         end)
         test.it("preserves canonical payload and stable event keys across old and new implementation", function()
             local binding_id = "bind-gateway-123"
@@ -292,11 +293,11 @@ local function define_tests()
             local ref1 = reference_hook_record(binding_id, turn_id, item)
             test.eq(batch1.records[1].source, ref1.source)
             test.eq(batch1.records[1].turn_id, ref1.turn_id)
-            test.eq((batch1.records[1].body :: Object).event_key, "hook:" .. binding_id .. ":UserPromptSubmit:turn:prompt-1")
-            test.eq((batch1.records[1].body :: Object).event_key, (ref1.body :: Object).event_key)
+            test.eq((assert(bounds.object(batch1.records[1].body))).event_key, "hook:" .. binding_id .. ":UserPromptSubmit:turn:prompt-1")
+            test.eq((assert(bounds.object(batch1.records[1].body))).event_key, (assert(bounds.object(ref1.body))).event_key)
 
-            local data1 = (batch1.records[1].body :: Object).data :: Object
-            local ref_data1 = (ref1.body :: Object).data :: Object
+            local data1 = assert(bounds.object((assert(bounds.object(batch1.records[1].body))).data))
+            local ref_data1 = assert(bounds.object((assert(bounds.object(ref1.body))).data))
             test.eq(data1.event_name, "bee.harness.hook")
             test.eq(data1.event_revision, "1")
             test.eq(data1.payload_json, ref_data1.payload_json)
@@ -305,9 +306,9 @@ local function define_tests()
             local batch2, err2 = hook_records.batch(binding_id, turn_id, {item})
             test.is_nil(err2)
             if not batch2 then error("batch2 is nil") end
-            local data2 = (batch2.records[1].body :: Object).data :: Object
+            local data2 = assert(bounds.object((assert(bounds.object(batch2.records[1].body))).data))
             test.eq(data2.payload_json, data1.payload_json)
-            test.eq((batch2.records[1].body :: Object).event_key, (batch1.records[1].body :: Object).event_key)
+            test.eq((assert(bounds.object(batch2.records[1].body))).event_key, (assert(bounds.object(batch1.records[1].body))).event_key)
 
             -- Optional turn_id: when omitted/nil, record carries no turn_id, but payload_json is byte-for-byte identical
             local batch_noturn, err_noturn = hook_records.batch(binding_id, nil, {item})
@@ -316,7 +317,7 @@ local function define_tests()
             test.is_nil(batch_noturn.records[1].turn_id)
             local ref_noturn = reference_hook_record(binding_id, nil, item)
             test.is_nil(ref_noturn.turn_id)
-            local data_noturn = (batch_noturn.records[1].body :: Object).data :: Object
+            local data_noturn = assert(bounds.object((assert(bounds.object(batch_noturn.records[1].body))).data))
             test.eq(data_noturn.payload_json, data1.payload_json)
 
             -- Ambiguous event key uses hook:<event_id>. A stop's ambiguity is
@@ -336,16 +337,16 @@ local function define_tests()
             test.eq(#batch_amb.event_ids, 1)
             local signal_record = batch_amb.records[2]
             test.eq(signal_record.source, "hook")
-            local signal_body = signal_record.body :: Object
+            local signal_body = assert(bounds.object(signal_record.body))
             test.eq(signal_body.type, "turn.signal")
             test.eq(signal_body.event_key, "hook:evt-002:turn")
-            test.eq((signal_body.data :: Object).phase, "ended")
-            test.is_nil((signal_body.data :: Object).reported_outcome)
+            test.eq((assert(bounds.object(signal_body.data))).phase, "ended")
+            test.is_nil((assert(bounds.object(signal_body.data))).reported_outcome)
             local failed_stop = hook_records.batch(binding_id, turn_id, {make_valid_item("evt-004", "StopFailure", true)})
             if not failed_stop then error("failed_stop is nil") end
             test.eq(#failed_stop.records, 2)
             test.eq(failed_stop.records[2].turn_id, turn_id)
-            test.eq(((failed_stop.records[2].body :: Object).data :: Object).reported_outcome, "failed")
+            test.eq((assert(bounds.object((assert(bounds.object(failed_stop.records[2].body))).data))).reported_outcome, "failed")
             -- An activity that describes a specific occurrence cannot be
             -- attributed without that occurrence's identity.
             local untagged_tool = make_valid_item("evt-003", "PreToolUse", true)
@@ -359,10 +360,10 @@ local function define_tests()
             local batch_sequence = hook_records.batch(binding_id, nil, sequence)
             if not batch_sequence then error("batch_sequence is nil") end
             test.eq(batch_sequence.activity, "Stopped")
-            test.eq((batch_amb.records[1].body :: Object).event_key, "hook:evt-002")
+            test.eq((assert(bounds.object(batch_amb.records[1].body))).event_key, "hook:evt-002")
             local ref_amb = reference_hook_record(binding_id, nil, amb_item)
-            test.eq((batch_amb.records[1].body :: Object).event_key, (ref_amb.body :: Object).event_key)
-            test.eq(((batch_amb.records[1].body :: Object).data :: Object).payload_json, ((ref_amb.body :: Object).data :: Object).payload_json)
+            test.eq((assert(bounds.object(batch_amb.records[1].body))).event_key, (assert(bounds.object(ref_amb.body))).event_key)
+            test.eq((assert(bounds.object((assert(bounds.object(batch_amb.records[1].body))).data))).payload_json, (assert(bounds.object((assert(bounds.object(ref_amb.body))).data))).payload_json)
 
             -- Multiple items up to 16 preserve order, event_ids and payloads
             local items: {Object} = {}
@@ -379,7 +380,7 @@ local function define_tests()
             for i = 1, 16 do
                 test.eq(batch_multi.event_ids[i], string.format("evt-%03d", i))
                 local ref_i = reference_hook_record(binding_id, turn_id, items[i])
-                test.eq(((batch_multi.records[i].body :: Object).data :: Object).payload_json, ((ref_i.body :: Object).data :: Object).payload_json)
+                test.eq((assert(bounds.object((assert(bounds.object(batch_multi.records[i].body))).data))).payload_json, (assert(bounds.object((assert(bounds.object(ref_i.body))).data))).payload_json)
             end
 
             -- Empty items list produces empty batch without error
@@ -414,7 +415,7 @@ local function define_tests()
             test.is_nil(err_norm)
             if not batch_norm then error("batch_norm is nil") end
             local ref_norm = reference_hook_record(binding_id, turn_id, norm_item)
-            test.eq(((batch_norm.records[1].body :: Object).data :: Object).payload_json, ((ref_norm.body :: Object).data :: Object).payload_json)
+            test.eq((assert(bounds.object((assert(bounds.object(batch_norm.records[1].body))).data))).payload_json, (assert(bounds.object((assert(bounds.object(ref_norm.body))).data))).payload_json)
         end)
         test.it("rejects malformed hook claims at the unknown boundary without silent skip or fallback", function()
             local binding_id = "bind-gateway-123"

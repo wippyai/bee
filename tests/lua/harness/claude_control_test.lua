@@ -8,6 +8,7 @@
 -- and an approval left to expire is answered as a deny. Without the
 -- executable the gate is reported open.
 local test = require("test")
+local bounds = require("bounds")
 local funcs = require("funcs")
 local security = require("security")
 local process = require("process")
@@ -56,9 +57,9 @@ local actor = security.new_actor(ACTOR)
 local approver = funcs.new():with_actor(security.new_actor(APPROVER)):with_scope(scope({"bee.harness.catalog:approver_client_policy", "bee.security.approvals:approval_decide_policy"}))
 local function reply_value(target: string, result: unknown, err: unknown): Object
     if err then error(target .. ": " .. tostring(err)) end
-    local reply = result :: {ok: boolean, error: {code: string, message: string}?, value: unknown}
+    local reply = result
     if not reply.ok then error(target .. ": " .. tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
-    return reply.value :: Object
+    return assert(bounds.object(reply.value))
 end
 local function call(target: string, request: unknown): Object
     local result, err = funcs.new():with_actor(principals.actor(ACTOR, principals.workspace(request))):with_scope(scope(carrier_scope)):call(target, request)
@@ -73,7 +74,7 @@ local function read_all(stream): string
     while true do
         local chunk: unknown = stream:read(65536)
         if type(chunk) ~= "string" or chunk == "" then break end
-        content = content .. (chunk :: string)
+        content = content .. (chunk)
     end
     return content
 end
@@ -115,12 +116,12 @@ end
 local function real_adapter(): adapter.Adapter
     local entry = registry.get(ADAPTER)
     if not entry then error("adapter entry") end
-    local decoded, err = adapter.decode(ADAPTER, (entry.data :: Object).adapter)
+    local decoded, err = adapter.decode(ADAPTER, (assert(bounds.object(entry.data))).adapter)
     if not decoded then error(tostring(err)) end
     return decoded
 end
-local endpoint_handle: any = nil
-local endpoint_executor: any = nil
+local endpoint_handle: exec.Process? = nil
+local endpoint_executor: exec.Executor? = nil
 local function start_endpoint(record: string, command: string): string
     local executor = assert(exec.get("bee.placement.native:placement_executor"))
     local proc, err = executor:exec(fixture_bin() .. "/gateway-client endpoint " .. record, {env = {BEE_ENDPOINT_TOOL = command}})
@@ -150,9 +151,9 @@ type Measured = {revision: string, kind: string, digest: string}
 local function measure_executable(path: string): Measured
     local raw, err = funcs.new():with_actor(actor):with_scope(scope(carrier_scope)):call("bee.placement.native.binding:measure_executable", {path = path})
     if err then error("measure executable: " .. tostring(err)) end
-    local reply = raw :: {ok: boolean, value: Object?}
+    local reply = raw
     if reply.ok and reply.value then
-        local measured = reply.value :: Object
+        local measured = assert(bounds.object(reply.value))
         return {revision = tostring(measured.revision), kind = tostring(measured.kind), digest = tostring(measured.digest)}
     end
     return {revision = "bee.executable-measurement@1", kind = "other", digest = string.rep("0", 64)}
@@ -175,19 +176,21 @@ local function prepare_host(claude: string, port: string, ttl_ms: integer)
     local fixture_digest = capture_digest()
     local record = registry.get(ACCEPTANCE)
     if not record then error("acceptance entry") end
-    (record.data :: Object).acceptance = {schema_revision = "bee.permission-acceptance@2", binding_id = BINDING, profile_id = "batch", binding_digest = binding_digest, profile_digest = profile_digest,
+    (assert(bounds.object(record.data))).acceptance = {schema_revision = "bee.permission-acceptance@2", binding_id = BINDING, profile_id = "batch", binding_digest = binding_digest, profile_digest = profile_digest,
         adapter_ref = ADAPTER, adapter_digest = pinned.digest, fixture_digest = fixture_digest, executable_revision = measure_executable(claude).revision, executable_kind = measure_executable(claude).kind, executable_digest = measure_executable(claude).digest, proof_revision = "bee.permission-proof@1", accepted_by = "bee.test.operator", accepted_at = "2026-09-09T00:00:00.000Z"}
     apply(record)
     local policy = registry.get(POLICY)
     if not policy then error("policy entry") end
-    local data = policy.data :: Object
+    local data = assert(bounds.object(policy.data))
     data.executables = {claude = claude}
     data.environment = {ANTHROPIC_BASE_URL = "http://127.0.0.1:" .. port}
     data.permission_exchange = {adapter_ref = ADAPTER, acceptance_ref = ACCEPTANCE, fixture_digest = fixture_digest, approver_policy = APPROVER_POLICY, poll_ms = 500, ttl_ms = ttl_ms}
     apply(policy)
     local policies_entry = registry.get("bee:approver_policies")
     if not policies_entry then error("approver policies entry") end
-    local list = (policies_entry.data :: Object).policies :: {Object}
+    local list_owner = assert(bounds.object(policies_entry.data))
+    local list = principals.objects(list_owner.policies)
+    list_owner.policies = list
     local present = false
     for _, item in ipairs(list) do
         if item.name == APPROVER_POLICY then present = true end
@@ -198,7 +201,9 @@ local function prepare_host(claude: string, port: string, ttl_ms: integer)
     end
     local roots = registry.get("bee.placement.native:placement_admitted_roots")
     if not roots then error("admitted roots entry") end
-    local root_list = (roots.data :: Object).roots :: {Object}
+    local root_list_owner = assert(bounds.object(roots.data))
+    local root_list = principals.objects(root_list_owner.roots)
+    root_list_owner.roots = root_list
     local admitted = false
     for _, root in ipairs(root_list) do
         if root.root_ref == ROOT then admitted = true end
@@ -210,7 +215,8 @@ local function prepare_host(claude: string, port: string, ttl_ms: integer)
 end
 local function thread(): string
     local created = call("bee.threads.service:create", {thread_id = fresh("thread"), idempotency_key = fresh("key"), title = "Claude control"})
-    return created.thread_id :: string
+    if type(created.thread_id) ~= "string" then error("invalid fixture created.thread_id") end
+    return created.thread_id
 end
 local function request(thread_id: string, attempt_id: string, workspace: string): Object
     local placement = placement_fixture.resolve()
@@ -244,17 +250,17 @@ local function await_carrier(pid: string, label: string): Outcome
         if event.kind == process.event.EXIT then
             local result = event.result or {}
             local value: Object? = nil
-            if type(result.value) == "table" then value = result.value :: Object end
+            if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
             exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
         end
     end
-    return exited[pid] :: Outcome
+    return exited[pid]
 end
 local function await_request(workspace: string): Object
     for _ = 1, 400 do
         local page = approve_call("bee.approvals.binding:inbox", {workspace_id = workspace})
-        for _, change in ipairs(page.changes :: {Object}) do
-            local view = change.request :: Object
+        for _, change in ipairs(principals.objects(page.changes)) do
+            local view = assert(bounds.object(change.request))
             if view.state == "pending" then return view end
         end
         time.sleep("50ms")
@@ -269,19 +275,20 @@ local function records_of(thread_id: string): {Object}
     local cursor = 0
     for _ = 1, 32 do
         local page = call("bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64})
-        for _, item in ipairs(page.records :: {Object}) do all[#all + 1] = item end
+        for _, item in ipairs(principals.objects(page.records)) do all[#all + 1] = item end
         if page.has_more ~= true then break end
-        cursor = math.floor(page.scanned_through :: number)
+        if type(page.scanned_through) ~= "number" then error("invalid fixture page.scanned_through") end
+        cursor = math.floor(page.scanned_through)
     end
     return all
 end
 local function phases(records: {Object}): {string}
     local list: {string} = {}
     for _, item in ipairs(records) do
-        local body = item.body :: Object
+        local body = assert(bounds.object(item.body))
         if body.type == "extension" then
-            local data = body.data :: Object
-            if data.event_name == "bee.carrier.permission" then list[#list + 1] = tostring((json.decode(tostring(data.payload_json)) :: Object).phase) end
+            local data = assert(bounds.object(body.data))
+            if data.event_name == "bee.carrier.permission" then list[#list + 1] = tostring((assert(bounds.object(json.decode(tostring(data.payload_json))))).phase) end
         end
     end
     return list
@@ -289,17 +296,17 @@ end
 local function writes(records: {Object}): {string}
     local list: {string} = {}
     for _, item in ipairs(records) do
-        local body = item.body :: Object
+        local body = assert(bounds.object(item.body))
         if body.type == "extension" then
-            local data = body.data :: Object
-            if data.event_name == "bee.carrier.write" then list[#list + 1] = tostring((json.decode(tostring(data.payload_json)) :: Object).phase) end
+            local data = assert(bounds.object(body.data))
+            if data.event_name == "bee.carrier.write" then list[#list + 1] = tostring((assert(bounds.object(json.decode(tostring(data.payload_json))))).phase) end
         end
     end
     return list
 end
 local function approvals_in(workspace: string): integer
     local listed = call("bee.approvals.binding:list", {workspace_id = workspace})
-    return #(listed.requests :: {unknown})
+    return #(principals.items(listed.requests))
 end
 local function count(list: {string}, wanted: string): integer
     local total = 0
@@ -311,9 +318,9 @@ end
 local function tool_results(records: {Object}, outcome: string): integer
     local total = 0
     for _, item in ipairs(records) do
-        local body = item.body :: Object
+        local body = assert(bounds.object(item.body))
         if body.type == "tool.result" then
-            local data = body.data :: Object
+            local data = assert(bounds.object(body.data))
             if data.call_id == "toolu_bee_1" and data.outcome == outcome then total = total + 1 end
         end
     end
@@ -321,7 +328,7 @@ local function tool_results(records: {Object}, outcome: string): integer
 end
 local function settlement_of(outcome: Outcome, label: string): Object
     if not outcome.value then error(label .. ": " .. tostring(outcome.error)) end
-    return outcome.value.settlement :: Object
+    return assert(bounds.object(outcome.value.settlement))
 end
 -- The effect is a counted append, so a duplicate execution is visible.
 local function marker_count(name: string): integer
@@ -358,13 +365,13 @@ local function define_tests()
                 settlement.effects = marker_count(marker)
                 shell("rm -f " .. PROJECT .. "/" .. marker)
                 local evidence: {string} = {}
-                for _, item in ipairs(call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64}).evidence :: {Object}) do evidence[#evidence + 1] = tostring(item.kind) end
+                for _, item in ipairs(principals.objects(call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 64}).evidence)) do evidence[#evidence + 1] = tostring(item.kind) end
                 local input_phases: {string} = {}
                 for _, item in ipairs(records) do
-                    local body = item.body :: Object
+                    local body = assert(bounds.object(item.body))
                     if body.type == "extension" then
-                        local data = body.data :: Object
-                        if data.event_name == "bee.carrier.input" then input_phases[#input_phases + 1] = tostring((json.decode(tostring(data.payload_json)) :: Object).phase) end
+                        local data = assert(bounds.object(body.data))
+                        if data.event_name == "bee.carrier.input" then input_phases[#input_phases + 1] = tostring((assert(bounds.object(json.decode(tostring(data.payload_json))))).phase) end
                     end
                 end
                 if count(evidence, "stdin.closed") == 1 then
@@ -513,7 +520,7 @@ local function define_tests()
                 -- The runner itself is lost, so no remembered acceptance
                 -- survives; the child is then stopped through placement.
                 local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
-                local runner = tostring((status.attempt :: Object).runner or "")
+                local runner = tostring((assert(bounds.object(status.attempt))).runner or "")
                 if runner == "" then error("no runner recorded for the attempt") end
                 assert(process.terminate(runner))
                 time.sleep("500ms")

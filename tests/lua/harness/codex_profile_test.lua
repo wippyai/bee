@@ -3,6 +3,8 @@
 -- policy wiring (the reachability gap a rendering assertion cannot see) and
 -- the refusals that must hold without a provider.
 local test = require("test")
+local principals = require("principals")
+local bounds = require("bounds")
 local registry = require("registry")
 local policy = require("policy")
 local preferences = require("preferences")
@@ -23,7 +25,7 @@ local PROFILE = "ds-flash"
 local function raw_policy(ref: string): {[string]: unknown}
     local entry = registry.get(ref)
     if not entry then error("missing launch policy " .. ref) end
-    local data = entry.data :: {[string]: unknown}
+    local data = assert(bounds.object(entry.data))
     if not data then error("launch policy " .. ref .. " has no data") end
     return data
 end
@@ -63,28 +65,28 @@ local function define_tests()
             -- file it declares can resolve there.
             local codex, codex_error = registry.get("bee.driver.codex:profiles")
             if not codex then error(tostring(codex_error)) end
-            local driver = (codex.data :: {[string]: unknown}).driver :: {[string]: unknown}
+            local driver = assert(bounds.object((assert(bounds.object(codex.data))).driver))
             local window: {[string]: unknown}? = nil
-            for _, item in ipairs(driver.profiles :: {{[string]: unknown}}) do
+            for _, item in ipairs(principals.objects(driver.profiles)) do
                 if item.id == "window" then window = item end
             end
             if not window then error("codex window profile is missing") end
-            test.is_false((window.isolation_env :: {[string]: unknown}).private_home)
+            test.is_false((assert(bounds.object(window.isolation_env))).private_home)
             local named_batch: {[string]: unknown}? = nil
-            for _, item in ipairs(driver.profiles :: {{[string]: unknown}}) do
+            for _, item in ipairs(principals.objects(driver.profiles)) do
                 if item.id == "named_batch" then named_batch = item end
             end
             if not named_batch then error("codex named_batch profile is missing") end
-            test.is_true((named_batch.isolation_env :: {[string]: unknown}).private_home)
+            test.is_true((assert(bounds.object(named_batch.isolation_env))).private_home)
         end)
 
         test.it("accepts the named profile into the shipped Codex window policy and refuses it on Claude", function()
             local accepted, accepted_error = preferences.apply(raw_policy(CODEX_WINDOW), selected())
             if not accepted then error("codex window refused the named profile: " .. tostring(accepted_error)) end
-            test.eq((accepted.prepare_options :: {[string]: unknown}).config_profile, PROFILE)
+            test.eq((assert(bounds.object(accepted.prepare_options))).config_profile, PROFILE)
             local named, named_error = preferences.apply(raw_policy(CODEX_NAMED_BATCH), selected())
             if not named then error("codex named batch refused the named profile: " .. tostring(named_error)) end
-            test.eq((named.prepare_options :: {[string]: unknown}).config_profile, PROFILE)
+            test.eq((assert(bounds.object(named.prepare_options))).config_profile, PROFILE)
             -- A non-Codex driver refuses the field: its policy never enables
             -- it, and its driver has no such launch field.
             test.is_nil(preferences.apply(raw_policy(CLAUDE_WINDOW), selected()))
@@ -101,7 +103,7 @@ local function define_tests()
             local offered, offered_error = preferences.apply(offered_policy, selected())
             if not offered then error(tostring(offered_error)) end
             local _, offered_launch_error = claude_launch.decode({profile_id = "window", brief = "", permission_mode = "default",
-                config_profile = (offered.prepare_options :: {[string]: unknown}).config_profile})
+                config_profile = (assert(bounds.object(offered.prepare_options))).config_profile})
             test.is_true(tostring(offered_launch_error):find("config_profile", 1, true) ~= nil)
         end)
 
@@ -119,7 +121,7 @@ local function define_tests()
                 local spec = launch.specification(assert(launch.decode(request)))
                 test.is_nil(machine.required_file_refusal(spec, true))
                 test.is_nil(spec.required_files)
-                local home = spec.provider_home :: driver_types.ProviderHome
+                local home = spec.provider_home
                 test.is_true(home.private)
                 local found = false
                 for _, file in ipairs(home.files) do
@@ -141,7 +143,7 @@ local function define_tests()
             test.eq(spec.argv[1], "--profile")
             test.eq(spec.argv[2], PROFILE)
             test.is_nil(spec.required_files)
-            test.is_true((spec.provider_home :: driver_types.ProviderHome).private)
+            test.is_true((spec.provider_home).private)
             test.is_nil(machine.required_file_refusal(spec, true))
             -- A launch with no named profile is never refused for one.
             local plain = launch.specification(assert(launch.decode({profile_id = "named_batch", brief = "work", sandbox = "read-only"})))
@@ -172,7 +174,7 @@ local function define_tests()
                         return "", nil
                     end)
                 if not resolved then error(tostring(resolve_error)) end
-                test.eq((resolved.executables :: {[string]: string})[window.executable], "/opt/host/" .. window.executable)
+                test.eq((resolved.executables)[window.executable], "/opt/host/" .. window.executable)
                 -- An unavailable host executable leaves the declaration
                 -- unavailable rather than binding a relative or empty name.
                 local absent, absent_error = policy.decode(window.policy_ref, entry,
@@ -199,12 +201,12 @@ local function define_tests()
             for _, binding in ipairs(bindings) do
                 local policy_entry = registry.get(binding.policy_ref)
                 if not policy_entry then error("missing shipped policy " .. binding.policy_ref) end
-                local declared = ((policy_entry.data :: {[string]: unknown}).executable_env :: {[string]: string})[binding.executable]
+                local declared = ((assert(bounds.object(policy_entry.data))).executable_env)[binding.executable]
                 test.eq(declared, binding.variable)
                 local variable_entry = registry.get(binding.variable)
                 if not variable_entry then error("missing executable variable " .. binding.variable) end
                 test.eq(variable_entry.kind, "env.variable")
-                test.eq((variable_entry.data :: {[string]: unknown}).storage, "bee.harness.host:environment")
+                test.eq((assert(bounds.object(variable_entry.data))).storage, "bee.harness.host:environment")
             end
         end)
 

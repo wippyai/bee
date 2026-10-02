@@ -203,8 +203,8 @@ NEXT_COMPONENT = "0.1.0-selfupdate.component.3"
 
 
 def build_deployments(folder, seed):
-    # Reuse sealed artifact resources and registrations while packing current
-    # production Lua into the fixture versions. No runtime pin or publication changes.
+    # Refresh code declarations from their current owners while retaining
+    # sealed resource assets. Fixture versions do not change the runtime pin.
     lock, paths = artifact_paths(seed)
     sources, declarations = {}, {}
     for root in (ROOT / "src", ROOT / "modules"):

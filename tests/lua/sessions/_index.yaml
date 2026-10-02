@@ -302,6 +302,6 @@ entries:
     test: wippy.test:test
     route: bee.sessions.executor:driver_route
     bounds: bee.values:bounds
-    materializer: bee.gov.delivery:materializer
+    materializer: bee.gov.binding:materializer
   modules:
   - registry

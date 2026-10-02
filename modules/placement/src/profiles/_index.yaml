@@ -12,8 +12,8 @@ entries:
   source: file://profiles.lua
   modules: [hash, registry]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
 - name: native
   kind: registry.entry
   meta: {type: bee.placement_profile, title: Native}

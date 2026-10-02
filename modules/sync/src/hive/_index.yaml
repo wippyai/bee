@@ -7,8 +7,8 @@ entries:
   modules: [funcs, security, system]
   imports:
     types: bee.hive:types
-    bounds: bee.protocol:bounds
-    canonical: bee.protocol:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     catalog: bee.hive.exposure:catalog
     version: bee.sync.values:version
     output: bee.hive.binding:output

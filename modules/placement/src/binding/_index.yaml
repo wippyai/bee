@@ -6,6 +6,6 @@ entries:
   source: file://resolver.lua
   modules: [hash, registry]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types

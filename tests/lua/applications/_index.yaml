@@ -10,11 +10,11 @@ entries:
   security: {policies: [bee.gov:plan_test_policy]}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     catalog: bee.apps:catalog
     admission: bee.gov.activation:governed_application_admission
     activation_store: bee.gov.persist:activation_store
-    canonical: bee.sync.values:canonical
+    canonical: bee.values:canonical
     test: wippy.test:test
 - name: catalog_revision_probe
   kind: function.lua
@@ -79,7 +79,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     protocol: bee.apps:open_protocol
     contract: bee.protocol:application
     test: wippy.test:test
@@ -122,7 +122,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     reducer: bee.apps:thread_binding_reducer
 - name: open_thread_membership_test
@@ -132,7 +132,7 @@ entries:
   modules: [process, channel, time, security, funcs]
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.app:appearance
 - name: app_stable_membership_test
@@ -143,7 +143,7 @@ entries:
   meta: {type: test, suite: bee, timeout: "120s"}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.app:appearance
     catalog: bee.apps:catalog
@@ -154,7 +154,7 @@ entries:
   modules: [process, channel, time, security, exec, uuid]
   meta: {type: test, suite: bee, timeout: "60s"}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.app:appearance
 - name: broker_exit_test
@@ -164,7 +164,7 @@ entries:
   modules: [process, channel, time, security]
   meta: {type: test, suite: bee, timeout: "60s"}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.app:appearance
 - name: broker_reopen_test
@@ -174,6 +174,6 @@ entries:
   modules: [process, channel, time, security, tty]
   meta: {type: test, suite: bee, timeout: "60s"}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.app:appearance

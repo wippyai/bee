@@ -37,7 +37,7 @@ entries:
   source: file://resources.lua
   modules: [registry, env, system]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: resource_roots
   kind: registry.entry
   meta:

@@ -113,7 +113,7 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	if err := os.CopyFS(filepath.Join(sourceSnapshot, "security"), os.DirFS(filepath.Join(repository, "src/security"))); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"hive", "persist", "sync", "threads", "hive-telemetry", "application"} {
+	for _, name := range []string{"values", "hive", "persist", "sync", "threads", "hive-telemetry", "application"} {
 		if err := os.CopyFS(filepath.Join(root, "modules", name), os.DirFS(filepath.Join(repository, "modules", name))); err != nil {
 			t.Fatal(err)
 		}
@@ -125,9 +125,9 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 	}
 	for _, dependency := range []struct{ directory, source, manifest string }{
 		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
-		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.app:arguments\n    bounds: bee.protocol:bounds\n"},
+		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.app:arguments\n    bounds: bee.values:bounds\n"},
 		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
-		{"workspace_binding", "src/storage/binding.lua", "version: '1.0'\nnamespace: bee.storage\nentries:\n- name: binding\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.threads.records:bounds\n"},
+		{"workspace_binding", "src/storage/binding.lua", "version: '1.0'\nnamespace: bee.storage\nentries:\n- name: binding\n  kind: library.lua\n  source: file://source.lua\n  modules: [hash]\n  imports:\n    contract: bee.protocol:application\n    bounds: bee.values:bounds\n"},
 		{"application_host_leases", "modules/application/src/host_leases.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: host_leases\n  kind: library.lua\n  source: file://source.lua\n  modules: [process, channel, time, uuid]\n"},
 	} {
 		directory := filepath.Join(sourceSnapshot, dependency.directory)
@@ -142,33 +142,6 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(directory, "_index.yaml"), []byte(dependency.manifest), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	protocolDir := filepath.Join(sourceSnapshot, "application_protocol")
-	for _, module := range []struct {
-		name, path, manifest string
-	}{
-		{"clock", "src/protocol/clock.lua", "- name: clock\n  kind: library.lua\n  source: file://clock.lua\n  modules: [time]\n"},
-		{"bounds", "src/protocol/bounds.lua", "- name: bounds\n  kind: library.lua\n  source: file://bounds.lua\n  imports:\n    clock: bee.protocol:clock\n"},
-		{"canonical", "src/protocol/canonical.lua", "- name: canonical\n  kind: library.lua\n  source: file://canonical.lua\n  modules: [json]\n"},
-	} {
-		body, err := os.ReadFile(filepath.Join(repository, module.path))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(protocolDir, module.name+".lua"), body, 0600); err != nil {
-			t.Fatal(err)
-		}
-		manifest, err := os.OpenFile(filepath.Join(protocolDir, "_index.yaml"), os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := manifest.WriteString(module.manifest); err != nil {
-			manifest.Close()
-			t.Fatal(err)
-		}
-		if err := manifest.Close(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -393,7 +366,7 @@ func runHiveSupervisors(t *testing.T, feeds bool) {
 		if err := os.CopyFS(filepath.Join(folder, "src", "hive_probe"), os.DirFS(fixtureSnapshot)); err != nil {
 			t.Fatal(err)
 		}
-		moduleNames := []string{"hive", "persist", "sync", "threads", "hive-telemetry", "application"}
+		moduleNames := []string{"values", "hive", "persist", "sync", "threads", "hive-telemetry", "application"}
 		if feeds {
 			moduleNames = append(moduleNames, "approvals", "node")
 		}

@@ -4,8 +4,10 @@ entries:
 - name: revocation_stops
   kind: library.lua
   source: file://revocation_stops.lua
-  modules: [funcs]
-  imports: {bounds: bee.threads.records:bounds}
+  modules:
+  - funcs
+  imports:
+    bounds: bee.values:bounds
 - name: associate
   kind: function.lua
   source: file://associate_method.lua

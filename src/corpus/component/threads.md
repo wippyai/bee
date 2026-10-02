@@ -13,7 +13,7 @@ delivery contract and does not schedule work.
 | Slice | Responsibility |
 |---|---|
 | `bee.threads` | Contracts (`authority`, `lifecycle`, `delivery`, `projection`, `carrier`, `approvals`, `journal`), local bindings, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
-| `bee.threads.records` | Pure typed decoders for the seven record families, bounds, the canonical record encoder and canonical JSON for request identity; no I/O |
+| `bee.threads.records` | Pure typed decoders for the seven record families, thread-specific capacity and sequence checks, and canonical record envelopes encoded through `bee.values`; no I/O |
 | `bee.threads.binding` | Callable implementations of the authority, lifecycle, delivery, projection, carrier, approvals and journal contracts; domain-qualified method names resolve collisions |
 | `bee.threads.service` | The owner and delivery waiter processes; the authority: access facade, authority, action inbox and lifecycle operations, canonical session/work store, one-shot notices, and owner methods |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |

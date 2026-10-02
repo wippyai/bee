@@ -6,6 +6,6 @@ entries:
   source: file://catalog.lua
   modules: [registry, security, json, hash]
   imports:
-    canonical: bee.protocol:canonical
-    bounds: bee.protocol:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     types: bee.hive:types

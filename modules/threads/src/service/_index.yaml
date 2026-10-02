@@ -6,7 +6,7 @@ entries:
   source: file://access.lua
   modules: [security]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: boundary
   kind: library.lua
   source: file://boundary.lua
@@ -23,7 +23,7 @@ entries:
   source: file://notices.lua
   modules: [sql, uuid]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     record: bee.threads.records:record
     message: bee.threads.records:message
     record_types: bee.threads:record_types
@@ -36,8 +36,8 @@ entries:
   source: file://authority.lua
   modules: [sql, json]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     values: bee.threads.records:values
     record: bee.threads.records:record
     message: bee.threads.records:message
@@ -47,12 +47,13 @@ entries:
     access: bee.threads.service:access
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
+    record_bounds: bee.threads.records:bounds
 - name: lifecycle
   kind: library.lua
   source: file://lifecycle.lua
   modules: [sql]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     values: bee.threads.records:values
     lifecycle: bee.threads.records:lifecycle
     record_types: bee.threads:record_types
@@ -61,12 +62,13 @@ entries:
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
     inbox: bee.threads.service:inbox
+    record_bounds: bee.threads.records:bounds
 - name: app_alias
   kind: library.lua
   source: file://app_alias.lua
   modules: [sql]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     access: bee.threads.service:access
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
@@ -75,8 +77,8 @@ entries:
   source: file://send.lua
   modules: [sql, hash, json]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     reader: bee.threads.persist:reader
     transaction: bee.threads.persist:transaction
     authority: bee.threads.service:authority
@@ -85,7 +87,7 @@ entries:
   source: file://inbox.lua
   modules: [sql, system, json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     access: bee.threads.service:access
     message: bee.threads.records:message
     record: bee.threads.records:record
@@ -99,14 +101,14 @@ entries:
   source: file://outbox.lua
   modules: [sql, json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     transaction: bee.threads.persist:transaction
     repository: bee.threads.persist:outbox
 - name: pump
   kind: library.lua
   source: file://pump.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: pump_sender
   kind: library.lua
   source: file://pump_sender.lua
@@ -122,7 +124,7 @@ entries:
     resources: bee.threads.env:resources
     outbox: bee.threads.service:outbox
     pump: bee.threads.service:pump
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: work_store
   kind: library.lua
   source: file://work_store.lua
@@ -136,8 +138,9 @@ entries:
     record: bee.threads.records:record
     observation: bee.threads.records:observation
     record_types: bee.threads:record_types
-    bounds: bee.threads.records:bounds
-    canonical: bee.protocol:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    record_bounds: bee.threads.records:bounds
 - name: owner
   kind: process.lua
   source: file://owner.lua

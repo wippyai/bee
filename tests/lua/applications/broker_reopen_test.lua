@@ -43,10 +43,10 @@ local function journey(definition: string, check: (tty.Viewport, string, integer
         assert(tostring(catalogs:receive():from()) == broker)
         assert(process.send(broker, "bee.app.request", {version = 1, op = "bind", request_id = "reopen-bind", workspace_id = WORKSPACE, recipient = owner}))
         test.eq(reply("reopen-bind").error_code, "")
-        local first = open("reopen-first", {"src/protocol/clock.lua:2-4"})
+        local first = open("reopen-first", {"modules/values/src/clock.lua:2-4"})
         local retained = assert(tty.attach(tostring(first.mount)))
         assert(retained:send({type = "resize", width = 120, height = 36}))
-        check(retained, "src/protocol/clock.lua", 2, 4)
+        check(retained, "modules/values/src/clock.lua", 2, 4)
         local second = open("reopen-second", {"src/apps/command.lua:5-8"})
         test.eq(second.op, "focus")
         test.eq(second.instance_id, first.instance_id)
@@ -58,7 +58,7 @@ local function journey(definition: string, check: (tty.Viewport, string, integer
         open("reopen-second", {"src/apps/command.lua:5-8"})
         open("reopen-empty", {})
         if definition == "bee.files.app:app" then
-            for index, arg in ipairs({"../outside.lua:1-2", "/outside.lua:1-2", ".wippy/private.db:1-2", "src/protocol/clock.lua:0"}) do
+            for index, arg in ipairs({"../outside.lua:1-2", "/outside.lua:1-2", ".wippy/private.db:1-2", "modules/values/src/clock.lua:0"}) do
                 open("reopen-unsafe-" .. tostring(index), {arg})
             end
         end

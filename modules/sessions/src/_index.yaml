@@ -59,3 +59,7 @@ entries:
   methods:
   - name: run_turn
     description: Execute one accepted work turn through the selected driver and placement
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

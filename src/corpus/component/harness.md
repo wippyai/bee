@@ -16,6 +16,11 @@ readiness descriptors.
 | `bee.harness.profiles` | Stores bounded workspace preferences in the node-owned profile feed. Reads and writes still require the caller's workspace authority. |
 | `bee.harness.app` | Runs the Sessions application. Its list reads the public sessions contract and reopens stable addresses, including closed sessions. Its new-session picker reads `bee.sessions:catalog`, opens an idle session, and sends each input as one work item. `M` keeps the explicit PTY attach path. |
 
+Each Sessions window is a separate application instance, so another controlling
+display can open `bee agent` while the first display keeps its Sessions window.
+The windows read the same owner-managed sessions through the public contract;
+opening another window does not transfer an existing display assignment.
+
 ## Session catalog and readiness
 
 The new-session picker calls `bee.sessions:catalog.list`. The Sessions owner lists

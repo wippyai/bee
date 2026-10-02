@@ -6,7 +6,7 @@ entries:
   source: file://distributor.lua
   modules: [registry, system]
   imports:
-    bounds: bee.sync.values:bounds
+    bounds: bee.values:bounds
     version: bee.sync.values:version
     sync: bee.sync.persist:store
     replicas: bee.sync.persist:replicas

@@ -129,3 +129,7 @@ entries:
     path: .security.policies
   - entry: bee.approvals.binding:runtime_lease
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

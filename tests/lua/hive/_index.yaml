@@ -129,7 +129,7 @@ entries:
   imports:
     test: wippy.test:test
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: catalog_test
   kind: function.lua
   source: file://catalog_test.lua
@@ -137,7 +137,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     catalog: bee.hive.exposure:catalog
     types: bee.hive:types
@@ -175,7 +175,7 @@ entries:
   security:
     policies: [bee.hive:mapping_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     principals: bee.hive.security:principals
@@ -191,7 +191,7 @@ entries:
   security:
     policies: [bee.hive:mapping_test_policy, bee.security.threads:thread_create_policy, bee.security.threads:thread_observe_policy, bee.security.threads:thread_lifecycle_policy, bee.security.threads:thread_storage_policy, bee.security.threads:thread_resource_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     principals: bee.hive.security:principals
@@ -206,7 +206,7 @@ entries:
   modules: [process, channel, time, funcs, security, uuid, registry]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     protocol: bee.hive.desktop:protocol
@@ -259,7 +259,7 @@ entries:
   security:
     policies: [bee.hive:desktop_workspaces_test_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     types: bee.hive:types
     owner: bee.hive.desktop:owner
@@ -293,7 +293,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [process, channel, time]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     protocol: bee.hive.desktop:protocol
 

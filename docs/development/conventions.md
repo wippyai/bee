@@ -20,6 +20,13 @@ package-root spelling exception is `modules/application/src` → `bee.app`, the
 public SDK. Namespace segments and mapped folders contain no underscores.
 No child production `src/` path diverges from its namespace.
 
+Each entry lives in the namespace of the component that owns its concept,
+in the appropriate child such as `service`, `binding`, `persist`, `types`,
+`security` or `app`. The root `bee` namespace holds only the host composition
+and process wiring described below. Reuse existing dependency entries,
+resolution locks, requirement parameters and owner stores instead of adding
+parallel registry records or stored state for the same information.
+
 `make lint` runs `build/layout_check.py` before typed Lua lint. It checks namespace
 paths, component roots, local sources, application entries, process placement,
 host-free requirement defaults, duplicate Lua sources, orphan files and
@@ -53,6 +60,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `src/storage` | Workspace database, catalog rows and immutable migrations; shared runner in `bee.persist` |
+| `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
@@ -113,6 +121,7 @@ entry: host wiring cannot leak implementations into a component root.
 | `bee.placement.native` | `protocol` |
 | `bee.sync` | `protocol`, `replica_protocol`, `types` |
 | `bee.threads` | `record_types`, `types` |
+| `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
 
 The SDK `bee.app` owns its documented public application helpers and rendering
 values at its root. Those entries are included in the same explicit set. New
@@ -171,6 +180,10 @@ Use explicit record types for exported values and functions. Treat decoded JSON
 and message payloads as `unknown` until validated; never use casts or `any` to
 skip validation. Bound strings, arrays, state, geometry, request IDs and
 pending work. Reject invalid versions before changing state.
+
+Import generic bounds, canonical JSON, clock conversions and reply decoding
+directly from `bee.values`. Domain checks stay with their owning components;
+retained startup phases and deadlines live in `bee.app.status:startup_progress`.
 
 Authenticate `message:from()` and the relevant instance, launch token,
 execution generation or operation grant. A PID in a payload is not
@@ -240,7 +253,7 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 23,987 Lua line ceiling under `src/`, recorded in
+The root has a 23,643 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
 in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.

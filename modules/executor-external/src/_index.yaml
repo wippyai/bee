@@ -44,3 +44,7 @@ entries:
   version: '*'
   meta:
     comment: Shared bounded identifier and object decoders
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

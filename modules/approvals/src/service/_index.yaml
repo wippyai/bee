@@ -60,17 +60,18 @@ entries:
 - name: runtime_lease
   kind: library.lua
   source: file://runtime_lease.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports:
+    bounds: bee.values:bounds
 - name: service
   kind: library.lua
   source: file://service.lua
   modules: [sql, hash, uuid, json, security, system, process, funcs]
   imports:
     runtime_lease: bee.approvals.service:runtime_lease
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     values: bee.threads.records:values
-    clock: bee.protocol:clock
+    clock: bee.values:clock
     persist: bee.persist.persist:database
     transaction: bee.persist.persist:transaction
     migrations: bee.approvals.migrations:migrations

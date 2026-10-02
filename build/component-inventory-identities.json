@@ -786,6 +786,7 @@
     "bee.threads:target_db",
     "bee.threads:target_session_create_policies",
     "bee.threads:waiter_policies",
+    "bee.values:definition",
     "bee.workspace.catalog:contract",
     "bee.workspace.catalog:extension",
     "bee.workspace.catalog:local",

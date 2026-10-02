@@ -186,7 +186,7 @@ entries:
   method: main
   modules: [funcs, registry, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hubrecoveryprobe:policy, bee.hubrecoveryprobe:management_policy, bee.hubrecoveryprobe:reader_policy]
   meta:
@@ -199,7 +199,7 @@ entries:
   method: restart
   modules: [funcs, registry, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hubrecoveryprobe:policy, bee.hubrecoveryprobe:management_policy, bee.hubrecoveryprobe:reader_policy]
   meta:
@@ -218,7 +218,7 @@ entries:
   method: tamper
   modules: [funcs, registry, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hubrecoveryprobe:writer_policy]
   meta:
@@ -231,7 +231,7 @@ entries:
   method: conflict
   modules: [funcs, registry, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.hubrecoveryprobe:policy, bee.hubrecoveryprobe:management_policy, bee.hubrecoveryprobe:reader_policy]
   meta:
@@ -255,30 +255,14 @@ def command_environment(folder):
 
 def prepare_fixture(folder):
     shutil.copytree(ROOT / "tests/fixtures/hub_manage", folder / "src")
-    shutil.copytree(ROOT / "src/protocol", folder / "src/protocol")
-    (folder / "src/protocol/_index.yaml").write_text("""version: '1.0'
-namespace: bee.protocol
-entries:
-- name: clock
-  kind: library.lua
-  source: file://clock.lua
-  modules: [time]
-- name: bounds
-  kind: library.lua
-  source: file://bounds.lua
-  imports: {clock: bee.protocol:clock}
-- name: canonical
-  kind: library.lua
-  source: file://canonical.lua
-  modules: [json]
-""")
-    for module in ("hub", "hive", "persist", "sync", "threads", "placement", "driver"):
+    for module in ("values", "hub", "hive", "persist", "sync", "threads", "placement", "driver"):
         shutil.copytree(ROOT / "modules" / module, folder / "modules" / module)
     (folder / "src/hubrecoveryprobe").mkdir()
     (folder / "src/hubrecoveryprobe/main.lua").write_text(PROBE)
     (folder / "src/hubrecoveryprobe/_index.yaml").write_text(PROBE_INDEX)
     (folder / "wippy.lock").write_text(
         "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n"
+        "- name: bee/values\n  version: 0.1.0-dev\n"
         "- name: bee/hub\n  version: 0.1.0-dev\n"
         "- name: bee/hive\n  version: 0.1.0-dev\n"
         "- name: bee/persist\n  version: 0.1.0-dev\n"
@@ -290,6 +274,7 @@ entries:
         "version: '1.0'\nregistry:\n  enable_history: true\n"
         "  history_type: sqlite\n  history_path: registry.db\nshutdown:\n  timeout: 2s\n"
         "workspace:\n  replacements:\n"
+        "    bee/values: ./modules/values\n"
         "    bee/hub: ./modules/hub\n    bee/hive: ./modules/hive\n    bee/persist: ./modules/persist\n"
         "    bee/sync: ./modules/sync\n    bee/threads: ./modules/threads\n    bee/placement: ./modules/placement\n    bee/driver: ./modules/driver\n"
     )

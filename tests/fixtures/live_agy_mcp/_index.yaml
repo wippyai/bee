@@ -9,7 +9,7 @@ entries:
   source: file://main.lua
   method: main
   modules: [funcs, registry, process, channel, time, json, sql]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.research.probe:host_policy]}
   meta:
     command:

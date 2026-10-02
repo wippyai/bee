@@ -4,6 +4,7 @@ local sql = require("sql")
 local json = require("json")
 local time = require("time")
 local bounds = require("bounds")
+local values = require("values")
 local canonical = require("canonical")
 local database = require("database")
 local shared = require("transaction")
@@ -57,9 +58,9 @@ local function decode_input(raw: unknown): (Input?, Result?)
     if not value then return nil, failure("INVALID_ARGUMENT", "append request must be an object") end
     local unexpected = fields(value, {"feed", "event_id", "idempotency_key", "event_type", "payload", "projection_key", "projection_value", "tombstone", "expected_revision"})
     if unexpected then return nil, failure("INVALID_ARGUMENT", unexpected) end
-    local feed, event_id = bounds.id(value.feed), bounds.id(value.event_id)
-    local key, event_type = bounds.id(value.idempotency_key), bounds.id(value.event_type)
-    local projection_key = bounds.id(value.projection_key)
+    local feed, event_id = values.id(value.feed), values.id(value.event_id)
+    local key, event_type = values.id(value.idempotency_key), values.id(value.event_type)
+    local projection_key = values.id(value.projection_key)
     if not feed then return nil, failure("INVALID_ARGUMENT", "feed is not an identifier") end
     if not event_id then return nil, failure("INVALID_ARGUMENT", "event_id is not an identifier") end
     if not key then return nil, failure("INVALID_ARGUMENT", "idempotency_key is not an identifier") end
@@ -72,7 +73,7 @@ local function decode_input(raw: unknown): (Input?, Result?)
     if tombstone and value.projection_value ~= nil then return nil, failure("INVALID_ARGUMENT", "tombstone has no projection_value") end
     local expected: integer? = nil
     if value.expected_revision ~= nil then
-        expected = bounds.count(value.expected_revision, 9007199254740991)
+        expected = values.count(value.expected_revision, 9007199254740991)
         if expected == nil then return nil, failure("INVALID_ARGUMENT", "expected_revision is not a nonnegative integer") end
     end
     local request_json, request_error = canonical.encode({feed = feed, event_id = event_id, idempotency_key = key,
@@ -209,7 +210,7 @@ function M.append(store: Store, raw: unknown): Result
 end
 function M.projection_in(store: Store, tx: sql.Transaction, feed_raw: unknown, key_raw: unknown): Result
     if store.closed then return failure("CLOSED", "sync store is closed") end
-    local feed, key = bounds.id(feed_raw), bounds.id(key_raw)
+    local feed, key = values.id(feed_raw), values.id(key_raw)
     if not feed or not key then return failure("INVALID_ARGUMENT", "feed and projection_key must be identifiers") end
     local row, row_error = query_one(tx, "SELECT projection_key, revision, value_json, tombstone, last_sequence, updated_at FROM bee_sync_projections WHERE owner_id = ? AND feed = ? AND projection_key = ?",
         {store.owner, feed, key}, "sync projection")
@@ -246,9 +247,9 @@ local function event_value(store: Store, feed: string, row: {[string]: unknown})
 end
 function M.read_after_in(store: Store, tx: sql.Transaction, feed_raw: unknown, cursor_raw: unknown, limit_raw: unknown): Result
     if store.closed then return failure("CLOSED", "sync store is closed") end
-    local feed = bounds.id(feed_raw)
-    local cursor = bounds.count(cursor_raw, 9007199254740991)
-    local parsed_limit = bounds.count(limit_raw, bounds.MAX_PAGE)
+    local feed = values.id(feed_raw)
+    local cursor = values.count(cursor_raw, 9007199254740991)
+    local parsed_limit = values.count(limit_raw, bounds.MAX_PAGE)
     if not feed or cursor == nil or parsed_limit == nil or parsed_limit < 1 then return failure("INVALID_ARGUMENT", "feed, cursor and limit are invalid") end
     local limit = parsed_limit
     local head, head_error = feed_for_read(store, tx, feed)
@@ -280,15 +281,15 @@ function M.read_after(store: Store, feed: unknown, cursor: unknown, limit: unkno
 end
 function M.snapshot_in(store: Store, tx: sql.Transaction, feed_raw: unknown, limit_raw: unknown, after_raw: unknown?, expected_cursor_raw: unknown?): Result
     if store.closed then return failure("CLOSED", "sync store is closed") end
-    local feed = bounds.id(feed_raw)
-    local after = after_raw == nil and "" or bounds.id(after_raw)
-    local parsed_limit = bounds.count(limit_raw, bounds.MAX_PAGE)
+    local feed = values.id(feed_raw)
+    local after = after_raw == nil and "" or values.id(after_raw)
+    local parsed_limit = values.count(limit_raw, bounds.MAX_PAGE)
     if not feed or not after or parsed_limit == nil or parsed_limit < 1 then return failure("INVALID_ARGUMENT", "snapshot feed, after_key or limit is invalid") end
     local limit = parsed_limit
     local head, head_error = feed_for_read(store, tx, feed)
     if not head then return head_error or failure("INTERNAL", "read sync feed") end
     if expected_cursor_raw ~= nil then
-        local expected_cursor = bounds.count(expected_cursor_raw, 9007199254740991)
+        local expected_cursor = values.count(expected_cursor_raw, 9007199254740991)
         if expected_cursor == nil then return failure("INVALID_ARGUMENT", "snapshot cursor is invalid") end
         if expected_cursor ~= head.head then
             return failure("RESET_REQUIRED", "snapshot cursor changed", {schema = "bee.sync-snapshot@1", owner_id = store.owner,
@@ -319,7 +320,7 @@ function M.snapshot(store: Store, feed: unknown, limit: unknown, after: unknown?
 end
 function M.migrate(store: Store, prefix: string, migration_id: string, transform: (unknown) -> (unknown?, string?)): Result
     if store.closed then return failure("CLOSED", "sync store is closed") end
-    if not bounds.id(prefix) or not bounds.id(migration_id) then return failure("INVALID_ARGUMENT", "migration identity is invalid") end
+    if not values.id(prefix) or not values.id(migration_id) then return failure("INVALID_ARGUMENT", "migration identity is invalid") end
     return shared.write(store.db, "sync migration", function(tx: sql.Transaction): Result
         local prior, prior_error = query_one(tx,
             "SELECT completed_at FROM bee_sync_projection_migrations WHERE owner_id = ? AND prefix = ? AND migration_id = ?",
@@ -331,7 +332,7 @@ function M.migrate(store: Store, prefix: string, migration_id: string, transform
             {store.owner, prefix, prefix})
         if read_error or not rows then return storage(read_error, "read projections for migration") end
         for _, row in ipairs(rows) do
-            local feed, key, source = bounds.id(row.feed), bounds.id(row.projection_key), row.value_json
+            local feed, key, source = values.id(row.feed), values.id(row.projection_key), row.value_json
             if not feed or not key or type(source) ~= "string" or #source > 65536 then return failure("INTERNAL", "migration source is corrupt") end
             local decoded, decode_error = json.decode(source)
             if decode_error then return failure("INTERNAL", "migration source is invalid JSON") end
@@ -368,7 +369,7 @@ function M.open(raw: unknown): (Store?, string?)
     local unexpected = fields(config, {"resource", "owner", "event_capacity", "receipt_capacity"})
     if unexpected then return nil, "sync open " .. unexpected end
     local resource: unknown = config.resource
-    local owner = bounds.id(config.owner)
+    local owner = values.id(config.owner)
     if type(resource) ~= "string" or resource == "" then return nil, "sync resource is not linked" end
     if not owner then return nil, "sync owner is not an identifier" end
     local values = config

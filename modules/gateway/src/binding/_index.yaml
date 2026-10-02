@@ -18,8 +18,8 @@ entries:
   - http_client
   - registry
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     persist: bee.persist.persist:database
     migrations: bee.gateway.migrations:migrations
@@ -216,7 +216,7 @@ entries:
   kind: library.lua
   source: file://publication.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     gateway: bee.gateway.binding:gateway
     hubpublish: bee.gateway.security:publish
 - name: publish_request
@@ -344,7 +344,7 @@ entries:
   modules:
   - security
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     gateway: bee.gateway.binding:gateway
   security:
     policies:

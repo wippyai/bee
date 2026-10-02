@@ -382,3 +382,7 @@ entries:
 - name: types
   kind: library.lua
   source: file://types.lua
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

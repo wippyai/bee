@@ -44,3 +44,7 @@ entries:
   targets:
   - entry: bee.git.worktree.env:host_files_ref
     path: .resource_ref
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

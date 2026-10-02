@@ -48,7 +48,7 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     resource_authority: bee.resources.env:resources
 - name: configuration
   kind: library.lua
@@ -57,8 +57,8 @@ entries:
   - json
   - toml
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types
 - name: environment
   kind: env.storage.os

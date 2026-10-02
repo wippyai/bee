@@ -41,8 +41,10 @@ entries:
   kind: function.lua
   source: file://feed_read_after_method.lua
   method: handle
-  imports: {service: bee.approvals.service:service}
-  security: {policies: []}
+  imports:
+    service: bee.approvals.service:service
+  security:
+    policies: []
   meta:
     hive: policy
     hive_operation:
@@ -51,13 +53,33 @@ entries:
       input:
         type: object
         additionalProperties: false
-        required: [workspace_id, cursor, expected_scope_revision]
+        required:
+        - workspace_id
+        - cursor
+        - expected_scope_revision
         properties:
-          workspace_id: {type: string}
-          cursor: {type: integer, minimum: 0}
-          limit: {type: integer, minimum: 1, maximum: 64}
-          expected_scope_revision: {type: string}
-      output: *approval_reply
+          workspace_id:
+            type: string
+          cursor:
+            type: integer
+            minimum: 0
+          limit:
+            type: integer
+            minimum: 1
+            maximum: 64
+          expected_scope_revision:
+            type: string
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          ok:
+            type: boolean
+          error:
+            type: object
+          value: {}
+          replayed:
+            type: boolean
 - name: decide
   kind: function.lua
   meta:
@@ -68,19 +90,42 @@ entries:
       input:
         type: object
         additionalProperties: false
-        required: [approval_id, expected_revision, decision, proposal_digest]
+        required:
+        - approval_id
+        - expected_revision
+        - decision
+        - proposal_digest
         properties:
-          approval_id: {type: string}
-          expected_revision: {type: integer, minimum: 1}
-          decision: {type: string, enum: [approved, denied]}
-          proposal_digest: {type: string}
+          approval_id:
+            type: string
+          expected_revision:
+            type: integer
+            minimum: 1
+          decision:
+            type: string
+            enum:
+            - approved
+            - denied
+          proposal_digest:
+            type: string
           response: {}
-      output: *approval_reply
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          ok:
+            type: boolean
+          error:
+            type: object
+          value: {}
+          replayed:
+            type: boolean
   source: file://decide_method.lua
   method: handle
   imports:
     service: bee.approvals.service:service
-  security: {policies: []}
+  security:
+    policies: []
 - name: decide_batch
   kind: function.lua
   source: file://decide_batch_method.lua
@@ -95,13 +140,31 @@ entries:
     hive_operation:
       revision: '1'
       title: Withdraw own approval request
-      input: {type: object, additionalProperties: false, required: [approval_id], properties: {approval_id: {type: string}}}
-      output: *approval_reply
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - approval_id
+        properties:
+          approval_id:
+            type: string
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          ok:
+            type: boolean
+          error:
+            type: object
+          value: {}
+          replayed:
+            type: boolean
   source: file://withdraw_method.lua
   method: handle
   imports:
     service: bee.approvals.service:service
-  security: {policies: []}
+  security:
+    policies: []
 - name: consume
   kind: function.lua
   source: file://consume_method.lua
@@ -147,13 +210,31 @@ entries:
     hive_operation:
       revision: '1'
       title: Read authorized approval request
-      input: {type: object, additionalProperties: false, required: [approval_id], properties: {approval_id: {type: string}}}
-      output: *approval_reply
+      input:
+        type: object
+        additionalProperties: false
+        required:
+        - approval_id
+        properties:
+          approval_id:
+            type: string
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          ok:
+            type: boolean
+          error:
+            type: object
+          value: {}
+          replayed:
+            type: boolean
   source: file://read_method.lua
   method: handle
   imports:
     service: bee.approvals.service:service
-  security: {policies: []}
+  security:
+    policies: []
 - name: inbox
   kind: function.lua
   source: file://inbox_method.lua
@@ -188,7 +269,7 @@ entries:
   method: handle
   modules: [security]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     service: bee.approvals.service:service
     outbox: bee.approvals.persist:outbox
   security: {policies: []}

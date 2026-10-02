@@ -6,8 +6,8 @@ entries:
   source: file://option_render.lua
   modules: [json, toml, hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     configuration: bee.driver.configuration:configuration
 - name: configuration
   kind: library.lua
@@ -20,8 +20,8 @@ entries:
   - json
   - toml
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     driver_resolver: bee.driver.binding:resolver
     types: bee.driver:types
     instructions: bee.driver.profiles:instructions

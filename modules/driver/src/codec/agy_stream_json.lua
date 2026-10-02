@@ -5,6 +5,7 @@ local json = require("json")
 local events = require("events")
 local types = require("types")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local values = require("values")
 local path_reader = require("paths")
 
@@ -35,7 +36,7 @@ local function decode_fault(value: unknown, field: string): ({code: string, mess
     if unknown_field then return nil, field .. ": " .. unknown_field end
     local code = bounds.id(object.code)
     if not code then return nil, field .. ".code is not an identifier" end
-    local message = bounds.text(object.message, bounds.MAX_FAULT_MESSAGE_BYTES)
+    local message = bounds.text(object.message, record_bounds.MAX_FAULT_MESSAGE_BYTES)
     if not message then return nil, field .. ".message exceeds maximum fault message bytes" end
     if type(object.retryable) ~= "boolean" then return nil, field .. ".retryable must be a boolean" end
     return {code = code, message = message, retryable = object.retryable}, nil
@@ -119,7 +120,7 @@ local function decode_terminal(value: unknown): (types.Terminal?, string?)
 
     local answer: string? = nil
     if object.answer ~= nil then
-        answer = bounds.text(object.answer, bounds.MAX_RECORD_BYTES)
+        answer = bounds.text(object.answer, record_bounds.MAX_RECORD_BYTES)
         if not answer then return nil, "state.terminal.answer exceeds maximum record bytes" end
     end
     local resume_ref: string? = nil

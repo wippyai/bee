@@ -5,15 +5,15 @@ entries:
   kind: library.lua
   source: file://provenance.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: checkpoint
   kind: library.lua
   source: file://checkpoint.lua
   modules:
   - json
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     driver_types: bee.driver:types
     record_values: bee.threads.records:values
 - name: prestart
@@ -21,18 +21,18 @@ entries:
   source: file://prestart.lua
   imports:
     placement_decode: bee.placement:decode
-    service_reply: bee.protocol:reply
+    service_reply: bee.values:reply
 - name: hints
   kind: library.lua
   source: file://hints.lua
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     record_types: bee.threads:record_types
     record_values: bee.threads.records:values
     thread_record: bee.threads.records:record
     checkpoint: bee.harness.carrier:checkpoint
-    service_reply: bee.protocol:reply
+    service_reply: bee.values:reply
     carrier_types: bee.harness:types
 - name: settle
   kind: library.lua
@@ -48,8 +48,8 @@ entries:
   - env
   - json
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     placement_types: bee.placement:types
     configuration: bee.driver.configuration:configuration
     driver_resolver: bee.driver.binding:resolver
@@ -62,16 +62,17 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     checkpoint: bee.harness.carrier:checkpoint
     record: bee.threads.records:record
     hooks: bee.gateway.hooks:hooks
+    record_bounds: bee.threads.records:bounds
 - name: hook_records
   kind: library.lua
   source: file://hook_records.lua
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     gateway_hooks: bee.gateway.hooks:hooks
 - name: machine
   kind: library.lua
@@ -86,8 +87,8 @@ entries:
     permission: bee.harness.permission:adapter
     acceptance: bee.harness.permission:acceptance
     gateway_configuration: bee.gateway.env:configuration
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     catalog: bee.harness.catalog:catalog
     classify: bee.harness.catalog:classify
     policy: bee.harness.carrier:policy
@@ -110,7 +111,7 @@ entries:
     thread_record: bee.threads.records:record
     record_values: bee.threads.records:values
     gateway_protocol: bee.gateway:protocol
-    service_reply: bee.protocol:reply
+    service_reply: bee.values:reply
     carrier_types: bee.harness:types
     hints: bee.harness.carrier:hints
     permission_exchange: bee.harness.permission:exchange
@@ -118,6 +119,7 @@ entries:
     readiness: bee.harness.launch:readiness
     hook_records: bee.harness.carrier:hook_records
     placement_profiles: bee.placement.profiles:profiles
+    record_bounds: bee.threads.records:bounds
 - name: lease
   kind: library.lua
   source: file://lease.lua

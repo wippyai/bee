@@ -19,7 +19,7 @@ entries:
   method: handle
   imports:
     configure_protocol: bee.driver.configuration:configuration
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
     universal: bee.driver.binding:universal
   security:
     policies:

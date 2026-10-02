@@ -13,7 +13,7 @@ entries:
         actor: {id: bee.test.docs_volume}
   security:
     policies: [bee.docs.agent:volume_policy]
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}
 
 - name: volume_policy
   kind: security.policy
@@ -24,7 +24,7 @@ entries:
 - name: main
   kind: process.lua
   source: file://main.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   method: main
   modules: [funcs, http_client, json, time, process, io]
   meta:

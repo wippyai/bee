@@ -27,3 +27,7 @@ entries:
   kind: ns.dependency
   component: bee/threads
   version: '*'
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

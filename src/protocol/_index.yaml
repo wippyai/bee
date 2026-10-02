@@ -1,20 +1,6 @@
 version: '1.0'
 namespace: bee.protocol
 entries:
-- name: bounds
-  kind: library.lua
-  source: file://bounds.lua
-  imports:
-    clock: bee.protocol:clock
-- name: reply
-  kind: library.lua
-  source: file://reply.lua
-  imports:
-    bounds: bee.protocol:bounds
-- name: canonical
-  kind: library.lua
-  source: file://canonical.lua
-  modules: [json]
 - name: commands
   kind: library.lua
   source: file://commands.lua
@@ -37,13 +23,9 @@ entries:
   source: file://application.lua
   imports:
     arguments: bee.app:arguments
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: display_transfer
   kind: library.lua
   source: file://display_transfer.lua
   imports:
     contract: bee.protocol:application
-- name: clock
-  kind: library.lua
-  source: file://clock.lua
-  modules: [time]

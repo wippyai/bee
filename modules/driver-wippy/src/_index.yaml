@@ -30,5 +30,9 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     driver_types: bee.driver:types
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

@@ -6,8 +6,8 @@ entries:
   source: file://classify.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     profile: bee.driver.profiles:profile
     driver_types: bee.driver:types
     permission: bee.harness.permission:adapter
@@ -16,6 +16,6 @@ entries:
   source: file://catalog.lua
   modules: [registry]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     classify: bee.harness.catalog:classify
     resolver: bee.driver.binding:resolver

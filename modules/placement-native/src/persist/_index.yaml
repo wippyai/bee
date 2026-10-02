@@ -6,7 +6,7 @@ entries:
   source: file://store.lua
   modules: [sql, json, time]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     persist: bee.persist.persist:database
     migrations: bee.placement.native.migrations:migrations
     resources: bee.placement.native.env:resources

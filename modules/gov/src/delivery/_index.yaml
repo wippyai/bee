@@ -6,38 +6,47 @@ entries:
   source: file://lease_model.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync.values:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     super_edit: bee.gov.activation:super_edit
 - name: delivery_protocol
   kind: library.lua
   source: file://delivery_protocol.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports:
+    bounds: bee.values:bounds
 - name: candidate
   kind: library.lua
   source: file://candidate.lua
-  modules: [hash, json]
-  imports: {canonical: bee.sync.values:canonical, workspace: bee.gov.workspace:workspace}
+  modules:
+  - hash
+  - json
+  imports:
+    canonical: bee.values:canonical
+    workspace: bee.gov.workspace:workspace
 - name: artifact
   kind: library.lua
   source: file://artifact.lua
-  modules: [hash, json]
-  imports: {canonical: bee.sync.values:canonical, bounds: bee.threads.records:bounds}
+  modules:
+  - hash
+  - json
+  imports:
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
 - name: delivery
   kind: library.lua
   source: file://delivery.lua
   modules: [json, hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync.values:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     artifact: bee.gov.delivery:artifact
     version: bee.sync.values:version
 - name: publication_profile_decoder
   kind: library.lua
   source: file://publication_profiles.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     workspace_applications: bee.gov.workspace:workspace_applications
 - name: materializer
   kind: library.lua
@@ -48,8 +57,8 @@ entries:
     application_admission: bee.gov.activation:governed_application_admission
     capability_grants: bee.gov.capability:capability_grants
     capability_files: bee.gov.capability:capability_files
-    canonical: bee.sync.values:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
 - name: resolver
   kind: library.lua
   source: file://resolver.lua
@@ -61,8 +70,8 @@ entries:
   imports:
     resolution: bee.gov.delivery:resolver
     artifact: bee.gov.delivery:artifact
-    canonical: bee.sync.values:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     application_admission: bee.gov.activation:governed_application_admission
     protected_kernel: bee.gov.activation:protected_kernel
     preflight: bee.gov.activation:preflight
@@ -74,8 +83,8 @@ entries:
   imports:
     resolution: bee.gov.delivery:resolver
     artifact: bee.gov.delivery:artifact
-    canonical: bee.sync.values:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     application_admission: bee.gov.activation:governed_application_admission
     protected_kernel: bee.gov.activation:protected_kernel
     capability_model: bee.capability:model
@@ -86,5 +95,7 @@ entries:
 - name: staging_resources
   kind: library.lua
   source: file://staging_resources.lua
-  modules: [registry]
-  imports: {bounds: bee.threads.records:bounds}
+  modules:
+  - registry
+  imports:
+    bounds: bee.values:bounds

@@ -24,7 +24,7 @@ entries:
     credential_migrations: bee.credentials.migrations:migrations
     bindings: bee.gateway.persist:binding_store
     surfaces: bee.gateway.persist:surface_store
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   meta:
     command:
       name: layout-seed

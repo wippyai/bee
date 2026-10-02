@@ -35,8 +35,8 @@ entries:
   source: file://request.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     types: bee.placement:types
     driver_types: bee.driver:types
     login_evidence: bee.driver.locate:login_evidence
@@ -50,7 +50,7 @@ entries:
   kind: library.lua
   source: file://decode.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     types: bee.placement:types
 - name: placement
   kind: contract.definition
@@ -90,3 +90,7 @@ entries:
     description: Run setup before the child starts, optionally returning modified working_directory, extra writable roots, and state
   - name: cleanup
     description: Run cleanup after the child ends, using state recorded from setup
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

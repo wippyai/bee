@@ -38,7 +38,7 @@ entries:
   imports:
     text: bee.app:text
     caller: bee.app:caller
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     names: bee.app:names
 - name: creation

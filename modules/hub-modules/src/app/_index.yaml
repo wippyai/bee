@@ -37,9 +37,9 @@ entries:
   - json
   - hash
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     text: bee.app:text
-    canonical: bee.sync.values:canonical
+    canonical: bee.values:canonical
 - name: view
   kind: library.lua
   source: file://view.lua

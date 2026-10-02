@@ -115,3 +115,7 @@ entries:
   methods:
   - name: call
     description: Read or compare-and-set a typed saved agent profile owned by the host node
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

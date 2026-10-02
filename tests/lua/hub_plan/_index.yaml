@@ -14,7 +14,7 @@ entries:
     inspect: bee.hub.package:inspection
     requirements: bee.hub.package:requirements
     binary_identity: bee.hub.package:binary_identity
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: missing_native_scope_policy
   kind: security.policy
   groups: [without_native]

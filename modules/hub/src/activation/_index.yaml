@@ -7,15 +7,26 @@ entries:
 - name: migration_work
   kind: library.lua
   source: file://migration_work.lua
-  modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync.values:canonical, plan: bee.hub.package:plan, migrations: bee.hub.activation:migrations}
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    plan: bee.hub.package:plan
+    migrations: bee.hub.activation:migrations
 - name: host_resources
   kind: library.lua
   source: file://host_resources.lua
-  modules: [registry]
-  imports: {bounds: bee.threads.records:bounds}
+  modules:
+  - registry
+  imports:
+    bounds: bee.values:bounds
 - name: installation
   kind: library.lua
   source: file://installation.lua
-  modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync.values:canonical, semver: bee.hub.package:semver}
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    semver: bee.hub.package:semver

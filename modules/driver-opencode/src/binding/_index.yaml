@@ -60,7 +60,7 @@ entries:
   modules:
   - hash
   imports:
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
     configure_protocol: bee.driver.configuration:configuration
 - name: launch
   kind: library.lua

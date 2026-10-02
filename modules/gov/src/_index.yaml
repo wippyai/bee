@@ -97,3 +97,7 @@ entries:
   methods:
   - name: call
     description: Author a caller-owned overlay with revision checks; freeze content without executing or approving it
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

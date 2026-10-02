@@ -209,45 +209,13 @@ func resourcesModuleWrite(folder, relative string, document interface{}) error {
 	return nil
 }
 
-func resourcesModuleStageProtocol(root, folder string) error {
-	sources := []struct{ from, to string }{
-		{from: "protocol/clock.lua", to: "protocol/clock.lua"},
-		{from: "protocol/bounds.lua", to: "protocol/bounds.lua"},
-		{from: "protocol/canonical.lua", to: "protocol/canonical.lua"},
-	}
-	for _, source_file := range sources {
-		source := filepath.Join(root, "src", filepath.FromSlash(source_file.from))
-		data, err := os.ReadFile(source)
-		if err != nil {
-			return fmt.Errorf("read shared protocol source %s: %w", source, err)
-		}
-		destination := filepath.Join(folder, "src", filepath.FromSlash(source_file.to))
-		if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
-			return fmt.Errorf("create shared protocol source directory: %w", err)
-		}
-		if err := os.WriteFile(destination, data, 0600); err != nil {
-			return fmt.Errorf("stage shared protocol source %s: %w", source_file.to, err)
-		}
-	}
-	if err := resourcesModuleWrite(folder, filepath.Join("src", "protocol", "_index.yaml"), resourcesModuleIndex{
-		Version: "1.0", Namespace: "bee.protocol", Entries: []map[string]interface{}{
-			resourcesModuleClockEntry(),
-			{"name": "bounds", "kind": "library.lua", "source": "file://bounds.lua", "imports": map[string]string{"clock": "bee.protocol:clock"}},
-			{"name": "canonical", "kind": "library.lua", "source": "file://canonical.lua", "modules": []string{"json"}},
-		},
-	}); err != nil {
-		return fmt.Errorf("stage shared protocol index: %w", err)
-	}
-	return nil
-}
-
-func resourcesModuleClockEntry() map[string]interface{} {
-	return map[string]interface{}{"name": "clock", "kind": "library.lua", "source": "file://clock.lua", "modules": []string{"time"}}
+func resourcesModuleStageValues(root, folder string) error {
+	return resourcesModuleCopyDir(filepath.Join(folder, "modules", "values"), filepath.Join(root, "modules", "values"))
 }
 
 func resourcesModuleBase(folder string, resources bool, credentials bool) error {
-	modules := "    - name: bee/persist\n      version: 0.1.0-dev\n    - name: bee/threads\n      version: 0.1.0-dev\n"
-	replacements := "    bee/persist: ./modules/persist\n    bee/threads: ./modules/threads\n"
+	modules := "    - name: bee/values\n      version: 0.1.0-dev\n    - name: bee/persist\n      version: 0.1.0-dev\n    - name: bee/threads\n      version: 0.1.0-dev\n"
+	replacements := "    bee/values: ./modules/values\n    bee/persist: ./modules/persist\n    bee/threads: ./modules/threads\n"
 	if resources {
 		modules += "    - name: bee/resources\n      version: 0.1.0-dev\n    - name: bee/capability\n      version: 0.1.0-dev\n"
 		replacements += "    bee/resources: ./modules/resources\n    bee/capability: ./modules/capability\n"
@@ -330,7 +298,7 @@ func resourcesModuleStageResources(root, folder string, dropRoots bool) error {
 	if err := resourcesModuleBase(folder, true, false); err != nil {
 		return err
 	}
-	if err := resourcesModuleStageProtocol(root, folder); err != nil {
+	if err := resourcesModuleStageValues(root, folder); err != nil {
 		return err
 	}
 	hostEntries := resourcesModuleThreadsEntries()
@@ -384,7 +352,7 @@ func resourcesModuleStageCredentials(root, folder string, dropSources bool) erro
 	if err := resourcesModuleBase(folder, false, true); err != nil {
 		return err
 	}
-	if err := resourcesModuleStageProtocol(root, folder); err != nil {
+	if err := resourcesModuleStageValues(root, folder); err != nil {
 		return err
 	}
 	hostEntries := resourcesModuleThreadsEntries()

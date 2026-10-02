@@ -7,8 +7,8 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     descriptor: bee.driver.descriptor:descriptor
     configuration: bee.driver.configuration:configuration
     types: bee.driver:types
@@ -22,7 +22,7 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     profile: bee.driver.profiles:profile
     descriptor: bee.driver.descriptor:descriptor
     types: bee.driver:types

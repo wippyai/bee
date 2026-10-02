@@ -13,5 +13,9 @@ entries:
   source: file://types.lua
   modules: [hash]
   imports:
-    canonical: bee.protocol:canonical
-    bounds: bee.protocol:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

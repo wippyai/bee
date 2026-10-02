@@ -1,7 +1,7 @@
 # Repository layout audit
 
 `make lint` runs the permanent placement check in `build/layout_check.py`.
-Production consists of the host `src/` and 41 component `modules/*/src/` roots.
+Production consists of the host `src/` and 42 component `modules/*/src/` roots.
 The only root spelling exception is the public SDK: `application` exports
 `bee.app`. Hyphenated component names expand into namespace nesting; all child
 folders match their namespace. `src/host` is the host's documented desktop-owner
@@ -23,14 +23,14 @@ telemetry `owner_ref.service_id` values. The service remains the operation's exa
 namespace; unrelated namespace strings and opaque state remain intact.
 
 The root follow-up audits all entries in `bee` and every physical component
-root. `bee` retains only `definition`, `workers` and `terminal`. The 378 moved
-identities (144 Lua sources) are enumerated in `build/layout_root_moves.json`;
+root. `bee` retains only `definition`, `workers` and `terminal`. The 383 moved
+identities (144 Lua sources in step 1) are enumerated in `build/layout_root_moves.json`;
 `build/layout_identity_moves.json` also resolves earlier moves to these final
 live destinations. Main’s startup progress helper and environment field now live
 in `bee.app.status` and `bee.persist.env`. The persisted identity conversions
 are also explicit in `build/component-inventory-migrations.json`; the generated
 component inventory has no dangling requirement targets and caps root Lua at
-23,975 lines. Topics and schema tags retain their baseline identities.
+23,643 lines. Topics and schema tags retain their baseline identities.
 Shared root declarations and the exact library set are
 specified in the conventions and `build/layout_roots.json`. Lint rejects new
 root entries outside that set and known composition names with the wrong kind,
@@ -40,7 +40,7 @@ the implemented `bee.approvals.inbox.app:app` identity.
 
 Host catalogs move to their owning security namespace, endpoint wiring to
 Gateway's `api`, service instances to the owner's `service`, selected defaults
-to the owner's `env`, and the shared clock to `bee.protocol`. Component
+to the owner's `env`, and the shared value helpers to `bee.values`. Component
 bindings, policies, resource defaults and profile declarations move to
 `binding`, `security`, `env` and `profiles`. App helpers move to `app`; other
 helpers join the owning concept's child, including driver configuration,
@@ -51,7 +51,7 @@ Placement 9 migrates the remaining saved binding identity and exact cleanup
 markers, plus request/grant references. Sync 9 and Gateway 17 migrate stored
 reference scalars, including Gateway's policy column. Resources 4 and
 Credentials 7 move owner-local root/source/materializer columns. These new
-blocks cover all 508 cumulative moves, including identities from before the
+blocks cover the 508 step 1 cumulative moves, including identities from before the
 first layout refactor. Shared identity literals keep the captured migration
 definitions within the existing artifact size bound; their expanded SQL and
 checksums remain unchanged. Migration 8/16 and all older SQL remain
@@ -78,9 +78,9 @@ selects its backend; it does not duplicate the native facade. Retained
 presentation's executor selects the admitted application loop under its owner
 lifetime and terminal grant. These adapters have actual boundary roles.
 
-The audit removes four dead or redundant sources: the unregistered protocol
-clock duplicates `bee.protocol:clock`; the unregistered Sessions worker forwards an
-unused superseded journal protocol; the unreferenced JSONL alias only returns
+The shared clock is registered once as `bee.values:clock`. The audit removes
+three dead sources: the unregistered Sessions worker forwards an unused
+superseded journal protocol; the unreferenced JSONL alias only returns
 `stream_json`; the unreferenced application launch decoder predates the used
 Sessions protocol and Harness admission decoder. The obsolete Go Modules UI runner duplicates the active Python source/pack
 acceptance; that Python gate retains its search, UTF-8 editing, readme, parameter,
@@ -103,7 +103,7 @@ the script does not claim to prove arbitrary runtime reachability.
 Disposable test overlays live under `tests/` as required by the packaging rules.
 Their scenario/suite folder names group independent compositions; each overlay
 reuses the identities it tests rather than defining a production namespace.
-There are 67 unit overlay manifests and 74 acceptance overlay manifests,
+There are 68 unit overlay manifests and 74 acceptance overlay manifests,
 including 42 unit suite paths whose grouping differs from the declared
 namespace. They do not introduce a production `src/` divergence. The native
 host's `bee.harness.host:environment` has no source index: the native component
@@ -266,7 +266,7 @@ The following paths group overlays rather than production namespace children:
 Borrowed fixture sources are staged from their current owners: the thread
 journal borrows the desktop reducer; native identity borrows Placement identity;
 Hub migration probes borrow the Hub adapter and binding beside their fixture
-index; performance research borrows Threads canonical JSON; placement-publication
+index; performance research borrows Values canonical JSON; placement-publication
 borrows native materialization and its test runner; reference applications borrow
 the documented examples. Agent-author probes point at Timeline's `app/` sources.
 | `tests/fixtures/hub_inspect/security/gov/_index.yaml` | `bee.security.gov` |
@@ -401,7 +401,7 @@ conventions and `build/layout_roots.json`.
 | `bee.workspace.manager` | `bee.workspace.manager.security` | `client_policy` |
 | `bee` | `bee.security.approvals` | `approver_policies` |
 | `bee` | `bee.security.capability` | `capability_catalog` |
-| `bee` | `bee.protocol` | `clock` |
+| `bee` | `bee.values` | `clock` |
 | `bee` | `bee.env` | `docs_corpus` |
 | `bee` | `bee.gateway.api` | `gateway_endpoint`, `gateway_listener`, `gateway_mcp`, `gateway_ready`, `gateway_router` |
 | `bee` | `bee.gateway.service` | `gateway_installation_service`, `gateway_publication_service` |

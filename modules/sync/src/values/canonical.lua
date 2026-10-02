@@ -2,7 +2,6 @@
 local bounds = require("bounds")
 local encoder = require("encoder")
 local M = {}
-M.empty_like = encoder.empty_like
 
 function M.encode(value: unknown, maximum_raw: unknown?): (string?, string?)
     local maximum = bounds.capacity(maximum_raw, bounds.MAX_JSON_BYTES, 16777216)

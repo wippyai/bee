@@ -1,4 +1,5 @@
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local migrations = require("migrations")
 local claims = require("claims")
 local subscriptions = require("subscriptions")
@@ -80,26 +81,26 @@ function M.describe(): Report
     end
     return {
         revision = M.REVISION,
-        record_schema = bounds.SCHEMA_REVISION,
+        record_schema = record_bounds.SCHEMA_REVISION,
         recap_schema = recap.SCHEMA,
-        record_kinds = copy(bounds.KINDS),
-        record_sources = copy(bounds.SOURCES),
-        outcomes = copy(bounds.OUTCOMES),
+        record_kinds = copy(record_bounds.KINDS),
+        record_sources = copy(record_bounds.SOURCES),
+        outcomes = copy(record_bounds.OUTCOMES),
         migrations = carried,
         contracts = M.contracts(),
         limits = {
-            max_record_bytes = bounds.MAX_RECORD_BYTES,
-            max_page_records = bounds.MAX_PAGE_RECORDS,
-            max_thread_records = bounds.MAX_THREAD_RECORDS,
-            max_thread_members = bounds.MAX_THREAD_MEMBERS,
-            max_thread_actions = bounds.MAX_THREAD_ACTIONS,
-            max_thread_attempts = bounds.MAX_THREAD_ATTEMPTS,
-            max_thread_turns = bounds.MAX_THREAD_TURNS,
-            max_thread_obligations = bounds.MAX_THREAD_OBLIGATIONS,
+            max_record_bytes = record_bounds.MAX_RECORD_BYTES,
+            max_page_records = record_bounds.MAX_PAGE_RECORDS,
+            max_thread_records = record_bounds.MAX_THREAD_RECORDS,
+            max_thread_members = record_bounds.MAX_THREAD_MEMBERS,
+            max_thread_actions = record_bounds.MAX_THREAD_ACTIONS,
+            max_thread_attempts = record_bounds.MAX_THREAD_ATTEMPTS,
+            max_thread_turns = record_bounds.MAX_THREAD_TURNS,
+            max_thread_obligations = record_bounds.MAX_THREAD_OBLIGATIONS,
             max_thread_subscriptions = subscriptions.MAX_THREAD_SUBSCRIPTIONS,
             max_array_items = bounds.MAX_ARRAY_ITEMS,
-            max_json_depth = bounds.MAX_JSON_DEPTH,
-            max_title_bytes = bounds.MAX_TITLE_BYTES,
+            max_json_depth = record_bounds.MAX_JSON_DEPTH,
+            max_title_bytes = record_bounds.MAX_TITLE_BYTES,
             claim_ttl_seconds = claims.CLAIM_TTL_SECONDS,
             max_wait_ms = waits.MAX_WAIT_MS,
             wait_budget_margin_ms = waits.BUDGET_MARGIN_MS,

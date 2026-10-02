@@ -21,9 +21,9 @@ entries:
     policies: []
   imports:
     admission: bee.harness.launch:admission
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    clock: bee.protocol:clock
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    clock: bee.values:clock
     machine: bee.harness.carrier:machine
     exchange: bee.harness.permission:exchange
     checkpoint: bee.harness.carrier:checkpoint
@@ -40,8 +40,8 @@ entries:
   modules: [funcs, security, time, hash]
   security: {policies: []}
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     exchange: bee.harness.permission:exchange
     checkpoint: bee.harness.carrier:checkpoint
     admission: bee.harness.launch:admission

@@ -48,3 +48,7 @@ entries:
   targets:
   - entry: bee.driver.codex.profiles:named_batch
     path: .data.policy_ref
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

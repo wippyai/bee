@@ -4,13 +4,17 @@ entries:
 - name: catalog
   kind: library.lua
   source: file://catalog.lua
-  modules: [json]
-  imports: {bounds: bee.threads.records:bounds}
+  modules:
+  - json
+  imports:
+    bounds: bee.values:bounds
 - name: context
   kind: library.lua
   source: file://context.lua
-  modules: [json]
-  imports: {bounds: bee.threads.records:bounds}
+  modules:
+  - json
+  imports:
+    bounds: bee.values:bounds
 - name: sessions
   kind: library.lua
   source: file://sessions.lua
@@ -18,8 +22,10 @@ entries:
 - name: json_schema
   kind: library.lua
   source: file://json_schema.lua
-  modules: [json]
-  imports: {bounds: bee.threads.records:bounds}
+  modules:
+  - json
+  imports:
+    bounds: bee.values:bounds
 - name: session_bundle
   kind: library.lua
   source: file://session_bundle.lua
@@ -28,14 +34,14 @@ entries:
   source: file://session_tools.lua
   modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     json_schema: bee.gateway.catalog:json_schema
     session_bundle: bee.gateway.catalog:session_bundle
 - name: profile_scope
   kind: library.lua
   source: file://profile_scope.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     surface: bee.gateway.catalog:surface
     profile_access: bee.driver.profiles:profile_access
 - name: surface
@@ -43,7 +49,7 @@ entries:
   source: file://surface.lua
   imports:
     profile_access: bee.driver.profiles:profile_access
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     catalog: bee.gateway.catalog:catalog
     capability_model: bee.capability:model
     context: bee.gateway.catalog:context

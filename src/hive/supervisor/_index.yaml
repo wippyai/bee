@@ -6,7 +6,7 @@ entries:
   source: file://peers.lua
   imports:
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: registration
   kind: library.lua
   source: file://registration.lua
@@ -14,12 +14,12 @@ entries:
   kind: library.lua
   source: file://enrollment.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: invites
   kind: library.lua
   source: file://invites.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: admission
   kind: library.lua
   source: file://admission.lua
@@ -28,7 +28,7 @@ entries:
     types: bee.hive:types
     peers: bee.hive.supervisor:peers
     catalog: bee.hive.exposure:catalog
-    clock: bee.protocol:clock
+    clock: bee.values:clock
 - name: main
   kind: process.lua
   source: file://main.lua
@@ -37,7 +37,7 @@ entries:
   security: {policies: [bee.security.hive:hive_policy_exposure_policy]}
   imports:
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     peers: bee.hive.supervisor:peers
     enrollment: bee.hive.supervisor:enrollment
     invites: bee.hive.supervisor:invites
@@ -51,18 +51,18 @@ entries:
     catalog: bee.hive.exposure:catalog
     adapters: bee.hive.supervisor:adapters
     workspace_commands: bee.hive.supervisor:workspace_commands
-    clock: bee.protocol:clock
+    clock: bee.values:clock
 - name: owner_stop
   kind: library.lua
   source: file://owner_stop.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     types: bee.hive:types
 - name: workspace_commands
   kind: library.lua
   source: file://workspace_commands.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     types: bee.hive:types
 - name: workspace_command
   kind: function.lua
@@ -73,7 +73,7 @@ entries:
     comment: Runs one bee workspace command of an enrolled local client under the catalog grants the host attaches here
   security: {policies: [bee.security.storage:workspace_catalog_read_policy, bee.security.storage:workspace_catalog_manage_policy, bee.security.hive:workspace_command_catalog_policy]}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     types: bee.hive:types
     commands: bee.hive.supervisor:workspace_commands
 - name: advertise
@@ -88,7 +88,7 @@ entries:
   kind: library.lua
   source: file://exposure_audiences.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: exposure_audiences
   kind: registry.entry
   meta:
@@ -102,13 +102,13 @@ entries:
   source: file://policy_admission.lua
   modules: [funcs, security, registry, system, time, logger]
   imports:
-    clock: bee.protocol:clock
+    clock: bee.values:clock
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     catalog: bee.hive.exposure:catalog
     principals: bee.hive.security:principals
-    canonical: bee.protocol:canonical
+    canonical: bee.values:canonical
 - name: admit_policy
   kind: function.lua
   source: file://policy_admission.lua
@@ -117,13 +117,13 @@ entries:
   security:
     policies: [bee.hive.supervisor:policy_identity_policy, bee.hive.supervisor:policy_actor_policy, bee.security.hive:policy_admission_policy, bee.security.hive:hive_policy_exposure_policy, bee.security.hive:hive_exposure_facade_policy]
   imports:
-    clock: bee.protocol:clock
+    clock: bee.values:clock
     dispatch: bee.hive.supervisor:dispatch
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     catalog: bee.hive.exposure:catalog
     principals: bee.hive.security:principals
-    canonical: bee.protocol:canonical
+    canonical: bee.values:canonical
 - name: policy_identity_policy
   kind: security.policy
   policy:
@@ -147,16 +147,16 @@ entries:
   kind: library.lua
   source: file://adapters.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: dispatch
   kind: library.lua
   source: file://dispatch.lua
   modules: [json, funcs, security, registry]
   imports:
-    canonical: bee.protocol:canonical
+    canonical: bee.values:canonical
     types: bee.hive:types
     catalog: bee.hive.exposure:catalog
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
 
 - name: execute
@@ -165,10 +165,10 @@ entries:
   method: dispatch
   modules: [json, funcs, security, registry]
   imports:
-    canonical: bee.protocol:canonical
+    canonical: bee.values:canonical
     types: bee.hive:types
     catalog: bee.hive.exposure:catalog
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     audiences: bee.hive.supervisor:audiences
 - name: hive_operation_adapters
   kind: registry.entry

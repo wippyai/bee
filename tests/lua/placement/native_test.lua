@@ -26,6 +26,7 @@ local agy_launch = require("agy_launch")
 local muse_launch = require("muse_launch")
 local opencode_launch = require("opencode_launch")
 local configuration_protocol = require("configuration_protocol")
+local preferences = require("preferences")
 local hash = require("hash")
 local json = require("json")
 local store = require("store")
@@ -1477,6 +1478,19 @@ local function define_tests()
                 attempt_of(call(OWNER, "stop", {attempt_id = prepared.attempt_id, mode = "forced"}))
             end
             process.unlisten(outputs)
+        end)
+        test.it("prepares the planner's default options without a configuration conflict", function()
+            local policy = assert(registry.get(NO_PROVIDER_POLICY))
+            local policy_data = assert(bounds.object(policy.data))
+            local options = assert(preferences.decode_prepare_options(policy_data.prepare_options))
+            local digest = assert(configuration_protocol.digest({option_values = options, context = "window", fixture = true}, "bee.driver.claude.binding:configure"))
+            local request = launch({"sh", "-c", "true"}, "direct_process")
+            request.policy_ref = NO_PROVIDER_POLICY
+            request.binding_ref = "bee.driver.claude.binding:binding"
+            request.configuration_context = "window"
+            request.configuration_digest = digest
+            local prepared = attempt_of(call(OWNER, "prepare", request))
+            test.eq(prepared.execution_state, "intended")
         end)
         test.it("refuses a stale host configuration digest and retries only the matching plan", function()
             local provider = registry.get("bee.placement.native:codex_test_provider")

@@ -392,7 +392,7 @@ func run() error {
 		return err
 	}
 	hostPath := filepath.Join(dir, "src", "_index.yaml")
-	activationPath := filepath.Join(dir, "modules", "harness", "src", "_index.yaml")
+	activationPath := filepath.Join(dir, "modules", "harness", "src", "launch", "_index.yaml")
 	host, err := os.ReadFile(activationPath)
 	if err != nil {
 		return err

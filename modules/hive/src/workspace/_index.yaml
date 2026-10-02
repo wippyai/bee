@@ -5,4 +5,4 @@ entries:
   kind: library.lua
   source: file://workspace_query.lua
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds

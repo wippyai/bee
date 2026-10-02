@@ -6,20 +6,20 @@ entries:
   source: file://capability_files.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     capability_gateway: bee.gov.capability:capability_gateway
 - name: capability_gateway
   kind: library.lua
   source: file://capability_gateway.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: capability_grants
   kind: library.lua
   source: file://capability_grants.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync.values:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     capability_files: bee.gov.capability:capability_files
     capability_gateway: bee.gov.capability:capability_gateway
@@ -28,7 +28,7 @@ entries:
   source: file://capability_request.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     capability_model: bee.capability:model
     capability_grants: bee.gov.capability:capability_grants

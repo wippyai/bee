@@ -11,7 +11,7 @@ entries:
     corpus: bee.docs.binding:corpus
     resources: bee.docs.env:resources
     transaction: bee.persist.persist:transaction
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
   security: {policies: []}
   meta:
     type: tool
@@ -25,5 +25,5 @@ entries:
   source: file://corpus.lua
   modules: [fs, json, hash]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     protocol: bee.docs:protocol

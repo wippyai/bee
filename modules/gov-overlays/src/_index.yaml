@@ -20,3 +20,7 @@ entries:
   kind: ns.dependency
   component: bee/application
   version: '*'
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

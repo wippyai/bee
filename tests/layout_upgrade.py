@@ -3,6 +3,7 @@
 import argparse
 from contextlib import contextmanager
 import json
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -45,11 +46,17 @@ def stage(folder, source):
     shutil.copytree(ROOT / 'tests/fixtures/layout_upgrade', folder / 'src/tests/layout')
     if source != ROOT:
         moves = json.loads((ROOT / 'build/layout_root_moves.json').read_text())
+        source_ids = set()
+        for index in [*source.joinpath('src').rglob('_index.yaml'),
+                      *source.joinpath('modules').glob('*/src/**/_index.yaml')]:
+            document = yaml.safe_load(index.read_text())
+            source_ids.update(document['namespace'] + ':' + entry['name'] for entry in document['entries'])
+        previous_ids = {current: previous for previous, current in moves.items()
+                        if previous in source_ids and current not in source_ids}
         for path in (folder / 'src/tests/layout').rglob('*'):
             if path.suffix in {'.lua', '.yaml'}:
-                text = path.read_text()
-                for previous, current in moves.items():
-                    text = text.replace(current, previous)
+                text = re.sub(r'bee(?:\.[A-Za-z0-9_.-]+)*:[A-Za-z0-9_.-]+',
+                              lambda match: previous_ids.get(match[0], match[0]), path.read_text())
                 path.write_text(text)
     overrides = []
     for index in [*source.joinpath('src').rglob('_index.yaml'), *source.joinpath('modules').glob('*/src/**/_index.yaml')]:

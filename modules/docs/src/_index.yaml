@@ -22,7 +22,7 @@ entries:
 - name: protocol
   kind: library.lua
   source: file://protocol.lua
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: target_call_policies
   kind: ns.requirement
   default: []
@@ -31,3 +31,7 @@ entries:
   targets:
   - entry: bee.docs.binding:call
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

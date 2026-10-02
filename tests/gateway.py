@@ -20,7 +20,7 @@ from workspace import ROOT, RUNTIME, configure_managed_gateway, database_environ
 # Sync, Approvals and Hub, and Threads brings the Hive identity contract.
 # Codex is retained only for the configuration-scope proof in the probe.
 MODULES = (
-    "persist", "hive", "threads", "application", "sync", "approvals", "hub", "gov", "capability",
+    "values", "persist", "hive", "threads", "application", "sync", "approvals", "hub", "gov", "capability",
     "docs", "driver", "driver-codex", "gateway",
 )
 
@@ -52,7 +52,7 @@ HOST_ENTRIES = {
     "modules/placement-native/src/security/_index.yaml": {"placement_store_policy", "placement_exec_policy"},
     "src/security/docs/_index.yaml": {"docs_policy"},
     "src/security/gov/_index.yaml": {"workspace_folder_read_policy"},
-    "src/protocol/_index.yaml": {"bounds", "canonical", "application", "reply", "clock"},
+    "src/protocol/_index.yaml": {"application"},
 }
 
 
@@ -245,7 +245,7 @@ def stage_protocol_libraries(folder):
     """Stage shared protocol libraries used by the selected components."""
     source = ROOT / "src" / "protocol"
     document = yaml.safe_load((source / "_index.yaml").read_text())
-    selected = {"bounds", "canonical", "application", "reply", "clock"}
+    selected = {"application"}
     entries = [deepcopy(entry) for entry in document["entries"] if entry["name"] in selected]
     assert {entry["name"] for entry in entries} == selected
     destination = folder / "src" / "protocol"

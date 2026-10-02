@@ -38,15 +38,51 @@ entries:
   kind: registry.entry
   meta:
     type: bee.protected_kernel
-    comment: Host trust map no overlay profile can open; preflight refuses edits to these definitions, their transitive code dependencies and requirement selectors aimed at them
+    comment: Host trust map no overlay profile can open; preflight refuses edits to
+      these definitions, their transitive code dependencies and requirement selectors
+      aimed at them
   data:
     revision: 3
-    namespaces: [bee.app, bee.approvals, bee.apps, bee.capability, bee.client, bee.console, bee.deps,
-      bee.desktop, bee.docs, bee.env, bee.gateway, bee.governance, bee.gov, bee.hive,
-      bee.host, bee.hub, bee.interaction, bee.launch, bee.node, bee.persist, bee.protocol,
-      bee.security, bee.session, bee.settings, bee.storage, bee.sync, bee.terminal, bee.threads,
-      bee.workspace]
+    namespaces:
+    - bee.app
+    - bee.approvals
+    - bee.apps
+    - bee.capability
+    - bee.client
+    - bee.console
+    - bee.deps
+    - bee.desktop
+    - bee.docs
+    - bee.env
+    - bee.gateway
+    - bee.governance
+    - bee.gov
+    - bee.hive
+    - bee.host
+    - bee.hub
+    - bee.interaction
+    - bee.launch
+    - bee.node
+    - bee.persist
+    - bee.protocol
+    - bee.security
+    - bee.session
+    - bee.settings
+    - bee.storage
+    - bee.sync
+    - bee.terminal
+    - bee.threads
+    - bee.values
+    - bee.workspace
     super_edit: []
-    entries: ['bee.security.gov:protected_kernel', 'bee.security.approvals:approver_policies', 'bee.security.capability:capability_catalog', 'bee.env:gov_activation_profiles',
-      'bee.env:gov_publication_profiles', 'bee.deps:gov', 'bee.deps:approvals', 'bee.gateway.env:module_installation',
-      'bee.gateway.env:module_publication', 'bee.hub.publication:hub_publication']
+    entries:
+    - bee.security.gov:protected_kernel
+    - bee.security.approvals:approver_policies
+    - bee.security.capability:capability_catalog
+    - bee.env:gov_activation_profiles
+    - bee.env:gov_publication_profiles
+    - bee.deps:gov
+    - bee.deps:approvals
+    - bee.gateway.env:module_installation
+    - bee.gateway.env:module_publication
+    - bee.hub.publication:hub_publication

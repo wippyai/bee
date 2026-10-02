@@ -474,3 +474,7 @@ entries:
     - bee.sessions.security:owner_setup_policy
     - bee.sessions.security:owner_workspace_identity_policy
     - bee.sessions.security:scheduler_principal_policy
+- name: values
+  kind: ns.dependency
+  component: bee/values
+  version: 0.1.0-dev

@@ -9,15 +9,15 @@ entries:
   - security
   imports:
     catalog: bee.hive.exposure:catalog
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: client
   kind: library.lua
   source: file://client.lua
   modules: [process, channel, time, uuid]
-  imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
+  imports: {types: bee.hive:types, bounds: bee.values:bounds}
 - name: output
   kind: library.lua
   source: file://output.lua
   modules: [json]
   imports:
-    canonical: bee.protocol:canonical
+    canonical: bee.values:canonical

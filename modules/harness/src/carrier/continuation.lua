@@ -1,5 +1,6 @@
 -- MIT. Resolve native harness continuation from committed owner state.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local checkpoint = require("checkpoint")
 local record = require("record")
 local hooks = require("hooks")
@@ -120,12 +121,12 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
     local conversation_session_id: string? = nil
     -- A full page advances by at least MAX_PAGE_RECORDS; a sparse page
     -- advances the owner's scan window. The thread itself has a fixed bound.
-    local pages = math.ceil(bounds.MAX_THREAD_RECORDS / bounds.MAX_PAGE_RECORDS) + 1
+    local pages = math.ceil(record_bounds.MAX_THREAD_RECORDS / record_bounds.MAX_PAGE_RECORDS) + 1
     for _ = 1, pages do
         local page, page_error = value(call, "bee.threads.binding:read_after", {thread_id = request.thread_id, cursor = cursor,
-            limit = bounds.MAX_PAGE_RECORDS, filter = {kinds = {"observation"}, action_id = request.action_id}})
+            limit = record_bounds.MAX_PAGE_RECORDS, filter = {kinds = {"observation"}, action_id = request.action_id}})
         if not page then return nil, page_error end
-        local through = bounds.cursor(page.scanned_through)
+        local through = record_bounds.cursor(page.scanned_through)
         if not through or through < cursor or type(page.has_more) ~= "boolean" or (page.has_more and through == cursor) then
             return nil, "invalid continuation page cursor"
         end
@@ -136,7 +137,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
             if type(key) ~= "number" or key < 1 or key ~= math.floor(key) then return nil, "continuation records must be a dense list" end
             count = count + 1
         end
-        if count ~= #rows or count > bounds.MAX_PAGE_RECORDS then return nil, "continuation page exceeds its record bound" end
+        if count ~= #rows or count > record_bounds.MAX_PAGE_RECORDS then return nil, "continuation page exceeds its record bound" end
         local sequence = cursor
         for _, row in ipairs(rows) do
             local item, item_error = record.decode(row)
@@ -149,7 +150,7 @@ function M.resolve_window(call: Call, request: Request): (string?, string?, bool
                 local extension = body and bounds.object(body.data) or nil
                 if extension and extension.type == "extension" and extension.event_name == "bee.harness.hook" then
                     if extension.event_revision ~= "1" then return nil, "unsupported hook observation revision" end
-                    local encoded = bounds.text(extension.payload_json, bounds.MAX_RECORD_BYTES)
+                    local encoded = bounds.text(extension.payload_json, record_bounds.MAX_RECORD_BYTES)
                     if not encoded then return nil, "invalid hook observation payload" end
                     local raw, decode_error = json.decode(encoded)
                     local payload = not decode_error and bounds.object(raw) or nil

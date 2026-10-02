@@ -11,6 +11,7 @@ local channel = require("channel")
 local time = require("time")
 local json = require("json")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local sql = require("sql")
 local io = require("io")
 local base64 = require("base64")
@@ -320,7 +321,7 @@ local function reported_digest(started: Object, marker: string): (string?, strin
                     local content = bounds.object(body.content)
                     if not content or type(content.artifact_ref) ~= "string" then error("missing authored snapshot digest") end
                     digest = content.artifact_ref
-                    sequence = bounds.sequence(record.sequence) or 0
+                    sequence = record_bounds.sequence(record.sequence) or 0
                 end
             end
             if record.kind == "turn.end" or record.kind == "receipt" then

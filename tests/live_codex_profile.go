@@ -50,7 +50,7 @@ entries:
   source: file://main.lua
   method: main
   modules: [funcs, process, channel, time, json, sql, uuid, env]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.livecodexprofile:host_policy]}
   meta:
     command:

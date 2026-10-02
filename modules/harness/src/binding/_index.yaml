@@ -19,7 +19,7 @@ entries:
   method: handle
   imports:
     admission: bee.harness.launch:admission
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: admit
   kind: function.lua
   source: file://admit_method.lua
@@ -42,7 +42,7 @@ entries:
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     locator: bee.harness.launch:locate
   security:
     policies:
@@ -58,7 +58,7 @@ entries:
   - registry
   - security
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     definition: bee.harness.launch:definitions
 - name: setup
   kind: function.lua
@@ -68,7 +68,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     admission: bee.harness.launch:admission
     profiles: bee.harness.profiles:protocol
   security:
@@ -82,7 +82,7 @@ entries:
   - funcs
   - security
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies:
     - bee.harness.security:presentation_facade_policy

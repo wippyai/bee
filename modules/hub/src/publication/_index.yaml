@@ -9,5 +9,9 @@ entries:
 - name: publishing
   kind: library.lua
   source: file://publishing.lua
-  modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync.values:canonical, semver: bee.hub.package:semver}
+  modules:
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    semver: bee.hub.package:semver

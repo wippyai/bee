@@ -39,14 +39,14 @@ entries:
   modules: [json]
   imports:
     text: bee.app:text
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     caller: bee.app:caller
 - name: leases
   kind: library.lua
   source: file://leases.lua
   modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     model: bee.approvals.inbox.app:model
 - name: lease_form
   kind: library.lua
@@ -62,7 +62,7 @@ entries:
   kind: library.lua
   source: file://feeds.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     sync: bee.sync:protocol
     caller: bee.app:caller
     source_config: bee.approvals.inbox.app:source_config
@@ -87,7 +87,7 @@ entries:
   source: file://sources.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: sources
   kind: registry.entry
   meta:

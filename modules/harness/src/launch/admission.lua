@@ -10,6 +10,7 @@ local process = require("process")
 local security = require("security")
 local time = require("time")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local catalog = require("catalog")
 local policy = require("policy")
@@ -569,7 +570,7 @@ function M.decode_request(value: unknown): (Request?, string?)
     -- A new thread under the caller's title, instead of an existing one.
     local thread_title: string? = nil
     if object.thread_title ~= nil then
-        thread_title = bounds.line(object.thread_title, bounds.MAX_TITLE_BYTES)
+        thread_title = bounds.line(object.thread_title, record_bounds.MAX_TITLE_BYTES)
         if not thread_title then return nil, "thread_title must be one line of bounded text" end
         if thread_id then return nil, "thread_id and thread_title are exclusive" end
     end

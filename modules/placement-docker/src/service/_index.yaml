@@ -11,7 +11,7 @@ entries:
   - funcs
   - json
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     request_codec: bee.placement:request
     profiles: bee.placement.profiles:profiles
     spec: bee.placement.docker.binding:spec
@@ -35,7 +35,7 @@ entries:
   - json
   - sql
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     types: bee.placement:types
     materialization: bee.placement.native.service:materialization
     process_backend: bee.placement.native.binding:process_backend
@@ -94,8 +94,8 @@ entries:
   - security
   - time
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     profiles: bee.placement.profiles:profiles
     resources: bee.placement.native.env:resources
     homes: bee.placement.native.service:homes
@@ -109,7 +109,7 @@ entries:
   - process
   - channel
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     image: bee.placement.docker.service:image
     environment: bee.placement.docker.service:environment
 - name: image_owner_service
@@ -136,8 +136,8 @@ entries:
   - system
   - events
   imports:
-    canonical: bee.threads.records:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds
     environment: bee.placement.docker.env:environment
     resources: bee.placement.native.env:resources
     image: bee.placement.docker.service:image
@@ -148,7 +148,8 @@ entries:
   source: file://runtime_probe.lua
   modules: [exec, uuid]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     quote: bee.driver.kit:quote
     resources: bee.placement.native.env:resources
     capture: bee.driver.locate:probe_capture
+    docker_client: userspace.docker:docker_client

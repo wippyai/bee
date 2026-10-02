@@ -60,7 +60,7 @@ entries:
   modules:
   - hash
   imports:
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
     quote: bee.driver.kit:quote
     toml: bee.driver.kit:toml
     configure_protocol: bee.driver.configuration:configuration

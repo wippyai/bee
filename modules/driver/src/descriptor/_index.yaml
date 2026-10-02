@@ -5,13 +5,13 @@ entries:
   kind: library.lua
   source: file://schema_values.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: descriptor
   kind: library.lua
   source: file://descriptor.lua
   modules:
   - registry
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     login_evidence: bee.driver.locate:login_evidence
     schema_values: bee.driver.descriptor:schema_values

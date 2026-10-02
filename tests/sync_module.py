@@ -35,7 +35,7 @@ entries:
   - name: target_sender
     value: bee.sync.probe:sender
   - name: target_exports
-    value: bee:sync_exports
+    value: bee.sync.env:sync_exports
 - name: dependency_node
   kind: ns.dependency
   component: bee/node

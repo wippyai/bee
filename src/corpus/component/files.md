@@ -21,7 +21,7 @@ absolute paths are rejected. Directory loads and search results are bounded.
 
 An agent with approved `bee.app:runtime` access opens Files through
 `application_open`, with `definition_id: bee.files.app:app` and literal
-`arguments: ["src/protocol/clock.lua:2-4"]`. The preview marks the requested range.
+`arguments: ["modules/values/src/clock.lua:2-4"]`. The preview marks the requested range.
 Files uses singleton admission; opening an existing instance with new arguments
 moves its retained preview to the requested file and range. The shared reopen
 navigation uses the `bee.app.navigate` topic. Files calls

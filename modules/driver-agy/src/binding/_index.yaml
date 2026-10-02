@@ -65,8 +65,8 @@ entries:
   modules:
   - hash
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     configure_protocol: bee.driver.configuration:configuration
     quote: bee.driver.kit:quote
 - name: binding

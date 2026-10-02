@@ -213,5 +213,9 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
-    service_reply: bee.protocol:reply
+    bounds: bee.values:bounds
+    service_reply: bee.values:reply
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

@@ -20,7 +20,7 @@ entries:
   source: file://main.lua
   method: main
   modules: [funcs, registry, process, channel, time, json, sql, io, base64]
-  imports: {bounds: bee.threads.records:bounds, artifact: bee.gov.delivery:artifact}
+  imports: {bounds: bee.values:bounds, artifact: bee.gov.delivery:artifact}
   security: {policies: [bee.research.probe:host_policy]}
   meta:
     command:

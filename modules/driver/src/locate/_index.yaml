@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://login_evidence.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: probe_capture
   kind: library.lua
   source: file://probe_capture.lua
@@ -14,5 +14,5 @@ entries:
   kind: library.lua
   source: file://locate.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     login_evidence: bee.driver.locate:login_evidence

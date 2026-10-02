@@ -145,3 +145,7 @@ entries:
   targets:
   - entry: bee.placement.docker.service:runner
     path: .security.policies
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

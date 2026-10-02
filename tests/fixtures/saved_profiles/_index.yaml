@@ -34,7 +34,7 @@ entries:
   source: file://main.lua
   method: main
   modules: [funcs, security, logger, system]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.saved.profiles.probe:owner_policy]}
   meta:
     command:

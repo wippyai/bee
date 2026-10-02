@@ -5,7 +5,7 @@ entries:
   kind: library.lua
   source: file://protocol.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     catalog: bee.storage:catalog
 - name: extensions
@@ -13,7 +13,7 @@ entries:
   source: file://extensions.lua
   modules: [contract]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: backend
   kind: function.lua
   source: file://backend.lua
@@ -38,72 +38,122 @@ entries:
   kind: function.lua
   source: file://operations.lua
   method: read
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: list
   kind: function.lua
   source: file://operations.lua
   method: list
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: search
   kind: function.lua
   source: file://operations.lua
   method: search
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: rename
   kind: function.lua
   source: file://operations.lua
   method: rename
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: archive
   kind: function.lua
   source: file://operations.lua
   method: archive
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: restore
   kind: function.lua
   source: file://operations.lua
   method: restore
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: inspect
   kind: function.lua
   source: file://operations.lua
   method: inspect
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: search_within
   kind: function.lua
   source: file://operations.lua
   method: search_within
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: roots
   kind: function.lua
   source: file://operations.lua
   method: roots
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: folders
   kind: function.lua
   source: file://operations.lua
   method: folders
-  modules: *operation_modules
-  imports: *operation_imports
-  security: *operation_security
+  modules:
+  - funcs
+  - security
+  imports:
+    protocol: bee.workspace.catalog:protocol
+  security:
+    policies:
+    - bee.security.storage:workspace_catalog_facade_policy
 - name: contract
   kind: contract.definition
   meta:

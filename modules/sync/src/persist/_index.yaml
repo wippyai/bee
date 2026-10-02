@@ -18,12 +18,13 @@ entries:
     database: bee.sync.persist:database
     transaction: bee.persist.persist:transaction
     resources: bee.sync.env:resources
+    values: bee.values:bounds
 - name: replicas
   kind: library.lua
   source: file://replicas.lua
   modules: [json, sql, hash, base64]
   imports:
-    bounds: bee.sync.values:bounds
+    bounds: bee.values:bounds
     database: bee.sync.persist:database
     transaction: bee.persist.persist:transaction
     version: bee.sync.values:version
@@ -32,6 +33,6 @@ entries:
   source: file://distribution_store.lua
   modules: [sql]
   imports:
-    bounds: bee.sync.values:bounds
+    bounds: bee.values:bounds
     database: bee.sync.persist:database
     transaction: bee.persist.persist:transaction

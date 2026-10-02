@@ -47,3 +47,7 @@ entries:
   targets:
   - entry: bee.hub.env:publish_configuration_ref
     path: .resource_ref
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

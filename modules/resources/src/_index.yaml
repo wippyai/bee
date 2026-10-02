@@ -73,3 +73,7 @@ entries:
     description: One workspace's associations as a titled list, for a caller that may read the workspace; the shape of a workspace catalog extension
   - name: search
     description: One workspace's associations whose name starts with text, for a caller that may read the workspace
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

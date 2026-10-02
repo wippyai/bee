@@ -119,7 +119,7 @@ entries:
   - io
   - env
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies:
     - bee.workspace.app.probe:operator_policy
@@ -165,7 +165,7 @@ entries:
   method: main
   modules: [registry, env, logger, time, fs, json]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     catalog: bee.apps:catalog
     workspace_applications: bee.gov.workspace:workspace_applications
     capability_grants: bee.gov.capability:capability_grants

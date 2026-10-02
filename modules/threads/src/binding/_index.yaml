@@ -765,13 +765,14 @@ entries:
   kind: library.lua
   source: file://capabilities.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     migrations: bee.threads.migrations:migrations
     claims: bee.threads.delivery:claims
     subscriptions: bee.threads.delivery:subscriptions
     waits: bee.threads.delivery:waits
     recap: bee.threads.projection:recap
     notices: bee.threads.service:notices
+    record_bounds: bee.threads.records:bounds
 - name: authority_local
   kind: contract.binding
   contracts:

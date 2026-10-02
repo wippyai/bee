@@ -386,3 +386,7 @@ that budget. After child exit, the retention deadline bounds each continuous wai
 spool limit; acknowledged progress that resumes reads ends that wait. Once both
 streams end, one retention deadline bounds the remaining unacknowledged output. Drain expiration records forced
 truncation; retention expiration records output loss rather than consumption.
+
+Native preparation decodes host prepare options through the same driver preferences
+decoder as the carrier planner before comparing the configuration digest. Empty
+registry maps and absent options therefore select the same default options.

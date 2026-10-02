@@ -73,5 +73,11 @@
   "bee.threads": {
     "record_types": "library.lua",
     "types": "library.lua"
+  },
+  "bee.values": {
+    "bounds": "library.lua",
+    "canonical": "library.lua",
+    "clock": "library.lua",
+    "reply": "library.lua"
   }
 }

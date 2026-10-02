@@ -7,4 +7,4 @@ entries:
   modules: [hash]
   imports:
     types: bee.hive:types
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds

@@ -7,8 +7,8 @@ check in hub_release_install.py.
 
 An agent-driven install goes through the same fixture facade: an admitted
 attempt files an installation request through its gateway binding, the person
-approves it in Approvals, and only then does the attempt's status poll apply
-the approved plan digest under the Hub management policy.
+approves it in Approvals, and the owner worker applies the approved plan digest
+under the Hub management policy while the attempt observes its status.
 """
 import json
 import re

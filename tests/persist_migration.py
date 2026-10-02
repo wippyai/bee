@@ -1,5 +1,9 @@
 """Real SQLite migration opens, concurrent writers and SIGKILL recovery."""
 from concurrent.futures import ThreadPoolExecutor
+import json
+import argparse
+import shutil
+from pathlib import Path
 import hashlib
 import os
 import re
@@ -62,7 +66,7 @@ def bytes_check():
     print('Workspace 1–12, client 1–3 and all owner migration bytes/checksums unchanged', flush=True)
 
 
-def seed(path, owner):
+def seed(path, owner, workspace_revision=7):
     if owner == 'sync':
         source = (ROOT / 'modules/sync/src/migrations/migrations.lua').read_text()
         initial = re.search(r'local INITIAL = \[\[(.*?)\]\]', source, re.S)[1].removeprefix('\n')
@@ -70,9 +74,17 @@ def seed(path, owner):
     else:
         source = ROOT / ('src/storage/store.lua' if owner == 'workspace' else 'src/client/store.lua')
         expected = declared_migrations(source.read_text())
-    limit = 7 if owner == 'workspace' else 1
+    limit = workspace_revision if owner == 'workspace' else 1
+    if owner == 'workspace' and workspace_revision == 9:
+        identity, name, sql = expected[8]
+        sql = sql.replace('bee.approvals.inbox.app:app', 'bee.approvals.inbox:app')
+        assert hashlib.sha256((name + '\n' + sql).encode()).hexdigest() == '46544288073bfa24da5cc43334239ce9774e0a816624ab82b958db8c9acae71a'
+        expected[8] = (identity, name, sql)
     table = OWNERS[owner][1]
     with sqlite3.connect(path) as db:
+        if owner == 'workspace' and workspace_revision >= 8:
+            db.execute('CREATE TEMP TABLE workspace_migration_run (fresh INTEGER)')
+            db.execute('INSERT INTO workspace_migration_run VALUES (0)')
         timestamp = ', applied_at TEXT NOT NULL' if owner != 'client' else ''
         db.execute(f'CREATE TABLE {table} (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, checksum TEXT NOT NULL{timestamp})')
         for identity, name, sql in expected[:limit]:
@@ -223,7 +235,52 @@ INSERT INTO diagnostic_abort VALUES (1)]])
     print(f'{owner}: active checkpoint retains operation/native/rollback diagnostics without announcing completion', flush=True)
 
 
-def main():
+def catalog_snapshot(path):
+    with sqlite3.connect(path) as db:
+        tables = ('workspaces', 'workspace_state', 'workspace_display_assignments',
+                  'workspace_display_transfer_receipts', 'workspace_application_thread_bindings', 'workspace_folder')
+        aliases = dict(zip(
+            ('bee.settings', 'bee.console', 'bee.host.processes', 'bee.gov.overlays', 'bee.threads.timeline',
+             'bee.workspace.manager', 'bee.hive.manager', 'bee.hive_manager', 'bee.inbox', 'bee.modules',
+             'bee.hub.modules', 'bee.overlays', 'bee.workspaces', 'bee.timeline', 'bee.processes'),
+            ('bee.settings', 'bee.console', 'bee.host.processes', 'bee.gov.overlays', 'bee.threads.timeline',
+             'bee.workspace.manager', 'bee.hive.manager', 'bee.hive.manager', 'bee.approvals.inbox', 'bee.hub.modules',
+             'bee.hub.modules', 'bee.gov.overlays', 'bee.workspace.manager', 'bee.threads.timeline', 'bee.host.processes')))
+        aliases = {old + ':app': new + '.app:app' for old, new in aliases.items()}
+        result = {}
+        for table in tables:
+            columns = [row[1] for row in db.execute(f'PRAGMA table_info({table})')]
+            rows = [dict(zip(columns, row)) for row in db.execute(f'SELECT * FROM {table} ORDER BY 1')]
+            for row in rows:
+                if table == 'workspace_application_thread_bindings':
+                    row['definition_id'] = aliases.get(row['definition_id'], row['definition_id'])
+                elif table == 'workspace_state':
+                    value = json.loads(row['value'])
+                    for app in value.get('applications', []):
+                        if 'definition_id' in app:
+                            app['definition_id'] = aliases.get(app['definition_id'], app['definition_id'])
+                    row['value'] = value
+            result[table] = rows
+        return result
+
+
+def upgrade_nine(project, state, path):
+    before = ledger_rows(path, 'workspace')
+    assert [row[0] for row in before] == list(range(1, 10))
+    catalog = catalog_snapshot(path)
+    started = time.monotonic()
+    output = run(project, state, 'workspace')
+    elapsed = time.monotonic() - started
+    progress(output, 'workspace', 9, 12, True)
+    after = ledger_rows(path, 'workspace')
+    assert after[:9] == before and len(after) == 12
+    assert catalog_snapshot(path) == catalog
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+    print(f'workspace 9->12: original ledger rows and catalog/state/assignments/bindings/folder intact ({elapsed:.3f}s)', flush=True)
+
+
+def main(workspace_copy=None, upgrade_only=False):
     bytes_check()
     with fixture_workspace(unit_tests=False) as project:
         capture_progress(project)
@@ -260,6 +317,18 @@ def main():
             next(entry for entry in document['entries'] if entry['name'] == 'runner')['file'] = str(state / (owner + '.db'))
             manifests[owner].write_text(yaml.safe_dump(document))
             return state / (owner + '.db')
+
+        state = project / '.wippy' / 'upgrade-nine-workspace'
+        path = select_db('workspace', state)
+        seed(path, 'workspace', workspace_revision=9)
+        upgrade_nine(project, state, path)
+        if workspace_copy is not None:
+            state = project / '.wippy' / 'catalog-copy-workspace'
+            path = select_db('workspace', state)
+            shutil.copy2(workspace_copy, path)
+            upgrade_nine(project, state, path)
+        if upgrade_only:
+            return
 
         for owner in OWNERS:
             state = project / '.wippy' / ('diagnostic-' + owner)
@@ -333,4 +402,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--workspace-copy', type=Path)
+    parser.add_argument('--upgrade-only', action='store_true')
+    args = parser.parse_args()
+    main(args.workspace_copy, args.upgrade_only)

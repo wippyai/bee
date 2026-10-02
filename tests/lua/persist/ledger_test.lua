@@ -85,6 +85,34 @@ local function define_tests()
             test.eq(rows[1].fresh, 1); test.eq(rows[2].fresh, 0)
             db:release()
         end)
+        test.it("upgrades a nine-applied workspace ledger with an immutable shipped SQL variant", function()
+            local db = open()
+            local config: ledger.Ledger = {table = "workspace_schema_migrations", label = "workspace",
+                transaction = "batch", freshness_table = "workspace_migration_run"}
+            local expected: {ledger.Migration} = {}
+            for id = 1, 12 do
+                expected[id] = {id = id, name = "workspace_" .. tostring(id),
+                    sql = id == 1 and "CREATE TABLE workspace_history (revision INTEGER); INSERT INTO workspace_history VALUES (1)"
+                        or "INSERT INTO workspace_history VALUES (" .. tostring(id) .. ")"}
+            end
+            local original: {ledger.Migration} = {}
+            for id = 1, 9 do original[id] = expected[id] end
+            original[9] = {id = 9, name = expected[9].name, sql = "INSERT INTO workspace_history VALUES (9); SELECT 1"}
+            assert(ledger.apply(db, config, original))
+            local before = assert(ledger.rows(db, config))
+            expected[9].historical_sql = {original[9].sql}
+            assert(ledger.apply(db, config, expected))
+            local after = assert(ledger.rows(db, config))
+            test.eq(#after, 12)
+            for id = 1, 9 do test.eq(after[id].checksum, before[id].checksum) end
+            test.eq(#assert(db:query("SELECT revision FROM workspace_history")), 12)
+            test.eq(assert(db:query("SELECT fresh FROM temp.workspace_migration_run"))[1].fresh, 0)
+            assert(ledger.apply(db, config, expected))
+            assert(db:execute("UPDATE workspace_schema_migrations SET checksum = 'unknown' WHERE id = 9"))
+            local ok, err = ledger.apply(db, config, expected)
+            test.is_false(ok); test.contains(tostring(err), "checksum changed")
+            db:release()
+        end)
         test.it("rejects changed checksums before applying pending SQL", function()
             local db = open()
             local config = options("checksum_ledger", true, true, nil)

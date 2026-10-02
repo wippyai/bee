@@ -7,7 +7,7 @@ local sql = require("sql")
 local hash = require("hash")
 local env = require("env")
 local M = {}
-type Migration = {id: integer, name: string, sql: string, rebuild: boolean?}
+type Migration = {id: integer, name: string, sql: string, rebuild: boolean?, historical_sql: {string}?}
 type Ledger = {
     table: string, label: string,
     transaction: "batch"?, applied_at: boolean?, freshness_table: string?,
@@ -77,7 +77,15 @@ local function read_ledger(db: Connection, ledger: Ledger, expected: {Migration}
         local expected_checksum, checksum_err = M.checksum(migration)
         if not expected_checksum then return nil, checksum_err end
         if row_name ~= migration.name then return nil, ledger.label .. " migration name changed" end
-        if checksum ~= expected_checksum then return nil, ledger.label .. " migration checksum changed" end
+        local matches = checksum == expected_checksum
+        if not matches then
+            for _, text in ipairs(migration.historical_sql or {}) do
+                local historical_checksum, historical_err = M.checksum({id = migration.id, name = migration.name, sql = text})
+                if not historical_checksum then return nil, historical_err end
+                if checksum == historical_checksum then matches = true; break end
+            end
+        end
+        if not matches then return nil, ledger.label .. " migration checksum changed" end
         known[id] = true
         if reporting then env.set("bee.persist:startup_progress", "Checking data: " .. ledger.label:lower() .. " " .. tostring(id) .. "/" .. tostring(#expected)) end
         expected_id = expected_id + 1

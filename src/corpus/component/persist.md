@@ -20,6 +20,13 @@ The runner takes SQLite's writer lock before reading the ledger inside each
 migration transaction, then validates the ledger again so concurrent opens
 observe the winning writer's committed steps without applying them twice.
 
+A migration can declare `historical_sql` containing exact immutable texts from
+previously shipped variants under the same ID and name. Ledger verification
+checks those texts' SHA-256 digests as well as the current text; it preserves
+the stored checksum and never replays an applied variant. Unknown digests still
+refuse the store. Workspace migration 9 retains its original inbox package
+spelling and its later app-child spelling without rewriting either ledger history.
+
 SQL failures retain the native error text with the failing operation. Transaction
 begin, statement, commit, rollback and database release failures remain visible
 to the caller. Cleanup failures append to the initiating failure, including

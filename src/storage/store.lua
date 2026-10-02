@@ -360,6 +360,32 @@ WHERE json_type(value, '$.applications') = 'array' AND EXISTS
      WHERE json_extract(item.value, '$.definition_id') IN ('bee.settings:app','bee.console:app','bee.host.processes:app','bee.gov.overlays:app','bee.threads.timeline:app','bee.workspace.manager:app','bee.hive.manager:app','bee.hive_manager:app','bee.inbox:app','bee.modules:app','bee.hub.modules:app','bee.overlays:app','bee.workspaces:app','bee.timeline:app','bee.processes:app'));
 ]]
 
+-- Migration 9 shipped with the inbox package identity before its app child.
+-- Both shipped texts remain immutable; applied rows retain their original digest.
+local ORIGINAL_NESTED_NAMES_SQL = [[
+UPDATE workspaces SET root_ref = 'bee.env:workspace_root'
+WHERE root_ref = 'bee.environment:workspace_root';
+UPDATE workspace_application_thread_bindings SET definition_id = CASE definition_id
+    WHEN 'bee.hive_manager:app' THEN 'bee.hive.manager:app'
+    WHEN 'bee.inbox:app' THEN 'bee.approvals.inbox:app'
+    WHEN 'bee.modules:app' THEN 'bee.hub.modules:app'
+    WHEN 'bee.overlays:app' THEN 'bee.gov.overlays:app'
+    WHEN 'bee.workspaces:app' THEN 'bee.workspace.manager:app'
+    WHEN 'bee.timeline:app' THEN 'bee.threads.timeline:app'
+    WHEN 'bee.processes:app' THEN 'bee.host.processes:app'
+    ELSE definition_id END;
+UPDATE workspace_state SET value =
+    replace(replace(replace(replace(replace(replace(replace(value,
+    '"definition_id":"bee.hive_manager:app"', '"definition_id":"bee.hive.manager:app"'),
+    '"definition_id":"bee.inbox:app"', '"definition_id":"bee.approvals.inbox:app"'),
+    '"definition_id":"bee.modules:app"', '"definition_id":"bee.hub.modules:app"'),
+    '"definition_id":"bee.overlays:app"', '"definition_id":"bee.gov.overlays:app"'),
+    '"definition_id":"bee.workspaces:app"', '"definition_id":"bee.workspace.manager:app"'),
+    '"definition_id":"bee.timeline:app"', '"definition_id":"bee.threads.timeline:app"'),
+    '"definition_id":"bee.processes:app"', '"definition_id":"bee.host.processes:app"')
+WHERE instr(value, '"definition_id":"bee.') > 0;
+]]
+
 local migrations: {ledger.Migration} = {
     {id = 1, name = "workspace_state_v1", sql = STATE_TABLE_SQL},
     {id = 2, name = "workspace_identity_v1", sql = IDENTITY_TABLE_SQL},
@@ -369,7 +395,7 @@ local migrations: {ledger.Migration} = {
     {id = 6, name = "node_workspaces_v1", sql = NODE_WORKSPACES_SQL},
     {id = 7, name = "workspace_catalog_order_v1", sql = CATALOG_ORDER_SQL},
     {id = 8, name = "workspace_folder_on_open_v1", sql = FOLDER_ON_OPEN_SQL},
-    {id = 9, name = "nested_bee_names_v1", sql = NESTED_NAMES_SQL},
+    {id = 9, name = "nested_bee_names_v1", sql = NESTED_NAMES_SQL, historical_sql = {ORIGINAL_NESTED_NAMES_SQL}},
     {id = 10, name = "application_child_names_v1", sql = APPLICATION_NAMES_SQL},
     {id = 11, name = "modules_application_child_names_v1", sql = MODULES_APPLICATION_NAMES_SQL},
     {id = 12, name = "app_child_names_v2", sql = APP_CHILD_NAMES_SQL},

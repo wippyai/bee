@@ -28,7 +28,7 @@ local function plan_for(request: unknown, with_gateway: boolean?): {[string]: un
     local methods = assert(bounds.object(value.placement_methods))
     if type(methods.prepare) ~= "string" then error("placement prepare method must be text") end
     local placement_request: {[string]: unknown} = {
-        attempt_id = "attempt-current", binding_ref = "bee.driver.fixture.binding:binding", profile_id = "session",
+        attempt_id = "attempt-current", binding_ref = value.driver_binding_ref, profile_id = "session",
         placement_binding_ref = methods.prepare:gsub("prepare$", "binding"),
         launch = {executable = "fixture-cli", argv = {"--prompt"}, environment = {}, readiness = "protocol:ready"},
     }
@@ -105,14 +105,28 @@ end
 
 local function define_tests()
     test.describe("External executor turn", function()
-        test.it("refuses methods belonging to another driver binding before invoking the host", function()
+        test.it("accepts an admitted third-party binding with cross-namespace targets", function()
             local request = base_request()
+            request.driver_binding_ref = "vendor.agents:custom"
             local methods = assert(bounds.object(request.driver_methods))
-            methods.prepare = "bee.driver.other.binding:prepare"
+            methods.prepare = "vendor.operations:start"
+            methods.dispatch = "vendor.operations:continue"
+            methods.normalize = "vendor.codec:decode"
             local calls: {string} = {}
             local result, reason = turn.execute(success_io(calls), request)
+            test.is_nil(reason)
+            test.eq(result and result.outcome, "succeeded")
+            test.eq(calls[1], "plan")
+        end)
+        test.it("refuses a third-party binding when host admission denies it", function()
+            local request = base_request()
+            request.driver_binding_ref = "vendor.agents:custom"
+            local calls: {string} = {}
+            local io = success_io(calls)
+            io.plan = function(): (unknown?, string?) return nil, "binding vendor.agents:custom is not activated" end
+            local result, reason = turn.execute(io, request)
             test.is_nil(result)
-            test.eq(reason, "driver_methods.prepare is not an operation of the selected bee.driver binding")
+            test.eq(reason, "admit external turn: binding vendor.agents:custom is not activated")
             test.eq(#calls, 0)
         end)
         test.it("executes the admitted Docker placement through the shared turn lifecycle", function()

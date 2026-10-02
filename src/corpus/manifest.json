@@ -275,9 +275,9 @@
       "topic": "storage"
     },
     {
-      "bytes": 683,
+      "bytes": 2172,
       "id": "component/agents",
-      "sha256": "3e945348e427dc3b173dcad88f75b911caa1a9c962f1e4f69158b472e41994fa",
+      "sha256": "361f47a0cd15f60678dabe5b29a242ac5c37e1645daaa102c78adc75bc8435fb",
       "source": "modules/agents/src/README.md",
       "title": "Bee agents",
       "topic": "component"
@@ -347,9 +347,9 @@
       "topic": "component"
     },
     {
-      "bytes": 10963,
+      "bytes": 12886,
       "id": "component/driver",
-      "sha256": "32744bdadb84424b2ca2820964a8722794418f308cd7b80c49ef0298a89ce88a",
+      "sha256": "609656ee1b37cf91940daa5811e6322286053c1b620c1124c3330e41f18a2bc5",
       "source": "modules/driver/src/README.md",
       "title": "Bee driver",
       "topic": "component"
@@ -443,9 +443,9 @@
       "topic": "component"
     },
     {
-      "bytes": 23723,
+      "bytes": 24115,
       "id": "component/gov",
-      "sha256": "399838c3d37f0f0fdd8230fc618ea20d54415a8390c695a1887ef1921b5d4529",
+      "sha256": "5a6aba1cf828425266c345f4f50ec6c738a13591a75cc88cceec519e601b3ed2",
       "source": "modules/gov/src/README.md",
       "title": "Overlay authoring and preflight",
       "topic": "component"
@@ -531,9 +531,9 @@
       "topic": "component"
     },
     {
-      "bytes": 13946,
+      "bytes": 14036,
       "id": "component/sessions",
-      "sha256": "7841fb885d3b9e611dc2ada245cfdfb4be5b2121259ec604dd94da93af773f10",
+      "sha256": "0e84077f9e84fcdd278724fef4d89c166572f6b1eedf6b302855710f7f69dffa",
       "source": "modules/sessions/src/README.md",
       "title": "Bee sessions",
       "topic": "component"
@@ -678,7 +678,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 780989,
+    "bytes": 784883,
     "documents": 84
   }
 }

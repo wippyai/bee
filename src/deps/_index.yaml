@@ -144,7 +144,7 @@ entries:
     value: bee:workers
   - name: target_publish_configuration
     value: bee.hub.publication:hub_publication
-  - name: target_lifecycle_owners
+  - name: bee.hub.binding:target_lifecycle_owners
     value: [bee.sessions.binding:lifecycle]
 - name: gov
   kind: ns.dependency
@@ -241,9 +241,9 @@ entries:
   - name: bee.hive:target_retained_protocol
     value: bee.launch:retained_protocol
   - name: bee.hive:target_delivery
-    value: bee.terminal:delivery
+    value: bee.terminal.service:delivery
   - name: bee.hive:target_input
-    value: bee.protocol:input
+    value: bee.terminal.types:input
   - name: bee.hive:target_version
     value: bee.sync.values:version
 - name: hive_telemetry
@@ -356,13 +356,13 @@ entries:
     value: bee.approvals.env:db
   - name: target_policies
     value: bee.security.approvals:approver_policies
-  - name: process_host
+  - name: bee.approvals.service:process_host
     value: bee:workers
-  - name: authority_policies
+  - name: bee.approvals.service:authority_policies
     value:
     - bee.security.approvals:approval_store_policy
     - bee.security.approvals:approval_owner_policy
-  - name: worker_policies
+  - name: bee.approvals.service:worker_policies
     value:
     - bee.security.approvals:approval_store_policy
     - bee.security.approvals:approval_owner_policy

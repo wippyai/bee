@@ -33,7 +33,47 @@ def sql(path, constant="LAYOUT_REFERENCES_SQL"):
     return result.removesuffix(']]')
 
 
+def persisted_reference_moves():
+    migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
+    return {
+        entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} or any(
+            name in entry['reason'] for name in ('desktop_projection_references', 'hive_component_references')
+        ) else entry['from']
+        for entry in migrations if entry['category'] == 'ids'
+    }
+
+
 class RepositoryLayout(unittest.TestCase):
+    def test_host_selected_dependency_references_must_resolve(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-selection-') as temporary:
+            root = Path(temporary)
+            source = root / 'src'
+            source.mkdir()
+            (source / '_index.yaml').write_text("namespace: bee\nentries: []\n")
+            deps = source / 'deps'
+            deps.mkdir()
+            (deps / '_index.yaml').write_text("""namespace: bee.deps
+entries:
+- name: example
+  kind: ns.dependency
+  component: bee/example
+  parameters:
+  - name: target_input
+    value: bee.example:missing
+""")
+            module = root / 'modules/example/src'
+            module.mkdir(parents=True)
+            (module / '_index.yaml').write_text("""namespace: bee.example
+entries:
+- name: definition
+  kind: ns.definition
+  module: example
+- name: target_input
+  kind: ns.requirement
+  targets: []
+""")
+            self.assertIn('bee.deps:example: dangling linker/import target bee.example:missing', LAYOUT.audit(root)[0])
+
     def test_repository(self):
         errors, namespaces, entries, targets, dangling = LAYOUT.audit(ROOT)
         self.assertEqual(errors, [])
@@ -100,11 +140,7 @@ class RepositoryLayout(unittest.TestCase):
         self.assertEqual(database.execute('SELECT * FROM bee_placement_preparer_states ORDER BY binding_id').fetchall(), before)
 
     def test_reference_migrations_preserve_text_and_actor_identities(self):
-        # Applied root-reference SQL converts M0/M5 identities. Later actor moves
-        # preserve existing rows and do not extend those immutable migrations.
-        migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} else entry['from']
-                 for entry in migrations if entry['category'] == 'ids'}
+        moves = persisted_reference_moves()
         for path, tables in [
             ('modules/sync/src/migrations/migrations.lua', [('bee_sync_projections', 'value_json'), ('bee_sync_events', 'payload_json'), ('bee_sync_receipts', 'request_json')]),
             ('modules/gateway/src/migrations/migrations.lua', [('bee_gateway_surfaces', 'surface_json'), ('bee_gateway_surfaces', 'active_json'), ('bee_gateway_access_grants', 'traits_json')]),
@@ -232,11 +268,7 @@ class RepositoryLayout(unittest.TestCase):
         database = sqlite3.connect(':memory:')
         database.executescript('CREATE TABLE bee_placement_preparer_states (attempt_id TEXT, binding_id TEXT, record_json TEXT, PRIMARY KEY(attempt_id, binding_id)); CREATE TABLE bee_placement_evidence (kind TEXT, detail TEXT); CREATE TABLE bee_placement_attempts (request_json TEXT, grants_json TEXT);')
         record = {'binding_id': 'bee.git.worktree:binding', 'state': {'token': 'bee.git.worktree:binding'}}
-        # Applied root-reference SQL converts M0/M5 identities. Later actor moves
-        # preserve existing rows and do not extend those immutable migrations.
-        migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} else entry['from']
-                 for entry in migrations if entry['category'] == 'ids'}
+        moves = persisted_reference_moves()
         database.execute('INSERT INTO bee_placement_preparer_states VALUES (?, ?, ?)', ('attempt', record['binding_id'], json.dumps(record)))
         database.execute('INSERT INTO bee_placement_attempts VALUES (?, ?)', (json.dumps({'references': list(moves), 'binding_ref': 'bee.driver.codex:binding'}), json.dumps({'resource': 'bee.placement.native:db'})))
         database.executescript(script)
@@ -257,11 +289,7 @@ class RepositoryLayout(unittest.TestCase):
         self.assertEqual(database.execute('SELECT * FROM bee_placement_preparer_states ORDER BY binding_id').fetchall(), before)
 
     def test_scalar_resource_and_credential_references_move_without_grants(self):
-        # Applied root-reference SQL converts M0/M5 identities. Later actor moves
-        # preserve existing rows and do not extend those immutable migrations.
-        migrations = json.loads((ROOT / 'build/component-inventory-migrations.json').read_text())['migrations']
-        moves = {entry['from']: entry['to'] if entry['migration'] in {'M0', 'M5'} else entry['from']
-                 for entry in migrations if entry['category'] == 'ids'}
+        moves = persisted_reference_moves()
         for module, tables in [('resources', [('bee_resource_associations', 'root_ref'), ('bee_resource_grants', 'root_ref')]), ('credentials', [('bee_credential_definitions', 'source_ref'), ('bee_credential_projections', 'materializer')])]:
             database = sqlite3.connect(':memory:')
             for table, column in tables:

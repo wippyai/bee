@@ -10622,20 +10622,6 @@
       "source": "modules/sessions/src/executor/_index.yaml"
     },
     {
-      "namespace": "bee.sessions.migrations",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.sessions.migrations",
-      "source": "modules/sessions/src/migrations/_index.yaml"
-    },
-    {
-      "namespace": "bee.sessions.persist",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.sessions.persist",
-      "source": "modules/sessions/src/persist/_index.yaml"
-    },
-    {
       "namespace": "bee.sessions.security",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
@@ -10648,13 +10634,6 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.sessions.service",
       "source": "modules/sessions/src/service/_index.yaml"
-    },
-    {
-      "namespace": "bee.sessions.traits",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.sessions.traits",
-      "source": "modules/sessions/src/traits/_index.yaml"
     },
     {
       "namespace": "bee.settings",
@@ -16954,7 +16933,7 @@
   "summary": {
     "dangling_requirement_target_count": 0,
     "entry_count": 1788,
-    "namespace_count": 273,
+    "namespace_count": 270,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,

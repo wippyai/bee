@@ -266,6 +266,10 @@ requests a new permission approval. File grants root in the destination
 workspace's folder from the node catalog; contract and HTTP grants authorize
 only the capability gateway (`bee.gov.binding:contract_call`,
 `bee.gov.binding:http_request`), which checks the caller's own live record.
+An approved contract call retains the original application actor and enters the
+private `bee.gov.security:gateway_callee_scope`, whose policy grants nothing.
+Only the callee's declared policies apply; caller and gateway permissions do not
+flow into it, and the application retains its custom-scope creation denial.
 Preflight also refuses edits to the host `bee:protected_kernel` trust map, its
 transitive code dependencies and requirement selectors aimed at it. That map
 names every shipped namespace a host-selected scope lives in or is reached from

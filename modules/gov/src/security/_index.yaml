@@ -131,9 +131,19 @@ entries:
     resources: [bee.gov.binding:publication_call, bee.gov.binding:destination_call, bee.gov:publication_profiles_ref]
     effect: allow
 - name: gateway_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {comment: The capability gateway reads grant records and performs only calls it has checked against the caller's own live grant; applications never hold these actions}
   policy:
-    actions: [registry.get, contract.get, contract.open, contract.call, contract.security, security.scope.create, http_client.request]
+    expression: 'action != "security.policy_group.get" || resource == "bee.gov.security:gateway_callee_scope"'
+    actions: [registry.get, contract.get, contract.open, contract.call, contract.security, security.policy_group.get, http_client.request]
+    resources: '*'
+    effect: allow
+- name: gateway_callee_policy
+  kind: security.policy.expr
+  groups: [gateway_callee_scope]
+  meta: {comment: The gateway passes no caller or gateway authority to an approved contract callee; only its own declared policies apply}
+  policy:
+    expression: 'false'
+    actions: '*'
     resources: '*'
     effect: allow

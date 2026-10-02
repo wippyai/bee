@@ -64,8 +64,10 @@ local function contract_call(request_raw: unknown): Reply
     local actor = security.actor()
     local as_caller, actor_error = definition:with_actor(actor)
     if not as_caller then return fail("UNAVAILABLE", tostring(actor_error)) end
-    local confined, scope_error = as_caller:with_scope(security.new_scope({}))
-    if not confined then return fail("UNAVAILABLE", tostring(scope_error)) end
+    local scope, scope_error = security.named_scope("bee.gov.security:gateway_callee_scope")
+    if not scope then return fail("UNAVAILABLE", tostring(scope_error)) end
+    local confined, confinement_error = as_caller:with_scope(scope)
+    if not confined then return fail("UNAVAILABLE", tostring(confinement_error)) end
     local instance, open_error = confined:open(binding_id)
     if not instance then return fail("UNAVAILABLE", tostring(open_error)) end
     local call = (instance)[method]

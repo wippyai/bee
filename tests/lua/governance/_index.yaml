@@ -37,17 +37,37 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [funcs.call, security.actor.create]
+    actions: [funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.get, registry.snapshot, registry.apply]
     resources: '*'
     effect: allow
 - name: gateway_test
   kind: function.lua
   source: file://gateway_test.lua
   method: run
-  modules: [funcs, security]
+  modules: [funcs, security, registry, hash]
   meta: {type: test, suite: bee}
   security: {policies: [bee.gov:gateway_test_policy]}
-  imports: {bounds: bee.protocol:bounds, test: wippy.test:test}
+  imports:
+    bounds: bee.protocol:bounds
+    test: wippy.test:test
+    capability_grants: bee.gov:capability_grants
+    capability_model: bee.capability:model
+- name: gateway_probe_contract
+  kind: contract.definition
+  methods: [{name: inspect}]
+  meta: {type: test_support}
+- name: gateway_probe_binding
+  kind: contract.binding
+  contracts:
+  - contract: bee.gov:gateway_probe_contract
+    methods: {inspect: bee.gov:gateway_probe}
+  meta: {type: test_support}
+- name: gateway_probe
+  kind: function.lua
+  source: file://gateway_probe.lua
+  method: inspect
+  modules: [security]
+  meta: {type: test_support}
 - name: destination_public_test
   kind: function.lua
   source: file://destination_public_test.lua

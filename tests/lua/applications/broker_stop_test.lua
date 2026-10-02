@@ -11,6 +11,7 @@ local time = require("time")
 local exec = require("exec")
 local uuid = require("uuid")
 local appearance = require("appearance")
+local fixture = require("fixture")
 
 local WORKSPACE = string.rep("b", 32)
 local DEFINITION = "bee.console.app:app"
@@ -26,18 +27,19 @@ end
 
 local function define_tests()
     test.describe("Workspace broker stop", function()
-        test.it("reaps an application's PTY child before the broker exits", function()
+        test.it("reaps an application's PTY child before the broker exits", fixture.case(function(scope: fixture.State)
             local marker = "bee-broker-stop-" .. uuid.v7()
             local owner = tostring(process.pid())
-            local events = assert(process.events())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local events = scope.events
+            local catalogs = scope.catalogs
+            local replies = scope.replies
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
+            scope.brokers[broker] = true
             assert(catalogs:receive():from() == broker)
 
             local request_id = "broker-stop-open"
@@ -66,23 +68,23 @@ local function define_tests()
                 assert(received.ok and received.channel == events, "broker did not exit")
                 local event = received.value
                 exited = event.kind == process.event.EXIT and tostring(event.from) == broker
+                if exited then scope.brokers[broker] = nil end
             end
             test.is_false(running(marker), "the terminal child outlived the broker")
-            process.unlisten(catalogs)
-            process.unlisten(replies)
-        end)
-        test.it("stops one instance on an owner fence", function()
+        end))
+        test.it("stops one instance on an owner fence", fixture.case(function(scope: fixture.State)
             local marker = "bee-broker-fence-" .. uuid.v7()
             local owner = tostring(process.pid())
-            local events = assert(process.events())
-            local catalogs = assert(process.listen("bee.app.catalog", {message = true}))
-            local replies = assert(process.listen("bee.app.reply", {message = true}))
+            local events = scope.events
+            local catalogs = scope.catalogs
+            local replies = scope.replies
             local broker_pid, broker_error = process.with_context({["bee.workspace_owner"] = owner,
                 ["bee.workspace_id"] = WORKSPACE}):with_scope(security.new_scope({assert(security.policy("bee.security.desktop:broker_policy")),
                 assert(security.policy("bee.security:core_spawn_boundary"))}))
                 :spawn_monitored("bee.apps:broker", "bee:workers", owner, appearance.defaults(), {})
             if not broker_pid then error("broker spawn failed: " .. tostring(broker_error)) end
             local broker = tostring(broker_pid)
+            scope.brokers[broker] = true
             assert(catalogs:receive():from() == broker)
             local function wait_reply(op: string, request_id: string): {[string]: unknown}
                 local deadline = time.after("30s")
@@ -123,10 +125,9 @@ local function define_tests()
                 assert(received.ok and received.channel == events, "broker did not exit")
                 local event = received.value
                 exited = event.kind == process.event.EXIT and tostring(event.from) == broker
+                if exited then scope.brokers[broker] = nil end
             end
-            process.unlisten(catalogs)
-            process.unlisten(replies)
-        end)
+        end))
     end)
 end
 return test.run_cases(define_tests)

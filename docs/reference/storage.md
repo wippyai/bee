@@ -114,7 +114,14 @@ rejects a changed name or checksum. A failed migration rolls back both schema
 changes and all ledger records from that batch. Client migrations use the same
 batch runner with the original `client_schema_migrations` shape (`id`, `name`,
 `checksum`), without an `applied_at` column. Applied workspace migrations 1–12
-and client migrations 1–3 retain their exact SQL and checksums.
+and client migrations 1–3 retain their exact SQL and checksums. Workspace
+migration 13 converts the original shipped `bee.approvals.inbox:app` identity
+in bindings and saved applications to `bee.approvals.inbox.app:app`; both inbox
+histories canonicalize the same JSON and retain unrelated application state.
+Migration 13 also completes migration 9's exact rename in nested saved
+definition fields, so the two shipped texts produce the same complete value.
+Migration 14 converts the earlier `bee:workspace_root` catalog identity and
+removes only an unopened fresh folder seed left by mixed migration 6/8 texts.
 
 Each write is also transactional. Existing rows update through a generation
 compare-and-swap predicate, so a stale transaction cannot overwrite a newer
@@ -140,3 +147,29 @@ Manager; migration 11 covers Modules. Migration 12 covers Settings, Terminal,
 Process Manager and Overlays, alongside older application definition spellings.
 These migrations preserve opaque application state and layout generations.
 Workspace recovery also recognizes the earlier IDs.
+
+
+The shared runner accepts only the exact previously shipped SQL digests for
+workspace 6/8/9, threads 16, governance 14, gateway 16 and sync 4/8. Unknown
+checksums fail before pending migrations with the store label, migration ID/name,
+expected digest and found digest. Applied ledger rows remain unchanged.
+
+Threads migration 29 rebuilds cancel intents without the obsolete attempt-row
+foreign key, preserving all intents. Governance migration 16 rebuilds lease uses
+with their approval and admission fields. Existing fields remain unchanged;
+legacy uses inherit their lease's source approval and retain their already
+authorized effect as admitted at `applied_at`. Ambiguous legacy uses naming the
+same intent under multiple leases fail the new unique constraint and roll back;
+they never silently discard authority records. This SQLite migration uses guarded
+double-quoted identifiers for columns absent from the original schema; the
+runtime and populated-history acceptance both exercise that behavior.
+Gateway migration 17 and sync migration 9 repair telemetry owner references in
+owned JSON fields. Sync migration 4's historical difference is whitespace only.
+All repair steps are idempotent for both shipped histories.
+
+During retained startup, the Hive desktop bridge records its terminal failure
+before marking itself stopped and forwards it to the owner's registered route.
+A host-owned memory variable (`bee.launch:startup_error`) retains the same cause
+if failure precedes route registration. Only the selected Hive supervisor can
+write it; the startup owner reads it immediately and on its existing heartbeat.
+The owner fails with that diagnostic before the no-progress watchdog fires.

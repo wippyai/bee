@@ -30,7 +30,7 @@ entries:
 - name: owner
   kind: library.lua
   source: file://owner.lua
-  modules: [process, security, channel, time, uuid, funcs]
+  modules: [process, security, channel, time, uuid, funcs, env]
   imports:
     protocol: bee.hive.desktop:protocol
     types: bee.hive:types

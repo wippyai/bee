@@ -85,7 +85,8 @@ local function read_ledger(db: Connection, ledger: Ledger, expected: {Migration}
                 if checksum == historical_checksum then matches = true; break end
             end
         end
-        if not matches then return nil, ledger.label .. " migration checksum changed" end
+        if not matches then return nil, ledger.label .. " migration " .. tostring(id) .. " (" .. migration.name
+            .. ") checksum changed: expected " .. expected_checksum .. ", found " .. checksum end
         known[id] = true
         if reporting then env.set("bee.persist:startup_progress", "Checking data: " .. ledger.label:lower() .. " " .. tostring(id) .. "/" .. tostring(#expected)) end
         expected_id = expected_id + 1

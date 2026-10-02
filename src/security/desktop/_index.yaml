@@ -291,7 +291,14 @@ entries:
 - name: startup_progress_policy
   kind: security.policy.expr
   policy:
-    expression: '(action == "env.get" && resource in ["bee.env:startup_sequence", "bee.env:startup_phase"]) || (action == "env.set" && resource == "bee.env:startup_phase") || action == "time.ticker"'
+    expression: '(action == "env.get" && resource in ["bee.env:startup_sequence", "bee.env:startup_phase", "bee.launch:startup_error"]) || (action == "env.set" && resource == "bee.env:startup_phase") || action == "time.ticker"'
     actions: [env.get, env.set, time.ticker]
     resources: '*'
+    effect: allow
+
+- name: startup_failure_policy
+  kind: security.policy
+  policy:
+    actions: [env.set]
+    resources: [bee.launch:startup_error]
     effect: allow

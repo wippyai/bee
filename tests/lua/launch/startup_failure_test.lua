@@ -24,6 +24,13 @@ local function define_tests()
             test.is_nil(startup_failure.decode("{node@bee.launch:owner|1}", {version = 1, error = "bind failed"}, "node"))
         end)
 
+        test.it("reads a failure retained before the owner registered its route", function()
+            local detail = "workspace migration 9 (nested_bee_names_v1) checksum changed: expected abc, found unknown"
+            test.eq(startup_failure.stored(detail), "Hive supervisor failed before retained workspace readiness: " .. detail)
+            test.is_nil(startup_failure.stored(""))
+            test.is_nil(startup_failure.stored(string.rep("x", 4097)))
+        end)
+
         test.it("keeps a forwarded boot error on one line", function()
             test.eq(startup_failure.decode("{node@bee.hive.service:supervisor_host|1}",
                 {version = 1, error = "bind failed\nsecond line"}, "node"),

@@ -247,7 +247,7 @@ entries:
   kind: security.policy
   meta: {type: test_support}
   policy:
-    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.terminate, process.monitor, process.unmonitor]
+    actions: [process.spawn, process.spawn.monitored, process.host, process.send, process.terminate, process.monitor, process.unmonitor, process.registry.register, process.registry.unregister, env.get, env.set]
     resources: '*'
     effect: allow
 - name: desktop_workspaces_test
@@ -255,7 +255,7 @@ entries:
   source: file://desktop_workspaces_test.lua
   method: run
   meta: {type: test, suite: bee}
-  modules: [process, channel, time, security, funcs]
+  modules: [process, channel, time, security, funcs, env]
   security:
     policies: [bee.hive:desktop_workspaces_test_policy]
   imports:

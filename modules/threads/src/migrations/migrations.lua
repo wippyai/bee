@@ -2,7 +2,7 @@
 -- checksum: a change here is a new migration, never an edit.
 -- rebuild marks a migration that recreates a table: it runs with foreign key
 -- enforcement off on the migration connection and is checked before commit.
-type Migration = {id: integer, name: string, sql: string, rebuild: boolean}
+type Migration = {id: integer, name: string, sql: string, rebuild: boolean, historical_sql: {string}?}
 local M = {}
 
 local THREAD_SCHEMA_SQL = [[
@@ -848,6 +848,41 @@ ALTER TABLE bee_session_turns ADD COLUMN last_progress_at_ms INTEGER NOT NULL DE
 local APP_DEFINITION_SQL = [[
 CREATE TABLE bee_thread_definition_migrations (id INTEGER PRIMARY KEY CHECK(id = 1));
 ]]
+local ORIGINAL_SQL_16 = [[
+CREATE TABLE bee_thread_cancel_intents (
+  thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  attempt_id TEXT NOT NULL,
+  idempotency_key TEXT,
+  state TEXT NOT NULL CHECK(state IN ('cancelling','ended')),
+  outcome TEXT CHECK(outcome IS NULL OR outcome IN ('succeeded','failed','cancelled','uncertain')),
+  recorded_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(thread_id, attempt_id),
+  FOREIGN KEY(thread_id, attempt_id)
+    REFERENCES bee_thread_attempts(thread_id, attempt_id),
+  CHECK((state = 'cancelling' AND outcome IS NULL)
+     OR (state = 'ended' AND outcome = 'cancelled'))
+);
+]]
+
+local CANCEL_INTENT_REPAIR_SQL = [[
+CREATE TABLE bee_thread_cancel_intents_next (
+  thread_id TEXT NOT NULL REFERENCES bee_thread_heads(thread_id),
+  attempt_id TEXT NOT NULL,
+  idempotency_key TEXT,
+  state TEXT NOT NULL CHECK(state IN ('cancelling','ended')),
+  outcome TEXT CHECK(outcome IS NULL OR outcome IN ('succeeded','failed','cancelled','uncertain')),
+  recorded_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(thread_id, attempt_id),
+  CHECK((state = 'cancelling' AND outcome IS NULL)
+     OR (state = 'ended' AND outcome = 'cancelled'))
+);
+INSERT INTO bee_thread_cancel_intents_next SELECT * FROM bee_thread_cancel_intents;
+DROP TABLE bee_thread_cancel_intents;
+ALTER TABLE bee_thread_cancel_intents_next RENAME TO bee_thread_cancel_intents;
+CREATE INDEX bee_thread_cancel_intent_attempt ON bee_thread_cancel_intents(thread_id, attempt_id);
+]]
 local list: {Migration} = {
     {id = 1, name = "bee_thread_schema_v1", sql = THREAD_SCHEMA_SQL, rebuild = false},
     {id = 2, name = "thread_authority", sql = THREAD_AUTHORITY_SQL, rebuild = false},
@@ -864,7 +899,7 @@ local list: {Migration} = {
     {id = 13, name = "action_inbox_delivery_status", sql = ACTION_INBOX_DELIVERY_STATUS_SQL, rebuild = false},
     {id = 14, name = "action_inbox_outbox", sql = ACTION_INBOX_OUTBOX_SQL, rebuild = false},
     {id = 15, name = "action_inbox_outbox_reply", sql = ACTION_INBOX_OUTBOX_REPLY_SQL, rebuild = false},
-    {id = 16, name = "cancel_intent", sql = CANCEL_INTENT_SQL, rebuild = false},
+    {id = 16, name = "cancel_intent", historical_sql = {ORIGINAL_SQL_16}, sql = CANCEL_INTENT_SQL, rebuild = false},
     {id = 17, name = "attempt_notices", sql = ATTEMPT_NOTICES_SQL, rebuild = true},
     {id = 18, name = "app_alias", sql = APP_ALIAS_SQL, rebuild = false},
     {id = 19, name = "app_alias_live_authorization", sql = APP_ALIAS_LIVE_SQL, rebuild = false},
@@ -894,6 +929,7 @@ ALTER TABLE bee_sessions ADD COLUMN tool_calls INTEGER NOT NULL DEFAULT 0 CHECK(
 ALTER TABLE bee_sessions ADD COLUMN tokens INTEGER NOT NULL DEFAULT 0 CHECK(tokens >= 0);
 ]]},
     {id = 28, name = "app_child_definition_data", sql = APP_DEFINITION_SQL, rebuild = false},
+    {id = 29, name = "cancel_intent_admission_repair", sql = CANCEL_INTENT_REPAIR_SQL, rebuild = true},
 }
 function M.all(): {Migration}
     return M.prefix(#list)

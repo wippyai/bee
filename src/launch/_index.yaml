@@ -1,6 +1,13 @@
 version: '1.0'
 namespace: bee.launch
 entries:
+- name: startup_environment
+  kind: env.storage.memory
+- name: startup_error
+  kind: env.variable
+  storage: bee.launch:startup_environment
+  variable: error
+  default: ''
 - name: ownership
   kind: library.lua
   source: file://ownership.lua

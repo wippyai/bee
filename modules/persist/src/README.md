@@ -24,8 +24,10 @@ A migration can declare `historical_sql` containing exact immutable texts from
 previously shipped variants under the same ID and name. Ledger verification
 checks those texts' SHA-256 digests as well as the current text; it preserves
 the stored checksum and never replays an applied variant. Unknown digests still
-refuse the store. Workspace migration 9 retains its original inbox package
-spelling and its later app-child spelling without rewriting either ledger history.
+refuse the store with the owner label, migration ID/name, expected digest and
+found digest. Historical texts cover workspace 6/8/9, threads 16, governance 14,
+gateway 16 and sync 4/8. New migrations reconcile their schema/data differences;
+applied rows retain their original digest and timestamp.
 
 SQL failures retain the native error text with the failing operation. Transaction
 begin, statement, commit, rollback and database release failures remain visible

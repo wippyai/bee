@@ -146,6 +146,8 @@ local function main(controller_owner: string?, controller_checkpoint: unknown?)
         local heartbeats = heartbeat:channel()
         local startup_phase = "starting"
         local function observe_startup()
+            local failure = startup_failure.stored(env.get("bee.launch:startup_error"))
+            if failure then error(failure) end
             local raw = env.get("bee.env:startup_sequence")
             local sequence = raw and tonumber(raw)
             if sequence and sequence > 0 and sequence == math.floor(sequence) then

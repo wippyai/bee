@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+SHIPPED_BASELINE = '893d1216'
 SPEC = importlib.util.spec_from_file_location('layout_check', ROOT / 'build/layout_check.py')
 LAYOUT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LAYOUT)
@@ -114,9 +115,9 @@ class RepositoryLayout(unittest.TestCase):
                     self.assertEqual(migrated[key], original[key])
             database.close()
 
-    def test_main_migration_bytes_are_preserved(self):
+    def test_shipped_migration_bytes_are_preserved(self):
         for path in ['modules/placement-native/src/migrations/migrations.lua', 'modules/sync/src/migrations/migrations.lua', 'modules/gateway/src/migrations/migrations.lua']:
-            original = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
+            original = subprocess.check_output(['git', 'show', SHIPPED_BASELINE + ':' + path], cwd=ROOT, text=True)
             current = (ROOT / path).read_text()
             for block in re.findall(r'\[\[(.*?)\]\]', original, re.S):
                 self.assertIn(block, current, path)

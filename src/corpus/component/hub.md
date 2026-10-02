@@ -1,10 +1,11 @@
 # Hub module management
 
 This optional Bee component uses the existing native Hub reader and registry
-APIs. It has no Keeper dependency. The pinned runtime currently rejects a
-deployment-root update that also changes its composed dependency-root versions.
-`make hub-self-update-runtime-check` reproduces this conflict; completing a Bee
-release-closure update requires a runtime correction in a new executable.
+APIs. It has no Keeper dependency. The pinned runtime rejects a deployment-root
+artifact that changes versions of its nested composed dependency declarations.
+`make hub-self-update-runtime-check` reproduces this limitation. Update Bee uses
+a dependency-free core artifact and updates host-selected component roots in the
+existing publication transaction.
 
 Hub now ships as an independently resolved component. Existing immutable
 artifacts retain their recorded definition, receipt, migration, and policy

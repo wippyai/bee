@@ -185,6 +185,11 @@ fixture-lint: lua-boundary-check
 .PHONY: values-module
 values-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py
+.PHONY: sessions-unit-check
+sessions-unit-check: $(TOOLCHAIN_CURRENT)
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.tests.sessions interactive_test executor_registry_test locate_test catalog_service_test scheduler_test protocol_test client_test wiring_test attention_test driver_route_test owner_boundary_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.gateway sessions_test session_tools_test session_boundary_test
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py tests.hub.lifecycle lifecycle_test
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py

@@ -20,6 +20,13 @@ package-root spelling exception is `modules/application/src` → `bee.app`, the
 public SDK. Namespace segments and mapped folders contain no underscores.
 No child production `src/` path diverges from its namespace.
 
+Each entry lives in the namespace of the component that owns its concept,
+in the appropriate child such as `service`, `binding`, `persist`, `types`,
+`security` or `app`. The root `bee` namespace holds only the host composition
+and process wiring described below. Reuse existing dependency entries,
+resolution locks, requirement parameters and owner stores instead of adding
+parallel registry records or stored state for the same information.
+
 `make lint` runs `build/layout_check.py` before typed Lua lint. It checks namespace
 paths, component roots, local sources, application entries, process placement,
 host-free requirement defaults, duplicate Lua sources, orphan files and
@@ -53,6 +60,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
 | `src/storage` | Workspace database, catalog rows and immutable migrations; shared runner in `bee.persist` |
+| `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
@@ -132,6 +140,10 @@ Use explicit record types for exported values and functions. Treat decoded JSON
 and message payloads as `unknown` until validated; never use casts or `any` to
 skip validation. Bound strings, arrays, state, geometry, request IDs and
 pending work. Reject invalid versions before changing state.
+
+Import generic bounds, canonical JSON, clock conversions and reply decoding
+directly from `bee.values`. Domain checks stay with their owning components;
+retained startup phases and deadlines live in `bee.app:startup_progress`.
 
 Authenticate `message:from()` and the relevant instance, launch token,
 execution generation or operation grant. A PID in a payload is not

@@ -14,6 +14,7 @@ entries:
   modules: [sql, json, time]
   imports:
     bounds: bee.sync:bounds
+    values: bee.values:bounds
     canonical: bee.sync:canonical
     database: bee.sync.persist:database
     transaction: bee.persist:transaction
@@ -23,7 +24,7 @@ entries:
   source: file://replicas.lua
   modules: [json, sql, hash, base64]
   imports:
-    bounds: bee.sync:bounds
+    bounds: bee.values:bounds
     database: bee.sync.persist:database
     transaction: bee.persist:transaction
     version: bee.sync:version
@@ -32,6 +33,6 @@ entries:
   source: file://distribution_store.lua
   modules: [sql]
   imports:
-    bounds: bee.sync:bounds
+    bounds: bee.values:bounds
     database: bee.sync.persist:database
     transaction: bee.persist:transaction

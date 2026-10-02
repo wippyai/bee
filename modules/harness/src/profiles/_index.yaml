@@ -17,31 +17,31 @@ entries:
   modules: [json]
   imports:
     access: bee.driver:profile_access
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     budgets: bee.threads.records:budgets
-    canonical: bee.threads.records:canonical
+    canonical: bee.values:canonical
 - name: validation
   kind: library.lua
   source: file://validation.lua
   modules: [registry]
   imports:
     budgets: bee.threads.records:budgets
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     descriptors: bee.driver:descriptor
     protocol: bee.harness.profiles:protocol
 - name: migration
   kind: library.lua
   source: file://migration.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     protocol: bee.harness.profiles:protocol
 - name: service
   kind: library.lua
   source: file://service.lua
   modules: [security, ctx, system, registry, sql, hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     sync: bee.sync.persist:store
     transaction: bee.persist:transaction
     protocol: bee.harness.profiles:protocol

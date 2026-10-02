@@ -6,6 +6,10 @@ entries:
   module: hub
   readme: file://README.md
   meta: {title: Bee Hub, comment: Scoped package reads, dependency planning and publication recovery}
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_persist
   kind: ns.dependency
   component: bee/persist
@@ -64,15 +68,15 @@ entries:
 - name: requirements
   kind: library.lua
   source: file://requirements.lua
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical}
+  imports: {bounds: bee.values:bounds, record_bounds: bee.threads.records:bounds, canonical: bee.values:canonical}
 - name: inspection
   kind: library.lua
   source: file://inspection.lua
-  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements}
+  imports: {bounds: bee.values:bounds, requirements: bee.hub:requirements}
 - name: inventory
   kind: library.lua
   source: file://inventory.lua
-  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements}
+  imports: {bounds: bee.values:bounds, requirements: bee.hub:requirements}
 - name: semver
   kind: library.lua
   source: file://semver.lua
@@ -80,20 +84,20 @@ entries:
   kind: library.lua
   source: file://binary_identity.lua
   modules: [json, env]
-  imports: {bounds: bee.threads.records:bounds, semver: bee.hub:semver}
+  imports: {bounds: bee.values:bounds, semver: bee.hub:semver}
 - name: native_compat
   kind: library.lua
   source: file://native_compat.lua
-  imports: {bounds: bee.threads.records:bounds, binary_identity: bee.hub:binary_identity, semver: bee.hub:semver}
+  imports: {bounds: bee.values:bounds, binary_identity: bee.hub:binary_identity, semver: bee.hub:semver}
 - name: graph
   kind: library.lua
   source: file://graph.lua
-  imports: {bounds: bee.threads.records:bounds, requirements: bee.hub:requirements, inspection: bee.hub:inspection, semver: bee.hub:semver, canonical: bee.sync:canonical}
+  imports: {bounds: bee.values:bounds, requirements: bee.hub:requirements, inspection: bee.hub:inspection, semver: bee.hub:semver, canonical: bee.values:canonical}
 - name: plan
   kind: library.lua
   source: file://plan.lua
   modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, binary_identity: bee.hub:binary_identity, canonical: bee.sync:canonical, graph: bee.hub:graph, inventory: bee.hub:inventory, native_compat: bee.hub:native_compat, requirements: bee.hub:requirements, semver: bee.hub:semver}
+  imports: {bounds: bee.values:bounds, binary_identity: bee.hub:binary_identity, canonical: bee.values:canonical, graph: bee.hub:graph, inventory: bee.hub:inventory, native_compat: bee.hub:native_compat, requirements: bee.hub:requirements, semver: bee.hub:semver}
 - name: migrations
   kind: library.lua
   source: file://migrations.lua
@@ -101,7 +105,7 @@ entries:
   kind: library.lua
   source: file://migration_work.lua
   modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, plan: bee.hub:plan, migrations: bee.hub:migrations}
+  imports: {bounds: bee.values:bounds, canonical: bee.values:canonical, plan: bee.hub:plan, migrations: bee.hub:migrations}
 - name: inventory_reader
   kind: library.lua
   source: file://inventory_reader.lua
@@ -111,18 +115,18 @@ entries:
   kind: library.lua
   source: file://host_resources.lua
   modules: [registry]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: installation
   kind: library.lua
   source: file://installation.lua
   modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, semver: bee.hub:semver}
+  imports: {bounds: bee.values:bounds, canonical: bee.values:canonical, semver: bee.hub:semver}
 - name: publishing
   kind: library.lua
   source: file://publishing.lua
   modules: [hash]
-  imports: {bounds: bee.threads.records:bounds, canonical: bee.sync:canonical, semver: bee.hub:semver}
+  imports: {bounds: bee.values:bounds, canonical: bee.values:canonical, semver: bee.hub:semver}
 - name: result
   kind: library.lua
   source: file://result.lua
-  imports: {bounds: bee.threads.records:bounds, transaction: bee.persist:transaction}
+  imports: {bounds: bee.values:bounds, transaction: bee.persist:transaction}

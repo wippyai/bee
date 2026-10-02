@@ -33,7 +33,7 @@ entries:
   - time
   - logger
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     staging: bee.gov:staging_resources
     lease_store: bee.gov.persist:lease_store
   security:

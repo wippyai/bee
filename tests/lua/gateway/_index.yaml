@@ -64,7 +64,7 @@ entries:
   modules: [json, funcs]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     hooks: bee.gateway:hooks
     configuration: bee.driver:configuration
@@ -78,7 +78,7 @@ entries:
   security: {policies: [bee.gateway:mcp_test_policy]}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     mcp: bee.gateway:mcp
     gateway: bee.gateway.binding:gateway
@@ -100,7 +100,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     context: bee.gateway:context
 - name: ephemeral_listener
@@ -133,7 +133,7 @@ entries:
   security:
     policies: [bee.gateway:address_test_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     configuration: bee.gateway:configuration
 - name: native_admission_db_path
@@ -170,7 +170,7 @@ entries:
     policies: [bee.gateway:native_admission_test_policy]
   imports:
     app_caller: bee.app:caller
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     configuration: bee.gateway:configuration
     protocol: bee.gateway:protocol
@@ -197,7 +197,7 @@ entries:
   security:
     policies: [bee.gateway:policy_reference_admin]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
 - name: sessions_test
   kind: function.lua
@@ -212,7 +212,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     mcp: bee.gateway:mcp
     catalog: bee.gateway:catalog
@@ -229,7 +229,7 @@ entries:
   meta: {type: test_support}
   modules: [funcs, security]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     boundary: bee.gateway.api:session_boundary
 - name: session_boundary_test
   kind: function.lua
@@ -240,7 +240,7 @@ entries:
   imports:
     test: wippy.test:test
     harness: bee.threads:harness
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: profile_scope_test
   kind: function.lua
   source: file://profile_scope_test.lua
@@ -248,14 +248,14 @@ entries:
   meta: {type: test, suite: bee}
   modules: [security]
   security: {policies: [bee.gateway:profile_context_policy, bee.gateway.security:execute_policy]}
-  imports: {test: wippy.test:test, access: bee.driver:profile_access, scope: bee.gateway:profile_scope, context: bee.gateway:context, subject_call: bee.gateway.security:subject_call, bounds: bee.threads.records:bounds}
+  imports: {test: wippy.test:test, access: bee.driver:profile_access, scope: bee.gateway:profile_scope, context: bee.gateway:context, subject_call: bee.gateway.security:subject_call, bounds: bee.values:bounds}
 - name: profile_context_probe
   kind: function.lua
   source: file://profile_context_probe.lua
   method: handle
   meta: {type: test_support}
   modules: [ctx]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: profile_context_policy
   kind: security.policy
   meta: {type: test_support}

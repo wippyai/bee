@@ -9,6 +9,10 @@ entries:
     title: Bee sessions
     comment: Durable session launch contracts, host-selected executors, location and
       scheduling
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_threads
   kind: ns.dependency
   component: bee/threads
@@ -54,8 +58,8 @@ entries:
   - hash
   - funcs
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     journal: bee.sessions:threads_journal
     driver_route: bee.sessions:driver_route
     cancellation: bee.sessions.service:cancellation

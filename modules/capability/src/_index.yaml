@@ -8,7 +8,11 @@ entries:
   meta:
     title: Bee capability model
     comment: Pure catalog interpretation, grant scope comparison and revocation reports
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: model
   kind: library.lua
   source: file://model.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}

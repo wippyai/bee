@@ -58,7 +58,7 @@ entries:
   modules: [process, security, time, channel, io, system, funcs, registry, hash, base64, json]
   security: {policies: [bee.replica.probe:controller_policy]}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     types: bee.hive:types
     client: bee.hive:client
     sender: bee.hive.service:replica_sender

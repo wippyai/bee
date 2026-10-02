@@ -7,7 +7,7 @@ entries:
   method: handle
   modules: [funcs, security, json, system]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     publication_profiles: bee.gov:publication_profile_decoder
     transaction: bee.persist:transaction
     preflight: bee.gov:preflight
@@ -26,14 +26,14 @@ entries:
   source: file://super_edit_method.lua
   method: handle
   modules: [funcs, security]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.gov.security:super_edit_facade_policy]}
 - name: super_edit_recovery_call
   kind: function.lua
   source: file://super_edit_recovery_method.lua
   method: handle
   modules: [funcs, security]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.gov.security:super_edit_recovery_facade_policy]}
 - name: super_edit_backend_call
   kind: function.lua
@@ -41,7 +41,7 @@ entries:
   method: handle
   modules: [registry, security, system, time, uuid]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     transaction: bee.persist:transaction
     super_edit: bee.gov:super_edit
     activation_profiles: bee.gov:activation_profile_decoder
@@ -52,7 +52,7 @@ entries:
   source: file://recovery_service.lua
   modules: [system, uuid]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     resources: bee.gov:staging_resources
     activation_store: bee.gov.persist:activation_store
     headless_revert: bee.gov:headless_revert
@@ -66,7 +66,7 @@ entries:
   imports:
     service: bee.gov.binding:destination_service
     transaction: bee.persist:transaction
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security: {policies: [bee.gov.security:destination_facade_policy]}
 - name: contract_call
   kind: function.lua
@@ -74,7 +74,7 @@ entries:
   method: contract_call
   modules: &gateway_modules [registry, security, contract, http_client, hash]
   imports: &gateway_imports
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     capability_gateway: bee.gov:capability_gateway
     capability_access: bee.gov:capability_access
     capability_files: bee.gov:capability_files
@@ -102,7 +102,7 @@ entries:
     protocol: bee.gov:workspace_protocol
     guide: bee.gov.traits:guide
     transaction: bee.persist:transaction
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security: {policies: [bee.gov.security:overlay_facade_policy]}
   meta:
     type: tool
@@ -114,15 +114,15 @@ entries:
 - name: approval
   kind: library.lua
   source: file://approval.lua
-  imports: {canonical: bee.sync:canonical, bounds: bee.threads.records:bounds}
+  imports: {canonical: bee.values:canonical, bounds: bee.values:bounds}
 - name: destination
   kind: library.lua
   source: file://destination.lua
   modules: [hash]
   imports:
     resolution: bee.gov:resolver
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     approval: bee.gov.binding:approval
     plan_store: bee.gov.persist:plan_store
     replicas: bee.sync.persist:replicas
@@ -134,7 +134,7 @@ entries:
   source: file://publisher.lua
   modules: [base64]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     delivery: bee.gov:delivery
     replicas: bee.sync.persist:replicas
     sync: bee.sync.persist:store
@@ -144,7 +144,7 @@ entries:
   source: file://publication_service.lua
   modules: [registry, security, system, base64, json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     artifact: bee.gov:artifact
     materializer: bee.gov:materializer
     application_admission: bee.gov:governed_application_admission
@@ -164,7 +164,7 @@ entries:
   modules: [json]
   imports:
     resolution: bee.gov:resolver
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     transaction: bee.persist:transaction
     plan_store: bee.gov.persist:plan_store
     activation_store: bee.gov.persist:activation_store
@@ -180,7 +180,7 @@ entries:
   source: file://migration_effect.lua
   modules: [hash]
   imports:
-    canonical: bee.sync:canonical
+    canonical: bee.values:canonical
     hub_migrations: bee.hub:migrations
     migration_runner: bee.hub.binding:migration_runner
     migration_work: bee.gov:migration_work
@@ -190,8 +190,8 @@ entries:
   source: file://lease_grants.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     transaction: bee.persist:transaction
     capability_model: bee.capability:model
     lease_model: bee.gov:lease_model
@@ -201,8 +201,8 @@ entries:
   source: file://destination_service.lua
   modules: [registry, security, system, funcs, hash, time]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.sync:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     transaction: bee.persist:transaction
     resources: bee.gov:staging_resources
     sync_resources: bee.sync:resources

@@ -1,7 +1,6 @@
 -- MIT. Resolve the authenticated application's own live installed grants.
 local registry = require("registry")
 local security = require("security")
-local bounds = require("bounds")
 local gateway = require("capability_gateway")
 local grants = require("capability_grants")
 local capability_model = require("capability_model")

@@ -8,7 +8,7 @@ entries:
   modules: [security, process, channel, tty, uuid, registry, time, ctx, funcs]
   imports:
     attachment: bee.apps:attachment
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     execution: bee.apps:execution
     principal: bee.apps:principal
     contract: bee.protocol:application
@@ -18,7 +18,7 @@ entries:
     shutdown: bee.apps:shutdown
     interaction: bee.app:interaction
     interactions: bee.apps:interactions
-    clock: bee:clock
+    clock: bee.values:clock
     appearance: bee.app:appearance
     open_protocol: bee.apps:open_protocol
     binding_protocol: bee.host:binding_protocol
@@ -56,10 +56,10 @@ entries:
   source: file://catalog.lua
   modules: [registry, system, hash]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     application_admissions: bee.gov:application_admissions
-    canonical: bee.protocol:canonical
+    canonical: bee.values:canonical
 - name: interactions
   kind: library.lua
   source: file://interactions.lua
@@ -75,13 +75,14 @@ entries:
     arguments: bee.app:arguments
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: thread_binding
   kind: library.lua
   source: file://thread_binding.lua
   modules: [security]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
+    record_bounds: bee.threads.records:bounds
     principal: bee.apps:principal
     binding_protocol: bee.host:binding_protocol
     reducer: bee.apps:thread_binding_reducer
@@ -99,7 +100,7 @@ entries:
   method: handle
   modules: [process, security, channel, time, ctx, hash, uuid, registry]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     arguments: bee.app:arguments
     open_protocol: bee.apps:open_protocol
   security:

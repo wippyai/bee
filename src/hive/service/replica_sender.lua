@@ -115,7 +115,7 @@ function M.send(destination_node: string, raw_descriptor: version.Descriptor, co
     local descriptor, descriptor_error = version.decode(raw_descriptor)
     if not descriptor then return failure("INVALID", descriptor_error or "invalid version descriptor") end
     if not bounds.id(destination_node) then return failure("INVALID", "destination node is invalid") end
-    local source_cursor = bounds.count(options.source_cursor, 9007199254740991)
+    local source_cursor = bounds.count(options.source_cursor)
     if source_cursor == nil then return failure("INVALID", "source cursor is invalid") end
     if #content ~= descriptor.total_bytes or #content > MAX_CONTENT_BYTES then return failure("INVALID", "content length does not match descriptor") end
     local measured, measure_error = hash.sha256(content)

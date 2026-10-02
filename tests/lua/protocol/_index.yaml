@@ -14,7 +14,7 @@ entries:
     decode: bee.protocol:decode
     client: bee.app:client
     arguments: bee.app:arguments
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: decode_test
   kind: function.lua
   source: file://decode_test.lua

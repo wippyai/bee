@@ -38,7 +38,7 @@ entries:
   modules: [funcs, security, uuid]
   imports:
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: selection_test
   kind: function.lua
   source: file://selection_test.lua
@@ -47,7 +47,7 @@ entries:
   imports:
     protocol: bee.app:sessions_protocol
     fixtures: bee.tests.sessions:fixtures
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     agents: bee.harness.app:agents
     sessions: bee.app:sessions
@@ -78,7 +78,7 @@ entries:
     test: wippy.test:test
     form: bee.harness.app:profile_form
     editor: bee.harness.app:profile_editor
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: agents_test
   kind: function.lua
   source: file://agents_test.lua
@@ -86,7 +86,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     protocol: bee.app:sessions_protocol
     fixtures: bee.tests.sessions:fixtures
     test: wippy.test:test
@@ -104,7 +104,7 @@ entries:
     agents: bee.harness.app:agents
     sessions: bee.app:sessions
     protocol: bee.app:sessions_protocol
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: observations_probe
   kind: function.lua
   source: file://observations_test.lua
@@ -117,7 +117,7 @@ entries:
     agents: bee.harness.app:agents
     sessions: bee.app:sessions
     protocol: bee.app:sessions_protocol
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: agent_view_test
   kind: function.lua
   source: file://agent_view_test.lua
@@ -161,7 +161,7 @@ entries:
   security: {policies: [bee.sync:sync_test_policy]}
   imports:
     test: wippy.test:test
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     migration: bee.harness.profiles:migration
     protocol: bee.harness.profiles:protocol
     sync: bee.sync.persist:store
@@ -176,7 +176,7 @@ entries:
   meta: {type: test, suite: bee}
   modules: [registry, json]
   security: {policies: [bee.harness.profiles:repair_policy]}
-  imports: {test: wippy.test:test, form: bee.harness.app:profile_form, editor: bee.harness.app:profile_editor, bounds: bee.threads.records:bounds}
+  imports: {test: wippy.test:test, form: bee.harness.app:profile_form, editor: bee.harness.app:profile_editor, bounds: bee.values:bounds}
 - name: reopen_test
   kind: function.lua
   source: file://reopen_test.lua

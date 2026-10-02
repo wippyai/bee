@@ -7,6 +7,6 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     publishing: bee.hub:publishing

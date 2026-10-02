@@ -22,7 +22,7 @@ entries:
   kind: library.lua
   source: file://agent.lua
   modules: [funcs, security, system, time, env]
-  imports: {bounds: bee.protocol:bounds}
+  imports: {bounds: bee.values:bounds}
 
 - name: request
   kind: process.lua
@@ -30,7 +30,7 @@ entries:
   method: main
   modules: [logger, time]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     agent: bee.hub.install.probe:agent
   security:
     policies: [bee.hub.install.probe:probe_policy]

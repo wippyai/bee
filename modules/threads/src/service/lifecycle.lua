@@ -3,6 +3,7 @@
 -- transition is checked against the indexes in the same transaction.
 local sql = require("sql")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local values = require("values")
 local decoders = require("lifecycle")
 local record_types = require("record_types")
@@ -90,7 +91,7 @@ function M.admit_action(db: sql.DB, actor: string, request: unknown): Result
         if existing then return failure("CONFLICT", "action already exists") end
         local count, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_actions WHERE thread_id = ?", {head.thread_id}, "actions")
         if not count then return storage(count_err or "count actions") end
-        if count >= bounds.MAX_THREAD_ACTIONS then return failure("LIMIT_EXCEEDED", "thread action limit reached") end
+        if count >= record_bounds.MAX_THREAD_ACTIONS then return failure("LIMIT_EXCEEDED", "thread action limit reached") end
         context.action_id = action_id
         local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "action.admitted", body = admitted}, context, nil, nil, 1)
         if not committed then return refused or failure("INTERNAL", "commit failed") end
@@ -135,7 +136,7 @@ function M.prepare_attempt(db: sql.DB, actor: string, request: unknown): Result
         end
         local count, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_attempts WHERE thread_id = ?", {head.thread_id}, "attempts")
         if not count then return storage(count_err or "count attempts") end
-        if count >= bounds.MAX_THREAD_ATTEMPTS then return failure("LIMIT_EXCEEDED", "thread attempt limit reached") end
+        if count >= record_bounds.MAX_THREAD_ATTEMPTS then return failure("LIMIT_EXCEEDED", "thread attempt limit reached") end
         context.action_id = action_id
         context.attempt_id = attempt_id
         local committed, refused = authority.commit_record(tx, head, actor, "bee", {kind = "attempt.prepared", body = plan}, context, nil, nil, 2)
@@ -216,7 +217,7 @@ function M.request_turn(db: sql.DB, actor: string, request: unknown): Result
         if open then return failure("INVALID_STATE", "attempt already has an open turn") end
         local count, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_turns WHERE thread_id = ?", {head.thread_id}, "turns")
         if not count then return storage(count_err or "count turns") end
-        if count >= bounds.MAX_THREAD_TURNS then return failure("LIMIT_EXCEEDED", "thread turn limit reached") end
+        if count >= record_bounds.MAX_THREAD_TURNS then return failure("LIMIT_EXCEEDED", "thread turn limit reached") end
         context.action_id = action_id
         context.attempt_id = attempt_id
         context.turn_id = turn_id

@@ -6,7 +6,7 @@ entries:
   source: file://session_boundary.lua
   modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     subject_call: bee.gateway.security:subject_call
 - name: admission
   kind: library.lua
@@ -31,7 +31,7 @@ entries:
     hooks: bee.gateway:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:session_boundary_resolver_policy, bee.gateway.security:session_boundary_policy]}
 - name: hook_status_http
   kind: function.lua
@@ -43,7 +43,7 @@ entries:
     hooks: bee.gateway:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy]}
 - name: hook_mcp_http
   kind: function.lua
@@ -56,7 +56,7 @@ entries:
     hooks: bee.gateway:hooks
     admission: bee.gateway.api:admission
     session_boundary: bee.gateway.api:session_boundary
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security: {policies: [bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:session_boundary_resolver_policy, bee.gateway.security:session_boundary_policy]}
 - name: mcp_http
   kind: function.lua
@@ -71,7 +71,7 @@ entries:
     catalog: bee.gateway:catalog
     context: bee.gateway:context
     session_tools: bee.gateway:session_tools
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     subject_call: bee.gateway.security:subject_call
   security:
     policies: [bee.resources.security:resource_resolve_policy,bee.gateway.security:address_call_policy, bee.gateway.security:store_policy, bee.gateway.security:database_ref_policy, bee.gateway.security:address_policy, bee.gateway.security:supervisor_policy, bee.gateway.security:execute_policy, bee.gateway.security:tool_policy_read_policy, bee.gateway.security:tool_policy_reference_policy, bee.gateway.security:access_call_policy, bee.gateway.security:access_reference_policy, bee.gateway.security:access_policy_read_policy, bee.gateway.security:session_contract_policy]

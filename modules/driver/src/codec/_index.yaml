@@ -11,7 +11,7 @@ entries:
   imports:
     events: bee.driver.kit:events
     types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     paths: bee.driver.codec:paths
 - name: codex_jsonl
   kind: library.lua
@@ -20,7 +20,7 @@ entries:
   imports:
     events: bee.driver.kit:events
     types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     paths: bee.driver.codec:paths
 - name: opencode_json_events
   kind: library.lua
@@ -29,7 +29,7 @@ entries:
   imports:
     events: bee.driver.kit:events
     types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     values: bee.threads.records:values
     paths: bee.driver.codec:paths
 - name: agy_stream_json
@@ -39,7 +39,8 @@ entries:
   imports:
     events: bee.driver.kit:events
     types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
+    record_bounds: bee.threads.records:bounds
     values: bee.threads.records:values
     paths: bee.driver.codec:paths
 - name: grok_streaming_json
@@ -49,7 +50,7 @@ entries:
   imports:
     events: bee.driver.kit:events
     types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     values: bee.threads.records:values
     paths: bee.driver.codec:paths
 - name: muse_record_jsonl
@@ -59,6 +60,7 @@ entries:
   imports:
     events: bee.driver.kit:events
     types: bee.driver:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
+    record_bounds: bee.threads.records:bounds
     values: bee.threads.records:values
     paths: bee.driver.codec:paths

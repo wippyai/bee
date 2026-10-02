@@ -61,7 +61,7 @@ entries:
   method: run
   modules: [process, channel, tty, time, security, funcs, registry]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     service: bee.placement.native.service:service
     placement_store: bee.placement.native.persist:store
@@ -75,7 +75,7 @@ entries:
   method: main
   modules: [process, channel, time, funcs]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     window: bee.placement.native.service:window
     protocol: bee.placement.native:protocol
 - name: migration_test
@@ -84,7 +84,7 @@ entries:
   method: run
   modules: [sql]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     persist: bee.persist:database
     migrations: bee.placement.native.migrations:migrations

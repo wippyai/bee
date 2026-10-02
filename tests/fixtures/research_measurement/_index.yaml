@@ -10,7 +10,7 @@ entries:
   method: run
   source: file://probe.lua
   modules: [funcs, registry, security, http_client, json, time, hash]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.research.measurement:probe_policy]}
 - name: inputs
   kind: registry.entry
@@ -34,7 +34,7 @@ entries:
   source: file://tool.lua
   method: run
   modules: [ctx, funcs, channel, time, registry, security, hash, json]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
 - name: tool_policy
   kind: security.policy
   policy:
@@ -107,7 +107,7 @@ entries:
   method: run
   source: file://live.lua
   modules: [funcs, registry, security, process, channel, time, json, io]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds, record_bounds: bee.threads.records:bounds}
   security: {policies: [bee.research.measurement:probe_policy]}
   meta:
     command:

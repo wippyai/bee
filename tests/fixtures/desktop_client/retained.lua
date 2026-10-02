@@ -24,7 +24,8 @@ local function main(mode: string?)
     for _, name in ipairs({"bee.security.desktop:host_policy", "bee.security.desktop:desktop_policy", "bee.security.desktop:retained_supervisor_spawn_policy", "bee.security.desktop:desktop_catalog_policy", "bee.security.desktop:desktop_catalog_resource_policy"}) do
         policies[#policies + 1] = assert(security.policy(name))
     end
-    local supervisor = tostring(assert(process.with_options({}):with_context({["bee.retained_owner"] = owner})
+    local supervisor = tostring(assert(process.with_options({}):with_actor(security.new_actor("bee-retained-probe"))
+        :with_context({["bee.retained_owner"] = owner})
         :with_scope(security.new_scope(policies)):spawn_monitored("bee.launch:retained", "bee:workers", owner, {root_ref = "bee.env:workspace_root", subpath = ""}, "bee.console.app:app")))
     local deadline = time.after("10s")
     local selected = channel.select({ready:case_receive(), events:case_receive(), deadline:case_receive()})

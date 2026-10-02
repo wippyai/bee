@@ -37,7 +37,7 @@ entries:
   modules:
   - json
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     caller: bee.app:caller
     preflight: bee.gov:preflight
 - name: view

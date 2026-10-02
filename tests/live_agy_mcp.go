@@ -172,7 +172,7 @@ func check() error {
 		}
 		material := map[string]string{}
 		for topic, relative := range map[string]string{
-			"source": "modules/threads/src/records/canonical.lua", "corpus": "tests/fixtures/performance_research/corpus.lua",
+			"source": "modules/values/src/canonical.lua", "corpus": "tests/fixtures/performance_research/corpus.lua",
 			"authoring": "tests/fixtures/research_author/AUTHORING.md", "application": "modules/threads-timeline/src/app/app.lua",
 			"model": "modules/threads-timeline/src/app/model.lua", "view": "modules/threads-timeline/src/app/view.lua",
 		} {

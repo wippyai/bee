@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = Path(os.environ.get("BEE_RUNTIME", ROOT / ".wippy/bin/wippy")).resolve()
 
 
-def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, session_failure=False, session_upgrade=False, failed_session_upgrade=False, client_upgrade=False, client_upgrade_fallback=False, broker_upgrade=False, host_upgrade=False, host_upgrade_fallback=False, broker_upgrade_fallback=False, _transfer_failure=None):
+def run(command="desktop-client-probe", shared_store=False, storage_delay=False, launch_exit=False, primary_render_delay=False, copy_exit=False, defaults_probe=False, primary_exit=False, transfer_probe=False, host_prompt=False, session_failure=False, session_upgrade=False, failed_session_upgrade=False, client_upgrade=False, client_upgrade_fallback=False, broker_upgrade=False, host_upgrade=False, host_upgrade_fallback=False, broker_upgrade_fallback=False, sessions_windows=False, _transfer_failure=None):
     if transfer_probe and _transfer_failure is None:
         for failure in ("success", "source", "target"):
             run(command=command, shared_store=shared_store, storage_delay=storage_delay, launch_exit=launch_exit,
@@ -26,6 +26,25 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
         shutil.copytree(ROOT / "src", project / "src")
         shutil.copytree(ROOT / "modules", project / "modules")
         shutil.copytree(ROOT / "tests/fixtures/desktop_client", project / "src/client_probe")
+        if sessions_windows:
+            fixture = project / "src/client_probe/retained.lua"
+            code = fixture.read_text()
+            anchor = '    assert(launch(extra, "terminal", {}, extra_id) == "")\n'
+            proof = '''    do
+    assert(launch(first, "agent", {}) == "", "First Sessions command failed")
+    wait_text(first_screen, "SESSIONS")
+    assert(launch(extra, "agent", {}, extra_id) == "", "Second display could not open Sessions")
+    wait_text(extra_screen, "SESSIONS")
+    wait_text(first_screen, "SESSIONS")
+    assert(process.terminate(supervisor))
+    first_screen:close()
+    extra_screen:close()
+    log:info("RETAINED_SUPERVISOR_PROBE_COMPLETE")
+    return
+    end
+'''
+            assert anchor in code
+            fixture.write_text(code.replace(anchor, proof + anchor, 1))
         # Terminal shells read their rc files from the executor's HOME. The probe
         # owns that HOME so the prompt it waits for is independent of the host user.
         shell_home = root / "shell-home"
@@ -164,7 +183,7 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
             # retained output of the viewport it replaced.
             presenter = project / "src/terminal/main.lua"
             source = presenter.read_text()
-            label = '"Workspace " .. names.label(workspace_id)'
+            label = '"Workspace " .. (workspace_label or names.label(workspace_id))'
             assert source.count(label) == 1, "unexpected terminal presenter label anchor"
             presenter.write_text(source.replace(label, label + ' .. " " .. tostring(process.pid()):sub(-12)', 1))
         if primary_render_delay:
@@ -430,6 +449,9 @@ def run(command="desktop-client-probe", shared_store=False, storage_delay=False,
                 assert ((folder if packed else project) / "fault-launch-evidence").read_text() == "committed"
             if command in ("retained-supervisor-probe", "retained-client-upgrade-probe", "retained-client-fallback-probe", "retained-host-fallback-probe"):
                 assert "shutdown error" not in logs and "is failed" not in logs, logs
+    if sessions_windows:
+        print("Sessions source/pack: two controlling displays open independent Agent windows through host-selected admission")
+        return
     if transfer_probe:
         print(f"Display transfer source/pack ({_transfer_failure}): real window menu, exact retained shell PID/state, neighbor unaffected, client layouts" + (" and source F12" if _transfer_failure == "success" else " and failed-display restart"))
         return

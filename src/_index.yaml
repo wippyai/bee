@@ -12,10 +12,6 @@ entries:
     workers: 4
   lifecycle:
     auto_start: true
-- name: clock
-  kind: library.lua
-  source: file://clock.lua
-  modules: [time]
 - name: gov_recovery_service
   kind: process.service
   process: bee.gov.service:recovery
@@ -312,7 +308,7 @@ entries:
       bee.desktop, bee.docs, bee.env, bee.gateway, bee.governance, bee.gov, bee.hive,
       bee.host, bee.hub, bee.interaction, bee.launch, bee.node, bee.persist, bee.protocol,
       bee.security, bee.session, bee.settings, bee.storage, bee.sync, bee.terminal, bee.threads,
-      bee.workspace]
+      bee.values, bee.workspace]
     super_edit: []
     entries: ['bee:protected_kernel', 'bee:approver_policies', 'bee:capability_catalog', 'bee.env:gov_activation_profiles',
       'bee.env:gov_publication_profiles', 'bee.deps:gov', 'bee.deps:approvals', 'bee:module_installation',

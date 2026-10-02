@@ -7,6 +7,10 @@ entries:
   meta:
     title: Bee approvals inbox
     comment: Approvals inbox application; host composition, admitted workspaces and source selection remain in Bee
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_application
   kind: ns.dependency
   component: bee/application
@@ -37,7 +41,7 @@ entries:
   source: file://sources.lua
   modules: [hash]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: sources
   kind: registry.entry
   meta:

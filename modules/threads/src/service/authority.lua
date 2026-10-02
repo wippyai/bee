@@ -4,6 +4,7 @@
 local sql = require("sql")
 local json = require("json")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local values = require("values")
 local record = require("record")
@@ -102,7 +103,7 @@ function M.create(db: sql.DB, actor: string, request: unknown): Result
     local object = bounds.object(request) or {}
     local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "title"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local title = bounds.text(object.title, bounds.MAX_TITLE_BYTES)
+    local title = bounds.text(object.title, record_bounds.MAX_TITLE_BYTES)
     if not title or #title == 0 or title:find("%c") then return failure("INVALID_ARGUMENT", "title must be one line of bounded text") end
     local title_text = tostring(title)
     if not access.may_create(mutation.thread_id) then return failure("DENIED", "caller may not create threads") end
@@ -152,10 +153,10 @@ function M.list(db: sql.DB, actor: string, request: unknown): Result
         if not id then return failure("INVALID_ARGUMENT", "after_thread_id is not an identifier") end
         after = id
     end
-    local limit = bounds.MAX_PAGE_RECORDS
+    local limit = record_bounds.MAX_PAGE_RECORDS
     if object.limit ~= nil then
         local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
+        if not number or number < 1 or number > record_bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS)) end
         limit = number
     end
     return transaction.read(db, function(tx: sql.Transaction): Result
@@ -188,10 +189,10 @@ function M.list_workspace(db: sql.DB, actor: string, request: unknown): Result
         if not id then return failure("INVALID_ARGUMENT", "after_thread_id is not an identifier") end
         after = id
     end
-    local limit = bounds.MAX_PAGE_RECORDS
+    local limit = record_bounds.MAX_PAGE_RECORDS
     if object.limit ~= nil then
         local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
+        if not number or number < 1 or number > record_bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS)) end
         limit = number
     end
     if not access.may_list_workspace(workspace_id) then return failure("DENIED", "caller may not list the threads of workspace " .. workspace_id) end
@@ -231,7 +232,7 @@ function M.join(db: sql.DB, actor: string, request: unknown): Result
         if existing and existing.active then return failure("CONFLICT", "member is already active") end
         local active, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_members WHERE thread_id = ? AND active = 1", {mutation.thread_id}, "active members")
         if not active then return storage(count_err or "count active members") end
-        if active >= bounds.MAX_THREAD_MEMBERS then return failure("LIMIT_EXCEEDED", "thread membership is full") end
+        if active >= record_bounds.MAX_THREAD_MEMBERS then return failure("LIMIT_EXCEEDED", "thread membership is full") end
         local revision = head.revision + 1
         local write_err: string?
         if existing then
@@ -361,14 +362,14 @@ function M.commit_record(tx: sql.Transaction, head: reader.Head, producer_id: st
     local obligations, obligations_err = reader.obligations(tx, head.thread_id)
     if not obligations then return nil, storage(obligations_err or "count obligations") end
     local reserved = obligations.open_actions + obligations.running_attempts + obligations.open_turns + obligations.open_requests + obligations.live_claims
-    if head.head_sequence + 1 + reserved + new_obligations > bounds.MAX_THREAD_RECORDS then
+    if head.head_sequence + 1 + reserved + new_obligations > record_bounds.MAX_THREAD_RECORDS then
         return nil, failure("LIMIT_EXCEEDED", "thread has no capacity for this record and the receipts still owed")
     end
     local record_id, id_err = transaction.record_id()
     if not record_id then return nil, failure("INTERNAL", id_err or "allocate record identifier") end
     local sequence = head.head_sequence + 1
     local now = transaction.now()
-    local envelope: record_types.RecordEnvelope = {schema_revision = bounds.SCHEMA_REVISION, record_id = record_id, thread_id = head.thread_id,
+    local envelope: record_types.RecordEnvelope = {schema_revision = record_bounds.SCHEMA_REVISION, record_id = record_id, thread_id = head.thread_id,
         sequence = sequence, recorded_at = now, producer_id = producer_id, source = source, causation = context.causation,
         correlation_id = context.correlation_id, action_id = context.action_id, attempt_id = context.attempt_id, turn_id = context.turn_id}
     local encoded, encode_error = record.encode_parts(envelope, payload)
@@ -435,7 +436,7 @@ local function commit_message(tx: sql.Transaction, head: reader.Head, decoded: r
     if #recipients > 0 then
         local total, count_err = reader.count(tx, "SELECT COUNT(*) AS count FROM bee_thread_obligations WHERE thread_id = ?", {head.thread_id}, "obligations")
         if not total then return storage(count_err or "count obligations") end
-        if total + #recipients > bounds.MAX_THREAD_OBLIGATIONS then return failure("LIMIT_EXCEEDED", "thread obligation limit reached") end
+        if total + #recipients > record_bounds.MAX_THREAD_OBLIGATIONS then return failure("LIMIT_EXCEEDED", "thread obligation limit reached") end
     end
     local result = commit(owed)
     if not result.ok or result.replayed then return result end
@@ -612,13 +613,13 @@ function M.read_after(db: sql.DB, actor: string, request: unknown): Result
     if not object then return failure("INVALID_ARGUMENT", "request must be an object") end
     local unknown_field = bounds.fields(object, {"thread_id", "cursor", "limit", "filter"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
-    local thread_id, cursor = bounds.id(object.thread_id), bounds.cursor(object.cursor)
+    local thread_id, cursor = bounds.id(object.thread_id), record_bounds.cursor(object.cursor)
     if not thread_id then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
-    if not cursor then return failure("INVALID_ARGUMENT", "cursor must be between 0 and " .. tostring(bounds.MAX_THREAD_RECORDS)) end
-    local limit = bounds.MAX_PAGE_RECORDS
+    if not cursor then return failure("INVALID_ARGUMENT", "cursor must be between 0 and " .. tostring(record_bounds.MAX_THREAD_RECORDS)) end
+    local limit = record_bounds.MAX_PAGE_RECORDS
     if object.limit ~= nil then
         local number = bounds.integer(object.limit)
-        if not number or number < 1 or number > bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
+        if not number or number < 1 or number > record_bounds.MAX_PAGE_RECORDS then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS)) end
         limit = number
     end
     local kinds: {string}? = nil

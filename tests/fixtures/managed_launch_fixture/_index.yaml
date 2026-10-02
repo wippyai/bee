@@ -52,7 +52,7 @@ entries:
   method: run
   modules: [process, channel, time, security, tty, funcs, json, registry]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.app:appearance
   security:

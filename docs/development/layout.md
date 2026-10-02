@@ -41,9 +41,9 @@ selects its backend; it does not duplicate the native facade. Retained
 presentation's executor selects the admitted application loop under its owner
 lifetime and terminal grant. These adapters have actual boundary roles.
 
-The audit removes four dead or redundant sources: the unregistered protocol
-clock duplicates `bee:clock`; the unregistered Sessions worker forwards an
-unused superseded journal protocol; the unreferenced JSONL alias only returns
+The shared clock is registered once as `bee.values:clock`. The audit removes
+three dead sources: the unregistered Sessions worker forwards an unused
+superseded journal protocol; the unreferenced JSONL alias only returns
 `stream_json`; the unreferenced application launch decoder predates the used
 Sessions protocol and Harness admission decoder. The obsolete Go Modules UI runner duplicates the active Python source/pack
 acceptance; that Python gate retains its search, UTF-8 editing, readme, parameter,
@@ -229,6 +229,7 @@ The following paths group overlays rather than production namespace children:
 Borrowed fixture sources are staged from their current owners: the thread
 journal borrows the desktop reducer; native identity borrows Placement identity;
 Hub migration probes borrow the Hub adapter and binding beside their fixture
-index; performance research borrows Threads canonical JSON; placement-publication
-borrows native materialization and its test runner; reference applications borrow
-the documented examples. Agent-author probes point at Timeline's `app/` sources.
+index; performance research borrows shared canonical JSON from `bee.values`;
+placement-publication borrows native materialization and its test runner;
+reference applications borrow the documented examples. Agent-author probes
+point at Timeline's `app/` sources.

@@ -6,6 +6,7 @@ local sql = require("sql")
 local hash = require("hash")
 local json = require("json")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local canonical = require("canonical")
 local values = require("values")
 local record = require("record")
@@ -85,8 +86,8 @@ function M.subscribe(db: sql.DB, actor: string, request: unknown): Result
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local consumer_id = bounds.id(object.consumer_id)
     if not consumer_id then return failure("INVALID_ARGUMENT", "consumer_id is not an identifier") end
-    local after = bounds.cursor(object.after_sequence)
-    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(bounds.MAX_THREAD_RECORDS)) end
+    local after = record_bounds.cursor(object.after_sequence)
+    if not after then return failure("INVALID_ARGUMENT", "after_sequence must be between 0 and " .. tostring(record_bounds.MAX_THREAD_RECORDS)) end
     local durability = bounds.member(object.durability, {"durable", "reconstructible"})
     if not durability then return failure("INVALID_ARGUMENT", "durability must be durable or reconstructible") end
     local filter, filter_json, filter_error = decode_filter(object.filter)
@@ -128,8 +129,8 @@ function M.page(db: sql.DB, actor: string, request: unknown): Result
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local thread_id = bounds.id(object.thread_id)
     if not thread_id then return failure("INVALID_ARGUMENT", "thread_id is not an identifier") end
-    local limit = bounds.page_limit(object.limit)
-    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(bounds.MAX_PAGE_RECORDS)) end
+    local limit = record_bounds.page_limit(object.limit)
+    if not limit then return failure("INVALID_ARGUMENT", "limit must be between 1 and " .. tostring(record_bounds.MAX_PAGE_RECORDS)) end
     return transaction.write(db, function(tx: sql.Transaction): Result
         local head, caller, denied = authority.membership(tx, thread_id, actor)
         if not head or not caller then return denied or failure("DENIED", "caller is not a member of the thread") end
@@ -189,7 +190,7 @@ function M.ack_page(db: sql.DB, actor: string, request: unknown): Result
     local unknown_field = bounds.fields(object, {"thread_id", "idempotency_key", "subscription_id", "page_id", "scanned_through"})
     if unknown_field then return failure("INVALID_ARGUMENT", unknown_field) end
     local page_id = bounds.id(object.page_id)
-    local through = bounds.cursor(object.scanned_through)
+    local through = record_bounds.cursor(object.scanned_through)
     if not page_id then return failure("INVALID_ARGUMENT", "page_id is not an identifier") end
     if not through then return failure("INVALID_ARGUMENT", "scanned_through is out of range") end
     return transaction.write(db, function(tx: sql.Transaction): Result

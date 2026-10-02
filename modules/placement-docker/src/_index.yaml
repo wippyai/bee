@@ -7,6 +7,10 @@ entries:
   readme: file://README.md
   meta:
     title: Bee Docker placement
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'
 - name: dependency_placement
   kind: ns.dependency
   component: bee/placement
@@ -32,7 +36,7 @@ entries:
     request_codec: bee.placement:request
     profiles: bee.placement:profiles
     types: bee.placement:types
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: docker_service_groups
   kind: ns.requirement
   default: []

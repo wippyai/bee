@@ -175,18 +175,24 @@ codex-native-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
-test: fixture-gateway-client component-inventory-check
+test: fixture-gateway-client values-module component-inventory-check
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_TEST_JOBS="$(TEST_JOBS)" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
+
+.PHONY: values-module
+values-module:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 tests/values_module.py
 .PHONY: compile-cache-check
 compile-cache-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/compile_cache.py
 .PHONY: clipboard-contract-check
 clipboard-contract-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/clipboard_contract.py
-.PHONY: client-desktop-check local-launcher-check client-storage-check retained-desktop-check
+.PHONY: client-desktop-check local-launcher-check client-storage-check retained-desktop-check sessions-display-check
+sessions-display-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-supervisor-probe", sessions_windows=True)'
 retained-desktop-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(command="retained-supervisor-probe"); client_desktop.run(command="retained-supervisor-probe", storage_delay=True); client_desktop.run(command="retained-supervisor-probe", launch_exit=True); client_desktop.run(command="retained-supervisor-probe", primary_render_delay=True); client_desktop.run(command="retained-supervisor-probe", copy_exit=True); client_desktop.run(command="retained-supervisor-probe", primary_exit=True); client_desktop.run(command="retained-supervisor-probe", host_prompt=True)'
 client-storage-check:
@@ -417,7 +423,7 @@ retained-broker-fallback-check:
 check: session-upgrade-fallback-check
 session-upgrade-fallback-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" PYTHONPATH=tests python3 -c 'import client_desktop; client_desktop.run(failed_session_upgrade=True)'
-desktop-client-launch-check:
+desktop-client-launch-check: sessions-display-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/local_launcher.py
 desktop-client-recovery-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/recovery.py

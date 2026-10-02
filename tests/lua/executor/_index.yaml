@@ -15,7 +15,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     turn: bee.executor.external.service:turn
     stream: bee.executor.external.service:stream
@@ -29,5 +29,5 @@ entries:
     test: wippy.test:test
     permissions: bee.harness.permission:exchange
     adapter: bee.harness.permission:adapter
-    canonical: bee.threads.records:canonical
-    bounds: bee.threads.records:bounds
+    canonical: bee.values:canonical
+    bounds: bee.values:bounds

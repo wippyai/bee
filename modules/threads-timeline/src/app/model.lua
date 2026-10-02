@@ -9,6 +9,7 @@ local caller = require("caller")
 local session = require("session")
 local record = require("record")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local contract = require("contract")
 local record_types = require("record_types")
 local format = require("format")
@@ -61,10 +62,10 @@ local function decode_thread_summary(value: unknown): Summary?
     local summary = object(value)
     if not summary or bounds.fields(summary, {"thread_id", "title", "state", "revision", "head_sequence", "owner_id", "created_at", "workspace_id"}) then return nil end
     local thread_id = bounds.id(summary.thread_id)
-    local title = bounds.line(summary.title, bounds.MAX_TITLE_BYTES)
+    local title = bounds.line(summary.title, record_bounds.MAX_TITLE_BYTES)
     local state: ThreadState? = summary.state == "open" and "open" or (summary.state == "closed" and "closed" or nil)
     local revision = bounds.count(summary.revision)
-    local head_sequence = bounds.cursor(summary.head_sequence)
+    local head_sequence = record_bounds.cursor(summary.head_sequence)
     local owner_id = bounds.id(summary.owner_id)
     local created_at = bounds.timestamp(summary.created_at)
     if summary.workspace_id ~= nil and not contract.workspace_id(summary.workspace_id) then return nil end
@@ -189,9 +190,9 @@ function M.apply_recap(state: State, reply: Reply)
     if not value or bounds.fields(value, {"through_sequence", "revision", "checkpoint", "digest", "head_sequence", "owner_authority", "owner_incarnation"})
         or not checkpoint or bounds.fields(checkpoint, {"schema", "messages", "open_requests", "answered", "deliveries", "actions", "summary_lines", "last_turn"})
         or checkpoint.schema ~= "bee.recap@1" or not lines_raw then state.recap = nil; return end
-    local through = bounds.cursor(value.through_sequence)
+    local through = record_bounds.cursor(value.through_sequence)
     local revision = bounds.count(value.revision)
-    local head = bounds.cursor(value.head_sequence)
+    local head = record_bounds.cursor(value.head_sequence)
     local authority = bounds.id(value.owner_authority)
     local incarnation = bounds.count(value.owner_incarnation)
     local messages, answered = bounds.count(checkpoint.messages), bounds.count(checkpoint.answered)
@@ -223,7 +224,7 @@ local function decode_subscription_summary(value: unknown): session.Summary?
     local summary = object(value)
     if not summary or bounds.fields(summary, {"subscription_id", "consumer_id", "after_sequence", "lease_generation", "owner_incarnation", "owner_authority", "durability", "filter_digest", "closed"}) then return nil end
     local subscription_id = bounds.id(summary.subscription_id)
-    local after_sequence = bounds.cursor(summary.after_sequence)
+    local after_sequence = record_bounds.cursor(summary.after_sequence)
     local lease_generation = bounds.count(summary.lease_generation)
     local owner_incarnation = bounds.count(summary.owner_incarnation)
     local owner_authority = bounds.id(summary.owner_authority)
@@ -303,8 +304,8 @@ function M.apply_page(state: State, reply: Reply): PageResult
     local invalid = value and bounds.fields(value, {"subscription_id", "page_id", "lease_generation", "from_sequence", "scanned_through", "records", "has_more"})
     local rows = value and bounds.array(value.records, M.PAGE_LIMIT)
     local subscription_id = value and bounds.id(value.subscription_id)
-    local from_sequence = value and bounds.cursor(value.from_sequence)
-    local scanned_through = value and bounds.cursor(value.scanned_through)
+    local from_sequence = value and record_bounds.cursor(value.from_sequence)
+    local scanned_through = value and record_bounds.cursor(value.scanned_through)
     if not value or invalid or not rows then
         state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed page"; return {kind = "refused"}
     end
@@ -384,7 +385,7 @@ function M.apply_ack(state: State, reply: Reply)
         state.phase = "unavailable"; state.unavailable = "thread owner returned a malformed acknowledgment"; return
     end
     local subscription_id = bounds.id(value.subscription_id)
-    local after_sequence = bounds.cursor(value.after_sequence)
+    local after_sequence = record_bounds.cursor(value.after_sequence)
     local expected = session.acknowledgment(current)
     if not subscription_id or subscription_id ~= current.subscription_id or not after_sequence or not expected
         or after_sequence ~= expected.scanned_through then
@@ -478,7 +479,7 @@ function M.restore(state: State, encoded: string): boolean
         M.open(state, saved.thread_id, type(saved.subscription_id) == "string" and (saved.subscription_id) or nil)
     end
     state.attach_key = type(saved.attach_key) == "string" and saved.attach_key or nil
-    state.selected = saved.selected ~= nil and bounds.sequence(saved.selected) or nil
+    state.selected = saved.selected ~= nil and record_bounds.sequence(saved.selected) or nil
     state.follow = saved.follow ~= false
     state.technical = saved.technical == true
     return true

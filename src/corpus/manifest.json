@@ -237,7 +237,7 @@
     {
       "bytes": 9248,
       "id": "docs/storage",
-      "sha256": "7b7d9e05d73c25e2b6ecb9a955c0ff87ff2231bf45ad46f5b834a418d5e78813",
+      "sha256": "06217b0e03d6dae7e71c3b0ac36515225ad908b9ac5b916559046d53d3d52084",
       "source": "docs/reference/storage.md",
       "title": "Workspace storage",
       "topic": "storage"

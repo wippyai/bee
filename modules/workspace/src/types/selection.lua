@@ -1,4 +1,4 @@
--- MIT. Core stores accept registry resources, never caller-supplied file paths.
+-- MIT. Host-owned stores accept registry resources, never caller-supplied file paths.
 local hash = require("hash")
 local contract = require("contract")
 local bounds = require("bounds")

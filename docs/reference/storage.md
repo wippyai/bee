@@ -126,7 +126,7 @@ replacing an existing row; malformed or oversized state remains an error and
 is never silently discarded.
 
 Migration 4 adds `workspace_application_thread_bindings`, keyed (since
-migration 6) by workspace and the logical `instance_id`. The core-only `bee.workspace.persist:thread_bindings` helper prepares one
+migration 6) by workspace and the logical `instance_id`. The host-only `bee.workspace.persist:thread_bindings` helper prepares one
 immutable `{thread_id, definition_id, actor_id, role}` identity with one bounded
 idempotency key, then advances its revision through `pending`, `active` and
 `revoked` with expected revision/state compare-and-swap checks. Exact prepare

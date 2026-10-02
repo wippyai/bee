@@ -75,7 +75,10 @@ Failures are recorded as placement evidence.
   nothing is materialized first.
 - Execution state (`intended`, `starting`, `running`, `stopping`, `exited`,
   `uncertain`) and cleanup state (`pending`, `complete`, `uncertain`) are
-  separate. Cleanup runs only from `exited`. A process-group absence proof
+  separate. Native cleanup runs only from `exited`. Docker failed starts expose
+  the exact cause as `start_failure` while execution remains `uncertain`; cleanup
+  requires removal and absence proof for exactly ownership-labelled Created
+  containers. A container that ran still requires an observed exit. A process-group absence proof
   requires a successful, fully decoded process-table query; command failure,
   malformed output and an empty result retain uncertainty. A failed signal
   probe is never evidence that the group is gone.

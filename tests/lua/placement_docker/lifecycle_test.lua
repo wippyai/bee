@@ -157,6 +157,21 @@ local function boundary()
             test.eq(assert(placement_decode.attempt(cleaned.value)).cleanup_state, "complete")
             test.is_nil(homes.remove_attempt(key))
         end)
+        test.it("rejects a label-owned container with mismatched attempt environment", function()
+            local loaded, client, key = observed_container("docker-invalid-environment", "created", nil)
+            local inspect = client.inspect_container
+            client.inspect_container = function(self: unknown, ref: string): (unknown, unknown?)
+                local raw, err = inspect(self, ref)
+                local observed = assert(bounds.object(raw))
+                local config = assert(bounds.object(observed.Config))
+                config.Env = {"BEE_ATTEMPT_ID=another-attempt"}
+                return observed, err
+            end
+            local found, reason = service.find(loaded, client)
+            test.is_nil(found)
+            test.eq(reason, "container has another attempt identity")
+            test.is_nil(homes.remove_attempt(key))
+        end)
         test.it("keeps materialization refusal separate from container exit", function()
             local id = "docker-materialization-refused"
             value(call("prepare", request(id)))
@@ -336,7 +351,7 @@ local function run()
             assert(service.change(id, {execution = "exited", fields = {exit_source = "runner"},
                 evidence = {kind = "test.finished", detail = "fixture has no dispatched container"}}).ok)
         end)
-        test.it("retains one environment-identified realization, fences foreign stop and proves cancellation before removal", function()
+        test.it("retains one label-owned realization, fences foreign stop and proves cancellation before removal", function()
             local id = "docker-" .. tostring(process.pid()):gsub("[^A-Za-z0-9-]", "-")
             local prepared = value(call("prepare", request(id)))
             test.eq(prepared.execution_state, "intended")

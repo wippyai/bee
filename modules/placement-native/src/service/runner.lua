@@ -25,7 +25,6 @@ local bounds = require("bounds")
 type Stream = "stdout" | "stderr"
 type Chunk = {stream: Stream, data: string?, eof: boolean}
 type Pending = {sequence: integer, stream: Stream, data: string?, eof: boolean, bytes: integer, truncated: boolean?}
-
 local function evidence(db, attempt_id: string, kind: string, detail: string, update: {execution: types.ExecutionState?, fields: {[string]: unknown}?}?): (boolean, string?)
     local execution: types.ExecutionState? = nil
     local fields: {[string]: unknown}? = nil

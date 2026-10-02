@@ -25,14 +25,35 @@ provider. Private Grok/OpenCode turns publish their admitted config even without
 gateway tools. Docker mounts
 the private home at `/home/bee` and only the resources admitted for the attempt.
 
-One unpatched runtime executor creates each container with `BEE_ATTEMPT_ID`.
+Docker execution requires upstream runtime support for `exec.docker`
+`labels_from_env`. The current runtime pin lacks that support; this source
+change remains dependent on the upstream runtime fix and its integration gates.
+The executor mapping selects Bee's host-supplied node, state and attempt values
+at creation. Placement uses the existing node identity and a SHA-256 digest of
+the canonical placement root, without adding an identity store.
+
 Reconciliation uses the vendored `userspace.docker:docker_client` inventory and
-inspection API to match that environment value, the projected provider-home
-mount and the admitted image digest. Placement records the immutable container
-ID immediately after observing it; later inspection, stop and removal act on
-that exact ID. Missing post-dispatch containers are uncertain and never silently
-invoked again. Daemon exit evidence precedes removal; automatic removal is
-disabled so a lost owner can still observe the outcome.
+inspection API with exact `bee.owner`, `bee.node_id`, `bee.state_id` and
+`bee.attempt_id` labels. It rechecks labels, the attempt environment, the projected
+provider-home mount and the admitted image digest before recording an immutable
+container ID. Inspection, stop and removal use that ID. Missing post-dispatch
+containers remain uncertain and are never silently invoked again. Labels scope
+ownership; host admission still authorizes each operation.
+
+A failed create or start records `child.start_failed` with the original runtime
+error, including its operation, deadline or daemon cause. Public attempts expose
+that evidence as `start_failure`; Sessions reports a failed launch with the same
+cause. `exited` requires an observed container exit. Existing false runner exits
+without an exit result are projected as uncertain when start-failure evidence
+exists; stored rows and schemas remain unchanged.
+
+Failed and cancelled starts remove only exactly label-owned Created containers
+and confirm their absence before removing attempt scratch. A container that ran
+requires stop and exit observation first. The sweeper checks node/state-owned
+Created containers after owner loss and restart, including containers that appear
+after an earlier cleanup observation. Recovery errors are logged. Legacy
+unlabelled containers cannot be selected or removed by this ownership mechanism.
+Automatic removal is disabled for attempts so a lost owner can observe outcomes.
 
 The Agent application lives in `bee.harness.app`; its placement constructor
 uses the existing terminal lifecycle and hook processing. The Docker sweeper
@@ -101,7 +122,11 @@ For explicit registry images, first launch fetches the admitted digest with
 ID is refused with a build instruction. `make docker-runtime-image` also builds
 from explicit Linux CLI artifacts without mounting login sources.
 
-Validation covers real start/replay, foreign-owner denial, quoted stdin and EOF,
+Daemon-free boundary tests cover create deadlines and daemon errors, exact failed
+start status/events, cancellation, observed exits, foreign and unlabelled
+container exclusion, and late Created recovery. Live proof diagnostics and
+cleanup use the same ownership labels and recorded attempt IDs.
+The real suites cover start/replay, foreign-owner denial, quoted stdin and EOF,
 owner SIGKILL/restart, exact-ID cancellation and evidence-before-removal. Live
 provider probes use `make docker-placement-live-check` with an explicit image,
 provider, mode and evidence directory; the probe removes its containers/network.

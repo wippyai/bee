@@ -172,28 +172,20 @@ function M.find(loaded: Loaded, selected: Daemon?): (spec_codec.Observation?, st
         local item = bounds.object(value)
         local ref = item and spec_codec.container_id(item.Id) or nil
         if not ref then return nil, "Docker inventory has an invalid container ID" end
-        if not known or ref == known then
-            local inspected, inspect_error = client:inspect_container(ref)
-            if inspect_error or not inspected then return nil, "containers/inspect: " .. tostring(inspect_error) end
-            local attempt, attempt_error = spec_codec.attempt(inspected)
-            if known or attempt == loaded.spec.attempt_id then
-                if attempt_error then return nil, attempt_error end
-                local verified, verify_error = spec_codec.inspect(inspected, loaded.spec, home, image_id, ownership)
-                if not verified then return nil, verify_error end
-                if found then return nil, "multiple containers have this attempt identity" end
-                found = verified
-            end
-        end
+        local inspected, inspect_error = client:inspect_container(ref)
+        if inspect_error or not inspected then return nil, "containers/inspect: " .. tostring(inspect_error) end
+        local verified, verify_error = spec_codec.inspect(inspected, loaded.spec, home, image_id, ownership)
+        if not verified then return nil, verify_error end
+        if found then return nil, "multiple containers have this attempt identity" end
+        found = verified
     end
     if not found then return nil, nil, true end
-    if not known then
-        local identity_json = json.encode(found)
-        local recorded = M.change(loaded.attempt.attempt_id, {fields = {placement_identity_json = identity_json},
-            evidence = {kind = "docker.identified", detail = "container " .. found.backend_ref .. " matches attempt environment, provider home and image digest"}})
-        if not recorded.ok then return nil, "container identity could not be recorded" end
-        local row: store.Row = loaded.row
-        row.placement_identity_json = identity_json
-    end
+    local identity_json = json.encode(found)
+    local recorded = M.change(loaded.attempt.attempt_id, {fields = {placement_identity_json = identity_json},
+        evidence = {kind = "docker.identified", detail = "container " .. found.backend_ref .. " matches ownership labels, attempt environment, provider home and image digest"}})
+    if not recorded.ok then return nil, "container identity could not be recorded" end
+    local row: store.Row = loaded.row
+    row.placement_identity_json = identity_json
     return found, nil, false
 end
 function M.prepare(value: unknown): Reply
@@ -444,16 +436,16 @@ function M.cleanup_loaded(loaded: Loaded, selected: Daemon?): Reply
                 loaded = refreshed
             end
         else
-        if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
-        local cleaned, cleanup_error = workdir_preparers.cleanup(loaded.attempt)
-        if not cleaned then return fail("UNAVAILABLE", cleanup_error or "workdir cleanup failed") end
-        local home_key = bounds.id(loaded.row.home_key)
-        if home_key then
-            local home_error = homes.remove_attempt(home_key)
-            if home_error then return fail("UNAVAILABLE", home_error) end
-        end
-        return M.change(loaded.attempt.attempt_id, {cleanup = "complete",
-            evidence = {kind = "cleanup.complete", detail = "failed start; owned Created containers absent; attempt scratch removed"}})
+            if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end
+            local cleaned, cleanup_error = workdir_preparers.cleanup(loaded.attempt)
+            if not cleaned then return fail("UNAVAILABLE", cleanup_error or "workdir cleanup failed") end
+            local home_key = bounds.id(loaded.row.home_key)
+            if home_key then
+                local home_error = homes.remove_attempt(home_key)
+                if home_error then return fail("UNAVAILABLE", home_error) end
+            end
+            return M.change(loaded.attempt.attempt_id, {cleanup = "complete",
+                evidence = {kind = "cleanup.complete", detail = "failed start; owned Created containers absent; attempt scratch removed"}})
         end
     end
     if loaded.attempt.cleanup_state == "complete" then return succeed(loaded.attempt) end

@@ -326,7 +326,7 @@ end
 -- Configuration inputs come from one host snapshot, not caller-authored
 -- files. The renderer receives the final owner-derived HOME only when a new
 -- intent is recorded; replay uses that intent's frozen delivery.
-local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, context: LocalPreparation?): (configuration_protocol.Request?, string?, string?, driver_types.GitWritableRootsAdapter?, string?)
+local function configuration_input(pinned: registry.Snapshot, request: types.LaunchRequest, context: LocalPreparation?): (configuration_protocol.Request?, string?, string?, driver_types.GitWritableRootsAdapter?)
     local policy_entry = resolver.entry(pinned, request.policy_ref)
     local policy_meta = policy_entry and bounds.object(policy_entry.meta) or {}
     local data = policy_entry and bounds.object(policy_entry.data) or nil
@@ -360,8 +360,6 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     if data.provider_ref ~= nil and not provider_ref then return nil, nil, "launch policy provider_ref is not an identifier" end
     local target, target_error = resolver.configure(pinned, request.binding_ref)
     if not target then return nil, nil, target_error or "binding is not activated" end
-    local configure_renderer, configure_renderer_error = resolver.configure_renderer(pinned, request.binding_ref, target)
-    if configure_renderer_error then return nil, nil, configure_renderer_error end
     local selected_profile, profile_error = resolver.profile(pinned, request.binding_ref, request.profile_id)
     if profile_error then return nil, nil, profile_error end
     local provider: {[string]: unknown}? = nil
@@ -394,7 +392,7 @@ local function configuration_input(pinned: registry.Snapshot, request: types.Lau
     local option_values, options_error = preferences.decode_prepare_options(data.prepare_options)
     if not option_values then return nil, nil, options_error end
     return {option_values = option_values, context = request.configuration_context, instructions = instructions, instruction_builder = instruction_builder, provider_ref = provider_ref, provider = provider, gateway = gateway, fixture = data.fixture == true}, target, nil,
-        selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil, configure_renderer
+        selected_profile and selected_profile.sandbox and selected_profile.sandbox.git_writable_roots_adapter or nil
 end
 local function configured_home(request: types.LaunchRequest): (string?, string?)
     local path: string? = nil
@@ -458,7 +456,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     if request.placement_binding_digest and request.placement_binding_digest ~= selected_placement.binding_digest then
         return fail("CONFLICT", "native placement binding changed since admission")
     end
-    local configuration, configure_target, configuration_error, git_writable_roots_adapter, configure_renderer = configuration_input(prepare_pinned, request, context)
+    local configuration, configure_target, configuration_error, git_writable_roots_adapter = configuration_input(prepare_pinned, request, context)
     if not configuration or not configure_target then return fail("DENIED", configuration_error or "configuration inputs unavailable") end
     local home_authorization_error = host_home_authorization(prepare_pinned, request)
     if home_authorization_error then return fail("DENIED", home_authorization_error) end
@@ -474,7 +472,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     if request.launch.stdin_eof == true and not measured.stdin_close then
         return fail("UNSUPPORTED_CAPABILITY", "this runtime cannot close a child's stdin; the launch reads its input until end of file")
     end
-    local selected_digest, selected_error = configuration_protocol.digest(configuration, configure_target, configure_renderer)
+    local selected_digest, selected_error = configuration_protocol.digest(request.binding_ref, configuration, configure_target)
     if not selected_digest then return fail("DENIED", selected_error or "configuration inputs are not measurable") end
     if request.configuration_digest then
         if request.configuration_digest ~= selected_digest then return fail("CONFLICT", "host configuration inputs changed since the launch plan") end
@@ -548,7 +546,7 @@ function M.prepare_local(value: unknown, context: LocalPreparation?): Reply
     -- private delivery. It is excluded from the host configuration digest and
     -- cannot be selected by the caller or saved profile.
     configuration.attempt_id = request.attempt_id
-    local delivery, delivery_error = configuration_protocol.call(configure_target, configuration, configure_renderer)
+    local delivery, delivery_error = configuration_protocol.call(request.binding_ref, configure_target, configuration)
     if not delivery then db:release(); return fail("DENIED", delivery_error or "configuration rendering failed") end
     delivery.git_writable_roots_adapter = git_writable_roots_adapter
     -- Keep the admitted request unchanged: its digest excludes this private

@@ -301,3 +301,7 @@ entries:
   imports:
     test: wippy.test:test
     route: bee.sessions.executor:driver_route
+    bounds: bee.values:bounds
+    materializer: bee.gov.delivery:materializer
+  modules:
+  - registry

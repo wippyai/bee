@@ -155,7 +155,7 @@ local function measure_policy_digest(policy_ref: string): string
         instruction_builder = data.instruction_builder,
         fixture = true,
     }
-    local digest, digest_error = configuration_protocol.digest(request_input, "bee.placement.native:fixture_agent_configure")
+    local digest, digest_error = configuration_protocol.digest(nil, request_input, "bee.placement.native:fixture_agent_configure")
     if not digest then error(tostring(digest_error)) end
     return digest
 end

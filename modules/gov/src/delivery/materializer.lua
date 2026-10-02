@@ -335,6 +335,8 @@ function M.matches_composed_with(open: Open, owner_raw: unknown, entries_raw: un
 end
 
 local function open(owner: string): (Snapshot?, unknown?)
+    local composed, composed_error = registry.snapshot()
+    if not composed then return nil, composed_error end
     local snapshot, open_error = registry.overlay(owner)
     if not snapshot then return nil, open_error end
     local function input(entry: Entry): {id: string, kind: string, meta: Entry, data: Entry, dependency_root: boolean}
@@ -346,7 +348,12 @@ local function open(owner: string): (Snapshot?, unknown?)
         local native = snapshot:changes()
         if not native then return nil end
         return {
-            create = function(_self: Changes, entry: Entry): (unknown?, unknown?) return native:create(input(entry)) end,
+            create = function(_self: Changes, entry: Entry): (unknown?, unknown?)
+                local decoded = input(entry)
+                local existing = composed:get(decoded.id)
+                if existing then return native:update(decoded) end
+                return native:create(decoded)
+            end,
             update = function(_self: Changes, entry: Entry): (unknown?, unknown?) return native:update(input(entry)) end,
             delete = function(_self: Changes, id: string): (unknown?, unknown?) return native:delete(id) end,
             apply = function(_self: Changes): (unknown?, unknown?) return native:apply() end,

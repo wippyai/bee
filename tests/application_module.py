@@ -35,7 +35,7 @@ def main():
         (check / "_index.yaml").write_text(yaml.safe_dump({
             "version": "1.0", "namespace": "bee.app.check", "entries": [
                 {"name": "probe", "kind": "process.lua", "source": "file://probe.lua", "method": "main",
-                 "imports": {"caller": "bee.app:caller", "picker": "bee.app:folder_picker", "client": "bee.app:client"}},
+                 "imports": {"caller": "bee.app:caller", "picker": "bee.ui.picker:folder", "client": "bee.app:client"}},
             ]}, sort_keys=False))
         (check / "probe.lua").write_text('''local caller = require("caller")
 local picker = require("picker")

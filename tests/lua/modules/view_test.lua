@@ -275,6 +275,7 @@ local function define_tests()
                 {component = "bee/terminal", version = "0.4.6", source = "builtin", direct = true, used_by = {}},
                 {component = "userspace/calc", version = "1.0.0", source = "hub", direct = true, used_by = {}},
             }, roots = {}}})
+            model.show(state, "catalog")
             model.apply_catalog(state, {ok = true, replayed = false, value = {total = 5, items = {
                 {component = "wippy/test", title = "Test Framework", description = "BDD framework", latest_version = "0.4.19"},
                 {component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6"},

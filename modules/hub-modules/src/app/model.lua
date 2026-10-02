@@ -6,6 +6,7 @@ local canonical = require("canonical")
 local hash = require("hash")
 local text = require("text")
 local bounds = require("bounds")
+local workspace_applications = require("workspace_applications")
 local M = {}
 
 M.MAX_TEXT = 512
@@ -81,6 +82,13 @@ end
 local function component(value: unknown): string?
     if type(value) ~= "string" or #value == 0 or #value > 160 or not value:match("^[%w_.-]+/[%w_.-]+$") then return nil end
     return value
+end
+
+local function authored_component(value: unknown): string?
+    local package = component(value)
+    if package then return package end
+    if type(value) == "string" and workspace_applications.source_of(value) then return value end
+    return nil
 end
 
 local function version(value: unknown): string?
@@ -283,7 +291,7 @@ function M.set_publication_field(state: State, field: string, raw: unknown): str
     if type(raw) ~= "string" then return "publication value must be text" end
     local value = raw:match("^%s*(.-)%s*$") or ""
     if field == "component" then
-        if value ~= "" and not component(value) then return "component must use namespace/name form" end
+        if value ~= "" and not authored_component(value) then return "component must use namespace/name or app.<overlay_id> form" end
         state.publication_component = value
     elseif field == "version" then
         if value ~= "" and not version(value) then return "version is invalid" end
@@ -307,7 +315,7 @@ local function publication_identity(state: State, workspace_id: unknown): (strin
     if state.phase ~= "authoring" then
         return nil, "open the Authored pane first"
     end
-    if not component(state.publication_component) then return nil, "enter a component in namespace/name form" end
+    if not authored_component(state.publication_component) then return nil, "enter a package or workspace application component" end
     if not version(state.publication_version) then return nil, "enter an explicit version" end
     return workspace, nil
 end
@@ -341,7 +349,7 @@ function M.apply_publication_prepare(state: State, reply: Reply)
         state.notice = "UNCERTAIN: preparation receipt has no measured descriptor"
         return
     end
-    local name, selected_version = component(value.component), version(value.version)
+    local name, selected_version = authored_component(value.component), version(value.version)
     local descriptor_digest = digest(descriptor.digest)
     if name ~= state.publication_component or selected_version ~= state.publication_version or not descriptor_digest then
         state.publication_prepared = nil
@@ -375,7 +383,7 @@ function M.apply_publication_publish(state: State, reply: Reply)
     end
     local value = object(reply.value)
     if not value then state.notice = "UNCERTAIN: publication receipt is malformed"; return end
-    local name, selected_version = component(value.component), version(value.version)
+    local name, selected_version = authored_component(value.component), version(value.version)
     if name ~= state.publication_component or selected_version ~= state.publication_version or not M.publication_ready(state) then
         state.notice = "UNCERTAIN: publication receipt did not match the prepared authored version"
         return
@@ -881,7 +889,7 @@ function M.apply_catalog(state: State, reply: Reply)
         return a.component < b.component
     end)
     state.all_catalog = rows
-    state.total, state.phase, state.notice = total, "catalog", ""
+    state.total, state.notice = total, ""
     if update_catalog_visibility then update_catalog_visibility(state) end
 end
 

@@ -102,8 +102,23 @@ entries:
     actions: [bee.gov.delivery.execute]
     resources: [bee.gov.binding:destination_backend_call]
     effect: allow
+- name: publication_facade_policy
+  kind: security.policy.expr
+  policy:
+    expression: '(action == "funcs.security" && resource == "security") || (action == "security.policy_group.get" && resource == "bee.gov.security:publication_execution_scope") || (action == "funcs.call" && resource == "bee.gov.binding:publication_backend_call")'
+    actions: [funcs.security, security.policy_group.get, funcs.call]
+    resources: [security, bee.gov.security:publication_execution_scope, bee.gov.binding:publication_backend_call]
+    effect: allow
+- name: publication_execution_policy
+  kind: security.policy
+  groups: [publication_execution_scope]
+  policy:
+    actions: [bee.gov.publication.execute, funcs.call]
+    resources: [bee.gov.binding:publication_backend_call]
+    effect: allow
 - name: publication_service_policy
   kind: security.policy.expr
+  groups: [publication_execution_scope]
   meta: {comment: Private host resources for publishing one configured local overlay as immutable Sync content}
   policy:
     expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
@@ -132,9 +147,19 @@ entries:
     resources: [bee.gov.binding:publication_call, bee.gov.binding:destination_call, bee.gov.env:publication_profiles_ref]
     effect: allow
 - name: gateway_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {comment: The capability gateway reads grant records and performs only calls it has checked against the caller's own live grant; applications never hold these actions}
   policy:
-    actions: [registry.get, contract.get, contract.open, contract.call, contract.security, security.scope.create, http_client.request]
+    expression: 'action != "security.policy_group.get" || resource == "bee.gov.security:gateway_callee_scope"'
+    actions: [registry.get, contract.get, contract.open, contract.call, contract.security, security.policy_group.get, http_client.request]
+    resources: '*'
+    effect: allow
+- name: gateway_callee_policy
+  kind: security.policy.expr
+  groups: [gateway_callee_scope]
+  meta: {comment: The gateway passes no caller or gateway authority to an approved contract callee; only its own declared policies apply}
+  policy:
+    expression: 'false'
+    actions: '*'
     resources: '*'
     effect: allow

@@ -16,6 +16,9 @@ end
 function M.session_scan(request: unknown): types.Reply
     return boundary.run(work_store.session_scan, request, false)
 end
+function M.node_summary(request: unknown): types.Reply
+    return boundary.run(work_store.node_summary, request, false)
+end
 function M.session_transition(request: unknown): types.Reply
     return boundary.run(work_store.session_transition, request, true)
 end

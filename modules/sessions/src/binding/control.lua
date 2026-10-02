@@ -45,9 +45,10 @@ function M.intent(request: Request): boolean
 end
 function M.fenced(): (boolean, string?)
     local snapshot, problem = registry.snapshot()
-    local state = snapshot and snapshot:state()
-    if not state then return true, tostring(problem or "scheduler admission fence unavailable") end
-    for _, entry in ipairs(snapshot:find({[".kind"] = "registry.entry"})) do
+    if not snapshot then return true, tostring(problem or "scheduler admission fence unavailable") end
+    local entries, find_error = snapshot:find({[".kind"] = "registry.entry"})
+    if find_error then return true, tostring(find_error) end
+    for _, entry in ipairs(entries) do
         local receipt = operations.record(entry)
         if receipt then
             local work = receipt and bounds.object(receipt.lifecycle_work)

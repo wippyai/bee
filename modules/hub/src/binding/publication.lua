@@ -196,10 +196,10 @@ function M.status(raw: unknown, options: unknown?): Result
             end
             page = decoded_page
         end
-        local state, state_error = snapshot:state()
-        if not state then return transaction.failure("UNAVAILABLE", tostring(state_error)) end
+        local entries, find_error = snapshot:find({[".kind"] = "registry.entry"})
+        if find_error then return transaction.failure("UNAVAILABLE", tostring(find_error)) end
         local owned: {Receipt} = {}
-        for _, item in ipairs(snapshot:find({[".kind"] = "registry.entry"})) do
+        for _, item in ipairs(entries) do
             local candidate = operations.record(item)
             if candidate then
                 local data = bounds.object(item.data)
@@ -665,9 +665,10 @@ function M.apply(raw: unknown, expected: unknown): Result
     end
     if previous.code ~= "NOT_FOUND" then return previous end
     local current = registry.snapshot()
-    local current_state = current and current:state()
-    if not current_state then return transaction.failure("UNAVAILABLE", "cannot inspect pending component lifecycles") end
-    for _, entry in ipairs(current:find({[".kind"] = "registry.entry"})) do
+    if not current then return transaction.failure("UNAVAILABLE", "cannot inspect pending component lifecycles") end
+    local entries, find_error = current:find({[".kind"] = "registry.entry"})
+    if find_error then return transaction.failure("UNAVAILABLE", tostring(find_error)) end
+    for _, entry in ipairs(entries) do
         if operations.record(entry) then
             local pending = decode_receipt(entry.data)
             if pending and pending.lifecycle_work and pending.state ~= "complete" and pending.state ~= "failed" then

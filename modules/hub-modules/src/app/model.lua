@@ -290,7 +290,7 @@ function M.set_publication_field(state: State, field: string, raw: unknown): str
     if type(raw) ~= "string" then return "publication value must be text" end
     local value = raw:match("^%s*(.-)%s*$") or ""
     if field == "component" then
-        if value ~= "" and not authored_component(value) then return "component must use namespace/name or app.<overlay_id> form" end
+        if value ~= "" and not authored_component(value) then return "component must use namespace/name or a dotted authored identity" end
         state.publication_component = value
     elseif field == "version" then
         if value ~= "" and not version(value) then return "version is invalid" end
@@ -727,8 +727,8 @@ function M.select_requirement(state: State, index: integer)
     state.selected_requirement = math.floor(math.max(1, math.min(#state.requirements, index)))
 end
 
-function M.is_application(item: Item): boolean
-    return item.application ~= false
+function M.is_library(item: Item): boolean
+    return item.application == false
 end
 
 local function component_status_installed(installed: {Module}, comp_name: string): string?
@@ -769,7 +769,7 @@ function M.visible_catalog(state: State): {Item}
     end
     local apps: {Item} = {}
     for _, item in ipairs(source) do
-        if M.is_application(item) then
+        if not M.is_library(item) then
             apps[#apps + 1] = item
         end
     end
@@ -794,7 +794,7 @@ function M.set_developer_packages(state: State, enabled: boolean)
 end
 
 local function catalog_rank(installed: {Module}, item: Item): integer
-    local is_app = M.is_application(item)
+    local is_app = not M.is_library(item)
     local status = component_status_installed(installed, item.component)
     if is_app then
         if status == "built-in" then return 1 end

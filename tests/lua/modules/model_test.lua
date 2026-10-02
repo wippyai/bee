@@ -497,16 +497,16 @@ local function define_tests()
             test.eq(model.component_status(state, "userspace/calc"), "installed")
             test.is_nil(model.component_status(state, "userspace/editor"))
 
-            test.is_true(model.is_application({component = "wippy/arbitrary", title = "Library", description = "library", latest_version = "1.0.0", application = true}))
-            test.is_false(model.is_application({component = "bee/console", title = "App", description = "app", latest_version = "1.0.0", application = false}))
+            test.is_false(model.is_library({component = "wippy/arbitrary", title = "Library", description = "library", latest_version = "1.0.0", application = true}))
+            test.is_true(model.is_library({component = "bee/console", title = "App", description = "app", latest_version = "1.0.0", application = false}))
             test.is_nil(model.component_status(state, "bee/settings"))
-            -- Test application classification
-            test.is_true(model.is_application({component = "bee/terminal", title = "Terminal", description = "", latest_version = "0.4.6"}))
-            test.is_true(model.is_application({component = "userspace/calc", title = "Calculator", description = "App", latest_version = "1.0.0"}))
-            test.is_false(model.is_application({component = "wippy/test", title = "Test Framework", description = "Testing framework", latest_version = "0.4.19", application = false}))
-            test.is_false(model.is_application({component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6", application = false}))
-            test.is_false(model.is_application({component = "wippy/migration", title = "Migrations", description = "Migration utilities", latest_version = "0.3.19", application = false}))
-            test.is_false(model.is_application({component = "bee/sync", title = "Sync", description = "Workspace sync protocol", latest_version = "0.1.0", application = false}))
+            -- Only declared installed libraries are classified; unknown packages stay visible.
+            test.is_false(model.is_library({component = "bee/terminal", title = "Terminal", description = "", latest_version = "0.4.6"}))
+            test.is_false(model.is_library({component = "userspace/calc", title = "Calculator", description = "App", latest_version = "1.0.0"}))
+            test.is_true(model.is_library({component = "wippy/test", title = "Test Framework", description = "Testing framework", latest_version = "0.4.19", application = false}))
+            test.is_true(model.is_library({component = "wippy/terminal", title = "Terminal", description = "Terminal library components", latest_version = "0.4.6", application = false}))
+            test.is_true(model.is_library({component = "wippy/migration", title = "Migrations", description = "Migration utilities", latest_version = "0.3.19", application = false}))
+            test.is_true(model.is_library({component = "bee/sync", title = "Sync", description = "Workspace sync protocol", latest_version = "0.1.0", application = false}))
 
             -- Catalog contains mixed apps and developer packages
             model.apply_catalog(state, ok({total = 5, items = {

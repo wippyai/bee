@@ -36,7 +36,7 @@ entries:
 - name: capability_access
   kind: library.lua
   source: file://capability_access.lua
-  modules: [registry, security, hash]
+  modules: [registry, security]
   imports:
     capability_gateway: bee.gov.capability:capability_gateway
     capability_grants: bee.gov.capability:capability_grants

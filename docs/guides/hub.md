@@ -286,3 +286,9 @@ Remote packages without that information remain visible. Update status reads the
 catalog for each exact host-selected component. Authored application publication
 selects a matching identity from overlays already present in the governance
 owner's store; entering a component name does not create or authorize an overlay.
+
+Agent-launch grants now name the exact Sessions contracts and owner methods.
+An installed grant whose generated policy still contains a namespace wildcard
+fails the current host-template measurement and needs a fresh capability review;
+its immutable record is retained. Built-in driver executable probes likewise
+admit the exact selected environment entries.

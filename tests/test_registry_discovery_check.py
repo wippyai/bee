@@ -72,3 +72,18 @@ class DiscoveryCheckTest(unittest.TestCase):
             errors, _, _, _, dangling = layout_check.audit(tree)
             self.assertEqual(dangling, 1)
             self.assertTrue(any('vendor.plugin:missing' in item for item in errors))
+
+    def test_allowlist_cannot_cover_an_added_duplicate(self):
+        import json
+        import tempfile
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory(dir=root / '.wippy', prefix='discovery-count-') as folder:
+            tree = Path(folder)
+            (tree / 'src').mkdir()
+            (tree / 'build').mkdir()
+            expression = 'id:match("^persisted%.owner:")'
+            (tree / 'src/owner.lua').write_text('local first = ' + expression + '\nlocal second = ' + expression)
+            (tree / 'build/registry_discovery_allowlist.json').write_text(json.dumps([
+                {'path': 'src/owner.lua', 'expression': expression, 'count': 1,
+                 'reason': 'M0 persisted identity decoder'}]))
+            self.assertTrue(any('occurrence count' in item for item in check.audit(tree)))

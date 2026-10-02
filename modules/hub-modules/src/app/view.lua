@@ -89,7 +89,7 @@ local function draw_base(width: integer, height: integer, preferences: appearanc
         end
         if #catalog_items == 0 then
             if state.all_catalog and #state.all_catalog > 0 then
-                frame.line(painter, first, "No applications on this page", theme.text)
+                frame.line(painter, first, "No packages on this page", theme.text)
                 if roomy then frame.line(painter, first + 1, "Developer packages are hidden · enable Developer packages to show libraries.", theme.muted) end
             else
                 frame.empty(painter, first, "No packages found", "/ change the search · K change the keyword")

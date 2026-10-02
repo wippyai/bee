@@ -7,7 +7,6 @@ from lua_boundary_check import TOKENS
 
 ROOT = Path(__file__).resolve().parents[1]
 # Preserve quoted strings used as patterns, but ignore comments and long examples.
-IGNORED = re.compile(r'--\[(=*)\[.*?\]\1\]|--[^\n]*|\[(=*)\[.*?\]\2\]', re.S)
 CALL = re.compile(r'(\(?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\)?)\s*:\s*(match|find|sub|gsub)\s*\(')
 STRINGS = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'')
 IDENTITY = re.compile(r'(?:^|[._])(?:id|ref|target|entry|binding|namespace|component|destination|value|raw|owner|name|token|actor|checked|resource)(?:$|[._])')
@@ -63,7 +62,7 @@ def findings(source):
             suspicious = literals[0] == ':'
         if literals and re.match(r'^\^?(?:https?|sha256(?:-tree-v1)?|bs|bw|catalog|driver|provider|notifications|gitdir|refs|generated|localhost|docs|modules)(?:[:/%.]|\[)', literals[0]):
             suspicious = False
-        if method in {'match', 'find'} and not IDENTITY.search(receiver) :
+        if method in {'match', 'find'} and not IDENTITY.search(receiver):
             suspicious = False
         if method == 'sub' and re.match(r'\s*[~=]=\s*["\'](?:sha256:|sha256[.]|sha256-tree-v1:|bs:|bw:)', source[index:index + 100]):
             suspicious = False

@@ -236,7 +236,7 @@ local function requirement(entry: Entry, package: string, final: {[string]: Entr
                     return nil, "Hive exposure requirement must append policies to one of its own operations"
                 end
             else
-                        local target_meta = object(destination.meta)
+                local target_meta = object(destination.meta)
                 if target.path ~= ".security.policies +=" or not owned[target_id]
                     or destination.kind ~= "process.lua" or not target_meta or target_meta.type ~= "bee.app" then
                     return nil, "capability requirement must append policies to its own application"

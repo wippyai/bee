@@ -15,7 +15,7 @@ local function request(): types.Request
     local digest = types.digest({})
     if not digest then error("digest") end
     local value: types.Request = {protocol_revision = types.REVISION, request_id = "exchange", idempotency_key = "retry",
-        caller_node_id = "alpha", caller_incarnation = "alpha-inc", owner_ref = {node_id = "beta", service_id = "bee.hive.telemetry"},
+        caller_node_id = "alpha", caller_incarnation = "alpha-inc", owner_ref = {node_id = "beta", service_id = "bee.hive.telemetry.binding"},
         operation_ref = "bee.hive.telemetry.binding:stats", operation_revision = "1", input = {}, input_digest = digest,
         principal_ref = {issuer = "alpha", subject_id = "{alpha@bee:workers|a1}"},
         principal_assertion = {method = types.ASSERTION_METHOD, audience = "beta", issued_at = "2026-09-08T12:00:00.000Z",

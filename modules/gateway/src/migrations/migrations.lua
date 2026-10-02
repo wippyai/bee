@@ -640,6 +640,48 @@ UPDATE bee_gateway_access_grants SET traits_json = (
   )
   SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
 ) WHERE json_valid(traits_json) AND (instr(traits_json, 'bee.driver.wippy') > 0 OR instr(traits_json, 'bee.gateway') > 0 OR instr(traits_json, 'bee.git.worktree') > 0 OR instr(traits_json, 'bee.git_worktree') > 0 OR instr(traits_json, 'bee.harness.carrier') > 0 OR instr(traits_json, 'bee.harness.launch') > 0 OR instr(traits_json, 'bee.harness.profiles') > 0 OR instr(traits_json, 'bee.hive') > 0 OR instr(traits_json, 'bee.hive.telemetry') > 0 OR instr(traits_json, 'bee.placement.native') > 0 OR instr(traits_json, 'bee.sync.hive') > 0 OR instr(traits_json, 'bee.threads') > 0 OR instr(traits_json, 'bee.threads.approvals') > 0 OR instr(traits_json, 'bee.threads.carrier') > 0 OR instr(traits_json, 'bee.threads.delivery') > 0 OR instr(traits_json, 'bee.threads.projection') > 0 OR instr(traits_json, 'bee.threads.records') > 0 OR instr(traits_json, 'bee.threads.service') > 0);
+UPDATE bee_gateway_surfaces SET surface_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(surface_json) leaf JOIN json_tree(surface_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.telemetry'
+  ), rewritten(position, value) AS (
+    SELECT 0, surface_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.telemetry.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(surface_json) AND instr(surface_json, 'bee.hive.telemetry') > 0;
+UPDATE bee_gateway_surfaces SET active_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(active_json) leaf JOIN json_tree(active_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.telemetry'
+  ), rewritten(position, value) AS (
+    SELECT 0, active_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.telemetry.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(active_json) AND instr(active_json, 'bee.hive.telemetry') > 0;
+UPDATE bee_gateway_access_grants SET traits_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(traits_json) leaf JOIN json_tree(traits_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.telemetry'
+  ), rewritten(position, value) AS (
+    SELECT 0, traits_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.telemetry.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(traits_json) AND instr(traits_json, 'bee.hive.telemetry') > 0;
 ]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},

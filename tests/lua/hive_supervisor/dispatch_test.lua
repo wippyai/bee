@@ -11,7 +11,7 @@ local function make_request(operation_ref: string, input: {[string]: unknown}): 
     local digest, err = types.digest(input)
     if not digest then error("digest failed: " .. tostring(err)) end
     local colon = operation_ref:find(":", 1, true)
-    local ns = colon and operation_ref:sub(1, colon - 1) or "bee.hive.telemetry"
+    local ns = colon and operation_ref:sub(1, colon - 1) or "bee.hive.telemetry.binding"
     local raw = {
         protocol_revision = types.REVISION,
         request_id = "req-1",
@@ -131,7 +131,7 @@ local function define_tests()
 
         test.it("rejects request when resource_ref is present (node telemetry only)", function()
             local req = make_request("bee.hive.telemetry.binding:stats", {})
-            req.owner_ref = {node_id = "forge", service_id = "bee.hive.telemetry", resource_ref = "cpu-core-0"}
+            req.owner_ref = {node_id = "forge", service_id = "bee.hive.telemetry.binding", resource_ref = "cpu-core-0"}
             local rep = dispatch.dispatch(req)
             test.is_false(rep.ok)
             test.not_nil(rep.error)

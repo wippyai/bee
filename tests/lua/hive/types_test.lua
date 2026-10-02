@@ -4,7 +4,7 @@ local test = require("test")
 local types = require("types")
 local bounds = require("bounds")
 local function owner(): {[string]: unknown}
-    return {node_id = "forge", service_id = "bee.hive.telemetry"}
+    return {node_id = "forge", service_id = "bee.hive.telemetry.binding"}
 end
 local function call(extra: {[string]: unknown}?): {[string]: unknown}
     local value: {[string]: unknown} = {protocol_revision = types.REVISION, request_id = "r1", idempotency_key = "k1",

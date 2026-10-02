@@ -6,7 +6,7 @@ local channel = require("channel")
 local time = require("time")
 local client = require("client")
 local types = require("types")
-local OWNER = {node_id = "local", service_id = "bee.hive.telemetry"}
+local OWNER = {node_id = "local", service_id = "bee.hive.telemetry.binding"}
 local TARGET = {operation_ref = "bee.hive.telemetry.binding:stats"}
 local supervisor_sequence = 0
 local function spawn_supervisor(host: string): (string, Channel<process.Event>)
@@ -82,7 +82,7 @@ local function define_tests()
             local echoed = handle:call(OWNER, TARGET, {mode = "echo", n = 1}, {idempotency_key = "k1", timeout = "2s"})
             test.is_true(echoed.ok)
             test.eq(echoed.value.echo.n, 1)
-            test.eq(echoed.value.owner, "bee.hive.telemetry")
+            test.eq(echoed.value.owner, "bee.hive.telemetry.binding")
             local stale = handle:call(OWNER, TARGET, {mode = "stale"}, {timeout = "2s"})
             test.is_true(stale.ok)
             test.is_true(stale.value.fresh)

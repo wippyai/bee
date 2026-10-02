@@ -89,14 +89,17 @@ class RepositoryLayout(unittest.TestCase):
                 database.execute('CREATE TABLE ' + table + ' (' + columns + ')')
                 database.execute('INSERT INTO ' + table + ' DEFAULT VALUES')
             original = {'references': list(moves), 'instructions': 'Call bee.git_worktree:setup later',
-                        'actor': 'bee.harness.carrier:process:instance', 'opaque': json.dumps({'target': 'bee.git_worktree:binding'})}
+                        'actor': 'bee.harness.carrier:process:instance', 'opaque': json.dumps({'target': 'bee.git_worktree:binding'}),
+                        'namespace': 'bee.hive.telemetry', 'service_id': 'bee.hive.telemetry',
+                        'owner_ref': {'node_id': 'node', 'service_id': 'bee.hive.telemetry'}}
             for table, column in tables:
                 database.execute('UPDATE ' + table + ' SET ' + column + ' = ?', (json.dumps(original),))
             database.executescript(sql(path))
             for table, column in tables:
                 migrated = json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0])
                 self.assertEqual(migrated['references'], list(moves.values()))
-                for key in ['instructions', 'actor', 'opaque']:
+                self.assertEqual(migrated['owner_ref'], {'node_id': 'node', 'service_id': 'bee.hive.telemetry.binding'})
+                for key in ['instructions', 'actor', 'opaque', 'namespace', 'service_id']:
                     self.assertEqual(migrated[key], original[key])
             database.close()
 

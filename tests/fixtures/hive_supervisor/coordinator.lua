@@ -59,7 +59,7 @@ local function main(remote: string)
             local deadline = time.now():add("30s")
             local reply: types.Reply? = nil
             while time.now():before(deadline) do
-                reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
+                reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry.binding"},
                     {operation_ref = "bee.hive.telemetry.binding:presence"}, {}, {timeout = "1s"})
                 if reply.ok then break end
                 -- Presence is a read: a replacement can make its dispatched outcome
@@ -70,7 +70,7 @@ local function main(remote: string)
             if not reply or not reply.ok then error("remote supervisor never established") end
             local value: unknown = reply.value
             if type(value) ~= "table" or value.node_id ~= remote then error("telemetry did not execute on destination") end
-            local denied = handle:call({node_id = remote, service_id = "bee.hive.telemetry", resource_ref = "forbidden"},
+            local denied = handle:call({node_id = remote, service_id = "bee.hive.telemetry.binding", resource_ref = "forbidden"},
                 {operation_ref = "bee.hive.telemetry.binding:stats"}, {}, {timeout = "3s"})
             if not denied.error or denied.error.code ~= "INVALID_ARGUMENT" then error("resource scope was not refused") end
             handle:close()
@@ -78,7 +78,7 @@ local function main(remote: string)
         elseif command == "expose-stats" then
             local handle, open_error = client.open()
             if not handle then error(tostring(open_error)) end
-            local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
+            local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry.binding"},
                 {operation_ref = "bee.hive.telemetry.binding:stats"}, {}, {timeout = "3s"})
             handle:close()
             if reply.ok then
@@ -91,7 +91,7 @@ local function main(remote: string)
         elseif command == "expose-presence" then
             local handle, open_error = client.open()
             if not handle then error(tostring(open_error)) end
-            local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
+            local reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry.binding"},
                 {operation_ref = "bee.hive.telemetry.binding:presence"}, {}, {timeout = "3s"})
             handle:close()
             if not reply.ok then error("presence refused: " .. tostring(reply.error and reply.error.code)) end
@@ -105,7 +105,7 @@ local function main(remote: string)
             local request: types.Request = {
                 protocol_revision = types.REVISION, request_id = "sibling-forgery", idempotency_key = "sibling-forgery-key",
                 caller_node_id = local_node, caller_incarnation = "sibling-forgery-incarnation",
-                owner_ref = {node_id = remote, service_id = "bee.hive.telemetry"},
+                owner_ref = {node_id = remote, service_id = "bee.hive.telemetry.binding"},
                 operation_ref = "bee.hive.telemetry.binding:stats", operation_revision = "1", input = input,
                 input_digest = assert(types.digest(input)),
                 principal_ref = {issuer = local_node, subject_id = tostring(process.pid())},

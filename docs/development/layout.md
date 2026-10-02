@@ -18,7 +18,9 @@ Threads' public reply and record types and Harness's shared execution types live
 at their component roots rather than in `records/`, `service/` or `carrier/`.
 The saved-profile contract and public binding also live at the Harness root.
 The complete identity map is `build/layout_identity_moves.json`; Placement 8,
-Sync 8 and Gateway 16 migrate their owned saved executable references.
+Sync 8 and Gateway 16 migrate their owned saved executable references and
+telemetry `owner_ref.service_id` values. The service remains the operation's exact
+namespace; unrelated namespace strings and opaque state remain intact.
 
 Module requirements carry host selections through `bee.deps` parameters.
 Module defaults do not name host entries, and host policy grants enter callable

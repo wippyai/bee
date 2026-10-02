@@ -35,7 +35,7 @@ local function main(remote: string)
             local probe_deadline = time.now():add("30s")
             local reply: types.Reply? = nil
             while time.now():before(probe_deadline) do
-                reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry"},
+                reply = handle:call({node_id = remote, service_id = "bee.hive.telemetry.binding"},
                     {operation_ref = "bee.hive.telemetry.binding:presence"}, {}, {timeout = "1s"})
                 if reply.ok then break end
                 if reply.error and reply.error.code ~= "UNAVAILABLE" then
@@ -48,7 +48,7 @@ local function main(remote: string)
             if type(value) ~= "table" or value.node_id ~= remote then
                 error("telemetry did not execute on destination")
             end
-            local denied = handle:call({node_id = remote, service_id = "bee.hive.telemetry", resource_ref = "forbidden"},
+            local denied = handle:call({node_id = remote, service_id = "bee.hive.telemetry.binding", resource_ref = "forbidden"},
                 {operation_ref = "bee.hive.telemetry.binding:stats"}, {}, {timeout = "3s"})
             if not denied.error or denied.error.code ~= "INVALID_ARGUMENT" then
                 error("resource scope was not refused")

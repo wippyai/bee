@@ -44,7 +44,7 @@ function M.seed()
     local projection = assert(sync.open({resource = "bee.sync:db", owner = SUBJECT}))
     local written = projection:append({feed = "layout", event_id = "layout-event", idempotency_key = "layout-event-key",
         event_type = "layout.references", projection_key = "references", expected_revision = 0,
-        projection_value = {binding = "bee.git_worktree:binding", method = "bee.threads.delivery:claim", opaque = OPAQUE .. ":instance"},
+        projection_value = {binding = "bee.git_worktree:binding", method = "bee.threads.delivery:claim", opaque = OPAQUE .. ":instance", owner_ref = {node_id = "node", service_id = "bee.hive.telemetry"}},
         payload = {method = "bee.threads.delivery:claim"}})
     assert(written.ok, written.message)
     assert(projection:close())
@@ -81,6 +81,7 @@ function M.verify()
     local value = assert(bounds.object(assert(bounds.object(stored.value)).value))
     assert(value.binding == "bee.git.worktree:binding" and value.method == "bee.threads.binding:delivery_claim")
     assert(value.opaque == OPAQUE .. ":instance")
+    assert(assert(bounds.object(value.owner_ref)).service_id == "bee.hive.telemetry.binding")
     assert(projection:close())
     db = gateway()
     local tx = assert(db:begin())

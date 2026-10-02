@@ -134,12 +134,15 @@ function M.turn(tx: sql.Transaction, turn_ref: string): (Turn?, string?)
     return M.decode_turn(row)
 end
 
-function M.operation_receipt(tx: sql.Transaction, workspace: string, actor: string, operation_key: string): (Row?, string?)
+function M.operation_receipt(tx: sql.Transaction, workspace: string, actor: string,
+    operation_key: string): (Row?, string?)
     return query_one(tx, "SELECT operation, request_digest, receipt_json FROM bee_session_operations " ..
         "WHERE workspace_id = ? AND owner_actor = ? AND operation_key = ?", {workspace, actor, operation_key}, "operation receipt")
 end
 
-function M.insert_operation(tx: sql.Transaction, workspace: string, actor: string, operation_key: string, operation_ref: string, operation: string, request_digest: string, target_ref: string?, receipt_json: string, committed_at: string): string?
+function M.insert_operation(tx: sql.Transaction, workspace: string, actor: string, operation_key: string,
+    operation_ref: string, operation: string, request_digest: string, target_ref: string?, receipt_json: string,
+    committed_at: string): string?
     return execute(tx, "INSERT INTO bee_session_operations (workspace_id, owner_actor, operation_key, operation_ref, operation, " ..
         "request_digest, target_ref, receipt_json, committed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", {workspace, actor, operation_key, operation_ref, operation, request_digest, target_ref or sql.NULL, receipt_json, committed_at}, "store operation receipt")
 end
@@ -152,9 +155,10 @@ function M.interactive_thread(tx: sql.Transaction, existing_thread: string): (Ro
     return query_one(tx, "SELECT owner_actor, workspace_id FROM bee_thread_heads WHERE thread_id = ?", {existing_thread}, "interactive thread")
 end
 
-function M.insert_session(tx: sql.Transaction, session_ref: string, thread_id: string, workspace: string, caller: string, title: string, now: string, stored_route_json: string): string?
+function M.insert_session(tx: sql.Transaction, session_ref: string, thread_id: string, workspace: string,
+    caller: string, title: string, now: string, stored_route_json: string): string?
     return execute(tx, "INSERT INTO bee_sessions (session_ref, thread_id, workspace_id, owner_actor, title, state, revision, created_at, updated_at, route_json) " ..
-            "VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, ?)", {session_ref, thread_id, workspace, caller, title, now, now, stored_route_json}, "create session")
+        "VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, ?)", {session_ref, thread_id, workspace, caller, title, now, now, stored_route_json}, "create session")
 end
 
 function M.attach_session(tx: sql.Transaction, route_json: string, now: string, session_ref: string): string?
@@ -167,13 +171,13 @@ end
 
 function M.work_counts(tx: sql.Transaction, session_ref: string): ({Row}?, string?)
     return tx:query("SELECT phase, COUNT(*) AS count, " ..
-            "SUM(CASE WHEN uncertainty_json IS NOT NULL THEN 1 ELSE 0 END) AS uncertain " ..
-            "FROM bee_session_work WHERE session_ref = ? GROUP BY phase", {session_ref})
+        "SUM(CASE WHEN uncertainty_json IS NOT NULL THEN 1 ELSE 0 END) AS uncertain " ..
+        "FROM bee_session_work WHERE session_ref = ? GROUP BY phase", {session_ref})
 end
 
 function M.unreconciled_turns(tx: sql.Transaction, session_ref: string, epoch: integer): (Row?, string?)
     return query_one(tx, "SELECT COUNT(*) AS count FROM bee_session_turns " ..
-            "WHERE session_ref = ? AND phase IN ('reserved','accepted') AND owner_epoch <> ?", {session_ref, epoch}, "unreconciled session turns")
+        "WHERE session_ref = ? AND phase IN ('reserved','accepted') AND owner_epoch <> ?", {session_ref, epoch}, "unreconciled session turns")
 end
 
 function M.last_result(tx: sql.Transaction, session_ref: string): ({Row}?, string?)
@@ -186,16 +190,16 @@ end
 
 function M.session_activity(tx: sql.Transaction, session_ref: string): (Row?, string?)
     return query_one(tx, "SELECT turn_ref, claim_token, work_ref, owner_epoch, phase, last_progress_at_ms " ..
-            "FROM bee_session_turns WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active session turn")
+        "FROM bee_session_turns WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active session turn")
 end
 
 function M.executing_sessions(tx: sql.Transaction, epoch: integer): ({Row}?, string?)
     return tx:query("SELECT COUNT(DISTINCT s.session_ref) AS count FROM bee_sessions s " ..
-            "JOIN bee_session_work w ON w.session_ref = s.session_ref " ..
-            "JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.session_ref = s.session_ref " ..
-            "WHERE s.state <> 'closed' AND w.phase = 'accepted' AND t.phase = 'accepted' AND t.owner_epoch = ? " ..
-            "AND NOT EXISTS (SELECT 1 FROM bee_session_turns old WHERE old.session_ref = s.session_ref " ..
-            "AND old.phase IN ('reserved','accepted') AND old.owner_epoch <> ?)", {epoch, epoch})
+        "JOIN bee_session_work w ON w.session_ref = s.session_ref " ..
+        "JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.session_ref = s.session_ref " ..
+        "WHERE s.state <> 'closed' AND w.phase = 'accepted' AND t.phase = 'accepted' AND t.owner_epoch = ? " ..
+        "AND NOT EXISTS (SELECT 1 FROM bee_session_turns old WHERE old.session_ref = s.session_ref " ..
+        "AND old.phase IN ('reserved','accepted') AND old.owner_epoch <> ?)", {epoch, epoch})
 end
 
 function M.workspaces(tx: sql.Transaction): ({Row}?, string?)
@@ -220,20 +224,23 @@ function M.unsettled_work(tx: sql.Transaction, session_ref: string): (Row?, stri
     return query_one(tx, "SELECT COUNT(*) AS count FROM bee_session_work WHERE session_ref = ? AND phase <> 'settled'", {session_ref}, "unsettled work")
 end
 
-function M.transition_session(tx: sql.Transaction, target: string, revision: integer, now: string, session_ref: string, expected_revision: integer): string?
+function M.transition_session(tx: sql.Transaction, target: string, revision: integer, now: string, session_ref: string,
+    expected_revision: integer): string?
     return execute(tx, "UPDATE bee_sessions SET state = ?, revision = ?, updated_at = ? WHERE session_ref = ? AND revision = ?", {target, revision, now, session_ref, expected_revision}, "update session lifecycle")
 end
 
-function M.insert_work(tx: sql.Transaction, work_ref: string, session_ref: string, workspace: string, sequence: integer, input_json: string, input_digest: string, output_schema: string, sender_kind: string, caller: string, op_ref: string, now: string, selected_budget_json: string): string?
+function M.insert_work(tx: sql.Transaction, work_ref: string, session_ref: string, workspace: string,
+    sequence: integer, input_json: string, input_digest: string, output_schema: string, sender_kind: string,
+    caller: string, op_ref: string, now: string, selected_budget_json: string): string?
     return execute(tx, "INSERT INTO bee_session_work (work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
-            "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at, budget_json) VALUES (?, ?, ?, ?, 1, 'queued', ?, ?, ?, ?, ?, NULL, ?, ?, ?)", {work_ref, session_ref, workspace, sequence, input_json, input_digest, output_schema, sender_kind, caller, op_ref, now, selected_budget_json}, "enqueue work")
+        "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at, budget_json) VALUES (?, ?, ?, ?, 1, 'queued', ?, ?, ?, ?, ?, NULL, ?, ?, ?)", {work_ref, session_ref, workspace, sequence, input_json, input_digest, output_schema, sender_kind, caller, op_ref, now, selected_budget_json}, "enqueue work")
 end
 
 function M.work_execution(tx: sql.Transaction, work_ref: string): (Row?, string?)
     return query_one(tx, "SELECT t.turn_ref, t.claim_token, t.owner_epoch, t.phase AS turn_phase, " ..
-            "t.checkpoint_json, c.work_ref AS cancellation_work_ref, c.reason AS cancellation_reason " ..
-            "FROM bee_session_work w LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
-            "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref WHERE w.work_ref = ?", {work_ref}, "work execution state")
+        "t.checkpoint_json, c.work_ref AS cancellation_work_ref, c.reason AS cancellation_reason " ..
+        "FROM bee_session_work w LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
+        "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref WHERE w.work_ref = ?", {work_ref}, "work execution state")
 end
 
 function M.work_history(tx: sql.Transaction, session_ref: string, cursor: integer, limit: integer): ({Row}?, string?)
@@ -242,51 +249,54 @@ end
 
 function M.scan_work(tx: sql.Transaction, include_hooks: boolean, workspace: string?, limit: integer): ({Row}?, string?)
     return tx:query("SELECT w.work_ref, w.session_ref, w.workspace_id, w.sequence, w.revision, w.phase, w.input_json, w.input_digest, " ..
-            "w.output_schema, w.sender_kind, w.sender_id, w.result_json, w.uncertainty_json, w.operation_ref, w.created_at, w.budget_json, " ..
-            "t.turn_ref, t.claim_token, t.owner_epoch, t.checkpoint_json, s.route_json, s.context_json, " ..
-            "c.work_ref AS cancellation_work_ref, c.reason AS cancellation_reason " ..
-            "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
-            "LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
-            "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref " ..
-            "WHERE w.phase IN ('queued','reserved','accepted') AND (? = 1 OR COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull') AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
-            "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
-            "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
-            "ORDER BY w.sequence LIMIT ?", {include_hooks and 1 or 0, workspace or sql.NULL, workspace or sql.NULL, limit})
+        "w.output_schema, w.sender_kind, w.sender_id, w.result_json, w.uncertainty_json, w.operation_ref, w.created_at, w.budget_json, " ..
+        "t.turn_ref, t.claim_token, t.owner_epoch, t.checkpoint_json, s.route_json, s.context_json, " ..
+        "c.work_ref AS cancellation_work_ref, c.reason AS cancellation_reason " ..
+        "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
+        "LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
+        "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref " ..
+        "WHERE w.phase IN ('queued','reserved','accepted') AND (? = 1 OR COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull') AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
+        "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
+        "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
+        "ORDER BY w.sequence LIMIT ?", {include_hooks and 1 or 0, workspace or sql.NULL, workspace or sql.NULL, limit})
 end
 
 function M.interactive_obligations(tx: sql.Transaction, workspace: string?): ({Row}?, string?)
     return tx:query("SELECT session_ref FROM bee_sessions WHERE state <> 'closed' " ..
-                "AND json_extract(route_json, '$.delivery') = 'hook' AND (? IS NULL OR workspace_id = ?) LIMIT 1", {workspace or sql.NULL, workspace or sql.NULL})
+        "AND json_extract(route_json, '$.delivery') = 'hook' AND (? IS NULL OR workspace_id = ?) LIMIT 1", {workspace or sql.NULL, workspace or sql.NULL})
 end
 
 function M.cancel_queued_work(tx: sql.Transaction, result_json: string, work_ref: string): string?
     return execute(tx, "UPDATE bee_session_work SET phase = 'settled', revision = revision + 1, result_json = ? " ..
-                "WHERE work_ref = ? AND phase = 'queued'", {result_json, work_ref}, "settle queued cancellation")
+        "WHERE work_ref = ? AND phase = 'queued'", {result_json, work_ref}, "settle queued cancellation")
 end
 
-function M.insert_cancellation(tx: sql.Transaction, work_ref: string, op_ref: string, reason: string?, now: string): string?
+function M.insert_cancellation(tx: sql.Transaction, work_ref: string, op_ref: string, reason: string?,
+    now: string): string?
     return execute(tx, "INSERT INTO bee_session_work_cancellations " ..
-                "(work_ref, operation_ref, reason, requested_at) VALUES (?, ?, ?, ?) ON CONFLICT(work_ref) DO NOTHING", {work_ref, op_ref, reason or sql.NULL, now}, "record work cancellation")
+        "(work_ref, operation_ref, reason, requested_at) VALUES (?, ?, ?, ?) ON CONFLICT(work_ref) DO NOTHING", {work_ref, op_ref, reason or sql.NULL, now}, "record work cancellation")
 end
 
 function M.mark_cancelling(tx: sql.Transaction, work_ref: string): string?
     return execute(tx, "UPDATE bee_session_work SET revision = revision + 1 " ..
-                "WHERE work_ref = ? AND phase IN ('reserved','accepted')", {work_ref}, "mark work cancelling")
+        "WHERE work_ref = ? AND phase IN ('reserved','accepted')", {work_ref}, "mark work cancelling")
 end
 
-function M.operation_by_key(tx: sql.Transaction, workspace: string, caller: string, operation_key: string): (Row?, string?)
+function M.operation_by_key(tx: sql.Transaction, workspace: string, caller: string,
+    operation_key: string): (Row?, string?)
     return query_one(tx, "SELECT operation_key, operation_ref, operation, request_digest, target_ref, receipt_json, committed_at " ..
-            "FROM bee_session_operations WHERE workspace_id = ? AND owner_actor = ? AND operation_key = ?", {workspace, caller, operation_key}, "operation lookup")
+        "FROM bee_session_operations WHERE workspace_id = ? AND owner_actor = ? AND operation_key = ?", {workspace, caller, operation_key}, "operation lookup")
 end
 
-function M.operation_by_ref(tx: sql.Transaction, workspace: string, caller: string, operation_ref: string): (Row?, string?)
+function M.operation_by_ref(tx: sql.Transaction, workspace: string, caller: string,
+    operation_ref: string): (Row?, string?)
     return query_one(tx, "SELECT operation_key, operation_ref, operation, request_digest, target_ref, receipt_json, committed_at " ..
-            "FROM bee_session_operations WHERE workspace_id = ? AND owner_actor = ? AND operation_ref = ?", {workspace, caller, operation_ref}, "operation")
+        "FROM bee_session_operations WHERE workspace_id = ? AND owner_actor = ? AND operation_ref = ?", {workspace, caller, operation_ref}, "operation")
 end
 
 function M.feed(tx: sql.Transaction, thread_id: string, cursor: integer, limit: integer): ({Row}?, string?)
     return tx:query("SELECT record_id, sequence, record_json, committed_at FROM bee_thread_records " ..
-            "WHERE thread_id = ? AND event_scope = 'sessions' AND sequence > ? ORDER BY sequence LIMIT ?", {thread_id, cursor, limit})
+        "WHERE thread_id = ? AND event_scope = 'sessions' AND sequence > ? ORDER BY sequence LIMIT ?", {thread_id, cursor, limit})
 end
 
 local TURN_COLUMNS = "turn_ref, session_ref, work_ref, claim_token, owner_epoch, input_digest, phase, checkpoint_json, " ..
@@ -294,24 +304,25 @@ local TURN_COLUMNS = "turn_ref, session_ref, work_ref, claim_token, owner_epoch,
 
 function M.active_turn(tx: sql.Transaction, session_ref: string): (Row?, string?)
     return query_one(tx, "SELECT " .. TURN_COLUMNS .. " FROM bee_session_turns " ..
-            "WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active turn")
+        "WHERE session_ref = ? AND phase IN ('reserved','accepted')", {session_ref}, "active turn")
 end
 
 function M.queued_work(tx: sql.Transaction, session_ref: string): (Row?, string?)
     return query_one(tx, "SELECT work_ref, session_ref, workspace_id, sequence, revision, phase, input_json, input_digest, " ..
-            "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at, budget_json FROM bee_session_work " ..
-            "WHERE session_ref = ? AND phase = 'queued' ORDER BY sequence LIMIT 1", {session_ref}, "queued work")
+        "output_schema, sender_kind, sender_id, result_json, operation_ref, created_at, budget_json FROM bee_session_work " ..
+        "WHERE session_ref = ? AND phase = 'queued' ORDER BY sequence LIMIT 1", {session_ref}, "queued work")
 end
 
-function M.insert_turn(tx: sql.Transaction, turn_ref: string, session_ref: string, work_ref: string, claim: string, epoch: integer, input_digest: string, record_id: string, now: string): string?
+function M.insert_turn(tx: sql.Transaction, turn_ref: string, session_ref: string, work_ref: string, claim: string,
+    epoch: integer, input_digest: string, record_id: string, now: string): string?
     return execute(tx, "INSERT INTO bee_session_turns (turn_ref, session_ref, work_ref, claim_token, owner_epoch, input_digest, phase, " ..
-            "checkpoint_json, reserve_record_id, accept_record_id, settle_record_id, created_at) " ..
-            "VALUES (?, ?, ?, ?, ?, ?, 'reserved', NULL, ?, NULL, NULL, ?)", {turn_ref, session_ref, work_ref, claim, epoch, input_digest, record_id, now}, "reserve turn")
+        "checkpoint_json, reserve_record_id, accept_record_id, settle_record_id, created_at) " ..
+        "VALUES (?, ?, ?, ?, ?, ?, 'reserved', NULL, ?, NULL, NULL, ?)", {turn_ref, session_ref, work_ref, claim, epoch, input_digest, record_id, now}, "reserve turn")
 end
 
 function M.reserve_work(tx: sql.Transaction, work_ref: string): string?
     return execute(tx, "UPDATE bee_session_work SET phase = 'reserved', revision = revision + 1 " ..
-            "WHERE work_ref = ? AND phase = 'queued'", {work_ref}, "mark work reserved")
+        "WHERE work_ref = ? AND phase = 'queued'", {work_ref}, "mark work reserved")
 end
 
 function M.recover_turn(tx: sql.Transaction, claim_token: string, epoch: integer, turn_ref: string): string?
@@ -320,12 +331,13 @@ end
 
 function M.mark_uncertain(tx: sql.Transaction, evidence_json: string, work_ref: string): string?
     return execute(tx, "UPDATE bee_session_work SET uncertainty_json = ?, revision = revision + 1 " ..
-            "WHERE work_ref = ? AND phase = 'accepted'", {evidence_json, work_ref}, "mark work uncertain")
+        "WHERE work_ref = ? AND phase = 'accepted'", {evidence_json, work_ref}, "mark work uncertain")
 end
 
-function M.accept_turn(tx: sql.Transaction, checkpoint_json: string, record_id: string, progress_at: integer, turn_ref: string, owner_epoch: integer): string?
+function M.accept_turn(tx: sql.Transaction, checkpoint_json: string, record_id: string, progress_at: integer,
+    turn_ref: string, owner_epoch: integer): string?
     return execute(tx, "UPDATE bee_session_turns SET phase = 'accepted', checkpoint_json = ?, accept_record_id = ?, last_progress_at_ms = ? " ..
-            "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'reserved'", {checkpoint_json, record_id, progress_at, turn_ref, owner_epoch}, "accept turn")
+        "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'reserved'", {checkpoint_json, record_id, progress_at, turn_ref, owner_epoch}, "accept turn")
 end
 
 function M.start_budget(tx: sql.Transaction, now_ms: integer, session_ref: string): string?
@@ -334,30 +346,32 @@ end
 
 function M.accept_work(tx: sql.Transaction, work_ref: string): string?
     return execute(tx, "UPDATE bee_session_work SET phase = 'accepted', revision = revision + 1 " ..
-            "WHERE work_ref = ? AND phase = 'reserved'", {work_ref}, "mark work accepted")
+        "WHERE work_ref = ? AND phase = 'reserved'", {work_ref}, "mark work accepted")
 end
 
-function M.checkpoint_turn(tx: sql.Transaction, checkpoint_json: string, turn_ref: string, owner_epoch: integer): string?
+function M.checkpoint_turn(tx: sql.Transaction, checkpoint_json: string, turn_ref: string,
+    owner_epoch: integer): string?
     return execute(tx, "UPDATE bee_session_turns SET checkpoint_json = ? WHERE turn_ref = ? AND owner_epoch = ?", {checkpoint_json, turn_ref, owner_epoch}, "checkpoint turn observation")
 end
 
 function M.turn_progress(tx: sql.Transaction, now_ms: integer, turn_ref: string, owner_epoch: integer): string?
     return execute(tx, "UPDATE bee_session_turns SET last_progress_at_ms = ? " ..
-            "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'accepted'", {now_ms, turn_ref, owner_epoch}, "record live turn progress")
+        "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'accepted'", {now_ms, turn_ref, owner_epoch}, "record live turn progress")
 end
 
-function M.session_progress(tx: sql.Transaction, now: string, steps: integer, tools: integer, tokens: integer, session_ref: string): string?
+function M.session_progress(tx: sql.Transaction, now: string, steps: integer, tools: integer, tokens: integer,
+    session_ref: string): string?
     return execute(tx, "UPDATE bee_sessions SET updated_at = ?, provider_steps = MIN(9007199254740991, provider_steps + ?), tool_calls = MIN(9007199254740991, tool_calls + ?), tokens = MIN(9007199254740991, tokens + ?) WHERE session_ref = ?", {now, steps, tools, tokens, session_ref}, "record session consumption")
 end
 
 function M.settle_turn(tx: sql.Transaction, record_id: string, turn_ref: string, owner_epoch: integer): string?
     return execute(tx, "UPDATE bee_session_turns SET phase = 'settled', settle_record_id = ? " ..
-            "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'accepted'", {record_id, turn_ref, owner_epoch}, "settle turn")
+        "WHERE turn_ref = ? AND owner_epoch = ? AND phase = 'accepted'", {record_id, turn_ref, owner_epoch}, "settle turn")
 end
 
 function M.settle_work(tx: sql.Transaction, next_revision: integer, checked_json: string, work_ref: string): string?
     return execute(tx, "UPDATE bee_session_work SET phase = 'settled', revision = ?, result_json = ? " ..
-            "WHERE work_ref = ? AND phase = 'accepted'", {next_revision, checked_json, work_ref}, "settle work")
+        "WHERE work_ref = ? AND phase = 'accepted'", {next_revision, checked_json, work_ref}, "settle work")
 end
 
 function M.save_context(tx: sql.Transaction, context_json: string, now: string, session_ref: string): string?

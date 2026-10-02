@@ -966,7 +966,6 @@ function M.feed_read(db: sql.DB, actor: string, request: unknown): Result
 end
 
 
-
 function M.turn_reserve(db: sql.DB, actor: string, request: unknown): Result
     local caller, workspace, denied = authenticated(actor, true)
     if denied then return denied end

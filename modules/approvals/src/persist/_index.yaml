@@ -17,3 +17,9 @@ entries:
     clock: bee.values:clock
     bounds: bee.values:bounds
     canonical: bee.values:canonical
+- name: identity_migration
+  kind: library.lua
+  source: file://identity_migration.lua
+  modules: [sql, env]
+  imports:
+    bounds: bee.values:bounds

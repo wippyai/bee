@@ -326,9 +326,9 @@ conventions and `build/layout_roots.json`.
 | `bee.approvals.inbox` | `bee.approvals.inbox.security` | `client_policy` |
 | `bee.app` | `bee.app.status` | `startup_progress` |
 | `bee.approvals` | `bee.approvals.env` | `database_ref`, `db`, `db_path`, `environment`, `node_identity_migration_source`, `policies_ref`, `resources` |
-| `bee.approvals` | `bee.approvals.migrations` | `identity_migration` |
-| `bee.approvals` | `bee.approvals.binding` | `local` |
-| `bee.approvals` | `bee.approvals.service` | `runtime_lease`, `service` |
+| `bee.approvals` | `bee.approvals.persist` | `identity_migration` |
+| `bee.approvals` | `bee.approvals.binding` | `local`, `service` |
+| `bee.approvals` | `bee.approvals.types` | `runtime_lease` |
 | `bee.console` | `bee.console.app` | `command` |
 | `bee.credentials` | `bee.credentials.env` | `credential_sources`, `database_ref`, `db`, `db_path`, `environment`, `materializer_ref`, `node_identity_migration_source`, `sources_ref` |
 | `bee.credentials` | `bee.credentials.binding` | `local`, `sources` |

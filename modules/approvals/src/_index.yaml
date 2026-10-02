@@ -34,6 +34,7 @@ entries:
     path: .storage
 - name: target_policies
   kind: ns.requirement
+  default: []
   meta:
     comment: The host's approver policies; each names its approvers and the longest request lifetime it allows
   targets:
@@ -170,3 +171,51 @@ entries:
   modules: [registry]
   imports:
     bounds: bee.threads.records:bounds
+- name: target_request_policies
+  kind: ns.requirement
+  default: []
+  meta:
+    comment: Host-selected grants for these package operations
+  targets:
+  - entry: bee.approvals.binding:node_summary
+    path: .security.policies
+  - entry: bee.approvals.binding:request
+    path: .security.policies
+  - entry: bee.approvals.binding:feed_snapshot
+    path: .security.policies
+  - entry: bee.approvals.binding:feed_read_after
+    path: .security.policies
+  - entry: bee.approvals.binding:decide
+    path: .security.policies
+  - entry: bee.approvals.binding:decide_batch
+    path: .security.policies
+  - entry: bee.approvals.binding:withdraw
+    path: .security.policies
+  - entry: bee.approvals.binding:consume
+    path: .security.policies
+  - entry: bee.approvals.binding:installation_effects
+    path: .security.policies
+  - entry: bee.approvals.binding:complete_installation_effect
+    path: .security.policies
+  - entry: bee.approvals.binding:publication_effects
+    path: .security.policies
+  - entry: bee.approvals.binding:complete_publication_effect
+    path: .security.policies
+  - entry: bee.approvals.binding:revalidate
+    path: .security.policies
+  - entry: bee.approvals.binding:read
+    path: .security.policies
+  - entry: bee.approvals.binding:inbox
+    path: .security.policies
+  - entry: bee.approvals.binding:list
+    path: .security.policies
+  - entry: bee.approvals.binding:reconcile
+    path: .security.policies
+  - entry: bee.approvals.binding:capabilities
+    path: .security.policies
+  - entry: bee.approvals.binding:deliveries
+    path: .security.policies
+  - entry: bee.approvals.binding:attention_count
+    path: .security.policies
+  - entry: bee.approvals.binding:runtime_lease
+    path: .security.policies

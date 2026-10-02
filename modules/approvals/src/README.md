@@ -7,7 +7,7 @@ digest; the requester consumes an approved decision under one effect identity
 before acting. Every change commits its history row, its inbox change and,
 when the request projects onto a thread, its outbox row in the same
 transaction. The worker delivers outbox rows through the narrow thread
-ingress `bee.threads.approvals:append` under a stable event id, and
+ingress `bee.threads.binding:append` under a stable event id, and
 acknowledges a row only after the ingress replies; a lost acknowledgement
 repeats the delivery and the thread replays the same record.
 

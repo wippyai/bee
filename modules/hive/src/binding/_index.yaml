@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.hive.binding
+entries:
+- name: invoke_check
+  kind: function.lua
+  source: file://invoke_check.lua
+  method: handle
+  modules:
+  - security
+  imports:
+    catalog: bee.hive:catalog
+    bounds: bee.protocol:bounds

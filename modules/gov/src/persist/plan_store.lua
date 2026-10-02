@@ -41,8 +41,7 @@ local function failure(code: string, message: string, value: unknown?): Result
 end
 
 local function storage(err: unknown, action: string): Result
-    if transaction.busy(err) then return transaction.storage_failure("governance plan database is busy") end
-    return failure("INTERNAL", action)
+    return transaction.sql_failure(err, action)
 end
 
 local function integer(value: unknown): integer?
@@ -416,7 +415,7 @@ function M.close(store: Store): (boolean, string?)
     if store.closed then return true, nil end
     store.closed = true
     local released, err = store.db:release()
-    if released ~= true or err then return false, "close governance plan database" end
+    if released ~= true or err then return false, transaction.error_message("close governance plan database", err) end
     return true, nil
 end
 
@@ -429,8 +428,8 @@ function M.open(resource: string, node_raw: string, workspace_raw: string): (Sto
     if not db then return nil, err end
     local migrated, migration_error = identity_migration.apply(db, node)
     if not migrated then
-        db:release()
-        return nil, migration_error or "migrate governance node identity"
+        local result = transaction.release(db, "governance", failure("UNAVAILABLE", migration_error or "migrate governance node identity"))
+        return nil, result.message
     end
     return {db = db, node = node, workspace = workspace, closed = false}, nil
 end

@@ -14,7 +14,7 @@ entries:
     - process.monitor
     - process.context
     resources:
-    - bee.harness.carrier:process
+    - bee.harness.service:carrier
     - bee:workers
     - context
     effect: allow
@@ -51,7 +51,7 @@ entries:
     comment: Host setup runs only for the workspace the caller's host-issued identity is bound to; the Agent application
       also resolves the public sessions contracts, whose owner authorizes each operation
   policy:
-    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.launch:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.workspace.catalog:read") || (action == "bee.workspace.manager.read" && resource == actor.meta.workspace_id)
+    expression: (action == "bee.harness.setup" && resource != "" && resource == actor.meta.workspace_id) || (action == "funcs.call" && resource == "bee.harness.binding:setup") || (action == "contract.get" && (resource == "bee.sessions:contract" || resource == "bee.sessions:catalog")) || (action == "contract.call" && resource in ["open", "run", "send", "await", "join", "get", "list", "history", "cancel", "close"]) || (action == "contract.open" && (resource == "bee.sessions.binding:owner_binding" || resource == "bee.sessions.binding:catalog_binding")) || (action == "funcs.call" && resource == "bee.workspace.catalog:read") || (action == "bee.workspace.manager.read" && resource == actor.meta.workspace_id)
     actions:
     - bee.workspace.manager.read
     - bee.harness.setup
@@ -96,11 +96,14 @@ entries:
     resources: [bee.placement.docker.binding:capabilities]
     effect: allow
 - name: profile_store_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
     comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or write authority
   policy:
+    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
     actions:
+    - env.get
+    - env.set
     - db.get
     - registry.get
     - system.read
@@ -132,14 +135,6 @@ entries:
     - process.context
     resources: '*'
     effect: deny
-- name: workspace_launch_policy
-  kind: security.policy
-  meta:
-    comment: Lets a managed agent launch into a workspace other than its binding's; the host attaches it to the launch tool only for agents it trusts to act across workspaces
-  policy:
-    actions: [bee.workspace.manager.launch]
-    resources: '*'
-    effect: allow
 - name: interactive_session_policy
   kind: security.policy
   policy:
@@ -153,7 +148,7 @@ entries:
   policy:
     actions: [process.spawn, process.host, process.send, process.registry.lookup, process.registry.register, process.registry.unregister, funcs.call, process.security, bee.apps.session_present]
     resources: '*'
-    expression: '(action == "process.security" && resource == "security") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner") || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.sessions.binding:get", "bee.apps:open_call", "bee.harness.launch:setup", "bee.harness.service:open"])'
+    expression: '(action == "process.security" && resource == "security") || (action == "bee.apps.session_present" && resource == actor.meta.workspace_id) || (action == "process.spawn" && resource == "bee.harness.service:presentation_owner") || (action == "process.host" && resource == "bee:workers") || action == "process.send" || (action == "process.registry.lookup" && resource matches "^bee[.]session[.](viewer|window)/[A-Za-z0-9_.:-]+$") || ((action == "process.registry.register" || action == "process.registry.unregister") && resource matches "^bee[.]session[.]viewer/[0-9a-f-]+$") || (action == "funcs.call" && resource in ["bee.sessions.binding:get", "bee.apps:open_call", "bee.harness.binding:setup", "bee.harness.service:open"])'
     effect: allow
 - name: presentation_owner_policy
   kind: security.policy.expr

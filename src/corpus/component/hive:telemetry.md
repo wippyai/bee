@@ -13,11 +13,11 @@ dispatches them through that same generic ceiling with no per-operation code.
 
 | Operation | Responsibility |
 |---|---|
-| `bee.hive.telemetry:presence` | Node presence: protocol revision, role, cluster size |
-| `bee.hive.telemetry:stats` | Runtime statistics: numeric memory, goroutines, CPU count |
-| `bee.hive.telemetry:catalog_list` | Public operation catalog in bounded pages |
-| `bee.hive.telemetry:holdings` | One bounded page of this node's live workspace holdings with each host phase and lease count |
-| `bee.hive.telemetry:cluster` | One holdings page from each named node (at most eight), with the local runtime's link state (`connected`, `outbound`/`inbound` direction and remote address) |
+| `bee.hive.telemetry.binding:presence` | Node presence: protocol revision, role, cluster size |
+| `bee.hive.telemetry.binding:stats` | Runtime statistics: numeric memory, goroutines, CPU count |
+| `bee.hive.telemetry.binding:catalog_list` | Public operation catalog in bounded pages |
+| `bee.hive.telemetry.binding:holdings` | One bounded page of this node's live workspace holdings with each host phase and lease count |
+| `bee.hive.telemetry.binding:cluster` | One holdings page from each named node (at most eight), with the local runtime's link state (`connected`, `outbound`/`inbound` direction and remote address) |
 
 `holdings` reads the node host manager's own read model through its owner
 request; a missing manager is an error, never an empty page. `cluster` fans
@@ -57,7 +57,7 @@ local/runtime link state independently of the summary's availability.
 Snapshot accepts only an empty object and lists at most 64 nodes from runtime
 membership plus the host's retained Hive peers, excluding native display
 clients. Detail accepts only `node_id` and refuses identities outside that
-same set. `bee.hive.telemetry:node_summary` reads names through Node and counts
+same set. `bee.hive.telemetry.binding:node_summary` reads names through Node and counts
 through the Threads and Approvals owners. Running means a currently accepted
 execution under the current owner epoch; idle or queued sessions do not count.
 Pending approvals exclude expired and settled requests. Counts cover the node's

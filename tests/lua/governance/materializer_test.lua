@@ -149,7 +149,7 @@ local function define_tests()
                     meta = {capability = "threads.read", value_kind = "security.policy"},
                     data = {targets = {{entry = "app.notes:app", path = ".security.policies +="}}}}}
             local generated = {policies = {{id = policy_id, kind = "security.policy",
-                data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.service:get"}, effect = "allow"}}}},
+                data = {policy = {actions = {"funcs.call"}, resources = {"bee.threads.binding:get"}, effect = "allow"}}}},
                 bindings = {{requirement_id = "app.notes:threads", policy_id = policy_id}},
                 record = {id = "bee.gov.grants:record." .. string.rep("b", 64),
                     kind = "registry.entry", data = {digest = string.rep("c", 64)}}}

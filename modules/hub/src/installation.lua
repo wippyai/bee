@@ -159,6 +159,18 @@ function M.proposal(plan_raw: unknown, context: Context): (Object?, string?, str
     local version = action == "uninstall" and "" or bounds.line(request.version, 128)
     if not version then return nil, nil, "Hub plan version is malformed" end
     local dependencies, policies, migrations, starts = lines(), lines(), lines(), lines()
+    if plan.conversion ~= nil then
+        local conversion = bounds.object(plan.conversion)
+        local selected = conversion and bounds.dense_list(conversion.roots, 128, "component roots") or nil
+        if not conversion or conversion.version ~= 1 or not selected then return nil, nil, "Hub root conversion is malformed" end
+        dependencies[#dependencies + 1] = "transfer component roots to host ownership"
+        for _, raw in ipairs(selected) do
+            local root = bounds.object(raw)
+            local component = root and component_name(root.component) or nil
+            if not root or not component then return nil, nil, "Hub root conversion is malformed" end
+            dependencies[#dependencies + 1] = component
+        end
+    end
     for _, raw in ipairs((plan.modules or {})) do
         local item = bounds.object(raw)
         local shown = item and dependency_line(item) or nil

@@ -90,7 +90,7 @@ local function file_on_thread(workspace: string): (string, string, string)
     return tostring(created.approval_id), tostring(created.proposal_digest), thread_id
 end
 local function thread_records(thread_id: string): {Object}
-    local page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"approval.request", "approval.transition"}}}))
+    local page = value(call(requester, "bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, filter = {kinds = {"approval.request", "approval.transition"}}}))
     return principals.objects(page.records)
 end
 local function delivery_status(approval_id: string): string
@@ -107,19 +107,19 @@ local function until_records(thread_id: string, count: integer, approval_id: str
     local collected: {Object} = {}
     local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 30000
     while true do
-        local page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64,
+        local page = value(call(requester, "bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64,
             filter = {kinds = {"approval.request", "approval.transition"}}}))
         local records = principals.objects(page.records)
         for _, record in ipairs(records) do collected[#collected + 1] = record end
         if #collected >= count then return collected end
         local remaining = deadline_ms - math.floor(time.now():unix_nano() / 1000000)
         if remaining <= 0 then
-            local page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64}))
+            local page = value(call(requester, "bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, limit = 64}))
             local observed: {string} = {}
             for _, record in ipairs(principals.objects(page.records)) do
                 observed[#observed + 1] = tostring(record.sequence) .. ":" .. tostring(record.kind)
             end
-            local filtered = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64,
+            local filtered = value(call(requester, "bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, limit = 64,
                 filter = {kinds = {"approval.request", "approval.transition"}}}))
             local matching = principals.objects(filtered.records)
             error("thread records did not arrive; matching=" .. tostring(#matching) .. " scanned=" .. tostring(filtered.scanned_through) ..
@@ -127,7 +127,7 @@ local function until_records(thread_id: string, count: integer, approval_id: str
         end
         cursor = math.floor(tonumber(page.scanned_through) or cursor)
         if page.has_more ~= true then
-            value(call(requester, "bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining}))
+            value(call(requester, "bee.threads.binding:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining}))
         end
     end
     error("record wait ended")
@@ -172,15 +172,15 @@ local function stop(name: string)
     await_exit(events, pid_id, name)
 end
 local function wait_for_no_more_records(thread_id: string, expected: integer)
-    local page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = 0, limit = 64,
+    local page = value(call(requester, "bee.threads.binding:read_after", {thread_id = thread_id, cursor = 0, limit = 64,
         filter = {kinds = {"approval.request", "approval.transition"}}}))
     local cursor = math.floor(tonumber(page.scanned_through) or 0)
     local deadline_ms = math.floor(time.now():unix_nano() / 1000000) + 300
     while true do
         local remaining = deadline_ms - math.floor(time.now():unix_nano() / 1000000)
         if remaining <= 0 then break end
-        local watched = value(call(requester, "bee.threads.delivery:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining}))
-        page = value(call(requester, "bee.threads.service:read_after", {thread_id = thread_id, cursor = cursor, limit = 64,
+        local watched = value(call(requester, "bee.threads.binding:watch", {thread_id = thread_id, after_sequence = cursor, wait_ms = remaining}))
+        page = value(call(requester, "bee.threads.binding:read_after", {thread_id = thread_id, cursor = cursor, limit = 64,
             filter = {kinds = {"approval.request", "approval.transition"}}}))
         cursor = math.floor(tonumber(page.scanned_through) or cursor)
         if watched.status == "timeout" then break end

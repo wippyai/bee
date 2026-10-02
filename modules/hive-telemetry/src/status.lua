@@ -59,7 +59,7 @@ function M.aggregate(call: Call, members: {Member}): {Node}
     local result: {Node} = {}
     for _, member in ipairs(members) do
         local reply = call({node_id = member.node_id, service_id = "bee.hive.telemetry"},
-            {operation_ref = "bee.hive.telemetry:node_summary"}, {}, {timeout = "2s"})
+            {operation_ref = "bee.hive.telemetry.binding:node_summary"}, {}, {timeout = "2s"})
         local summary = reply.ok and M.decode_summary(reply.value, member.node_id) or nil
         result[#result + 1] = {node_id = member.node_id, name = summary and summary.name or member.node_id,
             online = member.online, status = summary and "ok" or "unavailable",

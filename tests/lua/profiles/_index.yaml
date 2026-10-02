@@ -14,7 +14,7 @@ entries:
   meta: {type: test_support}
   policy:
     actions: [funcs.call]
-    resources: [bee.harness.profiles:call, bee.harness.profiles:context_probe]
+    resources: [bee.harness.binding:call, bee.harness.profiles:context_probe]
     effect: allow
 - name: test_read
   kind: security.policy

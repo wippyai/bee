@@ -14,18 +14,19 @@ delivery contract and does not schedule work.
 |---|---|
 | `bee.threads` | Contracts (`authority`, `lifecycle`, `delivery`, `projection`, `carrier`, `approvals`, `journal`), local bindings, module resources, the dependency interface and `capabilities`: the implementation report (schema revisions, carried migrations, bound contracts, enforced limits, interim delivery limits) that grants nothing |
 | `bee.threads.records` | Pure typed decoders for the seven record families, bounds, the canonical record encoder and canonical JSON for request identity; no I/O |
-| `bee.threads.service` | The authority: access facade, authority, action inbox and lifecycle operations, canonical session/work store, one-shot notices, and owner methods |
+| `bee.threads.binding` | Callable implementations of the authority, lifecycle, delivery, projection, carrier, approvals and journal contracts; domain-qualified method names resolve collisions |
+| `bee.threads.service` | The owner and delivery waiter processes; the authority: access facade, authority, action inbox and lifecycle operations, canonical session/work store, one-shot notices, and owner methods |
 | `bee.threads.delivery` | Recipient obligations: claim batches, dispatch intent, acknowledgment, release, expiry, reconciliation; subscriptions with one outstanding page; `wait` and the waiter service |
 | `bee.threads.projection` | The recap checkpoint folded from records and committed with its cursor |
 | `bee.threads.carrier` | `claim`: a fenced carrier epoch per live attempt; `commit`: derived records (stream observations with provenance in `raw_ref`, `bee.*` extension control records) and the next checkpoint in one transaction under epoch and revision; `checkpoint`: read |
-| `bee.threads.persist` | The owned store: checked migration ledger (25 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
+| `bee.threads.persist` | The owned store: checked migration ledger (28 migrations), owner incarnation, connection settings, typed readers, write transactions and forwarding outbox repository |
 
 ## Dependency interface
 
 | Requirement | Default | Injected into |
 |---|---|---|
 | `target_db` | `bee.threads:db` | `bee.threads:database_ref` at `.resource_ref`; every open goes through that resource |
-| `process_host` | none; `bee.deps:threads` supplies `bee:workers` | `bee.threads:owner_service` and `bee.threads.delivery:waiter_service` at `.host` |
+| `process_host` | none; `bee.deps:threads` supplies `bee:workers` | `bee.threads.service:owner_service` and `bee.threads.service:waiter_service` at `.host` |
 
 The host keeps `db.get` on the selected resource and `registry.get` on
 `bee.threads:database_ref` in the policy it attaches to the methods.
@@ -78,7 +79,7 @@ commits on the target thread and on a sweep, and commits the notification once
 under the watcher's identity. A message may address sessions by
 `recipient_action_ids` and name its sending action; the owner verifies both. Claims and
 subscriptions carry the owner incarnation established by
-`bee.threads:owner` at startup. The recap is folded from records only.
+`bee.threads.service:owner` at startup. The recap is folded from records only.
 
 An action inbox has its own ordered sequence on its thread. `inbox_accept`
 lets the thread owner set exact sender or sender-class rules under an epoch.
@@ -148,7 +149,7 @@ An interactive Session may use an existing workspace thread only when its authen
 
 Pull scans exclude settled Work, including Work with retained cancellation records, so cancellation does not block later intake.
 
-The host-selected counts-only `bee.threads.service:node_summary` accepts an
+The host-selected counts-only `bee.threads.binding:node_summary` accepts an
 empty object and requires `bee.threads.sessions.summary` on `node`. It returns
 `{ok=true,value={running_sessions=N}}` for sessions with accepted execution in
 the current owner epoch, excluding closed sessions and unreconciled old claims.

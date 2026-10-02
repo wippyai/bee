@@ -13,6 +13,19 @@ local function opened(): contract.Reply
 end
 local function define_tests()
     test.describe("Host inventory", function()
+        test.it("retains a broker restart notice in inventory even when the title is unchanged", function()
+            local reply = opened()
+            local live = assert(inventory.observe(inventory.new(workspace), reply))
+            reply.op = "title"
+            reply.notice = "Updated; saved state is incompatible. Restarted fresh."
+            local revised = assert(inventory.observe(live, reply))
+            local decoded = assert(inventory.views(inventory.views_message(revised, "connection")))
+            test.eq(decoded.items[1].notice, reply.notice)
+            test.eq(decoded.items[1].view_id, reply.id)
+            test.eq(decoded.items[1].instance_id, reply.instance_id)
+            test.is_nil(inventory.view({workspace_id = workspace, view_id = reply.id, instance_id = reply.instance_id,
+                definition_id = reply.definition_id, title = reply.title, notice = "bad\nnotice"}))
+        end)
         test.it("keeps catalog and live revisions independent and excludes credentials", function()
             local empty = inventory.new(workspace)
             local catalog = assert(inventory.set_catalog(empty, {{definition_id = "test:app", definition_revision = "1", title = "Terminal",

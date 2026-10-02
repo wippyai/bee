@@ -2,18 +2,12 @@ version: '1.0'
 namespace: bee.gateway.security
 entries:
 - name: store_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {comment: Gateway private store; target_db injects only the selected database resource}
   policy:
-    actions: [db.get]
-    resources: []
-    effect: allow
-- name: node_policy
-  kind: security.policy
-  meta: {comment: The MCP action address names this runtime's native node}
-  policy:
-    actions: [system.read]
-    resources: [node]
+    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
+    actions: [db.get, env.set, env.get]
+    resources: [bee.persist:startup_progress]
     effect: allow
 - name: database_ref_policy
   kind: security.policy
@@ -48,7 +42,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.gateway:address]
+    resources: [bee.gateway.binding:address]
     effect: allow
 - name: execute_policy
   kind: security.policy.expr
@@ -84,7 +78,7 @@ entries:
   meta: {comment: Private per-binding approval access calls only the approval and thread operations required for the effect}
   policy:
     actions: [funcs.call]
-    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.threads.service:get, bee.threads.service:read_after]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.threads.binding:get, bee.threads.binding:read_after]
     effect: allow
 - name: access_reference_policy
   kind: security.policy
@@ -125,7 +119,7 @@ entries:
     comment: Private per-binding capability elevation calls the approval operations and the resource grant write the consumed decision effects; the thread-bound approval is the authority for every write
   policy:
     actions: [funcs.call, registry.get]
-    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.resources.binding:check_grant, bee.resources.binding:grant, bee:capability_catalog, bee.threads.service:get, bee.threads.service:read_after]
+    resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate, bee.resources.binding:check_grant, bee.resources.binding:grant, bee:capability_catalog, bee.threads.binding:get, bee.threads.binding:read_after]
     effect: allow
 - name: elevation
   kind: library.lua
@@ -144,7 +138,7 @@ entries:
     actions: [funcs.call, registry.get]
     resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate,
       bee.approvals.binding:complete_installation_effect, bee.hub.binding:call, bee.gateway:install_configuration_ref,
-      bee.threads.service:get, bee.threads.service:read_after]
+      bee.threads.binding:get, bee.threads.binding:read_after]
     effect: allow
 - name: installation_queue_policy
   kind: security.policy
@@ -226,7 +220,7 @@ entries:
     actions: [funcs.call, registry.get]
     resources: [bee.approvals.binding:request, bee.approvals.binding:read, bee.approvals.binding:consume, bee.approvals.binding:revalidate,
       bee.approvals.binding:complete_publication_effect, bee.hub.binding:call, bee.gateway:publish_configuration_ref,
-      bee.threads.service:get, bee.threads.service:read_after]
+      bee.threads.binding:get, bee.threads.binding:read_after]
     effect: allow
 - name: publication_queue_policy
   kind: security.policy

@@ -21,7 +21,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call]
-    resources: [bee.harness.profiles:call]
+    resources: [bee.harness.binding:call]
     effect: allow
 - name: read_policy
   kind: security.policy

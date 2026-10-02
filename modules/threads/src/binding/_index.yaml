@@ -1,0 +1,772 @@
+version: '1.0'
+namespace: bee.threads.binding
+entries:
+- name: append
+  kind: function.lua
+  source: file://append_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    ingress: bee.threads.approvals:ingress
+    types: bee.threads:types
+  security: {policies: []}
+- name: claim
+  kind: function.lua
+  source: file://claim_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads:types
+  security: {policies: []}
+- name: commit
+  kind: function.lua
+  source: file://commit_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads:types
+  security: {policies: []}
+- name: checkpoint
+  kind: function.lua
+  source: file://checkpoint_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads:types
+  security: {policies: []}
+- name: cancel_intent
+  kind: function.lua
+  source: file://cancel_intent_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads:types
+  security: {policies: []}
+- name: cancel_status
+  kind: function.lua
+  source: file://cancel_status_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    carrier: bee.threads.carrier:carrier
+    types: bee.threads:types
+  security: {policies: []}
+- name: delivery_claim
+  kind: function.lua
+  source: file://delivery_claim_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads:types
+  security: {policies: []}
+- name: dispatch
+  kind: function.lua
+  source: file://dispatch_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads:types
+  security: {policies: []}
+- name: ack
+  kind: function.lua
+  source: file://ack_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads:types
+  security: {policies: []}
+- name: release
+  kind: function.lua
+  source: file://release_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads:types
+  security: {policies: []}
+- name: expire
+  kind: function.lua
+  source: file://expire_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads:types
+  security: {policies: []}
+- name: reconcile
+  kind: function.lua
+  source: file://reconcile_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    claims: bee.threads.delivery:claims
+    types: bee.threads:types
+  security: {policies: []}
+- name: subscribe
+  kind: function.lua
+  source: file://subscribe_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads:types
+  security: {policies: []}
+- name: page
+  kind: function.lua
+  source: file://page_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads:types
+  security: {policies: []}
+- name: ack_page
+  kind: function.lua
+  source: file://ack_page_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads:types
+  security: {policies: []}
+- name: unsubscribe
+  kind: function.lua
+  source: file://unsubscribe_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads:types
+  security: {policies: []}
+- name: close_subscription
+  kind: function.lua
+  source: file://close_subscription_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads:types
+  security: {policies: []}
+- name: forget_subscription
+  kind: function.lua
+  source: file://forget_subscription_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads:types
+  security: {policies: []}
+- name: resume
+  kind: function.lua
+  source: file://resume_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    subscriptions: bee.threads.delivery:subscriptions
+    types: bee.threads:types
+  security: {policies: []}
+- name: wait
+  kind: function.lua
+  source: file://wait_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    waits: bee.threads.delivery:waits
+    types: bee.threads:types
+  security: {policies: []}
+- name: watch
+  kind: function.lua
+  source: file://watch_method.lua
+  method: handle
+  modules: [process, channel, time, uuid]
+  imports:
+    boundary: bee.threads.service:boundary
+    waits: bee.threads.delivery:waits
+    types: bee.threads:types
+  security: {policies: []}
+- name: recap_read
+  kind: function.lua
+  source: file://recap_read_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    recap: bee.threads.projection:recap
+    types: bee.threads:types
+  security: {policies: []}
+- name: recap_update
+  kind: function.lua
+  source: file://recap_update_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    recap: bee.threads.projection:recap
+    types: bee.threads:types
+  security: {policies: []}
+- name: recap_rebuild
+  kind: function.lua
+  source: file://recap_rebuild_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    recap: bee.threads.projection:recap
+    types: bee.threads:types
+  security: {policies: []}
+- name: status_read
+  kind: function.lua
+  source: file://status_read_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    status: bee.threads.projection:status
+    types: bee.threads:types
+  security: {policies: []}
+- name: status_update
+  kind: function.lua
+  source: file://status_update_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    status: bee.threads.projection:status
+    types: bee.threads:types
+  security: {policies: []}
+- name: status_rebuild
+  kind: function.lua
+  source: file://status_rebuild_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    status: bee.threads.projection:status
+    types: bee.threads:types
+  security: {policies: []}
+- name: notify
+  kind: function.lua
+  source: file://notify_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    notices: bee.threads.service:notices
+    types: bee.threads:types
+  security: {policies: []}
+- name: create
+  kind: function.lua
+  source: file://create_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: get
+  kind: function.lua
+  source: file://get_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: list
+  kind: function.lua
+  source: file://list_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: list_workspace
+  kind: function.lua
+  source: file://list_workspace_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: join
+  kind: function.lua
+  source: file://join_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: leave
+  kind: function.lua
+  source: file://leave_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: close
+  kind: function.lua
+  source: file://close_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: record
+  kind: function.lua
+  source: file://record_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: register_app_alias
+  kind: function.lua
+  source: file://register_app_alias_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    app_alias: bee.threads.service:app_alias
+    types: bee.threads:types
+  security: {policies: []}
+- name: retire_app_alias
+  kind: function.lua
+  source: file://retire_app_alias_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    app_alias: bee.threads.service:app_alias
+    types: bee.threads:types
+  security: {policies: []}
+- name: fence_app
+  kind: function.lua
+  source: file://fence_app_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    app_alias: bee.threads.service:app_alias
+    types: bee.threads:types
+  security: {policies: []}
+- name: read_after
+  kind: function.lua
+  source: file://read_after_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    authority: bee.threads.service:authority
+    types: bee.threads:types
+  security: {policies: []}
+- name: admit_action
+  kind: function.lua
+  source: file://admit_action_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    lifecycle: bee.threads.service:lifecycle
+    types: bee.threads:types
+  security: {policies: []}
+- name: prepare_attempt
+  kind: function.lua
+  source: file://prepare_attempt_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    lifecycle: bee.threads.service:lifecycle
+    types: bee.threads:types
+  security: {policies: []}
+- name: start_attempt
+  kind: function.lua
+  source: file://start_attempt_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    lifecycle: bee.threads.service:lifecycle
+    types: bee.threads:types
+  security: {policies: []}
+- name: request_turn
+  kind: function.lua
+  source: file://request_turn_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    lifecycle: bee.threads.service:lifecycle
+    types: bee.threads:types
+  security: {policies: []}
+- name: end_turn
+  kind: function.lua
+  source: file://end_turn_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    lifecycle: bee.threads.service:lifecycle
+    types: bee.threads:types
+  security: {policies: []}
+- name: receipt
+  kind: function.lua
+  source: file://receipt_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    lifecycle: bee.threads.service:lifecycle
+    types: bee.threads:types
+  security: {policies: []}
+- name: send
+  kind: function.lua
+  source: file://send_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    send: bee.threads.service:sends
+    types: bee.threads:types
+  security: {policies: []}
+- name: send_status
+  kind: function.lua
+  source: file://send_status_method.lua
+  method: handle
+  imports:
+    boundary: bee.threads.service:boundary
+    send: bee.threads.service:sends
+    types: bee.threads:types
+  security: {policies: []}
+- name: session_create
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_create
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: session_attach
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_attach
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: session_describe
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_describe
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: session_scan
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_scan
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: session_transition
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: session_transition
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: work_send
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_send
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: work_describe
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_describe
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: work_history
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_history
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: work_scan
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_scan
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: turn_reserve
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_reserve
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: turn_recover
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_recover
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: turn_pull
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_pull
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: turn_accept
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_accept
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: turn_observation
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: turn_observation
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: work_settle
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_settle
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: work_uncertain
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_uncertain
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: work_cancel
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: work_cancel
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: operation_lookup
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: operation_lookup
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: operation_describe
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: operation_describe
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: feed_read
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: feed_read
+  imports: {boundary: bee.threads.service:boundary, work_store: bee.threads.service:work_store, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_accept
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: accept
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_describe
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: describe
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_resolve
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: resolve
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_send
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: send
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_reply
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: reply
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_list
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: list
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_ack
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: ack
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_offer
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: offer
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_transport
+  kind: function.lua
+  source: file://inbox_method.lua
+  method: transport
+  imports: {boundary: bee.threads.service:boundary, inbox: bee.threads.service:inbox, types: bee.threads:types}
+  security: {policies: []}
+- name: inbox_outbox_claim
+  kind: function.lua
+  source: file://outbox_method.lua
+  method: claim
+  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
+  security: {policies: []}
+- name: inbox_outbox_settle
+  kind: function.lua
+  source: file://outbox_method.lua
+  method: settle
+  imports: {boundary: bee.threads.service:boundary, outbox: bee.threads.service:outbox}
+  security: {policies: []}
+- name: capabilities
+  kind: function.lua
+  source: file://capabilities_method.lua
+  method: handle
+  imports:
+    capabilities: bee.threads:capabilities_report
+  meta:
+    comment: Implementation facts for any caller; the Hive metadata is inert when no Hive supervisor runs
+    hive: open
+    hive_operation:
+      revision: '1'
+      title: Threads capabilities
+      input:
+        type: object
+        properties: {}
+        additionalProperties: false
+      output:
+        type: object
+        additionalProperties: false
+        properties:
+          revision:
+            type: string
+          record_schema:
+            type: string
+          recap_schema:
+            type: string
+          record_kinds:
+            type: array
+            items:
+              type: string
+            maxItems: 64
+          record_sources:
+            type: array
+            items:
+              type: string
+            maxItems: 64
+          outcomes:
+            type: array
+            items:
+              type: string
+            maxItems: 64
+          migrations:
+            type: array
+            maxItems: 64
+            items:
+              type: object
+              additionalProperties: false
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+                rebuild:
+                  type: boolean
+          contracts:
+            type: array
+            maxItems: 64
+            items:
+              type: object
+              additionalProperties: false
+              properties:
+                contract:
+                  type: string
+                methods:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 64
+          limits:
+            type: object
+            additionalProperties: false
+            properties:
+              max_record_bytes:
+                type: integer
+              max_page_records:
+                type: integer
+              max_thread_records:
+                type: integer
+              max_thread_members:
+                type: integer
+              max_thread_actions:
+                type: integer
+              max_thread_attempts:
+                type: integer
+              max_thread_turns:
+                type: integer
+              max_thread_obligations:
+                type: integer
+              max_thread_subscriptions:
+                type: integer
+              max_array_items:
+                type: integer
+              max_json_depth:
+                type: integer
+              max_title_bytes:
+                type: integer
+              claim_ttl_seconds:
+                type: integer
+              max_wait_ms:
+                type: integer
+              wait_budget_margin_ms:
+                type: integer
+              max_waiters_per_thread:
+                type: integer
+              max_waiters:
+                type: integer
+              recap_summary_lines:
+                type: integer
+              recap_line_bytes:
+                type: integer
+          delivery:
+            type: object
+            additionalProperties: false
+            properties:
+              channels:
+                type: array
+                items:
+                  type: string
+                maxItems: 64
+              self_service_only:
+                type: boolean
+              delegated_replies:
+                type: boolean
+              cross_thread_replies:
+                type: boolean
+              cross_node_send:
+                type: boolean
+              telemetry_subscribe:
+                type: boolean
+              outstanding_pages_per_subscription:
+                type: integer
+              transport_budget:
+                type: object
+                additionalProperties: false
+                properties:
+                  ceiling_ms:
+                    type: integer
+                  caller_may_shorten:
+                    type: boolean
+                  caller_may_extend:
+                    type: boolean
+- name: node_summary
+  kind: function.lua
+  source: file://work_store_method.lua
+  method: node_summary
+  imports:
+    boundary: bee.threads.service:boundary
+    work_store: bee.threads.service:work_store
+    types: bee.threads:types
+  security: {policies: []}

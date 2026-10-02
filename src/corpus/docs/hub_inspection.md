@@ -85,6 +85,22 @@ nor parameters. Planning resolves the dependency closure against the current
 installed base, preserves unrelated roots and refuses changes to host-configured
 roots. It reports requirements, migrations, automatic starts and declared
 capabilities. A capability declaration does not grant the capability.
+Unchanged installed components use the captured registry definitions and live
+digest; the requested component and changed versions use inspected artifacts.
+An already selected development prerelease can satisfy wildcard dependencies;
+catalog selection still excludes prereleases unless the range admits them.
+
+Bee selects independently managed optional components with `meta.independent`
+on its existing `bee.deps` dependencies. The first operation transfers Bee
+component roots to host ownership in the same Registry change as the operation
+receipt, retaining their IDs, live versions and parameters. Inventory and review
+use the existing dependencies and resolution; protection follows required host
+roots and the Hub dependency graph. A refusal identifies the dependent.
+Third-party dependencies retain their constraints and parameters. `bee/bee`
+self-update uses a core artifact without Bee-component dependency declarations,
+so it preserves independent selections, including removed optional components.
+Component service handoff remains a proposal; removal uses the existing data
+retention and migration choices.
 
 A bare dependency parameter binds requirements of that name owned by that
 dependency. A qualified parameter binds its exact requirement in that
@@ -110,6 +126,9 @@ review. Receipts distinguish `published`, `complete`, `failed` and
 `recovery_required`; after an uncertain call, inspect its receipt rather than
 retrying blindly. `status` with a digest reads that receipt. Without one,
 `status` pages the authenticated caller's own receipt history.
+Replaying a completed operation validates the caller and exact request against
+its receipt without claiming the publisher name, so another active operation
+does not prevent that read. Publication and recovery still use the worker lock.
 A resolver rejection returns `FAILED` and records a `failed` receipt containing
 its code and original diagnostic. Diagnostics over 4,096 bytes carry an explicit
 `[truncated]` marker. Replaying that confirmed request returns the recorded

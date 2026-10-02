@@ -69,7 +69,10 @@ changed code with a same-PID handoff; on an incompatible checkpoint, its client
 restarts the session from the committed layout while retaining the desktop and
 applications. See [process handoff](process-handoff.md). Workspace, broker,
 host or application changes still require the owning process lifecycle and
-recovery path. Preferences and opted-in application checkpoints persist in the
+recovery path. Admitted application definition and imported-library changes now
+restart the execution behind its retained view through the broker's existing
+checkpoint/resume path; incompatible state produces a visible fresh-start notice.
+Preferences and opted-in application checkpoints persist in the
 workspace database. Settings opts in to checkpointing; a dead native Terminal
 does not become a portable checkpoint. See
 [application contracts](../reference/applications.md) for launch, attachment,

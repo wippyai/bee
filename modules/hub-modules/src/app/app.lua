@@ -489,7 +489,7 @@ local function main(value: unknown)
         elseif kind == "next" then model.set_page(state, state.page + 1); invalidate(); catalog()
         elseif kind == "refresh" then invalidate(); installed()
         elseif kind == "bee_update" then update_bee()
-        elseif kind == "update" and state.selected and state.selected:match("^bee/") then update_bee()
+        elseif kind == "update" and state.selected and state.selected == "bee/bee" then update_bee()
         elseif kind == "install" or kind == "update" or kind == "uninstall" then
             content.open = false; model.set_action(state, kind); model.show_requirements(state, false); reading_readme = false; offset = 0; invalidate()
             -- Updating an existing root must use its current typed values. Read

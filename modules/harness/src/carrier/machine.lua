@@ -47,7 +47,7 @@ local M = {}
 M.PLACEMENT_BINDING = placement_resolver.DEFAULT
 M.CARRIER_REGISTRY_PREFIX = prestart.CARRIER_REGISTRY_PREFIX
 M.THREADS = hints.THREADS
-M.CARRIER_OPS = "bee.threads.carrier"
+M.CARRIER_OPS = "bee.threads.binding"
 M.GATEWAY = "bee.gateway.binding"
 M.MAX_RECORDS_PER_COMMIT = 64
 -- A frame may be as large as the chunks the runner holds unacknowledged; a

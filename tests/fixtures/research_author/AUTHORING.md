@@ -60,8 +60,8 @@ median as a bar comparison, units, sample count, source identity and correctness
 Show an empty state until measurements arrive. Never insert example measurements.
 Duplicate thread delivery must not duplicate a measurement. A saved cursor alone
 cannot restore already acknowledged measurements. Persist the bounded two-slot
-projection with its applied cursor. Prefer `bee.threads.service:read_after`
-(`thread_id`, `cursor`, `limit`) and the read-only `bee.threads.delivery:watch`
+projection with its applied cursor. Prefer `bee.threads.binding:read_after`
+(`thread_id`, `cursor`, `limit`) and the read-only `bee.threads.binding:watch`
 for this dashboard: a stale checkpoint then safely replays records instead of
 skipping records acknowledged by a separate subscription. Checkpoint send is
 not a durable commit receipt. Reset malformed checkpoints as a whole; validate

@@ -31,7 +31,7 @@ entries:
     bounds: bee.protocol:bounds
     canonical: bee.protocol:canonical
     record_values: bee.threads.records:values
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
     budget_values: bee.threads.records:budgets
     profile_values: bee.harness.profiles:protocol
 - name: sessions
@@ -61,11 +61,9 @@ entries:
     caller: bee.app:caller
     frame: bee.app:frame
     bounds: bee.threads.records:bounds
-- name: agent_protocol
+- name: startup_progress
   kind: library.lua
-  source: file://agent_protocol.lua
-  imports:
-    bounds: bee.threads.records:bounds
+  source: file://startup_progress.lua
 - name: host_leases
   kind: library.lua
   source: file://host_leases.lua
@@ -114,7 +112,7 @@ entries:
   imports:
     bounds: bee.threads.records:bounds
     record: bee.threads.records:record
-    record_types: bee.threads.records:types
+    record_types: bee.threads:record_types
 - name: viz
   kind: library.lua
   source: file://viz.lua

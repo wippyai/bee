@@ -19,7 +19,7 @@ local function handle(value: unknown): status.Summary
     local metadata = bounds.object(description.metadata)
     if description.node_id ~= node or not metadata then error("node description is malformed") end
     local summary = status.decode_summary({node_id = node, name = metadata.display_name,
-        running_sessions = owner("bee.threads.service:node_summary").running_sessions,
+        running_sessions = owner("bee.threads.binding:node_summary").running_sessions,
         pending_approvals = owner("bee.approvals.binding:node_summary").pending_approvals}, node)
     if not summary then error("node summary is malformed") end
     return summary

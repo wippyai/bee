@@ -8,7 +8,7 @@ local bounds = require("bounds")
 local harness = require("harness")
 local AUTHORITY = {"bee.security.threads:thread_create_policy", "bee.security.threads:thread_observe_policy", "bee.security.threads:thread_lifecycle_policy", "bee.security.threads:thread_approval_policy"}
 local function request_body(approval_id: string): {[string]: unknown}
-    return {approval_id = approval_id, request_kind = "permission", requester_id = "bee.test.requester", operation_ref = "bee.hive.telemetry:stats",
+    return {approval_id = approval_id, request_kind = "permission", requester_id = "bee.test.requester", operation_ref = "bee.hive.telemetry.binding:stats",
         prompt = {text = "Allow stats?"}, response_schema = {type = "object", additionalProperties = false, properties = {option = {type = "string"}}},
         expires_at = "2026-09-10T00:00:00.000Z", state = "pending"}
 end

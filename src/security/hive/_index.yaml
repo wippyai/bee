@@ -31,14 +31,14 @@ entries:
     actions:
     - hive.expose.open
     resources:
-    - bee.hive.telemetry:presence
-    - bee.hive.telemetry:stats
-    - bee.hive.telemetry:catalog_list
-    - bee.hive.telemetry:holdings
-    - bee.hive.telemetry:cluster
-    - bee.hive.telemetry:node_summary
+    - bee.hive.telemetry.binding:presence
+    - bee.hive.telemetry.binding:stats
+    - bee.hive.telemetry.binding:catalog_list
+    - bee.hive.telemetry.binding:holdings
+    - bee.hive.telemetry.binding:cluster
+    - bee.hive.telemetry.binding:node_summary
     - bee.hive.api:workspaces
-    - bee.threads:capabilities
+    - bee.threads.binding:capabilities
     effect: allow
 - name: hive_exposure_facade_policy
   kind: security.policy.expr
@@ -79,7 +79,7 @@ entries:
     resources:
     - node
     - bee.hive.supervisor:principal_mappings
-    - bee.hive:invoke_check
+    - bee.hive.binding:invoke_check
     - bee.node.binding:describe
     - bee.node.binding:update_metadata
     - bee.node.binding:snapshot
@@ -114,15 +114,15 @@ entries:
     - hive.invoke
     - funcs.call
     resources:
-    - bee.threads.service:send
-    - bee.threads.service:send_status
-    - bee.threads.service:inbox_describe
-    - bee.threads.service:inbox_resolve
-    - bee.threads.service:inbox_send
-    - bee.threads.service:inbox_reply
-    - bee.threads.service:notify
-    - bee.threads.delivery:watch
-    - bee.hive:invoke_check
+    - bee.threads.binding:send
+    - bee.threads.binding:send_status
+    - bee.threads.binding:inbox_describe
+    - bee.threads.binding:inbox_resolve
+    - bee.threads.binding:inbox_send
+    - bee.threads.binding:inbox_reply
+    - bee.threads.binding:notify
+    - bee.threads.binding:watch
+    - bee.hive.binding:invoke_check
     effect: allow
 - name: hive_thread_exposure_policy
   kind: security.policy
@@ -133,14 +133,14 @@ entries:
     actions:
     - hive.expose.policy
     resources:
-    - bee.threads.service:send
-    - bee.threads.service:send_status
-    - bee.threads.service:inbox_describe
-    - bee.threads.service:inbox_resolve
-    - bee.threads.service:inbox_send
-    - bee.threads.service:inbox_reply
-    - bee.threads.service:notify
-    - bee.threads.delivery:watch
+    - bee.threads.binding:send
+    - bee.threads.binding:send_status
+    - bee.threads.binding:inbox_describe
+    - bee.threads.binding:inbox_resolve
+    - bee.threads.binding:inbox_send
+    - bee.threads.binding:inbox_reply
+    - bee.threads.binding:notify
+    - bee.threads.binding:watch
     effect: allow
 - name: hive_supervisor_policy
   kind: security.policy
@@ -157,29 +157,15 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.hive.telemetry:presence
-    - bee.hive.telemetry:stats
-    - bee.hive.telemetry:catalog_list
-    - bee.hive.telemetry:holdings
-    - bee.hive.telemetry:cluster
-    - bee.hive.telemetry:node_summary
+    - bee.hive.telemetry.binding:presence
+    - bee.hive.telemetry.binding:stats
+    - bee.hive.telemetry.binding:catalog_list
+    - bee.hive.telemetry.binding:holdings
+    - bee.hive.telemetry.binding:cluster
+    - bee.hive.telemetry.binding:node_summary
     - bee.hive.api:workspaces
-    - bee.threads:capabilities
+    - bee.threads.binding:capabilities
     effect: allow
-- name: hive_supervisor_spawn_deny
-  kind: security.policy
-  meta:
-    comment: Attached by the supervisor to ordinary application and launch scopes
-  policy:
-    actions:
-    - process.spawn
-    - process.spawn.monitored
-    - process.spawn.linked
-    - process.host
-    resources:
-    - bee.hive:supervisor
-    - bee.hive.service:supervisor_host
-    effect: deny
 - name: hive_names_policy
   kind: security.policy
   meta:
@@ -217,7 +203,7 @@ entries:
     - bee.hive.supervisor:admit_policy
     - bee.hive.supervisor:advertise
     - bee.threads.hive:admit
-    - bee.sync.hive:admit
+    - bee.sync.binding:admit
     effect: allow
 - name: hive_owner_stop_policy
   kind: security.policy

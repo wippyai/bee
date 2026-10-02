@@ -25,7 +25,7 @@ local function define_tests()
             local nodes = assert(status.members({{id = "local", is_local = true}}, {"offline", "wrong-reply"}, "local"))
             local counts = 0
             local function call(owner: types.OwnerRef, target: types.Target, _: {[string]: unknown}, _options: {timeout: string?}): types.Reply
-                test.eq(target.operation_ref, "bee.hive.telemetry:node_summary")
+                test.eq(target.operation_ref, "bee.hive.telemetry.binding:node_summary")
                 if owner.node_id == "offline" then return types.reply_error("id", types.fault("UNAVAILABLE", "offline")) end
                 return types.reply_ok("id", {node_id = owner.node_id == "wrong-reply" and "wrong" or owner.node_id,
                     name = "Friendly node", running_sessions = counts, pending_approvals = 0})
@@ -42,7 +42,7 @@ local function define_tests()
             test.eq(status.decode_summary({node_id = "local", name = "x", running_sessions = 0, pending_approvals = 0, requests = {}}, "local"), nil)
         end)
         test.it("reads real owners through host bindings and refuses direct ungranted calls", function()
-            local raw, err = funcs.call("bee.hive.telemetry:node_summary", {})
+            local raw, err = funcs.call("bee.hive.telemetry.binding:node_summary", {})
             test.eq(err, nil)
             local summary = bounds.object(raw)
             if not summary or type(summary.node_id) ~= "string" then error("node summary missing") end

@@ -21,7 +21,7 @@ local function main()
     local direct, direct_error = sql.get("bee.threads:db")
     assert(direct == nil and direct_error ~= nil, "caller gained SQL authority")
 
-    for _, id in ipairs({"bee.threads.records:types", "bee.threads.service:types", "bee.threads.migrations:migrations"}) do
+    for _, id in ipairs({"bee.threads:record_types", "bee.threads:types", "bee.threads.migrations:migrations"}) do
         local slice = assert(registry.get(id), id .. " missing")
         assert(slice.kind == "library.lua", id .. " kind")
     end

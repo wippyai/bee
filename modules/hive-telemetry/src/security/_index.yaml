@@ -34,7 +34,7 @@ entries:
   kind: security.policy
   policy:
     actions: [funcs.call, bee.threads.sessions.summary, bee.approvals.summary]
-    resources: [bee.threads.service:node_summary, bee.approvals.binding:node_summary, bee.node.binding:describe, node]
+    resources: [bee.threads.binding:node_summary, bee.approvals.binding:node_summary, bee.node.binding:describe, node]
     effect: allow
 - name: summary_node_name_policy
   kind: security.policy

@@ -8,8 +8,9 @@ generator when the corpus is intentionally updated.
 | Read for | Source |
 |---|---|
 | Runtime modules and Bee contracts available offline | [Agent documentation corpus](../modules/docs/src/README.md) |
-| Running Bee and local development | [Repository README](../README.md), [agent guide](development/agent-guide.md), [development conventions](development/conventions.md) |
+| Running Bee and local development | [Repository README](../README.md), [agent guide](development/agent-guide.md), [development conventions](development/conventions.md), [layout audit](development/layout.md) |
 | Ownership and boundaries | [System map](development/ownership.md), [package boundaries](development/package-boundaries.md) |
+| Current namespaces, registry IDs, requirement targets, topics, owned stores and handoff evidence | [Generated component inventory](development/component-inventory.json) |
 | Framework-shaped agents, Bee execution and Dataflow composition (proposal; the framework closure and CLI admission are implemented) | [Agent definitions](development/agent-definitions.md) |
 | Contributions and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
@@ -32,7 +33,7 @@ generator when the corpus is intentionally updated.
 | Managed harness gateway, hooks, and MCP configuration | [Gateway](reference/agents/gateway.md), [gateway module](../modules/gateway/src/README.md), [gateway hooks](reference/agents/hooks.md), [MCP configuration](guides/agents/mcp.md) |
 | Governed application delivery | [Distributed app delivery](guides/overlays.md) |
 | Managed-agent bundle and its application SDK, harness, placement, resource, and credential module contracts | [Agent bundle](../modules/agents/src/README.md), [application SDK](../modules/application/src/README.md), [Harness module](../modules/harness/src/README.md), [placement module](../modules/placement/src/README.md), [native placement](../modules/placement-native/src/README.md), [Docker placement](../modules/placement-docker/src/README.md), [resources module](../modules/resources/src/README.md), [credentials module](../modules/credentials/src/README.md) |
-| Persistence, approvals, shared capability model, governance, Hub, Hive, Hive telemetry, sync, and node module contracts | [Persist module](../modules/persist/src/README.md), [approvals module](../modules/approvals/src/README.md), [capability module](../modules/capability/src/README.md), [governance module](../modules/gov/src/README.md), [Hub module](../modules/hub/README.md), [Hive module](../modules/hive/src/README.md), [Hive telemetry module](../modules/hive-telemetry/src/README.md), [sync module](../modules/sync/src/README.md), [node module](../modules/node/src/README.md) |
+| Persistence, approvals, shared capability model, governance, Hub, Hive, Hive telemetry, sync, and node module contracts | [Persist module](../modules/persist/src/README.md), [approvals module](../modules/approvals/src/README.md), [capability module](../modules/capability/src/README.md), [governance module](../modules/gov/src/README.md), [Hub module](../modules/hub/src/README.md), [Hive module](../modules/hive/src/README.md), [Hive telemetry module](../modules/hive-telemetry/src/README.md), [sync module](../modules/sync/src/README.md), [node module](../modules/node/src/README.md) |
 
 Use the source module README and tests for implementation details. A contract
 describes a callable boundary only when the source and its checks implement it;

@@ -1,5 +1,5 @@
 -- MIT. Driver method prepare for native Wippy driver: the driver executes
--- in-process through bee.driver.wippy:run, so a placement launch is
+-- in-process through bee.driver.wippy.binding:run, so a placement launch is
 -- refused with a typed error instead of describing a binary that
 -- does not exist.
 local bounds = require("bounds")
@@ -18,7 +18,7 @@ end
 local function handle(request: unknown): {[string]: unknown}
     local _, err = decode(request)
     if err then return {ok = false, error = err} end
-    return {ok = false, error = "native driver executes in-process through bee.driver.wippy:run; placement launch is not supported"}
+    return {ok = false, error = "native driver executes in-process through bee.driver.wippy.binding:run; placement launch is not supported"}
 end
 
 return {handle = handle}

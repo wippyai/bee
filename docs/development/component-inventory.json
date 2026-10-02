@@ -4046,27 +4046,12 @@
       "source": "modules/harness/src/app/_index.yaml"
     },
     {
-      "id": "bee.harness.app:delivery",
-      "kind": "library.lua",
-      "source": "modules/harness/src/app/_index.yaml"
-    },
-    {
       "id": "bee.harness.app:directory_view",
       "kind": "library.lua",
       "source": "modules/harness/src/app/_index.yaml"
     },
     {
-      "id": "bee.harness.app:hooks",
-      "kind": "library.lua",
-      "source": "modules/harness/src/app/_index.yaml"
-    },
-    {
       "id": "bee.harness.app:input",
-      "kind": "library.lua",
-      "source": "modules/harness/src/app/_index.yaml"
-    },
-    {
-      "id": "bee.harness.app:interrupted",
       "kind": "library.lua",
       "source": "modules/harness/src/app/_index.yaml"
     },
@@ -4131,11 +4116,6 @@
       "source": "modules/harness/src/app/_index.yaml"
     },
     {
-      "id": "bee.harness.app:windows",
-      "kind": "library.lua",
-      "source": "modules/harness/src/app/_index.yaml"
-    },
-    {
       "id": "bee.harness.binding:admit",
       "kind": "function.lua",
       "source": "modules/harness/src/binding/_index.yaml"
@@ -4186,6 +4166,11 @@
       "source": "modules/harness/src/binding/_index.yaml"
     },
     {
+      "id": "bee.harness.binding:windows",
+      "kind": "library.lua",
+      "source": "modules/harness/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.harness.carrier:checkpoint",
       "kind": "library.lua",
       "source": "modules/harness/src/carrier/_index.yaml"
@@ -4196,12 +4181,27 @@
       "source": "modules/harness/src/carrier/_index.yaml"
     },
     {
+      "id": "bee.harness.carrier:delivery",
+      "kind": "library.lua",
+      "source": "modules/harness/src/carrier/_index.yaml"
+    },
+    {
       "id": "bee.harness.carrier:hints",
       "kind": "library.lua",
       "source": "modules/harness/src/carrier/_index.yaml"
     },
     {
       "id": "bee.harness.carrier:hook_records",
+      "kind": "library.lua",
+      "source": "modules/harness/src/carrier/_index.yaml"
+    },
+    {
+      "id": "bee.harness.carrier:hooks",
+      "kind": "library.lua",
+      "source": "modules/harness/src/carrier/_index.yaml"
+    },
+    {
+      "id": "bee.harness.carrier:interrupted",
       "kind": "library.lua",
       "source": "modules/harness/src/carrier/_index.yaml"
     },
@@ -4331,13 +4331,23 @@
       "source": "modules/harness/src/permission/_index.yaml"
     },
     {
-      "id": "bee.harness.profiles:database_ref",
-      "kind": "registry.entry",
-      "source": "modules/harness/src/profiles/_index.yaml"
+      "id": "bee.harness.profiles.binding:validation",
+      "kind": "library.lua",
+      "source": "modules/harness/src/profiles/binding/_index.yaml"
     },
     {
-      "id": "bee.harness.profiles:migration",
+      "id": "bee.harness.profiles.persist:migration",
       "kind": "library.lua",
+      "source": "modules/harness/src/profiles/persist/_index.yaml"
+    },
+    {
+      "id": "bee.harness.profiles.persist:store",
+      "kind": "library.lua",
+      "source": "modules/harness/src/profiles/persist/_index.yaml"
+    },
+    {
+      "id": "bee.harness.profiles:database_ref",
+      "kind": "registry.entry",
       "source": "modules/harness/src/profiles/_index.yaml"
     },
     {
@@ -4346,18 +4356,8 @@
       "source": "modules/harness/src/profiles/_index.yaml"
     },
     {
-      "id": "bee.harness.profiles:service",
-      "kind": "library.lua",
-      "source": "modules/harness/src/profiles/_index.yaml"
-    },
-    {
       "id": "bee.harness.profiles:target_db",
       "kind": "ns.requirement",
-      "source": "modules/harness/src/profiles/_index.yaml"
-    },
-    {
-      "id": "bee.harness.profiles:validation",
-      "kind": "library.lua",
       "source": "modules/harness/src/profiles/_index.yaml"
     },
     {
@@ -10158,6 +10158,20 @@
       "path_matches_namespace": true,
       "path_namespace": "bee.harness.profiles",
       "source": "modules/harness/src/profiles/_index.yaml"
+    },
+    {
+      "namespace": "bee.harness.profiles.binding",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.harness.profiles.binding",
+      "source": "modules/harness/src/profiles/binding/_index.yaml"
+    },
+    {
+      "namespace": "bee.harness.profiles.persist",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.harness.profiles.persist",
+      "source": "modules/harness/src/profiles/persist/_index.yaml"
     },
     {
       "namespace": "bee.harness.security",
@@ -16704,20 +16718,20 @@
     },
     {
       "sources": [
-        "modules/harness/src/profiles/migration.lua"
+        "modules/harness/src/profiles/persist/migration.lua"
       ],
       "tag": "bee.agent-profile-migration@1"
     },
     {
       "sources": [
-        "modules/harness/src/profiles/migration.lua"
+        "modules/harness/src/profiles/persist/migration.lua"
       ],
       "tag": "bee.agent-profile@1"
     },
     {
       "sources": [
         "modules/gateway/src/catalog/session_bundle.lua",
-        "modules/harness/src/profiles/migration.lua",
+        "modules/harness/src/profiles/persist/migration.lua",
         "modules/harness/src/profiles/protocol.lua"
       ],
       "tag": "bee.agent-profile@2"
@@ -17187,7 +17201,7 @@
   "summary": {
     "dangling_requirement_target_count": 0,
     "entry_count": 1816,
-    "namespace_count": 274,
+    "namespace_count": 276,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,

@@ -1,0 +1,24 @@
+version: '1.0'
+namespace: bee.harness.profiles.persist
+entries:
+- name: migration
+  kind: library.lua
+  source: file://migration.lua
+  imports:
+    bounds: bee.values:bounds
+    protocol: bee.harness.profiles:protocol
+- name: store
+  kind: library.lua
+  source: file://store.lua
+  modules:
+  - registry
+  - sql
+  - hash
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    sync: bee.sync.persist:store
+    transaction: bee.persist.persist:transaction
+    protocol: bee.harness.profiles:protocol
+    migration: bee.harness.profiles.persist:migration
+    driver_profile: bee.driver.profiles:profile

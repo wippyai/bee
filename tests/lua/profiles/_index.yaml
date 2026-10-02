@@ -162,7 +162,7 @@ entries:
   imports:
     test: wippy.test:test
     bounds: bee.values:bounds
-    migration: bee.harness.profiles:migration
+    migration: bee.harness.profiles.persist:migration
     protocol: bee.harness.profiles:protocol
     sync: bee.sync.persist:store
 - name: repair_policy

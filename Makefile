@@ -292,8 +292,7 @@ workspace-manager-module:
 host-processes-module:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/control_delivery.py
 saved-profiles-check:
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go vet tests/saved_profiles.go
-	env GOWORK=off GOTOOLCHAIN=go1.27.0 go run tests/saved_profiles.go -runtime "$(abspath $(WIPPY))"
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/saved_profiles.py
 check: saved-profiles-check
 gateway-check:
 	BEE_GOVERNANCE_DB=governance.db BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/gateway.py

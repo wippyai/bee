@@ -45,6 +45,11 @@ local function native_node(): string
 end
 
 local function probe(phase: string?, expected_node: string?)
+    local ungranted = funcs.new():with_actor(security.new_actor("profile-binding-probe"))
+        :with_scope(security.new_scope({assert(security.policy("bee.saved.profiles.probe:call_policy"))}))
+    local denied = call(ungranted, {operation = "list", workspace_id = WORKSPACE})
+    assert(denied.ok == false and denied.code == "DENIED", "composed profile handler must authorize its caller")
+    logger:info("SAVED_PROFILE_BINDING_PASS")
     local writer = principal("profile-writer", true)
     local reader = principal("profile-reader", false)
     local node = native_node()

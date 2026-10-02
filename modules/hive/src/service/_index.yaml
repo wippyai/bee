@@ -61,5 +61,5 @@ entries:
     clock: bee.values:clock
     display: bee.hive.desktop:display
     remote: bee.hive.desktop:remote
-    delivery: bee.terminal:delivery
-    input: bee.protocol:input
+    delivery: bee.terminal.service:delivery
+    input: bee.terminal.types:input

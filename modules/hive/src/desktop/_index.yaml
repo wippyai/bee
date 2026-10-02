@@ -48,8 +48,8 @@ entries:
     protocol: bee.hive.desktop:protocol
     contract: bee.protocol:application
     clock: bee.values:clock
-    delivery: bee.terminal:delivery
-    input: bee.protocol:input
+    delivery: bee.terminal.service:delivery
+    input: bee.terminal.types:input
 - name: display_policy
   kind: security.policy
   policy:

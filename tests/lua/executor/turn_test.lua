@@ -9,7 +9,7 @@ local function base_request(): {[string]: unknown}
     return {
         attempt_id = "attempt-current", claim = "claim-current", observation_target = "bee.threads.binding:turn_observation",
         generation = 2, prompt = "continue the task",
-        sender = {kind = "principal", id = "owner"}, driver_binding_ref = "bee.driver.fixture:binding", profile_id = "session",
+        sender = {kind = "principal", id = "owner"}, driver_binding_ref = "bee.driver.fixture.binding:binding", profile_id = "session",
         driver_methods = {prepare = "bee.driver.fixture.binding:prepare", dispatch = "bee.driver.fixture.binding:dispatch", normalize = "bee.driver.fixture.binding:normalize"},
         placement_methods = {prepare = "bee.placement.native.binding:prepare", attach = "bee.placement.native.binding:attach",
             start = "bee.placement.native.binding:start", stop = "bee.placement.native.binding:stop",
@@ -28,7 +28,7 @@ local function plan_for(request: unknown, with_gateway: boolean?): {[string]: un
     local methods = assert(bounds.object(value.placement_methods))
     if type(methods.prepare) ~= "string" then error("placement prepare method must be text") end
     local placement_request: {[string]: unknown} = {
-        attempt_id = "attempt-current", binding_ref = "bee.driver.fixture:binding", profile_id = "session",
+        attempt_id = "attempt-current", binding_ref = "bee.driver.fixture.binding:binding", profile_id = "session",
         placement_binding_ref = methods.prepare:gsub("prepare$", "binding"),
         launch = {executable = "fixture-cli", argv = {"--prompt"}, environment = {}, readiness = "protocol:ready"},
     }
@@ -105,6 +105,16 @@ end
 
 local function define_tests()
     test.describe("External executor turn", function()
+        test.it("refuses methods belonging to another driver binding before invoking the host", function()
+            local request = base_request()
+            local methods = assert(bounds.object(request.driver_methods))
+            methods.prepare = "bee.driver.other.binding:prepare"
+            local calls: {string} = {}
+            local result, reason = turn.execute(success_io(calls), request)
+            test.is_nil(result)
+            test.eq(reason, "driver_methods.prepare is not an operation of the selected bee.driver binding")
+            test.eq(#calls, 0)
+        end)
         test.it("executes the admitted Docker placement through the shared turn lifecycle", function()
             local request = base_request()
             local methods = assert(bounds.object(request.placement_methods))
@@ -354,7 +364,7 @@ local function define_tests()
 
             local io = success_io()
             io.plan = function(_request: unknown)
-                return {placement_request = {attempt_id = "attempt-current", binding_ref = "bee.driver.other:binding", profile_id = "session"},
+                return {placement_request = {attempt_id = "attempt-current", binding_ref = "bee.driver.other.binding:binding", profile_id = "session"},
                     normalize_target = "bee.driver.other.binding:normalize"}, nil
             end
             local changed = turn.execute(io, base_request())

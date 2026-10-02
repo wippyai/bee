@@ -8,32 +8,46 @@ decides; a grant may open a direct session.
 Cluster telemetry lives in the optional `bee/hive-telemetry` package
 (`bee.hive.telemetry`); this module keeps the protocol itself lean.
 
-## Slices
+## Ownership
 
-| Slice | Responsibility |
+| Namespace | Responsibility |
 |---|---|
-| `bee.hive` | `bounds` (identifiers, objects, lists, timestamps), `types` (envelopes and decoders), `client`, `canonical`, `principals` (the destination identity table), `output` (contract validation), `invoke_check`, the supervisor-host provenance resource, and the default host composition (`replica_sender`, `supervisor_service`, `workspaces`) |
-| `bee.hive.registry` | `catalog`, the registry read model for operation exposure and interfaces |
-| `bee.hive.supervisor` | The root-owned supervisor: hello, admission, forwarding, generic adapter routing, guarded dispatch, epochs |
-| `bee.hive.desktop` | Root-owned desktop integration |
+| `bee.hive` | Protocol envelopes and shared types; dependency and host requirement declarations |
+| `bee.hive.types` | Peer/enrollment/invite values, route selection, workspace queries and page decoding |
+| `bee.hive.binding` | Client, authenticated dispatch, policy admission, workspace operations and feature senders |
+| `bee.hive.exposure` | Operation exposure and interface catalog |
+| `bee.hive.security` | Principal identity and workspace-call policy template |
+| `bee.hive.service` | Supervisor, display command and remote viewer processes |
+| `bee.hive.desktop` | Desktop bridge, catalog, grant/session handling and presentation helpers |
 
-The Hive workspace listing API and desktop `list` operation share
-`bee.hive.workspace:workspace_query` for label, cursor and page-size validation. The
-workspace listing handler validates a dense, bounded catalog page and requires
-the local node identity before it returns results.
+Hive workspace listing and desktop `list` share
+`bee.hive.types:workspace_query` for label, cursor and page-size validation.
+The listing handler validates a dense, bounded catalog page and requires the
+local node identity before returning results.
 
 ## Host composition
 
-`bee.hive.service:supervisor_service` is the default `process.service`. It starts
-`bee.hive.supervisor:main` on `bee.hive.service:supervisor_host` with an empty
-`configured_nodes` list, so a fresh Bee can route local calls while remaining
-portable and offline. That default puts no transport credentials or network
-settings in the registry. Its lifecycle actor and policies are selected by the
-host composition, not by an ordinary application.
+The root selects `bee.hive.service:supervisor_service`, which starts
+`bee.hive.service:supervisor` on the native-known
+`bee.hive.service:supervisor_host` with an empty `configured_nodes` list.
+Its lifecycle actor remains `bee.hive.supervisor`. A fresh Bee routes local
+calls without transport credentials or network settings in the registry.
+The host selects the implementation's private protocol imports and function
+grants through `bee.deps:hive` parameters; package metadata grants no authority.
 
-An admitted host overlay may replace that service input with peer node IDs and
-an optional validated desktop configuration. TLS, seeds, ports and native
-membership settings remain outside the registry; they are not service input.
+The root retains native process hosts, supervisor service selection, protected
+principal mappings and adapter/audience tables. An admitted host overlay may
+replace service input with peer node IDs and a validated desktop configuration.
+TLS, seeds, ports, native membership, pinned identities and invites remain
+outside the registry; they are not service input.
+
+Moving the three process definitions appends exact-reference conversions to the
+Placement, Sync, Gateway, Resources and Credentials ledgers. Existing migration
+SQL, app IDs, native hosts, enrollment, mapping IDs, topics and schemas remain
+unchanged. Workspace operation requests use owner service `bee.hive.binding`;
+owner migrations convert that field only inside structured `owner_ref` values.
+Apply this source move through a full node restart. Hive supervisor handoff and
+service generation rollback remain proposals.
 
 ## Exposure
 

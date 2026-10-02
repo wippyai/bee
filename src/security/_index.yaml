@@ -74,7 +74,7 @@ entries:
     - bee.apps:broker
     - bee.terminal:main
     - bee.hive:supervisor
-    - bee.hive.supervisor:main
+    - bee.hive.service:supervisor
     - bee.hive.service:supervisor_host
     effect: deny
 - name: ordinary_app_subsystem_boundary

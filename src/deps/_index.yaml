@@ -30,7 +30,7 @@ entries:
   version: 0.1.0-dev
   parameters:
   - name: target_sender
-    value: bee.hive.service:replica_sender
+    value: bee.hive.binding:replica_sender
   - name: target_exports
     value: bee.sync.env:sync_exports
   - name: target_admit_policies
@@ -47,7 +47,7 @@ entries:
     value:
     - bee.security.threads:thread_waiter_policy
   - name: sender
-    value: bee.hive.service:inbox_sender
+    value: bee.hive.binding:inbox_sender
   - name: owner_policies
     value:
     - bee.security.threads:thread_storage_policy
@@ -136,6 +136,42 @@ entries:
   kind: ns.dependency
   component: bee/hive
   version: 0.1.0-dev
+  parameters:
+  - name: bee.hive.service:supervisor_policies
+    value:
+    - bee.security.hive:hive_policy_exposure_policy
+    - bee.security.hive:hive_readiness_policy
+  - name: bee.hive.binding:workspace_command_policies
+    value:
+    - bee.security.storage:workspace_catalog_read_policy
+    - bee.security.storage:workspace_catalog_manage_policy
+    - bee.security.hive:workspace_command_catalog_policy
+  - name: bee.hive.binding:advertise_policies
+    value:
+    - bee.security.hive:hive_names_policy
+    - bee.security.hive:hive_advertise_policy
+  - name: bee.hive.binding:admit_policy_policies
+    value:
+    - bee.hive.supervisor:policy_identity_policy
+    - bee.hive.supervisor:policy_actor_policy
+    - bee.security.hive:policy_admission_policy
+    - bee.security.hive:hive_policy_exposure_policy
+    - bee.security.hive:hive_exposure_facade_policy
+  - name: bee.hive.binding:workspaces_policies
+    value:
+    - bee.security.hive:hive_telemetry_policy
+    - bee.security.storage:workspace_catalog_read_policy
+    - bee.hive.security:workspaces_policy
+  - name: bee.hive:target_application
+    value: bee.protocol:application
+  - name: bee.hive:target_retained_protocol
+    value: bee.launch:retained_protocol
+  - name: bee.hive:target_delivery
+    value: bee.terminal:delivery
+  - name: bee.hive:target_input
+    value: bee.protocol:input
+  - name: bee.hive:target_version
+    value: bee.sync.values:version
 - name: hive_telemetry
   kind: ns.dependency
   meta: {independent: true}

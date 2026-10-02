@@ -2206,6 +2206,131 @@ UPDATE bee_gateway_bindings SET policy_ref = 'bee.launch.service:workspace_hosts
 
 
 ]]
+local HIVE_IDENTITY_VALUES = [[
+    (1, '"bee.hive.service:inbox_sender"', '"bee.hive.binding:inbox_sender"'),
+    (2, '"bee.hive.service:replica_sender"', '"bee.hive.binding:replica_sender"'),
+    (3, '"bee.hive.supervisor:peers"', '"bee.hive.types:peers"'),
+    (4, '"bee.hive.supervisor:registration"', '"bee.hive.types:registration"'),
+    (5, '"bee.hive.supervisor:enrollment"', '"bee.hive.types:enrollment"'),
+    (6, '"bee.hive.supervisor:invites"', '"bee.hive.types:invites"'),
+    (7, '"bee.hive.supervisor:admission"', '"bee.hive.binding:admission"'),
+    (8, '"bee.hive.supervisor:main"', '"bee.hive.service:supervisor"'),
+    (9, '"bee.hive.supervisor:owner_stop"', '"bee.hive.types:owner_stop"'),
+    (10, '"bee.hive.supervisor:workspace_commands"', '"bee.hive.types:workspace_commands"'),
+    (11, '"bee.hive.supervisor:workspace_command"', '"bee.hive.binding:workspace_command"'),
+    (12, '"bee.hive.supervisor:advertise"', '"bee.hive.binding:advertise"'),
+    (13, '"bee.hive.supervisor:audiences"', '"bee.hive.types:audiences"'),
+    (14, '"bee.hive.supervisor:policy_admission"', '"bee.hive.binding:policy_admission"'),
+    (15, '"bee.hive.supervisor:admit_policy"', '"bee.hive.binding:admit_policy"'),
+    (16, '"bee.hive.supervisor:adapters"', '"bee.hive.types:adapters"'),
+    (17, '"bee.hive.supervisor:dispatch"', '"bee.hive.binding:dispatch"'),
+    (18, '"bee.hive.supervisor:execute"', '"bee.hive.binding:execute"'),
+    (19, '"bee.hive.api:workspaces"', '"bee.hive.binding:workspaces"'),
+    (20, '"bee.hive.api:workspaces_page"', '"bee.hive.types:workspaces_page"'),
+    (21, '"bee.hive.workspace:workspace_query"', '"bee.hive.types:workspace_query"'),
+    (22, '"bee.hive.desktop:command"', '"bee.hive.service:display_command"'),
+    (23, '"bee.hive.desktop:viewer"', '"bee.hive.service:viewer"')]]
+local HIVE_REFERENCES_SQL = [[
+UPDATE bee_gateway_surfaces SET surface_json = (
+  WITH RECURSIVE identity_moves(position, prior, current) AS (VALUES
+]] .. HIVE_IDENTITY_VALUES .. [[),
+  rewritten(position, value) AS (
+    SELECT 0, surface_json
+    UNION ALL
+    SELECT identity_moves.position, replace(rewritten.value, identity_moves.prior, identity_moves.current)
+    FROM rewritten JOIN identity_moves ON identity_moves.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(surface_json) AND instr(surface_json, 'bee.hive') > 0;
+UPDATE bee_gateway_surfaces SET active_json = (
+  WITH RECURSIVE identity_moves(position, prior, current) AS (VALUES
+]] .. HIVE_IDENTITY_VALUES .. [[),
+  rewritten(position, value) AS (
+    SELECT 0, active_json
+    UNION ALL
+    SELECT identity_moves.position, replace(rewritten.value, identity_moves.prior, identity_moves.current)
+    FROM rewritten JOIN identity_moves ON identity_moves.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(active_json) AND instr(active_json, 'bee.hive') > 0;
+UPDATE bee_gateway_access_grants SET traits_json = (
+  WITH RECURSIVE identity_moves(position, prior, current) AS (VALUES
+]] .. HIVE_IDENTITY_VALUES .. [[),
+  rewritten(position, value) AS (
+    SELECT 0, traits_json
+    UNION ALL
+    SELECT identity_moves.position, replace(rewritten.value, identity_moves.prior, identity_moves.current)
+    FROM rewritten JOIN identity_moves ON identity_moves.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(traits_json) AND instr(traits_json, 'bee.hive') > 0;
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:inbox_sender' WHERE policy_ref = 'bee.hive.service:inbox_sender';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:replica_sender' WHERE policy_ref = 'bee.hive.service:replica_sender';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:peers' WHERE policy_ref = 'bee.hive.supervisor:peers';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:registration' WHERE policy_ref = 'bee.hive.supervisor:registration';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:enrollment' WHERE policy_ref = 'bee.hive.supervisor:enrollment';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:invites' WHERE policy_ref = 'bee.hive.supervisor:invites';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:admission' WHERE policy_ref = 'bee.hive.supervisor:admission';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.service:supervisor' WHERE policy_ref = 'bee.hive.supervisor:main';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:owner_stop' WHERE policy_ref = 'bee.hive.supervisor:owner_stop';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:workspace_commands' WHERE policy_ref = 'bee.hive.supervisor:workspace_commands';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:workspace_command' WHERE policy_ref = 'bee.hive.supervisor:workspace_command';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:advertise' WHERE policy_ref = 'bee.hive.supervisor:advertise';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:audiences' WHERE policy_ref = 'bee.hive.supervisor:audiences';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:policy_admission' WHERE policy_ref = 'bee.hive.supervisor:policy_admission';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:admit_policy' WHERE policy_ref = 'bee.hive.supervisor:admit_policy';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:adapters' WHERE policy_ref = 'bee.hive.supervisor:adapters';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:dispatch' WHERE policy_ref = 'bee.hive.supervisor:dispatch';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:execute' WHERE policy_ref = 'bee.hive.supervisor:execute';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.binding:workspaces' WHERE policy_ref = 'bee.hive.api:workspaces';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:workspaces_page' WHERE policy_ref = 'bee.hive.api:workspaces_page';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.types:workspace_query' WHERE policy_ref = 'bee.hive.workspace:workspace_query';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.service:display_command' WHERE policy_ref = 'bee.hive.desktop:command';
+UPDATE bee_gateway_bindings SET policy_ref = 'bee.hive.service:viewer' WHERE policy_ref = 'bee.hive.desktop:viewer';
+UPDATE bee_gateway_surfaces SET surface_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(surface_json) leaf JOIN json_tree(surface_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.api'
+  ), rewritten(position, value) AS (
+    SELECT 0, surface_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(surface_json) AND instr(surface_json, 'bee.hive.api') > 0;
+UPDATE bee_gateway_surfaces SET active_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(active_json) leaf JOIN json_tree(active_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.api'
+  ), rewritten(position, value) AS (
+    SELECT 0, active_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(active_json) AND instr(active_json, 'bee.hive.api') > 0;
+UPDATE bee_gateway_access_grants SET traits_json = (
+  WITH RECURSIVE owner_paths(position, path) AS (
+    SELECT row_number() OVER (ORDER BY leaf.fullkey), leaf.fullkey
+    FROM json_tree(traits_json) leaf JOIN json_tree(traits_json) owner ON leaf.parent = owner.id
+    WHERE owner.key = 'owner_ref' AND leaf.key = 'service_id'
+      AND leaf.value = 'bee.hive.api'
+  ), rewritten(position, value) AS (
+    SELECT 0, traits_json
+    UNION ALL
+    SELECT owner_paths.position, json_set(rewritten.value, owner_paths.path, 'bee.hive.binding')
+    FROM rewritten JOIN owner_paths ON owner_paths.position = rewritten.position + 1
+  )
+  SELECT value FROM rewritten ORDER BY position DESC LIMIT 1
+) WHERE json_valid(traits_json) AND instr(traits_json, 'bee.hive.api') > 0;
+
+]]
 function M.all(): {Migration}
     return {{id = 1, name = "gateway", sql = GATEWAY_SQL, rebuild = false}, {id = 2, name = "drain_deadline", sql = DRAIN_SQL, rebuild = false},
         {id = 3, name = "credentials", sql = CREDENTIALS_SQL, rebuild = true}, {id = 4, name = "materialization", sql = MATERIALIZATION_SQL, rebuild = false},
@@ -2221,6 +2346,7 @@ function M.all(): {Migration}
         {id = 15, name = "app_sdk_references", sql = APP_SDK_SQL, rebuild = false},
         {id = 16, name = "layout_registry_references", historical_sql = {ORIGINAL_SQL_16}, sql = LAYOUT_REFERENCES_SQL, rebuild = false},
         {id = 17, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
-        {id = 18, name = "telemetry_owner_reference_repair", sql = TELEMETRY_OWNER_REPAIR_SQL, rebuild = false}}
+        {id = 18, name = "telemetry_owner_reference_repair", sql = TELEMETRY_OWNER_REPAIR_SQL, rebuild = false},
+        {id = 19, name = "hive_component_references", sql = HIVE_REFERENCES_SQL, rebuild = false}}
 end
 return M

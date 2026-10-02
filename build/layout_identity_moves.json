@@ -289,7 +289,7 @@
   "bee.hive:invoke_check": "bee.hive.binding:invoke_check",
   "bee.hive:output": "bee.hive.binding:output",
   "bee.hive:principals": "bee.hive.security:principals",
-  "bee.hive:workspace_query": "bee.hive.workspace:workspace_query",
+  "bee.hive:workspace_query": "bee.hive.types:workspace_query",
   "bee.host.processes:probe": "bee.host.processes.app:probe",
   "bee.hub.modules:client_policy": "bee.hub.modules.security:client_policy",
   "bee.hub.modules:hub_policy": "bee.hub.modules.security:hub_policy",

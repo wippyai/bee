@@ -1147,6 +1147,54 @@ UPDATE bee_credential_definitions SET source_ref = 'bee.persist.env:startup_prog
 UPDATE bee_credential_projections SET materializer = 'bee.app.status:startup_progress' WHERE materializer = 'bee.app:startup_progress';
 UPDATE bee_credential_projections SET materializer = 'bee.persist.env:startup_progress' WHERE materializer = 'bee.persist:startup_progress';
 ]]
+local HIVE_REFERENCES_SQL = [[
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:inbox_sender' WHERE source_ref = 'bee.hive.service:inbox_sender';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:replica_sender' WHERE source_ref = 'bee.hive.service:replica_sender';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:peers' WHERE source_ref = 'bee.hive.supervisor:peers';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:registration' WHERE source_ref = 'bee.hive.supervisor:registration';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:enrollment' WHERE source_ref = 'bee.hive.supervisor:enrollment';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:invites' WHERE source_ref = 'bee.hive.supervisor:invites';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:admission' WHERE source_ref = 'bee.hive.supervisor:admission';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.service:supervisor' WHERE source_ref = 'bee.hive.supervisor:main';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:owner_stop' WHERE source_ref = 'bee.hive.supervisor:owner_stop';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:workspace_commands' WHERE source_ref = 'bee.hive.supervisor:workspace_commands';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:workspace_command' WHERE source_ref = 'bee.hive.supervisor:workspace_command';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:advertise' WHERE source_ref = 'bee.hive.supervisor:advertise';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:audiences' WHERE source_ref = 'bee.hive.supervisor:audiences';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:policy_admission' WHERE source_ref = 'bee.hive.supervisor:policy_admission';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:admit_policy' WHERE source_ref = 'bee.hive.supervisor:admit_policy';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:adapters' WHERE source_ref = 'bee.hive.supervisor:adapters';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:dispatch' WHERE source_ref = 'bee.hive.supervisor:dispatch';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:execute' WHERE source_ref = 'bee.hive.supervisor:execute';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.binding:workspaces' WHERE source_ref = 'bee.hive.api:workspaces';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:workspaces_page' WHERE source_ref = 'bee.hive.api:workspaces_page';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.types:workspace_query' WHERE source_ref = 'bee.hive.workspace:workspace_query';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.service:display_command' WHERE source_ref = 'bee.hive.desktop:command';
+UPDATE bee_credential_definitions SET source_ref = 'bee.hive.service:viewer' WHERE source_ref = 'bee.hive.desktop:viewer';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:inbox_sender' WHERE materializer = 'bee.hive.service:inbox_sender';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:replica_sender' WHERE materializer = 'bee.hive.service:replica_sender';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:peers' WHERE materializer = 'bee.hive.supervisor:peers';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:registration' WHERE materializer = 'bee.hive.supervisor:registration';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:enrollment' WHERE materializer = 'bee.hive.supervisor:enrollment';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:invites' WHERE materializer = 'bee.hive.supervisor:invites';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:admission' WHERE materializer = 'bee.hive.supervisor:admission';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.service:supervisor' WHERE materializer = 'bee.hive.supervisor:main';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:owner_stop' WHERE materializer = 'bee.hive.supervisor:owner_stop';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:workspace_commands' WHERE materializer = 'bee.hive.supervisor:workspace_commands';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:workspace_command' WHERE materializer = 'bee.hive.supervisor:workspace_command';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:advertise' WHERE materializer = 'bee.hive.supervisor:advertise';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:audiences' WHERE materializer = 'bee.hive.supervisor:audiences';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:policy_admission' WHERE materializer = 'bee.hive.supervisor:policy_admission';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:admit_policy' WHERE materializer = 'bee.hive.supervisor:admit_policy';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:adapters' WHERE materializer = 'bee.hive.supervisor:adapters';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:dispatch' WHERE materializer = 'bee.hive.supervisor:dispatch';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:execute' WHERE materializer = 'bee.hive.supervisor:execute';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.binding:workspaces' WHERE materializer = 'bee.hive.api:workspaces';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:workspaces_page' WHERE materializer = 'bee.hive.api:workspaces_page';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.types:workspace_query' WHERE materializer = 'bee.hive.workspace:workspace_query';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.service:display_command' WHERE materializer = 'bee.hive.desktop:command';
+UPDATE bee_credential_projections SET materializer = 'bee.hive.service:viewer' WHERE materializer = 'bee.hive.desktop:viewer';
+]]
 local list: {Migration} = {
     {id = 1, name = "credentials", sql = CREDENTIALS_SQL, rebuild = false},
     {id = 2, name = "file_sources", sql = FILE_SOURCES_SQL, rebuild = true},
@@ -1155,6 +1203,7 @@ local list: {Migration} = {
     {id = 5, name = "frozen_formats", sql = FROZEN_FORMATS_SQL, rebuild = false},
     {id = 6, name = "credentials_node_identity", sql = NODE_IDENTITY_SQL, rebuild = false},
     {id = 7, name = "root_namespace_references", sql = ROOT_REFERENCES_SQL, rebuild = false},
+        {id = 8, name = "hive_component_references", sql = HIVE_REFERENCES_SQL, rebuild = false},
 }
 function M.all(): {Migration}
     return list

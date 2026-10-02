@@ -123,6 +123,7 @@ class RepositoryLayout(unittest.TestCase):
                 database.execute('UPDATE ' + table + ' SET ' + column + ' = ?', (json.dumps(original),))
             database.executescript(sql(path))
             database.executescript(sql(path, "ROOT_REFERENCES_SQL"))
+            database.executescript(sql(path, "HIVE_REFERENCES_SQL"))
             for table, column in tables:
                 migrated = json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0])
                 self.assertEqual(migrated['references'], list(moves.values()))
@@ -130,6 +131,42 @@ class RepositoryLayout(unittest.TestCase):
                 for key in ['instructions', 'actor', 'opaque', 'namespace', 'service_id']:
                     self.assertEqual(migrated[key], original[key])
             database.close()
+
+    def test_hive_operation_identity_requires_a_migration(self):
+        specification = importlib.util.spec_from_file_location('component_inventory', ROOT / 'build/component_inventory.py')
+        inventory = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(inventory)
+        _, current = inventory.build_inventory()
+        self.assertIn('bee.hive.binding:workspaces', current['ids'])
+        prior = {'ids': ['bee.hive.api:workspaces']}
+        with self.assertRaisesRegex(ValueError, 'without a migration map entry'):
+            inventory.check_identity_compatibility(prior, current, {'ids': {}, 'topics': {}, 'schemas': {}})
+        inventory.check_identity_compatibility(prior, current, inventory.migration_map())
+
+    def test_hive_owner_references_preserve_provenance_and_opaque_text(self):
+        database = sqlite3.connect(':memory:')
+        tables = [('bee_sync_projections', 'value_json'), ('bee_sync_events', 'payload_json'), ('bee_sync_receipts', 'request_json')]
+        original = {'request': {'owner_ref': {'node_id': 'peer', 'service_id': 'bee.hive.api'},
+                                'operation_ref': 'bee.hive.api:workspaces'},
+                    'viewer': 'bee.hive.desktop:viewer', 'definition': 'bee.hive.supervisor:main',
+                    'host': 'bee.hive.service:supervisor_host', 'actor': 'bee.hive.supervisor',
+                    'namespace': 'bee.hive.api', 'instructions': 'Call bee.hive.api:workspaces later',
+                    'opaque': json.dumps({'operation_ref': 'bee.hive.api:workspaces'}),
+                    'owner_ref': {'node_id': 'peer', 'service_id': 'bee.hive.telemetry.binding'}}
+        for table, column in tables:
+            database.execute('CREATE TABLE ' + table + ' (' + column + ' TEXT)')
+            database.execute('INSERT INTO ' + table + ' VALUES (?)', (json.dumps(original),))
+        script = sql('modules/sync/src/migrations/migrations.lua', 'HIVE_REFERENCES_SQL')
+        database.executescript(script)
+        expected = dict(original, request={'owner_ref': {'node_id': 'peer', 'service_id': 'bee.hive.binding'},
+                                          'operation_ref': 'bee.hive.binding:workspaces'},
+                        viewer='bee.hive.service:viewer', definition='bee.hive.service:supervisor')
+        for table, column in tables:
+            self.assertEqual(json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0]), expected)
+        database.executescript(script)
+        for table, column in tables:
+            self.assertEqual(json.loads(database.execute('SELECT ' + column + ' FROM ' + table).fetchone()[0]), expected)
+        database.close()
 
     def test_new_root_entries_and_kind_changes_are_rejected(self):
         with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-roots-') as temporary:
@@ -172,7 +209,7 @@ class RepositoryLayout(unittest.TestCase):
             self.assertIn(destination, entries)
 
     def test_root_cleanup_migration_replays_and_refuses_collisions(self):
-        script = sql('modules/placement-native/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL')
+        script = sql('modules/placement-native/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL') + sql('modules/placement-native/src/migrations/migrations.lua', 'HIVE_REFERENCES_SQL')
         database = sqlite3.connect(':memory:')
         database.executescript('CREATE TABLE bee_placement_preparer_states (attempt_id TEXT, binding_id TEXT, record_json TEXT, PRIMARY KEY(attempt_id, binding_id)); CREATE TABLE bee_placement_evidence (kind TEXT, detail TEXT); CREATE TABLE bee_placement_attempts (request_json TEXT, grants_json TEXT);')
         record = {'binding_id': 'bee.git.worktree:binding', 'state': {'token': 'bee.git.worktree:binding'}}
@@ -208,7 +245,7 @@ class RepositoryLayout(unittest.TestCase):
             for table, column in tables:
                 database.execute('CREATE TABLE ' + table + ' (' + column + ' TEXT, digest TEXT, authority TEXT)')
                 database.executemany('INSERT INTO ' + table + ' VALUES (?, ?, ?)', [(previous, 'admitted-digest', 'admitted-authority') for previous in moves])
-            script = sql('modules/' + module + '/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL')
+            script = sql('modules/' + module + '/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL') + sql('modules/' + module + '/src/migrations/migrations.lua', 'HIVE_REFERENCES_SQL')
             database.executescript(script)
             for table, column in tables:
                 self.assertEqual(database.execute('SELECT * FROM ' + table).fetchall(), [(current, 'admitted-digest', 'admitted-authority') for current in moves.values()])

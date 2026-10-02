@@ -4541,17 +4541,47 @@
       "source": "modules/harness/src/_index.yaml"
     },
     {
-      "id": "bee.hive.api:workspaces",
-      "kind": "function.lua",
-      "source": "src/hive/api/_index.yaml"
+      "id": "bee.hive.binding:admission",
+      "kind": "library.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
     },
     {
-      "id": "bee.hive.api:workspaces_page",
-      "kind": "library.lua",
-      "source": "src/hive/api/_index.yaml"
+      "id": "bee.hive.binding:admit_policy",
+      "kind": "function.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:admit_policy_policies",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:advertise",
+      "kind": "function.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:advertise_policies",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/binding/_index.yaml"
     },
     {
       "id": "bee.hive.binding:client",
+      "kind": "library.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:dispatch",
+      "kind": "library.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:execute",
+      "kind": "function.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:inbox_sender",
       "kind": "library.lua",
       "source": "modules/hive/src/binding/_index.yaml"
     },
@@ -4566,24 +4596,49 @@
       "source": "modules/hive/src/binding/_index.yaml"
     },
     {
+      "id": "bee.hive.binding:policy_admission",
+      "kind": "library.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:replica_sender",
+      "kind": "library.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:workspace_command",
+      "kind": "function.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:workspace_command_policies",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:workspaces",
+      "kind": "function.lua",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.hive.binding:workspaces_policies",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.hive.desktop:catalog",
       "kind": "library.lua",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:catalog_call_policy",
       "kind": "security.policy",
-      "source": "src/hive/desktop/_index.yaml"
-    },
-    {
-      "id": "bee.hive.desktop:command",
-      "kind": "process.lua",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:display",
       "kind": "library.lua",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:display_host",
@@ -4593,37 +4648,32 @@
     {
       "id": "bee.hive.desktop:display_policy",
       "kind": "security.policy",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:host_policy",
       "kind": "security.policy.expr",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:owner",
       "kind": "library.lua",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:protocol",
       "kind": "library.lua",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:remote",
       "kind": "library.lua",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.desktop:session_policy",
       "kind": "library.lua",
-      "source": "src/hive/desktop/_index.yaml"
-    },
-    {
-      "id": "bee.hive.desktop:viewer",
-      "kind": "process.lua",
-      "source": "src/hive/desktop/_index.yaml"
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "id": "bee.hive.exposure:catalog",
@@ -4698,17 +4748,17 @@
     {
       "id": "bee.hive.security:workspaces_policy",
       "kind": "security.policy",
-      "source": "src/hive/security/_index.yaml"
+      "source": "modules/hive/src/security/_index.yaml"
     },
     {
-      "id": "bee.hive.service:inbox_sender",
-      "kind": "library.lua",
-      "source": "src/hive/service/_index.yaml"
+      "id": "bee.hive.service:display_command",
+      "kind": "process.lua",
+      "source": "modules/hive/src/service/_index.yaml"
     },
     {
-      "id": "bee.hive.service:replica_sender",
-      "kind": "library.lua",
-      "source": "src/hive/service/_index.yaml"
+      "id": "bee.hive.service:supervisor",
+      "kind": "process.lua",
+      "source": "modules/hive/src/service/_index.yaml"
     },
     {
       "id": "bee.hive.service:supervisor_host",
@@ -4716,49 +4766,19 @@
       "source": "src/hive/service/_index.yaml"
     },
     {
+      "id": "bee.hive.service:supervisor_policies",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/service/_index.yaml"
+    },
+    {
       "id": "bee.hive.service:supervisor_service",
       "kind": "process.service",
       "source": "src/hive/service/_index.yaml"
     },
     {
-      "id": "bee.hive.supervisor:adapters",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:admission",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:admit_policy",
-      "kind": "function.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:advertise",
-      "kind": "function.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:audiences",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:dispatch",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:enrollment",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:execute",
-      "kind": "function.lua",
-      "source": "src/hive/supervisor/_index.yaml"
+      "id": "bee.hive.service:viewer",
+      "kind": "process.lua",
+      "source": "modules/hive/src/service/_index.yaml"
     },
     {
       "id": "bee.hive.supervisor:exposure_audiences",
@@ -4771,33 +4791,8 @@
       "source": "src/hive/supervisor/_index.yaml"
     },
     {
-      "id": "bee.hive.supervisor:invites",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:main",
-      "kind": "process.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:owner_stop",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:peers",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
       "id": "bee.hive.supervisor:policy_actor_policy",
       "kind": "security.policy",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:policy_admission",
-      "kind": "library.lua",
       "source": "src/hive/supervisor/_index.yaml"
     },
     {
@@ -4808,21 +4803,6 @@
     {
       "id": "bee.hive.supervisor:principal_mappings",
       "kind": "registry.entry",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:registration",
-      "kind": "library.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:workspace_command",
-      "kind": "function.lua",
-      "source": "src/hive/supervisor/_index.yaml"
-    },
-    {
-      "id": "bee.hive.supervisor:workspace_commands",
-      "kind": "library.lua",
       "source": "src/hive/supervisor/_index.yaml"
     },
     {
@@ -4911,9 +4891,54 @@
       "source": "modules/hive-telemetry/src/_index.yaml"
     },
     {
-      "id": "bee.hive.workspace:workspace_query",
+      "id": "bee.hive.types:adapters",
       "kind": "library.lua",
-      "source": "modules/hive/src/workspace/_index.yaml"
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:audiences",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:enrollment",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:invites",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:owner_stop",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:peers",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:registration",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:workspace_commands",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:workspace_query",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.hive.types:workspaces_page",
+      "kind": "library.lua",
+      "source": "modules/hive/src/types/_index.yaml"
     },
     {
       "id": "bee.hive:definition",
@@ -4921,8 +4946,48 @@
       "source": "modules/hive/src/_index.yaml"
     },
     {
+      "id": "bee.hive:dependency_application",
+      "kind": "ns.dependency",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:dependency_persist",
+      "kind": "ns.dependency",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
       "id": "bee.hive:dependency_values",
       "kind": "ns.dependency",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:target_application",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:target_delivery",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:target_input",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:target_retained_protocol",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:target_version",
+      "kind": "ns.requirement",
+      "source": "modules/hive/src/_index.yaml"
+    },
+    {
+      "id": "bee.hive:target_workspace_selection",
+      "kind": "ns.requirement",
       "source": "modules/hive/src/_index.yaml"
     },
     {
@@ -10046,18 +10111,18 @@
       "source": "modules/hive/src/_index.yaml"
     },
     {
-      "namespace": "bee.hive.api",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.hive.api",
-      "source": "src/hive/api/_index.yaml"
-    },
-    {
       "namespace": "bee.hive.binding",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
       "path_namespace": "bee.hive.binding",
       "source": "modules/hive/src/binding/_index.yaml"
+    },
+    {
+      "namespace": "bee.hive.desktop",
+      "namespace_has_underscore": false,
+      "path_matches_namespace": true,
+      "path_namespace": "bee.hive.desktop",
+      "source": "modules/hive/src/desktop/_index.yaml"
     },
     {
       "namespace": "bee.hive.desktop",
@@ -10102,11 +10167,11 @@
       "source": "modules/hive/src/security/_index.yaml"
     },
     {
-      "namespace": "bee.hive.security",
+      "namespace": "bee.hive.service",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
-      "path_namespace": "bee.hive.security",
-      "source": "src/hive/security/_index.yaml"
+      "path_namespace": "bee.hive.service",
+      "source": "modules/hive/src/service/_index.yaml"
     },
     {
       "namespace": "bee.hive.service",
@@ -10144,11 +10209,11 @@
       "source": "modules/hive-telemetry/src/security/_index.yaml"
     },
     {
-      "namespace": "bee.hive.workspace",
+      "namespace": "bee.hive.types",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
-      "path_namespace": "bee.hive.workspace",
-      "source": "modules/hive/src/workspace/_index.yaml"
+      "path_namespace": "bee.hive.types",
+      "source": "modules/hive/src/types/_index.yaml"
     },
     {
       "namespace": "bee.host",
@@ -11946,13 +12011,13 @@
       "table": "bee_placement_evidence"
     },
     {
-      "line": 659,
+      "line": 736,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
       "table": "bee_placement_preparer_states"
     },
     {
-      "line": 672,
+      "line": 749,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
       "table": "bee_placement_runner_authorities"
@@ -11964,7 +12029,7 @@
       "table": "bee_placement_schema_migrations"
     },
     {
-      "line": 647,
+      "line": 724,
       "owner_namespace": "bee.placement.native",
       "source": "modules/placement-native/src/migrations/migrations.lua",
       "table": "bee_placement_session_files"
@@ -12036,7 +12101,7 @@
       "table": "bee_sync_distribution_cursors"
     },
     {
-      "line": 1603,
+      "line": 1705,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_distribution_cursors"
@@ -12054,7 +12119,7 @@
       "table": "bee_sync_feeds"
     },
     {
-      "line": 1612,
+      "line": 1714,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_projection_migrations"
@@ -12066,7 +12131,7 @@
       "table": "bee_sync_projections"
     },
     {
-      "line": 1621,
+      "line": 1723,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_projections_next"
@@ -12078,25 +12143,25 @@
       "table": "bee_sync_receipts"
     },
     {
-      "line": 1587,
+      "line": 1689,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_chunks"
     },
     {
-      "line": 1556,
+      "line": 1658,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_sources"
     },
     {
-      "line": 1573,
+      "line": 1675,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_transfers"
     },
     {
-      "line": 1562,
+      "line": 1664,
       "owner_namespace": "bee.sync",
       "source": "modules/sync/src/migrations/migrations.lua",
       "table": "bee_sync_replica_versions"
@@ -13121,6 +13186,31 @@
       "target": "bee.harness.service:carrier"
     },
     {
+      "requirement": "bee.hive.binding:admit_policy_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.binding:admit_policy"
+    },
+    {
+      "requirement": "bee.hive.binding:advertise_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.binding:advertise"
+    },
+    {
+      "requirement": "bee.hive.binding:workspace_command_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.binding:workspace_command"
+    },
+    {
+      "requirement": "bee.hive.binding:workspaces_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.binding:workspaces"
+    },
+    {
+      "requirement": "bee.hive.service:supervisor_policies",
+      "resolved_by": "registry source",
+      "target": "bee.hive.service:supervisor"
+    },
+    {
       "requirement": "bee.hive.telemetry:target_catalog_list_policies",
       "resolved_by": "registry source",
       "target": "bee.hive.telemetry.binding:catalog_list"
@@ -13149,6 +13239,71 @@
       "requirement": "bee.hive.telemetry:target_presence_policies",
       "resolved_by": "registry source",
       "target": "bee.hive.telemetry.binding:stats"
+    },
+    {
+      "requirement": "bee.hive:target_application",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:catalog"
+    },
+    {
+      "requirement": "bee.hive:target_application",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:display"
+    },
+    {
+      "requirement": "bee.hive:target_application",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:protocol"
+    },
+    {
+      "requirement": "bee.hive:target_application",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:remote"
+    },
+    {
+      "requirement": "bee.hive:target_application",
+      "resolved_by": "registry source",
+      "target": "bee.hive.service:viewer"
+    },
+    {
+      "requirement": "bee.hive:target_application",
+      "resolved_by": "registry source",
+      "target": "bee.hive.types:workspaces_page"
+    },
+    {
+      "requirement": "bee.hive:target_delivery",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:display"
+    },
+    {
+      "requirement": "bee.hive:target_delivery",
+      "resolved_by": "registry source",
+      "target": "bee.hive.service:viewer"
+    },
+    {
+      "requirement": "bee.hive:target_input",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:display"
+    },
+    {
+      "requirement": "bee.hive:target_input",
+      "resolved_by": "registry source",
+      "target": "bee.hive.service:viewer"
+    },
+    {
+      "requirement": "bee.hive:target_retained_protocol",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:owner"
+    },
+    {
+      "requirement": "bee.hive:target_version",
+      "resolved_by": "registry source",
+      "target": "bee.hive.binding:replica_sender"
+    },
+    {
+      "requirement": "bee.hive:target_workspace_selection",
+      "resolved_by": "registry source",
+      "target": "bee.hive.desktop:owner"
     },
     {
       "requirement": "bee.hub.binding:target_lifecycle_owners",
@@ -15172,6 +15327,61 @@
     },
     {
       "default_reference_ids": [],
+      "id": "bee.hive.binding:admit_policy_policies",
+      "source": "modules/hive/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.binding:admit_policy",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive.binding:advertise_policies",
+      "source": "modules/hive/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.binding:advertise",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive.binding:workspace_command_policies",
+      "source": "modules/hive/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.binding:workspace_command",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive.binding:workspaces_policies",
+      "source": "modules/hive/src/binding/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.binding:workspaces",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive.service:supervisor_policies",
+      "source": "modules/hive/src/service/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.service:supervisor",
+          "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
       "id": "bee.hive.telemetry:target_catalog_list_policies",
       "source": "modules/hive-telemetry/src/_index.yaml",
       "targets": [
@@ -15226,6 +15436,102 @@
         {
           "entry": "bee.hive.telemetry.binding:stats",
           "path": ".security.policies"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive:target_application",
+      "source": "modules/hive/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.desktop:protocol",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.hive.desktop:catalog",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.hive.desktop:display",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.hive.desktop:remote",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.hive.service:viewer",
+          "path": ".imports.contract"
+        },
+        {
+          "entry": "bee.hive.types:workspaces_page",
+          "path": ".imports.contract"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive:target_delivery",
+      "source": "modules/hive/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.desktop:display",
+          "path": ".imports.delivery"
+        },
+        {
+          "entry": "bee.hive.service:viewer",
+          "path": ".imports.delivery"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive:target_input",
+      "source": "modules/hive/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.desktop:display",
+          "path": ".imports.input"
+        },
+        {
+          "entry": "bee.hive.service:viewer",
+          "path": ".imports.input"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive:target_retained_protocol",
+      "source": "modules/hive/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.desktop:owner",
+          "path": ".imports.retained"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [],
+      "id": "bee.hive:target_version",
+      "source": "modules/hive/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.binding:replica_sender",
+          "path": ".imports.version"
+        }
+      ]
+    },
+    {
+      "default_reference_ids": [
+        "bee.workspace.types:selection"
+      ],
+      "id": "bee.hive:target_workspace_selection",
+      "source": "modules/hive/src/_index.yaml",
+      "targets": [
+        {
+          "entry": "bee.hive.desktop:owner",
+          "path": ".imports.workspaces"
         }
       ]
     },
@@ -16958,18 +17264,18 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1789,
+    "entry_count": 1802,
     "namespace_count": 273,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
     "owned_store_count": 82,
     "owned_table_declaration_count": 151,
-    "persisted_id_count": 821,
-    "requirement_count": 136,
-    "requirement_target_count": 322,
+    "persisted_id_count": 849,
+    "requirement_count": 147,
+    "requirement_target_count": 340,
     "root_src_lua_budget": 20851,
-    "root_src_lua_lines": 20851,
+    "root_src_lua_lines": 16341,
     "schema_tag_count": 70,
     "topic_count": 138
   },
@@ -17301,19 +17607,19 @@
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.desktop.lifetime"
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.desktop.lifetime.exit"
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.desktop.lifetime.reply."
     },
@@ -17386,37 +17692,37 @@
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.hive.viewer.close"
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.hive.viewer.frame"
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.hive.viewer.input"
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.hive.viewer.resize"
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.hive.viewer.retry"
     },
     {
       "sources": [
-        "src/hive/desktop/protocol.lua"
+        "modules/hive/src/desktop/protocol.lua"
       ],
       "topic": "bee.hive.viewer.state"
     },
@@ -17632,7 +17938,7 @@
     },
     {
       "sources": [
-        "src/hive/supervisor/owner_stop.lua"
+        "modules/hive/src/types/owner_stop.lua"
       ],
       "topic": "bee.owner.stop"
     },

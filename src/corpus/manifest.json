@@ -253,15 +253,15 @@
     {
       "bytes": 25899,
       "id": "docs/threads",
-      "sha256": "1247a944d6c5ecca490aa0bd8de89ddf107c30459788eeeecbb510374157ff84",
+      "sha256": "b24233e18db6cb19b3fb6723e5c29a135e6c2a3f3d375113b4a5cef0955b4f34",
       "source": "docs/reference/threads.md",
       "title": "Threads",
       "topic": "threads"
     },
     {
-      "bytes": 21828,
+      "bytes": 21829,
       "id": "docs/workspace_catalog",
-      "sha256": "9e43cd2f0ca12177971ac98512f637fe38fdfbe4c791d5702bf24679bd8c7335",
+      "sha256": "0d2017897f98aae59a09600ec85c87146ed1b2f88d9dc5f3291f895a2391ab0b",
       "source": "docs/reference/workspace-catalog.md",
       "title": "Workspace catalog",
       "topic": "storage"
@@ -435,9 +435,9 @@
       "topic": "component"
     },
     {
-      "bytes": 11679,
+      "bytes": 12370,
       "id": "component/hive",
-      "sha256": "be26cf30c9f456b86cc73fadb41f7e3a6401aec96b022c42498a61901231a11f",
+      "sha256": "e4f1ee80c08cf06a207c4f51b05c6fa7bdb54fef62754ffebe61daa9741d8d92",
       "source": "modules/hive/src/README.md",
       "title": "bee.hive",
       "topic": "component"
@@ -525,7 +525,7 @@
     {
       "bytes": 11089,
       "id": "component/threads",
-      "sha256": "571495a4489f58d355b8a1722c386a93be0eff9e817e77e0cc1af45d35ce4786",
+      "sha256": "3beac0ec1d15338a82e4eb7ecf9a10b9ac05e69c6a594d4e7d8abda42df04dd8",
       "source": "modules/threads/src/README.md",
       "title": "bee.threads",
       "topic": "component"
@@ -638,7 +638,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 753186,
+    "bytes": 753878,
     "documents": 79
   }
 }

@@ -32,7 +32,7 @@ M.CLIENT_HOST = "bee.hive.desktop:display_host"
 -- window. It runs on the display client host; its parent exchanges these
 -- topics with it: one state (attached or failed), then frames one way and
 -- input, resize and close the other.
-M.VIEWER = "bee.hive.desktop:viewer"
+M.VIEWER = "bee.hive.service:viewer"
 M.VIEW_STATE = "bee.hive.viewer.state"
 M.VIEW_FRAME = "bee.hive.viewer.frame"
 M.VIEW_INPUT = "bee.hive.viewer.input"

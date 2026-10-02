@@ -240,7 +240,7 @@ The command joins the owner as an enrolled local client and calls service
 an enrolled local client of its own node and only while the host grants it
 `bee.workspace.manager.command` on the operation (`bee.security.hive:workspace_command_policy`,
 selected for the supervisor service). It runs the command on its worker
-`bee.hive.supervisor:workspace_command`, which again requires that grant from
+`bee.hive.binding:workspace_command`, which again requires that grant from
 its caller and calls the catalog operation under the policies the host attaches
 to the worker (`bee.security.storage:workspace_catalog_read_policy`,
 `bee.security.storage:workspace_catalog_manage_policy`, `bee.security.hive:workspace_command_catalog_policy`);
@@ -265,7 +265,7 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   it; otherwise it shows a workspace picker (one catalog page, `/` label
   search, PgUp/PgDn paging, Enter to open). Ctrl+] detaches and returns to the
   picker; Ctrl+Q leaves.
-- **Hive member**: `bee.hive.api:workspaces` is an open Hive operation that
+- **Hive member**: `bee.hive.binding:workspaces` is an open Hive operation that
   pages a node's catalog (`{label?, after?, limit?}` to `{node_id, workspaces,
   next_after?}`, each row with whether a host serves it); the Hive app lists and
   searches the selected node's workspaces through it. A Hive display client
@@ -273,7 +273,7 @@ catalog `BUSY` is `INVALID_STATE`, and a command past its deadline is
   `desktop.allowed_peers`) attaches to any of the
   node's workspaces by identity through the bridge's lease path. The Hive
   Manager's Control and Observe open the selected workspace of another node as
-  a remote view in its window: a view process (`bee.hive.desktop:viewer`) on
+  a remote view in its window: a view process (`bee.hive.service:viewer`) on
   the display client host lists the owner's displays naming no execution,
   attaches through that node's bridge (control reuses a display without a
   controller and allocates one only after definite `DESKTOP_CONTROLLED`

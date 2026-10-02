@@ -8,8 +8,8 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
-    enrollment: bee.hive.supervisor:enrollment
+    peers: bee.hive.types:peers
+    enrollment: bee.hive.types:enrollment
     types: bee.hive:types
 - name: peer_restart_test
   kind: function.lua
@@ -18,7 +18,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    peers: bee.hive.supervisor:peers
+    peers: bee.hive.types:peers
     types: bee.hive:types
 - name: invites_test
   kind: function.lua
@@ -27,7 +27,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    invites: bee.hive.supervisor:invites
+    invites: bee.hive.types:invites
 - name: probe_exposure_policy
   kind: security.policy
   meta: {type: test_support}
@@ -230,7 +230,7 @@ entries:
     owner: bee.hive.desktop:owner
     catalog: bee.hive.desktop:catalog
     protocol: bee.hive.desktop:protocol
-    enrollment: bee.hive.supervisor:enrollment
+    enrollment: bee.hive.types:enrollment
 - name: display_standin
   kind: process.lua
   source: file://display_standin.lua

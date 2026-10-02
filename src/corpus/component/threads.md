@@ -97,7 +97,7 @@ the same owner-or-discover gate a lookup does. The forwarding outbox
 `bee.threads.service:pump_worker`: it leases due rows across every sender,
 delivers each through the destination's admission and settles only on the
 destination's own reply. Its transport is host-selected through the `sender`
-requirement — the bundled host links `bee.hive.service:inbox_sender` — and a
+requirement — the bundled host links `bee.hive.binding:inbox_sender` — and a
 composition that links no sender leaves due rows queued and reports each
 delivery unknown.
 `inbox_offer` gives the target's current carrier only the oldest outstanding

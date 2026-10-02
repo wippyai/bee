@@ -373,7 +373,7 @@ watches still settle on forwarded commits. The outbox pump is a supervised
 sender, delivers each through the destination's admission and settles only
 on the destination's own reply, so an unknown outcome settles nothing and
 the lease lapses. Its transport is host-selected through the `sender`
-requirement: the bundled host links `bee.hive.service:inbox_sender`, and a
+requirement: the bundled host links `bee.hive.binding:inbox_sender`, and a
 composition that links no sender leaves due rows queued and reports each
 delivery unknown.
 

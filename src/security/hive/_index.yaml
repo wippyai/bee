@@ -36,7 +36,7 @@ entries:
     - bee.hive.telemetry.binding:catalog_list
     - bee.hive.telemetry.binding:holdings
     - bee.hive.telemetry.binding:cluster
-    - bee.hive.api:workspaces
+    - bee.hive.binding:workspaces
     - bee.threads.binding:capabilities
     effect: allow
 - name: hive_exposure_facade_policy
@@ -167,7 +167,7 @@ entries:
     - bee.hive.telemetry.binding:catalog_list
     - bee.hive.telemetry.binding:holdings
     - bee.hive.telemetry.binding:cluster
-    - bee.hive.api:workspaces
+    - bee.hive.binding:workspaces
     - bee.threads.binding:capabilities
     effect: allow
 - name: hive_names_policy
@@ -203,9 +203,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.hive.supervisor:execute
-    - bee.hive.supervisor:admit_policy
-    - bee.hive.supervisor:advertise
+    - bee.hive.binding:execute
+    - bee.hive.binding:admit_policy
+    - bee.hive.binding:advertise
     - bee.threads.hive:admit
     - bee.sync.binding:admit
     effect: allow
@@ -242,7 +242,7 @@ entries:
     - funcs.call
     - bee.workspace.manager.command
     resources:
-    - bee.hive.supervisor:workspace_command
+    - bee.hive.binding:workspace_command
     - bee.workspace:create
     - bee.workspace:list
     - bee.workspace:archive

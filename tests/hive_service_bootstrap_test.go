@@ -74,7 +74,7 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 	if service == nil {
 		t.Fatal("missing default Hive supervisor service")
 	}
-	if service.Kind != "process.service" || service.Process != "bee.hive.supervisor:main" || service.Host != "bee.hive.service:supervisor_host" {
+	if service.Kind != "process.service" || service.Process != "bee.hive.service:supervisor" || service.Host != "bee.hive.service:supervisor_host" {
 		t.Fatalf("unexpected Hive service binding: kind=%q process=%q host=%q", service.Kind, service.Process, service.Host)
 	}
 	if service.Lifecycle.AutoStart == nil || !*service.Lifecycle.AutoStart {
@@ -89,7 +89,7 @@ func assertDefaultHiveSupervisorService(t *testing.T, source []byte) {
 		"bee.security.hive:hive_telemetry_policy", "bee.security.hive:hive_names_policy",
 		"bee.security.hive:hive_advertise_policy", "bee.security.hive:hive_execute_policy", "bee.security.hive:hive_invite_policy",
 		"bee.security.hive:hive_owner_stop_policy", "bee.security.hive:workspace_command_policy",
-		"bee.hive.desktop:host_policy", "bee.security.desktop:desktop_catalog_policy", "bee.security.desktop:desktop_catalog_resource_policy",
+		"bee.security.desktop:startup_failure_policy", "bee.hive.desktop:host_policy", "bee.security.desktop:desktop_catalog_policy", "bee.security.desktop:desktop_catalog_resource_policy",
 		"bee.security.storage:workspace_catalog_read_policy",
 		"bee.hive.security:workspaces_policy",
 		"bee.hive.desktop:catalog_call_policy",
@@ -173,7 +173,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		mainPath := filepath.Join(srcDir, "hive/supervisor/main.lua")
+		mainPath := filepath.Join(folder, "modules/hive/src/service/main.lua")
 		mainSource, err := os.ReadFile(mainPath)
 		if err != nil {
 			t.Fatal(err)
@@ -186,7 +186,7 @@ func TestHiveSupervisorServiceBootstrap(t *testing.T) {
 		if err := os.WriteFile(mainPath, []byte(observed), 0600); err != nil {
 			t.Fatal(err)
 		}
-		manifestPath := filepath.Join(srcDir, "hive/supervisor/_index.yaml")
+		manifestPath := filepath.Join(folder, "modules/hive/src/service/_index.yaml")
 		manifest, err := os.ReadFile(manifestPath)
 		if err != nil {
 			t.Fatal(err)

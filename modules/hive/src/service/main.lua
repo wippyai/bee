@@ -129,7 +129,7 @@ local function main(configuration: unknown)
     -- established peer or a host enrollment, so publication grants nothing.
     local function advertise(now_ms: integer)
         if native_node == "" or advertised or advertising then return end
-        local future, future_error = funcs.async("bee.hive.supervisor:advertise", {name = distributed_name, pid = self})
+        local future, future_error = funcs.async("bee.hive.binding:advertise", {name = distributed_name, pid = self})
         if not future or future_error then
             log:warn("Hive name publication unavailable")
             last_advertisement = now_ms
@@ -533,7 +533,7 @@ local function main(configuration: unknown)
             -- grants; a catalog policy operation takes the generic policy
             -- worker; everything else takes the open dispatch. A local
             -- caller never reaches the adapter path here.
-            local worker = "bee.hive.supervisor:execute"
+            local worker = "bee.hive.binding:execute"
             local mapped: string? = nil
             if sender_node ~= native_node then
                 local entry = registry.get(adapters.ENTRY)
@@ -551,7 +551,7 @@ local function main(configuration: unknown)
             if mapped then
                 worker = mapped
             elseif policy_admission.admits(request.operation_ref) then
-                worker = "bee.hive.supervisor:admit_policy"
+                worker = "bee.hive.binding:admit_policy"
             end
             local future, err = funcs.async(worker, request)
             if not future or err then failed(sender, id, "UNAVAILABLE", "operation dispatch unavailable"); return end

@@ -348,7 +348,7 @@ def stage(project, folder, round_label):
 
 def preflight_diagnostic(diagnostic):
     """One destination diagnostic as the agent reads it. The preflight wire
-    contract names the field remedy (modules/gov/src/activation/preflight.lua), so a
+    contract names the field remedy (modules/gov/src/binding/preflight.lua), so a
     reviewer that read another name would drop the destination's own repair
     instruction and hand back a weaker finding than the host observed."""
     return (str(diagnostic.get("code")) + " on " + str(diagnostic.get("target")) + ": "

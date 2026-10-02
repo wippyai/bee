@@ -11,7 +11,7 @@ entries:
     test: wippy.test:test
     model: bee.gov.overlays.app:model
     caller: bee.app:caller
-    preflight: bee.gov.activation:preflight
+    preflight: bee.gov.binding:preflight
 - name: view_test
   kind: function.lua
   source: file://view_test.lua
@@ -23,4 +23,4 @@ entries:
     model: bee.gov.overlays.app:model
     view: bee.gov.overlays.app:view
     appearance: bee.app:appearance
-    preflight: bee.gov.activation:preflight
+    preflight: bee.gov.binding:preflight

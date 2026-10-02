@@ -128,7 +128,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     canonical: bee.values:canonical
-    capability: bee.gov.capability:capability_request
+    capability: bee.gov.types:capability_request
     subject_call: bee.gateway.security:subject_call
 - name: installation_policy
   kind: security.policy

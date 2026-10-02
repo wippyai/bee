@@ -167,8 +167,8 @@ entries:
   imports:
     bounds: bee.values:bounds
     catalog: bee.apps:catalog
-    workspace_applications: bee.gov.workspace:workspace_applications
-    capability_grants: bee.gov.capability:capability_grants
+    workspace_applications: bee.gov.types:workspace_applications
+    capability_grants: bee.gov.types:capability_grants
     capability_catalog: bee.capability:model
   security:
     policies: [bee.workspace.app.probe:operator_policy, bee.workspace.app.probe:grant_evidence_policy]

@@ -1333,7 +1333,7 @@ entries:
     checkpoint: bee.harness.carrier:checkpoint
     hook_records: bee.harness.carrier:hook_records
     placement_store: bee.placement.native.persist:store
-    capability_grants: bee.gov.capability:capability_grants
+    capability_grants: bee.gov.types:capability_grants
     capability_catalog: bee.capability:model
     sends: bee.threads.service:sends
 - name: steer_permission_probe_test
@@ -1359,7 +1359,7 @@ entries:
     bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
-    capability_grants: bee.gov.capability:capability_grants
+    capability_grants: bee.gov.types:capability_grants
     capability_catalog: bee.capability:model
     sends: bee.threads.service:sends
 - name: steer_grant_actor_probe
@@ -1630,7 +1630,7 @@ entries:
   imports:
     principals: bee.test.principals:bound
     test: wippy.test:test
-    capability: bee.gov.capability:capability_request
+    capability: bee.gov.types:capability_request
     bounds: bee.values:bounds
 - name: elevation_client_policy
   kind: security.policy

@@ -45,8 +45,8 @@ entries:
   modules: &modules [funcs, registry, system, json, io, uuid, time]
   imports: &imports
     bounds: bee.values:bounds
-    artifact: bee.gov.delivery:artifact
-    materializer: bee.gov.delivery:materializer
+    artifact: bee.gov.types:artifact
+    materializer: bee.gov.binding:materializer
     recovery: bee.gov.binding:destination_service
   security:
     policies: [bee.research.delivery:operator_policy]

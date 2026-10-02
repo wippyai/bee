@@ -3396,54 +3396,9 @@
       "source": "modules/git-worktree/src/_index.yaml"
     },
     {
-      "id": "bee.gov.activation:activation_measure",
+      "id": "bee.gov.binding:activation_measure",
       "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:activation_profile_decoder",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:application_admissions",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:governed_application_admission",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:headless_revert",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:lists",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:migration_work",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:preflight",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:protected_kernel",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
-      "id": "bee.gov.activation:super_edit",
-      "kind": "library.lua",
-      "source": "modules/gov/src/activation/_index.yaml"
+      "source": "modules/gov/src/binding/_index.yaml"
     },
     {
       "id": "bee.gov.binding:activation_owner",
@@ -3451,7 +3406,17 @@
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
+      "id": "bee.gov.binding:application_admissions",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.gov.binding:approval",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.gov.binding:capability_access",
       "kind": "library.lua",
       "source": "modules/gov/src/binding/_index.yaml"
     },
@@ -3496,12 +3461,27 @@
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
+      "id": "bee.gov.binding:headless_revert",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.gov.binding:http_request",
       "kind": "function.lua",
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
+      "id": "bee.gov.binding:hub_resolver",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.gov.binding:lease_grants",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.gov.binding:materializer",
       "kind": "library.lua",
       "source": "modules/gov/src/binding/_index.yaml"
     },
@@ -3518,6 +3498,16 @@
     {
       "id": "bee.gov.binding:overlay_local",
       "kind": "contract.binding",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.gov.binding:overlay_resolver",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
+      "id": "bee.gov.binding:preflight",
+      "kind": "library.lua",
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
@@ -3546,6 +3536,11 @@
       "source": "modules/gov/src/binding/_index.yaml"
     },
     {
+      "id": "bee.gov.binding:staging_resources",
+      "kind": "library.lua",
+      "source": "modules/gov/src/binding/_index.yaml"
+    },
+    {
       "id": "bee.gov.binding:super_edit_backend_call",
       "kind": "function.lua",
       "source": "modules/gov/src/binding/_index.yaml"
@@ -3564,86 +3559,6 @@
       "id": "bee.gov.binding:workspace_backend_call",
       "kind": "function.lua",
       "source": "modules/gov/src/binding/_index.yaml"
-    },
-    {
-      "id": "bee.gov.capability:capability_access",
-      "kind": "library.lua",
-      "source": "modules/gov/src/capability/_index.yaml"
-    },
-    {
-      "id": "bee.gov.capability:capability_files",
-      "kind": "library.lua",
-      "source": "modules/gov/src/capability/_index.yaml"
-    },
-    {
-      "id": "bee.gov.capability:capability_gateway",
-      "kind": "library.lua",
-      "source": "modules/gov/src/capability/_index.yaml"
-    },
-    {
-      "id": "bee.gov.capability:capability_grants",
-      "kind": "library.lua",
-      "source": "modules/gov/src/capability/_index.yaml"
-    },
-    {
-      "id": "bee.gov.capability:capability_request",
-      "kind": "library.lua",
-      "source": "modules/gov/src/capability/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:artifact",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:candidate",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:delivery",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:delivery_protocol",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:hub_resolver",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:lease_model",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:materializer",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:overlay_resolver",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:publication_profile_decoder",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:resolver",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
-    },
-    {
-      "id": "bee.gov.delivery:staging_resources",
-      "kind": "library.lua",
-      "source": "modules/gov/src/delivery/_index.yaml"
     },
     {
       "id": "bee.gov.env:activation_profiles_ref",
@@ -3766,11 +3681,6 @@
       "source": "modules/gov/src/persist/_index.yaml"
     },
     {
-      "id": "bee.gov.persist:plan_protocol",
-      "kind": "library.lua",
-      "source": "modules/gov/src/persist/_index.yaml"
-    },
-    {
       "id": "bee.gov.persist:plan_store",
       "kind": "library.lua",
       "source": "modules/gov/src/persist/_index.yaml"
@@ -3856,6 +3766,11 @@
       "source": "modules/gov/src/security/_index.yaml"
     },
     {
+      "id": "bee.gov.security:super_edit",
+      "kind": "library.lua",
+      "source": "modules/gov/src/security/_index.yaml"
+    },
+    {
       "id": "bee.gov.security:super_edit_execution_policy",
       "kind": "security.policy",
       "source": "modules/gov/src/security/_index.yaml"
@@ -3916,19 +3831,104 @@
       "source": "modules/gov/src/traits/_index.yaml"
     },
     {
-      "id": "bee.gov.workspace:workspace",
+      "id": "bee.gov.types:activation_profile_decoder",
       "kind": "library.lua",
-      "source": "modules/gov/src/workspace/_index.yaml"
+      "source": "modules/gov/src/types/_index.yaml"
     },
     {
-      "id": "bee.gov.workspace:workspace_applications",
+      "id": "bee.gov.types:artifact",
       "kind": "library.lua",
-      "source": "modules/gov/src/workspace/_index.yaml"
+      "source": "modules/gov/src/types/_index.yaml"
     },
     {
-      "id": "bee.gov.workspace:workspace_protocol",
+      "id": "bee.gov.types:candidate",
       "kind": "library.lua",
-      "source": "modules/gov/src/workspace/_index.yaml"
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:capability_files",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:capability_gateway",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:capability_grants",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:capability_request",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:delivery",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:delivery_protocol",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:governed_application_admission",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:lease_model",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:lists",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:migration_work",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:plan_protocol",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:protected_kernel",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:publication_profile_decoder",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:resolver",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:workspace",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:workspace_applications",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
+    },
+    {
+      "id": "bee.gov.types:workspace_protocol",
+      "kind": "library.lua",
+      "source": "modules/gov/src/types/_index.yaml"
     },
     {
       "id": "bee.gov:definition",
@@ -9985,32 +9985,11 @@
       "source": "modules/gov/src/_index.yaml"
     },
     {
-      "namespace": "bee.gov.activation",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.gov.activation",
-      "source": "modules/gov/src/activation/_index.yaml"
-    },
-    {
       "namespace": "bee.gov.binding",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
       "path_namespace": "bee.gov.binding",
       "source": "modules/gov/src/binding/_index.yaml"
-    },
-    {
-      "namespace": "bee.gov.capability",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.gov.capability",
-      "source": "modules/gov/src/capability/_index.yaml"
-    },
-    {
-      "namespace": "bee.gov.delivery",
-      "namespace_has_underscore": false,
-      "path_matches_namespace": true,
-      "path_namespace": "bee.gov.delivery",
-      "source": "modules/gov/src/delivery/_index.yaml"
     },
     {
       "namespace": "bee.gov.env",
@@ -10083,11 +10062,11 @@
       "source": "modules/gov/src/traits/_index.yaml"
     },
     {
-      "namespace": "bee.gov.workspace",
+      "namespace": "bee.gov.types",
       "namespace_has_underscore": false,
       "path_matches_namespace": true,
-      "path_namespace": "bee.gov.workspace",
-      "source": "modules/gov/src/workspace/_index.yaml"
+      "path_namespace": "bee.gov.types",
+      "source": "modules/gov/src/types/_index.yaml"
     },
     {
       "namespace": "bee.harness",
@@ -16763,7 +16742,7 @@
     },
     {
       "sources": [
-        "modules/gov/src/capability/capability_request.lua"
+        "modules/gov/src/types/capability_request.lua"
       ],
       "tag": "bee.capability-request@1"
     },
@@ -16866,7 +16845,7 @@
     },
     {
       "sources": [
-        "modules/gov/src/activation/activation_profiles.lua"
+        "modules/gov/src/types/activation_profiles.lua"
       ],
       "tag": "bee.governance-activation-policy@1"
     },
@@ -16878,53 +16857,53 @@
     },
     {
       "sources": [
-        "modules/gov/src/activation/application_admission.lua",
+        "modules/gov/src/types/application_admission.lua",
         "src/apps/catalog.lua"
       ],
       "tag": "bee.governance-application-admission@1"
     },
     {
       "sources": [
-        "modules/gov/src/activation/application_admission.lua"
+        "modules/gov/src/types/application_admission.lua"
       ],
       "tag": "bee.governance-application-policies@1"
     },
     {
       "sources": [
-        "modules/gov/src/delivery/delivery.lua"
+        "modules/gov/src/types/delivery.lua"
       ],
       "tag": "bee.governance-application-version-key@2"
     },
     {
       "sources": [
-        "modules/gov/src/delivery/delivery.lua"
+        "modules/gov/src/types/delivery.lua"
       ],
       "tag": "bee.governance-application-version-slot@1"
     },
     {
       "sources": [
         "modules/gov-overlays/src/app/model.lua",
-        "modules/gov/src/delivery/delivery.lua",
+        "modules/gov/src/types/delivery.lua",
         "src/sync/env/_index.yaml"
       ],
       "tag": "bee.governance-application-version@2"
     },
     {
       "sources": [
-        "modules/gov/src/delivery/artifact.lua",
-        "modules/gov/src/traits/guide.lua"
+        "modules/gov/src/traits/guide.lua",
+        "modules/gov/src/types/artifact.lua"
       ],
       "tag": "bee.governance-artifact@1"
     },
     {
       "sources": [
-        "modules/gov/src/delivery/candidate.lua"
+        "modules/gov/src/types/candidate.lua"
       ],
       "tag": "bee.governance-candidate@1"
     },
     {
       "sources": [
-        "modules/gov/src/capability/capability_grants.lua"
+        "modules/gov/src/types/capability_grants.lua"
       ],
       "tag": "bee.governance-capability-grants@1"
     },
@@ -16942,7 +16921,7 @@
     },
     {
       "sources": [
-        "modules/gov/src/activation/headless_revert.lua",
+        "modules/gov/src/binding/headless_revert.lua",
         "modules/gov/src/binding/migration_effect.lua",
         "modules/gov/src/persist/activation_store.lua"
       ],
@@ -16950,13 +16929,13 @@
     },
     {
       "sources": [
-        "modules/gov/src/activation/migration_work.lua"
+        "modules/gov/src/types/migration_work.lua"
       ],
       "tag": "bee.governance-migration-work@2"
     },
     {
       "sources": [
-        "modules/gov/src/activation/migration_work.lua"
+        "modules/gov/src/types/migration_work.lua"
       ],
       "tag": "bee.governance-migration-work@3"
     },
@@ -16968,7 +16947,7 @@
     },
     {
       "sources": [
-        "modules/gov/src/activation/preflight.lua"
+        "modules/gov/src/binding/preflight.lua"
       ],
       "tag": "bee.governance-preflight@1"
     },
@@ -16980,7 +16959,7 @@
     },
     {
       "sources": [
-        "modules/gov/src/workspace/workspace.lua"
+        "modules/gov/src/types/workspace.lua"
       ],
       "tag": "bee.governance-workspace@1"
     },
@@ -17187,7 +17166,7 @@
   "summary": {
     "dangling_requirement_target_count": 0,
     "entry_count": 1816,
-    "namespace_count": 274,
+    "namespace_count": 271,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,

@@ -56,7 +56,13 @@ See [the API and acceptance status](../../../docs/guides/hub.md) for request exa
 Management operations are `plan`, `apply` and `status`, plus publication
 operations `publish_request` and `publish_apply` for person-approved Hub
 uploads (see the publication section of the Hub guide).
-Planning preserves other
+Update Bee selects the core and every host-selected `bee.deps` Bee component
+root together, independent or required, through one measured plan and receipt.
+It preserves parameters, removed components and third-party root selections.
+Retained components include a reason when a newer compatible release is unavailable;
+native requirements and active Hub installer code constrain candidates.
+
+Ordinary component planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. The planner uses the runtime selection rule: preserve a live installed
 version's captured definitions when that component is unchanged; inspect the

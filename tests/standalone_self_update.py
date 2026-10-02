@@ -125,7 +125,7 @@ local function first_core()
         if old.id:sub(1, 9) == "bee.deps:" then
             local retained: inventory.Root? = nil
             for _, root in ipairs(after.roots) do if root.id == old.id then retained = root; break end end
-            assert(retained and retained.owner == "" and retained.version == old.version, "legacy host selection changed")
+            assert(retained and retained.owner == "" and retained.version ~= "", "legacy host selection disappeared")
             assert(canonical.encode(retained.parameters) == canonical.encode(old.parameters), "legacy requirement parameters changed")
         end
     end
@@ -174,25 +174,13 @@ local function live(): integer
     local renderer = assert(registry.snapshot()):get("bee.settings.app:view")
     local renderer_data = renderer and bounds.object(renderer.data)
     local renderer_source = renderer_data and renderer_data.source
-    assert(type(renderer_source) == "string" and renderer_source:find("proof marker __BASELINE__", 1, true),
-        "core update replaced the independently selected Settings renderer")
-    assert(catalog.code(assert(registry.snapshot()), "bee.settings.app:app") == running_code,
-        "core update changed the independently selected Settings code")
+    assert(type(renderer_source) == "string" and renderer_source:find("proof marker __TARGET__", 1, true),
+        "Update Bee kept the old Settings renderer")
+    assert(catalog.code(assert(registry.snapshot()), "bee.settings.app:app") ~= running_code,
+        "Update Bee kept the old Settings code")
     check("__TARGET__")
     about("__TARGET__", "live")
-    selected_components("__COMPONENT__")
-    local settings: inventory.Root? = nil
-    for _, root in ipairs(captured().roots) do if root.component == "bee/settings" then settings = root; break end end
-    assert(settings, "Settings has no independent root after self-update")
-    component_change({action = "update", component = "bee/settings", version = "__TARGET__",
-        parameters = settings.parameters, migration_policy = "none"})
-    renderer = assert(registry.snapshot()):get("bee.settings.app:view")
-    renderer_data = renderer and bounds.object(renderer.data)
-    renderer_source = renderer_data and renderer_data.source
-    assert(type(renderer_source) == "string" and renderer_source:find("proof marker __TARGET__", 1, true),
-        "Settings update kept the old live renderer despite changing its installed version")
-    assert(catalog.code(assert(registry.snapshot()), "bee.settings.app:app") ~= running_code,
-        "Settings update kept the old live application code")
+    selected_components("__NEXT_COMPONENT__")
     logger:info("STANDALONE_SELF_UPDATE_SETTINGS_CODE_UPDATED")
     local files: inventory.Root? = nil
     for _, root in ipairs(captured().roots) do if root.component == "bee/files" then files = root; break end end
@@ -220,9 +208,9 @@ return {main = main, offline = offline}
 '''
 
 
-BASELINE = "0.1.0-selfupdate.15"
-TARGET = "0.1.0-selfupdate.16"
-EXPLICIT = "0.1.0-selfupdate.17"
+BASELINE = "0.1.0-selfupdate.17"
+TARGET = "0.1.0-selfupdate.17.1"
+EXPLICIT = "0.1.0-selfupdate.18"
 COMPONENT = "0.1.0-selfupdate.component.2"
 NEXT_COMPONENT = "0.1.0-selfupdate.component.3"
 
@@ -353,7 +341,7 @@ def native_attached(folder, baseline, explicit, url):
     versions = [next(row["version"] for row in lock["modules"] if row.get("root"))
                 for lock in (baseline_lock, target_lock)]
     args = SimpleNamespace(binary=binary, from_version=versions[0], to_version=versions[1],
-                           marker=versions[1], code_marker="proof marker " + versions[0],
+                           marker=versions[1], code_marker="proof marker " + versions[1],
                            baseline_code_marker="proof marker " + versions[0], evidence=folder, hub_url=url)
     native_exercise(args, scratch, "live")
     return args, scratch
@@ -523,7 +511,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--native-offline":
         args = SimpleNamespace(binary=Path(sys.argv[2]), evidence=Path(sys.argv[4]),
                                from_version=sys.argv[5], to_version=sys.argv[6], marker=sys.argv[6],
-                               code_marker="proof marker " + sys.argv[5])
+                               code_marker="proof marker " + sys.argv[6])
         native_exercise(args, Path(sys.argv[3]), "offline")
     else:
         main(sys.argv[1] if len(sys.argv) > 1 else None)

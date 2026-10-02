@@ -58,6 +58,7 @@ entries:
     binary_identity: bee.hub.package:binary_identity
     canonical: bee.values:canonical
     graph: bee.hub.package:graph
+    inspection: bee.hub.package:inspection
     inventory: bee.hub.package:inventory
     native_compat: bee.hub.package:native_compat
     requirements: bee.hub.package:requirements

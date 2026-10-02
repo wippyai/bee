@@ -97,8 +97,15 @@ receipt, retaining their IDs, live versions and parameters. Inventory and review
 use the existing dependencies and resolution; protection follows required host
 roots and the Hub dependency graph. A refusal identifies the dependent.
 Third-party dependencies retain their constraints and parameters. `bee/bee`
-self-update uses a core artifact without Bee-component dependency declarations,
-so it preserves independent selections, including removed optional components.
+self-update uses a core artifact without Bee-component dependency declarations.
+Update Bee plans that core and every selected `bee.deps` Bee component together,
+including required components. It chooses the newest compatible catalog versions
+without downgrading installed components, preserving host parameters and
+third-party root constraints. Native requirements and the selected core's
+version constrain compatibility; the active Hub installer code remains protected.
+The review lists retained components with the dependency or compatibility reason.
+One digest, confirmation and receipt cover the core and component root changes.
+Removed optional components stay removed.
 Component service handoff remains a proposal; removal uses the existing data
 retention and migration choices.
 

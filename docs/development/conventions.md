@@ -202,8 +202,10 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The current root contains 21,195 Lua lines under `src/`, reduced from the initial
-23,987-line ceiling. `build/root-src-lua-budget.txt` now caps it at 21,195. Run
+The current root contains 21,183 Lua lines under `src/`, reduced from the initial
+23,987-line ceiling. `build/root-src-lua-budget.txt` caps it at 21,183. Shared
+retained-startup progress values live in `modules/application/src` as
+`bee.app:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.
 Lower the ceiling as later component moves reduce root code.
 

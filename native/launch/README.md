@@ -180,9 +180,26 @@ default state and a read-only environment store with home, cwd, self and safe
 PATH executable lookup.
 
 Environment values are nonsecret and absolute. Executable lookup accepts only a
-bare name and returns an absolute PATH result. Writes, deletes, path names and
-traversal are refused.
+bare name and returns an absolute PATH result. Writes to launch facts, deletes,
+path names and traversal are refused.
 
 Run the native package tests with:
 
     make -C native test
+
+Retained startup publishes an owner-only `startup/progress.json` under the selected state.
+The launch identity and PID bind it to the elected owner. Cache creation/writes (and verification reads on Linux),
+owned migration publications and writes from migrations in flight advance its
+sequence. Clients show the current phase and bound publication and enrollment
+by thirty seconds without advancing progress. The retained Lua owner uses the
+same sequence for its ten-second inactivity bound; repeated or regressing
+counters do not renew either wait. Repeated or regressing ledger checkpoints
+and repeated reads of a verified cache file do not advance the sequence.
+Enrollment waits for retained readiness before starting the desktop handshake. A failed startup kills only the owner
+started by that invocation and waits for its exact process to exit; operating
+system locks and SQLite transactions recover on the next start. Normal desktop
+detachment retains the owner. The host environment keeps launch facts read-only
+and exposes startup phase and migration progress fields only to their selected
+owner scopes. Migration publications use the native environment storage without
+a terminal context; timestamped `BEE_STARTUP_PHASE` records in the owner log
+measure the individual checks and upgrades.

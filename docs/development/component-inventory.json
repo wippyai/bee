@@ -161,6 +161,11 @@
       "source": "modules/application/src/_index.yaml"
     },
     {
+      "id": "bee.app:startup_progress",
+      "kind": "library.lua",
+      "source": "modules/application/src/_index.yaml"
+    },
+    {
       "id": "bee.app:status_reader",
       "kind": "library.lua",
       "source": "modules/application/src/_index.yaml"
@@ -842,7 +847,7 @@
     },
     {
       "id": "bee.credentials.security:credential_store_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/credentials/src/security/_index.yaml"
     },
     {
@@ -2291,6 +2296,16 @@
       "source": "src/env/_index.yaml"
     },
     {
+      "id": "bee.env:startup_phase",
+      "kind": "env.variable",
+      "source": "src/env/_index.yaml"
+    },
+    {
+      "id": "bee.env:startup_sequence",
+      "kind": "env.variable",
+      "source": "src/env/_index.yaml"
+    },
+    {
       "id": "bee.env:workspace_db",
       "kind": "db.sql.sqlite",
       "source": "src/env/_index.yaml"
@@ -2792,7 +2807,7 @@
     },
     {
       "id": "bee.gateway.security:store_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/gateway/src/security/_index.yaml"
     },
     {
@@ -3462,7 +3477,7 @@
     },
     {
       "id": "bee.gov.security:staging_database_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/gov/src/security/_index.yaml"
     },
     {
@@ -4187,7 +4202,7 @@
     },
     {
       "id": "bee.harness.security:profile_store_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/harness/src/security/_index.yaml"
     },
     {
@@ -5236,11 +5251,6 @@
       "source": "src/launch/_index.yaml"
     },
     {
-      "id": "bee.launch:startup_watchdog",
-      "kind": "library.lua",
-      "source": "src/launch/_index.yaml"
-    },
-    {
       "id": "bee.launch:supervisor",
       "kind": "process.lua",
       "source": "src/launch/_index.yaml"
@@ -5287,7 +5297,7 @@
     },
     {
       "id": "bee.node.security:database_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/node/src/security/_index.yaml"
     },
     {
@@ -5378,6 +5388,11 @@
     {
       "id": "bee.persist:ledger",
       "kind": "library.lua",
+      "source": "modules/persist/src/_index.yaml"
+    },
+    {
+      "id": "bee.persist:startup_progress",
+      "kind": "env.variable",
       "source": "modules/persist/src/_index.yaml"
     },
     {
@@ -5752,7 +5767,7 @@
     },
     {
       "id": "bee.placement.native.security:placement_store_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/placement-native/src/security/_index.yaml"
     },
     {
@@ -6531,6 +6546,11 @@
       "source": "src/security/desktop/_index.yaml"
     },
     {
+      "id": "bee.security.desktop:startup_progress_policy",
+      "kind": "security.policy.expr",
+      "source": "src/security/desktop/_index.yaml"
+    },
+    {
       "id": "bee.security.desktop:workspace_host_lease_policy",
       "kind": "security.policy.expr",
       "source": "src/security/desktop/_index.yaml"
@@ -6747,7 +6767,7 @@
     },
     {
       "id": "bee.security.storage:client_storage_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "src/security/storage/_index.yaml"
     },
     {
@@ -6777,7 +6797,7 @@
     },
     {
       "id": "bee.security.storage:workspace_catalog_store_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "src/security/storage/_index.yaml"
     },
     {
@@ -6872,7 +6892,7 @@
     },
     {
       "id": "bee.security.threads:thread_outbox_pump_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "src/security/threads/_index.yaml"
     },
     {
@@ -6887,7 +6907,7 @@
     },
     {
       "id": "bee.security.threads:thread_storage_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "src/security/threads/_index.yaml"
     },
     {
@@ -6947,7 +6967,7 @@
     },
     {
       "id": "bee.security:sync_distribution_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "src/security/_index.yaml"
     },
     {
@@ -7297,7 +7317,7 @@
     },
     {
       "id": "bee.sync.security:replica_store_policy",
-      "kind": "security.policy",
+      "kind": "security.policy.expr",
       "source": "modules/sync/src/security/_index.yaml"
     },
     {
@@ -10362,6 +10382,20 @@
       "variable": "NO_COLOR"
     },
     {
+      "id": "bee.env:startup_phase",
+      "kind": "env.variable",
+      "source": "src/env/_index.yaml",
+      "storage": "bee.harness.host:environment",
+      "variable": "startup_phase"
+    },
+    {
+      "id": "bee.env:startup_sequence",
+      "kind": "env.variable",
+      "source": "src/env/_index.yaml",
+      "storage": "bee.harness.host:environment",
+      "variable": "startup_sequence"
+    },
+    {
       "file": "${env:bee.env:workspace_db_path}",
       "id": "bee.env:workspace_db",
       "kind": "db.sql.sqlite",
@@ -10486,6 +10520,13 @@
       "id": "bee.node:environment",
       "kind": "env.storage.os",
       "source": "modules/node/src/_index.yaml"
+    },
+    {
+      "id": "bee.persist:startup_progress",
+      "kind": "env.variable",
+      "source": "modules/persist/src/_index.yaml",
+      "storage": "bee.harness.host:environment",
+      "variable": "startup_progress"
     },
     {
       "id": "bee.placement.docker:boot_environment",
@@ -15872,18 +15913,18 @@
   ],
   "summary": {
     "dangling_requirement_target_count": 0,
-    "entry_count": 1732,
+    "entry_count": 1736,
     "namespace_count": 179,
     "namespace_path_mismatch_count": 0,
     "namespace_underscore_count": 0,
     "native_known_id_count": 26,
-    "owned_store_count": 77,
+    "owned_store_count": 80,
     "owned_table_declaration_count": 138,
-    "persisted_id_count": 804,
+    "persisted_id_count": 808,
     "requirement_count": 134,
     "requirement_target_count": 320,
-    "root_src_lua_budget": 21195,
-    "root_src_lua_lines": 21195,
+    "root_src_lua_budget": 21183,
+    "root_src_lua_lines": 21183,
     "schema_tag_count": 70,
     "topic_count": 137
   },

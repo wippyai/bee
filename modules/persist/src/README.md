@@ -39,6 +39,17 @@ ledger retains its original three columns, without `applied_at` or a new
 migration. Each owner keeps its immutable SQL, ledger identity, resource and
 schema; this module supplies the runner.
 
+The runner publishes migration checkpoints with lowercase owner labels through
+`bee.persist:startup_progress` while retained startup is active. Ledger
+verification reports each checked revision, pending steps report their old/new
+revision before SQL and their applied revision after the ledger insert, and
+completion reports only after commit. A batch completes after its single
+commit; rollback never announces completion. The host-selected store scope
+grants reads and writes only to this progress field, backed by the native host
+environment without a terminal. Ready owners and isolated compositions expose
+an empty field. Repeated or regressing checkpoints do not renew startup waits.
+Migration SQL and checksums remain unchanged.
+
 The current runtime pin exposes SQLite messages without numeric result codes.
 Runtime [PR #891](https://github.com/wippyai/runtime/pull/891) adds `sqlite_code` and `sqlite_extended_code`
 to Lua error details; those fields arrive with that runtime release.

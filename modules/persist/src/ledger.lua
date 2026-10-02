@@ -5,6 +5,7 @@
 -- before pending schema migrations run.
 local sql = require("sql")
 local hash = require("hash")
+local env = require("env")
 local M = {}
 type Migration = {id: integer, name: string, sql: string, rebuild: boolean?}
 type Ledger = {
@@ -55,7 +56,7 @@ local function create_ledger(db: Connection, ledger: Ledger): string?
     if create_err then return "create " .. ledger.label .. " migration ledger: " .. tostring(create_err) end
     return nil
 end
-local function read_ledger(db: Connection, ledger: Ledger, expected: {Migration}): ({[integer]: boolean}?, string?)
+local function read_ledger(db: Connection, ledger: Ledger, expected: {Migration}, reporting: boolean): ({[integer]: boolean}?, string?)
     local name, name_error = table_name(ledger)
     if not name then return nil, name_error end
     local rows, query_err = db:query("SELECT id, name, checksum FROM " .. name .. " ORDER BY id")
@@ -78,6 +79,7 @@ local function read_ledger(db: Connection, ledger: Ledger, expected: {Migration}
         if row_name ~= migration.name then return nil, ledger.label .. " migration name changed" end
         if checksum ~= expected_checksum then return nil, ledger.label .. " migration checksum changed" end
         known[id] = true
+        if reporting then env.set("bee.persist:startup_progress", "Checking data: " .. ledger.label:lower() .. " " .. tostring(id) .. "/" .. tostring(#expected)) end
         expected_id = expected_id + 1
     end
     return known, nil
@@ -115,7 +117,7 @@ end
 
 -- Batch owners commit their complete upgrade atomically. Other owners commit
 -- each step separately; rebuilds disable enforcement outside that transaction.
-local function apply_transaction(db: sql.DB, ledger: Ledger, expected: {Migration}, step: Migration?): (boolean, string?)
+local function apply_transaction(db: sql.DB, ledger: Ledger, expected: {Migration}, step: Migration?, reporting: boolean): (boolean, string?)
     local rebuild = step and step.rebuild == true
     if rebuild then
         local _, off_err = db:execute("PRAGMA foreign_keys = OFF")
@@ -141,18 +143,24 @@ local function apply_transaction(db: sql.DB, ledger: Ledger, expected: {Migratio
     if create_err then return fail(create_err) end
     local _, writer_err = tx:execute("UPDATE " .. ledger.table .. " SET id = id WHERE 0")
     if writer_err then return fail("lock " .. ledger.label .. " migration ledger: " .. tostring(writer_err)) end
-    local known, ledger_err = read_ledger(tx, ledger, expected)
+    local known, ledger_err = read_ledger(tx, ledger, expected, reporting)
     if not known then return fail(ledger_err) end
     local run_err = freshness(tx, ledger, known)
     if run_err then return fail(run_err) end
+    local completed: string? = nil
     for _, migration in ipairs(expected) do
         if not known[migration.id] and (not step or step.id == migration.id) then
+            local phase = ledger.label:lower() .. " " .. tostring(migration.id - 1) .. "->" .. tostring(migration.id)
+            if reporting then env.set("bee.persist:startup_progress", "Upgrading data: " .. phase) end
             local apply_err = apply_migration(tx, ledger, migration)
             if apply_err then return fail(apply_err) end
+            if reporting then env.set("bee.persist:startup_progress", "Applied data: " .. ledger.label:lower() .. " " .. tostring(migration.id)) end
+            completed = phase
         end
     end
     local committed, commit_err = tx:commit()
     if commit_err or committed ~= true then return fail("commit " .. ledger.label .. " migration: " .. tostring(commit_err)) end
+    if reporting and completed then env.set("bee.persist:startup_progress", "Upgraded data: " .. completed) end
     return finish(true, nil)
 end
 
@@ -165,19 +173,22 @@ function M.apply(db: sql.DB, ledger: Ledger, expected: {Migration}): (boolean, s
         if not ledger.freshness_table:match("^[a-z][a-z0-9_]*$") then return false, "migration freshness table name is invalid" end
         if ledger.transaction ~= "batch" then return false, "migration freshness requires a batch transaction" end
     end
+    local active = env.get("bee.persist:startup_progress")
+    local reporting = active ~= nil and active ~= ""
+    if reporting then env.set("bee.persist:startup_progress", "Checking data: " .. ledger.label:lower()) end
     if ledger.transaction == "batch" then
         for _, migration in ipairs(expected) do
             if migration.rebuild then return false, "rebuild migration requires a separate transaction" end
         end
-        return apply_transaction(db, ledger, expected, nil)
+        return apply_transaction(db, ledger, expected, nil, reporting)
     end
     local create_err = create_ledger(db, ledger)
     if create_err then return false, create_err end
-    local known, ledger_err = read_ledger(db, ledger, expected)
+    local known, ledger_err = read_ledger(db, ledger, expected, reporting)
     if not known then return false, ledger_err end
     for _, migration in ipairs(expected) do
         if not known[migration.id] then
-            local applied, apply_err = apply_transaction(db, ledger, expected, migration)
+            local applied, apply_err = apply_transaction(db, ledger, expected, migration, reporting)
             if not applied then return false, apply_err end
         end
     end

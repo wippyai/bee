@@ -6,8 +6,9 @@ entries:
   meta:
     comment: The approval owner's store, linked references, node identity, exact migration source and worker wake
   policy:
-    expression: 'action != "env.get" || resource == "bee.approvals:node_identity_migration_source"'
+    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.approvals:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
     actions:
+    - env.set
     - db.get
     - registry.get
     - system.read

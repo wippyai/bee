@@ -6,6 +6,11 @@ claim source substituted by the Go harness; both enable strict-any.
 `make test` runs Python checks and every registered Lua unit entry in four
 isolated processes.
 
+`make persist-migration-check` exercises workspace, client and sync migrations
+against real SQLite: concurrent opens, interrupted upgrades and immutable ledger
+replay. With startup progress active, native statement and rollback failures
+retain their operation context and never announce migration completion.
+
 Construct fixtures as complete typed records. Keep invalid inputs explicitly
 `unknown` and pass them to the production decoder or operation under test.
 Use production decoders for returned values and narrow optional fields before

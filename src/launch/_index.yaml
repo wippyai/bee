@@ -8,9 +8,6 @@ entries:
   kind: library.lua
   source: file://startup_failure.lua
   imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
-- name: startup_watchdog
-  kind: library.lua
-  source: file://startup_watchdog.lua
 - name: owner_handoff
   kind: library.lua
   source: file://owner_handoff.lua
@@ -107,12 +104,12 @@ entries:
   kind: process.lua
   source: file://owner.lua
   method: main
-  modules: [process, channel, security, time, logger, io, system, registry, ctx, uuid]
+  modules: [process, channel, security, time, logger, io, system, registry, ctx, uuid, env]
   imports: &owner_imports
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership
     startup_failure: bee.launch:startup_failure
-    startup_watchdog: bee.launch:startup_watchdog
+    startup_progress: bee.app:startup_progress
     decode: bee.protocol:decode
     workspaces: bee.workspace.types:selection
     command_stop: bee.launch:command_stop
@@ -125,13 +122,14 @@ entries:
       short: Run the retained Bee workspace owner
       security:
         actor: {id: bee.local}
-        policies: [bee.security.desktop:desktop_policy, bee.security.desktop:retained_owner_spawn_policy, bee.security.desktop:retained_owner_name_policy, bee.security.desktop:retained_owner_node_policy, bee.security.desktop:owner_command_stop_policy]
+        policies: [bee.security.desktop:desktop_policy, bee.security.desktop:retained_owner_spawn_policy, bee.security.desktop:retained_owner_name_policy, bee.security.desktop:retained_owner_node_policy, bee.security.desktop:startup_progress_policy, bee.security.desktop:owner_command_stop_policy]
 - name: daemon
   kind: process.lua
   source: file://daemon.lua
   method: main
-  modules: [process, channel, time, io, system, logger]
+  modules: [process, channel, time, io, system, logger, env]
   imports:
+    startup_progress: bee.app:startup_progress
     leases: bee.app:host_leases
     command_stop: bee.launch:command_stop
     types: bee.hive:types
@@ -143,7 +141,7 @@ entries:
       short: Run the node's services without a folder workspace
       security:
         actor: {id: bee.local}
-        policies: [bee.security.desktop:retained_owner_node_policy, bee.security.desktop:owner_command_stop_policy]
+        policies: [bee.security.desktop:retained_owner_node_policy, bee.security.desktop:startup_progress_policy, bee.security.desktop:owner_command_stop_policy]
 - name: command_stop
   kind: library.lua
   source: file://command_stop.lua

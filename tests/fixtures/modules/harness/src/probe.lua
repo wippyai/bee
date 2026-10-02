@@ -9,7 +9,7 @@ local function main()
     local snapshot, snapshot_error = catalog.snapshot()
     if not snapshot then error(tostring(snapshot_error)) end
     assert(snapshot.complete and #snapshot.bindings == 0, "empty host must activate no drivers")
-    local reference = registry.get("bee.harness:carrier_host_ref")
+    local reference = registry.get("bee.harness.env:carrier_host_ref")
     local linked = reference and type(reference.data) == "table" and reference.data.host_ref == "bee:workers"
     -- Invalid request deliberately reaches host validation first; no admission
     -- services exist here, so a missing host cannot accidentally cause effects.

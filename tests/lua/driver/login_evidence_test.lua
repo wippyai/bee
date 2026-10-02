@@ -27,7 +27,7 @@ local function define_tests()
             test.it(case.provider .. " declares its window login evidence", function()
                 local login = case.launch.login
                 if not login then error("missing login declaration") end
-                local entry = assert(registry.get("bee.driver." .. case.provider .. ":default_window"))
+                local entry = assert(registry.get("bee.driver." .. case.provider .. ".profiles:default_window"))
                 local definition = assert(bounds.object(entry.data))
                 local policy = assert(registry.get(tostring(definition.policy_ref)))
                 local policy_data = policy.data
@@ -39,7 +39,7 @@ local function define_tests()
                 else test.eq(policy_data.allow_host_home, true) end
                 local home = assert(case.launch.provider_home)
                 test.eq(home.private, private)
-                local profiles = assert(registry.get("bee.driver." .. case.provider .. ":profiles"))
+                local profiles = assert(registry.get("bee.driver." .. case.provider .. ".profiles:profiles"))
                 local profile_data = profiles.data
                 for _, profile in ipairs(profile_data.driver.profiles) do
                     if profile.id == "window" then test.eq(profile.isolation_env.private_home, private) end

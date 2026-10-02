@@ -440,7 +440,7 @@ func stageMeasurement(repo, root string, entries []interface{}) error {
 	if err := os.CopyFS(fixture, os.DirFS(filepath.Join(repo, "tests/fixtures/research_measurement"))); err != nil {
 		return err
 	}
-	baseline, err := os.ReadFile(filepath.Join(repo, "modules/threads/src/records/canonical.lua"))
+	baseline, err := os.ReadFile(filepath.Join(repo, "modules/values/src/canonical.lua"))
 	if err != nil {
 		return err
 	}
@@ -525,7 +525,7 @@ func stageLiveMeasurement(root string) error {
 	surface["access"] = map[string]interface{}{"workspace_id": "research-workspace", "policy": "research-live-measurement", "traits": []string{"research:measure"}}
 	// Launch policy belongs to the agy driver package; approval policy belongs
 	// to the root host.
-	for _, relative := range []string{"src/_index.yaml", "modules/driver-agy/src/_index.yaml"} {
+	for _, relative := range []string{"src/security/approvals/_index.yaml", "modules/driver-agy/src/security/_index.yaml"} {
 		path := filepath.Join(root, relative)
 		data, err = os.ReadFile(path)
 		if err != nil {

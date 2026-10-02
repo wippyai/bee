@@ -11,7 +11,7 @@ local OWNER = "bee.gov.apps:workspace-1.notes"
 local APP = "app.notes:app"
 
 local function vocabulary(): capability_model.Vocabulary
-    return assert(capability_model.decode(assert(registry.get("bee:capability_catalog"))))
+    return assert(capability_model.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
 end
 
 local function request(capability: string, parameters: {[string]: unknown}, template_revision: integer?): {[string]: unknown}

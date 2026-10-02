@@ -5,7 +5,6 @@
 -- belongs to adopts.
 local sql = require("sql")
 local json = require("json")
-local logger = require("logger")
 local ledger = require("ledger")
 local state = require("state")
 local contract = require("contract")
@@ -262,12 +261,9 @@ local function acquire(resource: string?): (sql.DB?, string?)
         db:release()
         return nil, "configure migration busy timeout: " .. tostring(busy_error)
     end
-    local log = logger:named("bee.client")
-    log:info("Boot phase", {phase = "migration_check", stage = "begin", owner = "client"})
     local migrated, migration_error = ledger.apply(db, {
         table = "client_schema_migrations", label = "Client", transaction = "batch", applied_at = false,
     }, migrations)
-    log:info("Boot phase", {phase = "migration_check", stage = migrated and "end" or "failed", owner = "client"})
     if not migrated then return fail(migration_error or "Client migration failed") end
     return db, nil
 end

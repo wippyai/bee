@@ -370,12 +370,12 @@ local function define_tests()
             if not snapshot then error(tostring(snapshot_error)) end
             local binding_digest, profile_digest = "", ""
             for _, binding in ipairs(snapshot.bindings) do
-                if binding.binding_id == "bee.driver.claude:binding" then
+                if binding.binding_id == "bee.driver.claude.binding:binding" then
                     binding_digest, profile_digest = binding.binding_digest.entry, binding.profile_digest.entry
                 end
             end
             test.is_true(binding_digest ~= "")
-            local point = checkpoint.new({binding_ref = "bee.driver.claude:binding", binding_digest = binding_digest,
+            local point = checkpoint.new({binding_ref = "bee.driver.claude.binding:binding", binding_digest = binding_digest,
                 profile_id = "window", profile_digest = profile_digest, gateway_binding = "old-binding"}, 1)
             point.retained_session_ref = "session"
             local calls = 0
@@ -405,7 +405,7 @@ local function define_tests()
                 key = function(): string return "key" end,
             }
             local request: machine.Request = {thread_id = "thread", action_id = "action", attempt_id = "next", owner_id = "alice", owner_incarnation = 1,
-                binding_ref = "bee.driver.claude:binding", profile_id = "window", brief = "", policy_ref = "bee.harness.catalog:fixture_policy",
+                binding_ref = "bee.driver.claude.binding:binding", profile_id = "window", brief = "", policy_ref = "bee.harness.catalog:fixture_policy",
                 placement_binding_ref = PLACEMENT.binding_id, placement_binding_digest = PLACEMENT.binding_digest, placement_methods = PLACEMENT_METHODS,
                 resources = {}, environment = {}, previous_attempt_id = "previous", session_ref = "session"}
             local planned, err = machine.plan(io, request)

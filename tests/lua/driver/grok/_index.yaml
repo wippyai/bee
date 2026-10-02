@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    launch: bee.driver.grok:launch
+    launch: bee.driver.grok.binding:launch
     prepare: bee.driver.grok.binding:prepare
     dispatch: bee.driver.grok.binding:dispatch
 - name: configuration_test
@@ -19,9 +19,9 @@ entries:
   modules: [json]
   imports:
     principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
-    configuration: bee.driver.grok:configuration
+    configuration: bee.driver.grok.binding:configuration
     configure: bee.driver.grok.binding:configure
 - name: protocol_test
   kind: function.lua
@@ -29,7 +29,7 @@ entries:
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
-    protocol: bee.driver.grok:protocol
+    protocol: bee.driver.grok.binding:protocol
     normalize: bee.driver.grok.binding:normalize

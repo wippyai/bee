@@ -28,7 +28,7 @@ local supervisor = funcs.new():with_actor(security.new_actor("bee.hive.superviso
     "bee.security.storage:workspace_catalog_read_policy", "bee.hive.security:workspaces_policy"}))
 
 local function admit()
-    local entry = registry.get("bee.resources:resource_roots")
+    local entry = registry.get("bee.resources.env:resource_roots")
     if not entry then error("admitted roots entry") end
     local roots_owner = assert(bounds.object(entry.data))
     local roots = principals.objects(roots_owner.roots)
@@ -41,7 +41,7 @@ local function admit()
 end
 local function create(label: string, subpath: string): string
     admit()
-    local reply, err = manager:call("bee.workspace.catalog:create", {label = label, root_ref = PROJECTS, subpath = subpath, create_directory = true})
+    local reply, err = manager:call("bee.workspace.binding:create", {label = label, root_ref = PROJECTS, subpath = subpath, create_directory = true})
     if err or type(reply) ~= "table" or reply.ok ~= true then error("create " .. label .. ": " .. tostring(err)) end
     return tostring((assert(bounds.object((assert(bounds.object(reply))).value))).workspace_id)
 end

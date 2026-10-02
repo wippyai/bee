@@ -9,8 +9,8 @@ entries:
   - system
   imports:
     types: bee.hive:types
-    sampling: bee.hive.telemetry:sampling
-    clock: bee:clock
+    sampling: bee.hive.telemetry.binding:sampling
+    clock: bee.values:clock
   meta:
     hive: open
     hive_operation:
@@ -43,8 +43,8 @@ entries:
   modules:
   - system
   imports:
-    sampling: bee.hive.telemetry:sampling
-    clock: bee:clock
+    sampling: bee.hive.telemetry.binding:sampling
+    clock: bee.values:clock
   meta:
     hive: open
     hive_operation:
@@ -87,8 +87,8 @@ entries:
   source: file://catalog_list.lua
   method: handle
   imports:
-    catalog: bee.hive:catalog
-    bounds: bee.protocol:bounds
+    catalog: bee.hive.exposure:catalog
+    bounds: bee.values:bounds
   meta:
     hive: open
     hive_operation:
@@ -124,7 +124,7 @@ entries:
   - process
   - system
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     leases: bee.app:host_leases
   meta:
     comment: Open Hive operation paging this node's live workspace holdings with each host phase and lease
@@ -185,10 +185,10 @@ entries:
   modules:
   - system
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     contract: bee.protocol:application
     types: bee.hive:types
-    client: bee.hive:client
+    client: bee.hive.binding:client
   meta:
     comment: Open Hive operation aggregating workspace holdings and local peer link state
     hive: open
@@ -245,3 +245,8 @@ entries:
                   type: boolean
   security:
     policies: []
+- name: sampling
+  kind: library.lua
+  source: file://sampling.lua
+  imports:
+    bounds: bee.values:bounds

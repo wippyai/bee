@@ -27,7 +27,7 @@ entries:
   source: file://catalog.lua
   modules: [funcs, time]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     harness_catalog: bee.harness.catalog:catalog
     definition: bee.harness.launch:definitions
     admission: bee.harness.launch:admission
@@ -39,24 +39,27 @@ entries:
   source: file://scheduler.lua
   modules: [funcs]
   imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
     cancellation: bee.sessions.service:cancellation
 - name: cancellation
   kind: library.lua
   source: file://cancellation.lua
-  modules: [funcs, security]
-  imports: {bounds: bee.threads.records:bounds}
+  modules:
+  - funcs
+  - security
+  imports:
+    bounds: bee.values:bounds
 - name: scheduler_worker
   kind: process.lua
   source: file://scheduler_worker.lua
   method: main
   modules: [process, time, channel, logger, hash, funcs]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     scheduler: bee.sessions.service:scheduler
-    threads_journal: bee.sessions:threads_journal
-    executors: bee.sessions:executor_registry
+    threads_journal: bee.sessions.binding:threads_journal
+    executors: bee.sessions.executor:executor_registry
 - name: scheduler_service
   kind: process.service
   process: bee.sessions.service:scheduler_worker
@@ -72,8 +75,26 @@ entries:
   method: turn_run
   modules: [process, time, channel, logger, hash, funcs]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     scheduler: bee.sessions.service:scheduler
-    threads_journal: bee.sessions:threads_journal
-    executors: bee.sessions:executor_registry
+    threads_journal: bee.sessions.binding:threads_journal
+    executors: bee.sessions.executor:executor_registry
   security: {policies: []}
+- name: owner
+  kind: library.lua
+  source: file://owner.lua
+  modules:
+  - security
+  - hash
+  - funcs
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    journal: bee.sessions.binding:threads_journal
+    driver_route: bee.sessions.executor:driver_route
+    cancellation: bee.sessions.service:cancellation
+    admission: bee.harness.launch:admission
+    catalog_service: bee.sessions.service:catalog
+    scheduler: bee.sessions.service:scheduler
+    budget_values: bee.threads.records:budgets
+    profile_values: bee.harness.profiles:protocol

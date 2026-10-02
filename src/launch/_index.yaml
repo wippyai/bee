@@ -7,7 +7,7 @@ entries:
 - name: startup_failure
   kind: library.lua
   source: file://startup_failure.lua
-  imports: {types: bee.hive:types, bounds: bee.protocol:bounds}
+  imports: {types: bee.hive:types, bounds: bee.values:bounds}
 - name: owner_handoff
   kind: library.lua
   source: file://owner_handoff.lua
@@ -46,7 +46,7 @@ entries:
   imports:
     protocol: bee.launch:protocol
     decode: bee.protocol:decode
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
   meta:
     command:
       name: bee-host
@@ -64,7 +64,7 @@ entries:
     input_decode: bee.protocol:input
     contract: bee.protocol:application
     decode: bee.protocol:decode
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
     edit_mode_recovery: bee.gov.binding:super_edit_recovery_call
     boot_fallback: bee.launch:boot_fallback
 - name: boot_fallback
@@ -83,7 +83,7 @@ entries:
   modules: [process, channel, security, ctx, time, uuid, logger]
   imports: &supervisor_imports
     leases: bee.app:host_leases
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
     desktop_lifecycle: bee.launch:desktop_lifecycle
     desktop_storage: bee.launch:desktop_storage
     desktops: bee.client:desktops
@@ -97,9 +97,26 @@ entries:
   kind: process.lua
   source: file://supervisor.lua
   method: retained
-  modules: [process, channel, security, ctx, time, uuid, logger]
-  imports: *supervisor_imports
-
+  modules:
+  - process
+  - channel
+  - security
+  - ctx
+  - time
+  - uuid
+  - logger
+  imports:
+    leases: bee.app:host_leases
+    workspaces: bee.workspace.types:selection
+    desktop_lifecycle: bee.launch:desktop_lifecycle
+    desktop_storage: bee.launch:desktop_storage
+    desktops: bee.client:desktops
+    attachments: bee.client:attachments
+    retained_protocol: bee.launch:retained_protocol
+    protocol: bee.launch:protocol
+    contract: bee.protocol:application
+    decode: bee.protocol:decode
+    interaction: bee.app:interaction
 - name: owner
   kind: process.lua
   source: file://owner.lua
@@ -109,9 +126,9 @@ entries:
     retained: bee.launch:retained_protocol
     ownership: bee.launch:ownership
     startup_failure: bee.launch:startup_failure
-    startup_progress: bee.app:startup_progress
+    startup_progress: bee.app.status:startup_progress
     decode: bee.protocol:decode
-    workspaces: bee.storage:binding
+    workspaces: bee.workspace.types:selection
     command_stop: bee.launch:command_stop
     owner_handoff: bee.launch:owner_handoff
   meta:
@@ -129,7 +146,7 @@ entries:
   method: main
   modules: [process, channel, time, io, system, logger, env]
   imports:
-    startup_progress: bee.app:startup_progress
+    startup_progress: bee.app.status:startup_progress
     leases: bee.app:host_leases
     command_stop: bee.launch:command_stop
     types: bee.hive:types
@@ -158,7 +175,7 @@ entries:
   method: main
   modules: [process, channel, security, time, uuid, logger]
   imports:
-    clock: bee:clock
+    clock: bee.values:clock
     hosts: bee.launch:hosts
     leases: bee.app:host_leases
     protocol: bee.launch:protocol

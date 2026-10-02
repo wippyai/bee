@@ -14,7 +14,7 @@ entries:
     decode: bee.protocol:decode
     client: bee.app:client
     arguments: bee.app:arguments
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
 - name: decode_test
   kind: function.lua
   source: file://decode_test.lua
@@ -37,7 +37,7 @@ entries:
   modules:
   - json
   imports:
-    recovery: bee.workspace:recovery
+    recovery: bee.workspace.types:recovery
     model: bee.desktop:model
     test: wippy.test:test
 - name: interaction_test

@@ -18,7 +18,7 @@ local exits = require("exits")
 local ACTOR = "bee.test.carrier"
 local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
-local BINDING = "bee.driver.claude:binding"
+local BINDING = "bee.driver.claude.binding:binding"
 local counter = 0
 
 type RegistryInput = {id: string, kind: string, meta: {[string]: unknown}, data: unknown, dependency_root: boolean}
@@ -79,13 +79,13 @@ local function install_policy()
 end
 local function admit_root()
     -- These runner fixtures exercise host-configured roots with literal grant labels.
-    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+    local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
     mode.data = {mode = "host_configured"}
     local selected = registry.snapshot():changes()
     selected:update(mode)
     local configured, mode_error = selected:apply()
     if not configured then error("fixture resource mode: " .. tostring(mode_error)) end
-    local entry = registry.get("bee.placement.native:placement_admitted_roots")
+    local entry = registry.get("bee.placement.native.env:placement_admitted_roots")
     if not entry then error("admitted roots entry") end
     local data = assert(bounds.object(entry.data))
     local roots = principals.objects(data.roots)
@@ -731,7 +731,7 @@ local function define_drain_tests()
 end
 local function owned_cases(cases, options)
     local originals: {{[string]: unknown}} = {}
-    for _, ref in ipairs({"bee.placement.native:placement_resource_mode", "bee.placement.native:placement_admitted_roots"}) do originals[#originals + 1] = assert(registry.get(ref)) end
+    for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots"}) do originals[#originals + 1] = assert(registry.get(ref)) end
     local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
     for _, original in ipairs(originals) do changes:update(registry_input(original)) end

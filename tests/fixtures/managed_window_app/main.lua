@@ -718,8 +718,8 @@ end
 -- Read the actual child's files after broker close. These checks never create
 -- a directory and never run another shell to manufacture the marker.
 M.retained = function()
-    local roots = assert(registry.get("bee.resources:resource_roots"))
-    local mode = assert(registry.get("bee.placement.native:placement_resource_mode"))
+    local roots = assert(registry.get("bee.resources.env:resource_roots"))
+    local mode = assert(registry.get("bee.placement.native.env:placement_resource_mode"))
     local ok, failure = pcall(function()
         local admitted = changed(roots)
         admitted.data = {roots = {{root_ref = "bee.managed.window.fixture:session_root", access = "write"}}}
@@ -731,7 +731,7 @@ M.retained = function()
             root_ref = "bee.managed.window.fixture:session_root", subpath = "", allowed_access = "write"})
         local actor = security.actor()
         if not actor then error("fixture has no authenticated actor") end
-        local vol = assert(fs.get("bee.placement.native:root"))
+        local vol = assert(fs.get("bee.placement.native.env:root"))
         -- Retained sessions are owned by the launch principal that created
         -- them, so the key derives from the application instance, never from
         -- this launcher.

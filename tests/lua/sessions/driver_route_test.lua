@@ -2,7 +2,7 @@
 local test = require("test")
 local route = require("route")
 
-local BINDING = "bee.driver.claude:binding"
+local BINDING = "bee.driver.claude.binding:binding"
 local PREFIX = "bee.driver.claude.binding:"
 
 local function methods(): {[string]: string}

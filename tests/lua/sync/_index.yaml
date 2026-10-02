@@ -21,8 +21,8 @@ entries:
   imports:
     test: wippy.test:test
     migrations: bee.sync.migrations:migrations
-    ledger: bee.persist:ledger
-    persist: bee.persist:database
+    ledger: bee.persist.persist:ledger
+    persist: bee.persist.persist:database
     database: bee.sync.persist:database
   security: {policies: [bee.sync:migration_test_policy]}
 - name: sync_test_db
@@ -46,7 +46,7 @@ entries:
   security:
     policies: [bee.sync:sync_test_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     store: bee.sync.persist:store
 - name: canonical_test
@@ -57,16 +57,17 @@ entries:
   modules: [json]
   imports:
     test: wippy.test:test
-    canonical: bee.sync:canonical
-    bounds: bee.sync:bounds
-    scalar: bee.protocol:bounds
+    canonical: bee.sync.values:canonical
+    encoder: bee.values:canonical
+    bounds: bee.sync.values:bounds
+    scalar: bee.values:bounds
 - name: protocol_test
   kind: function.lua
   source: file://protocol_test.lua
   method: run
   meta: {type: test, suite: bee}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     protocol: bee.sync:protocol
 - name: version_test
@@ -76,7 +77,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    version: bee.sync:version
+    version: bee.sync.values:version
 - name: replicas_test
   kind: function.lua
   source: file://replicas_test.lua
@@ -86,10 +87,10 @@ entries:
   security:
     policies: [bee.sync:sync_test_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     replicas: bee.sync.persist:replicas
-    version: bee.sync:version
+    version: bee.sync.values:version
 - name: distribution_store_test
   kind: function.lua
   source: file://distribution_store_test.lua
@@ -98,7 +99,7 @@ entries:
   meta: {type: test, suite: bee}
   security: {policies: [bee.sync:sync_test_policy]}
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     store: bee.sync.persist:distribution_store
 - name: distributor_test
@@ -118,7 +119,7 @@ entries:
   imports:
     test: wippy.test:test
     protocol: bee.sync:replica_protocol
-    version: bee.sync:version
+    version: bee.sync.values:version
 - name: replica_method_client_policy
   kind: security.policy
   meta: {type: test_support}
@@ -140,6 +141,6 @@ entries:
   meta: {type: test, suite: bee}
   modules: [funcs, security, uuid, hash, base64]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
-    version: bee.sync:version
+    version: bee.sync.values:version

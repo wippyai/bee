@@ -1,6 +1,7 @@
 -- MIT. Exact application-to-broker thread facade messages. Identity and
 -- authority come from the authenticated execution and its durable binding.
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local record = require("record")
 local record_types = require("record_types")
 
@@ -55,12 +56,12 @@ local function required_id(value: unknown): string?
 end
 
 local function cursor(value: unknown): integer?
-    return bounds.cursor(value)
+    return record_bounds.cursor(value)
 end
 
 local function limit(value: unknown): integer?
     local result = bounds.integer(value)
-    if not result or result < 1 or result > bounds.MAX_PAGE_RECORDS then return nil end
+    if not result or result < 1 or result > record_bounds.MAX_PAGE_RECORDS then return nil end
     return result
 end
 
@@ -129,7 +130,7 @@ function M.request(value: unknown): Request?
 end
 
 local function record_list(value: unknown): {record_types.Record}?
-    local list = bounds.array(value, bounds.MAX_PAGE_RECORDS)
+    local list = bounds.array(value, record_bounds.MAX_PAGE_RECORDS)
     if not list then return nil end
     local decoded: {record_types.Record} = {}
     for index, item in ipairs(list) do
@@ -145,7 +146,7 @@ local function subscription(value: unknown): Subscription?
     if not object or not exact(object, {"subscription_id", "consumer_id", "after_sequence", "lease_generation",
         "owner_incarnation", "owner_authority", "durability", "filter_digest", "closed"}) then return nil end
     local subscription_id, consumer_id = bounds.id(object.subscription_id), bounds.id(object.consumer_id)
-    local after = bounds.cursor(object.after_sequence)
+    local after = record_bounds.cursor(object.after_sequence)
     local lease_generation, incarnation = generation(object.lease_generation), bounds.count(object.owner_incarnation)
     local authority = bounds.id(object.owner_authority)
     local raw_durability = bounds.member(object.durability, {"durable", "reconstructible"})
@@ -174,7 +175,7 @@ local function decode_success(op: Operation, value: unknown, identity: Identity)
         return reply
     elseif op == "post" then
         if not exact(object, {"record_id", "sequence"}) then return nil end
-        local record_id, sequence = bounds.id(object.record_id), bounds.sequence(object.sequence)
+        local record_id, sequence = bounds.id(object.record_id), record_bounds.sequence(object.sequence)
         if not record_id or not sequence then return nil end
         local result: PostResult = {record_id = record_id, sequence = sequence}
         local reply: SuccessReply = {operation = "post", ok = true, value = result, error = nil,

@@ -6,15 +6,15 @@ entries:
   source: file://handle.lua
   modules: [registry, funcs]
   imports:
-    bounds: bee.protocol:bounds
-    client: bee.hive:client
+    bounds: bee.values:bounds
+    client: bee.hive.binding:client
     types: bee.hive:types
-    principals: bee.hive:principals
+    principals: bee.hive.security:principals
 - name: policy
   kind: security.policy
   policy:
     actions: [registry.get, funcs.call]
-    resources: [bee.hive.supervisor:principal_mappings, bee.feed.probe:handle, bee:approver_policies, bee.approvals.binding:request]
+    resources: [bee.hive.supervisor:principal_mappings, bee.feed.probe:handle, bee.security.approvals:approver_policies, bee.approvals.binding:request]
     effect: allow
 - name: enrollment_policy
   kind: security.policy
@@ -42,7 +42,7 @@ entries:
   security:
     policies: [bee.feed.probe:policy, bee.feed.probe:enrollment_policy]
   imports:
-    bounds: bee.protocol:bounds
-    client: bee.hive:client
+    bounds: bee.values:bounds
+    client: bee.hive.binding:client
     types: bee.hive:types
-    principals: bee.hive:principals
+    principals: bee.hive.security:principals

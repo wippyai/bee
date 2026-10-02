@@ -8,5 +8,5 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    migration_work: bee.hub:migration_work
-    plan: bee.hub:plan
+    migration_work: bee.hub.activation:migration_work
+    plan: bee.hub.package:plan

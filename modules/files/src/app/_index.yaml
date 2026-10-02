@@ -5,10 +5,10 @@ entries:
   kind: library.lua
   source: file://model.lua
   imports:
-    tree: bee.files:tree
-    syntax: bee.files:syntax
+    tree: bee.files.app:tree
+    syntax: bee.files.app:syntax
     protocol: bee.files:protocol
-    source: bee.files:source
+    source: bee.files.app:source
 - name: view
   kind: library.lua
   source: file://view.lua
@@ -16,7 +16,7 @@ entries:
   imports:
     frame: bee.app:frame
     appearance: bee.app:appearance
-    syntax: bee.files:syntax
+    syntax: bee.files.app:syntax
     model: bee.files.app:model
 - name: app
   kind: process.lua
@@ -27,9 +27,9 @@ entries:
     frame: bee.app:frame
     client: bee.app:client
     appearance: bee.app:appearance
-    syntax: bee.files:syntax
+    syntax: bee.files.app:syntax
     protocol: bee.files:protocol
-    source: bee.files:source
+    source: bee.files.app:source
     model: bee.files.app:model
     view: bee.files.app:view
   meta:
@@ -43,3 +43,23 @@ entries:
       instance_policy: singleton
       group: Tools
       role: inspection
+- name: gitignore
+  kind: library.lua
+  source: file://gitignore.lua
+- name: source
+  kind: library.lua
+  source: file://source.lua
+  modules: [fs]
+- name: tree
+  kind: library.lua
+  source: file://tree.lua
+  imports:
+    protocol: bee.files:protocol
+    gitignore: bee.files.app:gitignore
+    source: bee.files.app:source
+- name: syntax
+  kind: library.lua
+  source: file://syntax.lua
+  modules: [treesitter]
+  imports:
+    appearance: bee.app:appearance

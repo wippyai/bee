@@ -19,65 +19,12 @@ entries:
   version: '*'
 - name: target_threads_journal
   kind: ns.requirement
-  default: bee.threads:journal_local
+  default: bee.threads.binding:journal_local
   meta:
     comment: Host-selected binding for the canonical Threads journal contract
   targets:
-  - entry: bee.sessions:threads_journal_ref
+  - entry: bee.sessions.env:threads_journal_ref
     path: .data.ref
-- name: threads_journal_ref
-  kind: registry.entry
-  meta:
-    type: bee.sessions.threads_journal_ref
-    comment: The host-selected Threads journal contract binding
-- name: executor_selection
-  kind: registry.entry
-  meta:
-    type: bee.sessions.executor_selection
-    comment: The host-selected executor binding refs
-  data:
-    refs:
-    - bee.sessions.binding:external_executor_binding
-- name: threads_journal
-  kind: library.lua
-  source: file://threads_journal.lua
-  modules:
-  - registry
-  - funcs
-  imports:
-    scheduler: bee.sessions.service:scheduler
-- name: owner
-  kind: library.lua
-  source: file://owner.lua
-  modules:
-  - security
-  - hash
-  - funcs
-  imports:
-    bounds: bee.threads.records:bounds
-    canonical: bee.threads.records:canonical
-    journal: bee.sessions:threads_journal
-    driver_route: bee.sessions:driver_route
-    cancellation: bee.sessions.service:cancellation
-    admission: bee.harness.launch:admission
-    catalog_service: bee.sessions.service:catalog
-    scheduler: bee.sessions.service:scheduler
-    budget_values: bee.threads.records:budgets
-    profile_values: bee.harness.profiles:protocol
-- name: driver_route
-  kind: library.lua
-  source: file://driver_route.lua
-  modules:
-  - registry
-- name: executor_registry
-  kind: library.lua
-  source: file://executor_registry.lua
-  modules:
-  - registry
-  - funcs
-  - security
-  imports:
-    scheduler: bee.sessions.service:scheduler
 - name: contract
   kind: contract.definition
   methods:
@@ -112,3 +59,7 @@ entries:
   methods:
   - name: run_turn
     description: Execute one accepted work turn through the selected driver and placement
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

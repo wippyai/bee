@@ -25,7 +25,7 @@ end
 local function definition(id: string, command: string, mode: string, fullscreen: boolean?): Entry
     return {id = PREFIX .. id, kind = "registry.entry", meta = {type = "bee.launch_definition", test_support = true}, data = {
         schema_revision = "bee.launch-definition@1", launch_id = id, title = "Selection fixture", command_names = {command},
-        binding_ref = "bee.driver.claude:binding", profile_id = "window", policy_ref = POLICY, default_mode = mode,
+        binding_ref = "bee.driver.claude.binding:binding", profile_id = "window", policy_ref = POLICY, default_mode = mode,
         allowed_overrides = {}, workdir_policy = {kind = "caller_workspace"}, thread_policy = {kind = "new"},
         credentials = {}, presentation = {start_menu = false, fullscreen = fullscreen == true, reuse = "never"},
     }}

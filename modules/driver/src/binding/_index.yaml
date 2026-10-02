@@ -1,0 +1,28 @@
+version: '1.0'
+namespace: bee.driver.binding
+entries:
+- name: universal
+  kind: library.lua
+  source: file://universal.lua
+  modules:
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    canonical: bee.values:canonical
+    descriptor: bee.driver.descriptor:descriptor
+    configuration: bee.driver.configuration:configuration
+    types: bee.driver:types
+    locate: bee.driver.locate:locate
+    codec_registry: bee.driver.codec:codec_registry
+    option_render: bee.driver.configuration:option_render
+    normalizer: bee.driver.kit:normalize
+- name: resolver
+  kind: library.lua
+  source: file://resolver.lua
+  modules:
+  - registry
+  imports:
+    bounds: bee.values:bounds
+    profile: bee.driver.profiles:profile
+    descriptor: bee.driver.descriptor:descriptor
+    types: bee.driver:types

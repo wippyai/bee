@@ -25,7 +25,7 @@ function M.decode_reply(raw: unknown): Reply
     end
     return {ok = reply.ok, error = fault, value = reply.value, replayed = reply.replayed}
 end
-M.RESOURCE = "bee.threads:db"
+M.RESOURCE = "bee.threads.env:db"
 local SERVICE = "bee.threads.binding:"
 local DELIVERY = {claim = true, dispatch = true, ack = true, release = true, expire = true, reconcile = true, subscribe = true, page = true, ack_page = true, unsubscribe = true, resume = true, close_subscription = true, forget_subscription = true, wait = true, watch = true}
 local CLIENT_POLICY = "bee.threads:client_test_policy"

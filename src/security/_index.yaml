@@ -10,14 +10,14 @@ entries:
   - definition_id: bee.console.app:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
-    - bee.console:executor_policy
-    - bee.console:command_policy
+    - bee.console.security:executor_policy
+    - bee.console.security:command_policy
   - definition_id: bee.approvals.inbox.app:app
     policies:
     - bee.security:ordinary_app_subsystem_boundary
     - bee.security.approvals:approval_decide_policy
     - bee.security.gov:governance_delivery_lease_policy
-    - bee.approvals.inbox:client_policy
+    - bee.approvals.inbox.security:client_policy
     - bee.security.storage:workspace_catalog_read_policy
 - name: base_app_policy
   kind: security.policy.expr
@@ -86,10 +86,10 @@ entries:
     actions:
     - db.get
     resources:
-    - bee.placement.native:db
-    - bee.resources:db
-    - bee.credentials:db
-    - bee.gov:db
+    - bee.placement.native.env:db
+    - bee.resources.env:db
+    - bee.credentials.env:db
+    - bee.gov.env:db
     effect: deny
 - name: settings_edit_mode_policy
   kind: security.policy
@@ -122,7 +122,7 @@ entries:
   meta:
     comment: Generic immutable feed delivery to connected non-client Hive members
   policy:
-    expression: (resource != "bee.persist:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist:startup_progress")
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions: [db.get, registry.get, system.read, hive.invoke, process.registry.lookup,
       process.listen, process.unlisten, process.send, env.set, env.get]
     resources: '*'

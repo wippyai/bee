@@ -75,26 +75,26 @@ entries:
     - registry.overlay.delete.security.policy.expr
     - registry.overlay.shadow
     resources:
-    - bee.placement.docker:environment
-    - bee:gateway_endpoint
-    - bee:gateway_listener
+    - bee.placement.docker.env:environment
+    - bee.gateway.api:gateway_endpoint
+    - bee.gateway.api:gateway_listener
     - '*'
     effect: allow
     expression: (action in ["registry.get", "funcs.call", "bee.approvals.request",
       "bee.approvals.read", "bee.approvals.consume"]) || (action in ["registry.overlay.get",
-      "registry.overlay.apply"] && resource == "bee.placement.docker:environment")
+      "registry.overlay.apply"] && resource == "bee.placement.docker.env:environment")
       || (action in ["registry.overlay.shadow", "registry.overlay.update.registry.entry",
       "registry.overlay.update.http.service", "registry.overlay.delete.registry.entry",
       "registry.overlay.delete.http.service", "registry.overlay.update.security.policy.expr",
-      "registry.overlay.delete.security.policy.expr"] && resource in ["bee:gateway_endpoint",
-      "bee:gateway_listener", "bee.gateway.security:readiness_policy"])
+      "registry.overlay.delete.security.policy.expr"] && resource in ["bee.gateway.api:gateway_endpoint",
+      "bee.gateway.api:gateway_listener", "bee.gateway.security:readiness_policy"])
 - name: environment_revoke_policy
   kind: security.policy
   policy:
     actions:
     - bee.placement.environment.revoke
     resources:
-    - bee.placement.docker:coding
+    - bee.placement.docker.profiles:coding
     effect: allow
 - name: environment_listener_policy
   kind: security.policy

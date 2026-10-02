@@ -2,6 +2,7 @@
 local text = require("text")
 local caller = require("caller")
 local bounds = require("bounds")
+local record_bounds = require("record_bounds")
 local M = {}
 M.UPDATE = "bee.threads.binding:status_update"
 M.READ = "bee.threads.binding:status_read"
@@ -85,7 +86,7 @@ local function decode_last_outcome(value: unknown): LastOutcome?
     if not object or bounds.fields(object, {"kind", "outcome", "at_sequence"}) then return nil end
     local kind = bounds.member(object.kind, {"turn", "receipt"})
     local selected_outcome = outcome(object.outcome)
-    local sequence = bounds.sequence(object.at_sequence)
+    local sequence = record_bounds.sequence(object.at_sequence)
     if not kind or not selected_outcome or not sequence then return nil end
     local selected_kind: "turn" | "receipt"
     if kind == "turn" then selected_kind = "turn"
@@ -121,8 +122,8 @@ local function decode_projection(value: unknown, include_status: boolean): (Proj
     local unknown = bounds.fields(object, allowed)
     if unknown then return nil, "projection value: " .. unknown end
     local revision = bounds.count(object.revision)
-    local through = bounds.cursor(object.through_sequence)
-    local head = bounds.cursor(object.head_sequence)
+    local through = record_bounds.cursor(object.through_sequence)
+    local head = record_bounds.cursor(object.head_sequence)
     if not revision or not through or not head or through > head then return nil, "projection cursors are malformed" end
     if not bounds.object(object.checkpoint) then return nil, "projection checkpoint must be an object" end
     if object.digest ~= nil and not bounds.text(object.digest, 64) then return nil, "projection digest is malformed" end

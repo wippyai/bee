@@ -11,4 +11,9 @@ entries:
 - name: model
   kind: library.lua
   source: file://model.lua
-  imports: {bounds: bee.threads.records:bounds}
+  imports:
+    bounds: bee.values:bounds
+- name: dependency_values
+  kind: ns.dependency
+  component: bee/values
+  version: '*'

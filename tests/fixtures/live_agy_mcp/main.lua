@@ -26,8 +26,8 @@ local function main()
     local actor = "bee.research.probe"
     local marker = "bee-mcp-" .. tostring(time.now():unix_nano())
     local thread = "research-live"
-    local definition = "bee.driver.agy:research_batch"
-    local policy = registry.get("bee.driver.agy:launch_policy_agy_batch")
+    local definition = "bee.driver.agy.profiles:research_batch"
+    local policy = registry.get("bee.driver.agy.security:launch_policy_agy_batch")
     if not policy then error("Agy batch policy unavailable") end
     local data = bounds.object(policy.data)
     if not data then error("Agy policy data missing") end
@@ -39,7 +39,7 @@ local function main()
         access = {policy = "live-research", traits = {"research:record"}}}
     local changes = registry.snapshot():changes()
     changes:update(policy)
-    local approvers = registry.get("bee:approver_policies")
+    local approvers = registry.get("bee.security.approvals:approver_policies")
     if not approvers then error("approval policies missing") end
     local approver_data = bounds.object(approvers.data)
     if not approver_data then error("approval policy data missing") end
@@ -136,7 +136,7 @@ local function main()
     end
     if not found then error("Gemini did not commit the requested MCP message") end
     if not approved then error("Gemini did not request access through the approval inbox") end
-    local db, db_error = sql.get("bee.gateway:db")
+    local db, db_error = sql.get("bee.gateway.env:db")
     if not db then error(tostring(db_error)) end
     local rows, query_error = db:query("SELECT s.active_json, s.context_json FROM bee_gateway_surfaces s JOIN bee_gateway_bindings b ON b.binding_id = s.binding_id WHERE b.attempt_id = ?", {started.attempt_id})
     db:release()

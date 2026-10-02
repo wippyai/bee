@@ -14,7 +14,7 @@
     assert(security.can("funcs.call", "bee.client:list_desktops"), "missing display catalog authority")
     assert(security.can("bee.client.desktops.read", "bee.env:client_db"), "missing display read authority")
     assert(security.can("bee.workspace.manager.read", "bee:workspace_catalog"), "missing workspace catalog authority")
-    assert(security.can("funcs.call", "bee.workspace.catalog:list"), "missing workspace catalog call authority")
+    assert(security.can("funcs.call", "bee.workspace.binding:list"), "missing workspace catalog call authority")
     assert(security.can("hive.owner.stop", "bee.hive.owner:stop"), "missing owner stop authority")
     assert(not security.can("process.host", "bee.hive.service:supervisor_host"), "unexpected supervisor host authority")
     assert(not security.can("process.spawn", "bee.hive.supervisor:main"), "unexpected spawn authority")

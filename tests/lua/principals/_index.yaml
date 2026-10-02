@@ -6,4 +6,4 @@ entries:
   source: file://bound.lua
   meta: {type: test_support}
   modules: [security]
-  imports: {caller: bee.app:caller, bounds: bee.protocol:bounds}
+  imports: {caller: bee.app:caller, bounds: bee.values:bounds}

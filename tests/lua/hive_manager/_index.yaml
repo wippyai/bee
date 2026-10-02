@@ -8,7 +8,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    directory: bee.hive.manager:directory
+    directory: bee.hive.manager.app:directory
     types: bee.hive:types
 - name: model_test
   kind: function.lua
@@ -19,7 +19,7 @@ entries:
   imports:
     test: wippy.test:test
     model: bee.hive.manager.app:model
-    directory: bee.hive.manager:directory
+    directory: bee.hive.manager.app:directory
     types: bee.hive:types
 - name: view_test
   kind: function.lua
@@ -32,7 +32,7 @@ entries:
     test: wippy.test:test
     model: bee.hive.manager.app:model
     view: bee.hive.manager.app:view
-    directory: bee.hive.manager:directory
+    directory: bee.hive.manager.app:directory
     types: bee.hive:types
     appearance: bee.app:appearance
 - name: remote_test
@@ -44,7 +44,7 @@ entries:
     test: wippy.test:test
     remote: bee.hive.manager.app:remote
     model: bee.hive.manager.app:model
-    directory: bee.hive.manager:directory
+    directory: bee.hive.manager.app:directory
     types: bee.hive:types
     desktop_remote: bee.hive.desktop:remote
     display: bee.hive.desktop:display

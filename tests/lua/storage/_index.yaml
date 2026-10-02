@@ -14,9 +14,9 @@ entries:
   modules: [sql]
   imports:
     test: wippy.test:test
-    store: bee.storage:store
-    catalog: bee.storage:catalog
-    binding: bee.storage:binding
-    assignments: bee.storage:assignments
-    thread_bindings: bee.storage:thread_bindings
+    store: bee.workspace.persist:store
+    catalog: bee.workspace.persist:catalog
+    binding: bee.workspace.types:selection
+    assignments: bee.workspace.persist:assignments
+    thread_bindings: bee.workspace.persist:thread_bindings
     legacy_schema: bee.storage:legacy_schema

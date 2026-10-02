@@ -44,10 +44,10 @@ entries:
   method: main
   modules: [funcs, registry, system, env, json, logger, sql, time]
   imports:
-    bounds: bee.threads.records:bounds
-    artifact: bee.gov:artifact
-    materializer: bee.gov:materializer
-    preflight: bee.gov:preflight
+    bounds: bee.values:bounds
+    artifact: bee.gov.delivery:artifact
+    materializer: bee.gov.delivery:materializer
+    preflight: bee.gov.activation:preflight
     catalog: bee.apps:catalog
   security:
     policies:
@@ -67,7 +67,7 @@ entries:
   method: main
   modules: [funcs, registry, json, logger, base64, hash]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.app.journey.probe:operator_policy]
   meta:
@@ -82,10 +82,10 @@ entries:
   method: main
   modules: [funcs, system, env, json, logger]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     guide: bee.gov.traits:guide
-    artifact: bee.gov:artifact
-    preflight: bee.gov:preflight
+    artifact: bee.gov.delivery:artifact
+    preflight: bee.gov.activation:preflight
   security:
     policies: [bee.app.journey.probe:operator_policy]
   meta:
@@ -101,7 +101,7 @@ entries:
   modules: [registry, time, logger, env]
   imports:
     catalog: bee.apps:catalog
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
   security:
     policies: [bee.app.journey.probe:operator_policy]
   meta:

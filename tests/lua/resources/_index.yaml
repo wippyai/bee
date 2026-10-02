@@ -52,12 +52,12 @@ entries:
   security:
     policies: [bee.resources:apply_test_policy, bee.resources.security:resource_store_policy]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     principals: bee.test.principals:bound
     test: wippy.test:test
     authority: bee.resources.persist:authority
     capability_model: bee.capability:model
     migrations: bee.resources.migrations:migrations
-    persist: bee.persist:database
-    resources: bee.resources:resources
+    persist: bee.persist.persist:database
+    resources: bee.resources.env:resources
     identity_migration: bee.resources.persist:identity_migration

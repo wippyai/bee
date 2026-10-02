@@ -152,7 +152,7 @@ local function define_tests()
         end)
         test.it("admits a super-edit profile only while unexpired and explicitly confirmed", function()
             local function install(name: string, confirm: unknown?, approvers: unknown?)
-                local current = assert(registry.get("bee:approver_policies"))
+                local current = assert(registry.get("bee.security.approvals:approver_policies"))
                 local data = assert(bounds.object(current.data))
                 local rows: {{[string]: unknown}} = {}
                 for _, policy in ipairs(principals.objects(data.policies)) do
@@ -201,7 +201,7 @@ local function define_tests()
             test.is_false(approverless)
             test.not_nil((string.find(approverless_error, "names no approvers", 1, true)))
             -- A dedicated policy absent from the host table is refused.
-            local stripped = assert(registry.get("bee:approver_policies"))
+            local stripped = assert(registry.get("bee.security.approvals:approver_policies"))
             local stripped_data = assert(bounds.object(stripped.data))
             stripped_data.policies = {{name = "workspace-application-delivery",
                 approvers = {{definition_id = "bee.approvals.inbox.app:app"}}, max_ttl_ms = 600000}}

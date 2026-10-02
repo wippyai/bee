@@ -16,8 +16,8 @@ local model = require("model")
 local appearance = require("appearance")
 
 local PROJECTS = "bee.workspace.catalog:projects_fixture"
-local RESOURCES = "bee.resources:resources_workspace_extension"
-local AGENTS = "bee:gateway_workspace_extension"
+local RESOURCES = "bee.resources.binding:resources_workspace_extension"
+local AGENTS = "bee.gateway.binding:gateway_workspace_extension"
 local BROKEN = "bee.workspace.catalog:broken_extension"
 type Object = {[string]: unknown}
 type Reply = {ok: boolean, error: {code: string, message: string}?, value: unknown}
@@ -51,7 +51,7 @@ local function value(reply: Reply): Object
 end
 
 local function admit()
-    local entry = registry.get("bee.resources:resource_roots")
+    local entry = registry.get("bee.resources.env:resource_roots")
     if not entry then error("admitted roots entry") end
     local roots_owner = assert(bounds.object(entry.data))
     local roots = principals.objects(roots_owner.roots)
@@ -69,7 +69,7 @@ local function workspace(label: string): string
     local name = fresh("extension")
     local volume = assert(fs.get(PROJECTS))
     assert(volume:mkdir(name))
-    return tostring(value(call(manager, "bee.workspace.catalog:create", {label = label, root_ref = PROJECTS, subpath = name})).workspace_id)
+    return tostring(value(call(manager, "bee.workspace.binding:create", {label = label, root_ref = PROJECTS, subpath = name})).workspace_id)
 end
 
 local function extension(inspected: Object, binding: string): Object
@@ -91,7 +91,7 @@ local function define_tests()
                 applications = {{id = "view-1", instance_id = "instance-1", definition_id = "bee.settings.app:app", resume_schema = "settings.v1",
                     restart_policy = "automatic", resume_state = ""}}}))
             saved:close()
-            local inspected = value(call(reader, "bee.workspace.catalog:inspect", {workspace_id = id}))
+            local inspected = value(call(reader, "bee.workspace.binding:inspect", {workspace_id = id}))
             test.eq((assert(bounds.object(inspected.workspace))).label, "Described")
             test.eq(inspected.live, false)
             local applications = principals.objects(inspected.applications)
@@ -116,7 +116,7 @@ local function define_tests()
             for _, name in ipairs({"alpha-notes", "alpha-code", "beta"}) do
                 value(call(manager, "bee.resources.binding:associate", {workspace_id = id, name = name, root_ref = PROJECTS, subpath = "", allowed_access = "read"}))
             end
-            local found = value(call(reader, "bee.workspace.catalog:search_within", {workspace_id = id, text = "alpha", limit = 5}))
+            local found = value(call(reader, "bee.workspace.binding:search_within", {workspace_id = id, text = "alpha", limit = 5}))
             local resources: Object? = nil
             for _, item in ipairs(principals.objects(found.results)) do if item.binding == RESOURCES then resources = item end end
             if not resources then error("resources results missing") end
@@ -124,13 +124,13 @@ local function define_tests()
             test.eq(#hits, 2)
             test.eq(hits[1].label, "alpha-code")
             test.eq(hits[2].label, "alpha-notes")
-            local missing = call(reader, "bee.workspace.catalog:search_within", {workspace_id = string.rep("0", 32), text = "alpha"})
+            local missing = call(reader, "bee.workspace.binding:search_within", {workspace_id = string.rep("0", 32), text = "alpha"})
             test.eq(missing.error and missing.error.code, "NOT_FOUND")
         end)
 
         test.it("keeps the other extensions when one fails", function()
             local id = workspace("Resilient")
-            local inspected = value(call(reader, "bee.workspace.catalog:inspect", {workspace_id = id}))
+            local inspected = value(call(reader, "bee.workspace.binding:inspect", {workspace_id = id}))
             local broken = extension(inspected, BROKEN)
             test.contains(tostring(broken.error), "deliberately")
             test.is_nil(extension(inspected, RESOURCES).error)
@@ -143,7 +143,7 @@ local function define_tests()
             test.eq(denied.error and denied.error.code, "DENIED")
             local sessions = call(stranger, "bee.gateway.binding:describe", {workspace_id = id})
             test.eq(sessions.error and sessions.error.code, "DENIED")
-            local unread = call(executor("bee.test.extension_outsider", {"bee.workspace.catalog:call_test_policy"}), "bee.workspace.catalog:inspect", {workspace_id = id})
+            local unread = call(executor("bee.test.extension_outsider", {"bee.workspace.catalog:call_test_policy"}), "bee.workspace.binding:inspect", {workspace_id = id})
             test.eq(unread.error and unread.error.code, "DENIED")
         end)
     end)

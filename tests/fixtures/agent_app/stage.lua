@@ -100,7 +100,7 @@ local function configure(workspace_id: string, local_node: string, source_worksp
     activation_data.profiles = activation_profiles
     activation.data = activation_data
 
-    local approvers = registry.get("bee:approver_policies")
+    local approvers = registry.get("bee.security.approvals:approver_policies")
     if not approvers then error("approval policies are unavailable") end
     local approver_data = object(approvers.data)
     local policies = assert(bounds.array(approver_data.policies))

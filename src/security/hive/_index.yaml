@@ -257,9 +257,9 @@ entries:
     actions:
     - funcs.call
     resources:
-    - bee.workspace.catalog:create
-    - bee.workspace.catalog:list
-    - bee.workspace.catalog:archive
-    - bee.workspace.catalog:restore
-    - bee.workspace.catalog:roots
+    - bee.workspace.binding:create
+    - bee.workspace.binding:list
+    - bee.workspace.binding:archive
+    - bee.workspace.binding:restore
+    - bee.workspace.binding:roots
     effect: allow

@@ -3,7 +3,7 @@
 Native placement: one admitted launch becomes one attempt, run as a native
 child under a runner process this module owns. Receipts live in an owned
 SQLite store opened through `bee.persist`; attempt homes and retained
-session directories live under `bee.placement.native:root`, the default for
+session directories live under `bee.placement.native.env:root`, the default for
 the replaceable `target_root` requirement.
 
 | Slice | Responsibility |
@@ -240,10 +240,10 @@ cleanup. Retained session homes remain available for a subsequent admitted attem
 
 ## Resource modes
 
-The host selects the mode in `bee.placement.native:placement_resource_mode`; a
+The host selects the mode in `bee.placement.native.env:placement_resource_mode`; a
 request cannot. The shipped default is `granted`, so managed Agent resources
 are validated through their authority on use. In `host_configured` mode
-`bee.placement.native:placement_admitted_roots`
+`bee.placement.native.env:placement_admitted_roots`
 lists the `fs.directory` roots a launch may name with the widest access the
 host allows, `prepare` checks the caller, the root, the subpath and the
 access mode against that list, and a request's `grant_ref` is correlation
@@ -386,3 +386,7 @@ that budget. After child exit, the retention deadline bounds each continuous wai
 spool limit; acknowledged progress that resumes reads ends that wait. Once both
 streams end, one retention deadline bounds the remaining unacknowledged output. Drain expiration records forced
 truncation; retention expiration records output loss rather than consumption.
+
+Native preparation decodes host prepare options through the same driver preferences
+decoder as the carrier planner before comparing the configuration digest. Empty
+registry maps and absent options therefore select the same default options.

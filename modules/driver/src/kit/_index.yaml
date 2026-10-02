@@ -14,10 +14,10 @@ entries:
   kind: library.lua
   source: file://normalize.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
 - name: events
   kind: library.lua
   source: file://events.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     record_types: bee.threads:record_types

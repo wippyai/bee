@@ -45,7 +45,8 @@ Only known boot messages and phase fields enter the diagnostic sink. Logs
 cover owner preparation/spawn/wait, native runtime load/start, registry loading,
 application of the baseline, boot-listener readiness, migration checks by
 owner, Hive supervisor and retained workspace progress, and client enrollment.
-Workspace and client ledgers emit their own checks. Enrollment separates key
+The shared `bee.persist` ledger emits each owner’s migration check once,
+including workspace and client checks. Enrollment separates key
 publication, authority overlay application and bootstrap publication. Its
 supervisor readiness lookup selects exactly the node-local name table and
 checks the current node, protected host and execution address. The supervisor

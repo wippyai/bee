@@ -35,7 +35,7 @@ local executor: lease_grants.Executor = {call = function(_self: lease_grants.Exe
 end}
 
 local function install_policy()
-    local entry = assert(registry.get("bee:approver_policies"))
+    local entry = assert(registry.get("bee.security.approvals:approver_policies"))
     local data = assert(bounds.object(entry.data))
     local policies = principals.objects(data.policies)
     data.policies = policies
@@ -55,7 +55,7 @@ local function define_tests()
     test.describe("Lease grant flow", function()
         test.it("grants a lease from one decided approval and bounds its later use", function()
             install_policy()
-            local vocabulary = assert(capability_model.decode(assert(registry.get("bee:capability_catalog"))))
+            local vocabulary = assert(capability_model.decode(assert(registry.get("bee.security.capability:capability_catalog"))))
             local installed = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "alpha"}))
             local narrow = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "alpha/child"}))
             local widened = assert(capability_model.resolve(vocabulary, "workspace.files.write", {subpath = "beta/child"}))

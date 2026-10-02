@@ -5,13 +5,13 @@ entries:
   kind: library.lua
   source: file://budget.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     budget_values: bee.threads.records:budgets
 - name: turn
   kind: library.lua
   source: file://turn.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     budget: bee.executor.external.service:budget
 - name: stream
   kind: library.lua

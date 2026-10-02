@@ -6,12 +6,12 @@ entries:
   source: file://store.lua
   modules: [sql, json, time]
   imports:
-    bounds: bee.threads.records:bounds
-    persist: bee.persist:database
+    bounds: bee.values:bounds
+    persist: bee.persist.persist:database
     migrations: bee.placement.native.migrations:migrations
-    resources: bee.placement.native:resources
+    resources: bee.placement.native.env:resources
     types: bee.placement:types
     placement_decode: bee.placement:decode
     transitions: bee.placement:transitions
     request_protocol: bee.placement:request
-    configuration: bee.driver:configuration
+    configuration: bee.driver.configuration:configuration

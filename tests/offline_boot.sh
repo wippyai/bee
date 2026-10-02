@@ -48,9 +48,9 @@ python_path=${BEE_OFFLINE_BOOT_PYTHONPATH:-}
 # additional guard against forwarding credentials or user store paths.
 test_env=$(mktemp -d "${TMPDIR:-/tmp}/bee-offline-boot-env.XXXXXXXX")
 trap 'rm -rf "$test_env"' EXIT HUP INT TERM
-env -i HOME="$test_env" PATH=/usr/bin:/bin PYTHONPATH="$python_path" TERM=xterm-256color LC_ALL=C.UTF-8 \
+env -i HOME="$test_env" TMPDIR="$test_env" PATH=/usr/bin:/bin PYTHONPATH="$python_path" TERM=xterm-256color LC_ALL=C.UTF-8 \
     PYTHONUNBUFFERED=1 "$python_bin" "$root/tests/native_binary.py" "$binary"
-env -i HOME="$test_env" PATH=/usr/bin:/bin PYTHONPATH="$python_path" TERM=xterm-256color LC_ALL=C.UTF-8 \
+env -i HOME="$test_env" TMPDIR="$test_env" PATH=/usr/bin:/bin PYTHONPATH="$python_path" TERM=xterm-256color LC_ALL=C.UTF-8 \
     PYTHONUNBUFFERED=1 "$python_bin" -c \
     'import pathlib, sys; sys.path.insert(0, sys.argv[1]); from native_client import run; run(pathlib.Path(sys.argv[2]).resolve())' \
     "$root/tests" "$binary"

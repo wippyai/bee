@@ -16,7 +16,7 @@ local OTHER = "bee.test.install_other"
 local APPROVER = "bee.test.install_approver"
 local APPROVER_POLICY = "installation-fixture"
 local OTHER_APPROVER_POLICY = "installation-fixture-other"
-local CONFIGURATION = "bee:module_installation"
+local CONFIGURATION = "bee.gateway.env:module_installation"
 local DIGEST = string.rep("d", 64)
 local REMOVAL_DIGEST = string.rep("e", 64)
 local base_port = installation.port
@@ -61,12 +61,12 @@ local function apply(entry: Object)
     if not applied then error("apply " .. tostring(entry.id) .. ": " .. tostring(err)) end
 end
 local function endpoint(): string
-    local entry = registry.get("bee:gateway_endpoint")
+    local entry = registry.get("bee.gateway.api:gateway_endpoint")
     if not entry then error("gateway endpoint entry") end
     return tostring((assert(bounds.object(entry.data))).address)
 end
 local function ensure_approver_policy(name: string)
-    local policies_entry = registry.get("bee:approver_policies")
+    local policies_entry = registry.get("bee.security.approvals:approver_policies")
     if not policies_entry then error("approver policies entry") end
     local list_owner = assert(bounds.object(policies_entry.data))
     local list = principals.objects(list_owner.policies)

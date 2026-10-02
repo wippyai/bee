@@ -12,13 +12,13 @@ entries:
     appearance: bee.app:appearance
     model: bee.approvals.inbox.app:model
     view: bee.approvals.inbox.app:view
-    inbox: bee.approvals.inbox:client
+    inbox: bee.approvals.inbox.app:client
     caller: bee.app:caller
     feeds: bee.approvals.inbox.app:feeds
     leases: bee.approvals.inbox.app:leases
     lease_form: bee.approvals.inbox.app:lease_form
-    source_config: bee.approvals.inbox:source_config
-    hive: bee.hive:client
+    source_config: bee.approvals.inbox.app:source_config
+    hive: bee.hive.binding:client
     hive_types: bee.hive:types
   meta:
     type: bee.app
@@ -39,14 +39,14 @@ entries:
   modules: [json]
   imports:
     text: bee.app:text
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     caller: bee.app:caller
 - name: leases
   kind: library.lua
   source: file://leases.lua
   modules: [json]
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     model: bee.approvals.inbox.app:model
 - name: lease_form
   kind: library.lua
@@ -62,10 +62,10 @@ entries:
   kind: library.lua
   source: file://feeds.lua
   imports:
-    bounds: bee.threads.records:bounds
+    bounds: bee.values:bounds
     sync: bee.sync:protocol
     caller: bee.app:caller
-    source_config: bee.approvals.inbox:source_config
+    source_config: bee.approvals.inbox.app:source_config
     model: bee.approvals.inbox.app:model
 - name: view
   kind: library.lua
@@ -77,3 +77,27 @@ entries:
     leases: bee.approvals.inbox.app:leases
     model: bee.approvals.inbox.app:model
     names: bee.app:names
+- name: client
+  kind: library.lua
+  source: file://client.lua
+  imports:
+    caller: bee.app:caller
+- name: source_config
+  kind: library.lua
+  source: file://sources.lua
+  modules: [hash]
+  imports:
+    bounds: bee.values:bounds
+- name: sources
+  kind: registry.entry
+  meta:
+    type: bee.approvals.inbox.sources
+    comment: Host-selected remote owner/workspace sources; discovery grants no reading or approval authority
+  data: {sources: []}
+- name: workspaces
+  kind: registry.entry
+  meta:
+    type: bee.approvals.inbox.workspaces
+    comment: Workspace ids the host admits into the local viewer's inbox beside the launch workspace; the approval owner still decides eligibility per request
+  data:
+    workspaces: []

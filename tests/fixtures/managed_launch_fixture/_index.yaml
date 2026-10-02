@@ -30,7 +30,7 @@ entries:
     launch_id: fixture-terminal-window
     title: Open fixture provider window
     command_names: []
-    binding_ref: bee.driver.claude:binding
+    binding_ref: bee.driver.claude.binding:binding
     profile_id: window
     policy_ref: bee.fixture.terminal.launch:policy
     default_mode: window
@@ -52,7 +52,7 @@ entries:
   method: run
   modules: [process, channel, time, security, tty, funcs, json, registry]
   imports:
-    bounds: bee.protocol:bounds
+    bounds: bee.values:bounds
     test: wippy.test:test
     appearance: bee.app:appearance
   security:

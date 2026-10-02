@@ -1,0 +1,12 @@
+version: '1.0'
+namespace: bee.security.gov
+entries:
+- name: protected_kernel
+  kind: registry.entry
+  meta:
+    type: bee.protected_kernel
+  data:
+    revision: 3
+    namespaces: []
+    entries: []
+    super_edit: []

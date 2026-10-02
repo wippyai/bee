@@ -1,6 +1,4 @@
--- MIT. Bounded supervisor request routing. Execution stays in function workers;
--- the event loop owns validated supervisor identities, deadlines and reply correlation.
--- Native Wippy authenticates message:from(); Lua checks the established peer.
+-- MIT. Bounded supervisor request routing with execution in function workers.
 local process = require("process")
 local event_bus = require("events")
 local channel = require("channel")
@@ -580,8 +578,6 @@ local function main(configuration: unknown)
         local notified, notify_error = event_bus.send("bee.launch", "supervisor.ready", self)
         if not notified then error("Notify local supervisor readiness: " .. tostring(notify_error)) end
         log:info("Boot phase", {phase = "hive_supervisor", stage = "end"})
-        -- Hive peers discover this supervisor through its eventual name.
-        -- Publication grants no admission and does not depend on desktop readiness.
         local decision = registration.decide(native_node, distributed_name)
         if decision.publish then
             local published, publish_error = process.registry.register(decision.name, self, process.registry.EVENTUAL)

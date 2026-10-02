@@ -50,7 +50,7 @@ entries:
   source: file://main.lua
   method: main
   modules: [funcs, process, channel, time, json, sql, uuid, env]
-  imports: {bounds: bee.threads.records:bounds}
+  imports: {bounds: bee.values:bounds}
   security: {policies: [bee.livecodexprofile:host_policy]}
   meta:
     command:
@@ -88,7 +88,7 @@ local function call(target: string, request: unknown): Object
 end
 local function main()
     local actor = "bee.livecodexprofile.probe"
-    local definition = "bee.driver.codex:named_batch"
+    local definition = "bee.driver.codex.profiles:named_batch"
     local config_profile = env.get("bee.livecodexprofile:config_profile")
     if type(config_profile) ~= "string" or config_profile == "" then config_profile = "ds-flash" end
     local token = env.get("bee.livecodexprofile:token")
@@ -108,7 +108,7 @@ local function main()
     local profile_id = "live-codex-profile-" .. tostring(uuid.v7())
     call("bee.harness.binding:call", {operation = "put", workspace_id = workspace_id, profile_id = profile_id,
         expected_revision = 0, idempotency_key = "save-" .. profile_id,
-        profile = {schema_revision = "bee.agent-profile@2", name = "Live Codex named profile", definition_ref = definition, driver_binding_ref = "bee.driver.codex:binding", provider = {options = {config_profile = config_profile}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}})
+        profile = {schema_revision = "bee.agent-profile@2", name = "Live Codex named profile", definition_ref = definition, driver_binding_ref = "bee.driver.codex.binding:binding", provider = {options = {config_profile = config_profile}}, bee = {mcp = {{tool = "thread_read", scope = {}}}}}})
     local plan = call("bee.harness.binding:resolve", {definition_ref = definition, workspace_id = workspace_id,
         saved_profile_id = profile_id, saved_profile_revision = 1})
     reply("bee.harness.binding:setup", {workspace_id = workspace_id, definition_ref = definition,
@@ -143,7 +143,7 @@ local function main()
     end
     -- The attempt must settle successfully and the answer must be an
     -- observation committed to the thread.
-    local db, db_error = sql.get("bee.placement.native:db")
+    local db, db_error = sql.get("bee.placement.native.env:db")
     if not db then error(tostring(db_error)) end
     local rows, query_error = db:query("SELECT execution_state, exit_code FROM bee_placement_attempts WHERE attempt_id = ?", {started.attempt_id})
     db:release()
@@ -281,7 +281,7 @@ func liveCodexCheck() error {
 	}
 	// The host executes the owner's installed Codex and inherits the owner's
 	// Codex home, so the named profile and its login resolve there.
-	if err = liveCodexSetVariable(root, "modules/driver-codex/src/_index.yaml", "executable", "BEE_LIVE_CODEX_EXECUTABLE"); err != nil {
+	if err = liveCodexSetVariable(root, "modules/driver-codex/src/env/_index.yaml", "executable", "BEE_LIVE_CODEX_EXECUTABLE"); err != nil {
 		return err
 	}
 	if err = liveCodexSetVariable(root, "src/env/_index.yaml", "machine_home", "BEE_LIVE_CODEX_HOME"); err != nil {

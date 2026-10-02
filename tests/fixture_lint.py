@@ -8,7 +8,7 @@ import yaml
 
 from workspace import ROOT, RUNTIME, TEST_CACHE, database_environment, fixture_workspace
 
-ACCEPTANCE_FIXTURES = ("window_hooks", "layout_upgrade", "app_journey")
+ACCEPTANCE_FIXTURES = ("window_hooks", "layout_upgrade", "app_journey", "workspace_component")
 
 
 def environment(folder):

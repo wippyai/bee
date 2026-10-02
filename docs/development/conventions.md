@@ -20,10 +20,17 @@ package-root spelling exception is `modules/application/src` → `bee.app`, the
 public SDK. Namespace segments and mapped folders contain no underscores.
 No child production `src/` path diverges from its namespace.
 
+Each entry lives in the namespace of the component that owns its concept,
+in the appropriate child such as `service`, `binding`, `persist`, `types`,
+`security` or `app`. The root `bee` namespace holds only the host composition
+and process wiring described below. Reuse existing dependency entries,
+resolution locks, requirement parameters and owner stores instead of adding
+parallel registry records or stored state for the same information.
+
 `make lint` runs `build/layout_check.py` before typed Lua lint. It checks namespace
 paths, component roots, local sources, application entries, process placement,
 host-free requirement defaults, duplicate Lua sources, orphan files and
-requirement/import targets. Domain ownership, dynamic registry discovery and
+requirement/import and named approver definition targets. Domain ownership, dynamic registry discovery and
 public API reachability also require review.
 
 The generated [component inventory](component-inventory.json) records current
@@ -35,14 +42,14 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 
 | Location | Owns |
 |---|---|
-| `src/_index.yaml` | Host composition, resources and protected admission wiring |
+| `src/_index.yaml` | Root composition only: `bee:definition`, `bee:workers` and `bee:terminal` |
 | `src/deps` | One `bee.deps:<module>` dependency per composed module with the host-selected requirement parameters |
 | `src/security`, `src/security/<area>` | Host-selected app policies as `bee.security` and `bee.security.<area>` |
 | `src/env` | Host environment and selected resources as `bee.env` |
 | `src/hive/service`, `src/hive/api`, `src/hive/security` | App-owned Hive supervisor, open workspaces operation and its policy |
 | `src/hive/supervisor`, `src/hive/desktop` | Generic Hive routing, host-selected adapter table, supervisor lifecycle and desktop bridge |
 | `modules/hive-manager/src` | Hive management app as an installable package |
-| `src/workspace` | Workspace persistence, application checkpoints, workspace identity and the node catalog operations and extension contract |
+| `modules/workspace/src` | Workspace catalog contracts, authorized bindings, SQL repositories, immutable migrations and checkpoint/selection values as `bee.workspace` and its `.catalog`, `.binding`, `.persist`, `.migrations` and `.types` children |
 | `src/host` | TTY-free host, client admission, renderer grants and live inventory |
 | `src/launch` | Local startup, presenter selection, coordinated exit and the node host manager |
 | `src/client` | Desktop client, public commands, qualified layout and client store |
@@ -52,7 +59,7 @@ M0–M7 migration in `build/component-inventory-migrations.json`.
 | `src/desktop` | Pure scene, reducer and layout values |
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
-| `src/storage` | Workspace database, catalog rows and immutable migrations; shared runner in `bee.persist` |
+| `modules/values/src` | Shared bounds, canonical JSON, clock conversions and reply decoding as `bee.values` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |
@@ -79,6 +86,46 @@ requirement parameters. Module requirement defaults never point at host app
 IDs. Module `process.service` entries take their host and policy grants through
 requirements (`process_host`, per-service policy lists); their entries keep
 empty underlays the host fills.
+
+Every entry belongs to the namespace of the component that owns its concept,
+in the child that implements that responsibility. `bee` has exactly the three
+composition entries above. Host-selected protected admission catalogs live in
+`src/security/<owner>`; endpoint wiring, selected defaults and service instances
+live beside their owner (`api`, `env` and `service`). They remain app-owned
+composition and do not move into installable packages.
+
+Component roots admit `ns.definition`, `ns.dependency`, `ns.requirement` and
+`contract.definition`. The following shared library entries are the complete
+root library set; executable implementations, concrete bindings, policies,
+resources, catalogs, profiles and app helpers belong in their owning children.
+`build/layout_roots.json` records this set with exact kinds; `make lint` rejects
+other root entries, including a known composition name with the wrong kind.
+The check applies to the namespace regardless of which package declares the
+entry: host wiring cannot leak implementations into a component root.
+
+| Component namespace | Shared root libraries |
+|---|---|
+| `bee.app` | `appearance`, `arguments`, `caller`, `client`, `diagram`, `folder_picker`, `forms`, `frame`, `host_leases`, `interaction`, `names`, `sessions`, `sessions_protocol`, `status_reader`, `status_surface`, `text`, `thread_protocol`, `viz` |
+| `bee.capability` | `model` |
+| `bee.credentials` | `formats`, `protocol` |
+| `bee.docs` | `protocol` |
+| `bee.driver` | `types` |
+| `bee.driver.wippy` | `protocol`, `types` |
+| `bee.files` | `protocol` |
+| `bee.gateway` | `protocol` |
+| `bee.harness` | `types` |
+| `bee.hive` | `types` |
+| `bee.node` | `protocol` |
+| `bee.placement` | `decode`, `request`, `transitions`, `types` |
+| `bee.placement.native` | `protocol` |
+| `bee.sync` | `protocol`, `replica_protocol`, `types` |
+| `bee.threads` | `record_types`, `types` |
+| `bee.values` | `bounds`, `canonical`, `clock`, `reply` |
+
+The SDK `bee.app` owns its documented public application helpers and rendering
+values at its root. Those entries are included in the same explicit set. New
+shared root libraries require a documented responsibility and a reviewed update
+to the set; a new implementation does not qualify simply because it is shared.
 
 An append requirement (`+=`) contributes one element. It has no array default;
 an absent host selection contributes nothing instead of a nested empty array.
@@ -119,7 +166,10 @@ Application entries, renderers, screen models and view helpers live in
 `bee.files.app` import its helpers and own their separate application entries.
 The desktop shell remains in `src/desktop` and `src/terminal`.
 
-Within a module, keep shared domain types and contracts at the root. Contract
+Within a module, keep shared domain types and contracts at the root. Public contract
+bindings live in `binding`. Workspace catalog contracts retain their existing
+domain root `bee.workspace.catalog` and durable binding IDs; their method
+implementations live in `.binding`. Contract
 implementations belong in `binding`, SQL repositories in `persist`, and
 long-running processes in `service`. Use `api` for HTTP endpoints and `traits`
 for agent tools. Each child namespace declares its own local sources in its
@@ -132,6 +182,10 @@ Use explicit record types for exported values and functions. Treat decoded JSON
 and message payloads as `unknown` until validated; never use casts or `any` to
 skip validation. Bound strings, arrays, state, geometry, request IDs and
 pending work. Reject invalid versions before changing state.
+
+Import generic bounds, canonical JSON, clock conversions and reply decoding
+directly from `bee.values`. Domain checks stay with their owning components;
+retained startup phases and deadlines live in `bee.app.status:startup_progress`.
 
 Authenticate `message:from()` and the relevant instance, launch token,
 execution generation or operation grant. A PID in a payload is not
@@ -201,9 +255,9 @@ parallel on a local machine. Each shard writes its own native pack generation
 and log under `.wippy/check-parallel/`; the command reports wall and CPU time
 and fails if any shard fails.
 
-The root has a 23,987 Lua line ceiling under `src/`, recorded in
+The root has a 20,851 Lua line ceiling under `src/`, recorded in
 `build/root-src-lua-budget.txt`. Shared retained-startup progress values live
-in `modules/application/src` as `bee.app:startup_progress`. Run
+in `modules/application/src` as `bee.app.status:startup_progress`. Run
 `make root-src-budget-check`; it fails if the count grows beyond that ceiling.
 Lower the ceiling as later component moves reduce root code.
 
@@ -217,7 +271,9 @@ and selected modules' `src/` directories.
 `make native-pack` seals independently packed root and component WAPPs into the
 native manifest. `make portable-deployment-check` inspects the exact local lock
 and vendor set, then proves isolated source-free boot, restart and tamper
-rejection. These packs are bundled application inputs, not publications.
+rejection. The same build seals a Hub core with `bee.deps` excluded; the Hub
+composition supplies those host-selected roots. The bundled baseline and Hub
+core share the component artifacts, and host admission authorizes their use.
 
 New runtime patches require upstream Go tests, a refreshed runtime checksum and
 a clean pinned build. `make -C native patched-check` validates the native source

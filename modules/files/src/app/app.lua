@@ -32,7 +32,7 @@ local function main(value: unknown)
     local preferences = appearance.defaults()
 
     -- Acquire the workspace root volume
-    local reference, reference_error = registry.get("bee.files:workspace_root_ref")
+    local reference, reference_error = registry.get("bee.files.env:workspace_root_ref")
     local resource = reference and reference.data.resource_ref
     if reference_error or type(resource) ~= "string" or resource == "" then
         error("Workspace filesystem reference is unavailable")

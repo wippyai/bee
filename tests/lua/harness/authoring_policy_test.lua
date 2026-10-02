@@ -9,7 +9,7 @@ local function define_tests()
         test.it("admits the guide, offline docs and delivery on normal provider session routes", function()
             local authoring = {"capabilities", "overlay", "docs", "components", "delivery"}
             for _, provider in ipairs({"codex", "claude", "agy", "grok", "muse", "opencode"}) do
-                local ref = "bee.driver." .. provider .. ":default_window"
+                local ref = "bee.driver." .. provider .. ".profiles:default_window"
                 local launch, definition_error = definitions.decode(ref, assert(registry.get(ref)))
                 if not launch then error(tostring(definition_error)) end
                 test.not_nil(launch.session_profile_id)

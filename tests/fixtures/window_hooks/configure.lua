@@ -15,7 +15,7 @@ function M.configure(value: unknown): {[string]: unknown}
         local digest, digest_error = hash.sha256(content)
         if not digest then return tostring(digest_error) end
         table.insert(files, {revision = "bee.window-hooks-fixture@1", path = path, content = content, digest = digest,
-            provider_ref = "bee:gateway_endpoint"})
+            provider_ref = "bee.gateway.api:gateway_endpoint"})
         return nil
     end
     local executable = gateway.hook_command

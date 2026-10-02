@@ -152,7 +152,7 @@ function M.decode(raw: unknown, revision: unknown): (Result?, string?)
             local target, constraint = component(data.component), bounds.line(data.version, 128)
             if not target or not constraint then return nil, "invalid dependency identity" end
             local bucket = module(target)
-            local host_selection = owned.root == true and id:sub(1, 9) == "bee.deps:" and (owner == "" or owner == "bee/bee")
+            local host_selection = owned.root == true and target:match("^bee/") ~= nil and id:sub(1, 9) == "bee.deps:" and (owner == "" or owner == "bee/bee")
             local meta = bounds.object(entry.meta) or {}
             local managed = (host_selection and meta.independent == true) or (owner == "" and id:sub(1, 13) == "bee.hub.deps:")
             if host_selection then

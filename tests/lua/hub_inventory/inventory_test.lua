@@ -23,6 +23,16 @@ local function define_tests()
             }}, 1))
             test.eq(result.roots[1].managed, false)
         end)
+        test.it("leaves third-party declarations in the host namespace outside Bee root conversion", function()
+            local result = assert(inventory.decode({entries = {
+                {id = "bee.deps:external", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                    data = {component = "acme/app", version = "^1.0.0", parameters = {{name = "port", value = 8080}}}},
+            }}, 1))
+            test.is_nil(result.conversion)
+            test.eq(result.roots[1].version, "^1.0.0")
+            test.eq(result.roots[1].parameters[1].value, 8080)
+            test.eq(result.modules[1].used_by[1], "bee/bee")
+        end)
         test.it("uses registry ownership and one resolution for roots and shared dependencies", function()
             local result, problem = inventory.decode({resolution = {modules = {
                 {name = "acme/app", version = "1.2.0", source = "hub"},

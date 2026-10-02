@@ -12,7 +12,7 @@ local FORMAT = "2006-01-02T15:04:05.000Z07:00"
 local function main(remote: string)
     local policies: {security.Policy} = {}
     for _, name in ipairs({"bee.security.hive:hive_supervisor_policy", "bee.security.hive:hive_catalog_policy", "bee.security.hive:hive_exposure_facade_policy",
-        "bee.security.hive:hive_dispatch_policy", "bee.hive.probe:telemetry_grant", "bee.hive.probe:names_policy", "bee.hive.probe:execute_policy"}) do
+        "bee.security.hive:hive_dispatch_policy", "bee.security.hive:hive_telemetry_policy", "bee.hive.probe:telemetry_grant", "bee.hive.probe:names_policy", "bee.hive.probe:execute_policy"}) do
         local policy, policy_error = security.policy(name)
         if not policy then error("load supervisor policy " .. name .. ": " .. tostring(policy_error)) end
         policies[#policies + 1] = policy

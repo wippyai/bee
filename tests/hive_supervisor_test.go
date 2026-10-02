@@ -124,6 +124,8 @@ func freezeHiveSupervisorSource(t *testing.T, root string) (string, string) {
 		t.Fatal(err)
 	}
 	for _, dependency := range []struct{ directory, source, manifest string }{
+		{"profile_access", "modules/driver/src/profiles/profile_access.lua", "version: '1.0'\nnamespace: bee.driver.profiles\nentries:\n- name: profile_access\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    bounds: bee.values:bounds\n"},
+		{"profile_protocol", "modules/harness/src/profiles/protocol.lua", "version: '1.0'\nnamespace: bee.harness.profiles\nentries:\n- name: protocol\n  kind: library.lua\n  source: file://source.lua\n  modules: [json]\n  imports:\n    access: bee.driver.profiles:profile_access\n    bounds: bee.values:bounds\n    budgets: bee.threads.records:budgets\n    canonical: bee.values:canonical\n"},
 		{"application_arguments", "modules/application/src/arguments.lua", "version: '1.0'\nnamespace: bee.app\nentries:\n- name: arguments\n  kind: library.lua\n  source: file://source.lua\n"},
 		{"application_protocol", "src/protocol/application.lua", "version: '1.0'\nnamespace: bee.protocol\nentries:\n- name: application\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    arguments: bee.app:arguments\n    bounds: bee.values:bounds\n"},
 		{"retained_protocol", "src/launch/retained_protocol.lua", "version: '1.0'\nnamespace: bee.launch\nentries:\n- name: retained_protocol\n  kind: library.lua\n  source: file://source.lua\n  imports:\n    contract: bee.protocol:application\n"},
@@ -310,11 +312,13 @@ func stageHiveFeeds(t *testing.T, source, fixture string) {
 		t.Fatal(err)
 	}
 	dependency := "- name: dependency_approvals\n  kind: ns.dependency\n  component: bee/approvals\n" +
-		"  version: 0.1.0-dev\n  parameters:\n  - name: target_policies\n    value: bee.security.approvals:approver_policies\n" +
+		"  version: 0.1.0-dev\n  parameters:\n  - name: target_db\n    value: bee.approvals:db\n" +
+		"  - name: target_policies\n    value: bee.security.approvals:approver_policies\n" +
 		"  - name: process_host\n    value: bee:workers\n" +
 		"  - name: authority_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy]\n" +
 		"  - name: worker_policies\n    value: [bee.security.approvals:approval_store_policy, bee.security.approvals:approval_owner_policy,\n" +
-		"      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]\n"
+		"      bee.security.threads:thread_approval_policy, bee.security.threads:thread_approval_client_policy]\n" +
+		"  - name: target_request_policies\n    value: [bee.security.approvals:approval_store_policy]\n"
 	if err := os.WriteFile(stagedRoot, append(staged, []byte(dependency)...), 0600); err != nil {
 		t.Fatal(err)
 	}

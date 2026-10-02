@@ -910,8 +910,9 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
     if denied then return denied end
     local caller = assert(caller)
     local input = object(request)
-    local limit = input and has_only(input, {limit = true}) and (input.limit == nil and MAX_FEED_PAGE or integer(input.limit)) or nil
-    if not limit or limit < 1 or limit > MAX_FEED_PAGE then return failure("INVALID_ARGUMENT", "work scan limit is outside its bound") end
+    local limit = input and has_only(input, {limit = true, include_hooks = true}) and (input.limit == nil and MAX_FEED_PAGE or integer(input.limit)) or nil
+    if not limit or not input or (input.include_hooks ~= nil and type(input.include_hooks) ~= "boolean") or limit < 1 or limit > MAX_FEED_PAGE then return failure("INVALID_ARGUMENT", "work scan limit is outside its bound") end
+    local include_hooks = input.include_hooks == true
     return transaction.read(db, function(tx: sql.Transaction): Result
         local rows, query_error = tx:query("SELECT w.work_ref, w.session_ref, w.workspace_id, w.sequence, w.revision, w.phase, w.input_json, w.input_digest, " ..
             "w.output_schema, w.sender_kind, w.sender_id, w.result_json, w.uncertainty_json, w.operation_ref, w.created_at, w.budget_json, " ..
@@ -920,10 +921,10 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
             "FROM bee_session_work w JOIN bee_sessions s ON s.session_ref = w.session_ref " ..
             "LEFT JOIN bee_session_turns t ON t.work_ref = w.work_ref AND t.phase IN ('reserved','accepted') " ..
             "LEFT JOIN bee_session_work_cancellations c ON c.work_ref = w.work_ref " ..
-            "WHERE w.phase IN ('queued','reserved','accepted') AND COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull' AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
+            "WHERE w.phase IN ('queued','reserved','accepted') AND (? = 1 OR COALESCE(json_extract(s.route_json, '$.delivery'), 'pull') = 'pull') AND (? IS NULL OR s.workspace_id = ?) AND s.state IN ('active','closing') AND " ..
             "(c.work_ref IS NOT NULL OR w.phase IN ('reserved','accepted') OR (w.phase = 'queued' AND w.sequence = " ..
             "(SELECT MIN(q.sequence) FROM bee_session_work q WHERE q.session_ref = w.session_ref AND q.phase = 'queued'))) " ..
-            "ORDER BY w.sequence LIMIT ?", {workspace or sql.NULL, workspace or sql.NULL, limit}, "scan session work")
+            "ORDER BY w.sequence LIMIT ?", {include_hooks and 1 or 0, workspace or sql.NULL, workspace or sql.NULL, limit}, "scan session work")
         if query_error or not rows then return transaction.storage_failure("scan session work") end
         local items: {Row} = {}
         for _, row_value in ipairs(rows) do
@@ -957,6 +958,13 @@ function M.work_scan(db: sql.DB, actor: string, request: unknown): Result
                 item.checkpoint = checkpoint
             end
             items[#items + 1] = item
+        end
+        if include_hooks then
+            local windows, window_error = tx:query("SELECT session_ref FROM bee_sessions WHERE state <> 'closed' " ..
+                "AND json_extract(route_json, '$.delivery') = 'hook' AND (? IS NULL OR workspace_id = ?) LIMIT 1",
+                {workspace or sql.NULL, workspace or sql.NULL}, "scan interactive session obligations")
+            if window_error or not windows then return transaction.storage_failure("scan interactive session obligations") end
+            return transaction.success({items = items, interactive_active = #windows > 0}, false)
         end
         return transaction.success({items = items}, false)
     end)

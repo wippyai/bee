@@ -142,6 +142,12 @@ entries:
     - bee.threads.binding:notify
     - bee.threads.binding:watch
     effect: allow
+- name: hive_readiness_policy
+  kind: security.policy
+  policy:
+    actions: [events.send]
+    resources: [bee.launch]
+    effect: allow
 - name: hive_supervisor_policy
   kind: security.policy
   policy:

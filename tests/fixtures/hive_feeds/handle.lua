@@ -31,7 +31,12 @@ local function handle(raw: unknown): string
         if command == "approval-revoke" then return "approval_revoked" end
         local created, create_error = funcs.new():call("bee.approvals.binding:request", {workspace_id = "feed-workspace", idempotency_key = "feed-approval-1",
             request_kind = "permission", policy = "feed-approval", proposal = {kind = "operation", ref = "bee.node.binding:update_metadata", revision = "1", payload = {display_name = "Approved name"}}, prompt = {text = "Approve this test request?"}})
-        if create_error or object(created).ok ~= true then error("create approval: " .. tostring(create_error)) end
+        if create_error then error("create approval: " .. tostring(create_error)) end
+        local result = object(created)
+        if result.ok ~= true then
+            local fault = object(result.error)
+            error("create approval: " .. tostring(fault.code) .. ": " .. tostring(fault.message))
+        end
         return "approval_created"
     end
     if command == "revoke" or command:match("^enroll%-") then

@@ -33,8 +33,8 @@ entries:
   kind: process.lua
   source: file://main.lua
   method: main
-  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash]
-  security: {policies: [bee.security.hive:hive_policy_exposure_policy]}
+  modules: [process, channel, time, uuid, funcs, logger, registry, security, crypto, hash, events]
+  security: {policies: [bee.security.hive:hive_policy_exposure_policy, bee.security.hive:hive_readiness_policy]}
   imports:
     types: bee.hive:types
     bounds: bee.values:bounds

@@ -671,6 +671,11 @@ app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
 
+.PHONY: persist-migration-check
+persist-migration-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
+check: persist-migration-check
+check-shard-services-storage: persist-migration-check
 .PHONY: layout-check
 layout-check:
 	python3 build/layout_check.py

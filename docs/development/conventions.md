@@ -45,7 +45,7 @@ public API reachability also require review.
 | `src/desktop` | Pure scene, reducer and layout values |
 | `src/protocol` | Private core message decoders |
 | `src/terminal` | Replaceable presenter, input and composition |
-| `src/storage` | Workspace database, catalog rows and migration ledger |
+| `src/storage` | Workspace database, catalog rows and immutable migrations; shared runner in `bee.persist` |
 | `modules/application/src` | Public SDK namespace `bee.app`: application helpers, appearance and rendering values |
 | `modules/console/src/app`, `modules/settings/src/app` | Terminal and Settings/About UI as `bee.console.app` and `bee.settings.app` |
 | `src/console` | Host-selected native Terminal executor, OS environment and grants |

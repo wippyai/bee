@@ -676,3 +676,52 @@ func TestEnrollmentPublisherListsClientsOnlyAfterTheSupervisorIsPublished(t *tes
 		t.Fatalf("listed a client before publishing the supervisor: %+v %v", published, err)
 	}
 }
+
+type composedSupervisorRegistry struct {
+	topapi.PIDRegistry
+	local         topapi.LocalPIDRegistry
+	composedCalls int
+	remote        pid.PID
+}
+
+func (r *composedSupervisorRegistry) Lookup(string) (pid.PID, bool) {
+	r.composedCalls++
+	return r.remote, true
+}
+
+func (r *composedSupervisorRegistry) LookupLocal(name string) (pid.PID, bool) {
+	return r.local.LookupLocal(name)
+}
+
+func TestEnrollmentSupervisorUsesOnlyThisNodesLocalReadiness(t *testing.T) {
+	state := t.TempDir()
+	local := topologysys.NewPIDRegistry()
+	names := &composedSupervisorRegistry{PIDRegistry: local, local: local,
+		remote: pid.PID{Node: "previous-node", Host: "bee.hive.service:supervisor_host", UniqID: "stale"}}
+	publisher := &enrollmentPublisherComponent{node: ownerNodeName(state)}
+	base, err := bootpkg.NewBootstrapContext(zap.NewNop(), boot.NewConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := topapi.WithRegistry(base, names)
+	_, err = publisher.supervisor(ctx)
+	if !errors.Is(err, errSupervisorPending) {
+		t.Fatalf("missing local supervisor: %v", err)
+	}
+	current := pid.PID{Node: publisher.node, Host: "bee.hive.service:supervisor_host", UniqID: "current"}
+	if _, err := local.Register("bee.hive.supervisor", current); err != nil {
+		t.Fatal(err)
+	}
+	got, err := publisher.supervisor(ctx)
+	if err != nil || got != current {
+		t.Fatalf("local readiness = %v, %v", got, err)
+	}
+	if names.composedCalls != 0 {
+		t.Fatalf("local readiness consulted distributed namespaces %d times", names.composedCalls)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := publisher.supervisor(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled readiness: %v", err)
+	}
+}

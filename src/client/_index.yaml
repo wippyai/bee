@@ -123,7 +123,7 @@ entries:
 - name: store
   kind: library.lua
   source: file://store.lua
-  modules: [sql, json, hash]
+  modules: [sql, json, hash, logger]
   imports:
     state: bee.client:state
     contract: bee.protocol:application

@@ -6,6 +6,7 @@
 local sql = require("sql")
 local json = require("json")
 local hash = require("hash")
+local logger = require("logger")
 local binding = require("binding")
 local contract = require("contract")
 
@@ -691,7 +692,10 @@ local function acquire(resource: string?): (sql.DB?, string?)
         db:release()
         return nil, error_text("enable workspace WAL mode", wal_err)
     end
+    local log = logger:named("bee.storage")
+    log:info("Boot phase", {phase = "migration_check", stage = "begin", owner = "workspace"})
     local migrated, migration_err = migrate(db)
+    log:info("Boot phase", {phase = "migration_check", stage = migrated and "end" or "failed", owner = "workspace"})
     if not migrated then
         db:release()
         return nil, migration_err or "workspace migration failed"

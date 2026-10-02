@@ -115,9 +115,9 @@
       "topic": "lua"
     },
     {
-      "bytes": 4498,
+      "bytes": 4621,
       "id": "docs/readme",
-      "sha256": "777ad9263a5cd06286a98986332afa671f822516a231f0ba90131f0ac67c11c2",
+      "sha256": "173ed170cb7aaa7d07dacb5c481ceb82a36d7345a602c9faea2fff2d556da73f",
       "source": "docs/README.md",
       "title": "Documentation map",
       "topic": "platform"
@@ -622,7 +622,7 @@
   "schema": "bee.docs-corpus@1",
   "selection_rule": "Runtime reference: only the Lua base and type system, channel, contract, process, registry, time, JSON, HTTP client, security, UUID, filesystem, SQL and TTY pages used by Bee app authors; the SQL reference includes sql.builder. Runtime tutorials, internals, general guides and platform material are excluded. Bee contracts: the docs/ pages that state an implemented callable boundary or the path a frozen artifact travels (application, threads, placement, gateway, carrier, storage, ui, harness, approvals, registry, platform), excluding repository process and design pages. Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from tests/lua/frame. The corpus is digest-checked with the rest.",
   "totals": {
-    "bytes": 726335,
+    "bytes": 726458,
     "documents": 77
   }
 }

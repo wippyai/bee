@@ -6,6 +6,7 @@
 local sql = require("sql")
 local json = require("json")
 local hash = require("hash")
+local logger = require("logger")
 local state = require("state")
 local contract = require("contract")
 local binding = require("binding")
@@ -295,7 +296,10 @@ local function acquire(resource: string?): (sql.DB?, string?)
     if db:type() ~= sql.type.SQLITE then return fail("Client database must be SQLite") end
     local _, wal_error = db:execute("PRAGMA journal_mode = WAL")
     if wal_error then return fail(tostring(wal_error)) end
+    local log = logger:named("bee.client")
+    log:info("Boot phase", {phase = "migration_check", stage = "begin", owner = "client"})
     local migrated, migration_error = migrate(db)
+    log:info("Boot phase", {phase = "migration_check", stage = migrated and "end" or "failed", owner = "client"})
     if not migrated then return fail(migration_error or "Client migration failed") end
     return db, nil
 end

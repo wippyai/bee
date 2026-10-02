@@ -11,7 +11,7 @@ entries:
 - name: store
   kind: library.lua
   source: file://store.lua
-  modules: [sql, json, hash]
+  modules: [sql, json, hash, logger]
   imports:
     binding: bee.storage:binding
     contract: bee.protocol:application

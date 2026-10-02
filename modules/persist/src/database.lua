@@ -4,10 +4,13 @@
 -- knows a schema.
 local sql = require("sql")
 local ledger = require("ledger")
+local time = require("time")
+local logger = require("logger")
 local M = {}
 M.BUSY_TIMEOUT_MS = 5000
 type Options = {resource: string, ledger: ledger.Ledger, migrations: {ledger.Migration}}
 function M.open(options: Options): (sql.DB?, string?)
+    local log = logger:named("bee.persist")
     local label = options.ledger.label
     local db, acquire_err = sql.get(options.resource)
     if not db then return nil, "open " .. label .. " database: " .. tostring(acquire_err or "no reason given") end
@@ -28,7 +31,11 @@ function M.open(options: Options): (sql.DB?, string?)
             return nil, "configure " .. label .. " database"
         end
     end
+    local started = time.now()
+    log:info("Boot phase", {phase = "migration_check", stage = "begin", owner = label})
     local migrated, migration_err = ledger.apply(db, options.ledger, options.migrations)
+    log:info("Boot phase", {phase = "migration_check", stage = migrated and "end" or "failed", owner = label,
+        elapsed_ms = math.floor(time.now():sub(started):milliseconds())})
     if not migrated then
         db:release()
         return nil, migration_err or (label .. " migration failed")

@@ -184,7 +184,10 @@ func (p *enrollmentPublisherComponent) supervisor(ctx context.Context) (pid.PID,
 	if pidRegistry == nil {
 		return pid.PID{}, errors.New("enrollment publisher requires the process names")
 	}
-	supervisor, found := pidRegistry.Lookup("bee.hive.supervisor")
+	supervisor, found, err := topapi.LookupScopedPID(ctx, "bee.hive.supervisor", topapi.Local)
+	if err != nil {
+		return pid.PID{}, err
+	}
 	if !found || supervisor.Node != p.node || supervisor.Host != "bee.hive.service:supervisor_host" || supervisor.UniqID == "" {
 		return pid.PID{}, errSupervisorPending
 	}
@@ -300,11 +303,16 @@ func retireDepartedClients(ctx context.Context, trusted string) error {
 // written first, the supervisor address is published next, and the local
 // enrollment lists only the nodes that write named.
 func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry.Registry, enrollment *rendezvous.Enrollment) error {
+	log := logs.GetLogger(ctx).Named("bee.launch.enrollment")
+	phase := func(name, stage string) {
+		log.Info("Boot phase", zap.String("phase", name), zap.String("stage", stage))
+	}
 	// The service's name is the existing readiness barrier: before it runs the
 	// deployment's initial LoadState can still clear process-local overlays.
 	if _, err := p.supervisor(ctx); err != nil {
 		return err
 	}
+	phase("enrollment_snapshot", "begin")
 	if err := retireDepartedClients(ctx, p.trusted); err != nil {
 		return err
 	}
@@ -317,6 +325,7 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 		return err
 	}
 	clientNames, peerNames := trustedNames(keys), trustedNames(peers)
+	phase("enrollment_snapshot", "end")
 	if !p.registryApplied || !slices.Equal(clientNames, p.registryClients) || !slices.Equal(peerNames, p.registryPeers) {
 		writer, ok := reg.(registry.OverlayWriter)
 		if !ok {
@@ -335,10 +344,13 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 				return errors.New("unexpected enrollment overlay contents")
 			}
 		}
+		phase("enrollment_overlay", "begin")
 		generation, err := writer.ApplyOverlay(ctx, enrollmentOverlayOwner, p.registryGeneration, changes)
 		if err != nil {
+			phase("enrollment_overlay", "failed")
 			return err
 		}
+		phase("enrollment_overlay", "end")
 		p.registryGeneration = generation
 		p.registryClients, p.registryPeers, p.registryApplied = clientNames, peerNames, true
 	}
@@ -346,9 +358,12 @@ func (p *enrollmentPublisherComponent) publish(ctx context.Context, reg registry
 		return err
 	}
 	if !p.seeded || !sameTrustedKeys(p.seededClients, keys) {
+		phase("enrollment_seed", "begin")
 		if err := p.seedEnrollment(ctx, enrollment, keys); err != nil {
+			phase("enrollment_seed", "failed")
 			return err
 		}
+		phase("enrollment_seed", "end")
 		p.seededClients, p.seeded = cloneTrustedKeys(keys), true
 	}
 	return nil

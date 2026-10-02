@@ -86,6 +86,7 @@ local function main(configuration: unknown)
     local started = time.now()
     local function elapsed(): integer return clock.elapsed_ms(started) end
     local log = logger:named("bee.hive.supervisor")
+    log:info("Boot phase", {phase = "hive_supervisor", stage = "begin"})
     local function send(recipient: string, topic: string, value: unknown): boolean
         local sent, err = process.send(recipient, topic, value)
         if not sent or err then log:warn("Hive delivery rejected", {topic = topic}) end
@@ -575,6 +576,7 @@ local function main(configuration: unknown)
         local named, name_error = process.registry.register(types.SUPERVISOR_NAME)
         if not named then error("Register local supervisor: " .. tostring(name_error)) end
         registered = true
+        log:info("Boot phase", {phase = "hive_supervisor", stage = "end"})
         -- A local client discovers this supervisor only through this eventual
         -- name, so publish it whenever the node has a native identity. The
         -- desktop bridge is not a condition: its failure must not remove the

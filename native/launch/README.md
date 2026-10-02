@@ -186,3 +186,9 @@ traversal are refused.
 Run the native package tests with:
 
     make -C native test
+
+`make boot-measure` enables optional phase logging in its isolated environment.
+`BEE_BOOT_LOG_DIR` selects an existing absolute diagnostic directory. Each
+process writes a private JSON log through zap, while the owner forwards known
+runtime/Lua boot events with their original timestamps. Normal launches select
+no diagnostic file. See the [measurement contract](../../docs/development/boot-measurement.md).

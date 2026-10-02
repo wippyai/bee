@@ -15,7 +15,7 @@ entries:
 - name: database
   kind: library.lua
   source: file://database.lua
-  modules: [sql]
+  modules: [sql, time, logger]
   imports:
     ledger: bee.persist:ledger
 - name: transaction

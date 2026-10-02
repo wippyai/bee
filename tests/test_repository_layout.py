@@ -34,6 +34,36 @@ def sql(path, constant="LAYOUT_REFERENCES_SQL"):
 
 
 class RepositoryLayout(unittest.TestCase):
+    def test_host_selected_dependency_references_must_resolve(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-selection-') as temporary:
+            root = Path(temporary)
+            source = root / 'src'
+            source.mkdir()
+            (source / '_index.yaml').write_text("namespace: bee\nentries: []\n")
+            deps = source / 'deps'
+            deps.mkdir()
+            (deps / '_index.yaml').write_text("""namespace: bee.deps
+entries:
+- name: example
+  kind: ns.dependency
+  component: bee/example
+  parameters:
+  - name: target_input
+    value: bee.example:missing
+""")
+            module = root / 'modules/example/src'
+            module.mkdir(parents=True)
+            (module / '_index.yaml').write_text("""namespace: bee.example
+entries:
+- name: definition
+  kind: ns.definition
+  module: example
+- name: target_input
+  kind: ns.requirement
+  targets: []
+""")
+            self.assertIn('bee.deps:example: dangling linker/import target bee.example:missing', LAYOUT.audit(root)[0])
+
     def test_repository(self):
         errors, namespaces, entries, targets, dangling = LAYOUT.audit(ROOT)
         self.assertEqual(errors, [])

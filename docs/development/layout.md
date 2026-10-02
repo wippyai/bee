@@ -27,6 +27,10 @@ Module defaults do not name host entries, and host policy grants enter callable
 methods through requirements with empty policy underlays. Module-owned default
 resources remain replaceable resources, not authorization. The host still owns
 admission, selected roots, process hosts, environment and application grants.
+The Harness admission append requirement has no default: an empty-array default
+becomes an invalid nested binding when independently packed modules link.
+Lint rejects array defaults on append requirements; host selection supplies the
+reviewed binding, and the application journey fixture edits that host selection.
 
 Application entries, renderers, screen models and rendering helpers live under
 component `app/` namespaces. The public rendering kit remains in `application`;

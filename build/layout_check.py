@@ -90,6 +90,10 @@ def audit(root):
         if entry["kind"] == "ns.requirement":
             refs.extend(target["entry"] for target in entry.get("targets", []))
             targets += len(entry.get("targets", []))
+            if isinstance(entry.get("default"), list) and any(
+                target["path"].rstrip().endswith("+=") for target in entry.get("targets", [])
+            ):
+                errors.append(f"{identity}: append requirement cannot default to an array element")
         for ref in refs:
             if (ref.startswith("bee:") or ref.startswith("bee.")) and ref not in entries and ref not in NATIVE_ENTRIES:
                 errors.append(f"{identity}: dangling linker/import target {ref}")

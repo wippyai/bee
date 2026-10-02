@@ -48,6 +48,7 @@ def stage(folder, source):
         for entry in document['entries']:
             if entry['kind'] == 'process.service' or (document['namespace'] == 'bee' and entry['name'] == 'gateway_listener'):
                 overrides.extend(['--override', document['namespace'] + ':' + entry['name'] + ':lifecycle.auto_start=false'])
+                overrides.extend(['--override', document['namespace'] + ':' + entry['name'] + ':lifecycle.startup=optional'])
     return overrides
 
 

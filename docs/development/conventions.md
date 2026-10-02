@@ -72,6 +72,9 @@ never point at app ids. Module `process.service` entries take their host and
 policy grants through requirements (`process_host`, per-service policy lists);
 their entries keep empty underlays the host fills.
 
+An append requirement (`+=`) contributes one element. It has no array default;
+an absent host selection contributes nothing instead of a nested empty array.
+
 `bee.harness.host:environment` is not composed: Bee's native host component
 registers it at boot (`native/launch/component.go`) with the `home`, `cwd`
 and `self` facts, environment-name presence metadata, and executable discovery, so module defaults may reference

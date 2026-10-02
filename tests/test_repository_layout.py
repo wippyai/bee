@@ -45,6 +45,17 @@ class RepositoryLayout(unittest.TestCase):
             self.assertTrue(any('underscores' in error for error in errors))
             self.assertTrue(any('beside' in error for error in errors))
 
+    def test_append_requirement_has_no_array_default(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / '.wippy', prefix='layout-append-') as temporary:
+            root = Path(temporary)
+            source = root / 'src'
+            source.mkdir()
+            (source / '_index.yaml').write_text('namespace: bee\nentries: []\n')
+            module = root / 'modules/example/src'
+            module.mkdir(parents=True)
+            (module / '_index.yaml').write_text('namespace: bee.example\nentries:\n- name: admission\n  kind: registry.entry\n  bindings: []\n- name: target_admission\n  kind: ns.requirement\n  default: []\n  targets:\n  - entry: bee.example:admission\n    path: .bindings +=\n')
+            self.assertTrue(any('append requirement' in error for error in LAYOUT.audit(root)[0]))
+
     def test_placement_cleanup_recovers_identity_without_changing_opaque_state(self):
         database = sqlite3.connect(':memory:')
         database.executescript('CREATE TABLE bee_placement_preparer_states (attempt_id TEXT, binding_id TEXT, record_json TEXT, PRIMARY KEY(attempt_id, binding_id)); CREATE TABLE bee_placement_evidence (kind TEXT, detail TEXT);')

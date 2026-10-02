@@ -174,7 +174,6 @@ entries:
         optional: true
 - name: target_agent_application_admission
   kind: ns.requirement
-  default: []
   meta:
     comment: The installed harness contributes the Agent application's reviewed host-selected
       policies

@@ -1073,6 +1073,10 @@ UPDATE bee_resource_grants SET root_ref = 'bee.sync.env:sync_exports' WHERE root
 UPDATE bee_resource_grants SET root_ref = 'bee.threads.service:thread_outbox_pump_service' WHERE root_ref = 'bee:thread_outbox_pump_service';
 UPDATE bee_resource_grants SET root_ref = 'bee.placement.native.env:workdir_preparers' WHERE root_ref = 'bee:workdir_preparers';
 UPDATE bee_resource_grants SET root_ref = 'bee.launch.service:workspace_hosts' WHERE root_ref = 'bee:workspace_hosts';
+UPDATE bee_resource_associations SET root_ref = 'bee.app.status:startup_progress' WHERE root_ref = 'bee.app:startup_progress';
+UPDATE bee_resource_associations SET root_ref = 'bee.persist.env:startup_progress' WHERE root_ref = 'bee.persist:startup_progress';
+UPDATE bee_resource_grants SET root_ref = 'bee.app.status:startup_progress' WHERE root_ref = 'bee.app:startup_progress';
+UPDATE bee_resource_grants SET root_ref = 'bee.persist.env:startup_progress' WHERE root_ref = 'bee.persist:startup_progress';
 ]]
 local list: {Migration} = {
     {id = 1, name = "resources", sql = RESOURCES_SQL, rebuild = false},

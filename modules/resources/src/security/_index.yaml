@@ -6,8 +6,9 @@ entries:
   meta:
     comment: The resource authority's store, its linked references and node identity
   policy:
-    expression: 'action != "env.get" || resource == "bee.resources.env:node_identity_migration_source"'
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.resources.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
+    - env.set
     - db.get
     - registry.get
     - system.read

@@ -123,8 +123,9 @@ entries:
 - name: store
   kind: library.lua
   source: file://store.lua
-  modules: [sql, json, hash]
+  modules: [sql, json]
   imports:
+    ledger: bee.persist.persist:ledger
     state: bee.client:state
     contract: bee.protocol:application
     binding: bee.storage:binding

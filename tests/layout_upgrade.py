@@ -16,9 +16,9 @@ from app_layout_smoke import layout, saved, stop
 from native_workspace import NativeDesktop
 from workspace import ROOT, RUNTIME, database_environment
 
-STORES = [('placement', 'bee_placement_schema_migrations', 7, 9),
-          ('sync', 'bee_sync_schema_migrations', 7, 9),
-          ('gateway', 'bee_gateway_schema_migrations', 15, 17),
+STORES = [('placement', 'bee_placement_schema_migrations', 8, 9),
+          ('sync', 'bee_sync_schema_migrations', 8, 9),
+          ('gateway', 'bee_gateway_schema_migrations', 16, 17),
           ('resources', 'bee_resource_schema_migrations', 3, 4),
           ('credentials', 'bee_credential_schema_migrations', 6, 7)]
 
@@ -121,7 +121,7 @@ def upgrade(previous, binary, source):
         desktop(binary, folder, state)
         owner_records(folder / 'restarted-owners', state, 'layout-verify', ROOT)
         assert ledgers(state) == upgraded_ledgers, 'Restart reapplied a migration'
-        print('origin/main standalone restart: saved desktop retained; owner-written Placement 7→9, Sync 7→9, Gateway 15→17, Resources 3→4, Credentials 6→7; cleanup replay and second restart pass', flush=True)
+        print('origin/main standalone restart: saved desktop retained; owner-written Placement 8→9, Sync 8→9, Gateway 16→17, Resources 3→4, Credentials 6→7; cleanup replay and second restart pass', flush=True)
 
 
 if __name__ == '__main__':

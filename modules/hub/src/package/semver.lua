@@ -175,8 +175,8 @@ local function allows(version: Version, comparator: Comparator): boolean
     return false
 end
 
-local function set_matches(version: Version, set: Set): boolean
-    if #version.prerelease > 0 then
+local function set_matches(version: Version, set: Set, selected_prerelease: boolean?): boolean
+    if #version.prerelease > 0 and not selected_prerelease then
         local targeted = false
         for _, comparator in ipairs(set) do
             if comparator.version and #comparator.version.prerelease > 0 and same_core(version, comparator.version) then
@@ -192,13 +192,13 @@ local function set_matches(version: Version, set: Set): boolean
     return true
 end
 
-function M.matches(version: string, constraint: string): (boolean?, string?)
+function M.matches(version: string, constraint: string, selected_prerelease: boolean?): (boolean?, string?)
     local parsed = M.parse(version)
     if not parsed then return nil, "version must be strict SemVer" end
     local sets, problem = parse_constraint(constraint)
     if not sets then return nil, problem end
     for _, set in ipairs(sets) do
-        if set_matches(parsed, set) then return true, nil end
+        if set_matches(parsed, set, selected_prerelease) then return true, nil end
     end
     return false, nil
 end

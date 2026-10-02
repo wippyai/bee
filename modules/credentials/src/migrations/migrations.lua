@@ -1142,6 +1142,10 @@ UPDATE bee_credential_projections SET materializer = 'bee.sync.env:sync_exports'
 UPDATE bee_credential_projections SET materializer = 'bee.threads.service:thread_outbox_pump_service' WHERE materializer = 'bee:thread_outbox_pump_service';
 UPDATE bee_credential_projections SET materializer = 'bee.placement.native.env:workdir_preparers' WHERE materializer = 'bee:workdir_preparers';
 UPDATE bee_credential_projections SET materializer = 'bee.launch.service:workspace_hosts' WHERE materializer = 'bee:workspace_hosts';
+UPDATE bee_credential_definitions SET source_ref = 'bee.app.status:startup_progress' WHERE source_ref = 'bee.app:startup_progress';
+UPDATE bee_credential_definitions SET source_ref = 'bee.persist.env:startup_progress' WHERE source_ref = 'bee.persist:startup_progress';
+UPDATE bee_credential_projections SET materializer = 'bee.app.status:startup_progress' WHERE materializer = 'bee.app:startup_progress';
+UPDATE bee_credential_projections SET materializer = 'bee.persist.env:startup_progress' WHERE materializer = 'bee.persist:startup_progress';
 ]]
 local list: {Migration} = {
     {id = 1, name = "credentials", sql = CREDENTIALS_SQL, rebuild = false},

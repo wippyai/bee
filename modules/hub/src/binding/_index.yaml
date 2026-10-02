@@ -43,6 +43,7 @@ entries:
     inspect: bee.hub.binding:inspect
     inspection: bee.hub.package:inspection
     transaction: bee.persist.persist:transaction
+    requirements: bee.hub.package:requirements
     hub_result: bee.hub.package:result
     inventory: bee.hub.package:inventory
     inventory_reader: bee.hub.package:inventory_reader

@@ -110,13 +110,13 @@ local function define_tests()
             local selected = assert(descriptor.load("bee.driver.grok.descriptor:cli"))
             local declaration = assert(login_evidence.decode(selected.login_evidence))
             local config_only = login_evidence.probe(declaration, {
-                file = function(path, _variable, _directory) return path == ".grok/config.toml" end,
+                file = function(path, _variable, _directory) return path == ".grok/config.toml", nil end,
                 environment = function(_name) return false end,
                 status = function(_argv, _timeout) return nil end,
             })
             test.eq(login_evidence.present(declaration, config_only), false)
             local signed_in = login_evidence.probe(declaration, {
-                file = function(path, _variable, _directory) return path == ".grok/auth.json" end,
+                file = function(path, _variable, _directory) return path == ".grok/auth.json", nil end,
                 environment = function(_name) return false end,
                 status = function(_argv, _timeout) return nil end,
             })
@@ -129,7 +129,7 @@ local function define_tests()
                 {kind = "auth_status", argv = {"auth", "status"}, success_exit_code = 7, timeout_ms = 42},
             }}))
             local checks = login_evidence.probe(declaration, {
-                file = function(path, _variable, _directory) return path == ".fixture/config.jsonc" end,
+                file = function(path, _variable, _directory) return path == ".fixture/config.jsonc", nil end,
                 environment = function(name) return name == "FIXTURE_KEY" end,
                 status = function(argv, timeout)
                     test.eq(argv[1], "auth")
@@ -142,7 +142,7 @@ local function define_tests()
             for _, check in ipairs(checks) do test.eq(check.present, true) end
             test.eq(checks[3].exit_code, 7)
             local uncertain = login_evidence.probe(declaration, {
-                file = function(_path, _variable, _directory) return false end,
+                file = function(_path, _variable, _directory) return false, nil end,
                 environment = function(_name) return false end,
                 status = function(_argv, _timeout) return nil end,
             })

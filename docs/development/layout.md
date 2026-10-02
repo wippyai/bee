@@ -23,10 +23,15 @@ telemetry `owner_ref.service_id` values. The service remains the operation's exa
 namespace; unrelated namespace strings and opaque state remain intact.
 
 The root follow-up audits all entries in `bee` and every physical component
-root. `bee` retains only `definition`, `workers` and `terminal`. The 376 moved
+root. `bee` retains only `definition`, `workers` and `terminal`. The original 376 moved
 identities (143 Lua sources) are enumerated in `build/layout_root_moves.json`;
 `build/layout_identity_moves.json` also resolves earlier moves to these final
-live destinations. Shared root declarations and the exact library set are
+live destinations. Main’s startup progress helper and environment field now live
+in `bee.app.status` and `bee.persist.env`. The persisted identity conversions
+are also explicit in `build/component-inventory-migrations.json`; the generated
+component inventory has no dangling requirement targets and caps root Lua at
+23,975 lines. Topics and schema tags retain their baseline identities.
+Shared root declarations and the exact library set are
 specified in the conventions and `build/layout_roots.json`. Lint rejects new
 root entries outside that set and known composition names with the wrong kind,
 including host declarations that share a physical component namespace. It also

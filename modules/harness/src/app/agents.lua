@@ -51,7 +51,9 @@ function M.list(client: sessions.Client, include_unavailable: boolean, query: st
                 local reason = candidate.reasons[1] or (ready and "" or candidate.status)
                 local provider = ""
                 for _, feature in ipairs(candidate.features) do provider = feature:match("^driver:(.+)$") or provider end
-                if provider ~= "" then
+                if not ready and reason:find("owner_safe:", 1, true) then
+                    reason = "Login needed · " .. reason
+                elseif provider ~= "" then
                     if candidate.status == "missing" then reason = provider .. " was not found in PATH. Install it, then refresh."
                     elseif candidate.status == "unconfigured" then reason = "Run " .. provider .. " to sign in, then refresh."
                     elseif reason:find("bee.", 1, true) then reason = "This agent cannot run with the current setup. Check its folder and permissions." end

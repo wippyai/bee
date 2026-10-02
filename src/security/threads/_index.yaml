@@ -2,11 +2,15 @@ version: '1.0'
 namespace: bee.security.threads
 entries:
 - name: thread_storage_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
+    - env.get
+    - env.set
     - db.get
     resources:
+    - bee.persist.env:startup_progress
     - bee.threads.env:db
     effect: allow
 - name: thread_node_policy
@@ -215,11 +219,12 @@ entries:
     expression: action == "process.send" || resource == "bee.threads.waiter"
     effect: allow
 - name: thread_outbox_pump_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
     comment: Selected by the host for the forwarding pump; it reaches the shared outbox tables and nothing else, and the host links its transport separately
   policy:
-    actions: [db.get, registry.get, system.read, process.registry.lookup, process.listen, process.unlisten, process.send, channel.select]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, registry.get, system.read, process.registry.lookup, process.listen, process.unlisten, process.send, channel.select, env.set, env.get]
     resources: '*'
     effect: allow
 - name: thread_sessions_owner_policy

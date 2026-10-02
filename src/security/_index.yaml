@@ -118,11 +118,12 @@ entries:
     resources: '*'
     effect: allow
 - name: sync_distribution_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
     comment: Generic immutable feed delivery to connected non-client Hive members
   policy:
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions: [db.get, registry.get, system.read, hive.invoke, process.registry.lookup,
-      process.listen, process.unlisten, process.send]
+      process.listen, process.unlisten, process.send, env.set, env.get]
     resources: '*'
     effect: allow

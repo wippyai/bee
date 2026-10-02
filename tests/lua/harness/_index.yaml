@@ -795,6 +795,61 @@ entries:
     bounds: bee.protocol:bounds
     test: wippy.test:test
     placement_fixture: bee.harness.catalog:placement_fixture
+    exits: bee.harness.catalog:exits
+- name: carrier_drain_test
+  kind: function.lua
+  source: file://carrier_test.lua
+  method: run_drain
+  meta:
+    type: test
+    suite: bee
+    timeout: 180s
+  modules:
+  - funcs
+  - security
+  - process
+  - registry
+  - env
+  - time
+  - channel
+  - json
+  security:
+    policies:
+    - bee.harness.catalog:apply_test_policy
+    - bee.harness.catalog:carrier_spawn_policy
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
+    exits: bee.harness.catalog:exits
+- name: carrier_stream_test
+  kind: function.lua
+  source: file://carrier_test.lua
+  method: run_stream
+  meta:
+    type: test
+    suite: bee
+    timeout: 180s
+  modules:
+  - funcs
+  - security
+  - process
+  - registry
+  - env
+  - time
+  - channel
+  - json
+  security:
+    policies:
+    - bee.harness.catalog:apply_test_policy
+    - bee.harness.catalog:carrier_spawn_policy
+  imports:
+    principals: bee.test.principals:bound
+    bounds: bee.protocol:bounds
+    test: wippy.test:test
+    placement_fixture: bee.harness.catalog:placement_fixture
+    exits: bee.harness.catalog:exits
 - name: launch_sentinel_storage
   kind: env.storage.memory
   meta:
@@ -1737,6 +1792,7 @@ entries:
     - bee.security.approvals:approval_store_policy
     - bee.placement.native.security:placement_exec_policy
   imports:
+    placement_protocol: bee.placement.native:protocol
     placement_decode: bee.placement:decode
     principals: bee.test.principals:bound
     bounds: bee.protocol:bounds
@@ -2398,30 +2454,16 @@ entries:
   meta: {type: test_support}
   modules: [process, time]
   imports: {carrier_types: bee.harness:types, bounds: bee.protocol:bounds, principals: bee.test.principals:bound, placement_types: bee.placement:types, placement_request: bee.placement:request, preferences_codec: bee.driver.profiles:preferences, machine: bee.harness.carrier:machine, carrier_process: bee.harness.service:carrier}
-
-- name: carrier_stream_test
+- name: exits
+  kind: library.lua
+  source: file://exits.lua
+  meta: {type: test_support}
+  modules: [process]
+  imports: {bounds: 'bee.protocol:bounds'}
+- name: exits_test
   kind: function.lua
-  source: file://carrier_test.lua
-  method: stream
-  meta:
-    type: test
-    suite: bee
-    timeout: 180s
-  modules:
-  - funcs
-  - security
-  - process
-  - registry
-  - env
-  - time
-  - channel
-  - json
-  security:
-    policies:
-    - bee.harness.catalog:apply_test_policy
-    - bee.harness.catalog:carrier_spawn_policy
-  imports:
-    principals: bee.test.principals:bound
-    bounds: bee.protocol:bounds
-    test: wippy.test:test
-    placement_fixture: bee.harness.catalog:placement_fixture
+  source: file://exits_test.lua
+  method: run
+  meta: {type: test, suite: bee}
+  modules: [process]
+  imports: {test: 'wippy.test:test', exits: 'bee.harness.catalog:exits'}

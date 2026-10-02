@@ -76,7 +76,7 @@ local function define_tests()
                 end
                 local input = probe(false)
                 input.login_checks = login_evidence.probe(selected.login_evidence, {
-                    file = function(_path, _variable, _directory) return false end,
+                    file = function(_path, _variable, _directory) return false, nil end,
                     environment = function(_name) return false end,
                     status = function(_argv, _timeout) return 1 end})
                 local missing = assert(case.driver.handle(input))
@@ -105,6 +105,24 @@ local function define_tests()
             invalid, err = claude.handle(input)
             test.is_nil(invalid)
             test.not_nil(err)
+        end)
+
+        test.it("retains bounded login refusal reasons and clears them for accepted alternatives", function()
+            local declaration = {command = "fixture login", any_of = {{kind = "file_exists", paths = {".fixture/auth.json"}}}}
+            local refusal = "owner_safe: /store/login: group/other-writable mode 0620"
+            local input = probe(false)
+            input.login_checks = {{present = false, reason = refusal}}
+            local result, err = locate.evaluate({provider = "fixture", executable = "fixture-cli", login_evidence = declaration}, input)
+            if not result then error(tostring(err)) end
+            test.eq(result.status, "unconfigured")
+            test.eq(result.reason, refusal)
+            test.eq(assert(locate.decode(result)).reason, refusal)
+            input.login_checks = {{present = true, reason = refusal}}
+            test.is_nil(locate.evaluate({provider = "fixture", executable = "fixture-cli", login_evidence = declaration}, input))
+            for _, invalid in ipairs({"bad\nreason", string.rep("x", 513)}) do
+                input.login_checks = {{present = false, reason = invalid}}
+                test.is_nil(locate.evaluate({provider = "fixture", executable = "fixture-cli", login_evidence = declaration}, input))
+            end
         end)
 
         test.it("does not turn provider metadata into a runtime login claim", function()

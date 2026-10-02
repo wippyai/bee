@@ -308,7 +308,20 @@ application-owned compatibility contracts and are independent of package,
 registry, database and migration versions. Automatic instances remain pending
 while their definition is absent and resume only after admission; unavailable
 definitions do not block desktop readiness. A changed or incompatible schema
-keeps the saved record rather than feeding it to a different definition.
+keeps the saved record on cold restore rather than feeding it to a different definition.
+
+A live registry transition replaces a running application's execution when its
+admitted definition revision, Lua source or imported Lua libraries change. The
+broker uses its existing replacement and checkpoint protocol for every restart
+policy; the policy still controls cold recovery. It waits for pending checkpoint
+receipts, resumes from the last committed state, and retains the logical
+instance, view, terminal mount and window or tab. Unchanged definitions keep
+running. Removed or invalid admission never authorizes a replacement.
+An incompatible resume schema starts the new execution fresh. A persistent
+one-line notice inside its window says that saved state is incompatible and the
+app restarted fresh, including when the window has a custom label. The optional
+bounded `notice` field travels in broker replies and host view inventory and is
+projected by the desktop's private `announce` command. It grants no authority.
 
 `client.checkpoint(launch, json_string)` queues at most 64 KiB of opaque,
 application-owned JSON and returns a request ID. A successful

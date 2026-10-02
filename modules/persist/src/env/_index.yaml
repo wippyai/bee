@@ -1,0 +1,8 @@
+version: '1.0'
+namespace: bee.persist.env
+entries:
+- name: startup_progress
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: startup_progress
+  default: ''

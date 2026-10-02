@@ -96,11 +96,14 @@ entries:
     resources: [bee.placement.docker.binding:capabilities]
     effect: allow
 - name: profile_store_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta:
     comment: Saved profile facade storage and read-only registry validation; callers separately require workspace read or write authority
   policy:
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions:
+    - env.get
+    - env.set
     - db.get
     - registry.get
     - system.read

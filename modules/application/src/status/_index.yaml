@@ -1,0 +1,6 @@
+version: '1.0'
+namespace: bee.app.status
+entries:
+- name: startup_progress
+  kind: library.lua
+  source: file://startup_progress.lua

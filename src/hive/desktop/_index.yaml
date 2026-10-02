@@ -36,6 +36,7 @@ entries:
     types: bee.hive:types
     clock: bee.protocol:clock
     retained: bee.launch:retained_protocol
+    startup_progress: bee.app.status:startup_progress
     catalog: bee.hive.desktop:catalog
     session_policy: bee.hive.desktop:session_policy
     workspaces: bee.storage:binding

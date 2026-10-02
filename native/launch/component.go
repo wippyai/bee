@@ -35,6 +35,7 @@ type Host struct {
 	// ownerState is the state directory selected for a retained owner launch. It
 	// is set during planning so Load can add the owner's enrollment publisher.
 	ownerState string
+	startup    *startupMonitor
 	// ownerLaunch is the launch identity the starting client handed this owner.
 	ownerLaunch        string
 	nodeIdentity       string
@@ -171,7 +172,7 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 			return app.Plan{}, err
 		}
 		host.ownerState, host.ownerLaunch = state, launched
-		plan.Prepare = func(context.Context) (boot.Config, func() error, error) {
+		plan.Prepare = func(ctx context.Context) (boot.Config, func() error, error) {
 			config, release, err := prepareOwnerForProject(state, launch.Dir, owner)
 			if err != nil {
 				return nil, nil, err
@@ -181,7 +182,12 @@ func (host *Host) Plan(ctx context.Context, launch app.Launch) (app.Plan, error)
 				return nil, nil, errors.Join(err, release())
 			}
 			host.nodeIdentity, host.legacyNodeIdentity = identity.NodeID, identity.LegacyNodeID
-			return config, release, nil
+			monitor, err := beginStartup(ctx, state, launched, os.Getenv(ownerProgressLogVariable))
+			if err != nil {
+				return nil, nil, errors.Join(err, release())
+			}
+			host.startup = monitor
+			return config, func() error { return errors.Join(monitor.stop(), release()) }, nil
 		}
 		return plan, nil
 	}
@@ -240,8 +246,8 @@ func (host *Host) prepareStateIdentity(ctx context.Context, state, projectDir st
 }
 
 func (host *Host) Load(ctx context.Context) (context.Context, error) {
-	registry := envapi.GetRegistry(ctx)
-	if registry == nil {
+	environment := envapi.GetRegistry(ctx)
+	if environment == nil {
 		return ctx, errors.New("environment registry is unavailable")
 	}
 	storage, err := newHostEnvironment(host.resolver)
@@ -254,7 +260,11 @@ func (host *Host) Load(ctx context.Context) (context.Context, error) {
 	if host.nodeIdentity != "" {
 		storage.facts["node_identity"] = host.nodeIdentity
 	}
-	registry.RegisterStorage(registryID(), storage)
+	environment.RegisterStorage(registryID(), storage)
+	if host.startup != nil {
+		host.startup.advance("Starting services")
+		storage.startup = host.startup
+	}
 	return ctx, nil
 }
 

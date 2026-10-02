@@ -27,11 +27,17 @@ local function resource_owners()
     db:release()
 end
 function M.seed()
+    local registry = require("registry")
+    for _, id in ipairs({"bee.git.worktree.binding:binding", "bee.git.worktree.binding:plan",
+        "bee.git.worktree.binding:setup", "bee.git.worktree.binding:cleanup",
+        "bee.driver.codex.binding:binding", "bee.threads.binding:delivery_claim"}) do
+        assert(registry.get(id), "seed reference is not callable: " .. id)
+    end
     resource_owners()
     local db = assert(placement.open())
     local launch: types.LaunchRequest = {
         idempotency_key = "layout-attempt-key", owner_id = SUBJECT, owner_incarnation = 1,
-        action_id = "layout-action", attempt_id = ATTEMPT, binding_ref = "bee.driver.codex:binding",
+        action_id = "layout-action", attempt_id = ATTEMPT, binding_ref = "bee.driver.codex.binding:binding",
         policy_ref = "bee.layout.fixture:policy", profile_id = "session",
         binding_digest = string.rep("c", 64), profile_digest = string.rep("c", 64),
         launch = {executable = "fixture", argv = {"fixture"}, environment = {}, readiness = "protocol:system.init"},
@@ -42,19 +48,19 @@ function M.seed()
     local intended = placement.intend(db, launch, assert(request.digest(launch)), assert(json.encode(launch)),
         {capability = "direct_process", exit_observation = "eof_gated"})
     assert(intended.ok, intended.message)
-    assert(placement.record_preparer_plan(db, ATTEMPT, "bee.git_worktree:binding", assert(json.encode({
-        binding_id = "bee.git_worktree:binding", plan = "bee.git_worktree:plan",
-        setup = "bee.git_worktree:setup", cleanup = "bee.git_worktree:cleanup", state = {token = OPAQUE},
+    assert(placement.record_preparer_plan(db, ATTEMPT, "bee.git.worktree.binding:binding", assert(json.encode({
+        binding_id = "bee.git.worktree.binding:binding", plan = "bee.git.worktree.binding:plan",
+        setup = "bee.git.worktree.binding:setup", cleanup = "bee.git.worktree.binding:cleanup", state = {token = OPAQUE},
     }))) == nil)
     local exited = placement.transition(db, ATTEMPT, {execution = "exited", fields = {exit_source = "runner"},
-        evidence = {kind = "workdir_preparer.cleaned", detail = "bee.git_worktree:binding"}})
+        evidence = {kind = "workdir_preparer.cleaned", detail = "bee.git.worktree.binding:binding"}})
     assert(exited.ok, exited.message)
     db:release()
     local projection = assert(sync.open({resource = "bee.sync.env:db", owner = SUBJECT}))
     local written = projection:append({feed = "layout", event_id = "layout-event", idempotency_key = "layout-event-key",
         event_type = "layout.references", projection_key = "references", expected_revision = 0,
-        projection_value = {driver_binding = "bee.driver.codex:binding", binding = "bee.git_worktree:binding", method = "bee.threads.delivery:claim", opaque = OPAQUE .. ":instance", owner_ref = {node_id = "node", service_id = "bee.hive.telemetry"}},
-        payload = {method = "bee.threads.delivery:claim"}})
+        projection_value = {driver_binding = "bee.driver.codex.binding:binding", binding = "bee.git.worktree.binding:binding", method = "bee.threads.binding:delivery_claim", opaque = OPAQUE .. ":instance", owner_ref = {node_id = "node", service_id = "bee.hive.telemetry.binding"}},
+        payload = {method = "bee.threads.binding:delivery_claim"}})
     assert(written.ok, written.message)
     assert(projection:close())
     db = gateway()
@@ -64,8 +70,8 @@ function M.seed()
         "2000-01-01T00:00:00.000Z", "bee.layout.fixture:policy", "layout-workspace", "layout", "{}")
     assert(inserted, insert_error)
     local surface, surface_error = surfaces.initialize(tx, "layout-binding",
-        assert(json.encode({driver_binding = "bee.driver.codex:binding", target = "bee.git_worktree:binding", method = "bee.threads.delivery:claim"})),
-        assert(json.encode({method = "bee.threads.delivery:claim"})), "{}")
+        assert(json.encode({driver_binding = "bee.driver.codex.binding:binding", target = "bee.git.worktree.binding:binding", method = "bee.threads.binding:delivery_claim"})),
+        assert(json.encode({method = "bee.threads.binding:delivery_claim"})), "{}")
     assert(surface, surface_error and surface_error.message)
     assert(tx:commit())
     db:release()

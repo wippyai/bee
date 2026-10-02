@@ -2,10 +2,11 @@ version: '1.0'
 namespace: bee.node.security
 entries:
 - name: database_policy
-  kind: security.policy
+  kind: security.policy.expr
   policy:
-    actions: [db.get]
-    resources: [bee.node.env:db]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, env.set, env.get]
+    resources: [bee.node.env:db, bee.persist.env:startup_progress]
     effect: allow
 - name: store_policy
   kind: security.policy

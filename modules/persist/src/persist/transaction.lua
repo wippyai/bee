@@ -19,6 +19,28 @@ end
 function M.failure(code: string, message: string, value: unknown?): Result
     return {ok = false, code = code, message = message, value = value, replayed = false}
 end
+-- Keep the native error text intact while adding the failed operation.
+function M.error_message(action: string, err: unknown): string
+    return action .. ": " .. tostring(err or "no reason given")
+end
+function M.sql_failure(err: unknown, action: string): Result
+    return M.failure(M.busy(err) and "BUSY" or "INTERNAL", M.error_message(action, err))
+end
+function M.release(db: sql.DB, label: string, result: Result): Result
+    local released, err = db:release()
+    if released == true and not err then return result end
+    local message = M.error_message("close " .. label .. " database", err)
+    if not result.ok then message = tostring(result.message) .. "; " .. message end
+    return M.failure("INTERNAL", message, result.value)
+end
+local function rollback(tx: sql.Transaction, label: string, result: Result): Result
+    local rolled_back, err = tx:rollback()
+    if rolled_back == true and not err then return result end
+    local message = M.error_message("rollback " .. label .. " transaction", err)
+    if not result.ok then message = tostring(result.message) .. "; " .. message end
+    -- A failed rollback is never safe to retry.
+    return M.failure("INTERNAL", message, result.value)
+end
 function M.success(value: unknown, replayed: boolean): Result
     return {ok = true, value = value, replayed = replayed}
 end
@@ -34,20 +56,18 @@ function M.write(db: sql.DB, label: string, body: Body): Result
     for attempt = 1, M.MAX_ATTEMPTS do
         local tx, begin_err = db:begin({isolation = sql.isolation.SERIALIZABLE})
         if not tx then
-            if not M.busy(begin_err) then return M.failure("INTERNAL", "begin " .. label .. " transaction") end
-            last = M.storage_failure(label .. " database is busy")
+            last = M.sql_failure(begin_err, "begin " .. label .. " transaction")
+            if last.code ~= "BUSY" then return last end
         else
             local result = body(tx)
             if result.ok or result.commit then
                 local committed, commit_err = tx:commit()
                 if committed == true and not commit_err then return result end
-                tx:rollback()
-                if not M.busy(commit_err) then return M.failure("INTERNAL", "commit " .. label .. " transaction") end
-                last = M.storage_failure(label .. " database is busy")
+                last = rollback(tx, label, M.sql_failure(commit_err, "commit " .. label .. " transaction"))
+                if last.code ~= "BUSY" then return last end
             else
-                tx:rollback()
-                if result.code ~= "BUSY" then return result end
-                last = result
+                last = rollback(tx, label, result)
+                if last.code ~= "BUSY" then return last end
             end
         end
         if attempt < M.MAX_ATTEMPTS then time.sleep(tostring(M.BACKOFF_MS * attempt) .. "ms") end
@@ -58,11 +78,9 @@ end
 function M.read(db: sql.DB, label: string, body: Body): Result
     local tx, begin_err = db:begin({isolation = sql.isolation.SERIALIZABLE, read_only = true})
     if not tx then
-        if M.busy(begin_err) then return M.storage_failure(label .. " database is busy") end
-        return M.failure("INTERNAL", "begin " .. label .. " read")
+        return M.sql_failure(begin_err, "begin " .. label .. " read")
     end
     local result = body(tx)
-    tx:rollback()
-    return result
+    return rollback(tx, label, result)
 end
 return M

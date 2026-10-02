@@ -277,7 +277,9 @@ class Desktop:
 
     def open_start(self):
         self.key(b"\x1bOP")
-        self.wait("Apps")
+        self.wait_until(lambda: any("Apps " in line and "│" in line
+                                  and line.index("│") < line.index("Apps ")
+                                  for line in self.screen.display[1:]), "Start menu")
 
     def choose(self, label):
         visible = lambda target: any((target + " ") in line and "│" in line for line in self.screen.display[1:])

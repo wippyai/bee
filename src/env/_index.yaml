@@ -99,6 +99,7 @@ entries:
   readonly: true
 - name: machine_login_source
   kind: fs.directory
+  link_policy: owner_safe
   directory: ${env:bee.env:machine_home}
   base: project
   mode: '0500'
@@ -182,3 +183,15 @@ entries:
   meta:
     title: Bee agent documentation corpus
     comment: The offline platform documentation a bound agent reads through the gateway docs tool; wippy.yaml embed freezes it read-only into the pack. Rebuilt by build/agent_corpus.py.
+
+- name: startup_sequence
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: startup_sequence
+  default: '0'
+  readonly: true
+- name: startup_phase
+  kind: env.variable
+  storage: bee.harness.host:environment
+  variable: startup_phase
+  default: starting

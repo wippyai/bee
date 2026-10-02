@@ -105,10 +105,16 @@ layout schema contains no application definition ID.
 version, monotonic generation and update timestamp.
 `workspace_schema_migrations` is an append-only ledger with integer `id`,
 immutable `name`, `checksum` and `applied_at` fields. `open()` enables WAL and
-runs every pending migration in one transaction. On every open it checks that
+runs every pending migration in one transaction through `bee.persist.persist:ledger`.
+The shared runner captures freshness before applying the batch and takes the
+writer lock before validating the ledger, so concurrent opens read committed
+migration history. On every open it checks that
 recorded migrations are contiguous, rejects a newer ledger version, and
 rejects a changed name or checksum. A failed migration rolls back both schema
-changes and its ledger record.
+changes and all ledger records from that batch. Client migrations use the same
+batch runner with the original `client_schema_migrations` shape (`id`, `name`,
+`checksum`), without an `applied_at` column. Applied workspace migrations 1–12
+and client migrations 1–3 retain their exact SQL and checksums.
 
 Each write is also transactional. Existing rows update through a generation
 compare-and-swap predicate, so a stale transaction cannot overwrite a newer
@@ -130,5 +136,7 @@ imports.
 
 Workspace migrations 10 and 11 move saved application definition IDs to their
 application child namespaces. Migration 10 covers Timeline, Workspaces and Hive
-Manager; migration 11 covers Modules. Both preserve opaque application state
-and layout generations. Workspace recovery also recognizes the earlier IDs.
+Manager; migration 11 covers Modules. Migration 12 covers Settings, Terminal,
+Process Manager and Overlays, alongside older application definition spellings.
+These migrations preserve opaque application state and layout generations.
+Workspace recovery also recognizes the earlier IDs.

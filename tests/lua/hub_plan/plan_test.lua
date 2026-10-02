@@ -39,7 +39,7 @@ end
 
 local function package(name: string, version: string, digest: string, entries: {inspect.Entry}?,
     holes: requirements.Result?): inspect.Inspection
-    local selected: requirements.Result = {requirements = {}, missing = {}}
+    local selected: requirements.Result = assert(requirements.read(entries or {}, {}))
     if holes then selected = holes end
     return {component = name, version = version, digest = string.rep(digest, 64),
         entries = entries or {}, requirements = selected, next_offset = nil, eof = true}
@@ -87,7 +87,9 @@ local function define_tests()
                             {id = "acme.app:dependency", kind = "ns.dependency", meta = {},
                                 data = {component = "acme/lib", version = "1.0.0", parameters = {}}}}),
                         ["acme/lib@1.0.0"] = package("acme/lib", "1.0.0", changed and "d" or "c", {
-                            {id = "acme.lib:database", kind = "ns.requirement", meta = {}, data = {targets = targets}}}),
+                            {id = "acme.lib:database", kind = "ns.requirement", meta = {}, data = {targets = targets}},
+                            {id = "acme.lib:main", kind = "registry.entry", meta = {}, data = {}},
+                        }),
                     }))
                 test.is_nil(problem); test.not_nil(prepared)
                 if prepared then
@@ -343,11 +345,183 @@ local function define_tests()
             test.eq(problem, "component is managed by the host deployment")
         end)
 
-        test.it("reserves Bee's pack components for deployment-root updates", function()
+        test.it("requires host selection before managing Bee components", function()
             local prepared, problem = plan.prepare(state({}), 1,
                 request({action = "install", component = "bee/application", version = "0.2.0"}), source({}))
             test.is_nil(prepared)
-            test.eq(problem, "Bee packs update through the bee/bee deployment root")
+            test.eq(problem, "Bee component management requires explicit host-selected roots")
+        end)
+
+        test.it("converts host-selected component roots while preserving third-party parameters", function()
+            local selected = {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                data = {component = "bee/files", version = "1.0.0", parameters = {{name = "folder", value = "bee.env:files_root"}}}}
+            local captured = state({selected, root("acme/app", "1.0.0"),},
+                {{name = "bee/files", version = "1.0.0"}, {name = "acme/app", version = "1.0.0"}})
+            local artifacts = source({
+                ["bee/files@2.0.0"] = package("bee/files", "2.0.0", "a", {
+                    {id = "bee.files:folder", kind = "ns.requirement", meta = {},
+                        data = {targets = {{entry = "bee.files:main", path = ".folder"}}}},
+                    {id = "bee.files:main", kind = "registry.entry", meta = {}, data = {}},
+                }),
+                ["acme/app@1.0.0"] = package("acme/app", "1.0.0", "b"),
+            })
+            local prepared, problem = plan.prepare(captured, 3,
+                request({action = "update", component = "bee/files", version = "2.0.0",
+                    parameters = {{name = "folder", value = "bee.env:files_root"}}}), artifacts)
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                test.eq(prepared.plan.root_id, "bee.deps:files")
+                test.not_nil(prepared.plan.conversion)
+                local third = module_for(prepared.plan.modules, "acme/app")
+                if third then test.eq(third.change, "keep") else test.not_nil(third) end
+            end
+            local removed, remove_error = plan.prepare(captured, 3,
+                request({action = "uninstall", component = "bee/files"}), artifacts)
+            test.is_nil(remove_error); test.not_nil(removed)
+        end)
+        for _, action in ipairs({"update", "uninstall"}) do
+            test.it("protects the installed Hub from independent " .. action, function()
+                local captured = state({
+                    {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                        data = {component = "bee/hub", version = "1.0.0"}},
+                }, {{name = "bee/hub", version = "1.0.0"}})
+                local raw: {[string]: unknown} = {action = action, component = "bee/hub"}
+                if action == "update" then raw.version = "2.0.0" end
+                local prepared, problem = plan.prepare(captured, 3, request(raw), source({}))
+                test.is_nil(prepared)
+                test.eq(problem, "protected boot/installer component cannot be " .. (action == "uninstall" and "removed" or "updated") .. " independently: bee/hub; required by bee.deps:hub")
+            end)
+        end
+
+        test.it("refuses dangling requirement targets before publication", function()
+            local prepared, problem = plan.prepare(state({}), 1,
+                request({action = "install", component = "acme/app", version = "1.0.0"}),
+                source({["acme/app@1.0.0"] = package("acme/app", "1.0.0", "a", {
+                    {id = "acme.app:folder", kind = "ns.requirement", meta = {}, data = {default = "selected",
+                        targets = {{entry = "acme.app:missing", path = ".folder"}}}},
+                })}))
+            test.is_nil(prepared)
+            test.eq(problem, "requirement target does not resolve: acme.app:folder -> acme.app:missing")
+        end)
+        test.it("refuses removing an optional component needed by a third-party root", function()
+            local captured = state({root("acme/app", "1.0.0"),
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/files", version = "1.0.0"}},
+                {id = "acme.app:files", kind = "ns.dependency", registry = {owner = "acme/app"},
+                    data = {component = "bee/files", version = "1.0.0"}},
+            }, {{name = "acme/app", version = "1.0.0"}, {name = "bee/files", version = "1.0.0"}})
+            local prepared, problem = plan.prepare(captured, 1, request({action = "uninstall", component = "bee/files"}), source({}))
+            test.is_nil(prepared)
+            test.eq(problem, "component is still required by acme/app")
+        end)
+        test.it("derives protection for the Hub dependency closure at plan time", function()
+            local captured = state({
+                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "", root = true},
+                    data = {component = "bee/hub", version = "1.0.0"}},
+                {id = "bee.deps:values", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "", root = true},
+                    data = {component = "bee/values", version = "1.0.0"}},
+                {id = "bee.hub:values", kind = "ns.dependency", registry = {owner = "bee/hub"},
+                    data = {component = "bee/values", version = "1.0.0"}},
+            }, {{name = "bee/hub", version = "1.0.0"}, {name = "bee/values", version = "1.0.0"}})
+            local prepared, problem = plan.prepare(captured, 1, request({action = "uninstall", component = "bee/values"}), source({}))
+            test.is_nil(prepared)
+            test.eq(problem, "protected boot/installer component cannot be removed independently: bee/values; required by bee.hub:values")
+        end)
+        test.it("refuses removing a target of a retained host requirement", function()
+            local captured = state({
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/files", version = "1.0.0"}},
+                {id = "bee.files:main", kind = "registry.entry", registry = {owner = "bee/files"}, data = {}},
+                {id = "host:required_folder", kind = "ns.requirement", registry = {owner = ""},
+                    data = {default = "selected", targets = {{entry = "bee.files:main", path = ".folder"}}}},
+            }, {{name = "bee/files", version = "1.0.0"}})
+            local prepared, problem = plan.prepare(captured, 1, request({action = "uninstall", component = "bee/files"}), source({}))
+            test.is_nil(prepared)
+            test.eq(problem, "requirement target does not resolve: host:required_folder -> bee.files:main")
+        end)
+        test.it("resolves local requirement target names in their declared namespace", function()
+            local prepared, problem = plan.prepare(state({}), 1,
+                request({action = "install", component = "acme/app", version = "1.0.0"}),
+                source({["acme/app@1.0.0"] = package("acme/app", "1.0.0", "a", {
+                    {id = "acme.app:folder", kind = "ns.requirement", meta = {}, data = {default = "workspace",
+                        targets = {{entry = "main", path = ".folder"}}}},
+                    {id = "acme.app:main", kind = "registry.entry", meta = {}, data = {}},
+                })}))
+            test.is_nil(problem)
+            test.not_nil(prepared)
+        end)
+        test.it("keeps a converted optional root removed across self-update and refuses its resurrection", function()
+            local captured = state({root("bee/bee", "1.0.0"),
+                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "", root = true}, data = {component = "bee/hub", version = "1.0.0"}}}, {{name = "bee/bee", version = "1.0.0"}})
+            local identity = binary_identity("github.com/wippyai/bee/native", "1.0.0")
+            local selected = request({action = "update", component = "bee/bee", version = "2.0.0"})
+            local safe, problem = plan.prepare(captured, 2, selected,
+                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {identity})}), baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(safe)
+            local unsafe, unsafe_error = plan.prepare(captured, 2, selected,
+                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {identity,
+                    {id = "bee.deps:files", kind = "ns.dependency", meta = {}, data = {component = "bee/files", version = "1.0.0"}},
+                })}), baked_identity("1.0.0"))
+            test.is_nil(unsafe)
+            test.eq(unsafe_error, "Bee self-update must leave component selection to host roots: bee.deps:files")
+        end)
+        test.it("converts an authored legacy composition during its first core self-update", function()
+            local captured = state({root("bee/bee", "1.0.0"),
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/files", version = "1.0.0"}},
+            }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/files", version = "1.0.0"}})
+            local prepared, problem = plan.prepare(captured, 1, request({action = "update", component = "bee/bee", version = "2.0.0"}),
+                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                    ["bee/files@1.0.0"] = package("bee/files", "1.0.0", "b")}), baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then test.not_nil(prepared.plan.conversion) end
+        end)
+        test.it("updates the core while retaining independent component versions and parameters", function()
+            local captured = state({
+                root("bee/bee", "1.0.0"),
+                {id = "bee.deps:files", kind = "ns.dependency", meta = {independent = true}, registry = {owner = "", root = true},
+                    data = {component = "bee/files", version = "1.5.0", parameters = {{name = "folder", value = "selected"}}}},
+            }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/files", version = "1.5.0"}})
+            local prepared, problem = plan.prepare(captured, 2, request({action = "update", component = "bee/bee", version = "2.0.0"}),
+                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {binary_identity("github.com/wippyai/bee/native", "1.0.0")}),
+                    ["bee/files@1.5.0"] = package("bee/files", "1.5.0", "b", {
+                        {id = "bee.files:folder", kind = "ns.requirement", meta = {}, data = {targets = {{entry = "main", path = ".folder"}}}},
+                        {id = "bee.files:main", kind = "registry.entry", meta = {}, data = {}},
+                    })}), baked_identity("1.0.0"))
+            test.is_nil(problem); test.not_nil(prepared)
+            if prepared then
+                local files = module_for(prepared.plan.modules, "bee/files")
+                test.not_nil(files)
+                if files then test.eq(files.change, "keep"); test.eq(files.version, "1.5.0"); test.eq(files.requirements.requirements[1].selected, "selected") end
+            end
+        end)
+        test.it("refuses self-update that resets an independently selected version", function()
+            local selected_root = {id = "bee.deps:files", kind = "ns.dependency", registry = {owner = "", root = true},
+                data = {component = "bee/files", version = "1.5.0"}}
+            local captured = state({selected_root, root("bee/bee", "1.0.0")},
+                {{name = "bee/bee", version = "1.0.0"}, {name = "bee/files", version = "1.5.0"}})
+            local prepared, problem = plan.prepare(captured, 2, request({action = "update", component = "bee/bee", version = "2.0.0"}),
+                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {
+                    {id = "bee.deps:files", kind = "ns.dependency", meta = {}, data = {component = "bee/files", version = "2.0.0"}},
+                })}), baked_identity("1.0.0"))
+            test.is_nil(prepared)
+            test.eq(problem, "Bee self-update must leave component selection to host roots: bee.deps:files")
+        end)
+
+        test.it("refuses self-update that replaces the active Hub installer code", function()
+            local captured = state({root("bee/bee", "1.0.0"),
+                {id = "bee.deps:hub", kind = "ns.dependency", registry = {owner = "bee/bee", root = true},
+                    data = {component = "bee/hub", version = "1.0.0"}},
+                {id = "bee.hub.package:plan", kind = "library.lua", registry = {owner = "bee/hub"}, data = {source = "return {}"}},
+            }, {{name = "bee/bee", version = "1.0.0"}, {name = "bee/hub", version = "1.0.0"}})
+            local prepared, problem = plan.prepare(captured, 3, request({action = "update", component = "bee/bee", version = "2.0.0"}),
+                source({["bee/bee@2.0.0"] = package("bee/bee", "2.0.0", "a", {
+                    {id = "bee.deps:hub", kind = "ns.dependency", meta = {}, data = {component = "bee/hub", version = "2.0.0"}},
+                }), ["bee/hub@2.0.0"] = package("bee/hub", "2.0.0", "b", {
+                    {id = "bee.hub.package:plan", kind = "library.lua", meta = {}, data = {source = "return {changed = true}"}},
+                })}), baked_identity("1.0.0"))
+            test.is_nil(prepared)
+            test.eq(problem, "Bee self-update must leave component selection to host roots: bee.deps:hub")
         end)
 
         test.it("creates the first standalone selection instead of updating an absent entry", function()

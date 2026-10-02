@@ -14,6 +14,7 @@ local env = require("env")
 local time = require("time")
 local channel = require("channel")
 local placement_fixture = require("placement_fixture")
+local exits = require("exits")
 local ACTOR = "bee.test.carrier"
 local POLICY = "bee.harness.catalog:fixture_policy"
 local ROOT = "bee.harness.catalog:project_fixture"
@@ -123,26 +124,16 @@ local exited: {[string]: Outcome} = {}
 local function await_carriers(pids: {string}, label: string?, timeout_ms: integer?): {[string]: Outcome}
     local events = assert(process.events())
     local deadline = time.after(tostring(timeout_ms or 30000) .. "ms")
-    local function all_done(): boolean
-        for _, pid in ipairs(pids) do
-            if not exited[pid] then return false end
+    return exits.collect(pids, exited, function(poll: boolean): unknown
+        if poll then
+            local selected = channel.select({events:case_receive(), default = true})
+            if selected.default or not selected.ok then return nil end
+            return selected.value
         end
-        return true
-    end
-    while not all_done() do
         local selected = channel.select({events:case_receive(), deadline:case_receive()})
-        if not selected.ok or selected.channel == deadline then error((label or "carrier") .. " did not finish") end
-        local event = selected.value
-        if event.kind == process.event.EXIT then
-            local result = event.result or {}
-            local value: {[string]: unknown}? = nil
-            if type(result.value) == "table" then value = assert(bounds.object(result.value)) end
-            exited[tostring(event.from)] = {value = value, error = result.error and tostring(result.error) or nil}
-        end
-    end
-    local outcomes: {[string]: Outcome} = {}
-    for _, pid in ipairs(pids) do outcomes[pid] = exited[pid] end
-    return outcomes
+        if selected.ok and selected.channel == events then return selected.value end
+        return nil
+    end, label or "carrier")
 end
 local function await_carrier(pid: string, label: string?, timeout_ms: integer?): Outcome
     return assert(await_carriers({pid}, label, timeout_ms)[pid])
@@ -189,107 +180,106 @@ local function observations(records: {{[string]: unknown}}, event_name: string?)
     end
     return out
 end
-local function define_tests(stream_only: boolean)
+local function define_tests()
     test.describe("Harness carrier", function()
         install_policy()
         admit_root()
-        if not stream_only then
-            test.it("runs a fixture turn in the agreed order and settles from the terminal envelope", function()
-                local thread_id = thread()
-                local attempt_id = fresh("attempt")
-                local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl")}), "open", nil)
-                if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
-                local settlement = assert(bounds.object(outcome.value.settlement))
-                test.eq(settlement.outcome, "succeeded")
-                test.eq(settlement.answer, "pong")
-                test.is_true((outcome.value.revision) > 1)
-                local list, records = kinds(thread_id)
-                test.eq(list[1], "action.admitted")
-                test.eq(list[2], "attempt.prepared")
-                test.eq(list[3], "turn.request")
-                test.eq(count(list, "attempt.started"), 1)
-                test.eq(count(list, "turn.end"), 1)
-                test.eq(count(list, "receipt"), 1)
-                local started_at, first_stream, turn_end_at, receipt_at = 0, 0, 0, 0
-                for index, item in ipairs(list) do
-                    if item == "attempt.started" then started_at = index end
-                    if item == "observation" and records[index].source == "stream" and first_stream == 0 then first_stream = index end
-                    if item == "turn.end" then turn_end_at = index end
-                    if item == "receipt" then receipt_at = index end
+        test.it("runs a fixture turn in the agreed order and settles from the terminal envelope", function()
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl")}), "open", nil)
+            if not outcome.value then error("carrier failed: " .. tostring(outcome.error)) end
+            local settlement = assert(bounds.object(outcome.value.settlement))
+            test.eq(settlement.outcome, "succeeded")
+            test.eq(settlement.answer, "pong")
+            test.is_true((outcome.value.revision) > 1)
+            local list, records = kinds(thread_id)
+            test.eq(list[1], "action.admitted")
+            test.eq(list[2], "attempt.prepared")
+            test.eq(list[3], "turn.request")
+            test.eq(count(list, "attempt.started"), 1)
+            test.eq(count(list, "turn.end"), 1)
+            test.eq(count(list, "receipt"), 1)
+            local started_at, first_stream, turn_end_at, receipt_at = 0, 0, 0, 0
+            for index, item in ipairs(list) do
+                if item == "attempt.started" then started_at = index end
+                if item == "observation" and records[index].source == "stream" and first_stream == 0 then first_stream = index end
+                if item == "turn.end" then turn_end_at = index end
+                if item == "receipt" then receipt_at = index end
+            end
+            test.is_true(started_at > 3)
+            test.is_true(first_stream > started_at)
+            test.is_true(turn_end_at > first_stream)
+            test.is_true(receipt_at > turn_end_at)
+            local streamed = observations(records, nil)
+            test.is_true(#streamed >= 3)
+            local texts: {string} = {}
+            for _, item in ipairs(streamed) do
+                local body = assert(bounds.object(item.body))
+                test.is_nil(body.raw_ref)
+                test.eq(item.attempt_id, attempt_id)
+                test.eq(item.turn_id, "turn:" .. attempt_id .. ":1")
+                texts[#texts + 1] = tostring(body.type)
+            end
+            test.is_true(count(texts, "text") >= 1)
+            test.is_true(count(texts, "turn.signal") >= 1)
+            local placements = observations(records, "bee.placement.attempt")
+            test.is_true(#placements >= 1)
+            local stored = call("bee.threads.binding:checkpoint", {thread_id = thread_id, attempt_id = attempt_id})
+            test.eq(stored.attempt_state, "ended")
+            test.eq(stored.checkpoint_revision, outcome.value.revision)
+            local point = assert(bounds.object(stored.checkpoint))
+            test.eq((assert(bounds.object(point.terminal))).answer, "pong")
+            local placement = assert(bounds.object(outcome.value.placement))
+            test.eq(placement.execution_state, "exited")
+            test.eq(placement.cleanup_state, "complete")
+        end)
+        test.it("reports api errors as failed turns and cut streams as uncertain", function()
+            local failed = run_carrier("bee.harness.service:carrier", request(thread(), fresh("attempt"), {BEE_FIXTURE_STREAM = stream("api_error.jsonl")}), "open", nil)
+            if not failed.value then error("carrier failed: " .. tostring(failed.error)) end
+            local failure = assert(bounds.object(failed.value.settlement))
+            test.eq(failure.outcome, "failed")
+            local thread_id = thread()
+            local cut = run_carrier("bee.harness.service:carrier", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1"}), "open", nil)
+            if not cut.value then error("carrier failed: " .. tostring(cut.error)) end
+            local uncertain = assert(bounds.object(cut.value.settlement))
+            test.eq(uncertain.outcome, "uncertain")
+            local list = kinds(thread_id)
+            test.eq(count(list, "receipt"), 1)
+            test.eq(count(list, "turn.end"), 1)
+        end)
+        test.it("settles a stream that ends without a result only after the child's exit and remaining output", function()
+            local thread_id = thread()
+            local cut = run_carrier("bee.harness.service:carrier", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_LATE_STDERR = "1"}), "open", nil)
+            if not cut.value then error("carrier failed: " .. tostring(cut.error)) end
+            local settlement = assert(bounds.object(cut.value.settlement))
+            test.eq(settlement.outcome, "uncertain")
+            test.is_true(settlement.exit_reconciled == true)
+            local placement = assert(bounds.object(cut.value.placement))
+            test.eq((assert(bounds.object(placement.exit))).code, 0)
+            local _, records = kinds(thread_id)
+            local late = 0
+            for _, item in ipairs(observations(records, nil)) do
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
+                if data.type == "notice" and data.code == "stderr" and tostring((assert(bounds.object(data.content))).text):find("late:stderr", 1, true) then late = late + 1 end
+            end
+            test.eq(late, 1, "stderr written after stdout ended")
+        end)
+        local function stream_counts(records: {{[string]: unknown}}): (integer, integer, integer)
+            local texts, ended, reads = 0, 0, 0
+            for _, item in ipairs(observations(records, nil)) do
+                local body = assert(bounds.object(item.body))
+                local data = assert(bounds.object(body.data))
+                if data.type == "text" then texts = texts + 1 end
+                if data.type == "turn.signal" and data.phase == "ended" then ended = ended + 1 end
+                -- The fixture reports the line it read as a stdout frame
+                -- ahead of its stream, so the evidence precedes the result.
+                if data.type == "notice" and data.code == "informational" then
+                    local content = assert(bounds.object(data.content))
+                    if content.text == "read:ping" then reads = reads + 1 end
                 end
-                test.is_true(started_at > 3)
-                test.is_true(first_stream > started_at)
-                test.is_true(turn_end_at > first_stream)
-                test.is_true(receipt_at > turn_end_at)
-                local streamed = observations(records, nil)
-                test.is_true(#streamed >= 3)
-                local texts: {string} = {}
-                for _, item in ipairs(streamed) do
-                    local body = assert(bounds.object(item.body))
-                    test.is_nil(body.raw_ref)
-                    test.eq(item.attempt_id, attempt_id)
-                    test.eq(item.turn_id, "turn:" .. attempt_id .. ":1")
-                    texts[#texts + 1] = tostring(body.type)
-                end
-                test.is_true(count(texts, "text") >= 1)
-                test.is_true(count(texts, "turn.signal") >= 1)
-                local placements = observations(records, "bee.placement.attempt")
-                test.is_true(#placements >= 1)
-                local stored = call("bee.threads.binding:checkpoint", {thread_id = thread_id, attempt_id = attempt_id})
-                test.eq(stored.attempt_state, "ended")
-                test.eq(stored.checkpoint_revision, outcome.value.revision)
-                local point = assert(bounds.object(stored.checkpoint))
-                test.eq((assert(bounds.object(point.terminal))).answer, "pong")
-                local placement = assert(bounds.object(outcome.value.placement))
-                test.eq(placement.execution_state, "exited")
-                test.eq(placement.cleanup_state, "complete")
-            end)
-            test.it("reports api errors as failed turns and cut streams as uncertain", function()
-                local failed = run_carrier("bee.harness.service:carrier", request(thread(), fresh("attempt"), {BEE_FIXTURE_STREAM = stream("api_error.jsonl")}), "open", nil)
-                if not failed.value then error("carrier failed: " .. tostring(failed.error)) end
-                local failure = assert(bounds.object(failed.value.settlement))
-                test.eq(failure.outcome, "failed")
-                local thread_id = thread()
-                local cut = run_carrier("bee.harness.service:carrier", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1"}), "open", nil)
-                if not cut.value then error("carrier failed: " .. tostring(cut.error)) end
-                local uncertain = assert(bounds.object(cut.value.settlement))
-                test.eq(uncertain.outcome, "uncertain")
-                local list = kinds(thread_id)
-                test.eq(count(list, "receipt"), 1)
-                test.eq(count(list, "turn.end"), 1)
-            end)
-            test.it("settles a stream that ends without a result only after the child's exit and remaining output", function()
-                local thread_id = thread()
-                local cut = run_carrier("bee.harness.service:carrier", request(thread_id, fresh("attempt"), {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_LATE_STDERR = "1"}), "open", nil)
-                if not cut.value then error("carrier failed: " .. tostring(cut.error)) end
-                local settlement = assert(bounds.object(cut.value.settlement))
-                test.eq(settlement.outcome, "uncertain")
-                test.is_true(settlement.exit_reconciled == true)
-                local placement = assert(bounds.object(cut.value.placement))
-                test.eq((assert(bounds.object(placement.exit))).code, 0)
-                local _, records = kinds(thread_id)
-                local late = 0
-                for _, item in ipairs(observations(records, nil)) do
-                    local data = assert(bounds.object((assert(bounds.object(item.body))).data))
-                    if data.type == "notice" and data.code == "stderr" and tostring((assert(bounds.object(data.content))).text):find("late:stderr", 1, true) then late = late + 1 end
-                end
-                test.eq(late, 1, "stderr written after stdout ended")
-            end)
-            local function stream_counts(records: {{[string]: unknown}}): (integer, integer, integer)
-                local texts, ended, reads = 0, 0, 0
-                for _, item in ipairs(observations(records, nil)) do
-                    local body = assert(bounds.object(item.body))
-                    local data = assert(bounds.object(body.data))
-                    if data.type == "text" then texts = texts + 1 end
-                    if data.type == "turn.signal" and data.phase == "ended" then ended = ended + 1 end
-                    -- The fixture reports the line it read as a stdout frame
-                    -- ahead of its stream, so the evidence precedes the result.
-                    if data.type == "notice" and data.code == "informational" then
-                        local content = assert(bounds.object(data.content))
-                        if content.text == "read:ping" then reads = reads + 1 end
-                    end
-                end
-                return texts, ended, reads
+            end
+            return texts, ended, reads
         end
         local function writes(records: {{[string]: unknown}}): {string}
             local phases: {string} = {}
@@ -514,234 +504,243 @@ local function define_tests(stream_only: boolean)
             test.eq(reads, 1, "replacement child read evidence")
             test.eq(table.concat(writes(records), ","), "w9:intended,w9:accepted")
         end)
-        end
-        if stream_only then
-            test.it("preserves a burst larger than the output spool while the consumer is slow", function()
+        test.it("recovers from crash points without duplicate records or settlement", function()
+            for _, crash in ipairs({"placement_started", "committed", "turn_ended"}) do
                 local thread_id = thread()
                 local attempt_id = fresh("attempt")
-                local expected_deltas = 2000
-                local fixture_delta = '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"'
-                    .. string.rep("x", 80) .. '"}}}\n'
-                test.is_true(expected_deltas * #fixture_delta > 256 * 1024,
-                    "the emitted frames exceed the placement output spool")
-                local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected_deltas),
-                    BEE_FIXTURE_FLOOD_PACE = "0", BEE_FIXTURE_FLOOD_EXIT = "1"}
-                local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
-                    "open", nil, nil, nil, 40, 150000)
-                if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end
-                local settlement = assert(bounds.object(outcome.value.settlement))
-                test.eq(settlement.outcome, "succeeded", require("json").encode(settlement))
-                test.eq(settlement.answer, "flood-complete")
-                local _, records = kinds(thread_id)
-                local deltas = 0
-                for _, item in ipairs(observations(records, nil)) do
-                    local data = assert(bounds.object((assert(bounds.object(item.body))).data))
-                    if data.type == "text" then
-                        test.eq(data.text, string.rep("x", 80), "every burst delta retains its full content")
-                        deltas = deltas + 1
-                    end
-                end
-                test.eq(deltas, expected_deltas)
-                local state, truncated = "", 0
-                for _, item in ipairs(observations(records, "bee.carrier.output")) do
-                    local data = assert(bounds.object((assert(bounds.object(item.body))).data))
-                    local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
-                    if payload.state == "truncated" then truncated = truncated + 1 end
-                    if payload.stream == nil then state = tostring(payload.state) end
-                end
-                test.is_true(state == "incomplete" or state == "complete",
-                    "terminal output is complete or explicitly incomplete while EOF is in flight")
-                test.eq(truncated, 0)
-            end)
-        end
-        if not stream_only then
-            test.it("keeps the post-exit drain budget while a slow carrier holds the spool full", function()
-                local policy = registry.get(POLICY)
-                if not policy then error("fixture policy entry") end
-                local data = assert(bounds.object(policy.data))
-                local saved_drain = data.runner_drain_ms
-                local saved_carrier_drain = data.drain_ms
-                data.runner_drain_ms = 2000
-                -- The carrier settles past runner_drain_ms + drain_ms without
-                -- the terminal envelope; a wide carrier drain isolates the
-                -- runner's post-exit deadline under test.
-                data.drain_ms = 300000
-                local narrowed = registry.snapshot():changes()
-                narrowed:update(policy)
-                local shrunk, shrink_error = narrowed:apply()
-                if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
-                local thread_id = thread()
-                local attempt_id = fresh("attempt")
-                local expected = 280
-                -- 280 deltas of 2000 bytes are some 590 KB, far past the 256 KB
-                -- spool: the spool pins full while the child writes, so the pipe
-                -- tail holding the result is still unread at the exit and the
-                -- drain arms. Each commit waits 800 ms, so the carrier drains at
-                -- most 20 KB/s: a 2 s wall-clock window past the exit would let
-                -- at most 40 KB of the full pipes leave, while the full drain
-                -- takes some seventeen times it. Reads paused at the spool limit
-                -- do not consume the drain budget, so the terminal envelope
-                -- arrives.
-                local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected),
-                    BEE_FIXTURE_FLOOD_TEXT = "2000", BEE_FIXTURE_FLOOD_PACE = "0"}
-                local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
-                    "open", nil, nil, nil, 800, 300000)
-                data.runner_drain_ms = saved_drain
-                data.drain_ms = saved_carrier_drain
-                local widened = registry.snapshot():changes()
-                widened:update(policy)
-                local restored, restore_error = widened:apply()
-                if not restored then error("restore runner drain: " .. tostring(restore_error)) end
-                if not outcome.value then error("slow drain run failed: " .. tostring(outcome.error)) end
-                local settlement = assert(bounds.object(outcome.value.settlement))
-                test.eq(settlement.outcome, "succeeded")
-                test.eq(settlement.answer, "flood-complete")
-                local _, records = kinds(thread_id)
-                local deltas = 0
-                for _, item in ipairs(observations(records, nil)) do
-                    local body = assert(bounds.object(item.body))
-                    local data = assert(bounds.object(body.data))
-                    if data.type == "text" then
-                        test.eq(data.text, string.rep("x", 2000), "every burst delta retains its full content")
-                        deltas = deltas + 1
-                    end
-                end
-                test.eq(deltas, expected)
-                local truncated = 0
-                for _, item in ipairs(observations(records, "bee.carrier.output")) do
-                    local body = assert(bounds.object(item.body))
-                    local payload = assert(bounds.object(require("json").decode(tostring((assert(bounds.object(body.data))).payload_json))))
-                    if payload.stream ~= nil and payload.state == "truncated" then truncated = truncated + 1 end
-                end
-                test.eq(truncated, 0)
-            end)
-            test.it("still truncates a silent consumer at the drain deadline", function()
-                local policy = registry.get(POLICY)
-                if not policy then error("fixture policy entry") end
-                local data = assert(bounds.object(policy.data))
-                local saved_drain = data.runner_drain_ms
-                local saved_retain = data.retain_ms
-                data.runner_drain_ms = 1000
-                data.retain_ms = 2000
-                local narrowed = registry.snapshot():changes()
-                narrowed:update(policy)
-                local shrunk, shrink_error = narrowed:apply()
-                if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
-                local thread_id = thread()
-                local attempt_id = fresh("attempt")
-                -- A small stream with a descendant holding the pipes: the drain
-                -- arms while the carrier is already dead after its first commit,
-                -- so later acknowledgments never come and the drain fires on
-                -- schedule. A pause cannot hold the silence instead: an
-                -- unacknowledged spool fills and the child never reaches exit.
-                -- FLOOD_EXIT would skip the orphan, so the stream stays small.
-                local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
-                    BEE_FIXTURE_ORPHAN = "5"})
-                local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed")
+                local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_LINGER = "1"})
+                local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash)
                 test.is_nil(crashed.value)
-                test.is_true(tostring(crashed.error):find("crash after committed", 1, true) ~= nil)
-                local drained, finished = false, false
-                for _ = 1, 300 do
-                    local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
-                    for _, item in ipairs(principals.objects(page.evidence)) do
-                        if item.kind == "output.drain_elapsed" then drained = true end
-                        if item.kind == "runner.finished" then finished = true end
-                    end
-                    if drained and finished then break end
-                    time.sleep("100ms")
-                end
-                data.runner_drain_ms = saved_drain
-                data.retain_ms = saved_retain
-                local widened = registry.snapshot():changes()
-                widened:update(policy)
-                local restored, restore_error = widened:apply()
-                if not restored then error("restore runner drain: " .. tostring(restore_error)) end
-                test.is_true(drained)
-                test.is_true(finished)
-            end)
-            test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
-                local thread_id = thread()
-                local attempt_id = fresh("attempt")
-                local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_ORPHAN = "5"}), "open", nil)
-                if not outcome.value then error("orphan run failed: " .. tostring(outcome.error)) end
-                local settlement = assert(bounds.object(outcome.value.settlement))
-                test.eq(settlement.outcome, "uncertain")
-                local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
-                local attempt = assert(bounds.object(status.attempt))
-                local _, records = kinds(thread_id)
-                local output = ""
-                local truncated = 0
-                for _, item in ipairs(observations(records, "bee.carrier.output")) do
+                test.is_true(tostring(crashed.error):find("crash after " .. crash, 1, true) ~= nil)
+                local resumed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
+                if not resumed.value then error(crash .. ": resume failed: " .. tostring(resumed.error)) end
+                local settlement = assert(bounds.object(resumed.value.settlement))
+                test.eq(settlement.outcome, "succeeded")
+                test.eq(settlement.answer, "pong")
+                local list, records = kinds(thread_id)
+                test.eq(count(list, "attempt.started"), 1)
+                test.eq(count(list, "turn.end"), 1)
+                test.eq(count(list, "receipt"), 1)
+                local answers = 0
+                for _, item in ipairs(observations(records, nil)) do
                     local body = assert(bounds.object(item.body))
                     local data = assert(bounds.object(body.data))
-                    local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
-                    if payload.stream ~= nil then
-                        if payload.state == "truncated" then truncated = truncated + 1 end
-                    else
-                        output = tostring(payload.state)
-                    end
+                    if data.type == "turn.signal" and data.phase == "ended" then answers = answers + 1 end
                 end
-                if attempt.exit_observation == "independent" then
-                    test.eq(output, "truncated")
-                    if truncated < 1 or not tostring(settlement.reason):find("output truncated", 1, true) then
-                        error("truncated streams " .. tostring(truncated) .. "; reason " .. tostring(settlement.reason) .. "; kinds " .. table.concat(kinds(thread_id), ","))
-                    end
-                else
-                    -- EOF-gated exit: the runner never closes a stream on a
-                    -- deadline, so no stream is truncated. The terminal envelope
-                    -- settles the run when it arrives, and the other stream's
-                    -- end mark may still be in flight then, which settles the
-                    -- output as incomplete rather than complete.
-                    if output ~= "incomplete" and output ~= "complete" then
-                        error("output " .. output .. " with " .. tostring(truncated) .. " truncated streams; reason " .. tostring(settlement.reason) .. "; kinds " .. table.concat(kinds(thread_id), ","))
-                    end
-                    test.eq(truncated, 0)
-                end
-            end)
-            test.it("recovers from crash points without duplicate records or settlement", function()
-                for _, crash in ipairs({"placement_started", "committed", "turn_ended"}) do
-                    local thread_id = thread()
-                    local attempt_id = fresh("attempt")
-                    local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_LINGER = "1"})
-                    local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", crash)
-                    test.is_nil(crashed.value)
-                    test.is_true(tostring(crashed.error):find("crash after " .. crash, 1, true) ~= nil)
-                    local resumed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "resume", nil)
-                    if not resumed.value then error(crash .. ": resume failed: " .. tostring(resumed.error)) end
-                    local settlement = assert(bounds.object(resumed.value.settlement))
-                    test.eq(settlement.outcome, "succeeded")
-                    test.eq(settlement.answer, "pong")
-                    local list, records = kinds(thread_id)
-                    test.eq(count(list, "attempt.started"), 1)
-                    test.eq(count(list, "turn.end"), 1)
-                    test.eq(count(list, "receipt"), 1)
-                    local answers = 0
-                    for _, item in ipairs(observations(records, nil)) do
-                        local body = assert(bounds.object(item.body))
-                        local data = assert(bounds.object(body.data))
-                        if data.type == "turn.signal" and data.phase == "ended" then answers = answers + 1 end
-                    end
-                    test.eq(answers, 1)
-                    local stored = call("bee.threads.binding:checkpoint", {thread_id = thread_id, attempt_id = attempt_id})
-                    test.eq(stored.carrier_epoch, 2)
-                    local stale = funcs.new():with_actor(actor):with_scope(scope()):call("bee.threads.binding:commit", {thread_id = thread_id, idempotency_key = fresh("key"), attempt_id = attempt_id,
-                        carrier_epoch = 1, expected_revision = stored.checkpoint_revision, checkpoint = stored.checkpoint, records = {}})
-                    test.eq((assert(bounds.object(stale))).ok, false)
-                end
-            end)
-        end
+                test.eq(answers, 1)
+                local stored = call("bee.threads.binding:checkpoint", {thread_id = thread_id, attempt_id = attempt_id})
+                test.eq(stored.carrier_epoch, 2)
+                local stale = funcs.new():with_actor(actor):with_scope(scope()):call("bee.threads.binding:commit", {thread_id = thread_id, idempotency_key = fresh("key"), attempt_id = attempt_id,
+                    carrier_epoch = 1, expected_revision = stored.checkpoint_revision, checkpoint = stored.checkpoint, records = {}})
+                test.eq((assert(bounds.object(stale))).ok, false)
+            end
+        end)
     end)
 end
-local cases = test.run_cases(function() define_tests(false) end)
-local stream_cases = test.run_cases(function() define_tests(true) end)
-local function run(selected, options)
+local function define_stream_tests()
+    test.describe("Harness carrier stream burst", function()
+        install_policy()
+        admit_root()
+        test.it("preserves a burst larger than the output spool while the consumer is slow", function()
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            local expected_deltas = 2000
+            local fixture_delta = '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"'
+                .. string.rep("x", 80) .. '"}}}\n'
+            test.is_true(expected_deltas * #fixture_delta > 256 * 1024,
+                "the emitted frames exceed the placement output spool")
+            local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected_deltas),
+                BEE_FIXTURE_FLOOD_PACE = "0", BEE_FIXTURE_FLOOD_EXIT = "1"}
+            local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
+                "open", nil, nil, nil, 40, 150000)
+            if not outcome.value then error("short-frame stream failed: " .. tostring(outcome.error)) end
+            local settlement = assert(bounds.object(outcome.value.settlement))
+            test.eq(settlement.outcome, "succeeded", require("json").encode(settlement))
+            test.eq(settlement.answer, "flood-complete")
+            local _, records = kinds(thread_id)
+            local deltas = 0
+            for _, item in ipairs(observations(records, nil)) do
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
+                if data.type == "text" then
+                    test.eq(data.text, string.rep("x", 80), "every burst delta retains its full content")
+                    deltas = deltas + 1
+                end
+            end
+            test.eq(deltas, expected_deltas)
+            local state, truncated = "", 0
+            for _, item in ipairs(observations(records, "bee.carrier.output")) do
+                local data = assert(bounds.object((assert(bounds.object(item.body))).data))
+                local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
+                if payload.state == "truncated" then truncated = truncated + 1 end
+                if payload.stream == nil then state = tostring(payload.state) end
+            end
+            test.is_true(state == "incomplete" or state == "complete",
+                "terminal output is complete or explicitly incomplete while EOF is in flight")
+            test.eq(truncated, 0)
+        end)
+    end)
+end
+local function define_drain_tests()
+    test.describe("Harness carrier post-exit drain", function()
+        install_policy()
+        admit_root()
+        test.it("keeps the post-exit drain budget while a slow carrier holds the spool full", function()
+            local policy = registry.get(POLICY)
+            if not policy then error("fixture policy entry") end
+            local data = assert(bounds.object(policy.data))
+            local saved_drain = data.runner_drain_ms
+            local saved_carrier_drain = data.drain_ms
+            data.runner_drain_ms = 2000
+            -- The carrier settles past runner_drain_ms + drain_ms without
+            -- the terminal envelope; a wide carrier drain isolates the
+            -- runner's post-exit deadline under test.
+            data.drain_ms = 300000
+            local narrowed = registry.snapshot():changes()
+            narrowed:update(policy)
+            local shrunk, shrink_error = narrowed:apply()
+            if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            local expected = 280
+            -- 280 deltas of 2000 bytes are some 590 KB, far past the 256 KB
+            -- spool: the spool pins full while the child writes, so the pipe
+            -- tail holding the result is still unread at the exit and the
+            -- drain arms. Each commit waits 800 ms, so the carrier drains at
+            -- most 20 KB/s: a 2 s wall-clock window past the exit would let
+            -- at most 40 KB of the full pipes leave, while the full drain
+            -- takes some seventeen times it. Reads paused at the spool limit
+            -- do not consume the drain budget, so the terminal envelope
+            -- arrives.
+            local environment = {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_FLOOD = tostring(expected),
+                BEE_FIXTURE_FLOOD_TEXT = "2000", BEE_FIXTURE_FLOOD_PACE = "0"}
+            local outcome = run_carrier("bee.harness.catalog:carrier_faulted", request(thread_id, attempt_id, environment),
+                "open", nil, nil, nil, 800, 300000)
+            data.runner_drain_ms = saved_drain
+            data.drain_ms = saved_carrier_drain
+            local widened = registry.snapshot():changes()
+            widened:update(policy)
+            local restored, restore_error = widened:apply()
+            if not restored then error("restore runner drain: " .. tostring(restore_error)) end
+            if not outcome.value then error("slow drain run failed: " .. tostring(outcome.error)) end
+            local settlement = assert(bounds.object(outcome.value.settlement))
+            test.eq(settlement.outcome, "succeeded")
+            test.eq(settlement.answer, "flood-complete")
+            local _, records = kinds(thread_id)
+            local deltas = 0
+            for _, item in ipairs(observations(records, nil)) do
+                local body = assert(bounds.object(item.body))
+                local data = assert(bounds.object(body.data))
+                if data.type == "text" then
+                    test.eq(data.text, string.rep("x", 2000), "every burst delta retains its full content")
+                    deltas = deltas + 1
+                end
+            end
+            test.eq(deltas, expected)
+            local truncated = 0
+            for _, item in ipairs(observations(records, "bee.carrier.output")) do
+                local body = assert(bounds.object(item.body))
+                local payload = assert(bounds.object(require("json").decode(tostring((assert(bounds.object(body.data))).payload_json))))
+                if payload.stream ~= nil and payload.state == "truncated" then truncated = truncated + 1 end
+            end
+            test.eq(truncated, 0)
+        end)
+        test.it("still truncates a silent consumer at the drain deadline", function()
+            local policy = registry.get(POLICY)
+            if not policy then error("fixture policy entry") end
+            local data = assert(bounds.object(policy.data))
+            local saved_drain = data.runner_drain_ms
+            local saved_retain = data.retain_ms
+            data.runner_drain_ms = 1000
+            data.retain_ms = 2000
+            local narrowed = registry.snapshot():changes()
+            narrowed:update(policy)
+            local shrunk, shrink_error = narrowed:apply()
+            if not shrunk then error("shrink runner drain: " .. tostring(shrink_error)) end
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            -- A small stream with a descendant holding the pipes: the drain
+            -- arms while the carrier is already dead after its first commit,
+            -- so later acknowledgments never come and the drain fires on
+            -- schedule. A pause cannot hold the silence instead: an
+            -- unacknowledged spool fills and the child never reaches exit.
+            -- FLOOD_EXIT would skip the orphan, so the stream stays small.
+            local launch = request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"),
+                BEE_FIXTURE_ORPHAN = "5"})
+            local crashed = run_carrier("bee.harness.catalog:carrier_faulted", launch, "open", "committed")
+            test.is_nil(crashed.value)
+            test.is_true(tostring(crashed.error):find("crash after committed", 1, true) ~= nil)
+            local drained, finished = false, false
+            for _ = 1, 300 do
+                local page = call("bee.placement.native.binding:evidence", {attempt_id = attempt_id, limit = 128})
+                for _, item in ipairs(principals.objects(page.evidence)) do
+                    if item.kind == "output.drain_elapsed" then drained = true end
+                    if item.kind == "runner.finished" then finished = true end
+                end
+                if drained and finished then break end
+                time.sleep("100ms")
+            end
+            data.runner_drain_ms = saved_drain
+            data.retain_ms = saved_retain
+            local widened = registry.snapshot():changes()
+            widened:update(policy)
+            local restored, restore_error = widened:apply()
+            if not restored then error("restore runner drain: " .. tostring(restore_error)) end
+            test.is_true(drained)
+            test.is_true(finished)
+        end)
+        test.it("marks output truncated when descendants hold the pipes past the runner's drain and never settles it as complete", function()
+            local thread_id = thread()
+            local attempt_id = fresh("attempt")
+            local outcome = run_carrier("bee.harness.service:carrier", request(thread_id, attempt_id, {BEE_FIXTURE_STREAM = stream("plain.jsonl"), BEE_FIXTURE_TRUNCATE = "1", BEE_FIXTURE_ORPHAN = "5"}), "open", nil)
+            if not outcome.value then error("orphan run failed: " .. tostring(outcome.error)) end
+            local settlement = assert(bounds.object(outcome.value.settlement))
+            test.eq(settlement.outcome, "uncertain")
+            local status = call("bee.placement.native.binding:status", {attempt_id = attempt_id})
+            local attempt = assert(bounds.object(status.attempt))
+            local _, records = kinds(thread_id)
+            local output = ""
+            local truncated = 0
+            for _, item in ipairs(observations(records, "bee.carrier.output")) do
+                local body = assert(bounds.object(item.body))
+                local data = assert(bounds.object(body.data))
+                local payload = assert(bounds.object(require("json").decode(tostring(data.payload_json))))
+                if payload.stream ~= nil then
+                    if payload.state == "truncated" then truncated = truncated + 1 end
+                else
+                    output = tostring(payload.state)
+                end
+            end
+            if attempt.exit_observation == "independent" then
+                test.eq(output, "truncated")
+                if truncated < 1 or not tostring(settlement.reason):find("output truncated", 1, true) then
+                    error("truncated streams " .. tostring(truncated) .. "; reason " .. tostring(settlement.reason) .. "; kinds " .. table.concat(kinds(thread_id), ","))
+                end
+            else
+                -- EOF-gated exit: the runner never closes a stream on a
+                -- deadline, so no stream is truncated. The terminal envelope
+                -- settles the run when it arrives, and the other stream's
+                -- end mark may still be in flight then, which settles the
+                -- output as incomplete rather than complete.
+                if output ~= "incomplete" and output ~= "complete" then
+                    error("output " .. output .. " with " .. tostring(truncated) .. " truncated streams; reason " .. tostring(settlement.reason) .. "; kinds " .. table.concat(kinds(thread_id), ","))
+                end
+                test.eq(truncated, 0)
+            end
+        end)
+    end)
+end
+local function owned_cases(cases, options)
     local originals: {{[string]: unknown}} = {}
     for _, ref in ipairs({"bee.placement.native.env:placement_resource_mode", "bee.placement.native.env:placement_admitted_roots"}) do originals[#originals + 1] = assert(registry.get(ref)) end
-    local ok, result = pcall(selected, options)
+    local ok, result = pcall(cases, options)
     local changes = assert(registry.snapshot()):changes()
     for _, original in ipairs(originals) do changes:update(registry_input(original)) end
     assert(changes:apply())
     if not ok then error(tostring(result)) end
     return result
 end
-return {run = function(options) return run(cases, options) end, stream = function(options) return run(stream_cases, options) end}
+return {
+    run = function(options) return owned_cases(test.run_cases(define_tests), options) end,
+    run_stream = function(options) return owned_cases(test.run_cases(define_stream_tests), options) end,
+    run_drain = function(options) return owned_cases(test.run_cases(define_drain_tests), options) end,
+}

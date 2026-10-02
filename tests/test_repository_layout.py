@@ -19,7 +19,17 @@ SPEC.loader.exec_module(LAYOUT)
 
 def sql(path, constant="LAYOUT_REFERENCES_SQL"):
     source = (ROOT / path).read_text()
-    return re.search(r'local ' + constant + r' = \[\[(.*?)\]\]', source, re.S)[1]
+    expression = re.search(r'local ' + constant + r' = (.*?)(?=\n(?:local |function |return ))', source, re.S)
+    if not expression:
+        raise ValueError("migration constant is missing: " + constant)
+    parts = re.split(r'\]\]\s*\.\.\s*(\w+)\s*\.\.\s*\[\[', expression[1])
+    result = parts[0].removeprefix('[[')
+    for index in range(1, len(parts), 2):
+        literal = re.search(r'local ' + parts[index] + r' = \[\[(.*?)\]\]', source, re.S)
+        if not literal:
+            raise ValueError("migration literal is missing: " + parts[index])
+        result += literal[1] + parts[index + 1]
+    return result.removesuffix(']]')
 
 
 class RepositoryLayout(unittest.TestCase):
@@ -197,7 +207,7 @@ class RepositoryLayout(unittest.TestCase):
     def test_main_migration_bytes_are_preserved(self):
         for module in ['placement-native', 'sync', 'gateway', 'resources', 'credentials']:
             path = 'modules/' + module + '/src/migrations/migrations.lua'
-            original = subprocess.check_output(['git', 'show', 'db47bdc2:' + path], cwd=ROOT, text=True)
+            original = subprocess.check_output(['git', 'show', 'origin/main:' + path], cwd=ROOT, text=True)
             current = (ROOT / path).read_text()
             for block in re.findall(r'\[\[(.*?)\]\]', original, re.S):
                 self.assertIn(block, current, path)

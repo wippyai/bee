@@ -50,10 +50,10 @@ entries:
   kind: security.policy.expr
   meta: {comment: Headless native governance recovery reads activation facts and restores one retained baseline}
   policy:
-    expression: 'action != "env.get" || resource == "bee.gov.env:node_identity_migration_source"'
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
     actions: [db.get, registry.get, registry.snapshot, registry.preview, registry.apply, system.read, env.get,
       funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get,
-      registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+      registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
     resources: '*'
     effect: allow
 - name: staging_policy
@@ -64,11 +64,12 @@ entries:
     resources: [bee.gov.env:database_ref, bee.gov.env:node_identity_migration_source, node]
     effect: allow
 - name: staging_database_policy
-  kind: security.policy
+  kind: security.policy.expr
   groups: [workspace_execution_scope]
   policy:
-    actions: [db.get]
-    resources: [bee.gov.env:db]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, env.set, env.get]
+    resources: [bee.gov.env:db, bee.persist.env:startup_progress]
     effect: allow
 - name: workspace_execution_policy
   kind: security.policy
@@ -89,8 +90,8 @@ entries:
   groups: [destination_execution_scope]
   meta: {comment: Private dependencies of the destination owner; callers still need an exact workspace delivery action}
   policy:
-    expression: 'action != "env.get" || resource == "bee.gov.env:node_identity_migration_source"'
-    actions: [db.get, registry.get, registry.preview, system.read, env.get, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, registry.get, registry.preview, system.read, env.get, funcs.call, funcs.security, security.actor.create, security.scope.create, security.policy.get, registry.overlay.get, registry.overlay.apply, registry.overlay.create.*, registry.overlay.update.*, registry.overlay.delete.*, env.set]
     resources: '*'
     effect: allow
 - name: destination_execution_policy
@@ -105,8 +106,8 @@ entries:
   kind: security.policy.expr
   meta: {comment: Private host resources for publishing one configured local overlay as immutable Sync content}
   policy:
-    expression: 'action != "env.get" || resource == "bee.gov.env:node_identity_migration_source"'
-    actions: [registry.get, registry.overlay.get, db.get, system.read, env.get]
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && (action != "env.get" || resource == "bee.gov.env:node_identity_migration_source")) || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [registry.get, registry.overlay.get, db.get, system.read, env.get, env.set]
     resources: '*'
     effect: allow
 - name: publication_profiles_read_policy

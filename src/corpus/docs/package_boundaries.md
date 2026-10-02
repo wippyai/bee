@@ -5,12 +5,17 @@ includes `bee/agents`, a meta-package for the separately composed harness,
 credential, placement, resource and driver components. The local Hub can
 inspect, plan and apply host-authorized components, and governed overlays can
 author, freeze, review, apply and recover a destination-owned runtime overlay.
+These package roots describe source and composition boundaries; they do not
+provide independent Bee package activation. Hub currently refuses separate
+`bee/*` targets except an update of `bee/bee` and refuses host-managed members.
+The explicit-root conversion described by M6 is still a proposal.
 The bare kernel can omit `bee/agents`; its known agent commands direct the user
 to install the package. Public enrollment, managed headless launch,
 destination-owned package transfer/install and independent release streams
 remain proposals. Their metadata must not be described as a callable API until
 the corresponding owner and acceptance contract exists. See [the system
-map](ownership.md) for the larger topology.
+map](ownership.md) for the larger topology and the [generated component
+inventory](component-inventory.json) for the current source declarations.
 
 An admitted Wippy component may define services and functions, an owned
 database and migrations, drivers, traits, agents, and optional UI. Bee governs
@@ -21,7 +26,7 @@ authorize them. Component services own their domain protocol and state.
 | Layer | Owns | Boundary |
 |---|---|---|
 | Core | Workspace/session lifetime, composition, focus, geometry, admission, application lifecycle and persistence | Runtime primitives and shared value contracts; no default-app implementation imports |
-| Shared UI | Appearance, wallpaper and reusable presentation helpers | Value contracts only; no application authority |
+| Application SDK UI values | Appearance and reusable presentation helpers, currently exported by `bee/application` | Value contracts only; a separate UI package remains a proposal |
 | Default apps | Terminal, Settings, Process Manager and other bundled apps | Standalone processes with explicit grants and core protocols |
 | Optional packages | Installed applications, coding tools, harnesses, models and services | Published contracts and host admission |
 | Independent subsystems | Threads, Hub reads/planning/local apply, governed overlay authoring/review/apply/recovery, approvals, sync and scoped MCP | Authenticated operation contracts; each owns its state and migrations |
@@ -39,9 +44,9 @@ The harness owns its Agent application, launch setup and activation entries,
 gateway hook endpoints and harness policies. Placement, credentials and
 resources own their corresponding roots, host requirements and policies.
 Driver components own their launch policies and default host requirements.
-Requirements use package defaults that an assembly can replace. The MCP
-listener, tool routes and tool policies stay in the kernel's gateway core;
-the harness package adds only the hook endpoints used by managed agents.
+Requirements use package defaults that an assembly can replace. The Gateway
+component owns the MCP listener, tool routes and tool policies; the harness
+package adds only the hook endpoints used by managed agents.
 
 The Agent application's public definition ID and driver definition IDs remain
 unchanged when their source moves into these packages. Saved workspace state

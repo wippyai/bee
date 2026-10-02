@@ -69,7 +69,10 @@ changed code with a same-PID handoff; on an incompatible checkpoint, its client
 restarts the session from the committed layout while retaining the desktop and
 applications. See [process handoff](process-handoff.md). Workspace, broker,
 host or application changes still require the owning process lifecycle and
-recovery path. Preferences and opted-in application checkpoints persist in the
+recovery path. Admitted application definition and imported-library changes now
+restart the execution behind its retained view through the broker's existing
+checkpoint/resume path; incompatible state produces a visible fresh-start notice.
+Preferences and opted-in application checkpoints persist in the
 workspace database. Settings opts in to checkpointing; a dead native Terminal
 does not become a portable checkpoint. See
 [application contracts](../reference/applications.md) for launch, attachment,
@@ -158,6 +161,17 @@ machine home:
 | Grok | `.grok/auth.json` | `.grok/config.toml` | `GROK_HOME` points inside the attempt home |
 | Muse | `.config/muse/auth.json` | `.config/muse/settings.json` | private `HOME` |
 | OpenCode | `.local/share/opencode/auth.json` | `.config/opencode/opencode.json`; declared `.config/opencode/towers.key` dependency | XDG config and data roots point inside the attempt home |
+
+The machine login source selects the runtime's `owner_safe` link policy. On Unix,
+external links resolve to regular files owned by the process UID or root;
+the target and every canonical parent through filesystem root must also have
+`mode & 022 == 0`, including sticky directories. Resolution is bounded to 40
+symlinks and detects loops. Refusals retain the runtime's path and reason in the
+broker and Agent catalog. This requires the runtime release containing
+[runtime#890](https://github.com/wippyai/runtime/pull/890); the current pin safely
+ignores the field and retains containment. Windows retains containment because
+ownership/ACL evidence is unavailable. See the
+[credential contract](../../modules/credentials/src/README.md#machine-login-links).
 
 Only a provider's login file may be returned to its original path after the
 child exits. The broker requires the active attempt projection and unchanged

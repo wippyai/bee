@@ -218,3 +218,28 @@ under the host-admitted OpenCode `.key` rule. The broker projects that exact
 requested file without interpreting its bytes or writing it back. Placement
 rewrites a configuration reference only when this file is materialized; a
 configuration naming a missing or undeclared dependency refuses before start.
+
+## Machine login links
+
+Bee selects `link_policy: owner_safe` only on `bee.env:machine_login_source`.
+The existing broker availability/check and projection reads use that directory;
+there is no separate absolute-path credential reader. On Unix, external symlink
+chains have a 40-link limit and loop detection. The canonical target must be a
+regular file. Its owner and every canonical parent's owner through filesystem
+root must be the process UID or root, and every mode must satisfy `mode & 022 == 0`.
+Sticky directories have no exemption. This uses the owner/mode rule from
+[OpenSSH `misc.c` `safe_path`](https://github.com/openssh/openssh-portable/blob/master/misc.c).
+
+Runtime refusals name the path and cause. Availability, projection checks and
+materialization retain that reason; the Agent catalog shows it in the login-needed
+state. A successful metadata probe checks presence only, without opening login
+contents. Projection still reads only the provider's host-admitted files.
+Writes, creates, renames and deletes retain root containment. Windows keeps the
+contained behavior because equivalent ownership/ACL evidence is unavailable.
+
+External-link support requires the runtime release containing
+[wippyai/runtime#890](https://github.com/wippyai/runtime/pull/890). Bee's current
+runtime pin remains unchanged: it safely ignores the new field and retains
+containment, so external links remain unavailable until the runtime is upgraded.
+The proof-only `BEE_RUNTIME=/path/to/local/tool make login-links-check` exercises
+synthetic accepted and refused files through broker, locate and the Agent model.

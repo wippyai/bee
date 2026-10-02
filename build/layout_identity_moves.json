@@ -1,4 +1,5 @@
 {
+  "bee.app:startup_progress": "bee.app.status:startup_progress",
   "bee.approvals.inbox:client": "bee.approvals.inbox.app:client",
   "bee.approvals.inbox:client_policy": "bee.approvals.inbox.security:client_policy",
   "bee.approvals.inbox:source_config": "bee.approvals.inbox.app:source_config",
@@ -320,6 +321,7 @@
   "bee.node:resources": "bee.node.env:resources",
   "bee.persist:database": "bee.persist.persist:database",
   "bee.persist:ledger": "bee.persist.persist:ledger",
+  "bee.persist:startup_progress": "bee.persist.env:startup_progress",
   "bee.persist:transaction": "bee.persist.persist:transaction",
   "bee.placement.docker:boot_environment": "bee.placement.docker.env:boot_environment",
   "bee.placement.docker:coding": "bee.placement.docker.profiles:coding",

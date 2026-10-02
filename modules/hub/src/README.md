@@ -27,6 +27,9 @@ Resolver rejection returns `FAILED` with the original diagnostic bounded to
 `failed` receipt with the same code and message; replay returns that failure.
 A malformed diagnostic does not turn a definite failure into `UNCERTAIN`.
 Uncertain worker delivery still requires a receipt lookup.
+Completed-operation replay validates the caller and request through the same
+receipt path without acquiring the publication lock. Pending effects and
+recovery retain that lock.
 
 Read operations are `catalog`, `details`, `inspect`, `state`, `files`, `read_file`,
 `installed`, `installed_source` and `updates`. `updates` returns installed Bee
@@ -56,9 +59,14 @@ uploads (see the publication section of the Hub guide).
 Planning preserves other
 roots, resolves dependencies and measures the request, registry revision and
 artifacts. The planner uses the runtime selection rule: preserve a live installed
-version when every incoming constraint permits it, otherwise choose the highest
+version's captured definitions when that component is unchanged; inspect the
+requested component and changed versions as candidate artifacts. This also keeps
+unrelated package planning independent of local development artifact publication.
+The version solver preserves a live installed
+version, including a selected prerelease, when every incoming constraint permits
+it; otherwise it chooses the highest
 compatible stable release (or a compatible prerelease when no stable release
-matches). Changed selections retract their old dependencies and re-evaluate
+matches and the range explicitly admits that prerelease). Changed selections retract their old dependencies and re-evaluate
 intersections; a parent is never downgraded to satisfy its children. Exact pins
 and compatible installed selections do not list release history; other ranges
 inspect the complete bounded catalog, whose pages are ordered by publication time.
@@ -72,10 +80,48 @@ update creates a history-owned `ns.dependency` at the normal `bee.hub.deps` ID.
 Later updates change that resident selection; an existing host root retains its ID
 and parameters. The plan digest covers the root ID and create/update operation.
 
-For self-update, the request updates the installed host `bee/bee` root and
-resolves its `bee/*` closure, preserving the root's typed parameters and every
-third-party root. Bee pack components cannot be installed, updated or removed
-directly. A pack can declare native needs in `ns.definition.meta.native_requirements`
+The host selects independently managed components with `meta.independent: true`
+on its existing `bee.deps` dependency entries. Installed roots and versions come
+from those dependencies and the live resolution/lock; there is no second list.
+The first operation transfers package-owned Bee dependency roots to host
+ownership in the same Registry transaction as its existing operation receipt,
+without changing dependency IDs or requirement values. Converted roots pin the
+live version and retain their metadata. Third-party roots remain unchanged.
+Inventory derives `managed`; the plan and operation receipt's optional
+`conversion` (version 1, roots with `id` and `component`) records only the
+conversion effect for confirmation and interrupted-operation verification.
+It is not used to discover installed roots. No SQL or application-state migration
+is involved. Required host roots and the Hub dependency graph derive protection
+at plan time; refusal identifies the dependent.
+
+Modules can install, update and remove optional Bee components through ordinary
+review and confirmation. Unconverted hosts without the host selection refuse Bee
+component management. Required roots and the installer dependency closure refuse
+independent replacement or removal. Dependency constraints and entry collisions
+still apply. Removal retains owned data and uses the existing migration policies;
+service drain/revocation handoff remains a separate proposal. A first removal
+with migration rollback requires root conversion through an update first.
+
+A host that selects component management updates `bee/bee` using a core artifact
+that contains no Bee-component dependency declarations. The plan retains each
+explicit component root and its requirement parameters alongside the core update.
+A candidate that declares Bee-component dependencies is refused with its entry ID:
+it would reclaim host selection, collide with host-owned roots or reinstall a
+removed component. This applies to the initial self-update conversion as well as
+later updates. Legacy full-composition artifacts remain installation bundle
+inputs; independently updatable core artifacts require separate release identities.
+`make hub-core-pack BEE_CORE_VERSION=VERSION` stages the normal release source and
+packs `bee/bee` with its Bee dependency declarations excluded. It requires an
+identity distinct from the boot bundle; namespace definitions, native identity,
+resources and core code remain in the artifact. The standalone acceptance
+constructs distinct baseline and core release identities.
+Publishing those releases is a separate operation; this change does not publish
+artifacts or change the native bundle's boot composition.
+Hosts with an already authored legacy `bee/bee` selection must first convert using
+a core self-update; its old manifest constraints remain effective until then.
+Self-update also refuses a candidate that changes the active Hub installer code.
+Both paths preserve deployment parameters and third-party roots.
+A pack can declare native needs in `ns.definition.meta.native_requirements`
 as `{package = "native/module", version = "1.2.3"}` rows. The planner compares
 those semantic versions against the executable's Go module build list, exposed
 only through the native launch host's read-only environment facts. The release
@@ -149,10 +195,12 @@ from a ready plan bound to the asking gateway binding, verifies a recorded
 request belongs to that binding and attempt, and maps an apply reply to the
 agent's status. The gateway performs the calls.
 
-`make hub-self-update-standalone-check` builds two local sealed deployments and
+`make hub-self-update-standalone-check` builds local sealed baseline and core artifacts and
 serves their artifacts through a disposable fixture Hub. `BEE_RUNTIME` selects
 the proof executable without changing the repository runtime pin. The acceptance
-checks the installed older wildcard dependency, exact digest approval, completed
-receipt, unchanged runtime owner PID, live Settings About rendering, and restart
+checks an independent Files update, optional telemetry install/removal, protected Hub
+removal refusal, a core self-update, another independent Files update, the older
+wildcard dependency, exact digest approval, completed receipts, unchanged runtime
+owner PID, live Settings About rendering, and restart
 with the same history/cache in an isolated network namespace. To reuse already
 built fixtures, set `BEE_DEPLOYMENT` and `BEE_SELF_UPDATE_TARGET_DEPLOYMENT`.

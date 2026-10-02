@@ -81,6 +81,35 @@ reobserves bridge readiness after controller replacement. `make
 retained-owner-check` checks a live definition change and incompatible
 checkpoint fallback in the source owner, plus packed owner startup.
 
+Running applications follow admitted definition and imported Lua library changes
+through the broker's execution replacement, using the last acknowledged
+application checkpoint. Logical instance/view identities, windows/tabs and
+terminal mounts survive. An incompatible schema restarts fresh with a persistent
+one-line notice in the window. An unchanged definition is untouched. This is the
+same replacement path used for application definition revision changes, not an
+application `process.upgrade` handoff. Native PTY processes owned by a changed
+application still follow that application's normal stop lifecycle; no native
+session state is invented.
+
+The standalone acceptance checks the live registry renderer as well as the
+retained window's code marker. The proof runtime currently advances the selected
+pack versions while preserving resident child-module definitions during the
+first deployment-root apply. That runtime transition must expose the new code
+before application replacement can occur; live pack updates do not yet pass
+this acceptance. The broker does not synthesize a second registry or restart path
+to compensate for that missing transition.
+
+The desktop session and workspace host already use same-PID handoff; desktop
+clients, application brokers and the owner controller already use acknowledged
+supervised replacement. The terminal presenter changes through explicit F12.
+A changed `process.service` registration follows the runtime supervisor's own
+stop/start lifecycle; a code-only change with an equal service configuration does
+not replace that controller.
+Bee does not add checkpoint handoff for running service workers, drivers,
+managed agent sessions or the Hive supervisor here. Their running executions
+retain code until their existing lifecycle replaces them. Later function calls
+and newly spawned processes resolve the current registry definitions.
+
 Hive supervisor and module service handoff and generation rollback remain
 proposals. Native binary cutover is available through the local `bee upgrade`
 commands: a person confirms the candidate digest, and `bee upgrade --rollback`

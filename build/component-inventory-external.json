@@ -1,0 +1,25 @@
+{
+  "packages": [
+    {
+      "component": "userspace/docker",
+      "version": "0.5.17",
+      "sha256": "ac04ada5befd174f81773606f7ffc14cdc70874002375c04370a541a58fae204",
+      "source_module": "modules/placement-docker",
+      "target_ids": [
+        "userspace.docker:database",
+        "userspace.docker:process_host",
+        "userspace.docker.service:root.service"
+      ]
+    },
+    {
+      "component": "wippy/bootloader",
+      "version": "0.3.16",
+      "sha256": "a31e9c64ec482ced0b0095bc0c85b2a69a7b1361c207ab43ffae807da473f6bc",
+      "source_module": "modules/placement-docker",
+      "target_ids": [
+        "wippy.bootloader:application_host",
+        "wippy.bootloader:bootloader.service"
+      ]
+    }
+  ]
+}

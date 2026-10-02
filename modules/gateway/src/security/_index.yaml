@@ -2,11 +2,12 @@ version: '1.0'
 namespace: bee.gateway.security
 entries:
 - name: store_policy
-  kind: security.policy
+  kind: security.policy.expr
   meta: {comment: Gateway private store; target_db injects only the selected database resource}
   policy:
-    actions: [db.get]
-    resources: []
+    expression: (resource != "bee.persist.env:startup_progress" && action != "env.set" && action != "env.get") || (action in ["env.get", "env.set"] && resource == "bee.persist.env:startup_progress")
+    actions: [db.get, env.set, env.get]
+    resources: [bee.persist.env:startup_progress]
     effect: allow
 - name: database_ref_policy
   kind: security.policy

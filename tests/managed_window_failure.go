@@ -413,7 +413,7 @@ func run() error {
 	if err := os.WriteFile(hostPath, []byte(rootIndex), 0600); err != nil {
 		return err
 	}
-	receiptPath := filepath.Join(dir, "modules", "threads", "src", "service", "receipt_method.lua")
+	receiptPath := filepath.Join(dir, "modules", "threads", "src", "binding", "receipt_method.lua")
 	receipt, err := os.ReadFile(receiptPath)
 	if err != nil {
 		return err
@@ -427,7 +427,7 @@ func run() error {
 	if err := os.WriteFile(receiptPath, []byte(receiptText), 0600); err != nil {
 		return err
 	}
-	receiptIndexPath := filepath.Join(dir, "modules", "threads", "src", "service", "_index.yaml")
+	receiptIndexPath := filepath.Join(dir, "modules", "threads", "src", "binding", "_index.yaml")
 	receiptIndex, err := os.ReadFile(receiptIndexPath)
 	if err != nil {
 		return err

@@ -1,5 +1,6 @@
 WIPPY ?= .wippy/bin/bee-wippy
 LINT_FLAGS ?=
+TEST_JOBS ?= 4
 # Runtime Lua cache fingerprints include the toolchain, entry source and
 # dependencies. A shared test cache survives each fixture's disposable HOME.
 RUNTIME_CACHE_KEY := $(shell python3 -c 'import json; print(json.load(open("wippy.build.json"))["runtime"]["commit"][:12])')
@@ -14,6 +15,13 @@ endif
 .PHONY: toolchain-current
 toolchain-current:
 	python3 build/verify_cached_toolchain.py current || $(MAKE) native-tools
+.PHONY: component-inventory component-inventory-check root-src-budget-check
+component-inventory:
+	python3 build/component_inventory.py --write
+component-inventory-check:
+	python3 build/component_inventory.py
+root-src-budget-check:
+	python3 build/component_inventory.py --budget-only
 lint: $(TOOLCHAIN_CURRENT)
 test: $(TOOLCHAIN_CURRENT)
 fixture-lint: $(TOOLCHAIN_CURRENT)
@@ -39,6 +47,9 @@ hub-self-update-runtime-check:
 .PHONY: hub-self-update-standalone-check
 hub-self-update-standalone-check:
 	BEE_RUNTIME="$(or $(BEE_RUNTIME),$(abspath $(WIPPY)))" python3 tests/standalone_self_update.py "$(abspath $(BEE_DEPLOYMENT))"
+.PHONY: hub-core-pack
+hub-core-pack: $(TOOLCHAIN_CURRENT)
+	WIPPY="$(abspath $(WIPPY))" BEE_CORE_VERSION="$(BEE_CORE_VERSION)" build/core-pack.sh
 .PHONY: settings-unit-check capability-grants-unit-check
 settings-unit-check:
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/focused_lua.py bee.settings view_test
@@ -142,7 +153,7 @@ run:
 .PHONY: idle-cpu-check
 idle-cpu-check:
 	BEE_BINARY="$(abspath $(or $(BEE_BINARY),dist/bee))" python3 tests/idle_cpu_check.py
-lint: layout-check lua-boundary-check
+lint: layout-check lua-boundary-check component-inventory-check
 	$(WIPPY) lint $(LINT_FLAGS) --strict-any --set lua.type_system.enabled=true --set lua.type_system.strict=true
 .PHONY: codex-native-hooks-check
 codex-native-hooks-check:
@@ -151,9 +162,9 @@ codex-native-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
-test: fixture-gateway-client
+test: fixture-gateway-client component-inventory-check
 	python3 -m unittest discover -s tests -p 'test_*.py'
-	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
+	BEE_TEST_JOBS="$(TEST_JOBS)" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 fixture-lint: lua-boundary-check
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/fixture_lint.py
 .PHONY: compile-cache-check
@@ -670,6 +681,11 @@ app-layout-upgrade-check:
 	@test -n "$(APP_LAYOUT_PREVIOUS_BEE)" || { echo 'Set APP_LAYOUT_PREVIOUS_BEE to the standalone built from main 463ac2ea.'; exit 1; }
 	python3 tests/app_layout_smoke.py --binary "$(abspath $(BEE_BINARY))" --previous "$(abspath $(APP_LAYOUT_PREVIOUS_BEE))"
 
+.PHONY: persist-migration-check
+persist-migration-check:
+	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/persist_migration.py
+check: persist-migration-check
+check-shard-services-storage: persist-migration-check
 .PHONY: layout-check
 layout-check:
 	python3 build/layout_check.py
@@ -682,3 +698,9 @@ lua-boundary-check:
 layout-upgrade-check:
 	@test -n "$(LAYOUT_PREVIOUS_BEE)" -a -n "$(LAYOUT_PREVIOUS_SOURCE)" || { echo 'Set LAYOUT_PREVIOUS_BEE and LAYOUT_PREVIOUS_SOURCE to origin/main build and source.'; exit 1; }
 	BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/layout_upgrade.py --previous "$(abspath $(LAYOUT_PREVIOUS_BEE))" --binary "$(abspath $(BEE_BINARY))" --previous-source "$(abspath $(LAYOUT_PREVIOUS_SOURCE))"
+
+.PHONY: login-links-check
+# Explicit proof against the local runtime PR build; the production pin stays unchanged.
+login-links-check:
+	@test -n "$(BEE_RUNTIME)" || { echo 'Set BEE_RUNTIME to the local owner_safe runtime tool.'; exit 1; }
+	python3 tests/login_links.py $(LOGIN_LINKS_FLAGS)

@@ -278,12 +278,12 @@ def lua_type_definitions(source: str) -> list[str]:
 def toolkit_reference() -> bytes:
     """Bee's terminal toolkit, composed from the sources that define it."""
     client = (ROOT / "modules/application/src/client.lua").read_text()
-    appearance = (ROOT / "modules/application/src/appearance.lua").read_text()
-    frame = (ROOT / "modules/application/src/frame.lua").read_text()
+    appearance = (ROOT / "modules/ui/src/appearance.lua").read_text()
+    frame = (ROOT / "modules/ui/src/frame.lua").read_text()
     frame_api = [row for _, row in lua_calls(frame, "frame")]
     frame_types = lua_type_definitions(frame)
     if not frame_api or not frame_types:
-        raise SystemExit("modules/application/src/frame.lua has no documented functions or types")
+        raise SystemExit("modules/ui/src/frame.lua has no documented functions or types")
     viz = (ROOT / "modules/application/src/viz.lua").read_text()
     viz_calls = lua_calls(viz, "viz")
     viz_types = lua_type_definitions(viz)
@@ -344,7 +344,7 @@ def toolkit_reference() -> bytes:
         "## Layout, styles and input",
         "",
         "* A frame is plain rows. Bee's apps draw every frame through",
-        "  `bee.app:frame` (below), which reads the theme from",
+        "  `bee.ui:frame` (below), which reads the theme from",
         "  `require(\"appearance\").theme(preferences.theme)` and styles each run with a",
         "  semantic role; the view interprets nothing.",
         "* Layout is arithmetic on `width`/`height`; the frame bounds each run by display",
@@ -359,8 +359,8 @@ def toolkit_reference() -> bytes:
         "",
         "## Application frame",
         "",
-        "`bee.app:frame` is the shared toolkit every Bee application draws with.",
-        "Import it as `frame = \"bee.app:frame\"` next to `appearance`. One frame",
+        "`bee.ui:frame` is the shared toolkit every Bee application draws with.",
+        "Import it as `frame = \"bee.ui:frame\"` next to `appearance`. One frame",
         "reads top to bottom: row 1 header (uppercase title, muted summary at the right),",
         "optional tabs, the work area (tables, rows, empty states), the action bar on the",
         "penultimate row with one primary button, and the footer on the final row with the",
@@ -497,7 +497,7 @@ def reference_app_documents() -> "list[tuple[str, str, bytes, str]]":
     documents = []
     index = ["# Reference applications", "",
              "Proven, self-contained Bee application screens for copying: each is a pure",
-             "view over `bee.app:frame`, `viz`, `diagram` or `forms` with the model",
+             "view over `bee.ui:frame`, `viz`, `diagram` or `forms` with the model",
              "the application owns, and each is drawn at every size class by",
              "`make reference-apps-check`. Read one, copy it into an application's `view.lua`",
              "and replace the sample data. Overlay and form interaction patterns are in",
@@ -584,7 +584,7 @@ def build(local: bool = False) -> int:
     for identity, topic, payload, source in reference_app_documents():
         record(identity, topic, payload, source)
     record("toolkit", "terminal", toolkit_reference(),
-           "generated: modules/application/src, module app views, tests/lua/frame")
+           "generated: modules/ui/src, modules/application/src, module app views, tests/lua/frame")
 
     total = sum(document["bytes"] for document in documents)
     if total > MAX_CORPUS_BYTES:
@@ -655,7 +655,7 @@ SELECTION_RULE = (
     "registry, platform), excluding repository process and design pages. "
     "Component: one README per Bee package under src/ or modules/. Reference applications: one page per source in "
     "docs/reference/apps plus an index, proven by the reference-apps check. Terminal toolkit: one generated page composed from "
-    "modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from "
+    "modules/ui/src, modules/application/src, modules/*/src/app and compact examples; visualization examples are extracted from "
     "tests/lua/frame. The corpus is digest-checked with the rest."
 )
 

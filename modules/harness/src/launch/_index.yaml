@@ -34,9 +34,9 @@ entries:
     placement_types: bee.placement:types
     placement_resolver: bee.placement.binding:resolver
     continuation: bee.harness.carrier:continuation
-    interrupted: bee.harness.app:interrupted
+    interrupted: bee.harness.carrier:interrupted
     profiles: bee.harness.profiles:protocol
-    profile_validation: bee.harness.profiles:validation
+    profile_validation: bee.harness.profiles.binding:validation
     descriptors: bee.driver.descriptor:descriptor
     placement_profiles: bee.placement.profiles:profiles
     record_bounds: bee.threads.records:bounds

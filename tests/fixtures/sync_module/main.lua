@@ -44,7 +44,7 @@ local function main()
         assert(changed_key.ok == false and changed_key.code == "CONFLICT", "retry key was reused for other content")
         local bad = call(writer, "update_metadata", {expected_revision = 1, idempotency_key = "bad",
             metadata = {display_name = "Bad", permissions = {"admin"}}})
-        assert(bad.ok == false and bad.code == "INVALID", "metadata accepted authority fields")
+        assert(bad.ok == false and bad.code == "INVALID_ARGUMENT", "metadata accepted authority fields")
         local snapshot = value(call(reader, "snapshot", {}))
         assert(snapshot.cursor == 1, "rejections or replay appended events")
         local events = value(call(reader, "read_after", {cursor = 0, limit = 64}))
@@ -83,7 +83,7 @@ local function main()
     assert(replay_appearance.ok == true and replay_appearance.replayed == true, "appearance retry did not replay")
     local malformed = call(appearance_writer, "update_appearance", {expected_revision = 1, idempotency_key = "invalid-appearance",
         preferences = {theme = "unknown", background = "solid", taskbar = "labels"}})
-    assert(malformed.ok == false and malformed.code == "INVALID", "unknown theme accepted")
+    assert(malformed.ok == false and malformed.code == "INVALID_ARGUMENT", "unknown theme accepted")
     -- The public caller has no direct store access even though methods can open it.
     local restricted = funcs.new():with_actor(security.new_actor("node-metadata-user")):
         with_scope(security.new_scope({assert(security.policy("bee.sync.probe:call_policy"))}))

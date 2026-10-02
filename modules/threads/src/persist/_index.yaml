@@ -48,3 +48,9 @@ entries:
   - sql
   imports:
     identity: bee.threads.records:app_identity
+- name: journal
+  kind: library.lua
+  source: file://journal.lua
+  modules: [sql]
+  imports:
+    bounds: bee.values:bounds

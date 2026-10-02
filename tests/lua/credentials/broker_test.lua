@@ -11,7 +11,8 @@ local registry = require("registry")
 local time = require("time")
 local json = require("json")
 local fs = require("fs")
-local broker = require("broker")
+local credential_protocol = require("credential_protocol")
+local store = require("store")
 local persist = require("persist")
 local migrations = require("migrations")
 local identity_migration = require("identity_migration")
@@ -70,7 +71,7 @@ local user = caller(USER, {"bee.credentials.security:credential_issue_policy"})
 local other = caller(OTHER, {"bee.credentials.security:credential_issue_policy"})
 local runner = caller(RUNNER, {"bee.credentials.security:credential_materialize_policy"})
 local outsider = caller("bee.test.cred.outsider", {})
-local function call(client: Principal, method: string, value: unknown): broker.Reply
+local function call(client: Principal, method: string, value: unknown): credential_protocol.Reply
     local reply, err = executor(client, value):call("bee.credentials.binding:" .. method, value)
     if err then error(method .. ": " .. tostring(err)) end
     return principals.reply(reply)
@@ -80,22 +81,22 @@ local function async_call(client: Principal, method: string, value: unknown): fu
     if not future then error(method .. ": " .. tostring(err)) end
     return future
 end
-local function await_call(future: funcs.Future): broker.Reply
+local function await_call(future: funcs.Future): credential_protocol.Reply
     local _, open = future:response():receive()
     if not open then error("credential call closed without a reply") end
     local payload, result_error = future:result()
     if result_error or not payload then error("credential call: " .. tostring(result_error)) end
     return principals.reply(payload:data())
 end
-local function value(reply: broker.Reply): {[string]: unknown}
+local function value(reply: credential_protocol.Reply): {[string]: unknown}
     if not reply.ok then error(tostring(reply.error and reply.error.code) .. ": " .. tostring(reply.error and reply.error.message)) end
     return assert(bounds.object(reply.value))
 end
-local function code(reply: broker.Reply): string
+local function code(reply: credential_protocol.Reply): string
     if reply.ok then error("expected a failure, got success") end
     return reply.error and reply.error.code or ""
 end
-local function clean(reply: broker.Reply)
+local function clean(reply: credential_protocol.Reply)
     local encoded = tostring(json.encode(reply))
     if encoded:find(SENTINEL, 1, true) then error("sentinel leaked into a reply that must not carry it") end
     if encoded:find("sentinel-codex-tok-123", 1, true) then error("codex login sentinel leaked into a reply that must not carry it") end
@@ -180,7 +181,7 @@ local function define_tests()
             if not destination then error("read persisted node identity: " .. tostring(node_error)) end
             local resource, resource_error = cred_sources.database()
             if not resource then error("credential database: " .. tostring(resource_error)) end
-            local db, open_error = persist.open({resource = resource, ledger = broker.LEDGER, migrations = migrations.all()})
+            local db, open_error = persist.open({resource = resource, ledger = store.LEDGER, migrations = migrations.all()})
             if not db then error("open credential identity migration store: " .. tostring(open_error)) end
             local legacy, workspace_id = "legacy-" .. fresh("node"), fresh("identity")
             local definition, projection, at = fresh("definition"), fresh("projection"), "2026-09-28T00:00:00.000Z"
@@ -356,7 +357,7 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             test.eq(checked.materialization_generation, 2)
             local database, database_error = cred_sources.database()
             if not database then error("database ref: " .. tostring(database_error)) end
-            local db, open_error = persist.open({resource = database, ledger = broker.LEDGER, migrations = migrations.all()})
+            local db, open_error = persist.open({resource = database, ledger = store.LEDGER, migrations = migrations.all()})
             if not db then error("open db: " .. tostring(open_error)) end
             local rows, query_error = db:query("SELECT generation_key, generation FROM bee_credential_generations WHERE projection_id = ?", {projection_id})
             db:release()
@@ -1145,10 +1146,10 @@ VALUES (?, ?, 'migration', ?, 1, ?, 1, ?, ?, 'attempt', 'profile', ?, ?, ?, 'cla
             -- 2. Inspect the persistent database and ledger tables directly
             local res, rerr = cred_sources.database()
             if not res then error("database ref: " .. tostring(rerr)) end
-            local db, derr = persist.open({resource = res, ledger = broker.LEDGER, migrations = migrations.all()})
+            local db, derr = persist.open({resource = res, ledger = store.LEDGER, migrations = migrations.all()})
             if not db then error("open db: " .. tostring(derr)) end
 
-            local tables = {"bee_credential_definitions", "bee_credential_projections", "bee_credential_generations", "bee_credential_epochs", broker.LEDGER.table}
+            local tables = {"bee_credential_definitions", "bee_credential_projections", "bee_credential_generations", "bee_credential_epochs", store.LEDGER.table}
             for _, tbl in ipairs(tables) do
                 local found, qerr = db:query("SELECT * FROM " .. tbl)
                 if not found then error("query " .. tbl .. ": " .. tostring(qerr)) end

@@ -14,8 +14,8 @@ entries:
   source: file://view.lua
   modules: [tty]
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     syntax: bee.files.app:syntax
     model: bee.files.app:model
 - name: app
@@ -24,9 +24,9 @@ entries:
   method: main
   modules: [tty, process, channel, uuid, fs, registry]
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     client: bee.app:client
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     syntax: bee.files.app:syntax
     protocol: bee.files:protocol
     source: bee.files.app:source
@@ -62,4 +62,4 @@ entries:
   source: file://syntax.lua
   modules: [treesitter]
   imports:
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance

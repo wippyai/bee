@@ -46,9 +46,6 @@ entries:
 - name: arguments
   kind: library.lua
   source: file://arguments.lua
-- name: text
-  kind: library.lua
-  source: file://text.lua
 - name: caller
   kind: library.lua
   source: file://caller.lua
@@ -59,9 +56,9 @@ entries:
   kind: library.lua
   source: file://folder_picker.lua
   imports:
-    text: bee.app:text
+    text: bee.ui:text
     caller: bee.app:caller
-    frame: bee.app:frame
+    frame: bee.ui:frame
     bounds: bee.values:bounds
 - name: host_leases
   kind: library.lua
@@ -79,7 +76,7 @@ entries:
   imports:
     bounds: bee.values:bounds
     caller: bee.app:caller
-    text: bee.app:text
+    text: bee.ui:text
     record_bounds: bee.threads.records:bounds
 - name: status_surface
   kind: library.lua
@@ -91,18 +88,6 @@ entries:
   source: file://interaction.lua
   imports:
     bounds: bee.values:bounds
-- name: appearance
-  kind: library.lua
-  source: file://appearance.lua
-  modules:
-  - env
-- name: frame
-  kind: library.lua
-  source: file://frame.lua
-  modules:
-  - tty
-  imports:
-    appearance: bee.app:appearance
 - name: names
   kind: library.lua
   source: file://names.lua
@@ -120,26 +105,30 @@ entries:
   modules:
   - tty
   imports:
-    appearance: bee.app:appearance
-    frame: bee.app:frame
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
 - name: forms
   kind: library.lua
   source: file://forms.lua
   modules:
   - tty
   imports:
-    appearance: bee.app:appearance
-    frame: bee.app:frame
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
 - name: diagram
   kind: library.lua
   source: file://diagram.lua
   modules:
   - tty
   imports:
-    appearance: bee.app:appearance
-    frame: bee.app:frame
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
     viz: bee.app:viz
 - name: dependency_values
   kind: ns.dependency
   component: bee/values
+  version: '*'
+- name: dependency_ui
+  kind: ns.dependency
+  component: bee/ui
   version: '*'

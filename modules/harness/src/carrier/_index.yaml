@@ -125,3 +125,26 @@ entries:
   source: file://lease.lua
   imports:
     leases: bee.app:host_leases
+- name: hooks
+  kind: library.lua
+  source: file://hooks.lua
+  imports:
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.values:bounds
+- name: delivery
+  kind: library.lua
+  source: file://delivery.lua
+  modules: [funcs, channel]
+  imports:
+    hooks: bee.harness.carrier:hooks
+- name: interrupted
+  kind: library.lua
+  source: file://interrupted.lua
+  modules: [funcs, channel, time, uuid]
+  imports:
+    continuation: bee.harness.carrier:continuation
+    checkpoint: bee.harness.carrier:checkpoint
+    bounds: bee.values:bounds
+    hooks: bee.harness.carrier:hooks
+    delivery: bee.harness.carrier:delivery
+    records: bee.harness.carrier:hook_records

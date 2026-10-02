@@ -43,12 +43,12 @@ The implementation is split into these Lua namespaces:
 | --- | --- |
 | `bee.threads` | Local bindings, resources and capability reporting. |
 | `bee.threads.records` | Typed decoders, thread-specific capacities and sequence checks, and canonical record envelopes using shared `bee.values` encoding; no I/O. |
-| `bee.threads.service` | Thread authority, membership, messages, action inboxes, lifecycle and owner-qualified send. |
+| `bee.threads.service` | Thread authority, membership, messages, action inboxes, lifecycle, owner-qualified send, and Sessions journal authorization and domain transitions. |
 | `bee.threads.delivery` | Recipient obligations, claim batches, dispatch, waits and subscriptions. |
 | `bee.threads.projection` | Record-derived recap and status checkpoints. |
 | `bee.threads.carrier` | Attempt carrier epochs, provenance, stream records and checkpoints. |
 | `bee.threads.approvals` | Authenticated approval records projected from the approval owner; it does not decide approvals. |
-| `bee.threads.persist` | The database, checked migrations, owner incarnation and readers/transactions. |
+| `bee.threads.persist` | The database, checked migrations, owner incarnation, readers/transactions, and Sessions journal SQL and stored-row decoders. |
 
 ## Authority and records
 

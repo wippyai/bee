@@ -130,6 +130,7 @@ entries:
   source: file://work_store.lua
   modules: [sql, json, hash, uuid, system, time]
   imports:
+    journal: bee.threads.persist:journal
     budget_values: bee.threads.records:budgets
     access: bee.threads.service:access
     transaction: bee.threads.persist:transaction

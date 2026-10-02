@@ -159,7 +159,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -177,7 +177,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -195,7 +195,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -213,7 +213,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -231,7 +231,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:
@@ -249,7 +249,7 @@ entries:
   modules: [process, channel, time, security, tty, funcs, json, registry, io]
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     admission: bee.harness.launch:admission
     store: bee.placement.native.persist:store
   security:

@@ -143,12 +143,12 @@ class RepositoryLayout(unittest.TestCase):
             host_component = source / 'example'
             host_component.mkdir()
             (host_component / '_index.yaml').write_text('namespace: bee.example\nentries:\n- name: executor\n  kind: exec.native\n')
-            sdk = root / 'modules/application/src'
-            sdk.mkdir(parents=True)
-            (sdk / '_index.yaml').write_text('namespace: bee.app\nentries:\n- name: appearance\n  kind: ns.requirement\n')
+            ui = root / 'modules/ui/src'
+            ui.mkdir(parents=True)
+            (ui / '_index.yaml').write_text('namespace: bee.ui\nentries:\n- name: appearance\n  kind: ns.requirement\n')
             errors = LAYOUT.audit(root)[0]
             self.assertTrue(any('bee.example:executor: root entry' in error for error in errors))
-            for identity in ['bee:clock', 'bee:workers', 'bee.app:appearance', 'bee.example:policies', 'bee.example:helper', 'bee.example:local']:
+            for identity in ['bee:clock', 'bee:workers', 'bee.ui:appearance', 'bee.example:policies', 'bee.example:helper', 'bee.example:local']:
                 self.assertTrue(any(identity + ': root entry' in error for error in errors), identity)
             self.assertFalse(any('bee.example:definition: root entry' in error for error in errors))
 
@@ -170,6 +170,23 @@ class RepositoryLayout(unittest.TestCase):
             entries.update({document['namespace'] + ':' + entry['name']: entry for entry in document.get('entries', [])})
         for destination in json.loads((ROOT / 'build/layout_identity_moves.json').read_text()).values():
             self.assertIn(destination, entries)
+
+    def test_credential_source_relocation_preserves_host_catalog(self):
+        moves = json.loads((ROOT / 'build/layout_identity_moves.json').read_text())
+        binding = yaml.safe_load((ROOT / 'modules/credentials/src/binding/_index.yaml').read_text())
+        environment = yaml.safe_load((ROOT / 'modules/credentials/src/env/_index.yaml').read_text())
+        resolver = next(entry for entry in binding['entries'] if entry['name'] == 'sources')
+        destination = binding['namespace'] + ':' + resolver['name']
+        for previous in ['bee.credentials:sources', 'bee.credentials.env:sources']:
+            self.assertEqual(moves[previous], destination)
+        self.assertEqual(resolver['kind'], 'library.lua')
+        self.assertFalse(any(entry['name'] == 'sources' for entry in environment['entries']))
+        catalog = next(entry for entry in environment['entries'] if entry['name'] == 'credential_sources')
+        self.assertEqual(catalog['meta']['type'], 'bee.credential_sources')
+        self.assertEqual(moves['bee.credentials:credential_sources'], environment['namespace'] + ':' + catalog['name'])
+        for entry in binding['entries']:
+            if entry.get('source') == 'file://broker.lua':
+                self.assertEqual(entry['imports']['sources'], destination)
 
     def test_root_cleanup_migration_replays_and_refuses_collisions(self):
         script = sql('modules/placement-native/src/migrations/migrations.lua', 'ROOT_REFERENCES_SQL')

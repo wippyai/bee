@@ -48,7 +48,7 @@ entries:
   method: main
   imports:
     runtime: bee.harness.app:runtime
-    windows: bee.harness.app:windows
+    windows: bee.harness.binding:windows
 - name: open
   kind: function.lua
   source: file://presentation.lua

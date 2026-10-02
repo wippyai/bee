@@ -14,9 +14,9 @@ entries:
   - registry
   - system
   imports:
-    frame: bee.app:frame
+    frame: bee.ui:frame
     client: bee.app:client
-    appearance: bee.app:appearance
+    appearance: bee.ui:appearance
     model: bee.hive.manager.app:model
     names: bee.app:names
     view: bee.hive.manager.app:view
@@ -45,7 +45,7 @@ entries:
   modules:
   - json
   imports:
-    text: bee.app:text
+    text: bee.ui:text
     directory: bee.hive.manager.app:directory
     contract: bee.protocol:application
     types: bee.hive:types
@@ -55,8 +55,8 @@ entries:
   kind: library.lua
   source: file://view.lua
   imports:
-    frame: bee.app:frame
-    appearance: bee.app:appearance
+    frame: bee.ui:frame
+    appearance: bee.ui:appearance
     model: bee.hive.manager.app:model
     names: bee.app:names
 - name: remote
@@ -64,8 +64,8 @@ entries:
   source: file://remote.lua
   imports:
     bounds: bee.values:bounds
-    appearance: bee.app:appearance
-    frame: bee.app:frame
+    appearance: bee.ui:appearance
+    frame: bee.ui:frame
     names: bee.app:names
 - name: directory
   kind: library.lua

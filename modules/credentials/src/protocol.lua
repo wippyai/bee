@@ -6,6 +6,9 @@ local M = {}
 M.MAX_SECRET_BYTES = 8192
 M.MAX_FILE_BYTES = 65536
 
+type Fault = {code: string, message: string}
+type Reply = {ok: boolean, error: Fault?, value: unknown}
+
 type ProjectionKind = "environment" | "file"
 type CheckedProjection = {
     projection_id: string, workspace_id: string, name: string, definition_id: string, definition_revision: integer,

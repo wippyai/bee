@@ -5,7 +5,7 @@
 -- Names and root references go back to the owner exactly as it sent them, so
 -- any that is not a plain identifier or folder name is dropped.
 local text = require("text")
-local caller = require("caller")
+local reply = require("reply")
 local frame = require("frame")
 local bounds = require("bounds")
 
@@ -33,9 +33,9 @@ local function object(value: unknown): Object?
     return bounds.object(value)
 end
 
-local function failure(reply: caller.Reply): string
+local function failure(reply: reply.Reply): string
+    if reply.ok then return "The owner did not answer" end
     local fault = reply.error
-    if not fault then return "The owner did not answer" end
     return text.bound(fault.code .. ": " .. fault.message, 200)
 end
 
@@ -94,7 +94,7 @@ function M.roots_intent(): Intent
     return {target = M.CATALOG .. "roots", request = {}}
 end
 
-function M.apply_roots(picker: Picker, reply: caller.Reply)
+function M.apply_roots(picker: Picker, reply: reply.Reply)
     local value = object(reply.value)
     if not reply.ok or not value then
         fail(picker, failure(reply))
@@ -133,7 +133,7 @@ function M.folders_intent(picker: Picker): Intent?
 end
 
 -- An answer for another root or folder than the one shown is ignored.
-function M.apply_folders(picker: Picker, reply: caller.Reply)
+function M.apply_folders(picker: Picker, reply: reply.Reply)
     local root = picker.root
     if not root then return end
     local value = object(reply.value)

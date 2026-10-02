@@ -26,5 +26,5 @@ entries:
   imports:
     test: wippy.test:test
     probe: bee.host.processes.app:probe
-    viz: bee.app:viz
+    viz: bee.ui.viz:viz
     history_values: bee.host.processes.app:history

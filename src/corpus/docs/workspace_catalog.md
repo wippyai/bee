@@ -67,7 +67,7 @@ to offer a `create` or a launch folder. Browsing a root is its own action,
 `bee.workspace.manager.browse`: `bee.security.storage:workspace_catalog_manage_policy` grants it with
 management, and `bee.security.storage:workspace_folder_browse_policy` grants it with the
 catalog read `roots` needs and nothing else, which the Agent window holds for
-its folder choice. `bee.app:folder_picker` is the shared picker model
+its folder choice. `bee.ui.picker:folder` is the shared picker model
 and table both the Workspaces create flow and the Agent profile form use.
 
 **Inspect and search within.** `inspect` (`{workspace_id}`, read authority on

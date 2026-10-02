@@ -11,7 +11,7 @@ application frame, `bee.ui:frame`. The exact placement, color, state
 and breakpoint rules, with one layout per application archetype, are in
 [Application visual style](app-style.md); read it before drawing. The offline
 toolkit reference gives compact examples of the frame and the visualization
-kit `bee.app:viz`, with each chart example taken from a test. Use those
+kit `bee.ui.viz:viz`, with each chart example taken from a test. Use those
 calls with application-owned state and actions.
 
 ## Semantic palette
@@ -149,7 +149,7 @@ continues afterward.
 
 - Raw hex colors or a private theme table inside an application.
 - Private copies of header, button, row, table, footer, sparkline or chart
-  drawing; use the frame and `bee.app:viz`.
+  drawing; use the frame and `bee.ui.viz:viz`.
 - Accent on text that is neither focus, selection, the primary action nor the
   primary chart series.
 - A status role on a whole row, a background, a border or a title.

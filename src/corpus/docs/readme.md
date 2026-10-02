@@ -15,7 +15,7 @@ generator when the corpus is intentionally updated.
 | Contributions and community standards | [Contributing](../CONTRIBUTING.md) |
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
 | Bee visual language and accessible terminal UI | [UI brand book](guides/ui.md) |
-| Shared frame, semantic appearance and bounded text | [UI module](../modules/ui/src/README.md) |
+| Shared frame, semantic appearance, bounded text and presentation kits | [UI module](../modules/ui/src/README.md) |
 | Exact placement, color and breakpoint rules for application screens | [Application visual style](guides/app-style.md) |
 | Copyable, proven application screens (deploy board, inbox, logs, metrics, forms, overlays) | [Reference applications](reference/apps) |
 | Desktop, workspace host, client attachments, and layout persistence | [Desktop](guides/desktop.md), [desktop component](../modules/desktop/src/README.md) |

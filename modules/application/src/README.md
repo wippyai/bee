@@ -1,9 +1,8 @@
 # bee.app
 
 The public application SDK. It provides bounded launch arguments, application
-client and interaction values, caller and status helpers, presentation kits
-and naming values, and the wire decoder used by an application's authenticated
-thread facade. These libraries carry values only: they do not admit an
+client and interaction values, caller and status helpers, naming values, and
+the wire decoder used by an application's authenticated thread facade. These libraries carry values only: they do not admit an
 application, select a workspace, open a store, or grant access to a thread.
 
 | Entry | Responsibility |
@@ -11,23 +10,20 @@ application, select a workspace, open a store, or grant access to a thread.
 | `client`, `arguments`, `interaction` | Application launch and broker-facing values used by standalone application processes |
 | `caller`, `status_reader`, `status_surface` | Typed owner replies and bounded presentation values |
 | `names` | Shared naming values for applications and desktop consumers |
-| `viz` | The visualization kit on the frame: sparklines, line and area charts, bars, columns, stacked bars, histograms, heatmaps, status grids, gauges, progress, stat tiles, inline table bars, timelines, small graphs, scatter plots, candlestick and range charts, a braille radial gauge, a spinner, 100% stacked bars, progress with ETA and bounded live series with a redraw cadence |
-| `forms` | The input kit on the frame: a text field (cursor, word and line motions, select-all, paste, placeholder, `max_length`, masked mode), a bounded number field, a scrolling multi-line text area, a select/dropdown, a checkbox, a radio group and a toggle, plus a form container that owns focus order (Tab/Shift-Tab/click), per-field validation, dirty tracking and a disabled state |
-| `diagram` | Layout diagrams on the frame: `mesh` (nodes at chosen or ringed positions, braille-routed edges, node hits), `treemap` (squarified tiles of sized items) and `flame` (icicle chart of a value tree); pure painters with hit targets, in the same node and bar vocabulary as `viz` |
 | `thread_protocol` | Exact bounded requests and replies for the authenticated application-to-broker thread facade |
-| `folder_picker` | A folder picker over the roots the host admits through the workspace catalog's `roots` and `folders` operations: the pure paging and navigation model and its table on the frame |
 | `sessions`, `sessions_protocol` | The typed `sessions` client: `call`, `open`, `send`, `await`, `join`, `cancel`, `close`, `get`, `work`, `history`, `list` and `catalog` over the `bee.sessions` owner contracts, with Session, Work and Operation handles; `sessions_protocol` holds the closed reply types and their decoders |
 | `startup_progress` | Pure retained-startup phase decoding and inactivity deadline values shared by launch and desktop clients; callers authenticate progress senders and select and enforce timeout bounds |
 | `host_leases` | Leases on node-managed workspace hosts: the holder registers a lease name, asks the node host manager for a workspace's host and releases it; the manager answers only the holder of that name, and the host policy `bee.security.desktop:workspace_host_lease_policy` decides who may name leases |
 
-Shared frame, appearance and bounded text are owned by [bee.ui](../../ui/src/README.md).
-Import `bee.ui:frame`, `bee.ui:appearance` and `bee.ui:text` directly.
+Presentation helpers are owned by [bee.ui](../../ui/src/README.md). Import
+`bee.ui:frame`, `bee.ui:appearance`, `bee.ui:text`, `bee.ui.forms:forms`,
+`bee.ui.viz:viz`, `bee.ui.diagram:diagram` and `bee.ui.picker:folder` directly.
 
 Proven reference screens for each application class (deploy board, CI board,
 inbox, log viewer, topology, workflow, live metrics, deploy wizard with forms,
 and the palette, modal and toast overlays) live in `docs/reference/apps/`. They
-use only this public API, are not registered entries and never ship as an
-application; `make reference-apps-check` lints and draws them against these
+use the public application SDK and UI kits, are not registered entries and
+never ship as an application; `make reference-apps-check` lints and draws them against these
 libraries, and the agent corpus serves them under the `reference_apps` topic.
 
 Applications still run as standalone processes. The host admits their exact

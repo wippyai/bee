@@ -55,7 +55,7 @@ entries:
   imports:
     appearance: bee.ui:appearance
     frame: bee.ui:frame
-    forms: bee.app:forms
+    forms: bee.ui.forms:forms
     model: bee.approvals.inbox.app:model
     leases: bee.approvals.inbox.app:leases
 - name: feeds

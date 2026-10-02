@@ -176,7 +176,7 @@ codex-native-hooks-check:
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go -C native run ../tests/native_codex_hooks.go -root "$(CURDIR)" -runtime "$(abspath $(WIPPY))" -codex "$(CODEX)"
 fixture-gateway-client: tests/fixtures/harness/gateway_client.go
 	env GOWORK=off GOTOOLCHAIN=go1.27.0 go build -o tests/fixtures/harness/bin/gateway-client tests/fixtures/harness/gateway_client.go
-test: fixture-gateway-client values-module component-inventory-check
+test: fixture-gateway-client values-module ui-module component-inventory-check
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	BEE_TEST_JOBS="$(TEST_JOBS)" BEE_RUNTIME="$(abspath $(WIPPY))" python3 tests/unit.py
 fixture-lint: lua-boundary-check

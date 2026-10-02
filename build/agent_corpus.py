@@ -284,14 +284,14 @@ def toolkit_reference() -> bytes:
     frame_types = lua_type_definitions(frame)
     if not frame_api or not frame_types:
         raise SystemExit("modules/ui/src/frame.lua has no documented functions or types")
-    viz = (ROOT / "modules/application/src/viz.lua").read_text()
+    viz = (ROOT / "modules/ui/src/viz/viz.lua").read_text()
     viz_calls = lua_calls(viz, "viz")
     viz_types = lua_type_definitions(viz)
     examples = proven_examples(ROOT / "tests/lua/frame/viz_test.lua")
     shown = {name for names, _ in examples for name in names}
     missing = [name for name, _ in viz_calls if name not in shown]
     if not viz_calls or not viz_types or missing:
-        raise SystemExit(f"modules/application/src/viz.lua calls without a proven example: {missing}")
+        raise SystemExit(f"modules/ui/src/viz/viz.lua calls without a proven example: {missing}")
     gallery = []
     for names, text in examples:
         gallery += ["### " + ", ".join(f"`viz.{name}`" for name in names), "",
@@ -382,9 +382,9 @@ def toolkit_reference() -> bytes:
         "",
         "## Visualization kit",
         "",
-        "`bee.app:viz` draws charts inside a `frame.Rect` of a frame painter,",
+        "`bee.ui.viz:viz` draws charts inside a `frame.Rect` of a frame painter,",
         "from semantic roles, and keeps live series bounded. Import it as",
-        "`viz = \"bee.app:viz\"` next to `frame` and `appearance`. Every function is",
+        "`viz = \"bee.ui.viz:viz\"` next to `frame` and `appearance`. Every function is",
         "pure: the process owns `viz.series` rings, pushes one sample per tick and",
         "repaints when `viz.due` says a frame is due; the view reads `viz.values`. Choose",
         "the function by the question in `docs/app_style` section 12.",

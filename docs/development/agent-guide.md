@@ -15,14 +15,15 @@ them. Native Terminal runs with the operating system user's authority.
 Keep desktop responsibilities in the `src/` component folders (`src/host`,
 `src/client`, `src/launch` and their siblings, one namespace per folder),
 public application helpers in `modules/application/src`, shared frame, appearance
-and text helpers in `modules/ui/src`, and application UI in
+and text helpers and the forms, visualization, diagram and picker kits in
+`modules/ui/src`, and application UI in
 `modules/<module>/src/app` child namespaces. Desktop values and the committed
 projection live in `modules/desktop/src`; the terminal shell remains in
 `src/terminal`.
 Use the [UI brand book](../guides/ui.md) and
 [application visual style](../guides/app-style.md) for presentation and
 interaction rules. The offline toolkit reference gives compact, tested examples
-for `bee.ui:frame` and `bee.app:viz`. Apps use
+for `bee.ui:frame` and `bee.ui.viz:viz`. Apps use
 public contracts such as `bee.app:client` and
 `bee.threads.binding:authority_local`;
 they do not import private broker or store modules.

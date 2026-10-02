@@ -106,7 +106,7 @@ entries:
   meta: {type: test, suite: bee}
   imports:
     test: wippy.test:test
-    picker: bee.app:folder_picker
+    picker: bee.ui.picker:folder
     caller: bee.app:caller
 - name: thread_binding_test
   kind: function.lua

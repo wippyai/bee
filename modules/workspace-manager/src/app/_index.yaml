@@ -19,7 +19,7 @@ entries:
     leases: bee.app:host_leases
     model: bee.workspace.manager.app:model
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.app:folder_picker
+    folder_picker: bee.ui.picker:folder
     view: bee.workspace.manager.app:view
   meta:
     type: bee.app
@@ -45,7 +45,7 @@ entries:
   kind: library.lua
   source: file://creation.lua
   imports:
-    folder_picker: bee.app:folder_picker
+    folder_picker: bee.ui.picker:folder
     text: bee.ui:text
     caller: bee.app:caller
     model: bee.workspace.manager.app:model
@@ -57,4 +57,4 @@ entries:
     appearance: bee.ui:appearance
     model: bee.workspace.manager.app:model
     creation: bee.workspace.manager.app:creation
-    folder_picker: bee.app:folder_picker
+    folder_picker: bee.ui.picker:folder
